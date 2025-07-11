@@ -11,13 +11,14 @@
       width: 100%; padding: 0.5rem; margin-top: 0.3rem; font-size: 1rem;
     }
     #response { white-space: pre-wrap; background: #fff; padding: 1rem; margin-top: 1rem; border: 1px solid #ccc; }
+    #error { color: red; margin-top: 1rem; }
   </style>
 </head>
 <body>
   <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
-  
+
   <label for="diagnosis">تشخيص ICD-10:</label>
-  <input type="text" id="diagnosis" placeholder="مثال: J20 - Acute Bronchitis" />
+  <input type="text" id="diagnosis" placeholder="مثال: J20 – Acute Bronchitis" />
 
   <label for="symptoms">الأعراض:</label>
   <textarea id="symptoms" placeholder="مثال: سعال، حرارة 38.5، ضيق في التنفس"></textarea>
@@ -28,6 +29,7 @@
   <button onclick="analyzeCase()">تحقق من التغطية التأمينية</button>
 
   <div id="response"></div>
+  <div id="error"></div>
 
   <script>
     async function analyzeCase() {
@@ -35,12 +37,39 @@
       const symptoms = document.getElementById('symptoms').value;
       const procedure = document.getElementById('procedure').value;
       const responseBox = document.getElementById('response');
+      const errorBox = document.getElementById('error');
+
       responseBox.innerText = "جاري التحليل...";
+      errorBox.innerText = "";
 
       const prompt = `أنت خبير تأمين طبي. حلل الحالة التالية:\nتشخيص: ${diagnosis}\nالأعراض: ${symptoms}\nالإجراء المطلوب: ${procedure}\n\nهل هذا الإجراء مغطى تأمينيًا عادة؟ هل هناك خطر رفض؟ ما البدائل؟ اكتب نص توثيق طبي مقترح مختصر.`;
 
-      const result = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer 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"
+      try {
+        const result = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer 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"
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.3
+          })
+        });
+
+        const json = await result.json();
+        if (json.error) {
+          errorBox.innerText = "خطأ: " + json.error.message;
+          responseBox.innerText = "";
+        } else {
+          responseBox.innerText = json.choices[0].message.content;
+        }
+      } catch (err) {
+        errorBox.innerText = "تعذر الاتصال بـ GPT. تأكد من الاتصال بالإنترنت أو من صحة المفتاح.";
+        responseBox.innerText = "";
+      }
+    }
+  </script>
+</body>
+</html>
