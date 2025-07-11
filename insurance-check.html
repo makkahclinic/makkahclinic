@@ -7,7 +7,7 @@
   <style>
     body { font-family: sans-serif; direction: rtl; padding: 2rem; background-color: #f8f8f8; }
     label { font-weight: bold; display: block; margin-top: 1rem; }
-    textarea, input, select, button {
+    textarea, input, button {
       width: 100%; padding: 0.5rem; margin-top: 0.3rem; font-size: 1rem;
     }
     #response { white-space: pre-wrap; background: #fff; padding: 1rem; margin-top: 1rem; border: 1px solid #ccc; }
@@ -42,31 +42,25 @@
       responseBox.innerText = "جاري التحليل...";
       errorBox.innerText = "";
 
-      const prompt = `أنت خبير تأمين طبي. حلل الحالة التالية:\nتشخيص: ${diagnosis}\nالأعراض: ${symptoms}\nالإجراء المطلوب: ${procedure}\n\nهل هذا الإجراء مغطى تأمينيًا عادة؟ هل هناك خطر رفض؟ ما البدائل؟ اكتب نص توثيق طبي مقترح مختصر.`;
-
       try {
-        const result = await fetch("https://api.openai.com/v1/chat/completions", {
+        const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer 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"
+            "Content-Type": "application/json"
           },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.3
-          })
+          body: JSON.stringify({ diagnosis, symptoms, procedure })
         });
 
         const json = await result.json();
+
         if (json.error) {
-          errorBox.innerText = "خطأ: " + json.error.message;
+          errorBox.innerText = "خطأ: " + json.error;
           responseBox.innerText = "";
         } else {
-          responseBox.innerText = json.choices[0].message.content;
+          responseBox.innerText = json.result;
         }
       } catch (err) {
-        errorBox.innerText = "تعذر الاتصال بـ GPT. تأكد من الاتصال بالإنترنت أو من صحة المفتاح.";
+        errorBox.innerText = "حدث خطأ أثناء الاتصال بالخادم. تأكد من أن الخادم يعمل بشكل صحيح.";
         responseBox.innerText = "";
       }
     }
