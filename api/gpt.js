@@ -1,50 +1,55 @@
-// pages/api/gpt.js (أو المسار الفعلي لملف الـ API الخاص بك)
+import fetch from 'node-fetch';
+
 export default async function handler(req, res) {
-  // *** هنا الجزء الجديد والمهم للتعامل مع 405 ***
-  // تأكد أنك تسمح بطلبات OPTIONS لـ CORS Preflight إذا كنت تستخدم رؤوسًا معقدة
-  res.setHeader('Access-Control-Allow-Origin', 'https://m2020m.org'); // تأكد من وجود هذا
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS'); // *** تأكد من إضافة POST و OPTIONS هنا ***
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type'); // تأكد من وجود هذا
+  res.setHeader('Access-Control-Allow-Origin', 'https://m2020m.org');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // إذا كان الطلب هو OPTIONS (يستخدمه المتصفح للتحقق من CORS قبل إرسال الطلب الفعلي)
   if (req.method === 'OPTIONS') {
-    return res.status(200).end(); // استجابة فارغة ولكن برمز 200 لتلبية طلب Preflight
+    return res.status(200).end();
   }
-  // *** نهاية الجزء الخاص بـ CORS و 405 ***
 
-  // هذا هو الجزء الذي يتعامل مع طلب POST الفعلي
-  if (req.method === 'POST') {
-    const { diagnosis, symptoms, procedure } = req.body;
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
 
-    // قم بإضافة التحقق من صحة البيانات هنا إذا لزم الأمر
-    if (!diagnosis || !symptoms || !procedure) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+  const { diagnosis, symptoms, procedure } = req.body;
 
-    try {
-      // هنا تضع المنطق الذي يتفاعل مع خدمة GPT الخارجية
-      // مثال:
-      // const gptResponse = await fetch('YOUR_GPT_API_ENDPOINT', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer YOUR_GPT_API_KEY`
-      //   },
-      //   body: JSON.stringify({ prompt: `تشخيص: ${diagnosis}, أعراض: ${symptoms}, إجراء: ${procedure}`, max_tokens: 150 })
-      // });
-      // const gptData = await gptResponse.json();
-      // const result = gptData.choices[0].text;
+  if (!diagnosis || !symptoms || !procedure) {
+    return res.status(400).json({ error: 'Missing input fields' });
+  }
 
-      // لتجربة سريعة، يمكن إرجاع استجابة وهمية:
-      const result = `نتيجة تحليل الحالة لـ: ${diagnosis}, الأعراض: ${symptoms}, الإجراء المقترح: ${procedure}. تغطية تأمينية: محتملة.`;
+  const apiKey = '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';
 
-      res.status(200).json({ result: result });
-    } catch (apiError) {
-      console.error("Error calling GPT API:", apiError); // سجل الخطأ لمراجعته في Vercel Logs
-      res.status(500).json({ error: 'An error occurred while processing your request with the external API.' });
-    }
-  } else {
-    // إذا وصل أي طلب بخلاف POST أو OPTIONS، أرجع 405
-    res.status(405).json({ error: 'Method Not Allowed' });
+  try {
+    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'أنت مساعد خبير في التأمين الطبي. قم بتحليل البيانات التالية لتحديد ما إذا كان الإجراء المقترح مغطى بالتأمين ولماذا.'
+          },
+          {
+            role: 'user',
+            content: `تشخيص: ${diagnosis}\nأعراض: ${symptoms}\nإجراء مقترح: ${procedure}`
+          }
+        ],
+      })
+    });
+
+    const data = await completion.json();
+    const result = data.choices?.[0]?.message?.content || 'لا يوجد رد من GPT.';
+
+    res.status(200).json({ result });
+  } catch (error) {
+    console.error("GPT API error:", error);
+    res.status(500).json({ error: 'فشل الاتصال بخدمة GPT' });
   }
 }
