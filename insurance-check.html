@@ -1,86 +1,79 @@
-<!DOCTYPE html>
-<html lang="ar">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>نموذج تقييم الحالة الطبية - التأمين</title>
-  <style>
-    body { font-family: sans-serif; direction: rtl; padding: 2rem; background-color: #f9f9f9; }
-    label { font-weight: bold; display: block; margin-top: 1rem; }
-    textarea, input, button {
-      width: 100%; padding: 0.5rem; margin-top: 0.3rem; font-size: 1rem;
-    }
-    #response { white-space: pre-wrap; background: #fff; padding: 1rem; margin-top: 1rem; border: 1px solid #ccc; }
-    #error { color: red; margin-top: 1rem; }
-  </style>
-</head>
-<body>
-  <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
+import fetch from 'node-fetch';
 
-  <label for="age">العمر:</label>
-  <input type="text" id="age" placeholder="مثال: 55" />
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', 'https://m2020m.org');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  <label for="diseaseType">نوع المرض:</label>
-  <input type="text" id="diseaseType" placeholder="مثال: مزمن / حاد" />
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
-  <label for="diagnosis">تشخيص ICD-10:</label>
-  <input type="text" id="diagnosis" placeholder="مثال: J20 – Acute Bronchitis" />
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
 
-  <label for="symptoms">الأعراض:</label>
-  <textarea id="symptoms" placeholder="مثال: سعال، حرارة 38.5، ضيق في التنفس"></textarea>
+  const { age, diseaseType, diagnosis, symptoms, procedure, labTests, radiology, ultrasound } = req.body;
 
-  <label for="procedure">الإجراء الطبي المقترح:</label>
-  <input type="text" id="procedure" placeholder="مثال: Mesporin IV + Saline" />
+  if (!age || !diseaseType || !diagnosis || !symptoms || !procedure) {
+    return res.status(400).json({ error: 'Missing input fields' });
+  }
 
-  <label for="labTests">تحاليل مخبرية:</label>
-  <input type="text" id="labTests" placeholder="مثال: CBC, FBS" />
+  const apiKey = process.env.OPENAI_API_KEY;
 
-  <label for="radiology">الأشعة:</label>
-  <input type="text" id="radiology" placeholder="مثال: Chest X-ray" />
+  try {
+    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'أنت مساعد خبير في التأمين الطبي. عندما تصلك حالة طبية، أجب عليها بالتنسيق التالي:
 
-  <label for="ultrasound">موجات صوتية:</label>
-  <input type="text" id="ultrasound" placeholder="مثال: Ultrasound Abdomen" />
+📋 **تحليل الإجراء الطبي:**
+- هل الإجراء الموصوف مبرر طبيًا؟ ولماذا؟
+- هل يُتوقع أن يُرفض من قبل التأمين؟ مع توضيح السبب إن وُجد.
 
-  <button onclick="analyzeCase()">تحقق من التغطية التأمينية</button>
+🛠 **التصحيح الطبي المقترح:**
+- ما هو البديل الأنسب أو البروتوكول الأفضل لهذه الحالة؟
 
-  <div id="response"></div>
-  <div id="error"></div>
+📈 **فرص تحسين الدخل الطبي:**
+- ما هي الخدمات الموصى بإضافتها (تحاليل، أشعة، موجات صوتية...)
+- كم يمكن أن تُضيف هذه الإجراءات لقيمة الخدمة؟ (تقدير تقريبي)
 
-  <script>
-    async function analyzeCase() {
-      const age = document.getElementById('age').value;
-      const diseaseType = document.getElementById('diseaseType').value;
-      const diagnosis = document.getElementById('diagnosis').value;
-      const symptoms = document.getElementById('symptoms').value;
-      const procedure = document.getElementById('procedure').value;
-      const labTests = document.getElementById('labTests').value;
-      const radiology = document.getElementById('radiology').value;
-      const ultrasound = document.getElementById('ultrasound').value;
-      const responseBox = document.getElementById('response');
-      const errorBox = document.getElementById('error');
+🔍 **ملاحظات إضافية للطبيب:**
+- إرشادات دقيقة لتحسين جودة الكتابة في الملف الطبي
+- عناصر ناقصة تؤثر على الموافقة التأمينية
 
-      responseBox.innerText = "جاري التحليل...";
-      errorBox.innerText = "";
+📄 اكتب ردك بنقاط واضحة مرتبة.'
+          },
+          {
+            role: 'user',
+            content: `العمر: ${age}
+نوع المرض: ${diseaseType}
+تشخيص: ${diagnosis}
+أعراض: ${symptoms}
+إجراء مقترح: ${procedure}
+تحاليل مخبرية: ${labTests}
+أشعة: ${radiology}
+موجات صوتية: ${ultrasound}`
+          }
+        ],
+      })
+    });
 
-      try {
-        const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ age, diseaseType, diagnosis, symptoms, procedure, labTests, radiology, ultrasound })
-        });
+    const data = await completion.json();
+    const result = data.choices?.[0]?.message?.content || 'لا يوجد رد من GPT.';
 
-        const json = await result.json();
-        if (json.error) {
-          errorBox.innerText = "خطأ: " + json.error;
-          responseBox.innerText = "";
-        } else {
-          responseBox.innerText = json.result;
-        }
-      } catch (err) {
-        errorBox.innerText = "حدث خطأ أثناء الاتصال بالخادم. تأكد من أن الخادم يعمل بشكل صحيح.";
-        responseBox.innerText = "";
-      }
-    }
-  </script>
-</body>
-</html>
+    res.status(200).json({ result });
+  } catch (error) {
+    console.error("GPT API error:", error);
+    res.status(500).json({ error: 'فشل الاتصال بخدمة GPT' });
+  }
+}
