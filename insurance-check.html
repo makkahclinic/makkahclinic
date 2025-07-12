@@ -1,79 +1,149 @@
-import fetch from 'node-fetch';
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نموذج تقييم الحالة الطبية - GPT</title>
+  <style>
+    body {
+      font-family: sans-serif; direction: rtl; padding: 2rem; background-color: #f8f8f8;
+      max-width: 800px;
+      margin: 2rem auto;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      border-radius: 8px;
+    }
+    h2 { text-align: center; color: #333; margin-bottom: 2rem; }
+    label { font-weight: bold; display: block; margin-top: 1rem; color: #555; }
+    textarea, input[type="text"], input[type="number"], select {
+      width: calc(100% - 1rem);
+      padding: 0.8rem;
+      margin-top: 0.3rem;
+      font-size: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    button {
+      width: 100%;
+      padding: 1rem;
+      margin-top: 1.5rem;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #fff;
+      background-color: #007bff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover { background-color: #0056b3; }
+    #response {
+      white-space: pre-wrap;
+      background: #fff;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      min-height: 100px;
+      color: #333;
+      line-height: 1.6;
+    }
+    #error { color: red; margin-top: 1rem; text-align: center; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', 'https://m2020m.org');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  <label for="diagnosis">تشخيص المرض (ICD-10):</label>
+  <input type="text" id="diagnosis" />
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  <label for="symptoms">الأعراض:</label>
+  <textarea id="symptoms"></textarea>
 
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+  <label for="age">عمر المريض:</label>
+  <input type="number" id="age" min="0" max="120" />
 
-  const { age, diseaseType, diagnosis, symptoms, procedure, labTests, radiology, ultrasound } = req.body;
+  <label for="gender">نوع المريض:</label>
+  <select id="gender">
+    <option value="">اختر</option>
+    <option value="male">ذكر</option>
+    <option value="female">أنثى</option>
+    <option value="other">آخر</option>
+  </select>
 
-  if (!age || !diseaseType || !diagnosis || !symptoms || !procedure) {
-    return res.status(400).json({ error: 'Missing input fields' });
-  }
+  <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
+  <textarea id="beforeProcedure"></textarea>
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  <label for="afterProcedure">إجراءات بعد التشخيص:</label>
+  <textarea id="afterProcedure"></textarea>
 
-  try {
-    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: `أنت مساعد ذكي متخصص في مراجعة الحالات الطبية من منظور التأمين الطبي. أجب على النموذج بتحليل طبي دقيق ومنسق، يشمل البنود التالية:
+  <button onclick="analyzeCase()">تحليل الحالة</button>
 
-📋 تحليل الإجراء الطبي:
-- هل الإجراء الموصوف مبرر طبياً بناءً على التشخيص والأعراض؟ ولماذا؟
-- هل يُتوقع أن يُرفض من قبل التأمين؟ مع توضيح السبب إن وُجد.
+  <div id="response"></div>
+  <div id="error"></div>
 
-🛠 التصحيح الطبي المقترح:
-- ما هو البديل الأنسب أو البروتوكول الأفضل لهذه الحالة؟
+  <script>
+    async function analyzeCase() {
+      const diagnosis = document.getElementById('diagnosis').value;
+      const symptoms = document.getElementById('symptoms').value;
+      const age = document.getElementById('age').value;
+      const gender = document.getElementById('gender').value;
+      const beforeProcedure = document.getElementById('beforeProcedure').value;
+      const afterProcedure = document.getElementById('afterProcedure').value;
 
-📈 فرص تحسين الدخل الطبي:
-- ما هي الخدمات الموصى بإضافتها (تحاليل، أشعة، موجات صوتية...)
-- كم يمكن أن تُضيف هذه الإجراءات لقيمة الخدمة؟ (تقدير تقريبي)
+      const responseBox = document.getElementById('response');
+      const errorBox = document.getElementById('error');
 
-🔍 ملاحظات إضافية للطبيب:
-- إرشادات دقيقة لتحسين جودة الكتابة في الملف الطبي
-- عناصر ناقصة تؤثر على الموافقة التأمينية
+      responseBox.innerText = "جاري تحليل الحالة...";
+      errorBox.innerText = "";
 
-📄 يجب أن تكون المخرجات واضحة ومنسقة بنقاط مع استخدام الرموز والتوضيح المباشر.`
-          },
-          {
-            role: 'user',
-            content: `العمر: ${age}
-نوع المرض: ${diseaseType}
-تشخيص: ${diagnosis}
-أعراض: ${symptoms}
-إجراء مقترح: ${procedure}
-تحاليل مخبرية: ${labTests}
-أشعة: ${radiology}
-موجات صوتية: ${ultrasound}`
-          }
-        ],
-      })
-    });
+      if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
+        errorBox.innerText = "الرجاء ملء جميع الحقول.";
+        responseBox.innerText = "";
+        return;
+      }
 
-    const data = await completion.json();
-    const result = data.choices?.[0]?.message?.content || 'لا يوجد رد من GPT.';
+      try {
+        const result = await fetch("https://m2020m.org/api/gpt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure
+          })
+        });
 
-    res.status(200).json({ result });
-  } catch (error) {
-    console.error("GPT API error:", error);
-    res.status(500).json({ error: 'فشل الاتصال بخدمة GPT' });
-  }
-}
+        if (!result.ok) {
+          const errText = await result.text();
+          throw new Error(`Status ${result.status}: ${errText}`);
+        }
+
+        const json = await result.json();
+        let output = "";
+
+        if (json.result) output += `<h3>النتيجة:</h3><p>${json.result}</p>`;
+        if (json.justification) output += `<h4>مبررات الإجراءات:</h4><p>${json.justification}</p>`;
+        if (json.rejectionRisk) output += `<h4>احتمالية الرفض:</h4><p>${json.rejectionRisk}</p>`;
+        if (json.rejectionReason) output += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
+        if (json.rejectedValue) output += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
+        if (json.improvementSuggestions) {
+          output += `<h4>اقتراحات لتحسين الفاتورة:</h4><ul>`;
+          json.improvementSuggestions.forEach(s => {
+            output += `<li><strong>${s.title}:</strong> ${s.description} (تقدير: ${s.estimatedValue})</li>`;
+          });
+          output += `</ul>`;
+        }
+        if (json.potentialRevenueIncrease) {
+          output += `<h4>زيادة الدخل المحتملة:</h4><p>${json.potentialRevenueIncrease}</p>`;
+        }
+
+        responseBox.innerHTML = output;
+      } catch (err) {
+        errorBox.innerText = "حدث خطأ: " + err.message;
+        responseBox.innerText = "";
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
