@@ -1,30 +1,86 @@
-<h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نموذج تقييم الحالة الطبية - التأمين</title>
+  <style>
+    body { font-family: sans-serif; direction: rtl; padding: 2rem; background-color: #f9f9f9; }
+    label { font-weight: bold; display: block; margin-top: 1rem; }
+    textarea, input, button {
+      width: 100%; padding: 0.5rem; margin-top: 0.3rem; font-size: 1rem;
+    }
+    #response { white-space: pre-wrap; background: #fff; padding: 1rem; margin-top: 1rem; border: 1px solid #ccc; }
+    #error { color: red; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
 
-<label for="age">العمر:</label>
-<input type="number" id="age" placeholder="مثال: 45" />
+  <label for="age">العمر:</label>
+  <input type="text" id="age" placeholder="مثال: 55" />
 
-<label for="diseaseType">نوع المرض:</label>
-<input type="text" id="diseaseType" placeholder="مثال: مزمن، حاد، سكري، تنفسي..." />
+  <label for="diseaseType">نوع المرض:</label>
+  <input type="text" id="diseaseType" placeholder="مثال: مزمن / حاد" />
 
-<label for="diagnosis">تشخيص ICD-10:</label>
-<input type="text" id="diagnosis" placeholder="مثال: J20 – Acute Bronchitis" />
+  <label for="diagnosis">تشخيص ICD-10:</label>
+  <input type="text" id="diagnosis" placeholder="مثال: J20 – Acute Bronchitis" />
 
-<label for="symptoms">الأعراض:</label>
-<textarea id="symptoms" placeholder="مثال: سعال، حرارة 38.5، ضيق تنفس"></textarea>
+  <label for="symptoms">الأعراض:</label>
+  <textarea id="symptoms" placeholder="مثال: سعال، حرارة 38.5، ضيق في التنفس"></textarea>
 
-<label for="procedure">الإجراء الطبي المقترح:</label>
-<input type="text" id="procedure" placeholder="مثال: مضاد حيوي IV + Fluids" />
+  <label for="procedure">الإجراء الطبي المقترح:</label>
+  <input type="text" id="procedure" placeholder="مثال: Mesporin IV + Saline" />
 
-<label for="labTests">تحاليل مخبرية:</label>
-<input type="text" id="labTests" placeholder="مثال: CBC، CRP، Urine" />
+  <label for="labTests">تحاليل مخبرية:</label>
+  <input type="text" id="labTests" placeholder="مثال: CBC, FBS" />
 
-<label for="radiology">أشعة:</label>
-<input type="text" id="radiology" placeholder="مثال: Chest X-ray" />
+  <label for="radiology">الأشعة:</label>
+  <input type="text" id="radiology" placeholder="مثال: Chest X-ray" />
 
-<label for="ultrasound">موجات صوتية (Ultrasound):</label>
-<input type="text" id="ultrasound" placeholder="مثال: Abdominal US" />
+  <label for="ultrasound">موجات صوتية:</label>
+  <input type="text" id="ultrasound" placeholder="مثال: Ultrasound Abdomen" />
 
-<button onclick="analyzeCase()">تحقق من التغطية التأمينية</button>
+  <button onclick="analyzeCase()">تحقق من التغطية التأمينية</button>
 
-<div id="response"></div>
-<div id="error"></div>
+  <div id="response"></div>
+  <div id="error"></div>
+
+  <script>
+    async function analyzeCase() {
+      const age = document.getElementById('age').value;
+      const diseaseType = document.getElementById('diseaseType').value;
+      const diagnosis = document.getElementById('diagnosis').value;
+      const symptoms = document.getElementById('symptoms').value;
+      const procedure = document.getElementById('procedure').value;
+      const labTests = document.getElementById('labTests').value;
+      const radiology = document.getElementById('radiology').value;
+      const ultrasound = document.getElementById('ultrasound').value;
+      const responseBox = document.getElementById('response');
+      const errorBox = document.getElementById('error');
+
+      responseBox.innerText = "جاري التحليل...";
+      errorBox.innerText = "";
+
+      try {
+        const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ age, diseaseType, diagnosis, symptoms, procedure, labTests, radiology, ultrasound })
+        });
+
+        const json = await result.json();
+        if (json.error) {
+          errorBox.innerText = "خطأ: " + json.error;
+          responseBox.innerText = "";
+        } else {
+          responseBox.innerText = json.result;
+        }
+      } catch (err) {
+        errorBox.innerText = "حدث خطأ أثناء الاتصال بالخادم. تأكد من أن الخادم يعمل بشكل صحيح.";
+        responseBox.innerText = "";
+      }
+    }
+  </script>
+</body>
+</html>
