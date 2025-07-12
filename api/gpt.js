@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing input fields' });
   }
 
-  const apiKey = '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';
+  const apiKey = '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';
 
   try {
     const completion = await fetch('https://api.openai.com/v1/chat/completions', {
