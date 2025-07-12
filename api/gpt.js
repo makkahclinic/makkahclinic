@@ -1,10 +1,10 @@
-import fetch from 'node-fetch';
-
 export default async function handler(req, res) {
+  // إعداد رؤوس CORS للسماح بطلبات من موقع m2020m.org
   res.setHeader('Access-Control-Allow-Origin', 'https://m2020m.org');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // معالجة طلب OPTIONS (Preflight)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -21,6 +21,9 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Missing OpenAI API Key' });
+  }
 
   try {
     const completion = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -40,16 +43,12 @@ export default async function handler(req, res) {
             role: 'user',
             content: `تشخيص: ${diagnosis}\nأعراض: ${symptoms}\nإجراء مقترح: ${procedure}`
           }
-        ],
+        ]
       })
     });
 
     const data = await completion.json();
     const result = data.choices?.[0]?.message?.content || 'لا يوجد رد من GPT.';
-
     res.status(200).json({ result });
+
   } catch (error) {
-    console.error("GPT API error:", error);
-    res.status(500).json({ error: 'فشل الاتصال بخدمة GPT' });
-  }
-}
