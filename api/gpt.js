@@ -1,17 +1,21 @@
 export default async function handler(req, res) {
+  // إعداد رؤوس CORS للسماح بالوصول من موقعك
   res.setHeader('Access-Control-Allow-Origin', 'https://m2020m.org');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // السماح بطلبات CORS
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  // رفض أي طريقة غير POST
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  // استخراج البيانات القادمة من النموذج
   const { diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure } = req.body;
 
   if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
@@ -20,7 +24,6 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.OPENAI_API_KEY;
-
     if (!apiKey) {
       throw new Error("OpenAI API key is not set.");
     }
@@ -72,7 +75,6 @@ export default async function handler(req, res) {
     }
 
     res.status(200).json(result);
-
   } catch (err) {
     console.error("GPT API error:", err);
     res.status(500).json({ error: "GPT API error: " + err.message });
