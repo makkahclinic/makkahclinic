@@ -4,11 +4,9 @@
   <meta charset="UTF-8">
   <title>التسجيل في التأمين الطبي</title>
   <script type="module">
-    // تحميل مكتبات Firebase الحديثة
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-    // إعداد Firebase
     const firebaseConfig = {
       apiKey: "AlzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
       authDomain: "insurance-check-6cec9.firebaseapp.com",
@@ -22,14 +20,27 @@
     window.signup = async function () {
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
+      const confirmPassword = document.getElementById("confirmPassword").value;
+      const terms = document.getElementById("terms").checked;
       const message = document.getElementById("message");
 
+      if (!terms) {
+        message.textContent = "❌ يجب الموافقة على الشروط والأحكام";
+        message.style.color = "red";
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        message.textContent = "❌ تأكيد كلمة المرور غير متطابق";
+        message.style.color = "red";
+        return;
+      }
+
       try {
-        await createUserWithEmailAndPassword(auth, email, password);
-        message.textContent = "✅ تم التسجيل بنجاح!";
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await sendEmailVerification(userCredential.user);
+        message.textContent = "✅ تم التسجيل بنجاح! تم إرسال رابط التحقق إلى بريدك الإلكتروني.";
         message.style.color = "green";
-        // بعد التسجيل، يمكنك تحويله مباشرة إلى صفحة التأمين:
-        // window.location.href = "insurance-check.html";
       } catch (error) {
         message.textContent = "❌ خطأ: " + error.message;
         message.style.color = "red";
@@ -41,12 +52,17 @@
     input { margin: 10px; padding: 10px; width: 250px; border: 1px solid #ccc; border-radius: 4px; }
     button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; }
     button:hover { background: #0056b3; }
+    label { display: block; margin-top: 10px; font-size: 0.9em; }
   </style>
 </head>
 <body>
   <h2>📝 إنشاء حساب جديد</h2>
   <input type="email" id="email" placeholder="البريد الإلكتروني"><br>
   <input type="password" id="password" placeholder="كلمة المرور"><br>
+  <input type="password" id="confirmPassword" placeholder="تأكيد كلمة المرور"><br>
+  <label>
+    <input type="checkbox" id="terms"> أوافق على <a href="#" target="_blank">الشروط والأحكام</a>
+  </label>
   <button onclick="signup()">تسجيل</button>
   <p id="message"></p>
 </body>
