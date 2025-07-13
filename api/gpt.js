@@ -1,19 +1,17 @@
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  return res.status(200).end();
-}
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
 
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
 
   const { diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure } = req.body;
 
@@ -54,3 +52,42 @@ export default async function handler(req, res) {
   • القيمة التقديرية بالريال السعودي (estimatedValue)
   • لماذا لا يُرفض تأمينياً (whyNotRejectable)
 - potentialRevenueIncrease: عبارة منظمة توضح إجمالي الزيادة الممكنة مع دمج أسماء الإجراءات المقترحة وتأثيرها المالي والتأميني.
+
+🔬 بيانات الحالة:
+- التشخيص: ${diagnosis}
+- الأعراض: ${symptoms}
+- العمر: ${age}
+- الجنس: ${gender}
+- الإجراءات التحليلية (أشعة وتحاليل) قبل التشخيص: ${beforeProcedure}
+- الإجراءات العلاجية والوقائية بعد التشخيص: ${afterProcedure}
+`;
+
+    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1400
+      })
+    });
+
+    const data = await completion.json();
+    const raw = data.choices?.[0]?.message?.content;
+
+    let result;
+    try {
+      result = JSON.parse(raw);
+    } catch {
+      result = { result: raw };
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("GPT API Error:", err);
+    res.status(500).json({ error: "GPT API Error: " + err.message });
+  }
+}
