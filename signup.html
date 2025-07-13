@@ -5,7 +5,7 @@
   <title>إنشاء حساب جديد</title>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
@@ -61,6 +61,22 @@
         message.style.color = "red";
       }
     };
+
+    window.resendVerification = async function () {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const message = document.getElementById("message");
+
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        await sendEmailVerification(userCredential.user);
+        message.textContent = "📧 تم إرسال رابط التحقق مجددًا إلى بريدك الإلكتروني.";
+        message.style.color = "blue";
+      } catch (error) {
+        message.textContent = "❌ لا يمكن إرسال رابط التحقق: " + error.message;
+        message.style.color = "red";
+      }
+    };
   </script>
   <style>
     body { font-family: Arial; text-align: center; margin-top: 50px; background: #f9f9f9; }
@@ -78,6 +94,7 @@
   <input type="password" id="confirmPassword" placeholder="تأكيد كلمة المرور"><br>
   <label><input type="checkbox" id="terms"> أوافق على <a href="#" target="_blank">الشروط والأحكام</a></label>
   <button onclick="signup()">تسجيل</button>
+  <button onclick="resendVerification()">🔁 إعادة إرسال رابط التحقق</button>
   <p id="message"></p>
   <a href="login.html" class="link">لديك حساب بالفعل؟ تسجيل الدخول</a>
 </body>
