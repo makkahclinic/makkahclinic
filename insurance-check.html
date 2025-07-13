@@ -16,7 +16,6 @@
       border-radius: 8px;
     }
     h2, h3, h4 {
-      text-align: right;
       color: #333;
       margin-top: 2rem;
     }
@@ -24,9 +23,8 @@
       font-weight: bold;
       display: block;
       margin-top: 1rem;
-      color: #555;
     }
-    textarea, input[type="text"], input[type="number"], select {
+    textarea, input, select {
       width: 100%;
       padding: 0.8rem;
       margin-top: 0.3rem;
@@ -53,30 +51,26 @@
     button:hover {
       background-color: #0056b3;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 0.75rem;
-      text-align: right;
-    }
-    th {
-      background-color: #f0f0f0;
-    }
-    #response {
+    .block {
       background: #fff;
-      padding: 2rem;
+      padding: 1.5rem;
       margin-top: 2rem;
       border: 1px solid #ccc;
       border-radius: 8px;
+      white-space: pre-line;
     }
-    #error {
-      color: red;
-      margin-top: 1rem;
-      text-align: center;
+    .suggestion-block {
+      border: 1px dashed #999;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      background-color: #fdfdfd;
+    }
+    .highlight {
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    .checkmark {
+      font-size: 1.2rem;
     }
   </style>
 </head>
@@ -88,10 +82,10 @@
   <input type="text" id="diagnosis" placeholder="مثال: سكري نوع 2" />
 
   <label for="symptoms">الأعراض:</label>
-  <textarea id="symptoms" placeholder="مثال: عطش، تبول متكرر، انخفاض وزن"></textarea>
+  <textarea id="symptoms"></textarea>
 
   <label for="age">عمر المريض:</label>
-  <input type="number" id="age" min="0" max="120" placeholder="مثال: 45" />
+  <input type="number" id="age" min="0" max="120" />
 
   <label for="gender">نوع المريض:</label>
   <select id="gender">
@@ -102,15 +96,15 @@
   </select>
 
   <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
-  <textarea id="beforeProcedure" placeholder="مثال: تحليل سكر، تحليل بول، فحص سريري"></textarea>
+  <textarea id="beforeProcedure"></textarea>
 
   <label for="afterProcedure">إجراءات بعد التشخيص:</label>
-  <textarea id="afterProcedure" placeholder="مثال: وصف انسولين، متابعة أسبوعية، تحويل لأخصائي تغذية"></textarea>
+  <textarea id="afterProcedure"></textarea>
 
   <button onclick="analyzeCase()">تحليل الحالة</button>
 
-  <div id="response"></div>
-  <div id="error"></div>
+  <div id="response" class="block"></div>
+  <div id="error" style="color:red; text-align:center; margin-top:1rem;"></div>
 
   <script>
     async function analyzeCase() {
@@ -124,12 +118,12 @@
       const responseBox = document.getElementById('response');
       const errorBox = document.getElementById('error');
 
-      responseBox.innerHTML = "جاري تحليل الحالة...";
+      responseBox.innerText = "جاري تحليل الحالة...";
       errorBox.innerText = "";
 
       if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
         errorBox.innerText = "الرجاء ملء جميع الحقول.";
-        responseBox.innerHTML = "";
+        responseBox.innerText = "";
         return;
       }
 
@@ -148,42 +142,43 @@
         }
 
         const json = await result.json();
-        let html = `<h3>📌 ملخص الحالة</h3><p>${json.result}</p>`;
+        let html = "";
+
+        if (json.result) html += `<h3>📌 ملخص الحالة:</h3><p>${json.result}</p>`;
 
         if (json.justification && Array.isArray(json.justification)) {
-          html += `<h4>📋 تحليل الإجراءات:</h4><table><thead><tr><th>الإجراء</th><th>التقييم</th><th>السبب</th></tr></thead><tbody>`;
+          html += `<h3>🧾 تحليل الإجراءات:</h3>`;
           json.justification.forEach(j => {
-            html += `<tr><td>${j.step}</td><td>${j.justification}</td><td>${j.explanation}</td></tr>`;
+            html += `
+              <div class="suggestion-block">
+                <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
+                <p><span class="highlight">التقييم:</span> ${j.justification}</p>
+                <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
+              </div>`;
           });
-          html += `</tbody></table>`;
         }
 
         if (json.rejectionRisk) {
-          html += `<h4>🚫 احتمالية الرفض:</h4><p><strong>${json.rejectionRisk}</strong></p>`;
+          html += `<h3>🚫 احتمالية الرفض:</h3><p><strong>${json.rejectionRisk}</strong></p>`;
           if (json.rejectionReason) html += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
-          if (json.rejectedValue) html += `<p><strong>القيمة المحتملة للرفض:</strong> ${json.rejectedValue} ريال سعودي</p>`;
+          if (json.rejectedValue) html += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
         }
 
         if (json.improvementSuggestions && Array.isArray(json.improvementSuggestions)) {
-          html += `<h4>💡 اقتراحات لزيادة الدخل:</h4><table><thead><tr><th>الخدمة</th><th>الوصف</th><th>القيمة التقديرية</th></tr></thead><tbody>`;
+          html += `<h3>📈 ما كان يمكن عمله لرفع الفاتورة (إجراءات مبررة وغير قابلة للرفض):</h3>`;
           json.improvementSuggestions.forEach(s => {
-            html += `<tr><td>${s.title}</td><td>${s.description}</td><td>${s.estimatedValue}</td></tr>`;
+            html += `
+              <div class="suggestion-block">
+                <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
+                <p><span class="highlight">الأهمية:</span> ${s.description}</p>
+                <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
+                <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
+              </div>`;
           });
-          html += `</tbody></table>`;
         }
 
         if (json.potentialRevenueIncrease) {
-          html += `<h4>💰 الزيادة المحتملة في الدخل:</h4><p>${json.potentialRevenueIncrease}</p>`;
+          html += `<h3>💰 الزيادة المحتملة في الدخل:</h3><p>${json.potentialRevenueIncrease}</p>`;
         }
 
-        responseBox.innerHTML = html;
-
-      } catch (err) {
-        errorBox.innerText = "حدث خطأ أثناء تحليل الحالة: " + err.message;
-        responseBox.innerHTML = "";
-        console.error(err);
-      }
-    }
-  </script>
-</body>
-</html>
+        responseBox.innerHTML
