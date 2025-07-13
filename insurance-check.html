@@ -39,4 +39,142 @@
       min-height: 80px;
       resize: vertical;
     }
-    but
+    button {
+      width: 100%;
+      padding: 1rem;
+      margin-top: 1.5rem;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #fff;
+      background-color: #007bff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #response {
+      white-space: pre-wrap;
+      background: #fff;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      min-height: 100px;
+      color: #333;
+      line-height: 1.6;
+    }
+    #error {
+      color: red;
+      margin-top: 1rem;
+      text-align: center;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
+
+  <label for="diagnosis">تشخيص المرض (ICD-10):</label>
+  <input type="text" id="diagnosis" placeholder="مثال: سكري نوع 2" />
+
+  <label for="symptoms">الأعراض:</label>
+  <textarea id="symptoms" placeholder="مثال: عطش، تبول متكرر، انخفاض وزن"></textarea>
+
+  <label for="age">عمر المريض:</label>
+  <input type="number" id="age" placeholder="مثال: 45" min="0" max="120" />
+
+  <label for="gender">نوع المريض:</label>
+  <select id="gender">
+    <option value="">اختر</option>
+    <option value="male">ذكر</option>
+    <option value="female">أنثى</option>
+    <option value="other">آخر</option>
+  </select>
+
+  <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
+  <textarea id="beforeProcedure" placeholder="مثال: تحليل سكر، تحليل بول، فحص سريري"></textarea>
+
+  <label for="afterProcedure">إجراءات بعد التشخيص:</label>
+  <textarea id="afterProcedure" placeholder="مثال: وصف انسولين، متابعة أسبوعية، تحويل لأخصائي تغذية"></textarea>
+
+  <!-- الزر الظاهر والفعال -->
+  <button onclick="analyzeCase()">تحليل الحالة</button>
+
+  <div id="response"></div>
+  <div id="error"></div>
+
+  <script>
+    async function analyzeCase() {
+      const diagnosis = document.getElementById('diagnosis').value;
+      const symptoms = document.getElementById('symptoms').value;
+      const age = document.getElementById('age').value;
+      const gender = document.getElementById('gender').value;
+      const beforeProcedure = document.getElementById('beforeProcedure').value;
+      const afterProcedure = document.getElementById('afterProcedure').value;
+
+      const responseBox = document.getElementById('response');
+      const errorBox = document.getElementById('error');
+
+      responseBox.innerText = "جاري تحليل الحالة...";
+      errorBox.innerText = "";
+
+      if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
+        errorBox.innerText = "الرجاء ملء جميع الحقول.";
+        responseBox.innerText = "";
+        return;
+      }
+
+      try {
+        const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            diagnosis,
+            symptoms,
+            age,
+            gender,
+            beforeProcedure,
+            afterProcedure
+          })
+        });
+
+        if (!result.ok) {
+          const errorText = await result.text();
+          throw new Error(`خطأ من الخادم: ${result.status}\n${errorText}`);
+        }
+
+        const json = await result.json();
+        let output = "";
+
+        if (json.result) output += `<h3>النتيجة:</h3><p>${json.result}</p>`;
+        if (json.justification) output += `<h4>مبررات الإجراءات:</h4><p>${json.justification}</p>`;
+        if (json.rejectionRisk) output += `<h4>احتمالية الرفض:</h4><p>${json.rejectionRisk}</p>`;
+        if (json.rejectionReason) output += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
+        if (json.rejectedValue) output += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
+        if (json.improvementSuggestions) {
+          output += `<h4>اقتراحات لتحسين الفاتورة:</h4><ul>`;
+          json.improvementSuggestions.forEach(s => {
+            output += `<li><strong>${s.title}:</strong> ${s.description} (تقدير: ${s.estimatedValue})</li>`;
+          });
+          output += `</ul>`;
+        }
+        if (json.potentialRevenueIncrease) {
+          output += `<h4>زيادة الدخل المحتملة:</h4><p>${json.potentialRevenueIncrease}</p>`;
+        }
+
+        responseBox.innerHTML = output;
+      } catch (err) {
+        errorBox.innerText = "حدث خطأ: " + err.message;
+        responseBox.innerText = "";
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
