@@ -33,6 +33,12 @@
         return;
       }
 
+      if (password.length < 6) {
+        message.textContent = "❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل.";
+        message.style.color = "red";
+        return;
+      }
+
       if (password !== confirmPassword) {
         message.textContent = "❌ تأكيد كلمة المرور غير مطابق.";
         message.style.color = "red";
@@ -42,10 +48,16 @@
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await sendEmailVerification(userCredential.user);
-        message.textContent = "✅ تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني.";
+        message.textContent = "✅ تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني (قد يكون في مجلد الرسائل غير المرغوبة).";
         message.style.color = "green";
       } catch (error) {
-        message.textContent = "❌ خطأ: " + error.message;
+        if (error.code === 'auth/email-already-in-use') {
+          message.textContent = "❌ هذا البريد الإلكتروني مستخدم بالفعل.";
+        } else if (error.code === 'auth/invalid-email') {
+          message.textContent = "❌ صيغة البريد الإلكتروني غير صحيحة.";
+        } else {
+          message.textContent = "❌ خطأ: " + error.message;
+        }
         message.style.color = "red";
       }
     };
