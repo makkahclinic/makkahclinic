@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 - rejectionRisk: (منخفض / متوسط / مرتفع)
 - rejectionReason: سبب الرفض المحتمل إن وُجد
 - rejectedValue: مبلغ معرض للرفض إن وُجد
-- improvementSuggestions: قائمة بصيغة JSON فقط، مثال:
+- improvementSuggestions: مصفوفة JSON حقيقية فقط بدون أي شرح نصي أو تنسيق Markdown، يجب أن تكون على هذا الشكل:
   [
     {
       "title": "تحليل السكر التراكمي HbA1c",
