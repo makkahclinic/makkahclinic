@@ -47,10 +47,6 @@ export default async function handler(req, res) {
 - ما هي الأعراض أو التشخيصات التي تبرر طلبه: ...
 - القيمة التقديرية: ...
 - لماذا لا يُرفض تأمينياً: ...
-  • اسم الإجراء (title)
-  • الأهمية الطبية (description)
-  • القيمة التقديرية بالريال السعودي (estimatedValue)
-  • لماذا لا يُرفض تأمينياً (whyNotRejectable)
 - potentialRevenueIncrease: عبارة منظمة توضح إجمالي الزيادة الممكنة مع دمج أسماء الإجراءات المقترحة وتأثيرها المالي والتأميني.
 
 🔬 بيانات الحالة:
@@ -80,7 +76,12 @@ export default async function handler(req, res) {
 
     let result;
     try {
-      result = JSON.parse(raw);
+      const cleaned = raw
+        .replace(/^```json\s*/i, '')
+        .replace(/^```/, '')
+        .replace(/```$/, '')
+        .trim();
+      result = JSON.parse(cleaned);
     } catch {
       result = { result: raw };
     }
