@@ -10,15 +10,15 @@
       direction: rtl;
       padding: 2rem;
       background-color: #f8f8f8;
-      max-width: 800px;
+      max-width: 900px;
       margin: 2rem auto;
       box-shadow: 0 0 15px rgba(0,0,0,0.1);
       border-radius: 8px;
     }
-    h2 {
-      text-align: center;
+    h2, h3, h4 {
+      text-align: right;
       color: #333;
-      margin-bottom: 2rem;
+      margin-top: 2rem;
     }
     label {
       font-weight: bold;
@@ -27,13 +27,12 @@
       color: #555;
     }
     textarea, input[type="text"], input[type="number"], select {
-      width: calc(100% - 1rem);
+      width: 100%;
       padding: 0.8rem;
       margin-top: 0.3rem;
       font-size: 1rem;
-      border: 1px solid #ddd;
+      border: 1px solid #ccc;
       border-radius: 4px;
-      box-sizing: border-box;
     }
     textarea {
       min-height: 80px;
@@ -42,7 +41,7 @@
     button {
       width: 100%;
       padding: 1rem;
-      margin-top: 1.5rem;
+      margin-top: 2rem;
       font-size: 1.1rem;
       font-weight: bold;
       color: #fff;
@@ -50,27 +49,34 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      transition: background-color 0.3s ease;
     }
     button:hover {
       background-color: #0056b3;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 0.75rem;
+      text-align: right;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
     #response {
-      white-space: pre-wrap;
       background: #fff;
-      padding: 1.5rem;
+      padding: 2rem;
       margin-top: 2rem;
       border: 1px solid #ccc;
       border-radius: 8px;
-      min-height: 100px;
-      color: #333;
-      line-height: 1.6;
     }
     #error {
       color: red;
       margin-top: 1rem;
       text-align: center;
-      font-weight: bold;
     }
   </style>
 </head>
@@ -85,7 +91,7 @@
   <textarea id="symptoms" placeholder="مثال: عطش، تبول متكرر، انخفاض وزن"></textarea>
 
   <label for="age">عمر المريض:</label>
-  <input type="number" id="age" placeholder="مثال: 45" min="0" max="120" />
+  <input type="number" id="age" min="0" max="120" placeholder="مثال: 45" />
 
   <label for="gender">نوع المريض:</label>
   <select id="gender">
@@ -101,7 +107,6 @@
   <label for="afterProcedure">إجراءات بعد التشخيص:</label>
   <textarea id="afterProcedure" placeholder="مثال: وصف انسولين، متابعة أسبوعية، تحويل لأخصائي تغذية"></textarea>
 
-  <!-- الزر الظاهر والفعال -->
   <button onclick="analyzeCase()">تحليل الحالة</button>
 
   <div id="response"></div>
@@ -119,28 +124,21 @@
       const responseBox = document.getElementById('response');
       const errorBox = document.getElementById('error');
 
-      responseBox.innerText = "جاري تحليل الحالة...";
+      responseBox.innerHTML = "جاري تحليل الحالة...";
       errorBox.innerText = "";
 
       if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
         errorBox.innerText = "الرجاء ملء جميع الحقول.";
-        responseBox.innerText = "";
+        responseBox.innerHTML = "";
         return;
       }
 
       try {
         const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            diagnosis,
-            symptoms,
-            age,
-            gender,
-            beforeProcedure,
-            afterProcedure
+            diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure
           })
         });
 
@@ -150,28 +148,39 @@
         }
 
         const json = await result.json();
-        let output = "";
+        let html = `<h3>📌 ملخص الحالة</h3><p>${json.result}</p>`;
 
-        if (json.result) output += `<h3>النتيجة:</h3><p>${json.result}</p>`;
-        if (json.justification) output += `<h4>مبررات الإجراءات:</h4><p>${json.justification}</p>`;
-        if (json.rejectionRisk) output += `<h4>احتمالية الرفض:</h4><p>${json.rejectionRisk}</p>`;
-        if (json.rejectionReason) output += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
-        if (json.rejectedValue) output += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
-        if (json.improvementSuggestions) {
-          output += `<h4>اقتراحات لتحسين الفاتورة:</h4><ul>`;
-          json.improvementSuggestions.forEach(s => {
-            output += `<li><strong>${s.title}:</strong> ${s.description} (تقدير: ${s.estimatedValue})</li>`;
+        if (json.justification && Array.isArray(json.justification)) {
+          html += `<h4>📋 تحليل الإجراءات:</h4><table><thead><tr><th>الإجراء</th><th>التقييم</th><th>السبب</th></tr></thead><tbody>`;
+          json.justification.forEach(j => {
+            html += `<tr><td>${j.step}</td><td>${j.justification}</td><td>${j.explanation}</td></tr>`;
           });
-          output += `</ul>`;
-        }
-        if (json.potentialRevenueIncrease) {
-          output += `<h4>زيادة الدخل المحتملة:</h4><p>${json.potentialRevenueIncrease}</p>`;
+          html += `</tbody></table>`;
         }
 
-        responseBox.innerHTML = output;
+        if (json.rejectionRisk) {
+          html += `<h4>🚫 احتمالية الرفض:</h4><p><strong>${json.rejectionRisk}</strong></p>`;
+          if (json.rejectionReason) html += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
+          if (json.rejectedValue) html += `<p><strong>القيمة المحتملة للرفض:</strong> ${json.rejectedValue} ريال سعودي</p>`;
+        }
+
+        if (json.improvementSuggestions && Array.isArray(json.improvementSuggestions)) {
+          html += `<h4>💡 اقتراحات لزيادة الدخل:</h4><table><thead><tr><th>الخدمة</th><th>الوصف</th><th>القيمة التقديرية</th></tr></thead><tbody>`;
+          json.improvementSuggestions.forEach(s => {
+            html += `<tr><td>${s.title}</td><td>${s.description}</td><td>${s.estimatedValue}</td></tr>`;
+          });
+          html += `</tbody></table>`;
+        }
+
+        if (json.potentialRevenueIncrease) {
+          html += `<h4>💰 الزيادة المحتملة في الدخل:</h4><p>${json.potentialRevenueIncrease}</p>`;
+        }
+
+        responseBox.innerHTML = html;
+
       } catch (err) {
-        errorBox.innerText = "حدث خطأ: " + err.message;
-        responseBox.innerText = "";
+        errorBox.innerText = "حدث خطأ أثناء تحليل الحالة: " + err.message;
+        responseBox.innerHTML = "";
         console.error(err);
       }
     }
