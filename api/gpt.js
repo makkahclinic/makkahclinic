@@ -50,43 +50,4 @@ export default async function handler(req, res) {
   • الأهمية الطبية (description)
   • القيمة التقديرية بالريال السعودي (estimatedValue)
   • لماذا لا يُرفض تأمينياً (whyNotRejectable)
-- potentialRevenueIncrease: عبارة منظمة توضح إجمالي الزيادة الممكنة مع دمج أسماء الإجراءات المقترحة وتأثيرها المالي والتأمينينص مالي منسق يوضح كم يمكن تحسين الإيراد، ولماذا هذا التحسين مقبول طبياً وتأمينياً
-
-🔬 بيانات الحالة:
-- التشخيص: ${diagnosis}
-- الأعراض: ${symptoms}
-- العمر: ${age}
-- الجنس: ${gender}
-- الإجراءات التحليلية (أشعة وتحاليل) قبل التشخيص: ${beforeProcedure}
-- الإجراءات العلاجية والوقائية بعد التشخيص: ${afterProcedure}
-`;
-
-    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 1400
-      })
-    });
-
-    const data = await completion.json();
-    const raw = data.choices?.[0]?.message?.content;
-
-    let result;
-    try {
-      result = JSON.parse(raw);
-    } catch {
-      result = { result: raw };
-    }
-
-    res.status(200).json(result);
-  } catch (err) {
-    console.error("GPT API Error:", err);
-    res.status(500).json({ error: "GPT API Error: " + err.message });
-  }
-}
+- potentialRevenueIncrease: عبارة منظمة توضح إجمالي الزيادة الممكنة مع دمج أسماء الإجراءات المقترحة وتأثيرها المالي والتأميني.
