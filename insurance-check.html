@@ -18,16 +18,37 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
 
+    let authCheckInProgress = false;
+
     onAuthStateChanged(auth, async (user) => {
+      if (authCheckInProgress) return;
+      authCheckInProgress = true;
+
+      console.log("onAuthStateChanged triggered. User:", user);
       if (user) {
-        await user.reload();
+        console.log("User found:", user.email);
+        console.log("Before reload - user.emailVerified:", user.emailVerified);
+        try {
+          await user.reload();
+          console.log("After reload - user.emailVerified:", user.emailVerified);
+        } catch (error) {
+          console.error("Error reloading user:", error);
+          await signOut(auth);
+          window.location.href = "login.html";
+          return;
+        }
+
         if (!user.emailVerified) {
+          console.log("Email not verified. Redirecting to login.html");
           alert("⚠️ يجب تأكيد البريد الإلكتروني للوصول لهذه الصفحة.");
+          await signOut(auth);
           window.location.href = "login.html";
         } else {
+          console.log("Email verified. User is allowed to access.");
           document.getElementById("user-info").textContent = `مرحبًا ${user.email}`;
         }
       } else {
+        console.log("No user found. Redirecting to login.html");
         window.location.href = "login.html";
       }
     });
@@ -54,7 +75,6 @@
   </style>
 </head>
 <body>
-
   <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
   <div id="user-info"></div>
 
