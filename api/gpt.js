@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { NextApiRequest, NextApiResponse } from 'next';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -24,8 +26,45 @@ export default async function handler(req, res) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("OpenAI API key is not set.");
 
-    const prompt = `
-أنت استشاري تحليلات طبية وتأمينية، دورك هو تقييم الحالة التالية بعمق طبي ومالي.
+    const evaluateProcedureJustification = (procedure: string, patientAge: number, patientSymptoms: string[]) => {
+      let justification = '✅ مبررة ومدعومة تأمينياً';
+      let risk = 'منخفض';
+
+      if (procedure.includes('سكر عشوائي')) {
+        if (patientAge < 30 && !patientSymptoms.includes('عطش') && !patientSymptoms.includes('تبول') && !patientSymptoms.includes('فقدان وزن')) {
+          justification = '⚠️ مبررة ولكن غير مدعومة (غير كافٍ بمفرده دون أعراض داعمة، يجب توثيق الأعراض أو طلب HbA1c لاحقاً)';
+          risk = 'متوسط إلى مرتفع';
+        }
+      }
+
+      return { justification, risk };
+    };
+
+    const proceduresWithEvaluations: any[] = [];
+
+    if (beforeProcedure && Array.isArray(beforeProcedure)) {
+      beforeProcedure.forEach((proc: string) => {
+        const { justification, risk } = evaluateProcedureJustification(proc, age, symptoms);
+        proceduresWithEvaluations.push({
+          step: proc,
+          justification: justification,
+          rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}`
+        });
+      });
+    }
+
+    if (afterProcedure && Array.isArray(afterProcedure)) {
+      afterProcedure.forEach((proc: string) => {
+        const { justification, risk } = evaluateProcedureJustification(proc, age, symptoms);
+        proceduresWithEvaluations.push({
+          step: proc,
+          justification: justification,
+          rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}`
+        });
+      });
+    }
+
+    const prompt = `أنت استشاري تحليلات طبية وتأمينية، دورك هو تقييم الحالة التالية بعمق طبي ومالي.
 
 🔍 المطلوب منك:
 1. تحليل شامل للإجراءات المُتخذة (أشعة، فحوصات، أدوية) وبيان هل هي:
@@ -82,7 +121,7 @@ export default async function handler(req, res) {
 - التشخيص: ${diagnosis}
 - الأعراض: ${symptoms}
 - العمر: ${age}
-- الجنس: ${gender}
+- الجنس: ${gender === 'male' ? 'ذكر' : gender === 'female' ? 'أنثى' : 'غير محدد'}
 - الإجراءات التحليلية (أشعة وتحاليل) قبل التشخيص: ${beforeProcedure}
 - الإجراءات العلاجية والوقائية بعد التشخيص: ${afterProcedure}
 `;
@@ -106,17 +145,18 @@ export default async function handler(req, res) {
     let result;
     try {
       const cleaned = raw
+        .replace(/^json\s*/i, '')
         .replace(/^```json\s*/i, '')
-        .replace(/^```/, '')
         .replace(/```$/, '')
         .trim();
       result = JSON.parse(cleaned);
-    } catch {
-      result = { result: raw };
+    } catch (parseError) {
+      console.error("Failed to parse GPT response:", parseError);
+      result = { result: raw, error: "Failed to parse GPT response as JSON." };
     }
 
     res.status(200).json(result);
-  } catch (err) {
+  } catch (err: any) {
     console.error("GPT API Error:", err);
     res.status(500).json({ error: "GPT API Error: " + err.message });
   }
