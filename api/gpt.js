@@ -32,7 +32,7 @@ export default async function handler(req, res) {
    ✅ مبررة ومدعومة تأمينياً
    ⚠️ مبررة ولكن غير مدعومة
    ❌ غير مبررة ولا مدعومة
-2. بيان واضح لكل مبرر طبياً مع التركيز على التوثيق السريري المطلوب لقبوله تأمينياً.
+2. بيان واض يعن لكل مبرر طبياً مع التركيز على التوثيق السريري المطلوب لقبوله تأمينياً.
 3. الكشف عن الإجراءات أو الفحوصات الطبية المفقودة والتي كان من الأفضل عملها (مثل CBC، ESR، تحليل بول، وظائف كلى... حسب التشخيص والأعراض).
 4. تقديم توصيات لتحسين الإيراد من نفس الحالة بطريقة مشروعة ومغطاة.
 
@@ -42,13 +42,19 @@ export default async function handler(req, res) {
 - rejectionRisk: (منخفض / متوسط / مرتفع)
 - rejectionReason: سبب الرفض المحتمل إن وُجد
 - rejectedValue: مبلغ معرض للرفض إن وُجد
-- improvementSuggestions: قائمة بصيغة JSON على الشكل التالي:
+- improvementSuggestions: قائمة بصيغة JSON فقط، مثال:
   [
     {
-      "title": "اسم الإجراء",
-      "description": "الأهمية الطبية للإجراء",
-      "estimatedValue": "القيمة التقديرية بالريال السعودي",
-      "whyNotRejectable": "سبب قبوله تأمينياً"
+      "title": "تحليل السكر التراكمي HbA1c",
+      "description": "لمعرفة مدى السيطرة على السكري خلال الثلاثة أشهر الماضية.",
+      "estimatedValue": "150",
+      "whyNotRejectable": "ضروري ومغطى تأمينياً لجميع مرضى السكري."
+    },
+    {
+      "title": "تحليل وظائف الكلى",
+      "description": "للكشف عن أثر السكري على الكلى.",
+      "estimatedValue": "200",
+      "whyNotRejectable": "مغطى تأمينياً عند وجود سكري مزمن."
     }
   ]
 - potentialRevenueIncrease: عبارة منظمة توضح إجمالي الزيادة الممكنة مع دمج أسماء الإجراءات المقترحة وتأثيرها المالي والتأميني.
@@ -81,7 +87,7 @@ export default async function handler(req, res) {
     let result;
     try {
       const cleaned = raw
-        .replace(/^```json\\s*/i, '')
+        .replace(/^```json\s*/i, '')
         .replace(/^```/, '')
         .replace(/```$/, '')
         .trim();
