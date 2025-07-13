@@ -1,3 +1,4 @@
+<!-- بداية الصفحة -->
 <!DOCTYPE html>
 <html lang="ar">
 <head>
@@ -5,73 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>نموذج تقييم الحالة الطبية - GPT</title>
   <style>
-    body {
-      font-family: sans-serif;
-      direction: rtl;
-      padding: 2rem;
-      background-color: #f8f8f8;
-      max-width: 900px;
-      margin: 2rem auto;
-      box-shadow: 0 0 15px rgba(0,0,0,0.1);
-      border-radius: 8px;
-    }
-    h2, h3, h4 {
-      color: #333;
-      margin-top: 2rem;
-    }
-    label {
-      font-weight: bold;
-      display: block;
-      margin-top: 1rem;
-    }
-    textarea, input, select {
-      width: 100%;
-      padding: 0.8rem;
-      margin-top: 0.3rem;
-      font-size: 1rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    textarea {
-      min-height: 80px;
-      resize: vertical;
-    }
-    button {
-      width: 100%;
-      padding: 1rem;
-      margin-top: 2rem;
-      font-size: 1.1rem;
-      font-weight: bold;
-      color: #fff;
-      background-color: #007bff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    .block {
-      background: #fff;
-      padding: 1.5rem;
-      margin-top: 2rem;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      white-space: pre-line;
-    }
-    .suggestion-block {
-      border: 1px dashed #999;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      background-color: #fdfdfd;
-    }
-    .highlight {
-      font-weight: bold;
-      color: #2c3e50;
-    }
-    .checkmark {
-      font-size: 1.2rem;
-    }
+    body { font-family: sans-serif; direction: rtl; padding: 2rem; background: #f8f8f8; max-width: 900px; margin: 2rem auto; box-shadow: 0 0 15px rgba(0,0,0,0.1); border-radius: 8px; }
+    h2, h3, h4 { color: #333; margin-top: 2rem; }
+    label { font-weight: bold; display: block; margin-top: 1rem; }
+    textarea, input, select { width: 100%; padding: 0.8rem; margin-top: 0.3rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+    textarea { min-height: 80px; resize: vertical; }
+    button { width: 100%; padding: 1rem; margin-top: 2rem; font-size: 1.1rem; font-weight: bold; color: #fff; background-color: #007bff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    .block { background: #fff; padding: 1.5rem; margin-top: 2rem; border: 1px solid #ccc; border-radius: 8px; white-space: pre-line; }
+    .suggestion-block { border: 1px dashed #999; padding: 1rem; margin-bottom: 1rem; background-color: #fdfdfd; }
+    .highlight { font-weight: bold; color: #2c3e50; }
   </style>
 </head>
 <body>
@@ -79,13 +23,13 @@
   <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
 
   <label for="diagnosis">تشخيص المرض (ICD-10):</label>
-  <input type="text" id="diagnosis" placeholder="مثال: سكري نوع 2" />
+  <input type="text" id="diagnosis" />
 
   <label for="symptoms">الأعراض:</label>
   <textarea id="symptoms"></textarea>
 
   <label for="age">عمر المريض:</label>
-  <input type="number" id="age" min="0" max="120" />
+  <input type="number" id="age" />
 
   <label for="gender">نوع المريض:</label>
   <select id="gender">
@@ -104,8 +48,9 @@
   <button onclick="analyzeCase()">تحليل الحالة</button>
 
   <div id="response" class="block"></div>
-  <div id="error" style="color:red; text-align:center; margin-top:1rem;"></div>
+  <div id="error" style="color:red; text-align:center;"></div>
 
+  <!-- ✅ الكود هنا بعد انتهاء كل العناصر -->
   <script>
     async function analyzeCase() {
       const diagnosis = document.getElementById('diagnosis').value;
@@ -131,9 +76,7 @@
         const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure
-          })
+          body: JSON.stringify({ diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure })
         });
 
         if (!result.ok) {
@@ -146,15 +89,14 @@
 
         if (json.result) html += `<h3>📌 ملخص الحالة:</h3><p>${json.result}</p>`;
 
-        if (json.justification && Array.isArray(json.justification)) {
+        if (json.justification) {
           html += `<h3>🧾 تحليل الإجراءات:</h3>`;
           json.justification.forEach(j => {
-            html += `
-              <div class="suggestion-block">
-                <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
-                <p><span class="highlight">التقييم:</span> ${j.justification}</p>
-                <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
-              </div>`;
+            html += `<div class="suggestion-block">
+              <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
+              <p><span class="highlight">التقييم:</span> ${j.justification}</p>
+              <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
+            </div>`;
           });
         }
 
@@ -164,16 +106,15 @@
           if (json.rejectedValue) html += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
         }
 
-        if (json.improvementSuggestions && Array.isArray(json.improvementSuggestions)) {
-          html += `<h3>📈 ما كان يمكن عمله لرفع الفاتورة (إجراءات مبررة وغير قابلة للرفض):</h3>`;
+        if (json.improvementSuggestions) {
+          html += `<h3>📈 فرص تحسين الدخل:</h3>`;
           json.improvementSuggestions.forEach(s => {
-            html += `
-              <div class="suggestion-block">
-                <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
-                <p><span class="highlight">الأهمية:</span> ${s.description}</p>
-                <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
-                <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
-              </div>`;
+            html += `<div class="suggestion-block">
+              <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
+              <p><span class="highlight">الأهمية:</span> ${s.description}</p>
+              <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
+              <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
+            </div>`;
           });
         }
 
@@ -181,4 +122,13 @@
           html += `<h3>💰 الزيادة المحتملة في الدخل:</h3><p>${json.potentialRevenueIncrease}</p>`;
         }
 
-        responseBox.innerHTML
+        responseBox.innerHTML = html;
+      } catch (err) {
+        errorBox.innerText = "حدث خطأ أثناء التحليل: " + err.message;
+        responseBox.innerText = "";
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
