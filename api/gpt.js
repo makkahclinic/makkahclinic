@@ -32,7 +32,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("OpenAI API key is not set.");
 
-    const evaluateProcedureJustification = (procedure: string, patientAge: number, patientSymptoms: string[]) => {
+    const evaluateProcedureJustification = (
+      procedure: string,
+      patientAge: number,
+      patientSymptoms: string[]
+    ) => {
       let justification = '✅ مبررة ومدعومة تأمينياً';
       let risk = 'منخفض';
 
