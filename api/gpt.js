@@ -1,137 +1,187 @@
-export const config = {
-  runtime: 'nodejs', // يجبر Vercel على استخدام Serverless
-};
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نموذج تقييم الحالة الطبية - GPT</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-import Cors from 'micro-cors';
-import type { NextApiRequest, NextApiResponse } from 'next';
-
-const cors = Cors({
-  origin: ['https://m2020m.org', 'http://localhost:3000'],
-  allowMethods: ['POST', 'OPTIONS'],
-});
-
-const handler = async (req: NextApiRequest, res: NextApiResponse) => {
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const { diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure } = req.body;
-
-  if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("OpenAI API key is not set.");
-
-    const evaluateProcedureJustification = (
-      procedure: string,
-      patientAge: number,
-      patientSymptoms: string[]
-    ) => {
-      let justification = '✅ مبررة ومدعومة تأمينياً';
-      let risk = 'منخفض';
-
-      if (procedure.includes('سكر عشوائي')) {
-        if (
-          patientAge < 30 &&
-          !patientSymptoms.includes('عطش') &&
-          !patientSymptoms.includes('تبول') &&
-          !patientSymptoms.includes('فقدان وزن')
-        ) {
-          justification =
-            '⚠️ مبررة ولكن غير مدعومة (غير كافٍ بمفرده دون أعراض داعمة، يجب توثيق الأعراض أو طلب HbA1c لاحقاً)';
-          risk = 'متوسط إلى مرتفع';
-        }
-      }
-
-      return { justification, risk };
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+      authDomain: "insurance-check-6cec9.firebaseapp.com",
+      projectId: "insurance-check-6cec9",
+      storageBucket: "insurance-check-6cec9.appspot.com",
+      messagingSenderId: "992769471393",
+      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
+      measurementId: "G-LMS6VRSTT6"
     };
 
-    const proceduresWithEvaluations: any[] = [];
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
 
-    if (Array.isArray(beforeProcedure)) {
-      beforeProcedure.forEach((proc: string) => {
-        const { justification, risk } = evaluateProcedureJustification(proc, age, symptoms);
-        proceduresWithEvaluations.push({
-          step: proc,
-          justification,
-          rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}`,
-        });
-      });
-    }
+    let authCheckInProgress = false;
 
-    if (Array.isArray(afterProcedure)) {
-      afterProcedure.forEach((proc: string) => {
-        const { justification, risk } = evaluateProcedureJustification(proc, age, symptoms);
-        proceduresWithEvaluations.push({
-          step: proc,
-          justification,
-          rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}`,
-        });
-      });
-    }
+    onAuthStateChanged(auth, async (user) => {
+      if (authCheckInProgress) return;
+      authCheckInProgress = true;
 
-    const prompt = `أنت استشاري تحليلات طبية وتأمينية، دورك هو تقييم الحالة التالية بعمق طبي ومالي.
+      if (user) {
+        try {
+          await user.reload();
+        } catch (error) {
+          console.error("reload error:", error);
+          await signOut(auth);
+          window.location.href = "login.html";
+          return;
+        }
 
-🔬 بيانات الحالة:
-- التشخيص: ${diagnosis}
-- الأعراض: ${symptoms}
-- العمر: ${age}
-- الجنس: ${gender}
-- الإجراءات التحليلية قبل التشخيص: ${beforeProcedure}
-- الإجراءات بعد التشخيص: ${afterProcedure}
-
-🧾 أخرج النتيجة بصيغة JSON فقط تتضمن:
-- result
-- justification
-- rejectionRisk
-- rejectionReason
-- rejectedValue
-- improvementSuggestions
-- potentialRevenueIncrease
-`;
-
-    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1400,
-      }),
+        if (!user.emailVerified) {
+          alert("⚠️ يجب تأكيد البريد الإلكتروني للوصول لهذه الصفحة.");
+          await signOut(auth);
+          window.location.href = "login.html";
+        } else {
+          document.getElementById("user-info").textContent = `مرحبًا ${user.email}`;
+        }
+      } else {
+        window.location.href = "login.html";
+      }
     });
 
-    const data = await completion.json();
-    const raw = data.choices?.[0]?.message?.content;
+    window.logout = function () {
+      signOut(auth).then(() => {
+        alert("🛑 تم تسجيل الخروج.");
+        window.location.href = "login.html";
+      });
+    };
+  </script>
+  <style>
+    body { font-family: sans-serif; direction: rtl; padding: 2rem; background: #f8f8f8; max-width: 900px; margin: 2rem auto; box-shadow: 0 0 15px rgba(0,0,0,0.1); border-radius: 8px; }
+    h2, h3, h4 { color: #333; margin-top: 2rem; }
+    label { font-weight: bold; display: block; margin-top: 1rem; }
+    textarea, input, select { width: 100%; padding: 0.8rem; margin-top: 0.3rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+    textarea { min-height: 80px; resize: vertical; }
+    button { width: 100%; padding: 1rem; margin-top: 2rem; font-size: 1.1rem; font-weight: bold; color: #fff; background-color: #007bff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    .block { background: #fff; padding: 1.5rem; margin-top: 2rem; border: 1px solid #ccc; border-radius: 8px; white-space: pre-line; }
+    .suggestion-block { border: 1px dashed #999; padding: 1rem; margin-bottom: 1rem; background-color: #fdfdfd; }
+    .highlight { font-weight: bold; color: #2c3e50; }
+    #user-info { margin-top: -1rem; color: #444; font-size: 0.9rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
+  <div id="user-info"></div>
 
-    let result;
-    try {
-      const cleaned = raw
-        .replace(/^json\s*/i, '')
-        .replace(/^```json\s*/i, '')
-        .replace(/```$/, '')
-        .trim();
-      result = JSON.parse(cleaned);
-    } catch (e) {
-      console.error('Failed to parse GPT response:', e);
-      result = { result: raw, error: 'Failed to parse response as JSON' };
+  <label for="diagnosis">تشخيص المرض (ICD-10):</label>
+  <input type="text" id="diagnosis" />
+
+  <label for="symptoms">الأعراض:</label>
+  <textarea id="symptoms"></textarea>
+
+  <label for="age">عمر المريض:</label>
+  <input type="number" id="age" />
+
+  <label for="gender">نوع المريض:</label>
+  <select id="gender">
+    <option value="">اختر</option>
+    <option value="male">ذكر</option>
+    <option value="female">أنثى</option>
+  </select>
+
+  <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
+  <textarea id="beforeProcedure"></textarea>
+
+  <label for="afterProcedure">إجراءات بعد التشخيص:</label>
+  <textarea id="afterProcedure"></textarea>
+
+  <button onclick="analyzeCase()">تحليل الحالة</button>
+  <button onclick="logout()" style="background:#dc3545; margin-top:1rem;">تسجيل الخروج</button>
+
+  <div id="response" class="block"></div>
+  <div id="error" style="color:red; text-align:center;"></div>
+
+  <script>
+    async function analyzeCase() {
+      const diagnosis = document.getElementById('diagnosis').value;
+      const symptoms = document.getElementById('symptoms').value;
+      const age = document.getElementById('age').value;
+      const gender = document.getElementById('gender').value;
+      const beforeProcedure = document.getElementById('beforeProcedure').value;
+      const afterProcedure = document.getElementById('afterProcedure').value;
+
+      const responseBox = document.getElementById('response');
+      const errorBox = document.getElementById('error');
+
+      responseBox.innerText = "جاري تحليل الحالة...";
+      errorBox.innerText = "";
+
+      if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
+        errorBox.innerText = "الرجاء ملء جميع الحقول.";
+        responseBox.innerText = "";
+        return;
+      }
+
+      try {
+        const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure })
+        });
+
+        if (!result.ok) {
+          const errorText = await result.text();
+          throw new Error(`خطأ من الخادم: ${result.status}\n${errorText}`);
+        }
+
+        const json = await result.json();
+        let html = "";
+
+        if (json.result) html += `<h3>📌 ملخص الحالة:</h3><p>${json.result}</p>`;
+
+        if (json.justification) {
+          html += `<h3>🧾 تحليل الإجراءات:</h3>`;
+          json.justification.forEach(j => {
+            html += `<div class="suggestion-block">
+              <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
+              <p><span class="highlight">التقييم:</span> ${j.justification}</p>
+              <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
+            </div>`;
+          });
+        }
+
+        if (json.rejectionRisk) {
+          html += `<h3>🚫 احتمالية الرفض:</h3><p><strong>${json.rejectionRisk}</strong></p>`;
+          if (json.rejectionReason) html += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
+          if (json.rejectedValue) html += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
+        }
+
+        if (json.improvementSuggestions) {
+          html += `<h3>📈 فرص تحسين الدخل:</h3>`;
+          json.improvementSuggestions.forEach(s => {
+            html += `<div class="suggestion-block">
+              <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
+              <p><span class="highlight">الأهمية:</span> ${s.description}</p>
+              <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
+              <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
+            </div>`;
+          });
+        }
+
+        if (json.potentialRevenueIncrease) {
+          html += `<h3>💰 الزيادة المحتملة في الدخل:</h3><p>${json.potentialRevenueIncrease}</p>`;
+        }
+
+        responseBox.innerHTML = html;
+      } catch (err) {
+        errorBox.innerText = "حدث خطأ أثناء التحليل: " + err.message;
+        responseBox.innerText = "";
+        console.error(err);
+      }
     }
-
-    res.status(200).json(result);
-  } catch (err: any) {
-    console.error('GPT API Error:', err);
-    res.status(500).json({ error: 'GPT API Error: ' + err.message });
-  }
-};
-
-// الحل الحقيقي: لف handler داخل cors
-export default cors(handler);
+  </script>
+</body>
+</html>
