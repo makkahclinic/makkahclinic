@@ -22,21 +22,15 @@
     const auth = getAuth(app);
 
     let authCheckInProgress = false;
-
     onAuthStateChanged(auth, async (user) => {
       if (authCheckInProgress) return;
       authCheckInProgress = true;
-
       if (user) {
-        try {
-          await user.reload();
-        } catch (error) {
-          console.error("reload error:", error);
+        try { await user.reload(); }
+        catch {
           await signOut(auth);
-          window.location.href = "login.html";
-          return;
+          return window.location.href = "login.html";
         }
-
         if (!user.emailVerified) {
           alert("⚠️ يجب تأكيد البريد الإلكتروني للوصول لهذه الصفحة.");
           await signOut(auth);
@@ -49,7 +43,7 @@
       }
     });
 
-    window.logout = function () {
+    window.logout = () => {
       signOut(auth).then(() => {
         alert("🛑 تم تسجيل الخروج.");
         window.location.href = "login.html";
@@ -57,15 +51,22 @@
     };
   </script>
   <style>
-    body { font-family: sans-serif; direction: rtl; padding: 2rem; background: #f8f8f8; max-width: 900px; margin: 2rem auto; box-shadow: 0 0 15px rgba(0,0,0,0.1); border-radius: 8px; }
+    body { font-family: sans-serif; direction: rtl; padding: 2rem; background: #f8f8f8;
+           max-width: 900px; margin: 2rem auto; box-shadow: 0 0 15px rgba(0,0,0,0.1);
+           border-radius: 8px; }
     h2, h3, h4 { color: #333; margin-top: 2rem; }
     label { font-weight: bold; display: block; margin-top: 1rem; }
-    textarea, input, select { width: 100%; padding: 0.8rem; margin-top: 0.3rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+    textarea, input, select { width: 100%; padding: 0.8rem; margin-top: 0.3rem;
+                              font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
     textarea { min-height: 80px; resize: vertical; }
-    button { width: 100%; padding: 1rem; margin-top: 2rem; font-size: 1.1rem; font-weight: bold; color: #fff; background-color: #007bff; border: none; border-radius: 4px; cursor: pointer; }
+    button { width: 100%; padding: 1rem; margin-top: 2rem; font-size: 1.1rem;
+             font-weight: bold; color: #fff; background-color: #007bff;
+             border: none; border-radius: 4px; cursor: pointer; }
     button:hover { background-color: #0056b3; }
-    .block { background: #fff; padding: 1.5rem; margin-top: 2rem; border: 1px solid #ccc; border-radius: 8px; white-space: pre-line; }
-    .suggestion-block { border: 1px dashed #999; padding: 1rem; margin-bottom: 1rem; background-color: #fdfdfd; }
+    .block { background: #fff; padding: 1.5rem; margin-top: 2rem;
+              border: 1px solid #ccc; border-radius: 8px; white-space: pre-line; }
+    .suggestion-block { border: 1px dashed #999; padding: 1rem; margin-bottom: 1rem;
+                        background-color: #fdfdfd; }
     .highlight { font-weight: bold; color: #2c3e50; }
     #user-info { margin-top: -1rem; color: #444; font-size: 0.9rem; text-align: center; }
   </style>
@@ -104,86 +105,78 @@
 
   <script>
     async function analyzeCase() {
-      const diagnosis = document.getElementById('diagnosis').value;
-      const symptoms = document.getElementById('symptoms').value;
-      const age = document.getElementById('age').value;
-      const gender = document.getElementById('gender').value;
+      const diagnosis       = document.getElementById('diagnosis').value;
+      const symptoms        = document.getElementById('symptoms').value;
+      const age             = document.getElementById('age').value;
+      const gender          = document.getElementById('gender').value;
       const beforeProcedure = document.getElementById('beforeProcedure').value;
-      const afterProcedure = document.getElementById('afterProcedure').value;
+      const afterProcedure  = document.getElementById('afterProcedure').value;
 
       const responseBox = document.getElementById('response');
-      const errorBox = document.getElementById('error');
-
+      const errorBox    = document.getElementById('error');
       responseBox.innerText = "جاري تحليل الحالة...";
-      errorBox.innerText = "";
+      errorBox.innerText    = "";
 
       if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
-        errorBox.innerText = "الرجاء ملء جميع الحقول.";
+        errorBox.innerText    = "الرجاء ملء جميع الحقول.";
         responseBox.innerText = "";
         return;
       }
 
       try {
-- const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
--   method: "POST",
--   headers: {
--     "Content-Type": "application/json",
--     "Origin": "https://m2020m.org"
--   },
-+ const result = await fetch("/api/gpt", {
-+   method: "POST",
-+   headers: {
-+     "Content-Type": "application/json"
-+   },
-    body: JSON.stringify({ diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure })
-});
+        // استدعاء الـ proxy الداخلي
+        const result = await fetch("/api/gpt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure })
+        });
 
         if (!result.ok) {
-          const errorText = await result.text();
-          throw new Error(`خطأ من الخادم: ${result.status}\n${errorText}`);
+          const text = await result.text();
+          throw new Error(`خطأ من الخادم: ${result.status}\n${text}`);
         }
 
         const json = await result.json();
         let html = "";
 
-        if (json.result) html += `<h3>📌 ملخص الحالة:</h3><p>${json.result}</p>`;
-
+        if (json.result) {
+          html += `<h3>📌 ملخص الحالة:</h3><p>${json.result}</p>`;
+        }
         if (json.justification) {
           html += `<h3>🧾 تحليل الإجراءات:</h3>`;
           json.justification.forEach(j => {
-            html += `<div class="suggestion-block">
-              <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
-              <p><span class="highlight">التقييم:</span> ${j.justification}</p>
-              <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
-            </div>`;
+            html += `
+              <div class="suggestion-block">
+                <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
+                <p><span class="highlight">التقييم:</span> ${j.justification}</p>
+                <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
+              </div>`;
           });
         }
-
         if (json.rejectionRisk) {
           html += `<h3>🚫 احتمالية الرفض:</h3><p><strong>${json.rejectionRisk}</strong></p>`;
-          if (json.rejectionReason) html += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
-          if (json.rejectedValue) html += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
+          if (json.rejectionReason)  html += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
+          if (json.rejectedValue)    html += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
         }
-
         if (json.improvementSuggestions) {
           html += `<h3>📈 فرص تحسين الدخل:</h3>`;
           json.improvementSuggestions.forEach(s => {
-            html += `<div class="suggestion-block">
-              <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
-              <p><span class="highlight">الأهمية:</span> ${s.description}</p>
-              <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
-              <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
-            </div>`;
+            html += `
+              <div class="suggestion-block">
+                <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
+                <p><span class="highlight">الأهمية:</span> ${s.description}</p>
+                <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
+                <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
+              </div>`;
           });
         }
-
         if (json.potentialRevenueIncrease) {
           html += `<h3>💰 الزيادة المحتملة في الدخل:</h3><p>${json.potentialRevenueIncrease}</p>`;
         }
 
         responseBox.innerHTML = html;
       } catch (err) {
-        errorBox.innerText = "حدث خطأ أثناء التحليل: " + err.message;
+        errorBox.innerText    = "حدث خطأ أثناء التحليل: " + err.message;
         responseBox.innerText = "";
         console.error(err);
       }
