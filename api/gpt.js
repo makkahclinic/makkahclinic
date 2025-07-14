@@ -1,6 +1,7 @@
 export const config = {
   runtime: 'nodejs', // يجبر Vercel أن تستخدم Serverless function وليس Edge Function
 };
+
 import { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -155,8 +156,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let result;
     try {
       const cleaned = raw
-        .replace(/^json\s*/i, '')
-        .replace(/^```json\s*/i, '')
+        .replace(/^json\\s*/i, '')
+        .replace(/^```json\\s*/i, '')
         .replace(/```$/, '')
         .trim();
       result = JSON.parse(cleaned);
