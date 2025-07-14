@@ -1,22 +1,16 @@
 export const config = {
-  runtime: 'nodejs', // يجبر Vercel أن تستخدم Serverless function وليس Edge Function
+  runtime: 'nodejs',
 };
 
-import { NextApiRequest, NextApiResponse } from 'next';
+import Cors from 'micro-cors';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // إعداد CORS بشكل مخصص
-  const allowedOrigins = ['https://m2020m.org', 'http://localhost:3000'];
-  const origin = req.headers.origin || '';
+const cors = Cors({
+  allowMethods: ['POST', 'OPTIONS'],
+  origin: ['https://m2020m.org', 'http://localhost:3000'],
+});
 
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-
+const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -171,4 +165,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error("GPT API Error:", err);
     res.status(500).json({ error: "GPT API Error: " + err.message });
   }
-}
+};
+
+export default cors(handler);
