@@ -1,5 +1,5 @@
 export const config = {
-  runtime: 'nodejs',
+  runtime: 'nodejs', // يجبر Vercel على استخدام Serverless
 };
 
 import Cors from 'micro-cors';
@@ -58,42 +58,56 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     if (Array.isArray(beforeProcedure)) {
       beforeProcedure.forEach((proc: string) => {
         const { justification, risk } = evaluateProcedureJustification(proc, age, symptoms);
-        proceduresWithEvaluations.push({ step: proc, justification, rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}` });
+        proceduresWithEvaluations.push({
+          step: proc,
+          justification,
+          rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}`,
+        });
       });
     }
 
     if (Array.isArray(afterProcedure)) {
       afterProcedure.forEach((proc: string) => {
         const { justification, risk } = evaluateProcedureJustification(proc, age, symptoms);
-        proceduresWithEvaluations.push({ step: proc, justification, rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}` });
+        proceduresWithEvaluations.push({
+          step: proc,
+          justification,
+          rationale: `تقييم مبدئي بناءً على العمر والأعراض: ${risk}`,
+        });
       });
     }
 
     const prompt = `أنت استشاري تحليلات طبية وتأمينية، دورك هو تقييم الحالة التالية بعمق طبي ومالي.
-
-🔍 المطلوب:
-(نفس محتوى البرومبت الخاص بك...)
 
 🔬 بيانات الحالة:
 - التشخيص: ${diagnosis}
 - الأعراض: ${symptoms}
 - العمر: ${age}
 - الجنس: ${gender}
-- قبل التشخيص: ${beforeProcedure}
-- بعد التشخيص: ${afterProcedure}
+- الإجراءات التحليلية قبل التشخيص: ${beforeProcedure}
+- الإجراءات بعد التشخيص: ${afterProcedure}
+
+🧾 أخرج النتيجة بصيغة JSON فقط تتضمن:
+- result
+- justification
+- rejectionRisk
+- rejectionReason
+- rejectedValue
+- improvementSuggestions
+- potentialRevenueIncrease
 `;
 
-    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
+    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 1400
-      })
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1400,
+      }),
     });
 
     const data = await completion.json();
@@ -102,22 +116,22 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     let result;
     try {
       const cleaned = raw
-        .replace(/^json\\s*/i, '')
-        .replace(/^```json\\s*/i, '')
+        .replace(/^json\s*/i, '')
+        .replace(/^```json\s*/i, '')
         .replace(/```$/, '')
         .trim();
       result = JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error("Failed to parse GPT response:", parseError);
-      result = { result: raw, error: "Failed to parse GPT response as JSON." };
+    } catch (e) {
+      console.error('Failed to parse GPT response:', e);
+      result = { result: raw, error: 'Failed to parse response as JSON' };
     }
 
     res.status(200).json(result);
   } catch (err: any) {
-    console.error("GPT API Error:", err);
-    res.status(500).json({ error: "GPT API Error: " + err.message });
+    console.error('GPT API Error:', err);
+    res.status(500).json({ error: 'GPT API Error: ' + err.message });
   }
 };
 
-// 🔥 الحل الحقيقي هنا:
+// الحل الحقيقي: لف handler داخل cors
 export default cors(handler);
