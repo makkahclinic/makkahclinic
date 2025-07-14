@@ -1,3 +1,6 @@
+export const config = {
+  runtime: 'nodejs', // يجبر Vercel أن تستخدم Serverless function وليس Edge Function
+};
 import { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
