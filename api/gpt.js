@@ -3,11 +3,11 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY    // تأكد من ضبط هذا المتغير في إعدادات Vercel أو بيئتك
+  apiKey: process.env.OPENAI_API_KEY    // تأكد من ضبط هذا المتغير في إعدادات Vercel
 });
 
 export default async function handler(req, res) {
-  // 1) دعم طلبات CORS preflight
+  // 1) دعم CORS preflight
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
@@ -15,13 +15,13 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 2) نسمح فقط بطلبات POST
+  // 2) السماح فقط بـ POST
   if (req.method !== "POST") {
     res.setHeader("Access-Control-Allow-Origin", "*");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // 3) قراءة الحقول من body
+  // 3) جلب البيانات من جسم الطلب
   const {
     diagnosis,
     symptoms,
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     afterProcedure
   } = req.body;
 
-  // 4) التحقق من وجود جميع الحقول
+  // 4) التحقق من ملء جميع الحقول
   if (
     !diagnosis ||
     !symptoms ||
@@ -45,33 +45,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 5) بناء رسالة النظام للموديل
+    // 5) بناء الـ prompt
     const systemPrompt = `
-أنت مساعد طبي مختص في تحليل إجراءات التأمين.
-لديك هذه البيانات:
-- التشخيص (ICD-10): ${diagnosis}
+أنت مساعد طبي مختص بتحليل إجراءات التأمين.
+المعطيات:
+- التشخيص: ${diagnosis}
 - الأعراض: ${symptoms}
 - العمر: ${age}
 - الجنس: ${gender}
-- إجراءات ما قبل التشخيص: ${beforeProcedure}
-- إجراءات ما بعد التشخيص: ${afterProcedure}
+- قبل التشخيص: ${beforeProcedure}
+- بعد التشخيص: ${afterProcedure}
 
-الرجاء أن تنتج الرد بصيغة JSON يتضمن الحقول التالية:
-1) result: ملخص موجز للحالة.
-2) justification: مصفوفة من الكائنات، كل كائن يحتوي على:
-   - step: اسم الإجراء
-   - justification: تقييم الإجراء
-   - rationale: المبرر التأميني
-3) rejectionRisk: احتمالية الرفض (نص).
-4) rejectionReason: سبب الرفض (اختياري).
-5) rejectedValue: القيمة المعرضة للرفض (اختياري).
-6) improvementSuggestions: مصفوفة من الكائنات، كل كائن يحتوي على:
-   - title: عنوان الاقتراح
-   - description: وصف الأهمية
-   - estimatedValue: القيمة التقديرية
-   - whyNotRejectable: سبب قبول الإجراء تأمينيًا
-7) potentialRevenueIncrease: نص يوضح الزيادة المحتملة في الدخل.
-`;
+أرجو أن تُخرِج JSON يحتوي على:
+1) result (ملخص الحالة)
+2) justification: [ { step, justification, rationale }, ... ]
+3) rejectionRisk
+4) rejectionReason (اختياري)
+5) rejectedValue (اختياري)
+6) improvementSuggestions: [ { title, description, estimatedValue, whyNotRejectable }, ... ]
+7) potentialRevenueIncrease
+    `;
 
     // 6) استدعاء OpenAI
     const completion = await openai.chat.completions.create({
@@ -80,19 +73,17 @@ export default async function handler(req, res) {
       temperature: 0.2
     });
 
-    // 7) الحصول على النص الناتج
     const raw = completion.choices?.[0]?.message?.content || "";
 
-    // 8) محاولة تحويل الرد إلى JSON
+    // 7) محاولة تحويله لـ JSON
     let payload;
     try {
       payload = JSON.parse(raw);
     } catch {
-      // إذا لم يكن JSON صالحًا، نضع النص كله في result
       payload = { result: raw };
     }
 
-    // 9) إعادة الرد مع هيدر CORS
+    // 8) إرجاع الرد مع هيدر CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
     return res.status(200).json(payload);
 
