@@ -1,187 +1,106 @@
-<!DOCTYPE html>
-<html lang="ar">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>نموذج تقييم الحالة الطبية - GPT</title>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+// main/api/gpt.js
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-      authDomain: "insurance-check-6cec9.firebaseapp.com",
-      projectId: "insurance-check-6cec9",
-      storageBucket: "insurance-check-6cec9.appspot.com",
-      messagingSenderId: "992769471393",
-      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
-      measurementId: "G-LMS6VRSTT6"
-    };
+import OpenAI from "openai";
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY    // تأكد من ضبط هذا المتغير في إعدادات Vercel أو بيئتك
+});
 
-    let authCheckInProgress = false;
+export default async function handler(req, res) {
+  // 1) دعم طلبات CORS preflight
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(200).end();
+  }
 
-    onAuthStateChanged(auth, async (user) => {
-      if (authCheckInProgress) return;
-      authCheckInProgress = true;
+  // 2) نسمح فقط بطلبات POST
+  if (req.method !== "POST") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-      if (user) {
-        try {
-          await user.reload();
-        } catch (error) {
-          console.error("reload error:", error);
-          await signOut(auth);
-          window.location.href = "login.html";
-          return;
-        }
+  // 3) قراءة الحقول من body
+  const {
+    diagnosis,
+    symptoms,
+    age,
+    gender,
+    beforeProcedure,
+    afterProcedure
+  } = req.body;
 
-        if (!user.emailVerified) {
-          alert("⚠️ يجب تأكيد البريد الإلكتروني للوصول لهذه الصفحة.");
-          await signOut(auth);
-          window.location.href = "login.html";
-        } else {
-          document.getElementById("user-info").textContent = `مرحبًا ${user.email}`;
-        }
-      } else {
-        window.location.href = "login.html";
-      }
+  // 4) التحقق من وجود جميع الحقول
+  if (
+    !diagnosis ||
+    !symptoms ||
+    !age ||
+    !gender ||
+    !beforeProcedure ||
+    !afterProcedure
+  ) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res.status(400).json({ error: "الرجاء ملء جميع الحقول." });
+  }
+
+  try {
+    // 5) بناء رسالة النظام للموديل
+    const systemPrompt = `
+أنت مساعد طبي مختص في تحليل إجراءات التأمين.
+لديك هذه البيانات:
+- التشخيص (ICD-10): ${diagnosis}
+- الأعراض: ${symptoms}
+- العمر: ${age}
+- الجنس: ${gender}
+- إجراءات ما قبل التشخيص: ${beforeProcedure}
+- إجراءات ما بعد التشخيص: ${afterProcedure}
+
+الرجاء أن تنتج الرد بصيغة JSON يتضمن الحقول التالية:
+1) result: ملخص موجز للحالة.
+2) justification: مصفوفة من الكائنات، كل كائن يحتوي على:
+   - step: اسم الإجراء
+   - justification: تقييم الإجراء
+   - rationale: المبرر التأميني
+3) rejectionRisk: احتمالية الرفض (نص).
+4) rejectionReason: سبب الرفض (اختياري).
+5) rejectedValue: القيمة المعرضة للرفض (اختياري).
+6) improvementSuggestions: مصفوفة من الكائنات، كل كائن يحتوي على:
+   - title: عنوان الاقتراح
+   - description: وصف الأهمية
+   - estimatedValue: القيمة التقديرية
+   - whyNotRejectable: سبب قبول الإجراء تأمينيًا
+7) potentialRevenueIncrease: نص يوضح الزيادة المحتملة في الدخل.
+`;
+
+    // 6) استدعاء OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "system", content: systemPrompt }],
+      temperature: 0.2
     });
 
-    window.logout = function () {
-      signOut(auth).then(() => {
-        alert("🛑 تم تسجيل الخروج.");
-        window.location.href = "login.html";
-      });
-    };
-  </script>
-  <style>
-    body { font-family: sans-serif; direction: rtl; padding: 2rem; background: #f8f8f8; max-width: 900px; margin: 2rem auto; box-shadow: 0 0 15px rgba(0,0,0,0.1); border-radius: 8px; }
-    h2, h3, h4 { color: #333; margin-top: 2rem; }
-    label { font-weight: bold; display: block; margin-top: 1rem; }
-    textarea, input, select { width: 100%; padding: 0.8rem; margin-top: 0.3rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
-    textarea { min-height: 80px; resize: vertical; }
-    button { width: 100%; padding: 1rem; margin-top: 2rem; font-size: 1.1rem; font-weight: bold; color: #fff; background-color: #007bff; border: none; border-radius: 4px; cursor: pointer; }
-    button:hover { background-color: #0056b3; }
-    .block { background: #fff; padding: 1.5rem; margin-top: 2rem; border: 1px solid #ccc; border-radius: 8px; white-space: pre-line; }
-    .suggestion-block { border: 1px dashed #999; padding: 1rem; margin-bottom: 1rem; background-color: #fdfdfd; }
-    .highlight { font-weight: bold; color: #2c3e50; }
-    #user-info { margin-top: -1rem; color: #444; font-size: 0.9rem; text-align: center; }
-  </style>
-</head>
-<body>
-  <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
-  <div id="user-info"></div>
+    // 7) الحصول على النص الناتج
+    const raw = completion.choices?.[0]?.message?.content || "";
 
-  <label for="diagnosis">تشخيص المرض (ICD-10):</label>
-  <input type="text" id="diagnosis" />
-
-  <label for="symptoms">الأعراض:</label>
-  <textarea id="symptoms"></textarea>
-
-  <label for="age">عمر المريض:</label>
-  <input type="number" id="age" />
-
-  <label for="gender">نوع المريض:</label>
-  <select id="gender">
-    <option value="">اختر</option>
-    <option value="male">ذكر</option>
-    <option value="female">أنثى</option>
-  </select>
-
-  <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
-  <textarea id="beforeProcedure"></textarea>
-
-  <label for="afterProcedure">إجراءات بعد التشخيص:</label>
-  <textarea id="afterProcedure"></textarea>
-
-  <button onclick="analyzeCase()">تحليل الحالة</button>
-  <button onclick="logout()" style="background:#dc3545; margin-top:1rem;">تسجيل الخروج</button>
-
-  <div id="response" class="block"></div>
-  <div id="error" style="color:red; text-align:center;"></div>
-
-  <script>
-    async function analyzeCase() {
-      const diagnosis = document.getElementById('diagnosis').value;
-      const symptoms = document.getElementById('symptoms').value;
-      const age = document.getElementById('age').value;
-      const gender = document.getElementById('gender').value;
-      const beforeProcedure = document.getElementById('beforeProcedure').value;
-      const afterProcedure = document.getElementById('afterProcedure').value;
-
-      const responseBox = document.getElementById('response');
-      const errorBox = document.getElementById('error');
-
-      responseBox.innerText = "جاري تحليل الحالة...";
-      errorBox.innerText = "";
-
-      if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
-        errorBox.innerText = "الرجاء ملء جميع الحقول.";
-        responseBox.innerText = "";
-        return;
-      }
-
-      try {
-        const result = await fetch("https://makkahclinic.vercel.app/api/gpt", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure })
-        });
-
-        if (!result.ok) {
-          const errorText = await result.text();
-          throw new Error(`خطأ من الخادم: ${result.status}\n${errorText}`);
-        }
-
-        const json = await result.json();
-        let html = "";
-
-        if (json.result) html += `<h3>📌 ملخص الحالة:</h3><p>${json.result}</p>`;
-
-        if (json.justification) {
-          html += `<h3>🧾 تحليل الإجراءات:</h3>`;
-          json.justification.forEach(j => {
-            html += `<div class="suggestion-block">
-              <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
-              <p><span class="highlight">التقييم:</span> ${j.justification}</p>
-              <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
-            </div>`;
-          });
-        }
-
-        if (json.rejectionRisk) {
-          html += `<h3>🚫 احتمالية الرفض:</h3><p><strong>${json.rejectionRisk}</strong></p>`;
-          if (json.rejectionReason) html += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
-          if (json.rejectedValue) html += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
-        }
-
-        if (json.improvementSuggestions) {
-          html += `<h3>📈 فرص تحسين الدخل:</h3>`;
-          json.improvementSuggestions.forEach(s => {
-            html += `<div class="suggestion-block">
-              <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
-              <p><span class="highlight">الأهمية:</span> ${s.description}</p>
-              <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
-              <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
-            </div>`;
-          });
-        }
-
-        if (json.potentialRevenueIncrease) {
-          html += `<h3>💰 الزيادة المحتملة في الدخل:</h3><p>${json.potentialRevenueIncrease}</p>`;
-        }
-
-        responseBox.innerHTML = html;
-      } catch (err) {
-        errorBox.innerText = "حدث خطأ أثناء التحليل: " + err.message;
-        responseBox.innerText = "";
-        console.error(err);
-      }
+    // 8) محاولة تحويل الرد إلى JSON
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      // إذا لم يكن JSON صالحًا، نضع النص كله في result
+      payload = { result: raw };
     }
-  </script>
-</body>
-</html>
+
+    // 9) إعادة الرد مع هيدر CORS
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res.status(200).json(payload);
+
+  } catch (err) {
+    console.error("GPT API error:", err);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res
+      .status(500)
+      .json({ error: "خطأ في الخادم: " + err.message });
+  }
+}
