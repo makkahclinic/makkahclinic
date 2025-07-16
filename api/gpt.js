@@ -3,11 +3,11 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // تأكد من إضافته في Vercel > Settings > Environment Variables
+  apiKey: process.env.OPENAI_API_KEY, // يجب أن يكون معرفًا في Vercel
 });
 
 export default async function handler(req, res) {
-  // ✅ دعم CORS
+  // دعم CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -41,7 +41,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ الـ Prompt بشكل صحيح داخل backticks
     const systemPrompt = `
 أنت مساعد طبي مختص بتحليل إجراءات التأمين.
 المعطيات:
@@ -70,11 +69,11 @@ export default async function handler(req, res) {
 
     const raw = completion.choices?.[0]?.message?.content || "";
 
-    // ✅ نحاول تحويل الناتج إلى JSON
     let payload;
     try {
       payload = JSON.parse(raw);
-    } catch {
+    } catch (err) {
+      console.warn("⚠️ JSON parsing failed. Returning raw text.");
       payload = {
         result: raw,
         warning: "⚠️ الرد ليس JSON، تم عرضه كنص فقط",
@@ -83,9 +82,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json(payload);
   } catch (err) {
-    console.error("GPT API error:", err);
-    return res
-      .status(500)
-      .json({ error: "خطأ أثناء تحليل الحالة: " + err.message });
+    console.error("🔥 GPT API error:", err);
+    return res.status(500).json({
+      error: "خطأ أثناء تحليل الحالة من GPT",
+      detail: err.message,
+    });
   }
 }
