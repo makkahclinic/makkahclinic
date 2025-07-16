@@ -103,7 +103,11 @@
   <div id="response" class="block"></div>
   <div id="error" style="color:red; text-align:center;"></div>
 
-  <script>
+  <script type="module">
+    import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const auth = getAuth();
+
     async function analyzeCase() {
       const diagnosis       = document.getElementById('diagnosis').value;
       const symptoms        = document.getElementById('symptoms').value;
@@ -124,10 +128,14 @@
       }
 
       try {
-        // استدعاء الـ proxy الداخلي
+        const token = await auth.currentUser.getIdToken(); // ✅ هذا الجديد
+
         const result = await fetch("/api/gpt", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}` // ✅ أضفنا توثيق المستخدم
+          },
           body: JSON.stringify({ diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure })
         });
 
@@ -181,6 +189,8 @@
         console.error(err);
       }
     }
+
+    window.analyzeCase = analyzeCase;
   </script>
 </body>
 </html>
