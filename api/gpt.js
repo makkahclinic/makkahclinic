@@ -3,35 +3,32 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY    // تأكد من ضبط هذا المتغير في إعدادات Vercel
+  apiKey: process.env.OPENAI_API_KEY, // تأكد من إضافته في إعدادات Vercel
 });
 
 export default async function handler(req, res) {
-  // 1) دعم CORS preflight
+  // دعم CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     return res.status(200).end();
   }
 
-  // 2) السماح فقط بـ POST
   if (req.method !== "POST") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // 3) جلب البيانات من جسم الطلب
   const {
     diagnosis,
     symptoms,
     age,
     gender,
     beforeProcedure,
-    afterProcedure
+    afterProcedure,
   } = req.body;
 
-  // 4) التحقق من ملء جميع الحقول
   if (
     !diagnosis ||
     !symptoms ||
@@ -40,12 +37,10 @@ export default async function handler(req, res) {
     !beforeProcedure ||
     !afterProcedure
   ) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
     return res.status(400).json({ error: "الرجاء ملء جميع الحقول." });
   }
 
   try {
-    // 5) بناء الـ prompt
     const systemPrompt = `
 أنت مساعد طبي مختص بتحليل إجراءات التأمين.
 المعطيات:
@@ -64,34 +59,32 @@ export default async function handler(req, res) {
 5) rejectedValue (اختياري)
 6) improvementSuggestions: [ { title, description, estimatedValue, whyNotRejectable }, ... ]
 7) potentialRevenueIncrease
-    `;
+`;
 
-    // 6) استدعاء OpenAI
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [{ role: "system", content: systemPrompt }],
-      temperature: 0.2
+      temperature: 0.2,
     });
 
     const raw = completion.choices?.[0]?.message?.content || "";
 
-    // 7) محاولة تحويله لـ JSON
+    // جرب نحول إلى JSON
     let payload;
     try {
       payload = JSON.parse(raw);
     } catch {
-      payload = { result: raw };
+      payload = {
+        result: raw,
+        warning: "⚠️ الرد ليس JSON، تم عرضه كنص فقط",
+      };
     }
 
-    // 8) إرجاع الرد مع هيدر CORS
-    res.setHeader("Access-Control-Allow-Origin", "*");
     return res.status(200).json(payload);
-
   } catch (err) {
     console.error("GPT API error:", err);
-    res.setHeader("Access-Control-Allow-Origin", "*");
     return res
       .status(500)
-      .json({ error: "خطأ في الخادم: " + err.message });
+      .json({ error: "خطأ أثناء تحليل الحالة: " + err.message });
   }
 }
