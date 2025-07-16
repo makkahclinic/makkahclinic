@@ -3,11 +3,11 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // تأكد من إضافته في إعدادات Vercel
+  apiKey: process.env.OPENAI_API_KEY, // تأكد من إضافته في Vercel > Settings > Environment Variables
 });
 
 export default async function handler(req, res) {
-  // دعم CORS
+  // ✅ دعم CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
@@ -41,6 +41,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ✅ الـ Prompt بشكل صحيح داخل backticks
     const systemPrompt = `
 أنت مساعد طبي مختص بتحليل إجراءات التأمين.
 المعطيات:
@@ -69,7 +70,7 @@ export default async function handler(req, res) {
 
     const raw = completion.choices?.[0]?.message?.content || "";
 
-    // جرب نحول إلى JSON
+    // ✅ نحاول تحويل الناتج إلى JSON
     let payload;
     try {
       payload = JSON.parse(raw);
