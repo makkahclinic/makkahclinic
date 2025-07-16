@@ -3,42 +3,23 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // يجب أن يكون معرفًا في Vercel
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export default async function handler(req, res) {
-  // دعم CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  const { diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure } = req.body;
 
-  const {
-    diagnosis,
-    symptoms,
-    age,
-    gender,
-    beforeProcedure,
-    afterProcedure,
-  } = req.body;
-
-  if (
-    !diagnosis ||
-    !symptoms ||
-    !age ||
-    !gender ||
-    !beforeProcedure ||
-    !afterProcedure
-  ) {
+  if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
     return res.status(400).json({ error: "الرجاء ملء جميع الحقول." });
   }
+
   try {
     const systemPrompt = `
 أنت مساعد خبير في المراجعة الطبية التأمينية. دورك هو تحليل الحالة الطبية المقدمة من طبيب، وتقييمها من حيث:
@@ -87,24 +68,6 @@ export default async function handler(req, res) {
 - الجنس: ${gender}
 - الإجراءات قبل التشخيص: ${beforeProcedure}
 - الإجراءات بعد التشخيص: ${afterProcedure}
-`;
-أنت مساعد طبي مختص بتحليل إجراءات التأمين.
-المعطيات:
-- التشخيص: ${diagnosis}
-- الأعراض: ${symptoms}
-- العمر: ${age}
-- الجنس: ${gender}
-- قبل التشخيص: ${beforeProcedure}
-- بعد التشخيص: ${afterProcedure}
-
-أرجو أن تُخرِج JSON يحتوي على:
-1) result (ملخص الحالة)
-2) justification: [ { step, justification, rationale }, ... ]
-3) rejectionRisk
-4) rejectionReason (اختياري)
-5) rejectedValue (اختياري)
-6) improvementSuggestions: [ { title, description, estimatedValue, whyNotRejectable }, ... ]
-7) potentialRevenueIncrease
 `;
 
     const completion = await openai.chat.completions.create({
