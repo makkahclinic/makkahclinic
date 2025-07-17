@@ -48,15 +48,15 @@ export default async function handler(req, res) {
   }
 
   // Use the Gemini API key from Vercel's environment variables.
-  // Make sure to add GEMINI_API_KEY to your Vercel project settings.
-  // استخدام مفتاح Gemini API من متغيرات البيئة في Vercel.
-  // تأكد من إضافة GEMINI_API_KEY في إعدادات مشروعك على Vercel.
   const apiKey = process.env.GEMINI_API_KEY;
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-  // Prompt focused on providing context for the JSON generation
+  // **CRITICAL CHANGE**: The prompt is now highly detailed and prescriptive to force
+  // the model to generate a deep, insightful, and actionable report, not just a summary.
+  // **تغيير جوهري**: التعليمات الآن مفصلة وتوجيهية للغاية لإجبار النموذج على
+  // إنشاء تقرير عميق ومفيد وقابل للتنفيذ، وليس مجرد ملخص.
   const jsonPrompt = `
-    أنت خبير مراجعة طبية تأمينية. بناءً على بيانات الحالة التالية، قم بإنشاء تحليل مفصل على هيئة JSON.
+    أنت خبير استشاري في المراجعة الطبية والتأمين، ومهمتك مزدوجة: ضمان أفضل رعاية للمريض وتحقيق أقصى استفادة مالية مشروعة للعيادة. قم بتحليل الحالة التالية بعمق وقدم تقريراً مفصلاً بصيغة JSON. لا تكن مختصراً أبداً.
 
     **بيانات الحالة:**
     - التشخيص: ${diagnosis}
@@ -67,19 +67,41 @@ export default async function handler(req, res) {
     - الإجراءات قبل التشخيص: ${beforeProcedure}
     - الإجراءات بعد التشخيص: ${afterProcedure}
 
-    **المطلوب:**
-    - تحليل الحالة وتقييم الإجراءات.
-    - تحديد مخاطر الرفض التأميني.
-    - اقتراح تحسينات عملية لزيادة دخل العيادة وتحسين الرعاية.
-    - يجب أن تكون جميع القيم المالية بالريال السعودي.
-    - قم بتعبئة جميع حقول مخطط JSON المطلوب بدقة واحترافية.
+    ---
+    **التحليل المطلوب (يجب أن يكون مفصلاً وعميقاً):**
+
+    1.  **result (الملخص النقدي):**
+        -   قدم ملخصاً نقدياً للحالة. لا تكتفِ بسرد البيانات.
+        -   حلل العلاقة بين التشخيص والأعراض والإجراءات المتخذة.
+        -   هل هناك تقصير واضح في الرعاية؟ هل الإجراءات كافية أم سطحية؟ ما هي الصورة الكبيرة التي تراها كخبير؟
+
+    2.  **justification (تقييم الإجراءات):**
+        -   لكل إجراء تم اتخاذه، قدم تبريراً مفصلاً.
+        -   مثال: إذا كان التشخيص "مشاكل كلى" وتم صرف دواء سكري، اشرح الرابط الطبي المنطقي (مثل: "مرضى الكلى غالباً ما يعانون من السكري، لذا فإن صرف دواء السكري مبرر لضبط الحالة المصاحبة").
+
+    3.  **rejectionRisk (مخاطر الرفض):**
+        -   بناءً على تحليلك، حدد مستوى الخطر (منخفض/متوسط/مرتفع).
+        -   اشرح سبب هذا التقييم بوضوح.
+
+    4.  **improvementSuggestions (اقتراحات التحسين - الجزء الأهم):**
+        -   هنا تظهر خبرتك. فكر كطبيب استشاري وخبير مالي. ما هي الفحوصات أو الاستشارات الإضافية التي كانت **ضرورية طبياً** لهذه الحالة ولكن تم إغفالها؟
+        -   يجب أن تكون الاقتراحات منطقية ومبنية على بروتوكولات طبية (مثل ADA, WHO).
+        -   لكل اقتراح، يجب أن تقدم بالتفصيل:
+            -   **title:** اسم الإجراء بوضوح (مثال: "فحص الموجات فوق الصوتية للكلى والمثانة (Kidney & Bladder Ultrasound)").
+            -   **description:** اشرح الأهمية الطبية بعمق. لماذا هو ضروري؟ (مثال: "ضروري لتقييم بنية الكلى، واستبعاد وجود حصوات أو مشاكل في المسالك البولية قد تكون هي السبب الحقيقي لألم الظهر وتدهور وظائف الكلى").
+            -   **estimatedValue:** قدر التكلفة بالريال السعودي (مثال: "250 ريال سعودي").
+            -   **whyNotRejectable:** قدم حجة قوية ومقنعة لشركة التأمين (مثال: "يعتبر هذا الفحص جزءاً لا يتجزأ من التشخيص التفريقي لأمراض الكلى وفقاً للإرشادات الطبية، ولا يمكن الاستغناء عنه لتحديد السبب الجذري للمشكلة").
+        -   **أمثلة على اقتراحات ذكية يجب أن تفكر بها:** تحليل بول كامل مع نسبة الزلال إلى الكرياتينين (UACR)، فحص الكهارل (Electrolytes)، استشارة متخصص (Nephrology/Cardiology Consultation)، زيارة متابعة مجدولة.
+
+    5.  **potentialRevenueIncrease (الزيادة المحتملة في الإيرادات):**
+        -   اجمع القيم التقديرية **لجميع** اقتراحاتك وقدم المجموع النهائي كرقم واضح بالريال السعودي.
     `;
 
   const payload = {
     contents: [{ role: "user", parts: [{ text: jsonPrompt }] }],
     generationConfig: {
-      temperature: 0.4,
-      responseMimeType: "application/json", // Request JSON output
+      temperature: 0.5, // زيادة طفيفة للإبداع في التحليل
+      responseMimeType: "application/json",
       responseSchema: {
         type: "OBJECT",
         properties: {
@@ -139,7 +161,6 @@ export default async function handler(req, res) {
       throw new Error("لم يتمكن النموذج من إنشاء رد JSON.");
     }
 
-    // The response is already a JSON string, so we parse it before sending
     const parsedPayload = JSON.parse(rawJsonString);
     
     return res.status(200).json(parsedPayload);
