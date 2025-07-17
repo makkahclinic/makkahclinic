@@ -91,6 +91,14 @@
     <option value="female">أنثى</option>
   </select>
 
+  <!-- 🔹 تمت إضافة حقل المدخن هنا -->
+  <label for="smoker">هل المريض مدخن؟</label>
+  <select id="smoker">
+    <option value="">اختر...</option>
+    <option value="yes">نعم</option>
+    <option value="no">لا</option>
+  </select>
+
   <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
   <textarea id="beforeProcedure"></textarea>
 
@@ -113,6 +121,7 @@
       const symptoms        = document.getElementById('symptoms').value;
       const age             = document.getElementById('age').value;
       const gender          = document.getElementById('gender').value;
+      const smoker          = document.getElementById('smoker').value;
       const beforeProcedure = document.getElementById('beforeProcedure').value;
       const afterProcedure  = document.getElementById('afterProcedure').value;
 
@@ -121,22 +130,22 @@
       responseBox.innerText = "جاري تحليل الحالة...";
       errorBox.innerText    = "";
 
-      if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure) {
+      if (!diagnosis || !symptoms || !age || !gender || !smoker || !beforeProcedure || !afterProcedure) {
         errorBox.innerText    = "الرجاء ملء جميع الحقول.";
         responseBox.innerText = "";
         return;
       }
 
       try {
-        const token = await auth.currentUser.getIdToken(); // ✅ هذا الجديد
+        const token = await auth.currentUser.getIdToken();
 
         const result = await fetch("/api/gpt", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}` // ✅ أضفنا توثيق المستخدم
+            "Authorization": `Bearer ${token}`
           },
-          body: JSON.stringify({ diagnosis, symptoms, age, gender, beforeProcedure, afterProcedure })
+          body: JSON.stringify({ diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure })
         });
 
         if (!result.ok) {
@@ -145,44 +154,7 @@
         }
 
         const json = await result.json();
-        let html = "";
-
-        if (json.result) {
-          html += `<h3>📌 ملخص الحالة:</h3><p>${json.result}</p>`;
-        }
-        if (json.justification) {
-          html += `<h3>🧾 تحليل الإجراءات:</h3>`;
-          json.justification.forEach(j => {
-            html += `
-              <div class="suggestion-block">
-                <p><span class="highlight">🔹 الإجراء:</span> ${j.step}</p>
-                <p><span class="highlight">التقييم:</span> ${j.justification}</p>
-                <p><span class="highlight">المبرر:</span> ${j.rationale}</p>
-              </div>`;
-          });
-        }
-        if (json.rejectionRisk) {
-          html += `<h3>🚫 احتمالية الرفض:</h3><p><strong>${json.rejectionRisk}</strong></p>`;
-          if (json.rejectionReason)  html += `<p><strong>السبب:</strong> ${json.rejectionReason}</p>`;
-          if (json.rejectedValue)    html += `<p><strong>القيمة المعرضة للرفض:</strong> ${json.rejectedValue} ريال</p>`;
-        }
-        if (json.improvementSuggestions) {
-          html += `<h3>📈 فرص تحسين الدخل:</h3>`;
-          json.improvementSuggestions.forEach(s => {
-            html += `
-              <div class="suggestion-block">
-                <p><span class="highlight">🔹 الإجراء:</span> ${s.title}</p>
-                <p><span class="highlight">الأهمية:</span> ${s.description}</p>
-                <p><span class="highlight">القيمة التقديرية:</span> ${s.estimatedValue} ريال</p>
-                <p><span class="highlight">سبب القبول التأميني:</span> ${s.whyNotRejectable}</p>
-              </div>`;
-          });
-        }
-        if (json.potentialRevenueIncrease) {
-          html += `<h3>💰 الزيادة المحتملة في الدخل:</h3><p>${json.potentialRevenueIncrease}</p>`;
-        }
-
-        responseBox.innerHTML = html;
+        responseBox.innerText = json.result || "📄 لم يتم العثور على تقرير.";
       } catch (err) {
         errorBox.innerText    = "حدث خطأ أثناء التحليل: " + err.message;
         responseBox.innerText = "";
