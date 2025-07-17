@@ -1,15 +1,15 @@
 // /api/gpt.js
 
-/**
- * @description Serverless API endpoint to generate a structured JSON medical insurance review.
- * This version uses Google's Gemini API with a specific JSON schema in the response configuration
- * to ensure a valid, parseable JSON object is always returned, matching the frontend's requirements.
- *
- * تم تحديث هذا الكود ليستخدم Gemini API مع تحديد مخطط JSON في الإعدادات لضمان
- * الحصول على رد بصيغة JSON منظمة تتوافق مع متطلبات الواجهة الأمامية.
- */
+import OpenAI from "openai";
+
+// Initialize the OpenAI client with the API key from environment variables
+// تهيئة عميل OpenAI باستخدام مفتاح API من متغيرات البيئة
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, // تأكد من إضافة هذا المتغير في Vercel
+});
+
 export default async function handler(req, res) {
-  // Set CORS headers
+  // Set CORS headers to allow cross-origin requests
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -21,131 +21,88 @@ export default async function handler(req, res) {
 
   // Ensure the request method is POST
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed" });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const {
-    diagnosis,
-    symptoms,
-    age,
-    gender,
-    smoker, // تمت إضافته للتحقق
-    beforeProcedure,
-    afterProcedure,
-  } = req.body;
+  // Destructure and validate the request body
+  const { diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure } = req.body;
 
-  // Validate that all required fields are present
-  if (
-    !diagnosis ||
-    !symptoms ||
-    !age ||
-    !gender ||
-    smoker === undefined || // تم تحديث التحقق
-    !beforeProcedure ||
-    !afterProcedure
-  ) {
+  if (!diagnosis || !symptoms || !age || !gender || smoker === undefined || !beforeProcedure || !afterProcedure) {
     return res.status(400).json({ error: "الرجاء ملء جميع الحقول." });
   }
 
-  const apiKey = ""; // سيتم توفيره تلقائيًا
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  // The prompt instructs the model to act as an expert and fill a JSON object.
+  // The phrase "You must output a JSON object" is crucial for JSON mode.
+  // التعليمات توجه النموذج للعمل كخبير وتعبئة كائن JSON.
+  // عبارة "You must output a JSON object" ضرورية لتفعيل وضع JSON.
+  const prompt = `
+    You are an expert medical insurance consultant. Based on the following case data, you must output a JSON object that provides a detailed analysis.
 
-  // Prompt is now focused on providing context for the JSON generation
-  // التعليمات تركز الآن على توفير السياق اللازم لتوليد بيانات JSON
-  const jsonPrompt = `
-    أنت خبير مراجعة طبية تأمينية. بناءً على بيانات الحالة التالية، قم بإنشاء تحليل مفصل على هيئة JSON.
+    Case Data:
+    - Diagnosis (ICD-10): ${diagnosis}
+    - Symptoms: ${symptoms}
+    - Age: ${age}
+    - Gender: ${gender}
+    - Smoker: ${smoker ? 'Yes' : 'No'}
+    - Procedures before diagnosis: ${beforeProcedure}
+    - Procedures after diagnosis: ${afterProcedure}
 
-    **بيانات الحالة:**
-    - التشخيص: ${diagnosis}
-    - الأعراض: ${symptoms}
-    - العمر: ${age}
-    - الجنس: ${gender}
-    - مدخن: ${smoker ? 'نعم' : 'لا'}
-    - الإجراءات قبل التشخيص: ${beforeProcedure}
-    - الإجراءات بعد التشخيص: ${afterProcedure}
-
-    **المطلوب:**
-    - تحليل الحالة وتقييم الإجراءات.
-    - تحديد مخاطر الرفض التأميني.
-    - اقتراح تحسينات عملية لزيادة دخل العيادة وتحسين الرعاية.
-    - يجب أن تكون جميع القيم المالية بالريال السعودي.
-    - قم بتعبئة جميع حقول مخطط JSON المطلوب بدقة واحترافية.
+    Your tasks are to:
+    1.  Analyze the case and explain potential medical reasons for the symptoms.
+    2.  Evaluate each procedure for its justification.
+    3.  Determine the insurance rejection risk.
+    4.  Suggest additional tests or consultations that would increase clinic revenue, reduce insurance rejections, and improve patient care, referencing standards like ADA, UpToDate, WHO.
+    5.  All monetary values must be in Saudi Riyal (SAR).
+    6.  The output MUST be a valid JSON object matching the requested structure.
     `;
 
-  const payload = {
-    contents: [{ role: "user", parts: [{ text: jsonPrompt }] }],
-    generationConfig: {
-      temperature: 0.4,
-      responseMimeType: "application/json", // طلب إخراج JSON
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          result: { type: "STRING", description: "ملخص شامل باللغة العربية الفصحى، يشرح الحالة والأخطاء أو التقصير إن وجد، ويعطي نظرة احترافية" },
-          justification: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                step: { type: "STRING", description: "اسم الإجراء الذي تم تقييمه" },
-                justification: { type: "STRING", description: "هل الإجراء 'مبرر' أو 'غير مبرر'" },
-                rationale: { type: "STRING", description: "شرح علمي وتأميني واضح للتقييم" },
-              },
-              required: ["step", "justification", "rationale"],
-            },
-          },
-          rejectionRisk: { type: "STRING", description: "مستوى الخطورة: 'منخفض', 'متوسط', 'مرتفع'" },
-          rejectionReason: { type: "STRING", description: "لماذا يمكن رفض المطالبة إن وجد سبب" },
-          rejectedValue: { type: "STRING", description: "قيمة تقريبية محتملة للرفض بالريال السعودي" },
-          improvementSuggestions: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                title: { type: "STRING", description: "اسم الإجراء المقترح (مثلاً OCT أو استشارة عيون)" },
-                description: { type: "STRING", description: "لماذا هذا الإجراء مهم طبيًا وتأمينيًا" },
-                estimatedValue: { type: "STRING", description: "قيمة تقديرية للإجراء بالريال السعودي" },
-                whyNotRejectable: { type: "STRING", description: "مبررات قوية تمنع الرفض التأميني" },
-              },
-              required: ["title", "description", "estimatedValue", "whyNotRejectable"],
-            },
-          },
-          potentialRevenueIncrease: { type: "STRING", description: "تقدير الزيادة المحتملة في الإيرادات بالريال السعودي" },
-        },
-        required: ["result", "justification", "rejectionRisk", "rejectionReason", "rejectedValue", "improvementSuggestions", "potentialRevenueIncrease"],
-      },
-    },
-  };
-
   try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const completion = await openai.chat.completions.create({
+      // Using a model that supports JSON mode is recommended.
+      model: "gpt-4-turbo",
+      messages: [
+        { 
+          role: "system", 
+          content: prompt 
+        },
+        {
+          role: "user",
+          content: "Based on the system prompt, generate the JSON analysis for the provided case data."
+        }
+      ],
+      // This is the key change: enabling JSON mode
+      // هذا هو التغيير الرئيسي: تفعيل وضع JSON
+      response_format: { type: "json_object" },
+      temperature: 0.2,
     });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("🔥 Gemini API Error Response:", errorBody);
-      throw new Error(`API request failed: ${errorBody.error?.message || response.statusText}`);
+    const rawContent = completion.choices?.[0]?.message?.content;
+
+    if (!rawContent) {
+      throw new Error("The API returned an empty response.");
     }
 
-    const result = await response.json();
-    const rawJsonString = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!rawJsonString) {
-      throw new Error("لم يتمكن النموذج من إنشاء رد JSON.");
+    let payload;
+    try {
+      // The response from JSON mode is a guaranteed JSON string.
+      // الرد من وضع JSON هو نص JSON مضمون.
+      payload = JSON.parse(rawContent);
+    } catch (err) {
+      // This catch block is a fallback, but it's unlikely to be hit in JSON mode.
+      // هذا الكود احتياطي، ومن غير المرجح أن يتم تفعيله في وضع JSON.
+      console.error("Error parsing JSON from OpenAI:", err);
+      return res.status(500).json({ 
+          error: "Failed to parse the response from the AI.",
+          rawResponse: rawContent 
+      });
     }
-
-    // The response is already a JSON string, so we parse it before sending
-    // الرد هو نص بصيغة JSON، لذا نقوم بتحليله قبل إرساله
-    const parsedPayload = JSON.parse(rawJsonString);
     
-    return res.status(200).json(parsedPayload);
+    return res.status(200).json(payload);
 
   } catch (err) {
-    console.error("🔥 Server-side Error:", err);
+    console.error("❌ OpenAI API Error:", err);
     return res.status(500).json({
-      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
+      error: "An error occurred while analyzing the case.",
       detail: err.message,
     });
   }
