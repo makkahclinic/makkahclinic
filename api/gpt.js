@@ -53,92 +53,113 @@ export default async function handler(req, res) {
   // **ترقية النموذج**: تم التغيير إلى gemini-1.5-pro-latest للحصول على تحليل أعمق وأعلى جودة.
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-  // **CRITICAL CHANGE**: The prompt is now highly detailed and prescriptive to force
-  // the model to generate a deep, insightful, and actionable report, not just a summary.
-  // **تغيير جوهري**: التعليمات الآن مفصلة وتوجيهية للغاية لإجبار النموذج على
-  // إنشاء تقرير عميق ومفيد وقابل للتنفيذ، وليس مجرد ملخص.
+  // **CRITICAL PROMPT & SCHEMA OVERHAUL**: The prompt and schema are now completely redesigned
+  // to force the model to produce a detailed, critical, and structured report identical
+  // to the user's desired example.
+  // **إصلاح شامل للتعليمات والهيكل**: تم إعادة تصميم التعليمات وهيكل JSON بالكامل
+  // لإجبار النموذج على إنتاج تقرير مفصل ونقدي ومنظم مطابق تمامًا للمثال المطلوب.
   const jsonPrompt = `
-    أنت خبير استشاري في المراجعة الطبية والتأمين، ومهمتك مزدوجة: ضمان أفضل رعاية للمريض وتحقيق أقصى استفادة مالية مشروعة للعيادة. قم بتحليل الحالة التالية بعمق وقدم تقريراً مفصلاً بصيغة JSON. لا تكن مختصراً أبداً، بل كن مفصلاً في كل نقطة.
+    أنت "مدقق طبي مالي خبير" ومهمتك تحليل المطالبات التأمينية لعيادة طبية. هدفك هو نقد الإجراءات الحالية، تحديد المخاطر المالية، وتقديم خطة عمل واضحة ومفصلة لزيادة الإيرادات بشكل مبرر طبيًا ومتوافق مع البروتوكولات. يجب أن يكون تحليلك عميقاً، دقيقاً، وأن تتبع هيكل الـ JSON المطلوب بحذافيره.
 
-    **بيانات الحالة:**
-    - التشخيص: ${diagnosis}
+    **بيانات الحالة لتحليلها:**
+    - التشخيص المفوتر: ${diagnosis}
     - الأعراض: ${symptoms}
     - العمر: ${age}
     - الجنس: ${gender}
     - مدخن: ${smoker ? 'نعم' : 'لا'}
-    - الإجراءات قبل التشخيص: ${beforeProcedure}
-    - الإجراءات بعد التشخيص: ${afterProcedure}
+    - الإجراءات المتخذة (قبل وبعد التشخيص): ${beforeProcedure}, ${afterProcedure}
 
     ---
-    **التحليل المطلوب (يجب أن يكون مفصلاً وعميقاً):**
+    **منهجية التحليل المطلوبة (فكر بهذه الطريقة):**
 
-    1.  **result (الملخص النقدي):**
-        -   قدم ملخصاً نقدياً للحالة. لا تكتفِ بسرد البيانات.
-        -   حلل العلاقة بين التشخيص والأعراض والإجراءات المتخذة.
-        -   هل هناك تقصير واضح في الرعاية؟ هل الإجراءات كافية أم سطحية؟ ما هي الصورة الكبيرة التي تراها كخبير؟
+    1.  **الملخص النقدي (criticalSummary):** ابدأ بنظرة نقدية. هل التشخيص المفوتر دقيق أم عام (مثل Z01.0)؟ هل الأدوية تتناسب مع التشخيص؟ هل هناك تقصير واضح؟
+    2.  **تحليل الإجراءات الحالية (proceduresAnalysis):** حلل **كل** إجراء تم اتخاذه. هل هو مبرر؟ ما هي الملاحظات الهامة عليه؟
+    3.  **تحليل مخاطر الرفض (insuranceRejectionAnalysis):** كن محدداً. ما هو الإجراء المعرض للرفض؟ لماذا؟ كم قيمته؟
+    4.  **اقتراحات التحسين (revenueImprovementSuggestions):** هذا هو الجزء الأهم. اقترح فحوصات واستشارات إضافية **مبررة طبياً** تم إغفالها. لكل اقتراح، اشرح أهميته، قيمته، ولماذا لا يمكن للتأمين رفضه.
+    5.  **التوصيات العامة (generalRecommendations):** قدم نصائح عامة لتحسين الترميز والتوثيق.
 
-    2.  **justification (تقييم الإجراءات):**
-        -   لكل إجراء تم اتخاذه، قدم تبريراً مفصلاً.
-        -   مثال: إذا كان التشخيص "مشاكل كلى" وتم صرف دواء سكري، اشرح الرابط الطبي المنطقي (مثل: "مرضى الكلى غالباً ما يعانون من السكري، لذا فإن صرف دواء السكري مبرر لضبط الحالة المصاحبة").
-
-    3.  **rejectionRisk (مخاطر الرفض):**
-        -   بناءً على تحليلك، حدد مستوى الخطر (منخفض/متوسط/مرتفع).
-        -   اشرح سبب هذا التقييم بوضوح.
-
-    4.  **improvementSuggestions (اقتراحات التحسين - الجزء الأهم):**
-        -   هنا تظهر خبرتك. فكر كطبيب استشاري وخبير مالي. ما هي الفحوصات أو الاستشارات الإضافية التي كانت **ضرورية طبياً** لهذه الحالة ولكن تم إغفالها؟
-        -   يجب أن تكون الاقتراحات منطقية ومبنية على بروتوكولات طبية (مثل ADA, WHO).
-        -   لكل اقتراح، يجب أن تقدم بالتفصيل:
-            -   **title:** اسم الإجراء بوضوح (مثال: "فحص الموجات فوق الصوتية للكلى والمثانة (Kidney & Bladder Ultrasound)").
-            -   **description:** اشرح الأهمية الطبية بعمق. لماذا هو ضروري؟ (مثال: "ضروري لتقييم بنية الكلى، واستبعاد وجود حصوات أو مشاكل في المسالك البولية قد تكون هي السبب الحقيقي لألم الظهر وتدهور وظائف الكلى").
-            -   **estimatedValue:** قدر التكلفة بالريال السعودي (مثال: "250 ريال سعودي").
-            -   **whyNotRejectable:** قدم حجة قوية ومقنعة لشركة التأمين (مثال: "يعتبر هذا الفحص جزءاً لا يتجزأ من التشخيص التفريقي لأمراض الكلى وفقاً للإرشادات الطبية، ولا يمكن الاستغناء عنه لتحديد السبب الجذري للمشكلة").
-        -   **أمثلة على اقتراحات ذكية يجب أن تفكر بها:** تحليل بول كامل مع نسبة الزلال إلى الكرياتينين (UACR)، فحص الكهارل (Electrolytes)، استشارة متخصص (Nephrology/Cardiology Consultation)، زيارة متابعة مجدولة.
-
-    5.  **potentialRevenueIncrease (الزيادة المحتملة في الإيرادات):**
-        -   اجمع القيم التقديرية **لجميع** اقتراحاتك وقدم المجموع النهائي كرقم واضح بالريال السعودي.
+    الآن، قم بتعبئة هيكل الـ JSON التالي بهذا التحليل العميق.
     `;
 
   const payload = {
     contents: [{ role: "user", parts: [{ text: jsonPrompt }] }],
     generationConfig: {
-      temperature: 0.5, // زيادة طفيفة للإبداع في التحليل
+      temperature: 0.4,
       responseMimeType: "application/json",
       responseSchema: {
         type: "OBJECT",
         properties: {
-          result: { type: "STRING", description: "ملخص شامل باللغة العربية الفصحى، يشرح الحالة والأخطاء أو التقصير إن وجد، ويعطي نظرة احترافية" },
-          justification: {
+          criticalSummary: {
+            type: "STRING",
+            description: "ملخص نقدي وعميق للحالة، يوضح نقاط الضعف والقوة في الإدارة الحالية للحالة.",
+          },
+          proceduresAnalysis: {
             type: "ARRAY",
+            description: "تحليل مفصل لكل إجراء تم اتخاذه.",
             items: {
               type: "OBJECT",
               properties: {
-                step: { type: "STRING", description: "اسم الإجراء الذي تم تقييمه" },
-                justification: { type: "STRING", description: "هل الإجراء 'مبرر' أو 'غير مبرر'" },
-                rationale: { type: "STRING", description: "شرح علمي وتأميني واضح للتقييم" },
+                procedureName: { type: "STRING", description: "اسم الإجراء أو الدواء الذي تم تحليله." },
+                justification: { type: "STRING", description: "هل الإجراء مبرر طبياً أم لا." },
+                notes: { type: "STRING", description: "ملاحظات نقدية هامة، مثل عدم تطابق الدواء مع التشخيص العام." },
               },
-              required: ["step", "justification", "rationale"],
+              required: ["procedureName", "justification", "notes"],
             },
           },
-          rejectionRisk: { type: "STRING", description: "مستوى الخطورة: 'منخفض', 'متوسط', 'مرتفع'" },
-          rejectionReason: { type: "STRING", description: "لماذا يمكن رفض المطالبة إن وجد سبب" },
-          rejectedValue: { type: "STRING", description: "قيمة تقريبية محتملة للرفض بالريال السعودي" },
-          improvementSuggestions: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                title: { type: "STRING", description: "اسم الإجراء المقترح (مثلاً OCT أو استشارة عيون)" },
-                description: { type: "STRING", description: "لماذا هذا الإجراء مهم طبيًا وتأمينيًا" },
-                estimatedValue: { type: "STRING", description: "قيمة تقديرية للإجراء بالريال السعودي" },
-                whyNotRejectable: { type: "STRING", description: "مبررات قوية تمنع الرفض التأميني" },
+          insuranceRejectionAnalysis: {
+            type: "OBJECT",
+            description: "تحليل مفصل لمخاطر الرفض من شركة التأمين.",
+            properties: {
+              riskLevel: { type: "STRING", description: "مستوى الخطر: 'منخفض', 'متوسط', 'مرتفع', 'عالٍ جداً'." },
+              itemsAtRisk: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    itemName: { type: "STRING", description: "اسم الإجراء أو الدواء المعرض للرفض." },
+                    value: { type: "STRING", description: "قيمة البند بالريال السعودي." },
+                    reason: { type: "STRING", description: "السبب التفصيلي لاحتمالية الرفض." },
+                  },
+                  required: ["itemName", "value", "reason"],
+                },
               },
-              required: ["title", "description", "estimatedValue", "whyNotRejectable"],
+              totalValueAtRisk: { type: "STRING", description: "إجمالي القيمة المالية المعرضة للرفض بالريال السعودي." },
             },
+            required: ["riskLevel", "itemsAtRisk", "totalValueAtRisk"],
           },
-          potentialRevenueIncrease: { type: "STRING", description: "تقدير الزيادة المحتملة في الإيرادات بالريال السعودي" },
+          revenueImprovementSuggestions: {
+            type: "OBJECT",
+            description: "خطة عمل مفصلة لزيادة الإيرادات بشكل مبرر طبياً.",
+            properties: {
+              suggestions: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    title: { type: "STRING", description: "اسم الإجراء أو الاستشارة المقترحة." },
+                    description: { type: "STRING", description: "شرح عميق للأهمية الطبية للإجراء المقترح." },
+                    estimatedValue: { type: "STRING", description: "القيمة التقديرية للإجراء بالريال السعودي." },
+                    whyNotRejectable: { type: "STRING", description: "حجة قوية ومقنعة لشركة التأمين تمنع رفض الإجراء." },
+                  },
+                  required: ["title", "description", "estimatedValue", "whyNotRejectable"],
+                },
+              },
+              potentialIncrease: { type: "STRING", description: "إجمالي الزيادة المحتملة في الإيرادات بالريال السعودي." },
+            },
+            required: ["suggestions", "potentialIncrease"],
+          },
+          generalRecommendations: {
+            type: "STRING",
+            description: "توصيات عامة وشاملة لتحسين الأداء والترميز والتوثيق في المستقبل.",
+          },
         },
-        required: ["result", "justification", "rejectionRisk", "rejectionReason", "rejectedValue", "improvementSuggestions", "potentialRevenueIncrease"],
+        required: [
+          "criticalSummary",
+          "proceduresAnalysis",
+          "insuranceRejectionAnalysis",
+          "revenueImprovementSuggestions",
+          "generalRecommendations",
+        ],
       },
     },
   };
