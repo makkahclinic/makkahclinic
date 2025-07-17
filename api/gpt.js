@@ -1,18 +1,28 @@
-// main/api/gpt.js
+// /api/gpt.js
 
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // تأكد من إضافته في Vercel
-});
-
+/**
+ * @description Serverless API endpoint to generate a structured JSON medical insurance review.
+ * This version uses Google's Gemini API with a specific JSON schema in the response configuration
+ * to ensure a valid, parseable JSON object is always returned, matching the frontend's requirements.
+ *
+ * تم تحديث هذا الكود ليستخدم Gemini API مع تحديد مخطط JSON في الإعدادات لضمان
+ * الحصول على رد بصيغة JSON منظمة تتوافق مع متطلبات الواجهة الأمامية.
+ */
 export default async function handler(req, res) {
+  // Set CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  // Handle preflight OPTIONS request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  // Ensure the request method is POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
 
   const {
     diagnosis,
@@ -21,57 +31,123 @@ export default async function handler(req, res) {
     gender,
     smoker,
     beforeProcedure,
-    afterProcedure
+    afterProcedure,
   } = req.body;
 
-  if (!diagnosis || !symptoms || !age || !gender || !beforeProcedure || !afterProcedure || typeof smoker === 'undefined') {
+  // Validate that all required fields are present
+  if (
+    !diagnosis ||
+    !symptoms ||
+    !age ||
+    !gender ||
+    smoker === undefined ||
+    !beforeProcedure ||
+    !afterProcedure
+  ) {
     return res.status(400).json({ error: "الرجاء ملء جميع الحقول." });
   }
 
-  try {
-    const systemPrompt = `
-أنت مساعد خبير في المراجعة الطبية التأمينية. مهمتك تقديم تقرير طبي تأميني شامل بناءً على المعطيات التالية:
+  // Use the Gemini API key from Vercel's environment variables.
+  // Make sure to add GEMINI_API_KEY to your Vercel project settings.
+  // استخدام مفتاح Gemini API من متغيرات البيئة في Vercel.
+  // تأكد من إضافة GEMINI_API_KEY في إعدادات مشروعك على Vercel.
+  const apiKey = process.env.GEMINI_API_KEY;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-- التشخيص: ${diagnosis}
-- الأعراض: ${symptoms}
-- العمر: ${age}
-- الجنس: ${gender}
-- مدخن: ${smoker ? 'نعم' : 'لا'}
-- الإجراءات قبل التشخيص: ${beforeProcedure}
-- الإجراءات بعد التشخيص: ${afterProcedure}
+  // Prompt focused on providing context for the JSON generation
+  const jsonPrompt = `
+    أنت خبير مراجعة طبية تأمينية. بناءً على بيانات الحالة التالية، قم بإنشاء تحليل مفصل على هيئة JSON.
 
-⬇️ المطلوب بالتحديد:
+    **بيانات الحالة:**
+    - التشخيص: ${diagnosis}
+    - الأعراض: ${symptoms}
+    - العمر: ${age}
+    - الجنس: ${gender}
+    - مدخن: ${smoker ? 'نعم' : 'لا'}
+    - الإجراءات قبل التشخيص: ${beforeProcedure}
+    - الإجراءات بعد التشخيص: ${afterProcedure}
 
-1. قدم **ملخصًا سريريًا دقيقًا** للحالة بناءً على الأعراض والعمر.
-2. قيّم **كل إجراء طبي** تم اتخاذه (مبرر أو لا) مع شرح علمي دقيق (مستند إلى ADA، WHO، AAO، إلخ).
-3. حدّد **احتمالية رفض التأمين** لكل إجراء غير مبرر.
-4. اقترح بذكاء **ما كان يجب فعله** بشكل واقعي ومربح للعيادة وملائم تأمينيًا:
-  - اقتراح فحوصات إضافية مفصلة (مثل OCT، HbA1c، تصوير الشبكية، وظائف الكلى، تخطيط القلب...)
-  - استشارات تخصصية
-  - متابعة
-  - تثقيف صحي
-
-💰 حدّد القيمة التقديرية لكل إجراء مقترح بالريال السعودي (ليس بالدولار)
-✅ اشرح لماذا لا يمكن رفضه تأمينياً.
-📚 استند دومًا إلى بروتوكولات طبية مشهورة.
-📄 اجعل التقرير عربيًا بالكامل، سرديًا، تفصيليًا، احترافيًا، ويشبه تقارير التأمين الرسمية.
-✳️ استخدم عنوان رئيسي لكل قسم، وفصّل النقاط، واذكر التأثير التأميني والمالي والطبي، وفائدة كل فحص.
-🔢 لا تقل عدد كلمات التقرير عن 800 كلمة مهما حصل.
+    **المطلوب:**
+    - تحليل الحالة وتقييم الإجراءات.
+    - تحديد مخاطر الرفض التأميني.
+    - اقتراح تحسينات عملية لزيادة دخل العيادة وتحسين الرعاية.
+    - يجب أن تكون جميع القيم المالية بالريال السعودي.
+    - قم بتعبئة جميع حقول مخطط JSON المطلوب بدقة واحترافية.
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "system", content: systemPrompt }],
-      temperature: 0.2,
+  const payload = {
+    contents: [{ role: "user", parts: [{ text: jsonPrompt }] }],
+    generationConfig: {
+      temperature: 0.4,
+      responseMimeType: "application/json", // Request JSON output
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          result: { type: "STRING", description: "ملخص شامل باللغة العربية الفصحى، يشرح الحالة والأخطاء أو التقصير إن وجد، ويعطي نظرة احترافية" },
+          justification: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                step: { type: "STRING", description: "اسم الإجراء الذي تم تقييمه" },
+                justification: { type: "STRING", description: "هل الإجراء 'مبرر' أو 'غير مبرر'" },
+                rationale: { type: "STRING", description: "شرح علمي وتأميني واضح للتقييم" },
+              },
+              required: ["step", "justification", "rationale"],
+            },
+          },
+          rejectionRisk: { type: "STRING", description: "مستوى الخطورة: 'منخفض', 'متوسط', 'مرتفع'" },
+          rejectionReason: { type: "STRING", description: "لماذا يمكن رفض المطالبة إن وجد سبب" },
+          rejectedValue: { type: "STRING", description: "قيمة تقريبية محتملة للرفض بالريال السعودي" },
+          improvementSuggestions: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                title: { type: "STRING", description: "اسم الإجراء المقترح (مثلاً OCT أو استشارة عيون)" },
+                description: { type: "STRING", description: "لماذا هذا الإجراء مهم طبيًا وتأمينيًا" },
+                estimatedValue: { type: "STRING", description: "قيمة تقديرية للإجراء بالريال السعودي" },
+                whyNotRejectable: { type: "STRING", description: "مبررات قوية تمنع الرفض التأميني" },
+              },
+              required: ["title", "description", "estimatedValue", "whyNotRejectable"],
+            },
+          },
+          potentialRevenueIncrease: { type: "STRING", description: "تقدير الزيادة المحتملة في الإيرادات بالريال السعودي" },
+        },
+        required: ["result", "justification", "rejectionRisk", "rejectionReason", "rejectedValue", "improvementSuggestions", "potentialRevenueIncrease"],
+      },
+    },
+  };
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
 
-    const raw = completion.choices?.[0]?.message?.content || "";
+    if (!response.ok) {
+      const errorBody = await response.json();
+      console.error("🔥 Gemini API Error Response:", errorBody);
+      throw new Error(`API request failed: ${errorBody.error?.message || response.statusText}`);
+    }
 
-    return res.status(200).json({ result: raw });
+    const result = await response.json();
+    const rawJsonString = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!rawJsonString) {
+      throw new Error("لم يتمكن النموذج من إنشاء رد JSON.");
+    }
+
+    // The response is already a JSON string, so we parse it before sending
+    const parsedPayload = JSON.parse(rawJsonString);
+    
+    return res.status(200).json(parsedPayload);
+
   } catch (err) {
-    console.error("🔥 GPT API error:", err);
+    console.error("🔥 Server-side Error:", err);
     return res.status(500).json({
-      error: "حدث خطأ أثناء التحليل من GPT",
+      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
       detail: err.message,
     });
   }
