@@ -49,14 +49,16 @@ export default async function handler(req, res) {
 
   // Use the Gemini API key from Vercel's environment variables.
   const apiKey = process.env.GEMINI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  // **MODEL UPGRADE**: Switched to gemini-1.5-pro-latest for higher quality, in-depth analysis.
+  // **ترقية النموذج**: تم التغيير إلى gemini-1.5-pro-latest للحصول على تحليل أعمق وأعلى جودة.
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
   // **CRITICAL CHANGE**: The prompt is now highly detailed and prescriptive to force
   // the model to generate a deep, insightful, and actionable report, not just a summary.
   // **تغيير جوهري**: التعليمات الآن مفصلة وتوجيهية للغاية لإجبار النموذج على
   // إنشاء تقرير عميق ومفيد وقابل للتنفيذ، وليس مجرد ملخص.
   const jsonPrompt = `
-    أنت خبير استشاري في المراجعة الطبية والتأمين، ومهمتك مزدوجة: ضمان أفضل رعاية للمريض وتحقيق أقصى استفادة مالية مشروعة للعيادة. قم بتحليل الحالة التالية بعمق وقدم تقريراً مفصلاً بصيغة JSON. لا تكن مختصراً أبداً.
+    أنت خبير استشاري في المراجعة الطبية والتأمين، ومهمتك مزدوجة: ضمان أفضل رعاية للمريض وتحقيق أقصى استفادة مالية مشروعة للعيادة. قم بتحليل الحالة التالية بعمق وقدم تقريراً مفصلاً بصيغة JSON. لا تكن مختصراً أبداً، بل كن مفصلاً في كل نقطة.
 
     **بيانات الحالة:**
     - التشخيص: ${diagnosis}
