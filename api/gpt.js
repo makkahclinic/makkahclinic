@@ -1,12 +1,12 @@
 // /api/gpt.js
 
 /**
- * @description Serverless API endpoint to generate a structured JSON medical insurance review.
- * This version uses Google's Gemini API with a specific JSON schema in the response configuration
- * to ensure a valid, parseable JSON object is always returned, matching the frontend's requirements.
+ * @description Serverless API endpoint to generate a detailed, formatted HTML report.
+ * This version uses the powerful gemini-1.5-pro model and instructs it to return a single,
+ * comprehensive HTML string, which can be rendered directly by the frontend.
  *
- * تم تحديث هذا الكود ليستخدم Gemini API مع تحديد مخطط JSON في الإعدادات لضمان
- * الحصول على رد بصيغة JSON منظمة تتوافق مع متطلبات الواجهة الأمامية.
+ * تم تحديث هذا الكود ليستخدم نموذج gemini-1.5-pro القوي ويطلب منه إنشاء تقرير
+ * بصيغة HTML، مما يسهل على الواجهة الأمامية عرضه مباشرة بشكل منسق.
  */
 export default async function handler(req, res) {
   // Set CORS headers
@@ -40,26 +40,19 @@ export default async function handler(req, res) {
     !symptoms ||
     !age ||
     !gender ||
-    smoker === undefined ||
-    !beforeProcedure ||
-    !afterProcedure
+    smoker === undefined
   ) {
     return res.status(400).json({ error: "الرجاء ملء جميع الحقول." });
   }
 
   // Use the Gemini API key from Vercel's environment variables.
   const apiKey = process.env.GEMINI_API_KEY;
-  // **MODEL UPGRADE**: Switched to gemini-1.5-pro-latest for higher quality, in-depth analysis.
-  // **ترقية النموذج**: تم التغيير إلى gemini-1.5-pro-latest للحصول على تحليل أعمق وأعلى جودة.
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-  // **CRITICAL PROMPT & SCHEMA OVERHAUL**: The prompt and schema are now completely redesigned
-  // to force the model to produce a detailed, critical, and structured report identical
-  // to the user's desired example.
-  // **إصلاح شامل للتعليمات والهيكل**: تم إعادة تصميم التعليمات وهيكل JSON بالكامل
-  // لإجبار النموذج على إنتاج تقرير مفصل ونقدي ومنظم مطابق تمامًا للمثال المطلوب.
-  const jsonPrompt = `
-    أنت "مدقق طبي مالي خبير" ومهمتك تحليل المطالبات التأمينية لعيادة طبية. هدفك هو نقد الإجراءات الحالية، تحديد المخاطر المالية، وتقديم خطة عمل واضحة ومفصلة لزيادة الإيرادات بشكل مبرر طبيًا ومتوافق مع البروتوكولات. يجب أن يكون تحليلك عميقاً، دقيقاً، وأن تتبع هيكل الـ JSON المطلوب بحذافيره.
+  // **FINAL PROMPT REVISION**: This prompt now asks for a single, detailed,
+  // well-structured HTML report, exactly like the user's desired output format.
+  const htmlPrompt = `
+    أنت "مدقق طبي مالي خبير" ومهمتك كتابة تقرير تحليلي واحد ومتكامل بصيغة HTML. يجب أن يكون التقرير عميقاً، واضحاً، ومفيداً للطبيب. استخدم وسوم HTML والتنسيقات المحددة لإنشاء تقرير احترافي. لا تخرج عن هذا النسق أبداً.
 
     **بيانات الحالة لتحليلها:**
     - التشخيص المفوتر: ${diagnosis}
@@ -67,100 +60,80 @@ export default async function handler(req, res) {
     - العمر: ${age}
     - الجنس: ${gender}
     - مدخن: ${smoker ? 'نعم' : 'لا'}
-    - الإجراءات المتخذة (قبل وبعد التشخيص): ${beforeProcedure}, ${afterProcedure}
+    - الإجراءات المتخذة: ${beforeProcedure}, ${afterProcedure}
 
     ---
-    **منهجية التحليل المطلوبة (فكر بهذه الطريقة):**
+    **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط):**
 
-    1.  **الملخص النقدي (criticalSummary):** ابدأ بنظرة نقدية. هل التشخيص المفوتر دقيق أم عام (مثل Z01.0)؟ هل الأدوية تتناسب مع التشخيص؟ هل هناك تقصير واضح؟
-    2.  **تحليل الإجراءات الحالية (proceduresAnalysis):** حلل **كل** إجراء تم اتخاذه. هل هو مبرر؟ ما هي الملاحظات الهامة عليه؟
-    3.  **تحليل مخاطر الرفض (insuranceRejectionAnalysis):** كن محدداً. ما هو الإجراء المعرض للرفض؟ لماذا؟ كم قيمته؟
-    4.  **اقتراحات التحسين (revenueImprovementSuggestions):** هذا هو الجزء الأهم. اقترح فحوصات واستشارات إضافية **مبررة طبياً** تم إغفالها. لكل اقتراح، اشرح أهميته، قيمته، ولماذا لا يمكن للتأمين رفضه.
-    5.  **التوصيات العامة (generalRecommendations):** قدم نصائح عامة لتحسين الترميز والتوثيق.
+    <h3>تقرير تحليلي مُفصل</h3>
+    
+    <div class="section">
+        <h4>1. تحليل الإجراءات ومبرراتها الطبية:</h4>
+        <p>ابدأ بنقد التشخيص المفوتر. هل هو دقيق أم عام (مثل Z01.0)؟ اقترح الرمز الصحيح. حلل كل إجراء ودوّن ملاحظات هامة حوله. هل هو مبرر؟ هل يتناسب مع التشخيص؟</p>
+    </div>
 
-    الآن، قم بتعبئة هيكل الـ JSON التالي بهذا التحليل العميق.
+    <div class="section">
+        <h4>2. احتمالية الرفض من التأمين:</h4>
+        <p>حدد مستوى الخطر (منخفض/متوسط/عالٍ) باستخدام الفئة المناسبة: <span class="risk-low">منخفض</span>, <span class="risk-medium">متوسط</span>, <span class="risk-high">عالٍ</span>.</p>
+        <p>اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها بالريال السعودي، والسبب العلمي أو التأميني للرفض.</p>
+    </div>
+
+    <div class="section">
+        <h4>3. ما كان يمكن عمله لرفع الفاتورة (وفقًا للبروتوكولات الطبية):</h4>
+        <p>هذا هو الجزء الأهم. اقترح قائمة مفصلة من الفحوصات والاستشارات الإضافية التي تم إغفالها. لكل اقتراح، استخدم التنسيق التالي داخل وسم <div> مع فئة "recommendation":</p>
+        <!-- مثال على التنسيق المطلوب لكل اقتراح -->
+        <div class="recommendation">
+            <strong>عنوان الاقتراح:</strong>
+            <ul>
+                <li><strong>أهمية الإجراء:</strong> اشرح بعمق لماذا هو ضروري طبياً.</li>
+                <li><strong>القيمة التقديرية:</strong> قدر التكلفة بالريال السعودي.</li>
+                <li><strong>لماذا لا يمكن رفضه:</strong> قدم حجة قوية ومقنعة لشركة التأمين.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="section financial-summary">
+        <h4>4. المؤشر المالي:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>المؤشر</th>
+                    <th>القيمة (ريال سعودي)</th>
+                    <th>ملاحظات</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>إجمالي الدخل الحالي (المفوتر)</td>
+                    <td>[ضع القيمة هنا]</td>
+                    <td>[ضع الملاحظة هنا]</td>
+                </tr>
+                <tr>
+                    <td>إجمالي الدخل بعد خصم الرفوض المحتملة</td>
+                    <td>[ضع القيمة هنا]</td>
+                    <td>[ضع الملاحظة هنا]</td>
+                </tr>
+                <tr>
+                    <td>إجمالي الدخل المحتمل مع التحسينات</td>
+                    <td>[ضع القيمة هنا]</td>
+                    <td>[ضع الملاحظة هنا]</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h4>5. توصيات عامة شاملة:</h4>
+        <p>قدم نصائح عامة لتحسين الترميز، التوثيق، ومواءمة العلاج مع التشخيص في المستقبل.</p>
+    </div>
+
+    اكتب التقرير الآن باللغة العربية الفصحى، وبشكل مفصل وواضح.
     `;
 
   const payload = {
-    contents: [{ role: "user", parts: [{ text: jsonPrompt }] }],
+    contents: [{ role: "user", parts: [{ text: htmlPrompt }] }],
     generationConfig: {
-      temperature: 0.4,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          criticalSummary: {
-            type: "STRING",
-            description: "ملخص نقدي وعميق للحالة، يوضح نقاط الضعف والقوة في الإدارة الحالية للحالة.",
-          },
-          proceduresAnalysis: {
-            type: "ARRAY",
-            description: "تحليل مفصل لكل إجراء تم اتخاذه.",
-            items: {
-              type: "OBJECT",
-              properties: {
-                procedureName: { type: "STRING", description: "اسم الإجراء أو الدواء الذي تم تحليله." },
-                justification: { type: "STRING", description: "هل الإجراء مبرر طبياً أم لا." },
-                notes: { type: "STRING", description: "ملاحظات نقدية هامة، مثل عدم تطابق الدواء مع التشخيص العام." },
-              },
-              required: ["procedureName", "justification", "notes"],
-            },
-          },
-          insuranceRejectionAnalysis: {
-            type: "OBJECT",
-            description: "تحليل مفصل لمخاطر الرفض من شركة التأمين.",
-            properties: {
-              riskLevel: { type: "STRING", description: "مستوى الخطر: 'منخفض', 'متوسط', 'مرتفع', 'عالٍ جداً'." },
-              itemsAtRisk: {
-                type: "ARRAY",
-                items: {
-                  type: "OBJECT",
-                  properties: {
-                    itemName: { type: "STRING", description: "اسم الإجراء أو الدواء المعرض للرفض." },
-                    value: { type: "STRING", description: "قيمة البند بالريال السعودي." },
-                    reason: { type: "STRING", description: "السبب التفصيلي لاحتمالية الرفض." },
-                  },
-                  required: ["itemName", "value", "reason"],
-                },
-              },
-              totalValueAtRisk: { type: "STRING", description: "إجمالي القيمة المالية المعرضة للرفض بالريال السعودي." },
-            },
-            required: ["riskLevel", "itemsAtRisk", "totalValueAtRisk"],
-          },
-          revenueImprovementSuggestions: {
-            type: "OBJECT",
-            description: "خطة عمل مفصلة لزيادة الإيرادات بشكل مبرر طبياً.",
-            properties: {
-              suggestions: {
-                type: "ARRAY",
-                items: {
-                  type: "OBJECT",
-                  properties: {
-                    title: { type: "STRING", description: "اسم الإجراء أو الاستشارة المقترحة." },
-                    description: { type: "STRING", description: "شرح عميق للأهمية الطبية للإجراء المقترح." },
-                    estimatedValue: { type: "STRING", description: "القيمة التقديرية للإجراء بالريال السعودي." },
-                    whyNotRejectable: { type: "STRING", description: "حجة قوية ومقنعة لشركة التأمين تمنع رفض الإجراء." },
-                  },
-                  required: ["title", "description", "estimatedValue", "whyNotRejectable"],
-                },
-              },
-              potentialIncrease: { type: "STRING", description: "إجمالي الزيادة المحتملة في الإيرادات بالريال السعودي." },
-            },
-            required: ["suggestions", "potentialIncrease"],
-          },
-          generalRecommendations: {
-            type: "STRING",
-            description: "توصيات عامة وشاملة لتحسين الأداء والترميز والتوثيق في المستقبل.",
-          },
-        },
-        required: [
-          "criticalSummary",
-          "proceduresAnalysis",
-          "insuranceRejectionAnalysis",
-          "revenueImprovementSuggestions",
-          "generalRecommendations",
-        ],
-      },
+      temperature: 0.5,
     },
   };
 
@@ -174,19 +147,18 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorBody = await response.json();
       console.error("🔥 Gemini API Error Response:", errorBody);
-      throw new Error(`API request failed: ${errorBody.error?.message || response.statusText}`);
+      throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
     }
 
     const result = await response.json();
-    const rawJsonString = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!rawJsonString) {
-      throw new Error("لم يتمكن النموذج من إنشاء رد JSON.");
+    if (!reportHtml) {
+      throw new Error("لم يتمكن النموذج من إنشاء التقرير.");
     }
-
-    const parsedPayload = JSON.parse(rawJsonString);
     
-    return res.status(200).json(parsedPayload);
+    // Send the HTML report back to the frontend.
+    return res.status(200).json({ htmlReport: reportHtml });
 
   } catch (err) {
     console.error("🔥 Server-side Error:", err);
