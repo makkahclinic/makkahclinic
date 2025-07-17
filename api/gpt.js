@@ -49,11 +49,26 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-  // **FINAL PROMPT ENHANCEMENT**: The persona is now a dual-specialty expert.
-  // The model is now REQUIRED to think about the "patient journey" (referrals then specialist tests),
-  // suggest systemic tests (like kidney/liver function) for relevant conditions, and to CITE medical guidelines.
+  // **FUTURE ENHANCEMENT**: This is where you would fetch your real price list,
+  // for now, we are using a placeholder to show how it would be passed to the prompt.
+  // **تحسين مستقبلي**: هنا يمكنك جلب قائمة الأسعار الحقيقية الخاصة بك،
+  // في الوقت الحالي، نستخدم مثالاً وهمياً لنوضح كيف سيتم تمريرها إلى التعليمات.
+  const priceListExample = `
+    - استشارة أخصائي: 150 ريال
+    - فحص قاع العين: 200 ريال
+    - قياس ضغط العين (Tonometry): 75 ريال
+    - التصوير المقطعي للشبكية (OCT): 350 ريال
+    - فحص وظائف الكلى (Creatinine, UACR): 120 ريال
+    - فحص HbA1c: 90 ريال
+  `;
+
+  // **FINAL PROMPT ENHANCEMENT**: The prompt now includes a section for a real-world price list
+  // to make the financial analysis highly accurate.
   const htmlPrompt = `
-    أنت "خبير استشاري في المراجعة الطبية والتأمين، متخصص في طب العيون والأمراض الباطنية المصاحبة". مهمتك كتابة تقرير تحليلي استشاري واحد ومتكامل بصيغة HTML. يجب أن يكون تحليلك شمولياً، يربط بين التخصصات، ويدعم توصياته بمصادر طبية معروفة.
+    أنت "خبير استشاري في المراجعة الطبية والتأمين، متخصص في طب العيون والأمراض الباطنية المصاحبة". مهمتك كتابة تقرير تحليلي استشاري واحد ومتكامل بصيغة HTML. يجب أن يكون تحليلك شمولياً، يربط بين التخصصات، ويدعم توصياته بمصادر طبية معروفة. **يجب عليك استخدام قائمة الأسعار المرفقة لتحديد القيم المالية بدقة.**
+
+    **قائمة أسعار الخدمات (استخدم هذه الأسعار فقط):**
+    ${priceListExample}
 
     **بيانات الحالة لتحليلها:**
     - التشخيص المفوتر: ${diagnosis}
@@ -76,7 +91,7 @@ export default async function handler(req, res) {
     <div class="section">
         <h4>2. احتمالية الرفض من التأمين:</h4>
         <p>حدد مستوى الخطر (منخفض/متوسط/عالٍ) باستخدام الفئة المناسبة: <span class="risk-low">منخفض</span>, <span class="risk-medium">متوسط</span>, <span class="risk-high">عالٍ</span>.</p>
-        <p>اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها بالريال السعودي، والسبب العلمي أو التأميني للرفض.</p>
+        <p>اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها **(من قائمة الأسعار)**، والسبب العلمي أو التأميني للرفض.</p>
     </div>
 
     <div class="section">
@@ -87,24 +102,8 @@ export default async function handler(req, res) {
             <strong>عنوان الاقتراح: (مثال: طلب استشارة طبية للعيون)</strong>
             <ul>
                 <li><strong>أهمية الإجراء:</strong> اشرح بعمق لماذا الإحالة إلى أخصائي هي الخطوة الأولى الصحيحة والمبررة طبياً.</li>
-                <li><strong>القيمة التقديرية:</strong> قدر التكلفة بالريال السعودي.</li>
+                <li><strong>القيمة التقديرية:</strong> استخدم السعر الدقيق من قائمة الأسعار المرفقة.</li>
                 <li><strong>لماذا لا يمكن رفضه:</strong> قدم حجة قوية ومقنعة لشركة التأمين، وادعمها **بشكل إلزامي** بذكر بروتوكول طبي معروف (مثال: "وفقاً لإرشادات الجمعية الأمريكية للسكري (ADA)..." أو "حسب توصيات KDIGO لأمراض الكلى...").</li>
-            </ul>
-        </div>
-        <div class="recommendation">
-            <strong>عنوان الاقتراح: (مثال: بعد الاستشارة - فحوصات العيون المتخصصة)</strong>
-            <ul>
-                <li><strong>أهمية الإجراء:</strong> اشرح أهمية الفحوصات التي سيجريها الأخصائي مثل OCT وقياس ضغط العين.</li>
-                <li><strong>القيمة التقديرية:</strong> قدر التكلفة الإجمالية لهذه الفحوصات بالريال السعودي.</li>
-                <li><strong>لماذا لا يمكن رفضه:</strong> ادعم بالحجج والبروتوكولات الطبية (مثل AAO).</li>
-            </ul>
-        </div>
-         <div class="recommendation">
-            <strong>عنوان الاقتراح: (مثال: الفحوصات الجهازية المصاحبة)</strong>
-            <ul>
-                <li><strong>أهمية الإجراء:</strong> اشرح أهمية فحص وظائف الكلى (Creatinine, UACR) ووظائف الكبد لمريض السكري.</li>
-                <li><strong>القيمة التقديرية:</strong> قدر التكلفة الإجمالية لهذه الفحوصات بالريال السعودي.</li>
-                <li><strong>لماذا لا يمكن رفضه:</strong> ادعم بالحجج والبروتوكولات الطبية (مثل ADA, KDIGO).</li>
             </ul>
         </div>
     </div>
