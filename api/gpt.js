@@ -50,8 +50,8 @@ export default async function handler(req, res) {
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
   // **FINAL PROMPT ENHANCEMENT**: The persona is now a dual-specialty expert.
-  // The model is now REQUIRED to suggest systemic tests (like kidney/liver function) for relevant
-  // conditions and to CITE medical guidelines (like ADA, KDIGO) to support its claims.
+  // The model is now REQUIRED to think about the "patient journey" (referrals then specialist tests),
+  // suggest systemic tests (like kidney/liver function) for relevant conditions, and to CITE medical guidelines.
   const htmlPrompt = `
     أنت "خبير استشاري في المراجعة الطبية والتأمين، متخصص في طب العيون والأمراض الباطنية المصاحبة". مهمتك كتابة تقرير تحليلي استشاري واحد ومتكامل بصيغة HTML. يجب أن يكون تحليلك شمولياً، يربط بين التخصصات، ويدعم توصياته بمصادر طبية معروفة.
 
@@ -81,13 +81,30 @@ export default async function handler(req, res) {
 
     <div class="section">
         <h4>3. ما كان يمكن عمله لرفع الفاتورة (وفقًا للبروتوكولات الطبية):</h4>
-        <p>هذا هو الجزء الأهم. كخبير استشاري، اقترح قائمة مفصلة من الفحوصات المتقدمة (عينية وجهازية) والاستشارات الإضافية التي تم إغفالها. فكر في فحوصات مثل قياس ضغط العين (Tonometry)، التصوير المقطعي للشبكية (OCT)، وظائف الكلى والكبد، وفحص HbA1c. لكل اقتراح، استخدم التنسيق التالي:</p>
+        <p>هذا هو الجزء الأهم. كخبير استشاري، فكر في "رحلة المريض" الكاملة. اقترح خطة عمل تبدأ بالاستشارات الضرورية ثم تنتقل إلى الفحوصات المتخصصة التي سيقوم بها الأخصائي. كن شمولياً، وإذا كانت الحالة (مثل السكري) تؤثر على أعضاء أخرى، **فأنت ملزم** باقتراح فحوصات جهازية مثل وظائف الكلى والكبد. لكل اقتراح، استخدم التنسيق التالي:</p>
+        
         <div class="recommendation">
-            <strong>عنوان الاقتراح:</strong>
+            <strong>عنوان الاقتراح: (مثال: طلب استشارة طبية للعيون)</strong>
             <ul>
-                <li><strong>أهمية الإجراء:</strong> اشرح بعمق لماذا هو ضروري طبياً لهذه الحالة تحديداً.</li>
+                <li><strong>أهمية الإجراء:</strong> اشرح بعمق لماذا الإحالة إلى أخصائي هي الخطوة الأولى الصحيحة والمبررة طبياً.</li>
                 <li><strong>القيمة التقديرية:</strong> قدر التكلفة بالريال السعودي.</li>
                 <li><strong>لماذا لا يمكن رفضه:</strong> قدم حجة قوية ومقنعة لشركة التأمين، وادعمها **بشكل إلزامي** بذكر بروتوكول طبي معروف (مثال: "وفقاً لإرشادات الجمعية الأمريكية للسكري (ADA)..." أو "حسب توصيات KDIGO لأمراض الكلى...").</li>
+            </ul>
+        </div>
+        <div class="recommendation">
+            <strong>عنوان الاقتراح: (مثال: بعد الاستشارة - فحوصات العيون المتخصصة)</strong>
+            <ul>
+                <li><strong>أهمية الإجراء:</strong> اشرح أهمية الفحوصات التي سيجريها الأخصائي مثل OCT وقياس ضغط العين.</li>
+                <li><strong>القيمة التقديرية:</strong> قدر التكلفة الإجمالية لهذه الفحوصات بالريال السعودي.</li>
+                <li><strong>لماذا لا يمكن رفضه:</strong> ادعم بالحجج والبروتوكولات الطبية (مثل AAO).</li>
+            </ul>
+        </div>
+         <div class="recommendation">
+            <strong>عنوان الاقتراح: (مثال: الفحوصات الجهازية المصاحبة)</strong>
+            <ul>
+                <li><strong>أهمية الإجراء:</strong> اشرح أهمية فحص وظائف الكلى (Creatinine, UACR) ووظائف الكبد لمريض السكري.</li>
+                <li><strong>القيمة التقديرية:</strong> قدر التكلفة الإجمالية لهذه الفحوصات بالريال السعودي.</li>
+                <li><strong>لماذا لا يمكن رفضه:</strong> ادعم بالحجج والبروتوكولات الطبية (مثل ADA, KDIGO).</li>
             </ul>
         </div>
     </div>
