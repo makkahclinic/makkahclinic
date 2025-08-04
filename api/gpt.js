@@ -3,7 +3,7 @@
 /**
  * @description A multi-purpose serverless API endpoint. It now intelligently handles
  * requests from both the Doctor's Portal and the new Patient's Portal, providing
- * tailored responses for each.
+ * tailored responses for each. It also correctly handles multiple image uploads.
  */
 export default async function handler(req, res) {
   // Set CORS headers
@@ -17,14 +17,13 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
   
-  // This variable determines which persona the AI will adopt.
   let htmlPrompt;
   const requestBody = req.body;
 
   // --- Logic to select the correct prompt based on the request source ---
   if (requestBody.analysisType === 'patient') {
     // --- PATIENT PORTAL PROMPT ---
-    const { symptoms, age, gender, smoker, vitals, labs, diagnosis } = requestBody;
+    const { symptoms, age, gender, smoker, vitals, labs, diagnosis, currentMedications } = requestBody;
     htmlPrompt = `
       أنت "مساعد صحي ذكي" ومهمتك تحليل الأعراض التي يصفها المستخدم وتقديم نصائح أولية واضحة ومفيدة بصيغة HTML. يجب أن يكون تحليلك متعاطفاً، علمياً، وآمناً.
 
@@ -33,6 +32,7 @@ export default async function handler(req, res) {
       - الجنس: ${gender}
       - مدخن: ${smoker ? 'نعم' : 'لا'}
       - الأعراض الرئيسية: ${symptoms}
+      - الأدوية الحالية: ${currentMedications || "لا يوجد"}
       - الحرارة والضغط (إن وجدت): ${vitals || "لم يتم تقديمها"}
       - نتائج تحاليل (إن وجدت): ${labs || "لم يتم تقديمها"}
       - تشخيص سابق (إن وجد): ${diagnosis || "لا يوجد"}
@@ -90,7 +90,7 @@ export default async function handler(req, res) {
       أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين". مهمتك تحليل البيانات الطبية المقدمة (سواء كانت نصاً أو صورة وصفة طبية) وتقديم تقرير HTML مفصل.
 
       **البيانات لتحليلها:**
-      - **الصورة المرفقة (إن وجدت):** قم بقراءة وتحليل الوصفة الطبية أو المطالبة المرفقة أولاً. استخرج منها التشخيصات، الأدوية، والجرعات.
+      - **الصور المرفقة (إن وجدت):** قم بقراءة وتحليل كل صورة مرفقة. استخرج منها التشخيصات، الأدوية، والجرعات.
       - **البيانات النصية (للسياق الإضافي):**
           - التشخيص المفوتر: ${diagnosis || "لم يحدد"}
           - الأعراض: ${symptoms || "لم تحدد"}
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
       
       <div class="section">
           <h4>1. تحليل الإجراءات ومبرراتها الطبية:</h4>
-          <p>بناءً على الصورة والبيانات، ابدأ بنقد التشخيص. ثم، حلل كل دواء وإجراء. **عند تحليل الأدوية، أنت ملزم بتحليل خصائصها الدوائية:** هل الدواء المختار هو الأفضل؟ هل يصل بتركيز كافٍ لمكان العدوى؟ انقد الاختيارات الدوائية السيئة بوضوح.</p>
+          <p>بناءً على الصور والبيانات، ابدأ بنقد التشخيص. ثم، حلل كل دواء وإجراء. **عند تحليل الأدوية، أنت ملزم بتحليل خصائصها الدوائية:** هل الدواء المختار هو الأفضل؟ هل يصل بتركيز كافٍ لمكان العدوى؟ انقد الاختيارات الدوائية السيئة بوضوح.</p>
       </div>
 
       <div class="section">
@@ -139,13 +139,17 @@ export default async function handler(req, res) {
     `;
   }
 
-  const parts = [{ text: htmlPrompt }];
-  if (requestBody.imageData) {
-    parts.push({
-      inline_data: {
-        mime_type: "image/jpeg",
-        data: requestBody.imageData
-      }
+  // **FINAL FIX FOR MULTIPLE IMAGES**: Create the correct payload structure.
+  // **الإصلاح النهائي للصور المتعددة**: بناء هيكل الحمولة الصحيح.
+  const parts = [htmlPrompt];
+  if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
+    requestBody.imageData.forEach(imgData => {
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: imgData
+        }
+      });
     });
   }
 
