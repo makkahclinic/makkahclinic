@@ -137,14 +137,12 @@ export default async function handler(req, res) {
 
   // **FINAL FIX FOR MULTIPLE IMAGES**: Create the correct payload structure.
   // The first part must be a text object. Then, each image is its own object.
-  // **الإصلاح النهائي للصور المتعددة**: بناء هيكل الحمولة الصحيح.
-  // الجزء الأول يجب أن يكون كائن نصي، ثم كل صورة تكون كائناً منفصلاً.
   const parts = [{ text: htmlPrompt }];
   if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
     requestBody.imageData.forEach(imgData => {
       parts.push({
-        inline_data: {
-          mime_type: "image/jpeg",
+        inlineData: { // CORRECTED: from inline_data to inlineData (camelCase)
+          mimeType: "image/jpeg",
           data: imgData
         }
       });
