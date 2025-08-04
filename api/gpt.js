@@ -3,7 +3,7 @@
 /**
  * @description A multi-purpose serverless API endpoint. It now intelligently handles
  * requests from both the Doctor's Portal and the new Patient's Portal, providing
- * tailored responses for each. It also correctly handles multiple image uploads.
+ * tailored, expert-level responses for each.
  */
 export default async function handler(req, res) {
   // Set CORS headers
@@ -22,10 +22,10 @@ export default async function handler(req, res) {
 
   // --- Logic to select the correct prompt based on the request source ---
   if (requestBody.analysisType === 'patient') {
-    // --- PATIENT PORTAL PROMPT ---
+    // --- NEW, EXPERT-LEVEL PATIENT PORTAL PROMPT ---
     const { symptoms, age, gender, smoker, vitals, labs, diagnosis, currentMedications, weight, height, isPregnant, pregnancyMonth } = requestBody;
     htmlPrompt = `
-      أنت "مستشار طبي ذكي وخبير". مهمتك هي تحليل البيانات التي يقدمها المريض بعمق شديد، وتقديم تقرير HTML مفصل، آمن، وعلمي. يجب أن تفكر كطبيب حقيقي، تبحث عن الأسباب الجذرية، وتأخذ كل البيانات (خاصة الحمل والوزن) في الاعتبار.
+      أنت "مستشار طبي ذكي وخبير". مهمتك هي تحليل البيانات التي يقدمها المريض بعمق شديد، وتقديم تقرير HTML مفصل، آمن، وعلمي. يجب أن تفكر كطبيب استشاري حقيقي، تبحث عن الأسباب الجذرية، تكتشف الأخطاء الطبية الشائعة، وتقترح خطوات عملية ومحددة.
 
       **بيانات المريض:**
       - العمر: ${age}
@@ -44,35 +44,63 @@ export default async function handler(req, res) {
       **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط وبدقة):**
 
       <div class="response-section recommendation-box green"> <!-- استخدم red للحالات الطارئة، yellow للحالات الهامة، و green للحالات غير المقلقة -->
-        <!-- بناءً على تحليل عميق لخطورة الأعراض، ضع هنا توصيتك النهائية والواضحة. -->
+        <!-- بناءً على تحليل عميق لخطورة الأعراض، ضع هنا توصيتك النهائية والواضحة. مثال: "⚠️ توصية هامة: بناءً على وجود قسطرة بولية دائمة وأعراض التهاب، نوصي بشدة بحجز موعد مع طبيب مسالك بولية خلال 24-48 ساعة." -->
       </div>
 
       <div class="response-section">
           <h4>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A9.716 9.716 0 0 0 6 18a9.716 9.716 0 0 0 2.25-.333.75.75 0 0 0 .5-.707V8.25a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 6 7.5a8.25 8.25 0 0 1 5.25-2.967ZM12.75 4.533A9.707 9.707 0 0 1 18 3a9.735 9.735 0 0 1 3.25.555.75.75 0 0 1 .5.707v14.25a.75.75 0 0 1-1 .707A9.716 9.716 0 0 1 18 18a9.716 9.716 0 0 1-2.25-.333.75.75 0 0 1-.5-.707V8.25a.75.75 0 0 1 .5-.707A9.735 9.735 0 0 1 18 7.5a8.25 8.25 0 0 0-5.25-2.967Z" /></svg>
+            <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="currentColor"><path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A9.716 9.716 0 0 0 6 18a9.716 9.716 0 0 0 2.25-.333.75.75 0 0 0 .5-.707V8.25a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 6 7.5a8.25 8.25 0 0 1 5.25-2.967ZM12.75 4.533A9.707 9.707 0 0 1 18 3a9.735 9.735 0 0 1 3.25.555.75.75 0 0 1 .5.707v14.25a.75.75 0 0 1-1 .707A9.716 9.716 0 0 1 18 18a9.716 9.716 0 0 1-2.25-.333.75.75 0 0 1-.5-.707V8.25a.75.75 0 0 1 .5-.707A9.735 9.735 0 0 1 18 7.5a8.25 8.25 0 0 0-5.25-2.967Z" /></svg>
             تحليل الحالة والأسباب المحتملة
           </h4>
           <p>بناءً على المعلومات المقدمة، هذا هو تحليلنا الأولي:</p>
           <ul>
-            <li><strong>السبب الجذري المحتمل:</strong> [كن عميقاً في تحليلك].</li>
-            <li><strong>التشخيصات التفريقية:</strong> [اذكر احتمالات أخرى].</li>
+            <li><strong>السبب الجذري المحتمل:</strong> [هنا يجب أن تكون عميقاً. مثال: "وجود قسطرة بولية دائمة يعتبر السبب الرئيسي والأكثر ترجيحاً لحدوث التهابات مسالك بولية متكررة (CAUTI)."].</li>
+            <li><strong>التشخيصات التفريقية:</strong> [اذكر احتمالات أخرى. مثال: "يجب أيضاً النظر في احتمالية أن تكون الأعراض العصبية (النسيان) ناتجة عن تأثير الالتهاب على الحالة العامة للمريضة، أو كأثر جانبي لأحد الأدوية الحالية."].</li>
           </ul>
       </div>
       
       <div class="response-section">
           <h4>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd" /></svg>
+            <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12.97 3.97a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 1 1-1.06-1.06l6.22-6.22H3a.75.75 0 0 1 0-1.5h16.19l-6.22-6.22a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
+            أخطاء طبية محتملة يجب الانتباه لها
+          </h4>
+          <p>بناءً على خبرتنا، هذه بعض الأخطاء الشائعة التي قد تحدث في مثل هذه الحالات ويجب مناقشتها مع الفريق الطبي:</p>
+          <ul>
+            <li>[اذكر خطأً شائعاً ومحدداً. مثال: "إهمال استخدام القسطرة المتقطعة كبديل للدائمة، وهو ما توصي به الإرشادات الطبية لتقليل العدوى."].</li>
+            <li>[اذكر خطأً آخر. مثال: "تناول دواء مثل ريسبيردال أثناء الحمل يعتبر خطراً كبيراً على الجنين ويجب إيقافه فوراً تحت إشراف طبي."].</li>
+          </ul>
+      </div>
+
+      <div class="response-section">
+          <h4>
+            <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd" /></svg>
             الخطوات التالية المقترحة
           </h4>
           <p>بناءً على التحليل، هذه هي الخطوات العملية التي نوصي بها:</p>
           <ul>
-            <li><strong>الخطوة الأولى (عاجلة):</strong> [كن محدداً جداً].</li>
-            <li><strong>الخطوة الثانية:</strong> [كن محدداً جداً].</li>
+            <li><strong>الخطوة الأولى (عاجلة):</strong> [كن محدداً جداً. مثال: "إجراء تحليل وزراعة للبول (Urine Analysis and Culture) لتحديد نوع البكتيريا واختيار المضاد الحيوي المناسب."].</li>
+            <li><strong>الخطوة الثانية:</strong> [مثال: "مناقشة الطبيب حول خيار استبدال القسطرة الدائمة بالقسطرة المتقطعة لتقليل خطر العدوى بشكل كبير."].</li>
+            <li><strong>الخطوة الثالثة (للتأكد):</strong> [مثال: "إجراء فحص وظائف الكلى (Creatinine) للتأكد من أن العدوى لم تؤثر على الكلى."].</li>
           </ul>
       </div>
+      
+      <div class="response-section">
+          <h4>
+            <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm11.378-3.917c-.882 0-1.473.823-1.473 1.838 0 .931.515 1.744 1.455 1.838A.5.5 0 0 1 13.5 12.5v1.217a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1.217c0-.784-.57-1.624-1.455-1.838C8.623 10.423 8 9.603 8 8.672c0-1.017.612-1.838 1.473-1.838.84 0 1.473.823 1.473 1.838a.5.5 0 0 1-1 0c0-.594-.343-1.088-.873-1.088-.328 0-.5.276-.5.658 0 .343.248.658.5.658a.5.5 0 0 1 .5.5v.007a.5.5 0 0 1-.5.5h-.007a.5.5 0 0 1-.5-.5v-.007Z" clip-rule="evenodd" /></svg>
+            أسئلة لمناقشتها مع طبيبك
+          </h4>
+          <p>عند زيارة الطبيب، هذه بعض الأسئلة الهامة التي يمكنك طرحها:</p>
+          <ul>
+            <li>هل يمكن أن تكون القسطرة هي السبب الرئيسي للمشكلة؟ وما هي البدائل المتاحة؟</li>
+            <li>بناءً على نتيجة زراعة البول، ما هو المضاد الحيوي الأنسب لحالتي؟</li>
+            <li>هل نحتاج للقلق بشأن تأثير هذه الالتهابات على وظائف الكلى؟</li>
+          </ul>
+      </div>
+
+      **قاعدة مهمة:** لا تضع أبداً أي رموز تنسيق مثل \`\`\`html في بداية ردك. يجب أن يبدأ ردك مباشرة بوسم \`<div>\`.
     `;
   } else {
-    // --- DOCTOR PORTAL PROMPT (The one we perfected) ---
+    // --- DOCTOR PORTAL PROMPT (RESTORED TO FULL DETAIL) ---
     const { diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure } = requestBody;
     htmlPrompt = `
       أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين". مهمتك تحليل البيانات الطبية المقدمة (سواء كانت نصاً أو صوراً) وتقديم تقرير HTML مفصل.
@@ -127,14 +155,12 @@ export default async function handler(req, res) {
     `;
   }
 
-  // **FINAL FIX FOR MULTIPLE IMAGES**: Create the correct payload structure.
-  // The first part must be a text object. Then, each image is its own object.
   const parts = [{ text: htmlPrompt }];
   if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
     requestBody.imageData.forEach(imgData => {
       parts.push({
-        inlineData: { // CORRECTED: from inline_data to inlineData (camelCase)
-          mimeType: "image/jpeg",
+        inline_data: {
+          mime_type: "image/jpeg",
           data: imgData
         }
       });
