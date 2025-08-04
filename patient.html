@@ -6,7 +6,7 @@
   <title>المساعد الصحي الذكي - بوابة المريض</title>
   <style>
     :root {
-      --primary-color: #28a745;
+      --primary-color: #28a745; /* Green for patient portal */
       --secondary-color: #0a4c8b;
       --background-color: #f4f7f9;
       --text-color: #333;
@@ -187,10 +187,7 @@
     <button onclick="analyzeSymptoms()" class="btn-primary">تحليل الأعراض</button>
 
     <div id="notification-area"></div>
-    <div id="response-container">
-        <!-- The AI-generated report will be inserted here -->
-        <!-- سيتم إدراج التقرير الذي تم إنشاؤه بواسطة الذكاء الاصطناعي هنا -->
-    </div>
+    <div id="response-container"></div>
 
     <p class="disclaimer">
       <strong>إخلاء مسؤولية:</strong> هذه الأداة تقدم نصائح أولية للمعلومات فقط ولا تعتبر بديلاً عن الاستشارة الطبية المتخصصة.
@@ -198,15 +195,27 @@
   </div>
 
   <script type="module">
-    // Firebase configuration and authentication will be added here in the next step.
-    // This script is intentionally kept minimal for now to focus on the page structure.
-    // سيتم إضافة إعدادات Firebase والمصادقة هنا في الخطوة التالية.
-    // تم إبقاء هذا السكربت بسيطاً للتركيز على بنية الصفحة.
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+      authDomain: "insurance-check-6cec9.firebaseapp.com",
+      projectId: "insurance-check-6cec9",
+      storageBucket: "insurance-check-6cec9.appspot.com",
+      messagingSenderId: "992769471393",
+      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
+      measurementId: "G-LMS6VRSTT6"
+    };
+
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
     
-    // Placeholder function for now
-    function analyzeSymptoms() {
-        showNotification("info", "جاري بناء هذه الميزة... سنقوم بربطها بالذكاء الاصطناعي في الخطوة القادمة.");
-    }
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.replace("https://www.m2020m.org/login.html");
+      }
+    });
 
     function showNotification(type, message) {
         const notificationArea = document.getElementById('notification-area');
@@ -218,10 +227,71 @@
         notificationDiv.style.display = 'block';
     }
 
-    window.analyzeSymptoms = analyzeSymptoms;
+    async function analyzeSymptoms() {
+      const symptoms = document.getElementById('symptoms').value;
+      const age = document.getElementById('age').value;
+      const gender = document.getElementById('gender').value;
+      const smoker = document.getElementById('smoker').value;
+      const vitals = document.getElementById('vitals').value;
+      const labs = document.getElementById('labs').value;
+      const diagnosis = document.getElementById('diagnosis').value;
 
-    // Show the page once it's ready
-    document.body.style.opacity = 1;
+      const responseContainer = document.getElementById('response-container');
+      const notificationArea = document.getElementById('notification-area');
+      
+      responseContainer.style.display = 'none';
+      responseContainer.innerHTML = '';
+      notificationArea.innerHTML = '';
+
+      if (!symptoms || !age || !gender || !smoker) {
+        showNotification("error", "الرجاء ملء جميع الحقول المطلوبة.");
+        return;
+      }
+      
+      showNotification("info", "جاري تحليل الأعراض، قد يستغرق الأمر بضع لحظات...");
+
+      try {
+        if (!auth.currentUser) throw new Error("المستخدم غير مسجل الدخول.");
+        const token = await auth.currentUser.getIdToken();
+
+        const requestBody = { 
+            analysisType: 'patient', // This tells the API to use the patient prompt
+            symptoms, age, gender, 
+            smoker: smoker === 'yes', 
+            vitals, labs, diagnosis 
+        };
+
+        const result = await fetch("/api/gpt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!result.ok) {
+          const errorData = await result.json();
+          throw new Error(errorData.detail || `خطأ من الخادم: ${result.status}`);
+        }
+
+        const json = await result.json();
+
+        if (json.htmlReport) {
+            notificationArea.innerHTML = '';
+            responseContainer.innerHTML = json.htmlReport;
+            responseContainer.style.display = 'block';
+        } else {
+            throw new Error("لم يتم استلام تقرير من الخادم.");
+        }
+
+      } catch (err) {
+        showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
+        console.error(err);
+      }
+    }
+
+    window.analyzeSymptoms = analyzeSymptoms;
   </script>
 </body>
 </html>
