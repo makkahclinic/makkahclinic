@@ -94,6 +94,35 @@
         box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
     }
     
+    /* --- STYLES FOR IMAGE UPLOAD --- */
+    .image-upload-container {
+        margin-top: 1.5rem;
+        border: 2px dashed var(--border-color);
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.3s, background-color 0.3s;
+    }
+    .image-upload-container:hover {
+        border-color: var(--primary-color);
+        background-color: #f8f9fa;
+    }
+    #image-upload-input {
+        display: none;
+    }
+    #image-preview-container {
+        margin-top: 1rem;
+        text-align: center;
+    }
+    #image-preview {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        display: none; /* Hidden by default */
+    }
+
     #response-container {
         margin-top: 2.5rem;
         display: none;
@@ -186,6 +215,18 @@
             <label for="diagnosis">أي تشخيص سابق (اختياري):</label>
             <textarea id="diagnosis" placeholder="إذا كان لديك أي تشخيص سابق من طبيب، يمكنك كتابته هنا"></textarea>
         </div>
+        
+        <!-- --- NEW IMAGE UPLOAD SECTION --- -->
+        <div class="full-width">
+            <label for="image-upload-input">رفع ملف للتحليل (اختياري - مثل صورة أشعة أو نتيجة فحص):</label>
+            <div class="image-upload-container" onclick="document.getElementById('image-upload-input').click();">
+                <span>اضغط هنا لاختيار صورة</span>
+                <input type="file" id="image-upload-input" accept="image/*">
+            </div>
+            <div id="image-preview-container">
+                <img id="image-preview" src="#" alt="معاينة الصورة" />
+            </div>
+        </div>
     </div>
 
     <button onclick="analyzeSymptoms()" class="btn-primary">تحليل الأعراض</button>
@@ -221,6 +262,24 @@
       }
     });
 
+    // --- SCRIPT FOR IMAGE PREVIEW ---
+    const imageInput = document.getElementById('image-upload-input');
+    const imagePreview = document.getElementById('image-preview');
+    let imageDataUrl = null; 
+
+    imageInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                imageDataUrl = e.target.result.split(',')[1];
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
     function showNotification(type, message) {
         const notificationArea = document.getElementById('notification-area');
         const notificationDiv = document.createElement('div');
@@ -239,7 +298,7 @@
       const vitals = document.getElementById('vitals').value;
       const labs = document.getElementById('labs').value;
       const diagnosis = document.getElementById('diagnosis').value;
-      const currentMedications = document.getElementById('currentMedications').value; // Get new field value
+      const currentMedications = document.getElementById('currentMedications').value;
 
       const responseContainer = document.getElementById('response-container');
       const notificationArea = document.getElementById('notification-area');
@@ -264,7 +323,8 @@
             symptoms, age, gender, 
             smoker: smoker === 'yes', 
             vitals, labs, diagnosis,
-            currentMedications // Add new field to request
+            currentMedications,
+            imageData: imageDataUrl // Send image data
         };
 
         const result = await fetch("/api/gpt", {
