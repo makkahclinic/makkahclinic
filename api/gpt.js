@@ -247,7 +247,6 @@
     genderSelect.addEventListener('change', () => {
         if (genderSelect.value === 'female') {
             pregnancySection.style.display = 'block';
-            // Also check the pregnancy status to show/hide the month
             if (isPregnantSelect.value === 'yes') {
                 pregnancyMonthSection.style.display = 'block';
             }
@@ -277,8 +276,75 @@
     }
 
     async function analyzeSymptoms() {
-      // This will be updated in the next step to send the new fields
-      showNotification("info", "جاري بناء هذه الميزة... سنقوم بربطها بالذكاء الاصطناعي في الخطوة القادمة.");
+      const symptoms = document.getElementById('symptoms').value;
+      const age = document.getElementById('age').value;
+      const gender = document.getElementById('gender').value;
+      const smoker = document.getElementById('smoker').value;
+      const vitals = document.getElementById('vitals').value;
+      const labs = document.getElementById('labs').value;
+      const diagnosis = document.getElementById('diagnosis').value;
+      const currentMedications = document.getElementById('currentMedications').value;
+      const weight = document.getElementById('weight').value;
+      const height = document.getElementById('height').value;
+      const isPregnant = document.getElementById('isPregnant').value === 'yes';
+      const pregnancyMonth = document.getElementById('pregnancyMonth').value;
+
+      const responseContainer = document.getElementById('response-container');
+      const notificationArea = document.getElementById('notification-area');
+      
+      responseContainer.style.display = 'none';
+      responseContainer.innerHTML = '';
+      notificationArea.innerHTML = '';
+
+      if (!symptoms || !age || !gender || !smoker) {
+        showNotification("error", "الرجاء ملء جميع الحقول المطلوبة.");
+        return;
+      }
+      
+      showNotification("info", "جاري تحليل الأعراض، قد يستغرق الأمر بضع لحظات...");
+
+      try {
+        if (!auth.currentUser) throw new Error("المستخدم غير مسجل الدخول.");
+        const token = await auth.currentUser.getIdToken();
+
+        const requestBody = { 
+            analysisType: 'patient', 
+            symptoms, age, gender, 
+            smoker: smoker === 'yes', 
+            vitals, labs, diagnosis,
+            currentMedications,
+            weight, height,
+            isPregnant, pregnancyMonth
+        };
+
+        const result = await fetch("/api/gpt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!result.ok) {
+          const errorData = await result.json();
+          throw new Error(errorData.detail || `خطأ من الخادم: ${result.status}`);
+        }
+
+        const json = await result.json();
+
+        if (json.htmlReport) {
+            notificationArea.innerHTML = '';
+            responseContainer.innerHTML = json.htmlReport;
+            responseContainer.style.display = 'block';
+        } else {
+            throw new Error("لم يتم استلام تقرير من الخادم.");
+        }
+
+      } catch (err) {
+        showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
+        console.error(err);
+      }
     }
     window.analyzeSymptoms = analyzeSymptoms;
   </script>
