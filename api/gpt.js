@@ -1,284 +1,177 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>المساعد الصحي الذكي - بوابة المريض</title>
-  <style>
-    :root {
-      --primary-color: #28a745;
-      --secondary-color: #0a4c8b;
-      --background-color: #f4f7f9;
-      --text-color: #333;
-      --card-bg-color: #ffffff;
-      --border-color: #e0e0e0;
-    }
-    body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        background-color: var(--background-color);
-        color: var(--text-color);
-        margin: 0;
-        padding: 1rem;
-    }
-    .container {
-      max-width: 900px;
-      margin: 2rem auto;
-      background-color: var(--card-bg-color);
-      padding: 2.5rem;
-      border-radius: 16px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-    }
-    .header {
-        text-align: center;
-        margin-bottom: 2.5rem;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 1.5rem;
-    }
-    .header h2 {
-      color: var(--primary-color);
-      margin: 0;
-      font-size: 2rem;
-    }
-    .header p {
-        color: #555;
-        margin-top: 0.5rem;
-    }
-    label {
-      font-weight: 600;
-      display: block;
-      margin-top: 1.5rem;
-      margin-bottom: 0.5rem;
-    }
-    textarea, input, select {
-      width: 100%;
-      padding: 0.9rem 1rem;
-      font-size: 1rem;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      box-sizing: border-box;
-      transition: border-color 0.3s, box-shadow 0.3s;
-    }
-    textarea:focus, input:focus, select:focus {
-      outline: none;
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
-    }
-    textarea {
-      min-height: 120px;
-      resize: vertical;
-    }
-    .form-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem 1.5rem;
-    }
-    .full-width {
-        grid-column: 1 / -1;
-    }
-    .conditional-field {
-        display: none;
-        animation: slideDown 0.4s ease-out;
-    }
-    @keyframes slideDown {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    button {
-      padding: 1rem;
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: #fff;
-      background: linear-gradient(45deg, var(--primary-color), #218838);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      margin-top: 2.5rem;
-      width: 100%;
-      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
-    }
-    button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-    }
-    #response-container {
-      margin-top: 2.5rem;
-      display: none;
-      animation: fadeIn 0.5s ease-in-out;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    .response-section {
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      border-radius: 12px;
-      background-color: #fdfdfd;
-      border: 1px solid var(--border-color);
-      text-align: right;
-    }
-    .response-section h4 {
-      margin-top: 0;
-      margin-bottom: 1rem;
-      color: var(--secondary-color);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .response-section svg {
-      width: 24px;
-      height: 24px;
-    }
-    .recommendation-box {
-      padding: 1.5rem;
-      border-radius: 12px;
-      font-size: 1.1rem;
-      font-weight: bold;
-      text-align: center;
-    }
-    .recommendation-box.red { background-color: #f8d7da; color: #721c24; }
-    .recommendation-box.yellow { background-color: #fff3cd; color: #856404; }
-    .recommendation-box.green { background-color: #d4edda; color: #155724; }
-    .notification {
-      padding: 1rem;
-      margin-top: 1rem;
-      border-radius: 8px;
-      text-align: center;
-      display: none;
-    }
-    .notification.error { background-color: #f8d7da; color: #721c24; }
-    .notification.info { background-color: #d1ecf1; color: #0c5460; }
-    .back-link {
-      display: block;
-      text-align: center;
-      margin-bottom: 1rem;
-      color: var(--secondary-color);
-    }
-    .disclaimer {
-      font-size: 0.8rem;
-      text-align: center;
-      color: #777;
-      margin-top: 2rem;
-    }
-  </style>
-</head>
-<body>
-  <!-- محتوى الصفحة موجود هنا -->
-  <script type="module">
-    const firebaseConfig = {
-      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-      authDomain: "insurance-check-6cec9.firebaseapp.com",
-      projectId: "insurance-check-6cec9",
-      storageBucket: "insurance-check-6cec9.appspot.com",
-      messagingSenderId: "992769471393",
-      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
-      measurementId: "G-LMS6VRSTT6"
-    };
+// /api/gpt.js
 
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
-    
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
+/**
+ * @description A multi-purpose serverless API endpoint. It now intelligently handles
+ * requests from both the Doctor's Portal and the new Patient's Portal, providing
+ * tailored responses for each. It also correctly handles multiple image uploads.
+ */
+export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.replace("https://www.m2020m.org/login.html");
-      }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+  
+  let htmlPrompt;
+  const requestBody = req.body;
+
+  // --- Logic to select the correct prompt based on the request source ---
+  if (requestBody.analysisType === 'patient') {
+    // --- PATIENT PORTAL PROMPT ---
+    const { symptoms, age, gender, smoker, vitals, labs, diagnosis, currentMedications, weight, height, isPregnant, pregnancyMonth } = requestBody;
+    htmlPrompt = `
+      أنت "مستشار طبي ذكي وخبير". مهمتك هي تحليل البيانات التي يقدمها المريض بعمق شديد، وتقديم تقرير HTML مفصل، آمن، وعلمي. يجب أن تفكر كطبيب حقيقي، تبحث عن الأسباب الجذرية، وتأخذ كل البيانات (خاصة الحمل والوزن) في الاعتبار.
+
+      **بيانات المريض:**
+      - العمر: ${age}
+      - الجنس: ${gender}
+      - الوزن: ${weight || "لم يحدد"} كجم
+      - الطول: ${height || "لم يحدد"} سم
+      - مدخن: ${smoker ? 'نعم' : 'لا'}
+      - هل هي حامل: ${isPregnant ? `نعم، في الشهر ${pregnancyMonth}` : "لا"}
+      - الأعراض الرئيسية: ${symptoms}
+      - الأدوية الحالية: ${currentMedications || "لا يوجد"}
+      - الحرارة والضغط (إن وجدت): ${vitals || "لم يتم تقديمها"}
+      - نتائج تحاليل (إن وجدت): ${labs || "لم يتم تقديمها"}
+      - تشخيص سابق (إن وجد): ${diagnosis || "لا يوجد"}
+
+      ---
+      **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط وبدقة):**
+
+      <div class="response-section recommendation-box green"> <!-- استخدم red للحالات الطارئة، yellow للحالات الهامة، و green للحالات غير المقلقة -->
+        <!-- بناءً على تحليل عميق لخطورة الأعراض، ضع هنا توصيتك النهائية والواضحة. -->
+      </div>
+
+      <div class="response-section">
+          <h4>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A9.716 9.716 0 0 0 6 18a9.716 9.716 0 0 0 2.25-.333.75.75 0 0 0 .5-.707V8.25a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 6 7.5a8.25 8.25 0 0 1 5.25-2.967ZM12.75 4.533A9.707 9.707 0 0 1 18 3a9.735 9.735 0 0 1 3.25.555.75.75 0 0 1 .5.707v14.25a.75.75 0 0 1-1 .707A9.716 9.716 0 0 1 18 18a9.716 9.716 0 0 1-2.25-.333.75.75 0 0 1-.5-.707V8.25a.75.75 0 0 1 .5-.707A9.735 9.735 0 0 1 18 7.5a8.25 8.25 0 0 0-5.25-2.967Z" /></svg>
+            تحليل الحالة والأسباب المحتملة
+          </h4>
+          <p>بناءً على المعلومات المقدمة، هذا هو تحليلنا الأولي:</p>
+          <ul>
+            <li><strong>السبب الجذري المحتمل:</strong> [كن عميقاً في تحليلك].</li>
+            <li><strong>التشخيصات التفريقية:</strong> [اذكر احتمالات أخرى].</li>
+          </ul>
+      </div>
+      
+      <div class="response-section">
+          <h4>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd" /></svg>
+            الخطوات التالية المقترحة
+          </h4>
+          <p>بناءً على التحليل، هذه هي الخطوات العملية التي نوصي بها:</p>
+          <ul>
+            <li><strong>الخطوة الأولى (عاجلة):</strong> [كن محدداً جداً].</li>
+            <li><strong>الخطوة الثانية:</strong> [كن محدداً جداً].</li>
+          </ul>
+      </div>
+    `;
+  } else {
+    // --- DOCTOR PORTAL PROMPT (RESTORED TO FULL DETAIL) ---
+    const { diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure, imageData } = requestBody;
+    htmlPrompt = `
+      أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين". مهمتك تحليل البيانات الطبية المقدمة (سواء كانت نصاً أو صوراً) وتقديم تقرير HTML مفصل.
+
+      **البيانات لتحليلها:**
+      - **الصور المرفقة (إن وجدت):** قم بقراءة وتحليل كل صورة مرفقة. استخرج منها التشخيصات، الأدوية، والجرعات.
+      - **البيانات النصية (للسياق الإضافي):**
+          - التشخيص المفوتر: ${diagnosis || "لم يحدد"}
+          - الأعراض: ${symptoms || "لم تحدد"}
+          - العمر: ${age || "لم يحدد"}
+          - الجنس: ${gender || "لم يحدد"}
+          - مدخن: ${smoker ? 'نعم' : 'لا'}
+          - الإجراءات المتخذة: ${beforeProcedure}, ${afterProcedure}
+
+      ---
+      **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط):**
+
+      <h3>تقرير تحليلي مُفصل</h3>
+      
+      <div class="section">
+          <h4>1. تحليل الإجراءات ومبرراتها الطبية:</h4>
+          <p>بناءً على الصور والبيانات، ابدأ بنقد التشخيص. ثم، حلل كل دواء وإجراء. **عند تحليل الأدوية، أنت ملزم بتحليل خصائصها الدوائية:** هل الدواء المختار هو الأفضل؟ هل يصل بتركيز كافٍ لمكان العدوى؟ انقد الاختيارات الدوائية السيئة بوضوح.</p>
+      </div>
+
+      <div class="section">
+          <h4>2. احتمالية الرفض من التأمين:</h4>
+          <p>حدد مستوى الخطر. اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها بالريال السعودي، والسبب العلمي أو التأميني للرفض.</p>
+      </div>
+
+      <div class="section">
+          <h4>3. ما كان يمكن عمله لرفع الفاتورة (وفقًا للبروتوكولات الطبية):</h4>
+          <p>اقترح خطة عمل كاملة تبدأ بالاستشارات الضرورية ثم الفحوصات المتخصصة. كن شمولياً واقترح فحوصات جهازية (مثل وظائف الكلى) إذا كانت الحالة تستدعي ذلك. ادعم كل اقتراح ببروتوكول طبي معروف.</p>
+      </div>
+       <div class="section financial-summary">
+        <h4>4. المؤشر المالي:</h4>
+        <table>
+            <thead><tr><th>المؤشر</th><th>القيمة (ريال سعودي)</th><th>ملاحظات</th></tr></thead>
+            <tbody>
+                <tr><td>إجمالي الدخل الحالي (المفوتر)</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+                <tr><td>إجمالي الدخل بعد خصم الرفوض المحتملة</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+                <tr><td>إجمالي الدخل المحتمل مع التحسينات</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h4>5. توصيات عامة شاملة:</h4>
+        <p>قدم نصائح عامة لتحسين الترميز والتوثيق واختيار الأدوية.</p>
+    </div>
+
+    **قاعدة مهمة:** لا تضع أبداً أي رموز تنسيق مثل \`\`\`html في بداية ردك. يجب أن يبدأ ردك مباشرة بوسم \`<h3>\`.
+    `;
+  }
+
+  const parts = [{ text: htmlPrompt }];
+  if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
+    requestBody.imageData.forEach(imgData => {
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: imgData
+        }
+      });
+    });
+  }
+
+  const payload = {
+    contents: [{ parts: parts }],
+    generationConfig: {
+      temperature: 0.5,
+    },
+  };
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
 
-    function showNotification(type, message) {
-      const notificationArea = document.getElementById('notification-area');
-      const notificationDiv = document.createElement('div');
-      notificationDiv.className = `notification ${type}`;
-      notificationDiv.textContent = message;
-      notificationArea.innerHTML = '';
-      notificationArea.appendChild(notificationDiv);
-      notificationDiv.style.display = 'block';
+    if (!response.ok) {
+      const errorBody = await response.json();
+      throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
     }
 
-    async function analyzeSymptoms() {
-      const symptoms = document.getElementById('symptoms').value;
-      const age = document.getElementById('age').value;
-      const gender = document.getElementById('gender').value;
-      const smoker = document.getElementById('smoker').value;
-      const vitals = document.getElementById('vitals').value;
-      const labs = document.getElementById('labs').value;
-      const diagnosis = document.getElementById('diagnosis').value;
-      const currentMedications = document.getElementById('currentMedications').value;
-      const weight = document.getElementById('weight').value;
-      const height = document.getElementById('height').value;
-      const isPregnant = document.getElementById('isPregnant').value === 'yes';
-      const pregnancyMonth = document.getElementById('pregnancyMonth').value;
+    const result = await response.json();
+    const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      const responseContainer = document.getElementById('response-container');
-      const notificationArea = document.getElementById('notification-area');
-
-      responseContainer.style.display = 'none';
-      responseContainer.innerHTML = '';
-      notificationArea.innerHTML = '';
-
-      if (!symptoms || !age || !gender || !smoker) {
-        showNotification("error", "الرجاء ملء جميع الحقول المطلوبة.");
-        return;
-      }
-
-      showNotification("info", "جاري تحليل الأعراض، قد يستغرق الأمر بضع لحظات...");
-
-      try {
-        if (!auth.currentUser) throw new Error("المستخدم غير مسجل الدخول.");
-        const token = await auth.currentUser.getIdToken();
-
-        const requestBody = {
-          analysisType: 'patient',
-          symptoms, age, gender,
-          smoker: smoker === 'yes',
-          vitals, labs, diagnosis,
-          currentMedications,
-          weight, height,
-          isPregnant, pregnancyMonth
-        };
-
-        const result = await fetch("/api/gpt", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!result.ok) {
-          const contentType = result.headers.get("content-type");
-          let errorMessage = `خطأ من الخادم: ${result.status}`;
-          if (contentType && contentType.includes("application/json")) {
-            const errorData = await result.json();
-            errorMessage = errorData.detail || errorMessage;
-          } else {
-            const errorText = await result.text();
-            errorMessage = errorText || errorMessage;
-          }
-          throw new Error(errorMessage);
-        }
-
-        const json = await result.json();
-
-        if (json.htmlReport) {
-          notificationArea.innerHTML = '';
-          responseContainer.innerHTML = json.htmlReport;
-          responseContainer.style.display = 'block';
-        } else {
-          throw new Error("لم يتم استلام تقرير من الخادم.");
-        }
-
-      } catch (err) {
-        showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
-        console.error(err);
-      }
+    if (!reportHtml) {
+      throw new Error("لم يتمكن النموذج من إنشاء التقرير.");
     }
+    
+    return res.status(200).json({ htmlReport: reportHtml });
 
-    window.analyzeSymptoms = analyzeSymptoms;
-  </script>
-</body>
-</html>
+  } catch (err) {
+    console.error("🔥 Server-side Error:", err);
+    return res.status(500).json({
+      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
+      detail: err.message,
+    });
+  }
+}
