@@ -1,285 +1,202 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>المساعد الصحي الذكي - بوابة المريض</title>
-  <style>
-    :root {
-      --primary-color: #28a745; /* Green for patient portal */
-      --secondary-color: #0a4c8b;
-      --background-color: #f4f7f9;
-      --text-color: #333;
-      --card-bg-color: #ffffff;
-      --border-color: #e0e0e0;
-    }
-    body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        background-color: var(--background-color);
-        color: var(--text-color);
-        margin: 0;
-        padding: 1rem;
-    }
-    .container {
-      max-width: 900px;
-      margin: 2rem auto;
-      background-color: var(--card-bg-color);
-      padding: 2.5rem;
-      border-radius: 16px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-    }
-    .header {
-        text-align: center;
-        margin-bottom: 2.5rem;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 1.5rem;
-    }
-    .header h2 {
-      color: var(--primary-color);
-      margin: 0;
-      font-size: 2rem;
-    }
-    .header p {
-        color: #555;
-        margin-top: 0.5rem;
-    }
-    label {
-      font-weight: 600;
-      display: block;
-      margin-top: 1.5rem;
-      margin-bottom: 0.5rem;
-    }
-    textarea, input, select {
-      width: 100%;
-      padding: 0.9rem 1rem;
-      font-size: 1rem;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      box-sizing: border-box;
-      transition: border-color 0.3s, box-shadow 0.3s;
-    }
-    textarea:focus, input:focus, select:focus {
-      outline: none;
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
-    }
-    textarea {
-      min-height: 120px;
-      resize: vertical;
-    }
-    .form-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem 1.5rem;
-    }
-    .full-width {
-        grid-column: 1 / -1;
-    }
-    /* New styles for conditional fields */
-    .conditional-field {
-        display: none; /* Hidden by default */
-        animation: slideDown 0.4s ease-out;
-    }
-    @keyframes slideDown {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
+// /api/gpt.js
 
-    button {
-      padding: 1rem;
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: #fff;
-      background: linear-gradient(45deg, var(--primary-color), #218838);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      margin-top: 2.5rem;
-      width: 100%;
-      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
-    }
-    button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
-    }
-    
-    #response-container { margin-top: 2.5rem; display: none; animation: fadeIn 0.5s ease-in-out; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .response-section { padding: 1.5rem; margin-bottom: 1.5rem; border-radius: 12px; background-color: #fdfdfd; border: 1px solid var(--border-color); text-align: right; }
-    .response-section h4 { margin-top: 0; margin-bottom: 1rem; color: var(--secondary-color); display: flex; align-items: center; gap: 10px; }
-    .response-section svg { width: 24px; height: 24px; }
-    .recommendation-box { padding: 1.5rem; border-radius: 12px; font-size: 1.1rem; font-weight: bold; text-align: center; }
-    .recommendation-box.red { background-color: #f8d7da; color: #721c24; }
-    .recommendation-box.yellow { background-color: #fff3cd; color: #856404; }
-    .recommendation-box.green { background-color: #d4edda; color: #155724; }
+/**
+ * @description A multi-purpose serverless API endpoint. It now intelligently handles
+ * requests from both the Doctor's Portal and the new Patient's Portal, providing
+ * tailored responses for each. It also correctly handles multiple image uploads.
+ */
+export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-    .notification { padding: 1rem; margin-top: 1rem; border-radius: 8px; text-align: center; display: none; }
-    .notification.error { background-color: #f8d7da; color: #721c24; }
-    .notification.info { background-color: #d1ecf1; color: #0c5460; }
-    
-    .back-link { display: block; text-align: center; margin-bottom: 1rem; color: var(--secondary-color); }
-    .disclaimer { font-size: 0.8rem; text-align: center; color: #777; margin-top: 2rem; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <a href="portal.html" class="back-link">العودة إلى البوابة الرئيسية</a>
-    <div class="header">
-        <h2>المساعد الصحي الذكي</h2>
-        <p>أدخل معلوماتك للحصول على تحليل أولي لحالتك الصحية</p>
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+  
+  let htmlPrompt;
+  const requestBody = req.body;
+
+  // --- Logic to select the correct prompt based on the request source ---
+  if (requestBody.analysisType === 'patient') {
+    // --- PATIENT PORTAL PROMPT ---
+    const { symptoms, age, gender, smoker, vitals, labs, diagnosis, currentMedications, isPregnant, pregnancyMonth, weight, height } = requestBody;
+    htmlPrompt = `
+      أنت "مستشار طبي ذكي وخبير". مهمتك هي تحليل البيانات التي يقدمها المريض بعمق شديد، وتقديم تقرير HTML مفصل، آمن، وعلمي. يجب أن تفكر كطبيب حقيقي، تبحث عن الأسباب الجذرية، وتقترح خطوات عملية ومحددة.
+
+      **بيانات المريض:**
+      - العمر: ${age}
+      - الجنس: ${gender}
+      - الوزن: ${weight || "لم يحدد"} كجم
+      - الطول: ${height || "لم يحدد"} سم
+      - مدخن: ${smoker ? 'نعم' : 'لا'}
+      - هل هي حامل: ${isPregnant ? `نعم، في الشهر ${pregnancyMonth}` : "لا"}
+      - الأعراض الرئيسية: ${symptoms}
+      - الأدوية الحالية: ${currentMedications || "لا يوجد"}
+      - الحرارة والضغط (إن وجدت): ${vitals || "لم يتم تقديمها"}
+      - نتائج تحاليل (إن وجدت): ${labs || "لم يتم تقديمها"}
+      - تشخيص سابق (إن وجد): ${diagnosis || "لا يوجد"}
+
+      ---
+      **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط وبدقة):**
+
+      <div class="response-section recommendation-box green"> <!-- استخدم red للحالات الطارئة، yellow للحالات الهامة، و green للحالات غير المقلقة -->
+      </div>
+
+      <div class="response-section">
+          <h4>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A9.716 9.716 0 0 0 6 18a9.716 9.716 0 0 0 2.25-.333.75.75 0 0 0 .5-.707V8.25a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 6 7.5a8.25 8.25 0 0 1 5.25-2.967ZM12.75 4.533A9.707 9.707 0 0 1 18 3a9.735 9.735 0 0 1 3.25.555.75.75 0 0 1 .5.707v14.25a.75.75 0 0 1-1 .707A9.716 9.716 0 0 1 18 18a9.716 9.716 0 0 1-2.25-.333.75.75 0 0 1-.5-.707V8.25a.75.75 0 0 1 .5-.707A9.735 9.735 0 0 1 18 7.5a8.25 8.25 0 0 0-5.25-2.967Z" /></svg>
+            تحليل الحالة والأسباب المحتملة
+          </h4>
+          <p>بناءً على المعلومات المقدمة، هذا هو تحليلنا الأولي:</p>
+          <ul>
+            <li><strong>السبب الجذري المحتمل:</strong> [هنا يجب أن تكون عميقاً.].</li>
+            <li><strong>التشخيصات التفريقية:</strong> [اذكر احتمالات أخرى.].</li>
+          </ul>
+      </div>
+      
+      <div class="response-section">
+          <h4>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12.97 3.97a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 1 1-1.06-1.06l6.22-6.22H3a.75.75 0 0 1 0-1.5h16.19l-6.22-6.22a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
+            أخطاء طبية محتملة يجب الانتباه لها
+          </h4>
+          <p>بناءً على خبرتنا، هذه بعض الأخطاء الشائعة التي قد تحدث في مثل هذه الحالات ويجب مناقشتها مع الفريق الطبي:</p>
+          <ul>
+            <li>[اذكر خطأً شائعاً ومحدداً.].</li>
+            <li>[اذكر خطأً آخر.].</li>
+          </ul>
+      </div>
+
+      <div class="response-section">
+          <h4>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd" /></svg>
+            الخطوات التالية المقترحة
+          </h4>
+          <p>بناءً على التحليل، هذه هي الخطوات العملية التي نوصي بها:</p>
+          <ul>
+            <li><strong>الخطوة الأولى (عاجلة):</strong> [كن محدداً جداً.].</li>
+            <li><strong>الخطوة الثانية:</strong> [كن محدداً جداً.].</li>
+            <li><strong>الخطوة الثالثة (للتأكد):</strong> [كن محدداً جداً.].</li>
+          </ul>
+      </div>
+      
+      <div class="response-section">
+          <h4>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm11.378-3.917c-.882 0-1.473.823-1.473 1.838 0 .931.515 1.744 1.455 1.838A.5.5 0 0 1 13.5 12.5v1.217a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1.217c0-.784-.57-1.624-1.455-1.838C8.623 10.423 8 9.603 8 8.672c0-1.017.612-1.838 1.473-1.838.84 0 1.473.823 1.473 1.838a.5.5 0 0 1-1 0c0-.594-.343-1.088-.873-1.088-.328 0-.5.276-.5.658 0 .343.248.658.5.658a.5.5 0 0 1 .5.5v.007a.5.5 0 0 1-.5.5h-.007a.5.5 0 0 1-.5-.5v-.007Z" clip-rule="evenodd" /></svg>
+            أسئلة لمناقشتها مع طبيبك
+          </h4>
+          <p>عند زيارة الطبيب، هذه بعض الأسئلة الهامة التي يمكنك طرحها:</p>
+          <ul>
+            <li>[سؤال أول].</li>
+            <li>[سؤال ثاني].</li>
+          </ul>
+      </div>
+    `;
+  } else {
+    // --- DOCTOR PORTAL PROMPT (The one we perfected) ---
+    const { diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure } = requestBody;
+    htmlPrompt = `
+      أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين". مهمتك تحليل البيانات الطبية المقدمة (سواء كانت نصاً أو صوراً) وتقديم تقرير HTML مفصل.
+
+      **البيانات لتحليلها:**
+      - **الصور المرفقة (إن وجدت):** قم بقراءة وتحليل كل صورة مرفقة. استخرج منها التشخيصات، الأدوية، والجرعات.
+      - **البيانات النصية (للسياق الإضافي):**
+          - التشخيص المفوتر: ${diagnosis || "لم يحدد"}
+          - الأعراض: ${symptoms || "لم تحدد"}
+          - العمر: ${age || "لم يحدد"}
+          - الجنس: ${gender || "لم يحدد"}
+          - مدخن: ${smoker ? 'نعم' : 'لا'}
+          - الإجراءات المتخذة: ${beforeProcedure}, ${afterProcedure}
+
+      ---
+      **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط):**
+
+      <h3>تقرير تحليلي مُفصل</h3>
+      
+      <div class="section">
+          <h4>1. تحليل الإجراءات ومبرراتها الطبية:</h4>
+          <p>بناءً على الصور والبيانات، ابدأ بنقد التشخيص. ثم، حلل كل دواء وإجراء. **عند تحليل الأدوية، أنت ملزم بتحليل خصائصها الدوائية:** هل الدواء المختار هو الأفضل؟ هل يصل بتركيز كافٍ لمكان العدوى؟ انقد الاختيارات الدوائية السيئة بوضوح.</p>
+      </div>
+
+      <div class="section">
+          <h4>2. احتمالية الرفض من التأمين:</h4>
+          <p>حدد مستوى الخطر. اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها بالريال السعودي، والسبب العلمي أو التأميني للرفض.</p>
+      </div>
+
+      <div class="section">
+          <h4>3. ما كان يمكن عمله لرفع الفاتورة (وفقًا للبروتوكولات الطبية):</h4>
+          <p>اقترح خطة عمل كاملة تبدأ بالاستشارات الضرورية ثم الفحوصات المتخصصة. كن شمولياً واقترح فحوصات جهازية (مثل وظائف الكلى) إذا كانت الحالة تستدعي ذلك. ادعم كل اقتراح ببروتوكول طبي معروف.</p>
+      </div>
+       <div class="section financial-summary">
+        <h4>4. المؤشر المالي:</h4>
+        <table>
+            <thead><tr><th>المؤشر</th><th>القيمة (ريال سعودي)</th><th>ملاحظات</th></tr></thead>
+            <tbody>
+                <tr><td>إجمالي الدخل الحالي (المفوتر)</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+                <tr><td>إجمالي الدخل بعد خصم الرفوض المحتملة</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+                <tr><td>إجمالي الدخل المحتمل مع التحسينات</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+            </tbody>
+        </table>
     </div>
 
-    <div class="form-grid">
-        <div class="full-width">
-            <label for="symptoms">صف أعراضك بالتفصيل (مطلوب):</label>
-            <textarea id="symptoms" placeholder="مثال: أشعر بصداع شديد في مقدمة الرأس، مع غثيان..."></textarea>
-        </div>
-        <div>
-            <label for="age">العمر (مطلوب):</label>
-            <input type="number" id="age" placeholder="مثال: 35" />
-        </div>
-        <div>
-            <label for="gender">الجنس (مطلوب):</label>
-            <select id="gender">
-              <option value="" disabled selected>اختر...</option>
-              <option value="male">ذكر</option>
-              <option value="female">أنثى</option>
-            </select>
-        </div>
-
-        <!-- Conditional Pregnancy Fields -->
-        <div id="pregnancy-section" class="conditional-field full-width">
-            <label for="isPregnant">هل أنتِ حامل؟</label>
-            <select id="isPregnant">
-                <option value="no" selected>لا</option>
-                <option value="yes">نعم</option>
-            </select>
-        </div>
-        <div id="pregnancy-month-section" class="conditional-field full-width">
-            <label for="pregnancyMonth">في أي شهر من الحمل؟</label>
-            <select id="pregnancyMonth">
-                <option value="1">الشهر الأول</option>
-                <option value="2">الشهر الثاني</option>
-                <option value="3">الشهر الثالث</option>
-                <option value="4">الشهر الرابع</option>
-                <option value="5">الشهر الخامس</option>
-                <option value="6">الشهر السادس</option>
-                <option value="7">الشهر السابع</option>
-                <option value="8">الشهر الثامن</option>
-                <option value="9">الشهر التاسع</option>
-            </select>
-        </div>
-
-        <div>
-            <label for="weight">الوزن (كجم) (اختياري):</label>
-            <input type="number" id="weight" placeholder="مثال: 70">
-        </div>
-        <div>
-            <label for="height">الطول (سم) (اختياري):</label>
-            <input type="number" id="height" placeholder="مثال: 175">
-        </div>
-        <div>
-            <label for="smoker">هل أنت مدخن؟ (مطلوب)</label>
-            <select id="smoker">
-              <option value="" disabled selected>اختر...</option>
-              <option value="yes">نعم</option>
-              <option value="no">لا</option>
-            </select>
-        </div>
-        <div>
-            <label for="vitals">الحرارة والضغط (اختياري):</label>
-            <input type="text" id="vitals" placeholder="مثال: الحرارة 38.5">
-        </div>
-        <div class="full-width">
-            <label for="currentMedications">الأدوية الحالية (اختياري):</label>
-            <textarea id="currentMedications" placeholder="اذكر أي أدوية تتناولها حالياً"></textarea>
-        </div>
-        <div class="full-width">
-            <label for="labs">نتائج تحاليل حالية (اختياري):</label>
-            <textarea id="labs" placeholder="إذا كان لديك أي نتائج تحاليل حديثة"></textarea>
-        </div>
-        <div class="full-width">
-            <label for="diagnosis">أي تشخيص سابق (اختياري):</label>
-            <textarea id="diagnosis" placeholder="إذا كان لديك أي تشخيص سابق من طبيب"></textarea>
-        </div>
+    <div class="section">
+        <h4>5. توصيات عامة شاملة:</h4>
+        <p>قدم نصائح عامة لتحسين الترميز والتوثيق واختيار الأدوية.</p>
     </div>
 
-    <button onclick="analyzeSymptoms()" class="btn-primary">تحليل الأعراض</button>
+    **قاعدة مهمة:** لا تضع أبداً أي رموز تنسيق مثل \`\`\`html في بداية ردك. يجب أن يبدأ ردك مباشرة بوسم \`<h3>\`.
+    `;
+  }
 
-    <div id="notification-area"></div>
-    <div id="response-container"></div>
+  // **FINAL FIX FOR MULTIPLE IMAGES**: Create the correct payload structure.
+  const parts = [{ text: htmlPrompt }];
+  if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
+    requestBody.imageData.forEach(imgData => {
+      parts.push({
+        inline_data: { // CORRECTED: from inlineData to inline_data (snake_case)
+          mime_type: "image/jpeg",
+          data: imgData
+        }
+      });
+    });
+  }
 
-    <p class="disclaimer">
-      <strong>إخلاء مسؤولية:</strong> هذه الأداة تقدم نصائح أولية للمعلومات فقط ولا تعتبر بديلاً عن الاستشارة الطبية المتخصصة.
-    </p>
-  </div>
+  const payload = {
+    contents: [{ parts: parts }],
+    generationConfig: {
+      temperature: 0.5,
+    },
+  };
 
-  <script type="module">
-    const firebaseConfig = {
-      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-      authDomain: "insurance-check-6cec9.firebaseapp.com",
-      projectId: "insurance-check-6cec9",
-      storageBucket: "insurance-check-6cec9.appspot.com",
-      messagingSenderId: "992769471393",
-      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
-      measurementId: "G-LMS6VRSTT6"
-    };
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    if (!response.ok) {
+      const errorBody = await response.json();
+      throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!reportHtml) {
+      throw new Error("لم يتمكن النموذج من إنشاء التقرير.");
+    }
     
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
+    return res.status(200).json({ htmlReport: reportHtml });
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.replace("https://www.m2020m.org/login.html");
-      }
+  } catch (err) {
+    console.error("🔥 Server-side Error:", err);
+    return res.status(500).json({
+      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
+      detail: err.message,
     });
-
-    // --- SCRIPT FOR CONDITIONAL PREGNANCY FIELDS ---
-    const genderSelect = document.getElementById('gender');
-    const pregnancySection = document.getElementById('pregnancy-section');
-    const isPregnantSelect = document.getElementById('isPregnant');
-    const pregnancyMonthSection = document.getElementById('pregnancy-month-section');
-
-    genderSelect.addEventListener('change', () => {
-        if (genderSelect.value === 'female') {
-            pregnancySection.style.display = 'block';
-            if (isPregnantSelect.value === 'yes') {
-                pregnancyMonthSection.style.display = 'block';
-            }
-        } else {
-            pregnancySection.style.display = 'none';
-            pregnancyMonthSection.style.display = 'none';
-        }
-    });
-
-    isPregnantSelect.addEventListener('change', () => {
-        if (isPregnantSelect.value === 'yes') {
-            pregnancyMonthSection.style.display = 'block';
-        } else {
-            pregnancyMonthSection.style.display = 'none';
-        }
-    });
-
-    // --- SCRIPT FOR ANALYSIS ---
-    function showNotification(type, message) {
-        const notificationArea = document.getElementById('notification-area');
-        const notificationDiv = document.createElement('div');
-        notificationDiv.className = `notification ${type}`;
-        notificationDiv.textContent = message;
-        notificationArea.innerHTML = '';
-        notificationArea.appendChild(notificationDiv);
-        notificationDiv.style.display = 'block';
-    }
-
-    async function analyzeSymptoms() {
-      // This will be updated in the next step to send the new fields
-      showNotification("info", "جاري بناء هذه الميزة... سنقوم بربطها بالذكاء الاصطناعي في الخطوة القادمة.");
-    }
-    window.analyzeSymptoms = analyzeSymptoms;
-  </script>
-</body>
-</html>
+  }
+}
