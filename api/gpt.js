@@ -141,8 +141,8 @@ export default async function handler(req, res) {
   if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
     requestBody.imageData.forEach(imgData => {
       parts.push({
-        inlineData: { // CORRECTED: from inline_data to inlineData (camelCase)
-          mimeType: "image/jpeg",
+        inline_data: { // CORRECTED: from inlineData to inline_data (snake_case)
+          mime_type: "image/jpeg",
           data: imgData
         }
       });
