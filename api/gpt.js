@@ -247,7 +247,6 @@
     genderSelect.addEventListener('change', () => {
         if (genderSelect.value === 'female') {
             pregnancySection.style.display = 'block';
-            // Also check the pregnancy status to show/hide the month
             if (isPregnantSelect.value === 'yes') {
                 pregnancyMonthSection.style.display = 'block';
             }
