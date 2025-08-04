@@ -1,60 +1,60 @@
 // /api/gpt.js
 
 /**
- * @description Serverless API endpoint to generate a detailed, formatted HTML report.
- * This version is now fully multimodal, capable of analyzing both text and image inputs.
- *
- * تم تحديث هذا الكود ليصبح متعدد الوسائط، قادراً على تحليل المدخلات النصية والصور معاً.
- */
+ * @description Serverless API endpoint to generate a detailed, formatted HTML report.
+ * This version is now fully multimodal, capable of analyzing both text and image inputs.
+ *
+ * تم تحديث هذا الكود ليصبح متعدد الوسائط، قادراً على تحليل المدخلات النصية والصور معاً.
+ */
 export default async function handler(req, res) {
-  // Set CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // Set CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // Handle preflight OPTIONS request
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  // Handle preflight OPTIONS request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
-  // Ensure the request method is POST
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
+  // Ensure the request method is POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
 
-  const {
-    diagnosis,
-    symptoms,
-    age,
-    gender,
-    smoker,
-    beforeProcedure,
-    afterProcedure,
-    imageData // Now receiving image data
-  } = req.body;
+  const {
+    diagnosis,
+    symptoms,
+    age,
+    gender,
+    smoker,
+    beforeProcedure,
+    afterProcedure,
+    imageData // Now receiving image data
+  } = req.body;
 
-  // Validate that either text fields or an image is provided
-  if ((!diagnosis && !symptoms) && !imageData) {
-    return res.status(400).json({ error: "الرجاء ملء الحقول النصية أو رفع صورة." });
-  }
+  // Validate that either text fields or an image is provided
+  if ((!diagnosis && !symptoms) && !imageData) {
+    return res.status(400).json({ error: "الرجاء ملء الحقول النصية أو رفع صورة." });
+  }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+  const apiKey = process.env.GEMINI_API_KEY;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-  // **PROMPT ENHANCEMENT**: The prompt now instructs the model to prioritize image analysis.
-  // **تحسين التعليمات**: التعليمات الآن توجه النموذج لإعطاء الأولوية لتحليل الصورة.
-  const htmlPrompt = `
-    أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين". مهمتك تحليل البيانات الطبية المقدمة (سواء كانت نصاً أو صورة وصفة طبية) وتقديم تقرير HTML مفصل.
+  // **PROMPT ENHANCEMENT**: The persona is now a "Clinical Pharmacist & Expert Medical Reviewer".
+  // The analysis section now mandates pharmacological review of prescribed drugs.
+  // **تحسين التعليمات**: الشخصية الآن هي "صيدلي إكلينيكي وخبير مراجعة طبية".
+  // قسم التحليل الآن يفرض المراجعة الدوائية للأدوية الموصوفة.
+  const htmlPrompt = `
+    أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين، متخصص في طب العيون والأمراض الباطنية المصاحبة". مهمتك كتابة تقرير تحليلي استشاري واحد ومتكامل بصيغة HTML. يجب أن يكون تحليلك شمولياً، يربط بين التخصصات، ويدعم توصياته بمصادر طبية معروفة.
 
-    **البيانات لتحليلها:**
-    - **الصورة المرفقة (إن وجدت):** قم بقراءة وتحليل الوصفة الطبية أو المطالبة المرفقة أولاً. استخرج منها التشخيصات، الأدوية، والجرعات.
-    - **البيانات النصية (للسياق الإضافي):**
-        - التشخيص المفوتر: ${diagnosis || "لم يحدد"}
-        - الأعراض: ${symptoms || "لم تحدد"}
-        - العمر: ${age || "لم يحدد"}
-        - الجنس: ${gender || "لم يحدد"}
-        - مدخن: ${smoker ? 'نعم' : 'لا'}
-        - الإجراءات المتخذة: ${beforeProcedure}, ${afterProcedure}
+    **بيانات الحالة لتحليلها:**
+    - التشخيص المفوتر: ${diagnosis || "لم يحدد"}
+    - الأعراض: ${symptoms || "لم تحدد"}
+    - العمر: ${age || "لم يحدد"}
+    - الجنس: ${gender || "لم يحدد"}
+    - مدخن: ${smoker ? 'نعم' : 'لا'}
+    - الإجراءات المتخذة: ${beforeProcedure || "لا يوجد"}, ${afterProcedure || "لا يوجد"}
 
     ---
     **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط):**
@@ -63,85 +63,111 @@ export default async function handler(req, res) {
     
     <div class="section">
         <h4>1. تحليل الإجراءات ومبرراتها الطبية:</h4>
-        <p>بناءً على الصورة والبيانات، ابدأ بنقد التشخيص. ثم، حلل كل دواء وإجراء. **عند تحليل الأدوية، أنت ملزم بتحليل خصائصها الدوائية:** هل الدواء المختار هو الأفضل؟ هل يصل بتركيز كافٍ لمكان العدوى؟ انقد الاختيارات الدوائية السيئة بوضوح.</p>
+        <p>ابدأ بنقد التشخيص المفوتر. هل هو دقيق أم عام؟ اقترح الرمز الصحيح. ثم، حلل كل دواء وإجراء. **عند تحليل الأدوية، أنت ملزم بتحليل خصائصها الدوائية:** هل الدواء المختار هو الأفضل في فئته لهذه الحالة؟ هل يصل بتركيز كافٍ لمكان العدوى (مثلاً، هل يعبر للبول في حالة التهاب المسالك البولية)؟ انقد الاختيارات الدوائية السيئة بوضوح (مثال: "اختيار الإريثروميسين لعلاج التهاب المسالك البولية هو خطأ علاجي لأن تركيزه في البول ضعيف جداً...").</p>
     </div>
 
     <div class="section">
         <h4>2. احتمالية الرفض من التأمين:</h4>
-        <p>حدد مستوى الخطر. اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها بالريال السعودي، والسبب العلمي أو التأميني للرفض.</p>
+        <p>حدد مستوى الخطر (منخفض/متوسط/عالٍ) باستخدام الفئة المناسبة: <span class="risk-low">منخفض</span>, <span class="risk-medium">متوسط</span>, <span class="risk-high">عالٍ</span>.</p>
+        <p>اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها بالريال السعودي، والسبب العلمي أو التأميني للرفض، مع التركيز على الأخطاء العلاجية.</p>
     </div>
 
     <div class="section">
         <h4>3. ما كان يمكن عمله لرفع الفاتورة (وفقًا للبروتوكولات الطبية):</h4>
-        <p>اقترح خطة عمل كاملة تبدأ بالاستشارات الضرورية ثم الفحوصات المتخصصة. كن شمولياً واقترح فحوصات جهازية (مثل وظائف الكلى) إذا كانت الحالة تستدعي ذلك. ادعم كل اقتراح ببروتوكول طبي معروف.</p>
+        <p>هذا هو الجزء الأهم. كخبير استشاري، فكر في "رحلة المريض" الكاملة. اقترح خطة عمل تبدأ بالاستشارات الضرورية ثم تنتقل إلى الفحوصات المتخصصة. كن شمولياً، وإذا كانت الحالة (مثل السكري) تؤثر على أعضاء أخرى، **فأنت ملزم** باقتراح فحوصات جهازية مثل وظائف الكلى والكبد. لكل اقتراح، استخدم التنسيق التالي:</p>
+        
+        <div class="recommendation">
+            <strong>عنوان الاقتراح: (مثال: طلب استشارة طبية للعيون)</strong>
+            <ul>
+                <li><strong>أهمية الإجراء:</strong> اشرح بعمق لماذا الإحالة إلى أخصائي هي الخطوة الأولى الصحيحة والمبررة طبياً.</li>
+                <li><strong>القيمة التقديرية:</strong> قدر التكلفة بالريال السعودي.</li>
+                <li><strong>لماذا لا يمكن رفضه:</strong> قدم حجة قوية ومقنعة لشركة التأمين، وادعمها **بشكل إلزامي** بذكر بروتوكول طبي معروف (مثال: "وفقاً لإرشادات الجمعية الأمريكية للسكري (ADA)..." أو "حسب توصيات KDIGO لأمراض الكلى...").</li>
+            </ul>
+        </div>
     </div>
 
     <div class="section financial-summary">
         <h4>4. المؤشر المالي:</h4>
         <table>
-            <thead><tr><th>المؤشر</th><th>القيمة (ريال سعودي)</th><th>ملاحظات</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>المؤشر</th>
+                    <th>القيمة (ريال سعودي)</th>
+                    <th>ملاحظات</th>
+                </tr>
+            </thead>
             <tbody>
-                <tr><td>إجمالي الدخل الحالي (المفوتر)</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
-                <tr><td>إجمالي الدخل بعد خصم الرفوض المحتملة</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
-                <tr><td>إجمالي الدخل المحتمل مع التحسينات</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+                <tr>
+                    <td>إجمالي الدخل الحالي (المفوتر)</td>
+                    <td>[ضع القيمة هنا]</td>
+                    <td>[ضع الملاحظة هنا]</td>
+                </tr>
+                <tr>
+                    <td>إجمالي الدخل بعد خصم الرفوض المحتملة</td>
+                    <td>[ضع القيمة هنا]</td>
+                    <td>[ضع الملاحظة هنا]</td>
+                </tr>
+                <tr>
+                    <td>إجمالي الدخل المحتمل مع التحسينات</td>
+                    <td>[ضع القيمة هنا]</td>
+                    <td>[ضع الملاحظة هنا]</td>
+                </tr>
             </tbody>
         </table>
     </div>
 
     <div class="section">
         <h4>5. توصيات عامة شاملة:</h4>
-        <p>قدم نصائح عامة لتحسين الترميز والتوثيق واختيار الأدوية.</p>
+        <p>قدم نصائح عامة لتحسين الترميز، التوثيق، واختيار الأدوية بناءً على فعاليتها وخصائصها الدوائية.</p>
     </div>
 
     **قاعدة مهمة:** لا تضع أبداً أي رموز تنسيق مثل \`\`\`html في بداية ردك. يجب أن يبدأ ردك مباشرة بوسم \`<h3>\`.
-    `;
+    `;
 
-  // **PAYLOAD UPDATE**: Constructing a multimodal payload with text and image.
-  // **تحديث الحمولة**: بناء حمولة متعددة الوسائط تحتوي على نص وصورة.
-  const parts = [{ text: htmlPrompt }];
-  if (imageData) {
-    parts.push({
-      inline_data: {
-        mime_type: "image/jpeg",
-        data: imageData
-      }
-    });
-  }
+  const parts = [{ text: htmlPrompt }];
+  if (imageData) {
+    parts.push({
+      inline_data: {
+        mime_type: "image/jpeg",
+        data: imageData
+      }
+    });
+  }
 
-  const payload = {
-    contents: [{ parts: parts }],
-    generationConfig: {
-      temperature: 0.5,
-    },
-  };
+  const payload = {
+    contents: [{ parts: parts }],
+    generationConfig: {
+      temperature: 0.5,
+    },
+  };
 
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error("🔥 Gemini API Error Response:", errorBody);
-      throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
-    }
+    if (!response.ok) {
+      const errorBody = await response.json();
+      console.error("🔥 Gemini API Error Response:", errorBody);
+      throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
+    }
 
-    const result = await response.json();
-    const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    const result = await response.json();
+    const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!reportHtml) {
-      throw new Error("لم يتمكن النموذج من إنشاء التقرير.");
-    }
-    
-    return res.status(200).json({ htmlReport: reportHtml });
+    if (!reportHtml) {
+      throw new Error("لم يتمكن النموذج من إنشاء التقرير.");
+    }
+    
+    return res.status(200).json({ htmlReport: reportHtml });
 
-  } catch (err) {
-    console.error("🔥 Server-side Error:", err);
-    return res.status(500).json({
-      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
-      detail: err.message,
-    });
-  }
+  } catch (err) {
+    console.error("🔥 Server-side Error:", err);
+    return res.status(500).json({
+      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
+      detail: err.message,
+    });
+  }
 }
