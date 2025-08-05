@@ -1,8 +1,4 @@
-// /api/gpt.js
-/**
- * Serverless endpoint يُعالج طلبات بوابة الطبيب والمريض
- * ويدعم الآن عدداً غير محدود من الصور وملفّات PDF (≤ 20 MB إجمالاً).
- */
+// /api/gpt.js  – 2025‑08‑05 نسخة مُحدَّثة
 export default async function handler(req, res) {
   /* ----------  CORS  ---------- */
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -12,160 +8,118 @@ export default async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method Not Allowed" });
 
-  /* ----------  إعداد المتغيرات  ---------- */
+  /* ----------  مفاتيح و متغيرات  ---------- */
   const apiKey = process.env.GEMINI_API_KEY;
   const apiUrl =
     `https://generativelanguage.googleapis.com/v1beta/models/` +
     `gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-  const requestBody = req.body;
+  const reqBody = req.body;
   let htmlPrompt = "";
 
-  /* ----------  بوابة المريض  ---------- */
-  if (requestBody.analysisType === "patient") {
+  /* ================  1) بوابة المريض  ================ */
+  if (reqBody.analysisType === "patient") {
     const {
-      symptoms, age, gender, smoker, vitals, labs, diagnosis,
-      currentMedications, weight, height, isPregnant, pregnancyMonth
-    } = requestBody;
+      symptoms, age, gender, smoker,
+      vitals, labs, diagnosis,
+      currentMedications, weight, height,
+      isPregnant, pregnancyMonth
+    } = reqBody;
 
     htmlPrompt = `
-أنت "مستشار طبي ذكي وخبير". مهمتك تحليل بيانات المريض بعمق، وتقديم تقرير HTML مفصّل وآمن.
+أنت استشارى طب باطنى خبير و«مساعد صحى ذكى». المطلوب:
 
-**بيانات المريض:**
-- العمر: ${age}
+1️⃣ ✅ **اقرأ كل نص وصورة مرفقة** – استخرج منها الأدوية، الجرعات، القيم المخبرية، أى ملاحظة مكتوبة يدويًّا.  
+2️⃣ 🔬 **حلّل الحالة بعمق**: اشرح الفيزيولوجيا المرضية المحتملة، واذكر على الأقل ثلاثة تشخيصات تفريقية مرتبة حسب الإحتمال.  
+3️⃣ 💊 **مراجعة دوائية دقيقة**: امنع الأخطاء الشائعة (جرعات خطأ، تداخلات، أدوية ممنوعة للحامل، …).  
+4️⃣ ⚖️ **خطورة الحالة**: استخدم صندوق توصية ملوَّن (red / yellow / green) واجعله أول عنصر.  
+5️⃣ 📝 **خطوات عملية**: فحوصات مقترحة وفق أدلّة (مثــل: AHA 2024، NICE CKD NG203…).  
+6️⃣ ❓ **أسئلة للطبيب** كى يستفيد المريض فى الزيارة القادمة.  
+
+**بيانات المريض كى تستخدمها فى التحليل (لا تكررها حرفيًّا فى التقرير):**
+- العمر: ${age} سنة
 - الجنس: ${gender}
-- الوزن: ${weight || "لم يحدد"} كجم
-- الطول: ${height || "لم يحدد"} سم
-- مدخن: ${smoker ? "نعم" : "لا"}
-- حامل: ${isPregnant ? `نعم، بالشهر ${pregnancyMonth}` : "لا"}
+- الوزن/الطول: ${weight||"؟"} كجم / ${height||"؟"} سم
+- مدخن: ${smoker?"نعم":"لا"}
+- حامل: ${isPregnant ? `نعم (الشهر ${pregnancyMonth})` : "لا"}
 - الأعراض: ${symptoms}
-- الأدوية الحالية: ${currentMedications || "لا يوجد"}
-- الحرارة/الضغط: ${vitals || "لم تقدّم"}
-- نتائج تحاليل: ${labs || "لم تقدّم"}
-- تشخيص سابق: ${diagnosis || "لا يوجد"}
+- الأدوية الحالية: ${currentMedications||"لا يوجد"}
+- العلامات الحيوية: ${vitals||"لم تُذكر"}
+- المختبر: ${labs||"لم يُذكر"}
+- تشخيص سابق: ${diagnosis||"لا يوجد"}
 
----
-**هيكل التقرير (HTML فقط):**
-
-<div class="response-section recommendation-box green">
-  <!-- توصية نهائية -->
-</div>
-
-<div class="response-section">
-  <h4>تحليل الحالة والأسباب المحتملة</h4>
-  <ul>
-    <li><strong>السبب الجذري المحتمل:</strong> [...]</li>
-    <li><strong>التشخيصات التفريقية:</strong> [...]</li>
-  </ul>
-</div>
-
-<div class="response-section">
-  <h4>أخطاء طبية محتملة</h4>
-  <ul><li>[...]</li><li>[...]</li></ul>
-</div>
-
-<div class="response-section">
-  <h4>الخطوات التالية المقترحة</h4>
-  <ul><li>خطوة عاجلة [...]</li><li>خطوة ثانية [...]</li><li>خطوة ثالثة [...]</li></ul>
-</div>
-
-<div class="response-section">
-  <h4>أسئلة لمناقشتها مع طبيبك</h4>
-  <ul><li>...</li><li>...</li></ul>
-</div>
-
-**قاعدة:** ابدأ الرد مباشرةً بعنصر HTML دون \`\`\`.
-`;
+💡 **مخرجاتك يجب أن تكون HTML صالح فقط** – ابدأ مباشرةً بعنصر <div> أو <h3> بلا أى ``` أو &lt;html&gt;. استخدم عناوين فرعية واضحة وأيقونات (⚠️ / 💊 / 🔬).`;
   }
 
-  /* ----------  بوابة الطبيب (التأمين)  ---------- */
+  /* ================  2) بوابة الطبيب (التأمين)  ================ */
   else {
     const {
-      diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure
-    } = requestBody;
+      diagnosis, symptoms, age, gender, smoker,
+      beforeProcedure, afterProcedure
+    } = reqBody;
 
     htmlPrompt = `
-أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين". حلّل البيانات (نصاً وصوراً) وأخرج تقرير HTML مفصّل.
+أنت صيدلى إكلينيكى ومراجع تأمين طبى. المطلوب تحليل مفصَّل مع أقصى عمق ممكن:
 
-**البيانات:**
-- صور مرفقة: حلّل التشخيصات والأدوية.
-- التشخيص المفوتر: ${diagnosis || "لم يحدد"}
-- الأعراض: ${symptoms || "لم تحدد"}
-- العمر: ${age || "لم يحدد"} / الجنس: ${gender || "لم يحدد"} / مدخن: ${smoker ? "نعم" : "لا"}
-- الإجراءات: ${beforeProcedure}, ${afterProcedure}
+• **قراءة جميع الصور (OCR)** واستخراج: التشخيص، رموز ICD‑10, CPT, الأدوية والجرعات، توقيع الطبيب، أختام.  
+• **تحليل الأدوية**: آلية العمل، التوافر الحيوى، الوصول لموقع العدوى، التداخلات، بدائل أقل تكلفة إذا وُجدت.  
+• **تقييم الإجراءات**: هل تتفق مع إرشادات UpToDate / AAFP 2024؟ أى ثغرة توثيق قد تُعرّضها للرفض.  
+• **مؤشر الرفض التأمينى**: حوّله إلى ثلاث مستويات (مرتفع/متوسط/منخفض)، مع قيمة مالية تقديرية.  
+• **خطة تصعيد الفاتورة دون مخالفة**: فحوصات إضافية مبرَّرة طبيًّا، إستشارات متخصصة مناسبة.  
+• أخرج **تقرير HTML فقط**، يبدأ بـ <h3>، بلا ```، وبعناوين مرقّمة.
 
----
-<h3>تقرير تحليلي مُفصّل</h3>
-
-<div class="section"><h4>1. تحليل الإجراءات</h4><p>...</p></div>
-<div class="section"><h4>2. احتمالية الرفض</h4><p>...</p></div>
-<div class="section"><h4>3. خطوات لرفع الفاتورة</h4><p>...</p></div>
-<div class="section financial-summary">
- <h4>4. المؤشر المالي</h4><table><tbody>
-   <tr><td>الدخل الحالي</td><td>[...]</td><td>[...]</td></tr>
-   <tr><td>بعد الرفض</td><td>[...]</td><td>[...]</td></tr>
-   <tr><td>إجمالي محتمل</td><td>[...]</td><td>[...]</td></tr>
- </tbody></table>
-</div>
-<div class="section"><h4>5. توصيات عامة</h4><p>...</p></div>
-
-**قاعدة:** ابدأ الرد مباشرةً بوسم <h3>.
-`;
+**خلفية مختصرة:**
+- تشخيص مفوتر: ${diagnosis||"؟"}
+- الأعراض: ${symptoms||"؟"}
+- عُمر/جنس: ${age||"؟"} / ${gender||"؟"} – مدخن: ${smoker?"نعم":"لا"}
+- إجراءات مُسجَّلة: ${beforeProcedure||"—"} / ${afterProcedure||"—"} `;
   }
 
-  /* ----------  تجهيز الأجزاء لإرسالها إلى Gemini  ---------- */
+  /* ----------  تحويل الملفات  ---------- */
   const parts = [{ text: htmlPrompt }];
 
-  /* أضف ملف (صورة/ PDF) إلى parts */
-  const addFile = (bytes, mime) =>
+  const addFile = (bytes, mime = "image/jpeg") =>
     parts.push({ inline_data: { mime_type: mime, data: bytes } });
 
-  /**
-   * يدعم الأنماط التالية فى requestBody.imageData:
-   *  1) سلسلة Base64 واحدة
-   *  2) مصفوفة سلاسل Base64
-   *  3) مصفوفة كائنات {data, mime_type}
-   *  4) كائن واحد {data, mime_type}
-   */
-  if (requestBody.imageData) {
-    const img = requestBody.imageData;
-    if (Array.isArray(img)) {
-      img.forEach((item) => {
-        if (typeof item === "string")            addFile(item, "image/jpeg");
-        else if (item && item.data)              addFile(item.data, item.mime_type || "image/jpeg");
+  (()=>{
+    const img=reqBody.imageData;
+    if(!img) return;
+    if(Array.isArray(img)){
+      img.forEach(o=>{
+        if(typeof o==="string") addFile(o);
+        else if(o?.data) addFile(o.data, o.mime_type||"image/jpeg");
       });
-    } else if (typeof img === "string")          addFile(img, "image/jpeg");
-    else if (img && img.data)                    addFile(img.data, img.mime_type || "image/jpeg");
-  }
+    }else if(typeof img==="string"){
+      addFile(img);
+    }else if(img?.data){
+      addFile(img.data, img.mime_type||"image/jpeg");
+    }
+  })();
 
-  const payload = {
-    contents: [{ parts }],
-    generationConfig: { temperature: 0.5 }
-  };
+  const payload = { contents:[{parts}], generationConfig:{temperature:0.3} };
 
   /* ----------  استدعاء Gemini  ---------- */
-  try {
-    const resp = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+  try{
+    const response = await fetch(apiUrl,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
     });
-
-    if (!resp.ok) {
-      const errBody = await resp.json();
-      throw new Error(errBody.error?.message || `API error ${resp.status}`);
+    if(!response.ok){
+      const e=await response.json();
+      throw new Error(e.error?.message || `Gemini error ${response.status}`);
     }
+    const data=await response.json();
+    let html=data.candidates?.[0]?.content?.parts?.[0]?.text||"";
 
-    const data = await resp.json();
-    const html = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!html) throw new Error("لم يتمكن النموذج من إنشاء التقرير.");
+    /* إزالة أى ```html ... ``` لو ظهر */
+    html = html.replace(/^```html\s*/i,"").replace(/^```\s*/i,"")
+               .replace(/\s*```$/,"").trim();
 
-    return res.status(200).json({ htmlReport: html });
-  } catch (err) {
-    console.error("🔥 Server error:", err);
-    return res.status(500).json({
-      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
-      detail: err.message
-    });
+    if(!html) throw new Error("لم يُنشئ النموذج تقريراً.");
+
+    return res.status(200).json({htmlReport:html});
+  }catch(err){
+    console.error("🔥 ServerError:",err);
+    return res.status(500).json({error:"خطأ فى الخادم",detail:err.message});
   }
 }
