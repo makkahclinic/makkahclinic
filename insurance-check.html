@@ -605,7 +605,7 @@
       <textarea id="symptoms" placeholder="مثال: غباش في الرؤية، حكة، احمرار"></textarea>
       
       <label for="image-upload-input">رفع صورة المطالبة (اختياري):</label>
-      <div class="image-upload-container" onclick="document.getElementById('image-upload-input').click();">
+      <div class="image-upload-container" id="image-upload-container-click" onclick="document.getElementById('image-upload-input').click();">
         <i class="fas fa-cloud-upload-alt"></i>
         <h4>اضغط هنا لاختيار صورة</h4>
         <p>يُسمح بملفات الصور فقط (JPG, PNG) - الحد الأقصى 5MB</p>
@@ -656,10 +656,10 @@
         </div>
       </div>
       
-      <div id="pregnancy-section" class="pregnancy-section">
+      <div id="pregnancy-section" class="pregnancy-section" style="display: none;">
         <div class="input-group">
           <div class="input-item">
-            <label for="pregnant">هل المريضة حامل؟</label>
+            <label for="pregnant" class="required">هل المريضة حامل؟</label>
             <select id="pregnant" onchange="togglePregnancyMonth()">
               <option value="" selected>اختر...</option>
               <option value="yes">نعم</option>
@@ -668,7 +668,7 @@
           </div>
           
           <div class="input-item" id="pregnancy-month-container" style="display:none">
-            <label for="pregnancy-month">شهر الحمل:</label>
+            <label for="pregnancy-month" class="required">شهر الحمل:</label>
             <select id="pregnancy-month">
               <option value="" disabled selected>اختر...</option>
               <option value="1">الشهر الأول</option>
@@ -865,44 +865,51 @@
         const smoker = document.getElementById('smoker').value;
         
         // التحقق من الحقول الأساسية
+        let isValid = true;
+        let errorMessage = "";
+        
         if (!diagnosis && !symptoms && !imageDataUrl) {
-            showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
-            return false;
+            errorMessage += "الرجاء إدخال التشخيص أو الأعراض أو رفع صورة للمطالبة.<br>";
+            isValid = false;
         }
         
         if (!age || age < 1 || age > 120) {
-            showNotification("error", "الرجاء إدخال عمر صحيح بين 1 و 120");
-            return false;
+            errorMessage += "الرجاء إدخال عمر صحيح بين 1 و 120 سنة.<br>";
+            isValid = false;
         }
         
         if (!gender) {
-            showNotification("error", "الرجاء تحديد نوع المريض");
-            return false;
+            errorMessage += "الرجاء تحديد نوع المريض.<br>";
+            isValid = false;
         }
         
         if (!smoker) {
-            showNotification("error", "الرجاء تحديد حالة التدخين");
-            return false;
+            errorMessage += "الرجاء تحديد حالة التدخين.<br>";
+            isValid = false;
         }
         
         // التحقق من حقول الحمل إذا كانت المريضة أنثى
         if (gender === 'female') {
           const pregnant = document.getElementById('pregnant').value;
           if (!pregnant) {
-            showNotification("error", "الرجاء تحديد حالة الحمل");
-            return false;
+            errorMessage += "الرجاء تحديد حالة الحمل.<br>";
+            isValid = false;
           }
           
           if (pregnant === 'yes') {
             const pregnancyMonth = document.getElementById('pregnancy-month').value;
             if (!pregnancyMonth) {
-              showNotification("error", "الرجاء تحديد شهر الحمل");
-              return false;
+              errorMessage += "الرجاء تحديد شهر الحمل.<br>";
+              isValid = false;
             }
           }
         }
         
-        return true;
+        if (!isValid) {
+          showNotification("error", errorMessage);
+        }
+        
+        return isValid;
     }
 
     // --- Main Analysis Function ---
