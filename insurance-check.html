@@ -971,11 +971,36 @@ if (usageCount >= MAX_FREE_USAGE) {
         const pregnant = document.getElementById('pregnant')?.value;
         const pregnancyMonth = document.getElementById('pregnancy-month')?.value;
         
-        // محاكاة التحليل
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // توليد تقرير التحليل
-        const htmlReport = generateAnalysisReport(
+// تحضير بيانات الإرسال
+const payload = {
+  analysisType: "doctor",
+  diagnosis,
+  symptoms,
+  age,
+  gender,
+  smoker,
+  beforeProcedure,
+  afterProcedure,
+  height,
+  weight,
+  pregnant,
+  pregnancyMonth,
+  imageData: imageDataUrl ? [imageDataUrl.split(',')[1]] : [] // فقط البيانات base64
+};
+// إرسال الطلب إلى الخادم
+const res = await fetch("/api/gpt.js", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(payload)
+});
+
+const result = await res.json();
+
+// عرض النتيجة
+responseContainer.innerHTML = result.htmlReport;
+responseContainer.style.display = 'block';
           diagnosis, symptoms, age, gender, smoker, 
           beforeProcedure, afterProcedure, height, weight,
           pregnant, pregnancyMonth
