@@ -1,372 +1,388 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>نموذج تقييم الحالة الطبية - GPT</title>
-  <style>
-    :root {
-      --primary-color: #0056b3;
-      --secondary-color: #dc3545;
-      --background-color: #f4f7f9;
-      --text-color: #333;
-      --card-bg-color: #ffffff;
-      --border-color: #e0e0e0;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: var(--background-color);
-      color: var(--text-color);
-      margin: 0;
-      padding: 1rem;
-    }
-    
-    /* --- START: NEW STYLE FOR HOME ICON --- */
-    .home-icon-link {
-        position: absolute;
-        top: 25px;
-        right: 30px; /* Right for RTL layout */
-        z-index: 1000;
-        display: block;
-    }
-    .home-icon-link svg {
-        width: 32px;
-        height: 32px;
-        fill: var(--primary-color); /* Use theme color */
-        transition: opacity 0.3s;
-    }
-    .home-icon-link:hover svg {
-        opacity: 0.7;
-    }
-    /* --- END: NEW STYLE FOR HOME ICON --- */
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نموذج تقييم الحالة الطبية - GPT</title>
+  <style>
+    :root {
+      --primary-color: #0056b3;
+      --secondary-color: #dc3545;
+      --background-color: #f4f7f9;
+      --text-color: #333;
+      --card-bg-color: #ffffff;
+      --border-color: #e0e0e0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 1rem;
+    }
+    
+    .home-icon-link {
+        position: absolute;
+        top: 25px;
+        right: 30px;
+        z-index: 1000;
+        display: block;
+    }
+    .home-icon-link svg {
+        width: 32px;
+        height: 32px;
+        fill: var(--primary-color);
+        transition: opacity 0.3s;
+    }
+    .home-icon-link:hover svg {
+        opacity: 0.7;
+    }
 
-    .container {
-      max-width: 900px;
-      margin: 2rem auto;
-      background-color: var(--card-bg-color);
-      padding: 2rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    .container {
+      max-width: 900px;
+      margin: 2rem auto;
+      background-color: var(--card-bg-color);
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+    h2 {
+      text-align: center;
+      color: var(--primary-color);
+      margin-bottom: 2rem;
+    }
+    label {
+      font-weight: 600;
+      display: block;
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    textarea, input, select {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      font-size: 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-sizing: border-box;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    textarea:focus, input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.2);
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    button {
+      padding: 1rem;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.1s;
+    }
+    button:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
     }
-    h2 {
-      text-align: center;
-      color: var(--primary-color);
-      margin-bottom: 2rem;
-    }
-    label {
-      font-weight: 600;
-      display: block;
-      margin-top: 1.5rem;
-      margin-bottom: 0.5rem;
-    }
-    textarea, input, select {
-      width: 100%;
-      padding: 0.8rem 1rem;
-      font-size: 1rem;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      box-sizing: border-box;
-      transition: border-color 0.3s, box-shadow 0.3s;
-    }
-    textarea:focus, input:focus, select:focus {
-      outline: none;
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.2);
-    }
-    textarea {
-      min-height: 100px;
-      resize: vertical;
-    }
-    .button-group {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1rem;
-      margin-top: 2rem;
-    }
-    button {
-      padding: 1rem;
-      font-size: 1.1rem;
-      font-weight: bold;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background-color 0.3s, transform 0.1s;
-    }
-    button:active {
-        transform: scale(0.98);
-    }
-    .btn-primary { background-color: var(--primary-color); }
-    .btn-primary:hover { background-color: #004494; }
-    .btn-danger { background-color: var(--secondary-color); }
-    .btn-danger:hover { background-color: #c82333; }
+    button:active {
+        transform: scale(0.98);
+    }
+    .btn-primary { background-color: var(--primary-color); }
+    .btn-primary:hover:not(:disabled) { background-color: #004494; }
+    .btn-danger { background-color: var(--secondary-color); }
+    .btn-danger:hover { background-color: #c82333; }
 
-    /* --- NEW STYLES FOR IMAGE UPLOAD --- */
-    .image-upload-container {
-        margin-top: 1.5rem;
-        border: 2px dashed var(--border-color);
-        border-radius: 8px;
-        padding: 1.5rem;
-        text-align: center;
-        cursor: pointer;
-        transition: border-color 0.3s, background-color 0.3s;
-    }
-    .image-upload-container:hover {
-        border-color: var(--primary-color);
-        background-color: #f8f9fa;
-    }
-    #image-upload-input {
-        display: none;
-    }
-    #image-preview-container {
-        margin-top: 1rem;
-        text-align: center;
-    }
-    #image-preview {
-        max-width: 100%;
-        max-height: 300px;
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-        display: none; /* Hidden by default */
-    }
-    
-    /* Report Styles */
-    #response-container {
-        margin-top: 2rem;
-        padding: 1.5rem;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        background-color: #fdfdfd;
-        display: none; /* Hidden by default */
-    }
-    #response-container h3 { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; margin-top: 0; }
-    #response-container h4 { color: #17a2b8; margin-top: 1.5rem; }
-    #response-container p { line-height: 1.7; }
-    #response-container .section { margin-bottom: 1.5rem; }
-    #response-container .risk-high { color: #dc3545; font-weight: bold; }
-    #response-container .risk-medium { color: #ffc107; font-weight: bold; }
-    #response-container .risk-low { color: #28a745; font-weight: bold; }
-    #response-container ul { padding-right: 20px; }
-    #response-container li { margin-bottom: 0.75rem; }
-    #response-container .financial-summary table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    #response-container .financial-summary th, #response-container .financial-summary td { border: 1px solid var(--border-color); padding: 0.8rem; text-align: right; }
-    #response-container .financial-summary th { background-color: #f8f9fa; font-weight: 600; }
-    #response-container .recommendation { background: #e9f7fd; padding: 1rem; border-radius: 8px; border-right: 4px solid #17a2b8; margin-bottom: 1rem; }
-    
-    /* Notification Styles */
-    .notification {
-        padding: 1rem;
-        margin-top: 1rem;
-        border-radius: 8px;
-        text-align: center;
-        display: none; /* Hidden by default */
-    }
-    .notification.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .notification.info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-    
-    #user-info { margin-bottom: 2rem; color: #555; font-size: 0.9rem; text-align: center; }
-  </style>
+    .file-upload-container {
+        margin-top: 1.5rem;
+        border: 2px dashed var(--border-color);
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.3s, background-color 0.3s;
+    }
+    .file-upload-container:hover {
+        border-color: var(--primary-color);
+        background-color: #f8f9fa;
+    }
+    #file-upload-input {
+        display: none;
+    }
+    #file-list-container {
+        margin-top: 1rem;
+        text-align: right;
+        font-size: 0.9rem;
+        color: #555;
+    }
+    
+    #response-container {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background-color: #fdfdfd;
+        display: none;
+    }
+    #response-container h3 { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; margin-top: 0; }
+    #response-container h4 { color: #17a2b8; margin-top: 1.5rem; }
+    #response-container p { line-height: 1.7; }
+    #response-container .section { margin-bottom: 1.5rem; }
+    #response-container .risk-high { color: #dc3545; font-weight: bold; }
+    #response-container .risk-medium { color: #ffc107; font-weight: bold; }
+    #response-container .risk-low { color: #28a745; font-weight: bold; }
+    #response-container ul { padding-right: 20px; }
+    #response-container li { margin-bottom: 0.75rem; }
+    #response-container .financial-summary table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    #response-container .financial-summary th, #response-container .financial-summary td { border: 1px solid var(--border-color); padding: 0.8rem; text-align: right; }
+    #response-container .financial-summary th { background-color: #f8f9fa; font-weight: 600; }
+    #response-container .recommendation { background: #e9f7fd; padding: 1rem; border-radius: 8px; border-right: 4px solid #17a2b8; margin-bottom: 1rem; }
+    
+    .notification {
+        padding: 1rem;
+        margin-top: 1rem;
+        border-radius: 8px;
+        text-align: center;
+        display: none;
+    }
+    .notification.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .notification.info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    
+    #user-info { margin-bottom: 2rem; color: #555; font-size: 0.9rem; text-align: center; }
+  </style>
 </head>
 <body>
-  <a href="https://www.m2020m.org/portal.html" class="home-icon-link" title="الرجوع إلى البوابة الرئيسية">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"/>
-    </svg>
-  </a>
-  <div class="container">
-    <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
-    <div id="user-info">جاري التحقق من المستخدم...</div>
+  <a href="https://www.m2020m.org/portal.html" class="home-icon-link" title="الرجوع إلى البوابة الرئيسية">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8h5z"/>
+    </svg>
+  </a>
+  <div class="container">
+    <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
+    <div id="user-info">جاري التحقق من المستخدم...</div>
 
-    <label for="diagnosis">تشخيص المرض (ICD-10):</label>
-    <input type="text" id="diagnosis" placeholder="مثال: Z01.0 أو جفاف العين" />
+    <label for="diagnosis">تشخيص المرض (ICD-10):</label>
+    <input type="text" id="diagnosis" placeholder="مثال: Z01.0 أو جفاف العين" />
 
-    <label for="symptoms">الأعراض:</label>
-    <textarea id="symptoms" placeholder="مثال: غباش في الرؤية، حكة، احمرار"></textarea>
+    <label for="symptoms">الأعراض:</label>
+    <textarea id="symptoms" placeholder="مثال: غباش في الرؤية، حكة، احمرار"></textarea>
 
-    <label for="image-upload-input">أو قم برفع صورة المطالبة (اختياري):</label>
-    <div class="image-upload-container" onclick="document.getElementById('image-upload-input').click();">
-        <span>اضغط هنا لاختيار صورة</span>
-        <input type="file" id="image-upload-input" accept="image/*">
-    </div>
-    <div id="image-preview-container">
-        <img id="image-preview" src="#" alt="معاينة الصورة" />
-    </div>
-    <label for="age">عمر المريض:</label>
-    <input type="number" id="age" placeholder="مثال: 35" />
+    <label for="file-upload-input">أو قم برفع ملفات المطالبة (صور أو PDF):</label>
+    <div class="file-upload-container" onclick="document.getElementById('file-upload-input').click();">
+        <span>اضغط هنا لاختيار الملفات</span>
+                <input type="file" id="file-upload-input" accept="image/*,application/pdf" multiple>
+    </div>
+        <div id="file-list-container"></div>
 
-    <label for="gender">نوع المريض:</label>
-    <select id="gender">
-      <option value="" disabled selected>اختر...</option>
-      <option value="male">ذكر</option>
-      <option value="female">أنثى</option>
-    </select>
+    <label for="age">عمر المريض:</label>
+    <input type="number" id="age" placeholder="مثال: 35" />
 
-    <label for="smoker">هل المريض مدخن؟</label>
-    <select id="smoker">
-      <option value="" disabled selected>اختر...</option>
-      <option value="yes">نعم</option>
-      <option value="no">لا</option>
-    </select>
+    <label for="gender">نوع المريض:</label>
+    <select id="gender">
+      <option value="" disabled selected>اختر...</option>
+      <option value="male">ذكر</option>
+      <option value="female">أنثى</option>
+    </select>
 
-    <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
-    <textarea id="beforeProcedure" placeholder="أي إجراءات أو أدوية تم اتخاذها قبل التشخيص الحالي"></textarea>
+    <label for="smoker">هل المريض مدخن؟</label>
+    <select id="smoker">
+      <option value="" disabled selected>اختر...</option>
+      <option value="yes">نعم</option>
+      <option value="no">لا</option>
+    </select>
 
-    <label for="afterProcedure">إجراءات بعد التشخيص:</label>
-    <textarea id="afterProcedure" placeholder="الأدوية أو الإجراءات التي قام بها الطبيب"></textarea>
+    <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
+    <textarea id="beforeProcedure" placeholder="أي إجراءات أو أدوية تم اتخاذها قبل التشخيص الحالي"></textarea>
 
-    <div class="button-group">
-        <button onclick="analyzeCase()" class="btn-primary">تحليل الحالة</button>
-        <button onclick="logout()" class="btn-danger">تسجيل الخروج</button>
-    </div>
+    <label for="afterProcedure">إجراءات بعد التشخيص:</label>
+    <textarea id="afterProcedure" placeholder="الأدوية أو الإجراءات التي قام بها الطبيب"></textarea>
 
-    <div id="notification-area"></div>
-    <div id="response-container"></div>
-  </div>
+    <div class="button-group">
+                <button id="analyze-button" onclick="analyzeCase()" class="btn-primary">تحليل الحالة</button>
+        <button onclick="logout()" class="btn-danger">تسجيل الخروج</button>
+    </div>
 
-  <script type="module">
-    const firebaseConfig = {
-      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-      authDomain: "insurance-check-6cec9.firebaseapp.com",
-      projectId: "insurance-check-6cec9",
-      storageBucket: "insurance-check-6cec9.appspot.com",
-      messagingSenderId: "992769471393",
-      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
-      measurementId: "G-LMS6VRSTT6"
-    };
+    <div id="notification-area"></div>
+    <div id="response-container"></div>
+  </div>
 
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getAuth, onAuthStateChanged, signOut } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
-    
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
+  <script type="module">
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+      authDomain: "insurance-check-6cec9.firebaseapp.com",
+      projectId: "insurance-check-6cec9",
+      storageBucket: "insurance-check-6cec9.appspot.com",
+      messagingSenderId: "992769471393",
+      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
+      measurementId: "G-LMS6VRSTT6"
+    };
 
-    // --- Authentication Logic ---
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        document.getElementById("user-info").textContent = `مرحبًا ${user.email}`;
-      } else {
-        // FIX: Use a hardcoded, full URL to ensure validity in all environments.
-        // إصلاح: استخدام رابط كامل وثابت لضمان الصلاحية في جميع البيئات.
-        window.location.href = "http://www.m2020m.org/login.html";
-      }
-    });
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const { getAuth, onAuthStateChanged, signOut } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
 
-    window.logout = () => {
-      signOut(auth).then(() => {
-        showNotification("info", "تم تسجيل الخروج بنجاح.");
-        // FIX: Use a hardcoded, full URL to ensure validity in all environments.
-        // إصلاح: استخدام رابط كامل وثابت لضمان الصلاحية في جميع البيئات.
-        setTimeout(() => window.location.href = "http://www.m2020m.org/login.html", 1500);
-      });
-    };
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        document.getElementById("user-info").textContent = `مرحبًا ${user.email}`;
+      } else {
+        window.location.href = "http://www.m2020m.org/login.html";
+      }
+    });
 
-    // --- NEW SCRIPT FOR IMAGE PREVIEW ---
-    const imageInput = document.getElementById('image-upload-input');
-    const imagePreview = document.getElementById('image-preview');
-    
-    let imageDataUrl = null; // Variable to store the image data
+    window.logout = () => {
+      signOut(auth).then(() => {
+        showNotification("info", "تم تسجيل الخروج بنجاح.");
+        setTimeout(() => window.location.href = "http://www.m2020m.org/login.html", 1500);
+      });
+    };
 
-    imageInput.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imagePreview.src = e.target.result;
-                imagePreview.style.display = 'block';
-                // Store the Base64 string, removing the prefix
-                imageDataUrl = e.target.result.split(',')[1];
-            };
-            reader.readAsDataURL(file);
+    // --- <<< تعديل: إعادة كتابة منطق معالجة الملفات بالكامل >>> ---
+    const fileInput = document.getElementById('file-upload-input');
+    const analyzeButton = document.getElementById('analyze-button');
+    const fileListContainer = document.getElementById('file-list-container');
+    
+    let fileDataArray = []; // مصفوفة لتخزين بيانات كل الملفات
+
+    fileInput.addEventListener('change', async (event) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            fileListContainer.innerHTML = '';
+            fileDataArray = [];
+            return;
         }
-    });
 
-    // --- Notification Function ---
-    function showNotification(type, message) {
-        const notificationArea = document.getElementById('notification-area');
-        const notificationDiv = document.createElement('div');
-        notificationDiv.className = `notification ${type}`;
-        notificationDiv.textContent = message;
-        
-        notificationArea.innerHTML = '';
-        notificationArea.appendChild(notificationDiv);
-        notificationDiv.style.display = 'block';
-    }
+        analyzeButton.disabled = true;
+        analyzeButton.textContent = `جاري تجهيز ${files.length} ملف...`;
+        fileListContainer.innerHTML = '<h4>الملفات المختارة:</h4>';
+        fileDataArray = [];
 
-    // --- Main Analysis Function ---
-    async function analyzeCase() {
-      const diagnosis = document.getElementById('diagnosis').value;
-      const symptoms = document.getElementById('symptoms').value;
-      const age = document.getElementById('age').value;
-      const gender = document.getElementById('gender').value;
-      const smoker = document.getElementById('smoker').value === 'yes';
-      const beforeProcedure = document.getElementById('beforeProcedure').value;
-      const afterProcedure = document.getElementById('afterProcedure').value;
-
-      const responseContainer = document.getElementById('response-container');
-      const notificationArea = document.getElementById('notification-area');
-      
-      responseContainer.style.display = 'none';
-      responseContainer.innerHTML = '';
-      notificationArea.innerHTML = '';
-
-      // MODIFIED: Check if either text fields OR an image is provided.
-      if ((!diagnosis && !symptoms) && !imageDataUrl) {
-        showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
-        return;
-      }
-      
-      showNotification("info", "جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...");
-
-      try {
-        if (!auth.currentUser) {
-            throw new Error("المستخدم غير مسجل الدخول. جاري إعادة التوجيه.");
-        }
-        const token = await auth.currentUser.getIdToken();
-        const userEmail = auth.currentUser.email;
-
-        const requestBody = { 
-            diagnosis, 
-            symptoms, 
-            age, 
-            gender, 
-            smoker, 
-            beforeProcedure, 
-            afterProcedure,
-            userEmail,
-            imageData: imageDataUrl // Send the Base64 image data
-        };
-
-        const result = await fetch("/api/gpt", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(requestBody)
+        const fileReadPromises = Array.from(files).map(file => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const fileItem = document.createElement('p');
+                    fileItem.textContent = `✅ ${file.name}`;
+                    fileListContainer.appendChild(fileItem);
+                    
+                    resolve({
+                        mime_type: file.type,
+                        data: reader.result.split(',')[1]
+                    });
+                };
+                reader.onerror = (error) => reject(error);
+                reader.readAsDataURL(file);
+            });
         });
 
-        if (!result.ok) {
-          const errorData = await result.json();
-          throw new Error(errorData.detail || `خطأ من الخادم: ${result.status}`);
+        try {
+            fileDataArray = await Promise.all(fileReadPromises);
+            analyzeButton.disabled = false;
+            analyzeButton.textContent = 'تحليل الحالة';
+        } catch (error) {
+            console.error("Error reading files:", error);
+            showNotification('error', 'حدث خطأ أثناء قراءة أحد الملفات.');
+            analyzeButton.disabled = false;
+            analyzeButton.textContent = 'تحليل الحالة';
         }
+    });
 
-        const json = await result.json();
+    function showNotification(type, message) {
+        const notificationArea = document.getElementById('notification-area');
+        const notificationDiv = document.createElement('div');
+        notificationDiv.className = `notification ${type}`;
+        notificationDiv.textContent = message;
+        
+        notificationArea.innerHTML = '';
+        notificationArea.appendChild(notificationDiv);
+        notificationDiv.style.display = 'block';
+    }
 
-        if (json.htmlReport) {
-            notificationArea.innerHTML = '';
-            responseContainer.innerHTML = json.htmlReport;
-            responseContainer.style.display = 'block';
-        } else {
-            throw new Error("لم يتم استلام تقرير من الخادم.");
-        }
+    async function analyzeCase() {
+      const diagnosis = document.getElementById('diagnosis').value;
+      const symptoms = document.getElementById('symptoms').value;
+      const age = document.getElementById('age').value;
+      const gender = document.getElementById('gender').value;
+      const smoker = document.getElementById('smoker').value === 'yes';
+      const beforeProcedure = document.getElementById('beforeProcedure').value;
+      const afterProcedure = document.getElementById('afterProcedure').value;
 
-      } catch (err) {
-        showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
-        console.error(err);
-      }
-    }
+      const responseContainer = document.getElementById('response-container');
+      const notificationArea = document.getElementById('notification-area');
+      
+      responseContainer.style.display = 'none';
+      responseContainer.innerHTML = '';
+      notificationArea.innerHTML = '';
 
-    window.analyzeCase = analyzeCase;
-  </script>
+      if ((!diagnosis && !symptoms) && fileDataArray.length === 0) {
+        showNotification("error", "الرجاء ملء الحقول النصية أو رفع ملف واحد على الأقل.");
+        return;
+      }
+      
+      showNotification("info", "جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...");
+
+      try {
+        if (!auth.currentUser) {
+            throw new Error("المستخدم غير مسجل الدخول. جاري إعادة التوجيه.");
+        }
+        const token = await auth.currentUser.getIdToken();
+        const userEmail = auth.currentUser.email;
+        
+        // --- <<< تعديل: إرسال مصفوفة الملفات إلى الواجهة الخلفية >>> ---
+        const requestBody = { 
+            diagnosis, 
+            symptoms, 
+            age, 
+            gender, 
+            smoker, 
+            beforeProcedure, 
+            afterProcedure,
+            userEmail,
+            imageData: fileDataArray // إرسال مصفوفة بيانات الملفات
+        };
+
+        const result = await fetch("/api/gpt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!result.ok) {
+          const errorData = await result.json();
+          throw new Error(errorData.detail || `خطأ من الخادم: ${result.status}`);
+        }
+
+        const json = await result.json();
+
+        if (json.htmlReport) {
+            notificationArea.innerHTML = '';
+            responseContainer.innerHTML = json.htmlReport;
+            responseContainer.style.display = 'block';
+        } else {
+            throw new Error("لم يتم استلام تقرير من الخادم.");
+        }
+
+      } catch (err) {
+        showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
+        console.error(err);
+      }
+    }
+
+    window.analyzeCase = analyzeCase;
+  </script>
 </body>
 </html>
