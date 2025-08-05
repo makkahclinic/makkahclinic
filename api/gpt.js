@@ -100,6 +100,14 @@ export default async function handler(req, res) {
   }
 
   // نظام معالجة الصور المتقدم
+  let extractedText = '';
+if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
+  for (const base64Image of requestBody.imageData) {
+    const buffer = Buffer.from(base64Image, "base64");
+    const { data: { text } } = await Tesseract.recognize(buffer, 'ara');
+    extractedText += '\n' + text;
+  }
+}
   const parts = [{ text: htmlPrompt }];
   if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
     requestBody.imageData.forEach(imgData => {
