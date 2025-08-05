@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>نموذج تقييم الحالة الطبية - GPT</title>
+  <title>نموذج تقييم الحالة الطبية - التأمين الطبي</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -72,16 +72,36 @@
       border-radius: 8px;
       cursor: pointer;
       transition: background-color 0.3s, transform 0.1s;
+      position: relative;
+    }
+    button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
     }
     button:active {
         transform: scale(0.98);
     }
     .btn-primary { background-color: var(--primary-color); }
-    .btn-primary:hover { background-color: #004494; }
+    .btn-primary:hover:not(:disabled) { background-color: #004494; }
     .btn-danger { background-color: var(--secondary-color); }
-    .btn-danger:hover { background-color: #c82333; }
+    .btn-danger:hover:not(:disabled) { background-color: #c82333; }
 
-    /* --- NEW STYLES FOR IMAGE UPLOAD --- */
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .image-upload-container {
         margin-top: 1.5rem;
         border: 2px dashed var(--border-color);
@@ -101,23 +121,37 @@
     #image-preview-container {
         margin-top: 1rem;
         text-align: center;
+        position: relative;
     }
     #image-preview {
         max-width: 100%;
         max-height: 300px;
         border-radius: 8px;
         border: 1px solid var(--border-color);
-        display: none; /* Hidden by default */
+        display: none;
+    }
+    .remove-image {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(220, 53, 69, 0.8);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        font-size: 18px;
+        cursor: pointer;
+        display: none;
     }
     
-    /* Report Styles */
     #response-container {
         margin-top: 2rem;
         padding: 1.5rem;
         border: 1px solid var(--border-color);
         border-radius: 8px;
         background-color: #fdfdfd;
-        display: none; /* Hidden by default */
+        display: none;
     }
     #response-container h3 { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; margin-top: 0; }
     #response-container h4 { color: #17a2b8; margin-top: 1.5rem; }
@@ -133,13 +167,12 @@
     #response-container .financial-summary th { background-color: #f8f9fa; font-weight: 600; }
     #response-container .recommendation { background: #e9f7fd; padding: 1rem; border-radius: 8px; border-right: 4px solid #17a2b8; margin-bottom: 1rem; }
     
-    /* Notification Styles */
     .notification {
         padding: 1rem;
         margin-top: 1rem;
         border-radius: 8px;
         text-align: center;
-        display: none; /* Hidden by default */
+        display: none;
     }
     .notification.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     .notification.info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
@@ -158,7 +191,6 @@
     <label for="symptoms">الأعراض:</label>
     <textarea id="symptoms" placeholder="مثال: غباش في الرؤية، حكة، احمرار"></textarea>
 
-    <!-- --- NEW IMAGE UPLOAD SECTION --- -->
     <label for="image-upload-input">أو قم برفع صورة المطالبة (اختياري):</label>
     <div class="image-upload-container" onclick="document.getElementById('image-upload-input').click();">
         <span>اضغط هنا لاختيار صورة</span>
@@ -166,21 +198,21 @@
     </div>
     <div id="image-preview-container">
         <img id="image-preview" src="#" alt="معاينة الصورة" />
+        <button class="remove-image" onclick="removeImage()">×</button>
     </div>
-    <!-- --- END OF NEW SECTION --- -->
 
     <label for="age">عمر المريض:</label>
-    <input type="number" id="age" placeholder="مثال: 35" />
+    <input type="number" id="age" placeholder="مثال: 35" min="1" max="120" />
 
     <label for="gender">نوع المريض:</label>
-    <select id="gender">
+    <select id="gender" required>
       <option value="" disabled selected>اختر...</option>
       <option value="male">ذكر</option>
       <option value="female">أنثى</option>
     </select>
 
     <label for="smoker">هل المريض مدخن؟</label>
-    <select id="smoker">
+    <select id="smoker" required>
       <option value="" disabled selected>اختر...</option>
       <option value="yes">نعم</option>
       <option value="no">لا</option>
@@ -193,7 +225,10 @@
     <textarea id="afterProcedure" placeholder="الأدوية أو الإجراءات التي قام بها الطبيب"></textarea>
 
     <div class="button-group">
-        <button onclick="analyzeCase()" class="btn-primary">تحليل الحالة</button>
+        <button id="analyze-btn" onclick="analyzeCase()" class="btn-primary">
+          <span id="analyze-text">تحليل الحالة</span>
+          <span id="analyze-spinner" class="spinner" style="display:none"></span>
+        </button>
         <button onclick="logout()" class="btn-danger">تسجيل الخروج</button>
     </div>
 
@@ -223,40 +258,62 @@
       if (user) {
         document.getElementById("user-info").textContent = `مرحبًا ${user.email}`;
       } else {
-        // FIX: Use a hardcoded, full URL to ensure validity in all environments.
-        // إصلاح: استخدام رابط كامل وثابت لضمان الصلاحية في جميع البيئات.
-        window.location.href = "http://www.m2020m.org/login.html";
+        window.location.href = "login.html";
       }
+    }, (error) => {
+      console.error("خطأ في المصادقة:", error);
+      document.getElementById("user-info").textContent = "خطأ في التحقق من المستخدم";
+      showNotification("error", "حدث خطأ في المصادقة. يرجى تسجيل الدخول مرة أخرى.");
     });
 
     window.logout = () => {
       signOut(auth).then(() => {
         showNotification("info", "تم تسجيل الخروج بنجاح.");
-        // FIX: Use a hardcoded, full URL to ensure validity in all environments.
-        // إصلاح: استخدام رابط كامل وثابت لضمان الصلاحية في جميع البيئات.
-        setTimeout(() => window.location.href = "http://www.m2020m.org/login.html", 1500);
+        setTimeout(() => window.location.href = "login.html", 1500);
+      }).catch((error) => {
+        showNotification("error", "خطأ في تسجيل الخروج: " + error.message);
       });
     };
 
-    // --- NEW SCRIPT FOR IMAGE PREVIEW ---
+    // --- Image Handling ---
     const imageInput = document.getElementById('image-upload-input');
     const imagePreview = document.getElementById('image-preview');
+    const removeBtn = document.querySelector('.remove-image');
     
-    let imageDataUrl = null; // Variable to store the image data
+    let imageDataUrl = null;
 
     imageInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (file) {
+            // التحقق من نوع الملف
+            if (!file.type.match('image.*')) {
+                showNotification("error", "الرجاء اختيار ملف صورة فقط");
+                return;
+            }
+            
+            // التحقق من حجم الملف (5MB كحد أقصى)
+            if (file.size > 5 * 1024 * 1024) {
+                showNotification("error", "حجم الصورة كبير جدًا (الحد الأقصى 5MB)");
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = (e) => {
                 imagePreview.src = e.target.result;
                 imagePreview.style.display = 'block';
-                // Store the Base64 string, removing the prefix
-                imageDataUrl = e.target.result.split(',')[1];
+                removeBtn.style.display = 'block';
+                imageDataUrl = e.target.result; // تخزين الصورة كاملة مع البادئة
             };
             reader.readAsDataURL(file);
         }
     });
+
+    window.removeImage = () => {
+        imageInput.value = '';
+        imagePreview.style.display = 'none';
+        removeBtn.style.display = 'none';
+        imageDataUrl = null;
+    }
 
     // --- Notification Function ---
     function showNotification(type, message) {
@@ -268,18 +325,46 @@
         notificationArea.innerHTML = '';
         notificationArea.appendChild(notificationDiv);
         notificationDiv.style.display = 'block';
+        
+        // إخفاء الإشعار بعد 5 ثواني
+        setTimeout(() => {
+            notificationDiv.style.display = 'none';
+        }, 5000);
+    }
+
+    // --- تحقق من صحة المدخلات ---
+    function validateInputs() {
+        const diagnosis = document.getElementById('diagnosis').value;
+        const symptoms = document.getElementById('symptoms').value;
+        const age = document.getElementById('age').value;
+        const gender = document.getElementById('gender').value;
+        const smoker = document.getElementById('smoker').value;
+        
+        if ((!diagnosis && !symptoms) && !imageDataUrl) {
+            showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
+            return false;
+        }
+        
+        if (!age || age < 1 || age > 120) {
+            showNotification("error", "الرجاء إدخال عمر صحيح بين 1 و 120");
+            return false;
+        }
+        
+        if (!gender) {
+            showNotification("error", "الرجاء تحديد نوع المريض");
+            return false;
+        }
+        
+        if (!smoker) {
+            showNotification("error", "الرجاء تحديد حالة التدخين");
+            return false;
+        }
+        
+        return true;
     }
 
     // --- Main Analysis Function ---
     async function analyzeCase() {
-      const diagnosis = document.getElementById('diagnosis').value;
-      const symptoms = document.getElementById('symptoms').value;
-      const age = document.getElementById('age').value;
-      const gender = document.getElementById('gender').value;
-      const smoker = document.getElementById('smoker').value === 'yes';
-      const beforeProcedure = document.getElementById('beforeProcedure').value;
-      const afterProcedure = document.getElementById('afterProcedure').value;
-
       const responseContainer = document.getElementById('response-container');
       const notificationArea = document.getElementById('notification-area');
       
@@ -287,11 +372,17 @@
       responseContainer.innerHTML = '';
       notificationArea.innerHTML = '';
 
-      // MODIFIED: Check if either text fields OR an image is provided.
-      if ((!diagnosis && !symptoms) && !imageDataUrl) {
-        showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
-        return;
-      }
+      // التحقق من صحة المدخلات
+      if (!validateInputs()) return;
+      
+      // إظهار مؤشر التحميل
+      const analyzeBtn = document.getElementById('analyze-btn');
+      const analyzeText = document.getElementById('analyze-text');
+      const analyzeSpinner = document.getElementById('analyze-spinner');
+      
+      analyzeBtn.disabled = true;
+      analyzeText.textContent = "جارٍ التحليل...";
+      analyzeSpinner.style.display = 'inline-block';
       
       showNotification("info", "جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...");
 
@@ -299,8 +390,17 @@
         if (!auth.currentUser) {
             throw new Error("المستخدم غير مسجل الدخول. جاري إعادة التوجيه.");
         }
+        
         const token = await auth.currentUser.getIdToken();
         const userEmail = auth.currentUser.email;
+
+        const diagnosis = document.getElementById('diagnosis').value;
+        const symptoms = document.getElementById('symptoms').value;
+        const age = document.getElementById('age').value;
+        const gender = document.getElementById('gender').value;
+        const smoker = document.getElementById('smoker').value === 'yes';
+        const beforeProcedure = document.getElementById('beforeProcedure').value;
+        const afterProcedure = document.getElementById('afterProcedure').value;
 
         const requestBody = { 
             diagnosis, 
@@ -311,7 +411,7 @@
             beforeProcedure, 
             afterProcedure,
             userEmail,
-            imageData: imageDataUrl // Send the Base64 image data
+            imageData: imageDataUrl // إرسال الصورة كاملة
         };
 
         const result = await fetch("/api/gpt", {
@@ -341,6 +441,11 @@
       } catch (err) {
         showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
         console.error(err);
+      } finally {
+        // إعادة تعيين حالة الزر
+        analyzeBtn.disabled = false;
+        analyzeText.textContent = "تحليل الحالة";
+        analyzeSpinner.style.display = 'none';
       }
     }
 
