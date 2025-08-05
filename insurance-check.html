@@ -103,7 +103,7 @@
     .btn-danger { background-color: var(--secondary-color); }
     .btn-danger:hover { background-color: #c82333; }
 
-    .file-upload-container {
+    .image-upload-container {
         margin-top: 1.5rem;
         border: 2px dashed var(--border-color);
         border-radius: 8px;
@@ -112,18 +112,23 @@
         cursor: pointer;
         transition: border-color 0.3s, background-color 0.3s;
     }
-    .file-upload-container:hover {
+    .image-upload-container:hover {
         border-color: var(--primary-color);
         background-color: #f8f9fa;
     }
-    #file-upload-input {
+    #image-upload-input {
         display: none;
     }
-    #file-list-container {
+    #image-preview-container {
         margin-top: 1rem;
-        text-align: right;
-        font-size: 0.9rem;
-        color: #555;
+        text-align: center;
+    }
+    #image-preview {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        display: none;
     }
     
     #response-container {
@@ -177,13 +182,14 @@
     <label for="symptoms">الأعراض:</label>
     <textarea id="symptoms" placeholder="مثال: غباش في الرؤية، حكة، احمرار"></textarea>
 
-    <label for="file-upload-input">أو قم برفع ملفات المطالبة (صور أو PDF):</label>
-    <div class="file-upload-container" onclick="document.getElementById('file-upload-input').click();">
-        <span>اضغط هنا لاختيار الملفات</span>
-                <input type="file" id="file-upload-input" accept="image/*,application/pdf" multiple>
+    <label for="image-upload-input">أو قم برفع صورة المطالبة (اختياري):</label>
+    <div class="image-upload-container" onclick="document.getElementById('image-upload-input').click();">
+        <span>اضغط هنا لاختيار صورة</span>
+        <input type="file" id="image-upload-input" accept="image/*">
     </div>
-        <div id="file-list-container"></div>
-
+    <div id="image-preview-container">
+        <img id="image-preview" src="#" alt="معاينة الصورة" />
+    </div>
     <label for="age">عمر المريض:</label>
     <input type="number" id="age" placeholder="مثال: 35" />
 
@@ -248,53 +254,41 @@
       });
     };
 
-    // --- <<< تعديل: إعادة كتابة منطق معالجة الملفات بالكامل >>> ---
-    const fileInput = document.getElementById('file-upload-input');
+    // --- التعديل 2: إصلاح منطق قراءة الصورة ومنع السباق الزمني ---
+    const imageInput = document.getElementById('image-upload-input');
+    const imagePreview = document.getElementById('image-preview');
     const analyzeButton = document.getElementById('analyze-button');
-    const fileListContainer = document.getElementById('file-list-container');
     
-    let fileDataArray = []; // مصفوفة لتخزين بيانات كل الملفات
+    let imageDataUrl = null;
 
-    fileInput.addEventListener('change', async (event) => {
-        const files = event.target.files;
-        if (!files || files.length === 0) {
-            fileListContainer.innerHTML = '';
-            fileDataArray = [];
-            return;
-        }
+    imageInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            // تعطيل الزر فور اختيار الملف لمنع الضغط المبكر
+            analyzeButton.disabled = true;
+            analyzeButton.textContent = 'جاري تجهيز الصورة...';
+            const reader = new FileReader();
 
-        analyzeButton.disabled = true;
-        analyzeButton.textContent = `جاري تجهيز ${files.length} ملف...`;
-        fileListContainer.innerHTML = '<h4>الملفات المختارة:</h4>';
-        fileDataArray = [];
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                imageDataUrl = e.target.result.split(',')[1];
+                // إعادة تفعيل الزر بعد انتهاء التحميل
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = 'تحليل الحالة';
+            };
 
-        const fileReadPromises = Array.from(files).map(file => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const fileItem = document.createElement('p');
-                    fileItem.textContent = `✅ ${file.name}`;
-                    fileListContainer.appendChild(fileItem);
-                    
-                    resolve({
-                        mime_type: file.type,
-                        data: reader.result.split(',')[1]
-                    });
-                };
-                reader.onerror = (error) => reject(error);
-                reader.readAsDataURL(file);
-            });
-        });
+            reader.onerror = () => {
+                showNotification('error', 'حدث خطأ أثناء قراءة الصورة.');
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = 'تحليل الحالة';
+            };
 
-        try {
-            fileDataArray = await Promise.all(fileReadPromises);
-            analyzeButton.disabled = false;
-            analyzeButton.textContent = 'تحليل الحالة';
-        } catch (error) {
-            console.error("Error reading files:", error);
-            showNotification('error', 'حدث خطأ أثناء قراءة أحد الملفات.');
-            analyzeButton.disabled = false;
-            analyzeButton.textContent = 'تحليل الحالة';
+            reader.readAsDataURL(file);
+        } else {
+            // في حال ألغى المستخدم اختيار الملف
+            imageDataUrl = null;
+            imagePreview.style.display = 'none';
         }
     });
 
@@ -325,8 +319,8 @@
       responseContainer.innerHTML = '';
       notificationArea.innerHTML = '';
 
-      if ((!diagnosis && !symptoms) && fileDataArray.length === 0) {
-        showNotification("error", "الرجاء ملء الحقول النصية أو رفع ملف واحد على الأقل.");
+      if ((!diagnosis && !symptoms) && !imageDataUrl) {
+        showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
         return;
       }
       
@@ -338,8 +332,8 @@
         }
         const token = await auth.currentUser.getIdToken();
         const userEmail = auth.currentUser.email;
-        
-        // --- <<< تعديل: إرسال مصفوفة الملفات إلى الواجهة الخلفية >>> ---
+
+        // --- التعديل 3: إرسال الصورة داخل مصفوفة لتتوافق مع الواجهة الخلفية ---
         const requestBody = { 
             diagnosis, 
             symptoms, 
@@ -349,7 +343,7 @@
             beforeProcedure, 
             afterProcedure,
             userEmail,
-            imageData: fileDataArray // إرسال مصفوفة بيانات الملفات
+            imageData: imageDataUrl ? [imageDataUrl] : []
         };
 
         const result = await fetch("/api/gpt", {
