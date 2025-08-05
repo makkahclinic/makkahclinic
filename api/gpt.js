@@ -142,7 +142,7 @@ export default async function handler(req, res) {
   if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
     requestBody.imageData.forEach(imgData => {
       parts.push({
-        inlineData: { // CORRECTED: from inline_data to inlineData (camelCase)
+inline_data: { // <-- هذا هو الاسم الصحيح الذي تتوقعه Google API
           mimeType: "image/jpeg",
           data: imgData
         }
