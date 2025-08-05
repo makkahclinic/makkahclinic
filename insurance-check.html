@@ -21,22 +21,24 @@
       padding: 1rem;
     }
     
+    /* --- START: NEW STYLE FOR HOME ICON --- */
     .home-icon-link {
         position: absolute;
         top: 25px;
-        right: 30px;
+        right: 30px; /* Right for RTL layout */
         z-index: 1000;
         display: block;
     }
     .home-icon-link svg {
         width: 32px;
         height: 32px;
-        fill: var(--primary-color);
+        fill: var(--primary-color); /* Use theme color */
         transition: opacity 0.3s;
     }
     .home-icon-link:hover svg {
         opacity: 0.7;
     }
+    /* --- END: NEW STYLE FOR HOME ICON --- */
 
     .container {
       max-width: 900px;
@@ -99,6 +101,7 @@
     .btn-danger { background-color: var(--secondary-color); }
     .btn-danger:hover { background-color: #c82333; }
 
+    /* --- NEW STYLES FOR IMAGE UPLOAD --- */
     .image-upload-container {
         margin-top: 1.5rem;
         border: 2px dashed var(--border-color);
@@ -124,16 +127,17 @@
         max-height: 300px;
         border-radius: 8px;
         border: 1px solid var(--border-color);
-        display: none;
+        display: none; /* Hidden by default */
     }
     
+    /* Report Styles */
     #response-container {
         margin-top: 2rem;
         padding: 1.5rem;
         border: 1px solid var(--border-color);
         border-radius: 8px;
         background-color: #fdfdfd;
-        display: none;
+        display: none; /* Hidden by default */
     }
     #response-container h3 { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; margin-top: 0; }
     #response-container h4 { color: #17a2b8; margin-top: 1.5rem; }
@@ -149,12 +153,13 @@
     #response-container .financial-summary th { background-color: #f8f9fa; font-weight: 600; }
     #response-container .recommendation { background: #e9f7fd; padding: 1rem; border-radius: 8px; border-right: 4px solid #17a2b8; margin-bottom: 1rem; }
     
+    /* Notification Styles */
     .notification {
         padding: 1rem;
         margin-top: 1rem;
         border-radius: 8px;
         text-align: center;
-        display: none;
+        display: none; /* Hidden by default */
     }
     .notification.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     .notification.info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
@@ -210,7 +215,7 @@
     <textarea id="afterProcedure" placeholder="الأدوية أو الإجراءات التي قام بها الطبيب"></textarea>
 
     <div class="button-group">
-        <button onclick="analyzeCase()" class="btn-primary">تحليل الحالة</button>
+              <button id="analyze-button" onclick="analyzeCase()" class="btn-primary">تحليل الحالة</button>
         <button onclick="logout()" class="btn-danger">تسجيل الخروج</button>
     </div>
 
@@ -250,20 +255,38 @@
       });
     };
 
+    // --- <<< هذا هو الجزء الذي تم تعديله ليحل مشكلة تحميل الصورة >>> ---
     const imageInput = document.getElementById('image-upload-input');
     const imagePreview = document.getElementById('image-preview');
+    const analyzeButton = document.getElementById('analyze-button'); 
     
     let imageDataUrl = null;
 
     imageInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (file) {
+            // تعطيل الزر مؤقتاً
+            analyzeButton.disabled = true;
+            analyzeButton.textContent = 'جاري تجهيز الملف...';
+
             const reader = new FileReader();
-            reader.onload = (e) => {
+            
+            reader.onload = (e) => {
                 imagePreview.src = e.target.result;
                 imagePreview.style.display = 'block';
                 imageDataUrl = e.target.result.split(',')[1];
+                
+                // إعادة تفعيل الزر بعد جهوزية الصورة
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = 'تحليل الحالة';
             };
+
+            reader.onerror = () => {
+                showNotification('error', 'حدث خطأ أثناء قراءة الملف.');
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = 'تحليل الحالة';
+            };
+
             reader.readAsDataURL(file);
         }
     });
@@ -309,7 +332,6 @@
         const token = await auth.currentUser.getIdToken();
         const userEmail = auth.currentUser.email;
 
-        // <<< التعديل الوحيد هنا >>>
         const requestBody = { 
             diagnosis, 
             symptoms, 
@@ -319,7 +341,6 @@
             beforeProcedure, 
             afterProcedure,
             userEmail,
-            // تم تحويل المتغير إلى مصفوفة ليتوافق مع الواجهة الخلفية
             imageData: imageDataUrl ? [imageDataUrl] : []
         };
 
@@ -342,7 +363,7 @@
         if (json.htmlReport) {
             notificationArea.innerHTML = '';
             responseContainer.innerHTML = json.htmlReport;
-            responseContainer.style.display = 'block';
+          .style.display = 'block';
         } else {
             throw new Error("لم يتم استلام تقرير من الخادم.");
         }
