@@ -541,6 +541,14 @@
       border-left: 4px solid var(--success-color);
     }
     
+    .pregnancy-section {
+      display: none;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f0f7ff;
+      border-radius: 8px;
+    }
+    
     @media (max-width: 768px) {
       .container {
         padding: 1.5rem;
@@ -619,7 +627,7 @@
         
         <div class="input-item">
           <label for="gender" class="required">نوع المريض:</label>
-          <select id="gender">
+          <select id="gender" onchange="togglePregnancyFields()">
             <option value="" disabled selected>اختر...</option>
             <option value="male">ذكر</option>
             <option value="female">أنثى</option>
@@ -633,6 +641,47 @@
             <option value="yes">نعم</option>
             <option value="no">لا</option>
           </select>
+        </div>
+      </div>
+      
+      <div class="input-group">
+        <div class="input-item">
+          <label for="height">الطول (سم):</label>
+          <input type="number" id="height" placeholder="مثال: 170" min="50" max="250" />
+        </div>
+        
+        <div class="input-item">
+          <label for="weight">الوزن (كجم):</label>
+          <input type="number" id="weight" placeholder="مثال: 70" min="5" max="300" />
+        </div>
+      </div>
+      
+      <div id="pregnancy-section" class="pregnancy-section">
+        <div class="input-group">
+          <div class="input-item">
+            <label for="pregnant">هل المريضة حامل؟</label>
+            <select id="pregnant" onchange="togglePregnancyMonth()">
+              <option value="" selected>اختر...</option>
+              <option value="yes">نعم</option>
+              <option value="no">لا</option>
+            </select>
+          </div>
+          
+          <div class="input-item" id="pregnancy-month-container" style="display:none">
+            <label for="pregnancy-month">شهر الحمل:</label>
+            <select id="pregnancy-month">
+              <option value="" disabled selected>اختر...</option>
+              <option value="1">الشهر الأول</option>
+              <option value="2">الشهر الثاني</option>
+              <option value="3">الشهر الثالث</option>
+              <option value="4">الشهر الرابع</option>
+              <option value="5">الشهر الخامس</option>
+              <option value="6">الشهر السادس</option>
+              <option value="7">الشهر السابع</option>
+              <option value="8">الشهر الثامن</option>
+              <option value="9">الشهر التاسع</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -705,8 +754,6 @@
 
     // التحقق من حالة الاشتراك
     function checkSubscription(email) {
-      // هنا يمكنك التحقق من قاعدة البيانات لمعرفة حالة الاشتراك
-      // في هذا المثال، سنستخدم عدد المرات فقط
       if (usageCount >= MAX_FREE_USAGE) {
         document.getElementById("subscription-info").style.display = "block";
         document.getElementById("analyze-btn").disabled = true;
@@ -782,6 +829,33 @@
         }, 5000);
     }
 
+    // --- إدارة حقول الحمل ---
+    window.togglePregnancyFields = function() {
+      const gender = document.getElementById('gender').value;
+      const pregnancySection = document.getElementById('pregnancy-section');
+      
+      if (gender === 'female') {
+        pregnancySection.style.display = 'block';
+      } else {
+        pregnancySection.style.display = 'none';
+        document.getElementById('pregnant').value = '';
+        document.getElementById('pregnancy-month').value = '';
+        document.getElementById('pregnancy-month-container').style.display = 'none';
+      }
+    }
+    
+    window.togglePregnancyMonth = function() {
+      const isPregnant = document.getElementById('pregnant').value === 'yes';
+      const pregnancyMonthContainer = document.getElementById('pregnancy-month-container');
+      
+      if (isPregnant) {
+        pregnancyMonthContainer.style.display = 'block';
+      } else {
+        pregnancyMonthContainer.style.display = 'none';
+        document.getElementById('pregnancy-month').value = '';
+      }
+    }
+
     // --- تحقق من صحة المدخلات ---
     function validateInputs() {
         const diagnosis = document.getElementById('diagnosis').value;
@@ -790,7 +864,8 @@
         const gender = document.getElementById('gender').value;
         const smoker = document.getElementById('smoker').value;
         
-        if ((!diagnosis && !symptoms) && !imageDataUrl) {
+        // التحقق من الحقول الأساسية
+        if (!diagnosis && !symptoms && !imageDataUrl) {
             showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
             return false;
         }
@@ -808,6 +883,23 @@
         if (!smoker) {
             showNotification("error", "الرجاء تحديد حالة التدخين");
             return false;
+        }
+        
+        // التحقق من حقول الحمل إذا كانت المريضة أنثى
+        if (gender === 'female') {
+          const pregnant = document.getElementById('pregnant').value;
+          if (!pregnant) {
+            showNotification("error", "الرجاء تحديد حالة الحمل");
+            return false;
+          }
+          
+          if (pregnant === 'yes') {
+            const pregnancyMonth = document.getElementById('pregnancy-month').value;
+            if (!pregnancyMonth) {
+              showNotification("error", "الرجاء تحديد شهر الحمل");
+              return false;
+            }
+          }
         }
         
         return true;
@@ -850,6 +942,7 @@
       showNotification("info", "جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...");
 
       try {
+        // جمع البيانات من النموذج
         const diagnosis = document.getElementById('diagnosis').value;
         const symptoms = document.getElementById('symptoms').value;
         const age = document.getElementById('age').value;
@@ -857,16 +950,26 @@
         const smoker = document.getElementById('smoker').value === 'yes';
         const beforeProcedure = document.getElementById('beforeProcedure').value;
         const afterProcedure = document.getElementById('afterProcedure').value;
-
-        // محاكاة تحليل الحالة (بدلاً من الاتصال بالخادم)
+        const height = document.getElementById('height').value;
+        const weight = document.getElementById('weight').value;
+        const pregnant = document.getElementById('pregnant')?.value;
+        const pregnancyMonth = document.getElementById('pregnancy-month')?.value;
+        
+        // محاكاة التحليل
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // عرض نتيجة التحليل
-        const htmlReport = generateAnalysisReport(diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure);
+        // توليد تقرير التحليل
+        const htmlReport = generateAnalysisReport(
+          diagnosis, symptoms, age, gender, smoker, 
+          beforeProcedure, afterProcedure, height, weight,
+          pregnant, pregnancyMonth
+        );
+        
+        // عرض النتيجة
         responseContainer.innerHTML = htmlReport;
         responseContainer.style.display = 'block';
         
-        // زيادة عدد المرات عند نجاح التحليل
+        // تحديث عدد الاستخدامات
         usageCount++;
         localStorage.setItem(`usage_${user.email}`, usageCount);
         document.getElementById("usage-count").textContent = usageCount;
@@ -886,7 +989,9 @@
     }
 
     // توليد تقرير التحليل (محاكاة)
-    function generateAnalysisReport(diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure) {
+    function generateAnalysisReport(diagnosis, symptoms, age, gender, smoker, 
+                                    beforeProcedure, afterProcedure, height, weight,
+                                    pregnant, pregnancyMonth) {
       return `
         <div class="analysis-result">
           <h3><i class="fas fa-file-medical"></i> تقرير تحليل الحالة الطبية</h3>
@@ -900,6 +1005,9 @@
               <li><strong>عمر المريض:</strong> ${age} سنة</li>
               <li><strong>نوع المريض:</strong> ${gender === 'male' ? 'ذكر' : 'أنثى'}</li>
               <li><strong>حالة التدخين:</strong> ${smoker ? 'مدخن' : 'غير مدخن'}</li>
+              <li><strong>الطول:</strong> ${height || "غير محدد"} سم</li>
+              <li><strong>الوزن:</strong> ${weight || "غير محدد"} كجم</li>
+              ${gender === 'female' ? `<li><strong>حالة الحمل:</strong> ${pregnant === 'yes' ? `حامل في الشهر ${pregnancyMonth}` : 'غير حامل'}</li>` : ''}
             </ul>
           </div>
           
@@ -992,6 +1100,9 @@
     }
 
     window.analyzeCase = analyzeCase;
+    window.togglePregnancyFields = togglePregnancyFields;
+    window.togglePregnancyMonth = togglePregnancyMonth;
+    window.removeImage = removeImage;
   </script>
 </body>
 </html>
