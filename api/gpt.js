@@ -109,17 +109,9 @@ if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
   }
 }
   const parts = [{ text: htmlPrompt }];
-  if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
-    requestBody.imageData.forEach(imgData => {
-      parts.push({
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: imgData
-        }
-      });
-    });
-  }
-
+if (extractedText) {
+  parts.push({ text: extractedText });
+}
   const payload = {
     contents: [{ parts: parts }],
     generationConfig: {
