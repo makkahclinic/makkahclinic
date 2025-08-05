@@ -1,67 +1,119 @@
-// api/gpt.js
-import Tesseract from "tesseract.js";
 
+// /api/gpt.js
+
+/**
+ * @description Serverless API endpoint to generate a detailed, formatted HTML report.
+ * This version is now fully multimodal, capable of analyzing both text and image inputs.
+ *
+ * تم تحديث هذا الكود ليصبح متعدد الوسائط، قادراً على تحليل المدخلات النصية والصور معاً.
+ */
 export default async function handler(req, res) {
-  // CORS headers
+  // Set CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+  // Handle preflight OPTIONS request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  // Ensure the request method is POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
+  const {
+    diagnosis,
+    symptoms,
+    age,
+    gender,
+    smoker,
+    beforeProcedure,
+    afterProcedure,
+    imageData // Now receiving image data
+  } = req.body;
+
+  // Validate that either text fields or an image is provided
+  if ((!diagnosis && !symptoms) && !imageData) {
+    return res.status(400).json({ error: "الرجاء ملء الحقول النصية أو رفع صورة." });
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-  const requestBody = req.body;
-  let htmlPrompt = "";
+  // **PROMPT ENHANCEMENT**: The prompt now instructs the model to prioritize image analysis.
+  // **تحسين التعليمات**: التعليمات الآن توجه النموذج لإعطاء الأولوية لتحليل الصورة.
+  const htmlPrompt = `
+    أنت "صيدلي إكلينيكي وخبير مراجعة طبية وتأمين". مهمتك تحليل البيانات الطبية المقدمة (سواء كانت نصاً أو صورة وصفة طبية) وتقديم تقرير HTML مفصل.
 
-  if (requestBody.analysisType === 'doctor') {
-    htmlPrompt = `
-      أنت \"النظام الطبي المتكامل\" - محرك ذكاء اصطناعي يجمع خبرات:
-      [استشاري باطنة، صيدلي إكلينيكي، محلل تأمين طبي، خبير OCR]
+    **البيانات لتحليلها:**
+    - **الصورة المرفقة (إن وجدت):** قم بقراءة وتحليل الوصفة الطبية أو المطالبة المرفقة أولاً. استخرج منها التشخيصات، الأدوية، والجرعات.
+    - **البيانات النصية (للسياق الإضافي):**
+        - التشخيص المفوتر: ${diagnosis || "لم يحدد"}
+        - الأعراض: ${symptoms || "لم تحدد"}
+        - العمر: ${age || "لم يحدد"}
+        - الجنس: ${gender || "لم يحدد"}
+        - مدخن: ${smoker ? 'نعم' : 'لا'}
+        - الإجراءات المتخذة: ${beforeProcedure}, ${afterProcedure}
 
-      ## التعليمات:
-      - استخراج الأدوية فقط من النصوص بدون افتراض
-      - كل دواء: الاسم، الجرعة، التكرار، المدة
-      - تصحيح الأخطاء الشائعة مثل "ملف" ← "ملغ"
-      - لا تضف أدوية غير موجودة في الصورة
+    ---
+    **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط):**
 
-      مثال:
-      \"سيمغاسنانين 80 ملف يومياً\" ← \"سيمفاستاتين 80 ملغ يومياً\"
+    <h3>تقرير تحليلي مُفصل</h3>
+    
+    <div class="section">
+        <h4>1. تحليل الإجراءات ومبرراتها الطبية:</h4>
+        <p>بناءً على الصورة والبيانات، ابدأ بنقد التشخيص. ثم، حلل كل دواء وإجراء. **عند تحليل الأدوية، أنت ملزم بتحليل خصائصها الدوائية:** هل الدواء المختار هو الأفضل؟ هل يصل بتركيز كافٍ لمكان العدوى؟ انقد الاختيارات الدوائية السيئة بوضوح.</p>
+    </div>
 
-      أرسل التحليل النهائي بشكل منسق HTML بدون هلوسة.
+    <div class="section">
+        <h4>2. احتمالية الرفض من التأمين:</h4>
+        <p>حدد مستوى الخطر. اذكر بوضوح ما هي الإجراءات المعرضة للرفض، قيمتها بالريال السعودي، والسبب العلمي أو التأميني للرفض.</p>
+    </div>
+
+    <div class="section">
+        <h4>3. ما كان يمكن عمله لرفع الفاتورة (وفقًا للبروتوكولات الطبية):</h4>
+        <p>اقترح خطة عمل كاملة تبدأ بالاستشارات الضرورية ثم الفحوصات المتخصصة. كن شمولياً واقترح فحوصات جهازية (مثل وظائف الكلى) إذا كانت الحالة تستدعي ذلك. ادعم كل اقتراح ببروتوكول طبي معروف.</p>
+    </div>
+
+    <div class="section financial-summary">
+        <h4>4. المؤشر المالي:</h4>
+        <table>
+            <thead><tr><th>المؤشر</th><th>القيمة (ريال سعودي)</th><th>ملاحظات</th></tr></thead>
+            <tbody>
+                <tr><td>إجمالي الدخل الحالي (المفوتر)</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+                <tr><td>إجمالي الدخل بعد خصم الرفوض المحتملة</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+                <tr><td>إجمالي الدخل المحتمل مع التحسينات</td><td>[ضع القيمة هنا]</td><td>[ضع الملاحظة هنا]</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h4>5. توصيات عامة شاملة:</h4>
+        <p>قدم نصائح عامة لتحسين الترميز والتوثيق واختيار الأدوية.</p>
+    </div>
+
+    **قاعدة مهمة:** لا تضع أبداً أي رموز تنسيق مثل \`\`\`html في بداية ردك. يجب أن يبدأ ردك مباشرة بوسم \`<h3>\`.
     `;
-  } else if (requestBody.analysisType === 'patient') {
-    htmlPrompt = `أنت مساعد طبي ذكي، حلل الحالة بناء على الأعراض والمعطيات التالية...`;
-  }
 
-  // OCR من الصور
-  let extractedText = "";
-  if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
-    for (const base64Image of requestBody.imageData) {
-      const buffer = Buffer.from(base64Image, "base64");
-      const { data: { text } } = await Tesseract.recognize(buffer, 'ara');
-      extractedText += "\n" + text;
-    }
-  }
-
+  // **PAYLOAD UPDATE**: Constructing a multimodal payload with text and image.
+  // **تحديث الحمولة**: بناء حمولة متعددة الوسائط تحتوي على نص وصورة.
   const parts = [{ text: htmlPrompt }];
-  if (extractedText) {
-    parts.push({ text: extractedText });
+  if (imageData) {
+    parts.push({
+      inline_data: {
+        mime_type: "image/jpeg",
+        data: imageData
+      }
+    });
   }
 
   const payload = {
-    contents: [{ parts }],
+    contents: [{ parts: parts }],
     generationConfig: {
-      temperature: 0.2,
-      topK: 10,
-      maxOutputTokens: 5000
+      temperature: 0.5,
     },
-    safetySettings: [
-      { category: "HARM_CATEGORY_MEDICAL", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" }
-    ]
   };
 
   try {
@@ -72,58 +124,25 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gemini API error: ${errorText}`);
+      const errorBody = await response.json();
+      console.error("🔥 Gemini API Error Response:", errorBody);
+      throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
     }
 
     const result = await response.json();
-    let reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text || "<p>❌ لم يتم توليد تقرير</p>";
+    const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    // منع الهلوسة: تحقق من وجود أدوية في النص الأصلي
-    const extractedMeds = extractMedications(extractedText || "");
-    if (reportHtml.includes("سيمفاستاتين") && !extractedMeds.includes("سيمفاستاتين")) {
-      return res.status(200).json({
-        htmlReport: `
-          <div class="error-alert">
-            <h3>⚠️ تحذير: بيانات غير كافية</h3>
-            <p>لم يتم العثور على دواء \"سيمفاستاتين\" في الوثيقة المقدمة</p>
-            <ul>
-              <li>السبب المحتمل: جودة صورة منخفضة أو خط غير واضح</li>
-              <li>التوصية: إعادة رفع صورة أوضح</li>
-              <li>الأدوية المكتشفة: ${extractedMeds.join(', ') || 'لا شيء'}</li>
-            </ul>
-          </div>
-        `
-      });
+    if (!reportHtml) {
+      throw new Error("لم يتمكن النموذج من إنشاء التقرير.");
     }
-
+    
     return res.status(200).json({ htmlReport: reportHtml });
 
   } catch (err) {
-    console.error("🔥 خطأ في الخادم:", err);
+    console.error("🔥 Server-side Error:", err);
     return res.status(500).json({
-      error: "فشل في تحليل الوثيقة الطبية",
+      error: "حدث خطأ في الخادم أثناء تحليل الحالة",
       detail: err.message,
-      solution: "الرجاء التحقق من جودة الصورة وإعادة المحاولة"
     });
   }
-}
-
-// دالة لاستخراج الأدوية من النص
-function extractMedications(text) {
-  const drugPatterns = [
-    /(سيمفاستاتين|أتورفاستاتين|روزوفاستاتين)/gi,
-    /(أوميبرازول|لانسوبرازول|بانتوبرازول)/gi,
-    /(ميتفورمين|أنسولين|غليبنكلاميد)/gi
-  ];
-
-  const medications = new Set();
-  drugPatterns.forEach(pattern => {
-    const matches = text.match(pattern);
-    if (matches) {
-      matches.forEach(match => medications.add(match));
-    }
-  });
-
-  return Array.from(medications);
 }
