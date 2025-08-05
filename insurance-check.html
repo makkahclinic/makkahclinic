@@ -1,58 +1,288 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>نموذج تقييم الحالة الطبية - GPT</title>
+    <style>
+        :root {
+            --primary-color: #0056b3;
+            --secondary-color: #dc3545;
+            --background-color: #f4f7f9;
+            --text-color: #333;
+            --card-bg-color: #ffffff;
+            --border-color: #e0e0e0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 1rem;
+        }
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            background-color: var(--card-bg-color);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+        h2 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 2rem;
+        }
+        label {
+            font-weight: 600;
+            display: block;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        textarea, input, select {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            font-size: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-sizing: border-box;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        textarea:focus, input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.2);
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        button {
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .btn-primary { background-color: var(--primary-color); }
+        .btn-primary:hover { background-color: #004494; }
+        .btn-danger { background-color: var(--secondary-color); }
+        .btn-danger:hover { background-color: #c82333; }
+        .image-upload-container {
+            margin-top: 1.5rem;
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s, background-color 0.3s;
+        }
+        .image-upload-container:hover {
+            border-color: var(--primary-color);
+            background-color: #f8f9fa;
+        }
+        #image-upload-input {
+            display: none;
+        }
+        #image-preview-container {
+            margin-top: 1rem;
+            text-align: center;
+        }
+        #image-preview {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: none;
+        }
+        #response-container {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #fdfdfd;
+            display: none;
+        }
+        .notification {
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+        .notification.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .notification.info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        #user-info { margin-bottom: 2rem; color: #555; font-size: 0.9rem; text-align: center; }
+
+        /* --- 🚀 NEW EXPERT REPORT STYLES --- */
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+        }
+        .audit-table th, .audit-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.8rem 1rem;
+            text-align: right;
+            vertical-align: top;
+        }
+        .audit-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .audit-table td strong {
+            font-weight: 700;
+        }
+        .audit-table .risk-red { background-color: #f8d7da; }
+        .audit-table .risk-yellow { background-color: #fff3cd; }
+        .audit-table .risk-green { background-color: #d4edda; }
+        .recommendation-card {
+            background-color: #e9f7fd;
+            border: 1px solid #bee5eb;
+            border-right: 5px solid #17a2b8;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border-radius: 8px;
+        }
+        .recommendation-card h5 {
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            color: #0c5460;
+            font-size: 1.1rem;
+        }
+        .financial-summary .financial-red {
+            color: #721c24;
+            font-weight: bold;
+        }
+        .financial-summary .financial-green {
+            color: #155724;
+            font-weight: bold;
+        }
+        #response-container h3 svg {
+            width: 28px;
+            height: 28px;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>نموذج تقييم الحالة الطبية - التأمين الطبي</h2>
+        <div id="user-info">جاري التحقق من المستخدم...</div>
+
+        <label for="diagnosis">تشخيص المرض (ICD-10):</label>
+        <input type="text" id="diagnosis" placeholder="مثال: Z01.0 أو جفاف العين" />
+
+        <label for="symptoms">الأعراض:</label>
+        <textarea id="symptoms" placeholder="مثال: غباش في الرؤية، حكة، احمرار"></textarea>
+
+        <label for="image-upload-input">أو قم برفع صورة المطالبة (اختياري):</label>
+        <div class="image-upload-container" id="image-upload-trigger">
+            <span>اضغط هنا لاختيار صورة</span>
+            <input type="file" id="image-upload-input" accept="image/*">
+        </div>
+        <div id="image-preview-container">
+            <img id="image-preview" src="#" alt="معاينة الصورة" />
+        </div>
+
+        <label for="age">عمر المريض:</label>
+        <input type="number" id="age" placeholder="مثال: 35" />
+
+        <label for="gender">نوع المريض:</label>
+        <select id="gender">
+            <option value="" disabled selected>اختر...</option>
+            <option value="male">ذكر</option>
+            <option value="female">أنثى</option>
+        </select>
+
+        <label for="smoker">هل المريض مدخن؟</label>
+        <select id="smoker">
+            <option value="" disabled selected>اختر...</option>
+            <option value="yes">نعم</option>
+            <option value="no">لا</option>
+        </select>
+
+        <label for="beforeProcedure">إجراءات قبل التشخيص:</label>
+        <textarea id="beforeProcedure" placeholder="أي إجراءات أو أدوية تم اتخاذها قبل التشخيص الحالي"></textarea>
+
+        <label for="afterProcedure">إجراءات بعد التشخيص:</label>
+        <textarea id="afterProcedure" placeholder="الأدوية أو الإجراءات التي قام بها الطبيب"></textarea>
+
+        <div class="button-group">
+            <button id="analyze-button" class="btn-primary">تحليل الحالة</button>
+            <button id="logout-button" class="btn-danger">تسجيل الخروج</button>
+        </div>
+
+        <div id="notification-area"></div>
+        <div id="response-container"></div>
+    </div>
+
 <script type="module">
-    // 💡 FIX: We wrap all our code in this event listener.
-    // This ensures the HTML is fully loaded before the script tries to find any elements.
     document.addEventListener("DOMContentLoaded", () => {
+        // We need to use dynamic imports inside the listener for modules
+        import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js").then(firebaseApp => {
+        import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js").then(firebaseAuth => {
+            
+            const firebaseConfig = {
+              apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+              authDomain: "insurance-check-6cec9.firebaseapp.com",
+              projectId: "insurance-check-6cec9",
+              storageBucket: "insurance-check-6cec9.appspot.com",
+              messagingSenderId: "992769471393",
+              appId: "1:992769471393:web:c8a9400210a0e7901011e0",
+              measurementId: "G-LMS6VRSTT6"
+            };
 
-        const firebaseConfig = {
-          apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-          authDomain: "insurance-check-6cec9.firebaseapp.com",
-          projectId: "insurance-check-6cec9",
-          storageBucket: "insurance-check-6cec9.appspot.com",
-          messagingSenderId: "992769471393",
-          appId: "1:992769471393:web:c8a9400210a0e7901011e0",
-          measurementId: "G-LMS6VRSTT6"
-        };
-
-        // These imports need to be at the top level of the module, so we keep them outside the listener.
-        // We will call an async function to initialize everything else.
-        import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js").then(({ initializeApp }) => {
-        import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js").then(({ getAuth, onAuthStateChanged, signOut }) => {
-
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
+            const app = firebaseApp.initializeApp(firebaseConfig);
+            const auth = firebaseAuth.getAuth(app);
 
             // --- Authentication Logic ---
-            onAuthStateChanged(auth, (user) => {
+            firebaseAuth.onAuthStateChanged(auth, (user) => {
               const userInfoDiv = document.getElementById("user-info");
-              if (user) {
-                if(userInfoDiv) userInfoDiv.textContent = `مرحبًا ${user.email}`;
-              } else {
+              if (user && userInfoDiv) {
+                userInfoDiv.textContent = `مرحبًا ${user.email}`;
+              } else if (!user) {
                 window.location.href = "http://www.m2020m.org/login.html";
               }
             });
 
-            window.logout = () => {
-              signOut(auth).then(() => {
+            const logout = () => {
+              firebaseAuth.signOut(auth).then(() => {
                 showNotification("info", "تم تسجيل الخروج بنجاح.");
                 setTimeout(() => window.location.href = "http://www.m2020m.org/login.html", 1500);
               });
             };
 
-            // --- Image Preview Logic ---
+            // --- Image Upload & Preview Logic ---
             const imageInput = document.getElementById('image-upload-input');
+            const imageTrigger = document.getElementById('image-upload-trigger');
             const imagePreview = document.getElementById('image-preview');
             let imageDataUrl = null;
+            
+            if (imageTrigger) imageTrigger.onclick = () => imageInput.click();
 
             if (imageInput) {
                 imageInput.addEventListener('change', (event) => {
                     const file = event.target.files[0];
-                    if (file) {
+                    if (file && imagePreview) {
                         const reader = new FileReader();
                         reader.onload = (e) => {
-                            if(imagePreview) {
-                                imagePreview.src = e.target.result;
-                                imagePreview.style.display = 'block';
-                            }
+                            imagePreview.src = e.target.result;
+                            imagePreview.style.display = 'block';
                             imageDataUrl = e.target.result.split(',')[1];
                         };
                         reader.readAsDataURL(file);
@@ -63,15 +293,13 @@
             // --- Notification Function ---
             function showNotification(type, message) {
                 const notificationArea = document.getElementById('notification-area');
+                if (!notificationArea) return;
                 const notificationDiv = document.createElement('div');
                 notificationDiv.className = `notification ${type}`;
                 notificationDiv.textContent = message;
-                
-                if(notificationArea) {
-                    notificationArea.innerHTML = '';
-                    notificationArea.appendChild(notificationDiv);
-                    notificationDiv.style.display = 'block';
-                }
+                notificationArea.innerHTML = '';
+                notificationArea.appendChild(notificationDiv);
+                notificationDiv.style.display = 'block';
             }
 
             // --- Main Analysis Function ---
@@ -84,23 +312,15 @@
               const beforeProcedure = document.getElementById('beforeProcedure').value;
               const afterProcedure = document.getElementById('afterProcedure').value;
               const responseContainer = document.getElementById('response-container');
-              const notificationArea = document.getElementById('notification-area');
-              
-              if(responseContainer) responseContainer.style.display = 'none';
-              if(responseContainer) responseContainer.innerHTML = '';
-              if(notificationArea) notificationArea.innerHTML = '';
 
-              if ((!diagnosis && !symptoms) && !imageDataUrl) {
-                showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
-                return;
+              if(responseContainer) {
+                  responseContainer.style.display = 'none';
+                  responseContainer.innerHTML = '';
               }
-              
               showNotification("info", "جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...");
 
               try {
-                if (!auth.currentUser) {
-                  throw new Error("المستخدم غير مسجل الدخول. جاري إعادة التوجيه.");
-                }
+                if (!auth.currentUser) throw new Error("المستخدم غير مسجل الدخول.");
                 const token = await auth.currentUser.getIdToken();
                 
                 const requestBody = { diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure, userEmail: auth.currentUser.email, imageData: imageDataUrl };
@@ -112,42 +332,28 @@
                 });
 
                 const jsonResponse = await result.json();
+                if (!result.ok) throw new Error(jsonResponse.detail || jsonResponse.error || `خطأ من الخادم: ${result.status}`);
 
-                if (!result.ok) {
-                  const errorMessage = jsonResponse.detail || jsonResponse.error || `خطأ من الخادم: ${result.status}`;
-                  throw new Error(errorMessage);
-                }
-
-                if (jsonResponse.htmlReport) {
-                  if(notificationArea) notificationArea.innerHTML = '';
-                  if(responseContainer) {
-                    responseContainer.innerHTML = jsonResponse.htmlReport;
-                    responseContainer.style.display = 'block';
-                  }
+                if (jsonResponse.htmlReport && responseContainer) {
+                  showNotification("info", "تم استلام التقرير بنجاح.");
+                  responseContainer.innerHTML = jsonResponse.htmlReport;
+                  responseContainer.style.display = 'block';
                 } else {
                   throw new Error("لم يتم استلام تقرير من الخادم.");
                 }
-
               } catch (err) {
                 showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
                 console.error(err);
               }
             }
             
-            // Make the function globally accessible
-            window.analyzeCase = analyzeCase;
-
-            // Also attach it to the button to be safe
-            const analyzeButton = document.querySelector('.btn-primary');
-            if (analyzeButton) {
-                analyzeButton.onclick = analyzeCase;
-            }
-            const logoutButton = document.querySelector('.btn-danger');
-            if (logoutButton) {
-                logoutButton.onclick = window.logout;
-            }
-
+            // Attach functions to buttons
+            document.getElementById('analyze-button').onclick = analyzeCase;
+            document.getElementById('logout-button').onclick = logout;
         });
         });
     });
 </script>
+
+</body>
+</html>
