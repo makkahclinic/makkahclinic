@@ -141,7 +141,8 @@ if (extractedText) {
     let reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
     // التحقق النهائي لمنع الهلوسة
-    if (reportHtml.includes("سيمفاستاتين") && !requestBody.content?.includes("سيمفاستاتين")) {
+    const extractedMeds = extractMedications(extractedText || "");
+if (reportHtml.includes("سيمفاستاتين") && !extractedMeds.includes("سيمفاستاتين")) {
       reportHtml = `
         <div class="error-alert">
           <h3>⚠️ تحذير: بيانات غير كافية</h3>
