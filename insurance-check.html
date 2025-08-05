@@ -1,142 +1,153 @@
 <script type="module">
-    const firebaseConfig = {
-      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-      authDomain: "insurance-check-6cec9.firebaseapp.com",
-      projectId: "insurance-check-6cec9",
-      storageBucket: "insurance-check-6cec9.appspot.com",
-      messagingSenderId: "992769471393",
-      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
-      measurementId: "G-LMS6VRSTT6"
-    };
+    // 💡 FIX: We wrap all our code in this event listener.
+    // This ensures the HTML is fully loaded before the script tries to find any elements.
+    document.addEventListener("DOMContentLoaded", () => {
 
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getAuth, onAuthStateChanged, signOut } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
-    
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-
-    // --- Authentication Logic ---
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        document.getElementById("user-info").textContent = `مرحبًا ${user.email}`;
-      } else {
-        window.location.href = "http://www.m2020m.org/login.html";
-      }
-    });
-
-    window.logout = () => {
-      signOut(auth).then(() => {
-        showNotification("info", "تم تسجيل الخروج بنجاح.");
-        setTimeout(() => window.location.href = "http://www.m2020m.org/login.html", 1500);
-      });
-    };
-
-    // --- Image Preview Logic ---
-    const imageInput = document.getElementById('image-upload-input');
-    const imagePreview = document.getElementById('image-preview');
-    let imageDataUrl = null;
-
-    imageInput.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imagePreview.src = e.target.result;
-                imagePreview.style.display = 'block';
-                imageDataUrl = e.target.result.split(',')[1];
-            };
-            reader.readAsDataURL(file);
-        }
-    });
-
-    // --- Notification Function ---
-    function showNotification(type, message) {
-        const notificationArea = document.getElementById('notification-area');
-        const notificationDiv = document.createElement('div');
-        notificationDiv.className = `notification ${type}`;
-        notificationDiv.textContent = message;
-        
-        notificationArea.innerHTML = '';
-        notificationArea.appendChild(notificationDiv);
-        notificationDiv.style.display = 'block';
-    }
-
-    // --- ✅ CORRECTED Main Analysis Function ---
-    async function analyzeCase() {
-      const diagnosis = document.getElementById('diagnosis').value;
-      const symptoms = document.getElementById('symptoms').value;
-      const age = document.getElementById('age').value;
-      const gender = document.getElementById('gender').value;
-      const smoker = document.getElementById('smoker').value === 'yes';
-      const beforeProcedure = document.getElementById('beforeProcedure').value;
-      const afterProcedure = document.getElementById('afterProcedure').value;
-
-      const responseContainer = document.getElementById('response-container');
-      const notificationArea = document.getElementById('notification-area');
-      
-      responseContainer.style.display = 'none';
-      responseContainer.innerHTML = '';
-      notificationArea.innerHTML = '';
-
-      if ((!diagnosis && !symptoms) && !imageDataUrl) {
-        showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
-        return;
-      }
-      
-      showNotification("info", "جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...");
-
-      try {
-        if (!auth.currentUser) {
-          throw new Error("المستخدم غير مسجل الدخول. جاري إعادة التوجيه.");
-        }
-        const token = await auth.currentUser.getIdToken();
-        const userEmail = auth.currentUser.email;
-
-        const requestBody = { 
-          diagnosis, 
-          symptoms, 
-          age, 
-          gender, 
-          smoker, 
-          beforeProcedure, 
-          afterProcedure,
-          userEmail,
-          imageData: imageDataUrl
+        const firebaseConfig = {
+          apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+          authDomain: "insurance-check-6cec9.firebaseapp.com",
+          projectId: "insurance-check-6cec9",
+          storageBucket: "insurance-check-6cec9.appspot.com",
+          messagingSenderId: "992769471393",
+          appId: "1:992769471393:web:c8a9400210a0e7901011e0",
+          measurementId: "G-LMS6VRSTT6"
         };
 
-        const result = await fetch("/api/gpt", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(requestBody)
+        // These imports need to be at the top level of the module, so we keep them outside the listener.
+        // We will call an async function to initialize everything else.
+        import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js").then(({ initializeApp }) => {
+        import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js").then(({ getAuth, onAuthStateChanged, signOut }) => {
+
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+
+            // --- Authentication Logic ---
+            onAuthStateChanged(auth, (user) => {
+              const userInfoDiv = document.getElementById("user-info");
+              if (user) {
+                if(userInfoDiv) userInfoDiv.textContent = `مرحبًا ${user.email}`;
+              } else {
+                window.location.href = "http://www.m2020m.org/login.html";
+              }
+            });
+
+            window.logout = () => {
+              signOut(auth).then(() => {
+                showNotification("info", "تم تسجيل الخروج بنجاح.");
+                setTimeout(() => window.location.href = "http://www.m2020m.org/login.html", 1500);
+              });
+            };
+
+            // --- Image Preview Logic ---
+            const imageInput = document.getElementById('image-upload-input');
+            const imagePreview = document.getElementById('image-preview');
+            let imageDataUrl = null;
+
+            if (imageInput) {
+                imageInput.addEventListener('change', (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            if(imagePreview) {
+                                imagePreview.src = e.target.result;
+                                imagePreview.style.display = 'block';
+                            }
+                            imageDataUrl = e.target.result.split(',')[1];
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+
+            // --- Notification Function ---
+            function showNotification(type, message) {
+                const notificationArea = document.getElementById('notification-area');
+                const notificationDiv = document.createElement('div');
+                notificationDiv.className = `notification ${type}`;
+                notificationDiv.textContent = message;
+                
+                if(notificationArea) {
+                    notificationArea.innerHTML = '';
+                    notificationArea.appendChild(notificationDiv);
+                    notificationDiv.style.display = 'block';
+                }
+            }
+
+            // --- Main Analysis Function ---
+            async function analyzeCase() {
+              const diagnosis = document.getElementById('diagnosis').value;
+              const symptoms = document.getElementById('symptoms').value;
+              const age = document.getElementById('age').value;
+              const gender = document.getElementById('gender').value;
+              const smoker = document.getElementById('smoker').value === 'yes';
+              const beforeProcedure = document.getElementById('beforeProcedure').value;
+              const afterProcedure = document.getElementById('afterProcedure').value;
+              const responseContainer = document.getElementById('response-container');
+              const notificationArea = document.getElementById('notification-area');
+              
+              if(responseContainer) responseContainer.style.display = 'none';
+              if(responseContainer) responseContainer.innerHTML = '';
+              if(notificationArea) notificationArea.innerHTML = '';
+
+              if ((!diagnosis && !symptoms) && !imageDataUrl) {
+                showNotification("error", "الرجاء ملء الحقول النصية أو رفع صورة للمطالبة.");
+                return;
+              }
+              
+              showNotification("info", "جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...");
+
+              try {
+                if (!auth.currentUser) {
+                  throw new Error("المستخدم غير مسجل الدخول. جاري إعادة التوجيه.");
+                }
+                const token = await auth.currentUser.getIdToken();
+                
+                const requestBody = { diagnosis, symptoms, age, gender, smoker, beforeProcedure, afterProcedure, userEmail: auth.currentUser.email, imageData: imageDataUrl };
+
+                const result = await fetch("/api/gpt", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                  body: JSON.stringify(requestBody)
+                });
+
+                const jsonResponse = await result.json();
+
+                if (!result.ok) {
+                  const errorMessage = jsonResponse.detail || jsonResponse.error || `خطأ من الخادم: ${result.status}`;
+                  throw new Error(errorMessage);
+                }
+
+                if (jsonResponse.htmlReport) {
+                  if(notificationArea) notificationArea.innerHTML = '';
+                  if(responseContainer) {
+                    responseContainer.innerHTML = jsonResponse.htmlReport;
+                    responseContainer.style.display = 'block';
+                  }
+                } else {
+                  throw new Error("لم يتم استلام تقرير من الخادم.");
+                }
+
+              } catch (err) {
+                showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
+                console.error(err);
+              }
+            }
+            
+            // Make the function globally accessible
+            window.analyzeCase = analyzeCase;
+
+            // Also attach it to the button to be safe
+            const analyzeButton = document.querySelector('.btn-primary');
+            if (analyzeButton) {
+                analyzeButton.onclick = analyzeCase;
+            }
+            const logoutButton = document.querySelector('.btn-danger');
+            if (logoutButton) {
+                logoutButton.onclick = window.logout;
+            }
+
         });
-
-        // **الخطوة 1: اقرأ الاستجابة مرة واحدة فقط وخزنها**
-        const jsonResponse = await result.json();
-
-        // **الخطوة 2: تحقق من حالة الطلب**
-        // إذا لم يكن الطلب ناجحًا (مثل خطأ 500)، ارمِ رسالة الخطأ من الـ JSON الذي قرأناه
-        if (!result.ok) {
-          const errorMessage = jsonResponse.detail || jsonResponse.error || `خطأ من الخادم: ${result.status}`;
-          throw new Error(errorMessage);
-        }
-
-        // **الخطوة 3: إذا كان الطلب ناجحًا، استخدم الـ JSON الذي قرأناه**
-        if (jsonResponse.htmlReport) {
-          notificationArea.innerHTML = '';
-          responseContainer.innerHTML = jsonResponse.htmlReport;
-          responseContainer.style.display = 'block';
-        } else {
-          throw new Error("لم يتم استلام تقرير من الخادم.");
-        }
-
-      } catch (err) {
-        showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
-        console.error(err);
-      }
-    }
-
-    window.analyzeCase = analyzeCase;
+        });
+    });
 </script>
