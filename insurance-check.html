@@ -210,7 +210,7 @@
     <textarea id="afterProcedure" placeholder="الأدوية أو الإجراءات التي قام بها الطبيب"></textarea>
 
     <div class="button-group">
-        <button id="analyze-button" onclick="analyzeCase()" class="btn-primary">تحليل الحالة</button>
+        <button onclick="analyzeCase()" class="btn-primary">تحليل الحالة</button>
         <button onclick="logout()" class="btn-danger">تسجيل الخروج</button>
     </div>
 
@@ -252,33 +252,18 @@
 
     const imageInput = document.getElementById('image-upload-input');
     const imagePreview = document.getElementById('image-preview');
-    const analyzeButton = document.getElementById('analyze-button'); 
     
     let imageDataUrl = null;
 
     imageInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (file) {
-            analyzeButton.disabled = true;
-            analyzeButton.textContent = 'جاري تجهيز الملف...';
-
             const reader = new FileReader();
-            
-            reader.onload = (e) => {
+            reader.onload = (e) => {
                 imagePreview.src = e.target.result;
                 imagePreview.style.display = 'block';
                 imageDataUrl = e.target.result.split(',')[1];
-                
-                analyzeButton.disabled = false;
-                analyzeButton.textContent = 'تحليل الحالة';
             };
-
-            reader.onerror = () => {
-                showNotification('error', 'حدث خطأ أثناء قراءة الملف.');
-                analyzeButton.disabled = false;
-                analyzeButton.textContent = 'تحليل الحالة';
-            };
-
             reader.readAsDataURL(file);
         }
     });
@@ -324,6 +309,7 @@
         const token = await auth.currentUser.getIdToken();
         const userEmail = auth.currentUser.email;
 
+        // <<< التعديل الوحيد هنا >>>
         const requestBody = { 
             diagnosis, 
             symptoms, 
@@ -333,6 +319,7 @@
             beforeProcedure, 
             afterProcedure,
             userEmail,
+            // تم تحويل المتغير إلى مصفوفة ليتوافق مع الواجهة الخلفية
             imageData: imageDataUrl ? [imageDataUrl] : []
         };
 
@@ -355,7 +342,6 @@
         if (json.htmlReport) {
             notificationArea.innerHTML = '';
             responseContainer.innerHTML = json.htmlReport;
-            // <<< هذا هو السطر الذي تم إصلاحه >>>
             responseContainer.style.display = 'block';
         } else {
             throw new Error("لم يتم استلام تقرير من الخادم.");
