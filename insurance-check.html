@@ -322,11 +322,23 @@
           },
           body: JSON.stringify(requestBody)
         });
-
-        if (!result.ok) {
-          const errorData = await result.json();
-          throw new Error(errorData.detail || `خطأ من الخادم: ${result.status}`);
-        }
+        // استبدل الكتلة السابقة بهذا الكود المحسّن
+if (!result.ok) {
+    let errorMessage = `خطأ من الخادم: ${result.status} ${result.statusText}`;
+    try {
+        // حاول قراءة الاستجابة كـ JSON، فهذا ما يرسله كود api/gpt.js الخاص بك
+        const errorData = await result.json();
+        // استخدم الرسالة التفصيلية من الخادم إذا كانت موجودة
+        errorMessage = errorData.detail || errorData.error || errorMessage;
+    } catch (e) {
+        // إذا فشل تحليل JSON، فهذا يعني أن الخادم أرسل خطأ نصيًا أو HTML
+        // اقرأه كنص عادي بدلاً من ذلك
+        const errorText = await result.text();
+        errorMessage = errorText || errorMessage;
+    }
+    // ارمِ الخطأ بالرسالة التي تمكنا من استخلاصها
+    throw new Error(errorMessage);
+}
 
         const json = await result.json();
 
