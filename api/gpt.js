@@ -144,9 +144,19 @@ if (extractedText) {
     // التحقق النهائي لمنع الهلوسة
     const extractedMeds = extractMedications(extractedText || "");
 if (reportHtml.includes("سيمفاستاتين") && !extractedMeds.includes("سيمفاستاتين")) {
-      reportHtml = `
-        <div class="error-alert">
-          <h3>⚠️ تحذير: بيانات غير كافية</h3>
+return res.status(200).json({
+  htmlReport: `
+    <div class="error-alert">
+      <h3>⚠️ تحذير: بيانات غير كافية</h3>
+      <p>لم يتم العثور على دواء "سيمفاستاتين" في الوثيقة المقدمة</p>
+      <ul>
+        <li>السبب المحتمل: جودة صورة منخفضة أو خط غير واضح</li>
+        <li>التوصية: إعادة رفع صورة أوضح</li>
+        <li>الأدوية المكتشفة: ${extractedMeds.join(', ') || 'لا شيء'}</li>
+      </ul>
+    </div>
+  `
+});
           <p>لم يتم العثور على دواء "سيمفاستاتين" في الوثيقة المقدمة</p>
           <ul>
             <li>السبب المحتمل: جودة صورة منخفضة أو خط غير واضح</li>
