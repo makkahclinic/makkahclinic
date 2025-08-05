@@ -108,6 +108,7 @@ if (requestBody.imageData && Array.isArray(requestBody.imageData)) {
     extractedText += '\n' + text;
   }
 }
+  console.log("📷 النص المستخرج من الصورة:\n", extractedText);
   const parts = [{ text: htmlPrompt }];
 if (extractedText) {
   parts.push({ text: extractedText });
