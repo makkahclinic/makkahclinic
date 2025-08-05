@@ -3,7 +3,7 @@
 /**
  * @description The intelligent backend for the Medical & Insurance Review Expert system.
  * It receives comprehensive case data, including images, from the frontend,
- * and uses a powerful, structured prompt to generate a detailed analytical report with Gemini.
+ * and uses a powerful, structured prompt with visual cues to generate a detailed analytical report with Gemini.
  */
 export default async function handler(req, res) {
     // Set CORS headers for cross-origin requests
@@ -44,8 +44,7 @@ export default async function handler(req, res) {
             imageData
         } = req.body;
 
-        // --- Advanced Prompt Engineering ---
-        // This prompt is the core "brain" of the application.
+        // --- Advanced Prompt Engineering with Visual Cues ---
         const htmlPrompt = `
             أنت "خبير المراجعة الطبية والتأمين" (Medical & Insurance Review Expert).
             مهمتك هي تحليل البيانات الطبية الشاملة المقدمة لك (سواء كانت نصية أو من الصور) وتقديم تقرير تحليلي احترافي بصيغة HTML.
@@ -75,10 +74,10 @@ export default async function handler(req, res) {
 
             1.  **الأولوية للملفات:** الأولوية المطلقة للملفات المرفوعة. إذا كانت هناك صورة، فهي المصدر الأساسي للحقيقة. قم بتحليلها بدقة (حتى لو كانت مكتوبة بخط اليد) لاستخراج كافة التفاصيل.
             2.  **النص كداعِم:** استخدم البيانات النصية (وصف الحالة، التشخيص، إلخ) كمصدر مكمل أو داعم أو لتأكيد ما وجدته في الصورة.
-            3.  **تحديد النواقص:** إذا لاحظت أن معلومات حيوية ضرورية للتقييم الكامل ناقصة (مثل الطول، الوزن، نتائج تحاليل معينة لم يتم ذكرها ولكنها ضرورية للتشخيص)، يجب عليك التنويه في تقريرك إلى أهمية هذه المعلومات وكيف يمكن أن تؤثر على دقة التحليل.
+            3.  **تحديد النواقص:** إذا لاحظت أن معلومات حيوية ضرورية للتقييم الكامل ناقصة (مثل الطول، الوزن، نتائج تحاليل معينة)، يجب عليك التنويه في تقريرك إلى أهمية هذه المعلومات باستخدام وسم <strong>.
             
             ---
-            **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط):**
+            **هيكل التقرير المطلوب (يجب إنتاج كود HTML فقط مع استخدام الـ Classes اللونية):**
 
             <h3>تقرير تحليلي مُفصل</h3>
             
@@ -94,14 +93,16 @@ export default async function handler(req, res) {
 
             <div class="section">
                 <h4>3. تحديد النواقص والفجوات (ما الذي ينقص؟):</h4>
-                <p>[بناءً على التشخيص والحالة، اذكر بوضوح ما هي الفحوصات المخبرية أو الإشعاعية أو الاستشارات الطبية التي لم يتم عملها وهي ضرورية لتأكيد التشخيص أو لضمان سلامة المريض أو لتلبية متطلبات التأمين.]</p>
+                <p>عند ذكر معلومة ناقصة، استخدم <strong>&lt;strong&gt;</strong> لتمييزها. مثال: "ينقص إجراء فحص <strong>HbA1c (السكر التراكمي)</strong> وهو حيوي لمتابعة حالة السكري."</p>
+                <p>[بناءً على التشخيص والحالة، اذكر بوضوح ما هي الفحوصات المخبرية أو الإشعاعية أو الاستشارات الطبية التي لم يتم عملها وهي ضرورية.]</p>
             </div>
 
             <div class="section">
                 <h4>4. تحليل مخاطر الرفض التأميني:</h4>
+                <p>استخدم التصنيفات التالية عند تقييم المخاطر: <span class="risk-high">risk-high</span> للخطر المرتفع، <span class="risk-medium">risk-medium</span> للمتوسط، و <span class="risk-low">risk-low</span> للمنخفض.</p>
                 <ul>
-                    <li>[اذكر الإجراء/الدواء الأول الذي قد يُرفض، مع ذكر السبب (مثال: "Pantomax 40mg: خطر رفض متوسط لعدم وجود تشخيص واضح للقرحة"). قدر القيمة المالية للرفض.]</li>
-                    <li>[اذكر الإجراء/الدواء الثاني الذي قد يُرفض...]</li>
+                    <li><strong>الدواء/الإجراء:</strong> [اسم الدواء] - <span class="[risk-high/risk-medium/risk-low]">[اكتب هنا مستوى الخطر: خطر مرتفع/متوسط/منخفض]</span>. <strong>السبب:</strong> [اشرح سبب الخطر].</li>
+                    <li><strong>الدواء/الإجراء:</strong> [اسم الدواء التالي] - <span class="[risk-high/risk-medium/risk-low]">[اكتب هنا مستوى الخطر]</span>. <strong>السبب:</strong> [اشرح السبب].</li>
                 </ul>
             </div>
 
@@ -131,7 +132,7 @@ export default async function handler(req, res) {
             imageData.forEach(imgData => {
                 parts.push({
                     inline_data: {
-                        mimeType: "image/jpeg", // Assuming jpeg, can be made dynamic if needed
+                        mimeType: "image/jpeg",
                         data: imgData
                     }
                 });
@@ -141,7 +142,7 @@ export default async function handler(req, res) {
         const payload = {
             contents: [{ parts: parts }],
             generationConfig: {
-                temperature: 0.4, // Lower temperature for more consistent, fact-based output
+                temperature: 0.4,
             },
         };
 
@@ -160,7 +161,6 @@ export default async function handler(req, res) {
 
         const result = await response.json();
         
-        // Safely extract the generated HTML report
         const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!reportHtml) {
