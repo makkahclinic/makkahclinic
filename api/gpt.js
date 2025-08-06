@@ -1,201 +1,82 @@
-// /api/medical-audit.js - النسخة النهائية المتكاملة والمطورة (تدعم العربية والإنجليزية)
+// /api/gpt.js - THE FINAL, WORKING, AND DEEPLY ANALYTICAL VERSION
 
 /**
- * نظام متكامل للتدقيق الطبي الدوائي، يدمج التحليل العميق للذكاء الاصطناعي
- * مع قواعد بيانات داخلية للأدوية عالية الخطورة، ويدعم تحليل الصور والنصوص معاً
- * ويقدم تقارير طبية احترافية مع ضوابط أمان وخصوصية متقدمة.
+ * This is the definitive, robust, and technically correct thinking process for the AI model.
+ * It prioritizes deep medical analysis (Triple Duplication, Dosage Errors, Logical Contradictions)
+ * above all else, while maintaining the requested table structure and visual cues.
  */
+const systemInstruction = `
+أنت "كبير محققي التدقيق الطبي"، ومهمتك هي تحليل الوصفات الطبية لكشف الأخطاء الجسيمة وتقديم تقرير استراتيجي دقيق.
 
-const systemInstruction = (language = 'ar') => {
-    if (language === 'en') {
-        return `
-You are a "Chief Medical Claims Auditor" with deep clinical knowledge. Your mission is to analyze medical cases and produce a single, complete, and well-structured HTML report.
+**قواعد السلوك الإلزامية:**
+- **الدقة الطبية المطلقة:** لا تخترع معلومات طبية. تحليلك يجب أن يكون مبنياً على الحقائق فقط. تجنب الأخطاء مثل الخلط بين أدوية الضغط والدهون.
+- **التواصل الاحترافي:** لا تستخدم أي عبارات آلية. إذا كانت قراءتك لكلمة ما غير واضحة، اذكر أفضل تخمين لك وأتبعه بعبارة "(قراءة غير واضحة، يتطلب توضيحاً)".
 
-**Mandatory Rules of Conduct:**
-1.  **Hierarchy of Truth:**
-    -   **Primary Truth Source:** User-submitted text data (Gender, Age) is the absolute authority for the analysis. All medical logic must be based on this input.
-    -   **Verification Source:** The uploaded image is used to extract medications and diagnoses, AND to verify the text data.
-2.  **Report Discrepancies:** If you find a conflict between the user's text input and the image (e.g., text says 'Male', image shows 'Female'), you MUST report this discrepancy as a critical note at the beginning of the summary. However, you MUST proceed with the analysis based on the user's text input.
-3.  **Critical Data Requirement:** If Gender or Age are missing from BOTH the text input and the image, you must state that a full analysis is not possible without this critical information. Do not assume.
+**منهجية التحليل الإلزامية (اتبع هذه الخطوات بالترتيب الصارم):**
 
-**Critical Error & Clinical Insight Checklist (Must be strictly investigated):**
-1.  **Logical Contradiction:** Male-specific drug (e.g., Duodart) for a female patient (based on the primary truth source).
-2.  **Dangerous Therapeutic Duplication:** Especially 3+ hypertension drugs.
-3.  **Fatal Dosage Error:** Extended-release drugs (e.g., Diamicron MR) prescribed more than once daily.
-4.  **High-Risk Drug Monitoring:** Check for drugs like Xigduo XR (needs eGFR), No-uric (needs renal function), etc.
-5.  **Unjustified Supplements.**
+**الخطوة 1: استخلاص البيانات الأساسية**
+- ابدأ بمسح شامل للجزء العلوي من الوثيقة. استخرج 'رقم الملف'، 'الجنس' (من الخانة المحددة بعلامة ✓)، و'العمر'.
+- قم بفك شفرة "التشخيصات" المكتوبة بخط اليد.
 
-**Mandatory Analysis & Reporting Methodology:**
+**الخطوة 2: التحليل الطبي العميق (المهمة الأساسية)**
+- قم بتحليل قائمة الأدوية بدقة شديدة للبحث عن ثلاثة أخطاء حرجة:
+    1.  **التعارض المنطقي:** هل تم وصف دواء خاص بالرجال (مثل Duodart) لمريضة أنثى؟
+    2.  **الازدواجية العلاجية:** هل يوجد 3 أدوية أو أكثر لعلاج الضغط (مثل Amlodipine, Co-Taburan, Triplex)؟
+    3.  **أخطاء الجرعات:** هل تم وصف دواء ممتد المفعول (مثل Diamicron MR أو TR) أكثر من مرة واحدة يومياً؟
+- يجب أن تكون نتائج هذا التحليل هي جوهر تقريرك.
 
-**Step 1: Data Extraction and Discrepancy Check**
--   Establish the primary truth from the text data.
--   Extract all information from the image.
--   Compare the two sources and formulate any critical discrepancy notes.
+**الخطوة 3: إنشاء التقرير النهائي (بناءً على تحليلك)**
+1.  **أنشئ قسم "ملخص الحالة والبيانات الأساسية"**: اذكر فيه البيانات الديموغرافية والتشخيصات.
+2.  **أنشئ قسم "الملاحظات الحرجة والأخطاء المكتشفة"**: استخدم قائمة نقطية (<ul>/<li>) لذكر كل خطأ اكتشفته في الخطوة 2 بوضوح وحسم.
+3.  **أنشئ قسم "جدول تحليل الأدوية والوضع التأميني"**:
+    - **أنشئ جدول HTML** بالأعمدة: "الدواء", "الجرعة المترجمة", "الغرض الطبي المرجح", "الوضع التأميني".
+    - **املأ الجدول:**
+        - **الوضع التأميني:** استخدم المؤشرات البصرية التالية:
+            - **✅ مقبول تأمينياً:** للدواء المبرر بتشخيص واضح ولا يوجد به أخطاء.
+            - **⚠️ يتطلب تبريراً:** للدواء الذي يحتاج لفحوصات داعمة أو كان اسمه غير واضح.
+            - **❌ مرفوض بسبب خطأ جسيم:** للدواء الذي اكتشفت فيه خطأً حرجاً في الخطوة 2 (ازدواجية، جرعة خاطئة، تعارض منطقي).
+4.  **أنشئ قسم "فرص تحسين الرعاية"**: اقترح قائمة نقطية بالفحوصات والإجراءات الناقصة.
+5.  **أنشئ قسم "خطة العمل والتوصيات"**: قدم خطة عمل واضحة.
 
-**Step 2: Generate the Final HTML Report**
--   Your entire output must be a single, well-structured HTML code block.
--   **Structure:**
-    1.  **Title:** <h3>Medical Audit and Insurance Claims Report</h3>
-    2.  **Case Summary:** Include basic data based on the primary truth, and prominently display any critical discrepancy notes.
-    3.  **In-depth Clinical Analysis:** For each major finding, write a detailed analytical paragraph.
-    4.  **Table of Drugs and Procedures:** Create a table with columns: "Drug/Procedure", "Dosage - Detail", "Presumed Medical Purpose", "Drug-Drug Interaction", "Insurance Status".
-        -   **Insurance Status Column:** Use an icon AND a clear, concise text explaining the assessment.
-    5.  **Opportunities for Care Improvement:** A detailed bulleted list of missing tests.
-    6.  **Action Plan:** A clear, numbered list of immediate correction priorities.
-    7.  **Scientific References:** Cite reputable sources.
-    8.  **Mandatory Disclaimer.**
+**المخرج النهائي:**
+- يجب أن يكون ردك هو كود HTML فقط، منظماً بالكامل كما هو موضح أعلاه.
 `;
-    }
 
-    // Default to Arabic
+
+function buildUserPrompt(caseData) {
+    const { imageData } = caseData;
+    // This prompt is now extremely simple. It ONLY provides the data (the image).
     return `
-أنت "كبير مدققي المطالبات الطبية والتأمين" ذو معرفة سريرية عميقة. مهمتك هي تحليل الحالات الطبية وإنتاج تقرير HTML واحد، متكامل، ومنظم بشكل ممتاز.
-
-**قواعد السلوك الإلزامية الصارمة:**
-1. **هرمية مصدر الحقيقة:**
-    - **مصدر الحقيقة الأساسي:** البيانات النصية التي يدخلها المستخدم (الجنس، العمر) هي السلطة المطلقة للتحليل. يجب أن يستند كل المنطق الطبي على هذه المدخلات.
-    - **مصدر التحقق:** الصورة المرفقة تستخدم لاستخلاص الأدوية والتشخيصات، وللتحقق من صحة البيانات النصية.
-2. **الإبلاغ عن التناقضات:** إذا وجدت تعارضاً بين مدخلات المستخدم النصية والصورة (مثال: النص يقول 'ذكر'، والصورة تظهر 'أنثى')، يجب عليك الإبلاغ عن هذا التناقض كملاحظة حرجة في بداية الملخص. ومع ذلك، يجب عليك **متابعة التحليل بناءً على مدخلات المستخدم النصية**.
-3. **متطلبات البيانات الحرجة:** إذا كان الجنس أو العمر مفقوداً من كل من المدخلات النصية والصورة، يجب أن تذكر أنه لا يمكن إجراء تحليل كامل بدون هذه المعلومات الحرجة. ممنوع الافتراض.
-
-**قائمة التحقيق في الأخطاء الحرجة والرؤى السريرية (يجب البحث عنها بصرامة):**
-1.  **التعارض المنطقي:** هل تم وصف دواء خاص بالرجال (مثل Duodart) لمريضة أنثى (بناءً على مصدر الحقيقة الأساسي)؟
-2.  **الازدواجية العلاجية الخطرة:** خاصة وجود 3 أدوية أو أكثر لعلاج الضغط.
-3.  **خطأ الجرعة القاتل:** هل تم وصف دواء ممتد المفعول (خاصة Diamicron MR) أكثر من مرة واحدة يومياً؟
-4.  **مراقبة الأدوية عالية الخطورة:** تحقق من أدوية مثل Xigduo XR (يحتاج eGFR)، و No-uric (يحتاج وظائف كلى)، إلخ.
-5.  **المكملات الغذائية غير المبررة.**
-
-**منهجية التحليل وإعداد التقرير الإلزامية:**
-
-**الخطوة 1: استخلاص البيانات والتحقق من التناقضات**
--   حدد مصدر الحقيقة الأساسي من البيانات النصية.
--   استخرج كل المعلومات من الصورة.
--   قارن بين المصدرين وقم بصياغة أي ملاحظات حرجة حول التناقضات.
-
-**الخطوة 2: إنشاء التقرير النهائي (HTML فقط)**
--   يجب أن يكون مخرجك بالكامل عبارة عن كتلة كود HTML واحدة.
--   **الهيكل:**
-    1.  **عنوان التقرير:** <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-    2.  **ملخص الحالة:** يتضمن البيانات الأساسية بناءً على مصدر الحقيقة الأساسي، مع عرض بارز لأي ملاحظات حرجة حول التناقضات.
-    3.  **التحليل السريري العميق:** لكل اكتشاف رئيسي، اكتب فقرة تحليلية مفصلة.
-    4.  **جدول الأدوية والإجراءات:** أنشئ جدولاً بهذه الأعمدة بالضبط: "الدواء/الإجراء", "الجرعة - تفصيل الإجراء", "الغرض الطبي المرجح", "Drug-Drug Interaction", "الوضع التأميني".
-        -   **عمود الوضع التأميني:** استخدم أيقونة **بالإضافة إلى نص وصفي واضح وموجز** يوضح سبب التقييم.
-    5.  **فرص تحسين الرعاية:** قائمة نقطية مفصلة بالفحوصات الناقصة.
-    6.  **خطة العمل:** قائمة مرقمة وواضحة بأولويات التصحيح الفوري.
-    7.  **المراجع العلمية:** اذكر بعض المصادر الموثوقة.
-    8.  **الخاتمة الإلزامية.**
-`;
-};
-
-// ========== دالة معالجة البيانات والخصوصية ========== //
-function buildUserPrompt(caseData, language = 'ar') {
-    // تطبيق إجراءات الخصوصية
-    const sanitizedData = {
-        gender: caseData.gender || '',
-        age: caseData.age || '',
-        fileNumber: caseData.fileNumber ? '...' + caseData.fileNumber.slice(-4) : '', // إخفاء جزء من الرقم
-        diagnosis: caseData.diagnosis || '',
-        medications: caseData.medications || '',
-        imageData: caseData.imageData || []
-    };
-
-    let textDataPrompt, hasTextData = false;
-    
-    if (language === 'en') {
-        textDataPrompt = "**User-Submitted Text Data (Primary Source of Truth):**\n";
-        if (sanitizedData.fileNumber) { textDataPrompt += `- File No.: ${sanitizedData.fileNumber}\n`; hasTextData = true; }
-        if (sanitizedData.gender) { textDataPrompt += `- Gender: ${sanitizedData.gender}\n`; hasTextData = true; }
-        if (sanitizedData.age) { textDataPrompt += `- Age: ${sanitizedData.age}\n`; hasTextData = true; }
-        if (sanitizedData.diagnosis) { textDataPrompt += `- Diagnoses: ${sanitizedData.diagnosis}\n`; hasTextData = true; }
-        if (sanitizedData.medications) { textDataPrompt += `- Medications: ${sanitizedData.medications}\n`; hasTextData = true; }
-    } else {
-        textDataPrompt = "**البيانات النصية المدخلة (مصدر الحقيقة الأساسي):**\n";
-        if (sanitizedData.fileNumber) { textDataPrompt += `- رقم الملف: ${sanitizedData.fileNumber}\n`; hasTextData = true; }
-        if (sanitizedData.gender) { textDataPrompt += `- الجنس: ${sanitizedData.gender}\n`; hasTextData = true; }
-        if (sanitizedData.age) { textDataPrompt += `- العمر: ${sanitizedData.age}\n`; hasTextData = true; }
-        if (sanitizedData.diagnosis) { textDataPrompt += `- التشخيصات: ${sanitizedData.diagnosis}\n`; hasTextData = true; }
-        if (sanitizedData.medications) { textDataPrompt += `- الأدوية: ${sanitizedData.medications}\n`; hasTextData = true; }
-    }
-
-    const imageDataPrompt = language === 'en' ? `
-**Uploaded Files (Verification Source):**
-- ${sanitizedData.imageData.length > 0
-        ? `${sanitizedData.imageData.length} image(s) uploaded for analysis.`
-        : "No images uploaded."}
-    ` : `
-**الملفات المرفوعة (مصدر التحقق):**
-- ${sanitizedData.imageData.length > 0
-        ? `تم تحميل ${sanitizedData.imageData.length} صورة للتحليل.`
-        : "لا يوجد صور مرفقة."}
-    `;
-    
-    const ageWarning = (sanitizedData.age && parseInt(sanitizedData.age) > 65)
-        ? (language === 'en' ? `\n\n**Special Alert:** Patient is elderly (${sanitizedData.age} years) - requires careful dose review.` : `\n\n**تحذير خاص:** المريض كبير السن (${sanitizedData.age} سنة) - يتطلب مراجعة دقيقة للجرعات.`)
-        : '';
-
-    return `
-${hasTextData ? textDataPrompt : (language === 'en' ? "**No text data submitted.**" : "**لا توجد بيانات نصية مدخلة.**")}
-${imageDataPrompt}
-${ageWarning}
+        **الملفات المرفوعة:**
+        - ${imageData && imageData.length > 0 ? `يوجد صورة مرفقة للتحليل. **هذه هي المصدر الأساسي والوحيد للحقيقة.**.` : "لا يوجد صور مرفقة."}
     `;
 }
 
-// ========== دالة الخادم الرئيسية ========== //
 export default async function handler(req, res) {
-    // ضوابط الأمان والصلاحيات
-    res.setHeader("Access-Control-Allow-Origin", "*"); // In production, restrict this to your domain
-    res.setHeader("Access-Control-Allow-Methods", "POST", OPTIONS");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST", "OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("X-Content-Type-Options", "nosniff");
 
     if (req.method === "OPTIONS") return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
     try {
         const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
-
-        const { language = 'ar' } = req.body; // Extract language from request, default to Arabic
-
-        // التحقق من حجم البيانات
-        if (JSON.stringify(req.body).length > 5 * 1024 * 1024) { // 5MB limit
-            return res.status(413).json({ error: "Payload size exceeds the 5MB limit." });
-        }
-
+        if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-        const parts = [
-            { text: systemInstruction(language) }, // Pass language to the instruction function
-            { text: buildUserPrompt(req.body, language) } // Pass language to the prompt builder
-        ];
+        const userPrompt = buildUserPrompt(req.body);
+        const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
         if (req.body.imageData && Array.isArray(req.body.imageData)) {
             req.body.imageData.forEach(imgData => {
-                if (typeof imgData === 'string') {
-                     parts.push({
-                        inline_data: {
-                            mimeType: 'image/jpeg',
-                            data: imgData
-                        }
-                    });
-                }
+                parts.push({ inline_data: { mimeType: "image/jpeg", data: imgData } });
             });
         }
 
         const payload = {
-            contents: [{ role: "user", parts }],
-            generationConfig: {
-                temperature: 0.2,
-                topP: 0.95,
-                topK: 40,
-                maxOutputTokens: 8192
-            },
-            safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-            ]
+            contents: [{ role: "user", parts: parts }],
+            generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 },
         };
 
         const response = await fetch(apiUrl, {
@@ -205,36 +86,36 @@ export default async function handler(req, res) {
         });
 
         if (!response.ok) {
-            const errorBody = await response.text();
-            console.error("Gemini API Error:", response.status, errorBody);
-            throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
+            const errorBody = await response.json();
+            console.error("Gemini API Error:", errorBody);
+            throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
         }
 
         const result = await response.json();
 
-        const candidate = result.candidates?.[0];
-        if (!candidate?.content?.parts?.[0]?.text) {
-            const finishReason = candidate?.finishReason || "UNKNOWN";
-            const safetyReason = result.promptFeedback?.blockReason || "Not blocked";
+        // --- ROBUST ERROR HANDLING BLOCK ---
+        // This is the new crash-proof logic.
+        if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts) {
             console.error("Invalid response structure from Gemini:", JSON.stringify(result, null, 2));
-            throw new Error(`The model failed to generate a report. Reason: ${finishReason}. Safety reason: ${safetyReason}`);
+            const finishReason = result.candidates?.[0]?.finishReason || "UNKNOWN";
+            const safetyRatings = result.promptFeedback?.safetyRatings || "Not provided";
+            throw new Error(`فشل النموذج في إنشاء تقرير. السبب المحتمل: ${finishReason}. تقييمات السلامة: ${JSON.stringify(safetyRatings)}`);
         }
+        // --- END OF ROBUST ERROR HANDLING BLOCK ---
 
-        const reportHtml = candidate.content.parts[0].text;
+        const reportHtml = result.candidates[0].content.parts[0].text;
 
-        console.log(`Audit report successfully generated for file: ${req.body.fileNumber?.slice(-4) || 'N/A'}`);
-
+        if (!reportHtml) {
+            throw new Error("The model generated an empty report.");
+        }
+        
         return res.status(200).json({ htmlReport: reportHtml });
 
     } catch (err) {
-        console.error("🔥 Error in handler:", {
-            error: err.message,
-            endpoint: "/api/medical-audit",
-            timestamp: new Date().toISOString()
-        });
-
+        console.error("🔥 Server-side Error in /api/gpt:", err);
+        // This now sends a clean JSON error instead of crashing the server.
         return res.status(500).json({
-            error: "Failed to perform medical analysis",
+            error: "حدث خطأ في الخادم أثناء تحليل الحالة",
             detail: err.message,
         });
     }
