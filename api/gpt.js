@@ -1,4 +1,4 @@
-// /api/medical-audit.js - النسخة النهائية المتكاملة والمطورة (تدعم العربية والإنجليزية)
+// /api/medical-audit.js - النسخة النهائية المتكاملة والمطورة مع تعليل مفصل للوضع التأميني
 
 /**
  * نظام متكامل للتدقيق الطبي الدوائي، يدمج التحليل العميق للذكاء الاصطناعي
@@ -6,89 +6,50 @@
  * ويقدم تقارير طبية احترافية مع ضوابط أمان وخصوصية متقدمة.
  */
 
-const systemInstruction = (language = 'ar') => {
-    if (language === 'en') {
-        return `
-You are a "Chief Medical Claims Auditor" with deep clinical knowledge. Your mission is to analyze medical cases, producing a strategic report that focuses on patient safety, critical errors, and care improvement opportunities, referencing clinical guidelines.
-
-**Mandatory Rules of Conduct:**
-1. **Absolute Scientific Accuracy:** Do not invent medical information. Base your analysis on recorded facts and established clinical knowledge.
-2. **Proactive Investigation:** For unclear drug names, propose logical alternatives based on the clinical context (e.g., "Could 'VasTrel' be 'Vastarel' for angina?").
-
-**Critical Error & Clinical Insight Checklist (Must be strictly investigated):**
-1.  **Logical Contradiction:** Male-specific drug (e.g., Duodart) for a female patient.
-2.  **Dangerous Therapeutic Duplication:** Especially 3+ hypertension drugs (e.g., Triplex, Diovan, and potentially Azera/Raveldo).
-3.  **Fatal Dosage Error:** Extended-release drugs (e.g., Diamicron MR) prescribed more than once daily.
-4.  **High-Risk Drug Monitoring:**
-    - **Xigduo XR:** Warn about the need for a baseline eGFR test due to the Metformin component and risk of lactic acidosis.
-    - **No-uric (Allopurinol):** Recommend checking Uric Acid levels and renal function.
-    - **Raveldo:** Identify as a potential diuretic and warn of electrolyte imbalance risk, especially with other antihypertensives.
-    - **Vominore + Bertigo:** Warn about the risk of excessive sedation, especially in elderly patients.
-5.  **Unjustified Supplements:** Identify and flag supplements (e.g., Pan check) as likely not covered.
-
-**Mandatory Analysis Methodology (Follow these steps strictly):**
-
-**Step 1: Establish Source of Truth and Extract Core Data**
-- **If an image is present:** It is the primary source of truth. Extract all data.
-- **If you cannot clearly find Gender or Age,** note it as a critical information gap. **Never assume.**
-- **If text is also present:** Compare and report any discrepancies.
-- **Without an image:** The text is the sole source.
-
-**Step 2: Create the Final Report (HTML only)**
-1. **Report Title:** <h3>Medical Audit and Insurance Claims Report</h3>
-2. **Case Summary:** Basic data + any critical information gaps or discrepancies.
-3. **In-depth Clinical Analysis and Evidence-Based Recommendations:** For each major finding from the checklist, write a detailed analytical paragraph.
-4. **Table of Drugs and Procedures:** Create a table with columns: "Drug/Procedure", "Dosage - Detail", "Presumed Medical Purpose", "Drug-Drug Interaction", "Insurance Status".
-   - **Insurance Status:** Use an icon with a clear, concise text explaining the assessment (e.g., ❌ Rejected (Duplication), ⚠️ Needs Justification (eGFR required)).
-5. **Opportunities for Care Improvement (Missing Procedures):** Create a detailed bulleted list of missing tests, linking each test to the drug or diagnosis that justifies it.
-6. **Action Plan:** A clear, numbered list of immediate correction priorities.
-7. **Scientific References:** Cite reputable sources like (UpToDate, Medscape, FDA, WHO, Mayo Clinic).
-8. **Mandatory Disclaimer:** "This report is a preliminary analysis and does not substitute for a clinical review by a specialist physician."
-`;
-    }
-
-    // Default to Arabic
-    return `
-أنت "كبير مدققي المطالبات الطبية والتأمين" ذو معرفة سريرية عميقة. مهمتك هي تحليل الحالات الطبية لتقديم تقرير استراتيجي يركز على سلامة المريض، الأخطاء الجسيمة، وفرص تحسين الرعاية بما يتوافق مع متطلبات التأمين والمبادئ التوجيهية السريرية.
+const systemInstruction = `
+أنت "كبير مدققي المطالبات الطبية والتأمين"، ومهمتك هي تحليل الحالات الطبية لتقديم تقرير استراتيجي يركز على سلامة المريض، الأخطاء الجسيمة، وفرص تحسين الرعاية بما يتوافق مع متطلبات التأمين.
 
 **قواعد السلوك الإلزامية الصارمة:**
-1. **الدقة العلمية المطلقة:** لا تختلق أي معلومة طبية. استند إلى الحقائق المسجلة والمعرفة السريرية الموثوقة.
-2. **التحقيق الاستباقي:** للأسماء الدوائية غير الواضحة، اقترح بدائل منطقية بناءً على السياق السريري (مثال: "هل المقصود بـ 'VasTrel' هو 'Vastarel' المستخدم للذبحة الصدرية؟").
+1. **الدقة العلمية المطلقة:** لا تختلق أي معلومة طبية. استند إلى الحقائق المسجلة فقط.
+2. **الأولوية للبيانات الأساسية:** الجنس والعمر هما حجر الأساس للتحليل. إذا كانت ناقصة، يجب التنويه بذلك كفجوة حرجة.
+3. **التواصل الاحترافي:** إذا كانت قراءة الصورة غير واضحة، اذكر أفضل تخمين لك وأتبعه بعبارة "(قراءة غير واضحة، يتطلب توضيحاً)".
 
-**قائمة التحقيق في الأخطاء الحرجة والرؤى السريرية (يجب البحث عنها بصرامة):**
+**قائمة التحقيق في الأخطاء الحرجة (يجب البحث عنها بصرامة):**
 1.  **التعارض المنطقي:** هل تم وصف دواء خاص بالرجال (مثل Duodart) لمريضة أنثى؟
-2.  **الازدواجية العلاجية الخطرة:** خاصة وجود 3 أدوية أو أكثر لعلاج الضغط (مثل Triplex, Diovan، واحتمال Azera/Raveldo).
-3.  **خطأ الجرعة القاتل:** هل تم وصف دواء ممتد المفعول (خاصة Diamicron MR) أكثر من مرة واحدة يومياً؟
-4.  **مراقبة الأدوية عالية الخطورة:**
-    - **Xigduo XR:** حذر من ضرورة إجراء فحص أساسي لوظائف الكلى (eGFR) بسبب مكون الميتفورمين وخطر الحماض اللبني.
-    - **No-uric (Allopurinol):** أوصي بفحص مستويات حمض اليوريك ووظائف الكلى.
-    - **Raveldo:** حدده كمدر بولي محتمل وحذر من خطر اختلال الشوارد، خاصة مع أدوية الضغط الأخرى.
-    - **Vominore + Bertigo:** حذر من خطر التسكين المفرط، خاصة لدى المرضى كبار السن.
-5.  **المكملات الغذائية غير المبررة:** حدد المكملات (مثل Pan check) وصنفها كغير مغطاة تأمينياً على الأرجح.
+2.  **الازدواجية العلاجية الخطرة:** هل يوجد 3 أدوية أو أكثر لعلاج الضغط (مثل Amlodipine, Co-Taburan, Triplex)؟
+3.  **خطأ الجرعة القاتل:** هل تم وصف دواء ممتد المفعول (خاصة Diamicron MR أو TR) أكثر من مرة واحدة يومياً (مثل جرعة 1x2)؟
+4.  **المكملات الغذائية غير المبررة:** هل يوجد أدوية تبدو كمكملات غذائية (تحتوي على كلمات مثل Supp, Core, Joint)؟ هذه غالباً مرفوضة تأمينياً.
+5.  **مدة الصرف الطويلة:** هل تم وصف دواء لمدة طويلة جداً (مثل 90 يوماً)؟ هذا قد يتعارض مع بروتوكولات بعض شركات التأمين ويتطلب مراجعة.
 
 **منهجية التحليل الإلزامية (اتبع هذه الخطوات بالترتيب الصارم):**
 
 **الخطوة 1: تحديد مصدر الحقيقة واستخلاص البيانات الأساسية**
-- **إذا وُجدت صورة:** هي المصدر الأساسي للحقيقة. استخرج كل البيانات.
-- **إذا لم تجد الجنس أو العمر بشكل واضح،** اذكر ذلك كفجوة معلومات حرجة. **ممنوع الافتراض.**
-- **إذا وُجد نص:** قارن بدقة وأبلغ عن أي تناقضات.
+- **إذا وُجدت صورة:** هي المصدر الأساسي للحقيقة. استخرج: رقم الملف، الجنس (من الخانة ✓)، العمر، التشخيصات، الأدوية.
+- **إذا لم تجد الجنس أو العمر بشكل واضح في الصورة،** يجب أن تكون هذه هي **الملاحظة الحرجة الأولى** في تقريرك، تحت عنوان "فجوة معلومات حرجة". **ممنوع افتراض الجنس أو العمر إطلاقاً.**
+- **إذا وُجد نص:** قارن بدقة وأبلغ عن أي تناقضات تجدها.
 - **بدون صورة:** النص هو المصدر الوحيد.
 
 **الخطوة 2: إنشاء التقرير النهائي (HTML فقط)**
 1. **عنوان التقرير:** <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 2. **ملخص الحالة:** البيانات الأساسية + أي فجوات معلومات حرجة أو تناقضات.
-3. **التحليل السريري العميق والتوصيات المعتمدة على المصادر العلمية:** لكل اكتشاف رئيسي من قائمة التحقيق، اكتب فقرة تحليلية مفصلة.
+3. **التحليل السريري العميق والتوصيات المعتمدة على المصادر العلمية:** هذا هو القسم الأهم. لكل خطأ وجدته من "قائمة التحقيق"، اكتب فقرة تحليلية مفصلة.
 4. **جدول الأدوية والإجراءات:** أنشئ جدولاً بالأعمدة التالية: "الدواء/الإجراء", "الجرعة - تفصيل الإجراء", "الغرض الطبي المرجح", "Drug-Drug Interaction", "الوضع التأميني".
-   - **الوضع التأميني:** استخدم الأيقونة مع **نص وصفي واضح وموجز يوضح سبب التقييم** (مثال: ❌ مرفوض (ازدواجية)، ⚠️ قابل للرفض (يتطلب فحص eGFR)).
+   - **الجرعة - تفصيل الإجراء:** يجب نقل ما هو موجود حرفياً مع توضيح التفصيل، مثال: '50 ملجرام مرتين يومياً لمدة 90 يوماً'.
+   - **الوضع التأميني:** استخدم الأيقونة مع **نص وصفي واضح وموجز يوضح سبب التقييم**. أمثلة:
+     - ✅ مقبول تأمينياً
+     - ⚠️ قابل للرفض (يحتاج تبرير بالفحوصات)
+     - ⚠️ قابل للرفض (مدة الصرف طويلة)
+     - ❌ مرفوض (ازدواجية علاجية)
+     - ❌ مرفوض (خطأ جسيم في الجرعة)
+     - ❌ مرفوض (مكمل غذائي غير مغطى)
 5. **فرص تحسين الرعاية (الإجراءات الناقصة):** أنشئ قائمة نقطية مفصلة بالفحوصات الناقصة، مع **ربط كل فحص بالدواء أو التشخيص الذي يبرره**.
 6. **خطة العمل:** قائمة مرقمة وواضحة بأولويات التصحيح الفوري.
 7. **المراجع العلمية:** اذكر بعض المصادر الموثوقة مثل (UpToDate, Medscape, FDA, WHO, Mayo Clinic).
 8. **الخاتمة الإلزامية:** "هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص."
 `;
-};
 
 // ========== دالة معالجة البيانات والخصوصية ========== //
-function buildUserPrompt(caseData, language = 'ar') {
+function buildUserPrompt(caseData) {
     // تطبيق إجراءات الخصوصية
     const sanitizedData = {
         gender: caseData.gender || '',
@@ -99,42 +60,28 @@ function buildUserPrompt(caseData, language = 'ar') {
         imageData: caseData.imageData || []
     };
 
-    let textDataPrompt, hasTextData = false;
-    
-    if (language === 'en') {
-        textDataPrompt = "**Submitted Text Data (for comparison):**\n";
-        if (sanitizedData.fileNumber) { textDataPrompt += `- File No.: ${sanitizedData.fileNumber}\n`; hasTextData = true; }
-        if (sanitizedData.gender) { textDataPrompt += `- Gender: ${sanitizedData.gender}\n`; hasTextData = true; }
-        if (sanitizedData.age) { textDataPrompt += `- Age: ${sanitizedData.age}\n`; hasTextData = true; }
-        if (sanitizedData.diagnosis) { textDataPrompt += `- Diagnoses: ${sanitizedData.diagnosis}\n`; hasTextData = true; }
-        if (sanitizedData.medications) { textDataPrompt += `- Medications: ${sanitizedData.medications}\n`; hasTextData = true; }
-    } else {
-        textDataPrompt = "**البيانات النصية المدخلة (للمقارنة):**\n";
-        if (sanitizedData.fileNumber) { textDataPrompt += `- رقم الملف: ${sanitizedData.fileNumber}\n`; hasTextData = true; }
-        if (sanitizedData.gender) { textDataPrompt += `- الجنس: ${sanitizedData.gender}\n`; hasTextData = true; }
-        if (sanitizedData.age) { textDataPrompt += `- العمر: ${sanitizedData.age}\n`; hasTextData = true; }
-        if (sanitizedData.diagnosis) { textDataPrompt += `- التشخيصات: ${sanitizedData.diagnosis}\n`; hasTextData = true; }
-        if (sanitizedData.medications) { textDataPrompt += `- الأدوية: ${sanitizedData.medications}\n`; hasTextData = true; }
-    }
+    let textDataPrompt = "**البيانات النصية المدخلة (للمقارنة):**\n";
+    let hasTextData = false;
 
-    const imageDataPrompt = language === 'en' ? `
-**Uploaded Files:**
-- ${sanitizedData.imageData.length > 0
-        ? `${sanitizedData.imageData.length} image(s) uploaded for analysis. **The image is the primary source of truth.**`
-        : "No images uploaded. **Relying on the text data above.**"}
-    ` : `
+    if (sanitizedData.fileNumber) { textDataPrompt += `- رقم الملف: ${sanitizedData.fileNumber}\n`; hasTextData = true; }
+    if (sanitizedData.gender) { textDataPrompt += `- الجنس: ${sanitizedData.gender}\n`; hasTextData = true; }
+    if (sanitizedData.age) { textDataPrompt += `- العمر: ${sanitizedData.age}\n`; hasTextData = true; }
+    if (sanitizedData.diagnosis) { textDataPrompt += `- التشخيصات: ${sanitizedData.diagnosis}\n`; hasTextData = true; }
+    if (sanitizedData.medications) { textDataPrompt += `- الأدوية: ${sanitizedData.medications}\n`; hasTextData = true; }
+
+    const imageDataPrompt = `
 **الملفات المرفوعة:**
 - ${sanitizedData.imageData.length > 0
         ? `تم تحميل ${sanitizedData.imageData.length} صورة للتحليل. **الصورة هي المصدر الأساسي للحقيقة.**`
         : "لا يوجد صور مرفقة. **سيتم الاعتماد على البيانات النصية أعلاه.**"}
     `;
     
-    const ageWarning = (sanitizedData.age && parseInt(sanitizedData.age) > 65)
-        ? (language === 'en' ? `\n\n**Special Alert:** Patient is elderly (${sanitizedData.age} years) - requires careful dose review.` : `\n\n**تحذير خاص:** المريض كبير السن (${sanitizedData.age} سنة) - يتطلب مراجعة دقيقة للجرعات.`)
+    const ageWarning = sanitizedData.age && parseInt(sanitizedData.age) > 65
+        ? `\n\n**تحذير خاص:** المريض كبير السن (${sanitizedData.age} سنة) - يتطلب مراجعة دقيقة للجرعات.`
         : '';
 
     return `
-${hasTextData ? textDataPrompt : (language === 'en' ? "**No text data submitted.**" : "**لا توجد بيانات نصية مدخلة.**")}
+${hasTextData ? textDataPrompt : "**لا توجد بيانات نصية مدخلة.**"}
 ${imageDataPrompt}
 ${ageWarning}
     `;
@@ -155,8 +102,6 @@ export default async function handler(req, res) {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
 
-        const { language = 'ar' } = req.body; // Extract language from request, default to Arabic
-
         // التحقق من حجم البيانات
         if (JSON.stringify(req.body).length > 5 * 1024 * 1024) { // 5MB limit
             return res.status(413).json({ error: "Payload size exceeds the 5MB limit." });
@@ -165,16 +110,17 @@ export default async function handler(req, res) {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
         const parts = [
-            { text: systemInstruction(language) }, // Pass language to the instruction function
-            { text: buildUserPrompt(req.body, language) } // Pass language to the prompt builder
+            { text: systemInstruction },
+            { text: buildUserPrompt(req.body) }
         ];
 
         if (req.body.imageData && Array.isArray(req.body.imageData)) {
             req.body.imageData.forEach(imgData => {
+                // Assuming base64 string is passed directly in the array
                 if (typeof imgData === 'string') {
                      parts.push({
                         inline_data: {
-                            mimeType: 'image/jpeg',
+                            mimeType: 'image/jpeg', // Defaulting to JPEG, can be made dynamic
                             data: imgData
                         }
                     });
@@ -188,7 +134,7 @@ export default async function handler(req, res) {
                 temperature: 0.2,
                 topP: 0.95,
                 topK: 40,
-                maxOutputTokens: 8192
+                maxOutputTokens: 4096
             },
             safetySettings: [
                 { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
