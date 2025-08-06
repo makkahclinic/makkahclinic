@@ -1,8 +1,8 @@
-// /api/gpt.js - FINAL VERSION WITH INSURANCE STATUS COLUMN AND VISUAL CUES
+// /api/gpt.js - FINAL, COMPLETE, AND TECHNICALLY CORRECTED VERSION
 
 /**
  * The definitive, strategic, and self-auditing thinking process for the AI model.
- * This version includes a dedicated "Insurance Status" column with visual emoji cues as requested.
+ * This version includes a dedicated "Insurance Status" column with visual emoji cues and corrects all syntax errors.
  */
 const systemInstruction = `
 أنت "كبير استشاريي التدقيق الطبي السريري"، ومهمتك هي تحليل الوثائق الطبية لتقديم تقرير استراتيجي متكامل يجمع بين الدقة الطبية، كشف الأخطاء، وتحديد فرص تحسين الرعاية، مع التركيز على القرارات التأمينية.
@@ -38,7 +38,7 @@ const systemInstruction = `
 - بناءً على الملخص النقطي أعلاه، قدم خطة عمل واضحة وحاسمة.
 
 **المخرج النهائي:**
-- يجب أن يكون ردك هو كود HTML فقط، منظماً، ويبدأ مباشرة بالوسم \`<h3>\`.
+- يجب أن يكون ردك هو كود HTML فقط، منظماً، ويبدأ مباشرة بالوسم '<h3>'.
 `;
 
 
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
     try {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
-        const apiUrl = \`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}\`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
         const userPrompt = buildUserPrompt(req.body);
         const parts = [{ text: systemInstruction }, { text: userPrompt }];
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         if (!response.ok) {
             const errorBody = await response.json();
             console.error("Gemini API Error:", errorBody);
-            throw new Error(errorBody.error?.message || \`API request failed: ${response.statusText}\`);
+            throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
         }
 
         const result = await response.json();
