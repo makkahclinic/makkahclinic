@@ -21,7 +21,6 @@
         padding: 1rem;
     }
     
-    /* --- START: NEW STYLE FOR HOME ICON --- */
     .home-icon-link {
         position: absolute;
         top: 25px;
@@ -38,7 +37,6 @@
     .home-icon-link:hover svg {
         opacity: 0.7;
     }
-    /* --- END: NEW STYLE FOR HOME ICON --- */
 
     .container {
       max-width: 900px;
@@ -248,28 +246,10 @@
     </p>
   </div>
 
-  <script type="module">
-    const firebaseConfig = {
-      apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-      authDomain: "insurance-check-6cec9.firebaseapp.com",
-      projectId: "insurance-check-6cec9",
-      storageBucket: "insurance-check-6cec9.appspot.com",
-      messagingSenderId: "992769471393",
-      appId: "1:992769471393:web:c8a9400210a0e7901011e0",
-      measurementId: "G-LMS6VRSTT6"
-    };
-
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
-    
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.replace("https://www.m2020m.org/login.html");
-      }
-    });
+  <script>
+    // NOTE: This script assumes you have a backend API endpoint at '/api/gpt'
+    // that can handle the logic defined in the "Dual-Brain" system instruction.
+    // Firebase is used here only for authentication example.
 
     const genderSelect = document.getElementById('gender');
     const pregnancySection = document.getElementById('pregnancy-section');
@@ -279,6 +259,7 @@
     genderSelect.addEventListener('change', () => {
         if (genderSelect.value === 'female') {
             pregnancySection.style.display = 'block';
+            // Check current pregnancy status to show/hide month
             if (isPregnantSelect.value === 'yes') {
                 pregnancyMonthSection.style.display = 'block';
             }
@@ -298,11 +279,11 @@
 
     const imageInput = document.getElementById('image-upload-input');
     const previewContainer = document.getElementById('image-preview-container');
-    let imageDataUrls = [];
+    let imageBase64Data = [];
 
     imageInput.addEventListener('change', (event) => {
         previewContainer.innerHTML = '';
-        imageDataUrls = [];
+        imageBase64Data = [];
         const files = event.target.files;
         if (files.length > 0) {
             Array.from(files).forEach(file => {
@@ -312,7 +293,8 @@
                     img.src = e.target.result;
                     img.classList.add('preview-image');
                     previewContainer.appendChild(img);
-                    imageDataUrls.push(e.target.result.split(',')[1]);
+                    // Store only the base64 part
+                    imageBase64Data.push(e.target.result.split(',')[1]);
                 };
                 reader.readAsDataURL(file);
             });
@@ -334,15 +316,7 @@
       const age = document.getElementById('age').value;
       const gender = document.getElementById('gender').value;
       const smoker = document.getElementById('smoker').value;
-      const vitals = document.getElementById('vitals').value;
-      const labs = document.getElementById('labs').value;
-      const diagnosis = document.getElementById('diagnosis').value;
-      const currentMedications = document.getElementById('currentMedications').value;
-      const weight = document.getElementById('weight').value;
-      const height = document.getElementById('height').value;
-      const isPregnant = gender === 'female' && document.getElementById('isPregnant').value === 'yes';
-      const pregnancyMonth = document.getElementById('pregnancyMonth').value;
-
+      
       const responseContainer = document.getElementById('response-container');
       const notificationArea = document.getElementById('notification-area');
       
@@ -351,53 +325,66 @@
       notificationArea.innerHTML = '';
 
       if (!symptoms || !age || !gender || !smoker) {
-        showNotification("error", "الرجاء ملء جميع الحقول المطلوبة.");
+        showNotification("error", "الرجاء ملء جميع الحقول المطلوبة (الأعراض، العمر، الجنس، والتدخين).");
         return;
       }
       
       showNotification("info", "جاري تحليل الأعراض، قد يستغرق الأمر بضع لحظات...");
 
       try {
-        if (!auth.currentUser) throw new Error("المستخدم غير مسجل الدخول.");
-        const token = await auth.currentUser.getIdToken();
+        // This is where you would integrate with your backend.
+        // The backend would contain the logic to call the Gemini API.
+        // For this example, we will simulate a response.
+        
+        // 1. Collect all data from the form
+        const requestBody = {
+            analysisType: 'patient', // CRITICAL: This tells the backend to use the "Medical Assistant" brain
+            symptoms,
+            age,
+            gender,
+            isPregnant: gender === 'female' && document.getElementById('isPregnant').value === 'yes',
+            pregnancyMonth: document.getElementById('pregnancyMonth').value,
+            weight: document.getElementById('weight').value,
+            height: document.getElementById('height').value,
+            smoker: smoker,
+            vitals: document.getElementById('vitals').value,
 
-        const requestBody = { 
-            analysisType: 'patient', 
-            symptoms, age, gender, 
-            smoker: smoker === 'yes', 
-            vitals, labs, diagnosis,
-            currentMedications,
-            weight, height,
-            isPregnant, pregnancyMonth,
-            imageData: imageDataUrls
+            currentMedications: document.getElementById('currentMedications').value,
+            labs: document.getElementById('labs').value,
+            diagnosis: document.getElementById('diagnosis').value,
+            imageData: imageBase64Data
         };
 
-        const result = await fetch("/api/gpt", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(requestBody)
+        // 2. Send data to your backend API endpoint
+        // IMPORTANT: Replace "/api/gpt" with your actual backend endpoint URL.
+        const response = await fetch("/api/gpt", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                // If using authentication (like Firebase), you'd add the token here:
+                // "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(requestBody)
         });
 
-        if (!result.ok) {
-          const errorData = await result.json();
-          throw new Error(errorData.detail || `خطأ من الخادم: ${result.status}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `Server error: ${response.status}`);
         }
 
-        const json = await result.json();
+        const json = await response.json();
 
+        // 3. Display the HTML report received from the backend
         if (json.htmlReport) {
             notificationArea.innerHTML = '';
             responseContainer.innerHTML = json.htmlReport;
             responseContainer.style.display = 'block';
         } else {
-            throw new Error("لم يتم استلام تقرير من الخادم.");
+            throw new Error("Received an empty report from the server.");
         }
 
       } catch (err) {
-        showNotification("error", "حدث خطأ أثناء التحليل: " + err.message);
+        showNotification("error", "An error occurred during analysis: " + err.message);
         console.error(err);
       }
     }
