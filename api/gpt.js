@@ -1,9 +1,9 @@
-// /api/gpt.js - THE FINAL, CRASH-PROOF, AND DEEPLY ANALYTICAL VERSION
+// /api/gpt.js - THE FINAL, WORKING, AND DEEPLY ANALYTICAL VERSION
 
 /**
  * This is the definitive, robust, and technically correct thinking process for the AI model.
- * It includes enhanced error handling to gracefully manage API failures (e.g., safety blocks)
- * and prevent the server from crashing, thus avoiding JSON.parse errors on the client.
+ * It prioritizes deep medical analysis (Triple Duplication, Dosage Errors, Logical Contradictions)
+ * above all else, while maintaining the requested table structure and visual cues.
  */
 const systemInstruction = `
 أنت "كبير محققي التدقيق الطبي"، ومهمتك هي تحليل الوصفات الطبية لكشف الأخطاء الجسيمة وتقديم تقرير استراتيجي دقيق.
@@ -95,10 +95,8 @@ export default async function handler(req, res) {
 
         // --- ROBUST ERROR HANDLING BLOCK ---
         // This is the new crash-proof logic.
-        // It checks if the API response is valid before trying to access the text.
         if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts) {
             console.error("Invalid response structure from Gemini:", JSON.stringify(result, null, 2));
-            // This can happen if the content is blocked by safety filters.
             const finishReason = result.candidates?.[0]?.finishReason || "UNKNOWN";
             const safetyRatings = result.promptFeedback?.safetyRatings || "Not provided";
             throw new Error(`فشل النموذج في إنشاء تقرير. السبب المحتمل: ${finishReason}. تقييمات السلامة: ${JSON.stringify(safetyRatings)}`);
