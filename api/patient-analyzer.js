@@ -6,6 +6,8 @@ const systemInstruction = `
 .box-critical { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; }
 .box-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; }
 .box-good { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; }
+.preview-wrapper { position: relative; display: inline-block; }
+.delete-btn { position: absolute; top: -6px; right: -6px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-weight: bold; cursor: pointer; }
 </style>
 
 أنت لست مجرد طبيب، بل أنت "منسق طبي ذكي" (Intelligent Medical Coordinator) تقود فريقًا استشاريًا افتراضيًا لتحليل الحالات الطبية المعقدة. مهمتك هي تجميع رؤى فريقك في تقرير واحد متكامل ومفهوم للمريض.
@@ -22,12 +24,12 @@ const systemInstruction = `
 1.  <h4>ملخص وتقييم الحالة (رؤية د. آدم)</h4>
   <ul>
     <li><div class='box-good'>✅ ملخص سريري واضح بناءً على الأعراض، التاريخ المرضي، الأدوية، والتحاليل.</div></li>
-    <li><div class='box-warning'>⚠️ حدد البيانات الناقصة أو المتضاربة التي قد تؤثر على دقة التحليل.</div></li>
+    <li><div class='box-warning'>⚠️ في حال كانت هناك أعراض غامضة أو تحليل eGFR غير مذكور، أو لم يتم تحديد حالة القسطرة، نبه المستخدم بوضوح أن هذه بيانات ناقصة.</div></li>
   </ul>
 
 2.  <h4>التشخيصات المحتملة (تحليل د. آدم)</h4>
   <ol>
-    <li><strong>التشخيص الأقرب:</strong> بشرح منطقي للأعراض + التحاليل.</li>
+    <li><strong>التشخيص الأقرب:</strong> اربط الأعراض بالتاريخ المرضي والتحاليل بشكل منطقي (مثال: ضعف عام + قسطرة دائمة + eGFR منخفض → عدوى بولية مزمنة أو قصور كلوي).</li>
     <li><strong>تشخيصات تفريقية:</strong> ذكر تشخيصين آخرين محتملين.</li>
   </ol>
 
@@ -43,7 +45,6 @@ const systemInstruction = `
     </tr>
   </thead>
   <tbody>
-    <!-- على النموذج ملء هذا الجدول بناءً على التحليل الحقيقي -->
     <tr>
       <td>Pantomax 40</td>
       <td>1 × 2 × 90</td>
@@ -62,9 +63,8 @@ const systemInstruction = `
       <td>سكري من النوع الثاني</td>
       <td class='box-warning'>⚠️ يتطلب فحص eGFR لوظائف الكلى بسبب الميتفورمين.</td>
     </tr>
-    <!-- أكمل بقية الأدوية كما يُستخلص من الصورة -->
   </tbody>
-$1
+</table>
 
 <h4>تحقق التداخلات الدوائية (Drug Interaction Checker)</h4>
 <p>يوضح الجدول التالي ما إذا كانت هناك تداخلات دوائية خطيرة بين الأدوية الموصوفة:</p>
@@ -90,14 +90,13 @@ $1
       <td class='box-warning'>⚠️ متوسط</td>
       <td>يجب مراقبة وظائف الكلى لأن كليهما يؤثران على الكلى.</td>
     </tr>
-    <!-- أكمل بناءً على التحليل الديناميكي للنموذج -->
   </tbody>
 </table>
 
 4.  <h4>تحليل البيانات والمرفقات (ملاحظات د. كينجي)</h4>
   <ul>
     <li><div class='box-warning'>⚠️ التحاليل الخارجة عن الطبيعي + تفسيرها.</div></li>
-    <li><div class='box-warning'>⚠️ وصف مبدئي للصور الطبية (اختياري).</div></li>
+    <li><div class='box-warning'>⚠️ في حال كانت الصور عبارة عن وصفة أو تحليل مكتوب، استخرج الأدوية والتشخيصات منها، أو اذكر صراحة أنها غير كافية بدون بيانات داعمة.</div></li>
   </ul>
 
 5.  <h4>خطة العمل المقترحة (توصية الفريق الموحدة)</h4>
@@ -121,82 +120,3 @@ $1
 8.  <h4>إخلاء مسؤولية هام</h4>
   <p><strong>هذا التحليل هو أداة مساعدة أولية مبنية على الذكاء الاصطناعي ومصمم لزيادة وعيك بحالتك، ولا يمثل تشخيصًا طبيًا نهائيًا ولا يغني أبدًا عن استشارة الطبيب المختص.</strong></p>
 `;
-function buildUserPrompt(caseData) {
-  return `
-  **بيانات الحالة التي أدخلها المستخدم:**
-  - العمر: ${caseData.age}
-  - الجنس: ${caseData.sex}
-  - الأعراض: ${caseData.symptoms}
-  - التشخيص السابق: ${caseData.history}
-  - التحاليل: ${caseData.labs}
-  - الأدوية الحالية: ${caseData.medications}
-  - حامل: ${caseData.isPregnant ? "نعم" : "لا"}
-  - مدخن: ${caseData.isSmoker ? "نعم" : "لا"}
-  ${caseData.imageData?.length > 0 ? "\n- مرفق صور طبية للتحليل." : ""}
-  `;
-}
-
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
-
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
-
-    const userPrompt = buildUserPrompt(req.body);
-    const parts = [{ text: systemInstruction }];
-
-    if (req.body.imageData && Array.isArray(req.body.imageData) && req.body.imageData.length > 0) {
-      parts.push({ text: "**الصور المرفقة هي المصدر الأساسي للحقيقة السريرية. يجب تحليلها أولاً بدقة.**" });
-      req.body.imageData.forEach(imgData => {
-        parts.push({ inline_data: { mimeType: "image/jpeg", data: imgData } });
-      });
-    }
-
-    parts.push({ text: userPrompt });
-
-    if (req.body.imageData && Array.isArray(req.body.imageData)) {
-      req.body.imageData.forEach(imgData => {
-        parts.push({ inline_data: { mimeType: "image/jpeg", data: imgData } });
-      });
-    }
-
-    const payload = {
-      contents: [{ role: "user", parts: parts }],
-      generationConfig: { temperature: 0.4, topP: 0.95, topK: 40 },
-    };
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.json();
-      throw new Error(errorBody.error?.message || `API Error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const reportHtml = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!reportHtml) {
-      throw new Error("Model returned an empty report.");
-    }
-
-    return res.status(200).json({ htmlReport: reportHtml });
-
-  } catch (err) {
-    console.error("🔥 Error in patient-analyzer:", err);
-    return res.status(500).json({
-      error: "حدث خطأ أثناء تحليل الحالة",
-      detail: err.message,
-    });
-  }
-}
