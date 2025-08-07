@@ -1,148 +1,178 @@
-// /api/patient-analyzer.js - FINAL, VISUALLY ENHANCED VERSION
+// /api/patient-analyzer.js - FINAL ENHANCED VERSION
 
 const systemInstruction = `
 <style>
 /* CSS Styles for Professional Report Formatting */
-.report-container { font-family: 'Cairo', 'Arial', sans-serif; direction: rtl; text-align: right; }
+.report-container { font-family: 'Cairo', 'Arial', sans-serif; direction: rtl; }
 .box-critical { border-right: 5px solid #721c24; background-color: #f8d7da; color: #721c24; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
 .box-warning { border-right: 5px solid #856404; background-color: #fff3cd; color: #856404; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
 .box-good { border-right: 5px solid #155724; background-color: #d4edda; color: #155724; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
 .box-info { border-right: 5px solid #004085; background-color: #cce5ff; color: #004085; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.custom-table { border-collapse: collapse; width: 100%; text-align: right; margin-top: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
-.custom-table th, .custom-table td { padding: 12px 15px; border: 1px solid #dee2e6; }
+.custom-table { border-collapse: collapse; width: 100%; text-align: right; margin-top: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.custom-table th, .custom-table td { padding: 12px; border: 1px solid #dee2e6; }
 .custom-table thead { background-color: #e9ecef; }
-.custom-table tbody tr:nth-of-type(even) { background-color: #f8f9fa; }
-h3, h4 { color: #343a40; border-bottom: 2px solid #0056b3; padding-bottom: 8px; margin-top: 2rem; display: flex; align-items: center; gap: 10px; }
-.icon { font-size: 1.5em; color: #0056b3; }
+h3, h4 { color: #343a40; border-bottom: 2px solid #0056b3; padding-bottom: 8px; margin-top: 2rem; }
+.icon { font-size: 1.2em; margin-right: 8px; }
 </style>
 
 <div class="report-container">
-<h3><i class="fas fa-file-medical-alt icon"></i> تحليل شامل من فريقنا الاستشاري الطبي</h3>
-<p class="box-info">بناءً على المعلومات المقدمة، قام فريقنا بتحليل حالتك لتقديم رؤية شاملة. تم تصميم هذا التقرير لتسليط الضوء على النقاط الأكثر أهمية أولاً.</p>
+<h3>تحليل شامل من فريقنا الاستشاري الطبي</h3>
+<p class="box-info">بناءً على المعلومات المقدمة، قام فريقنا المكون من استشاريين متخصصين في التشخيص السريري والصيدلة الإكلينيكية بتحليل حالتك لتقديم رؤية شاملة ومتكاملة.</p>
 
-<h4><i class="fas fa-exclamation-triangle icon"></i> تنبيهات حرجة (Critical Alerts)</h4>
-<div class='box-critical'>
-    <strong>❌ خطر فوري:</strong> تم وصف أدوية **ممنوعة تمامًا** أثناء الحمل (مثل Diovan و Rost). يجب إيقافها فورًا.
-</div>
-<div class='box-critical'>
-    <strong>❌ خطر فوري:</strong> تناول دواء **Risperdal** بدون وصفة طبية أثناء الحمل أمر بالغ الخطورة. يجب إيقافه فورًا.
-</div>
-<div class='box-critical'>
-    <strong>❌ خطر فوري:</strong> أعراض الصداع الشديد مع وجود أدوية ضغط في الوصفة قد تشير إلى **تسمم الحمل**، وهي حالة طارئة.
-</div>
-
-
-<h4><i class="fas fa-user-md icon"></i> 1. موجز وتقييم الحالة</h4>
+<h4>1. موجز وتقييم الحالة</h4>
 <ul>
-    <li><strong>الملخص السريري:</strong> مريضة (44 عامًا، حامل في الشهر السابع، مدخنة) تعاني من صداع حاد حول العين ودوار.</li>
-    <li><strong>نقاط حرجة:</strong> يوجد تضارب في البيانات (العمر في الوصفة 50 عامًا)، والوصفة تتجاهل تمامًا حالة الحمل.</li>
-    <li><strong>بيانات ناقصة:</strong> لا يوجد قياس لضغط الدم أو ضغط العين، وهما فحصان ضروريان.</li>
+    <li><div class='box-good'>✅ **الملخص السريري:** [تلخيص دقيق للحالة هنا].</div></li>
+    <li><div class='box-critical'>❌ **نقاط حرجة:** [ذكر أي تضارب في البيانات مثل العمر، أو معلومات بالغة الأهمية مثل وجود حمل لم يؤخذ في الاعتبار].</div></li>
+    <li><div class='box-warning'>⚠️ **بيانات ناقصة:** [ذكر أي فحوصات ناقصة ضرورية للتشخيص، مثل قياس ضغط العين في حالة الصداع].</div></li>
 </ul>
 
-<h4><i class="fas fa-clipboard-list icon"></i> 2. التشخيصات المحتملة (مرتبة حسب الخطورة)</h4>
+<h4>2. التشخيصات المحتملة (مرتبة حسب الخطورة)</h4>
 <ol>
-    <li><div class='box-critical'><strong>تسمم الحمل (Preeclampsia):</strong> يجب استبعاده فورًا في قسم الطوارئ.</div></li>
-    <li><div class='box-warning'><strong>صداع نصفي (Migraine) أو جلوكوما حادة.</strong></div></li>
+    <li><div class='box-critical'><strong>التشخيص الأخطر (يجب استبعاده أولاً):</strong> [اذكر التشخيص هنا مع التبرير، مثال: تسمم الحمل بسبب الصداع وارتفاع الضغط في وصفة قديمة لدى حامل].</div></li>
+    <li><div class='box-warning'><strong>التشخيص المحتمل التالي:</strong> [اذكر التشخيص الثاني مع التبرير].</div></li>
+    <li><div class='box-good'><strong>تشخيصات أخرى أقل خطورة:</strong> [اذكر التشخيصات الأخرى].</div></li>
 </ol>
 
-<h4><i class="fas fa-microscope icon"></i> 3. تحليل الأدوية والإجراءات واستكشاف الأخطاء</h4>
+<h4>3. تحليل الأدوية والإجراءات واستكشاف الأخطاء</h4>
+<p>تم إجراء تدقيق شامل للأدوية المذكورة والإجراءات التشخيصية المتبعة للكشف عن أي مخاطر أو فجوات علاجية.</p>
 
-<h5><i class="fas fa-pills icon"></i> أ) تدقيق الأدوية (Drug Audit)</h5>
-<p>تم استخراج وتحليل الأدوية من الوصفة مع التركيز على المخاطر المتعلقة بالحمل.</p>
+<h5>أ) تدقيق الأدوية (Drug Audit)</h5>
+<p>يجب استخراج كافة الأدوية من الصور والنصوص وتحليلها وفقًا لقائمة التدقيق الإلزامية.</p>
 <table class='custom-table'>
-    <thead>
-        <tr><th>اسم الدواء</th><th>الجرعة</th><th>الغرض الطبي</th><th>تحليل معمق ومواطن الخطر</th></tr>
+    <thead style='background-color:#e9ecef;'>
+        <tr><th>اسم الدواء</th><th>الجرعة والمدة</th><th>الغرض الطبي</th><th>تحليل معمق ومواطن الخطر (مهم جدًا)</th></tr>
     </thead>
     <tbody>
         <tr>
-            <td>Risperdal (ريزبردال)</td>
-            <td>غير محددة</td>
-            <td>مضاد للذهان (يُستخدم للأرق)</td>
-            <td class='box-critical'>❌ **شديد الخطورة:** استخدامه بدون وصفة طبية، خاصة في الحمل، أمر خطير. قد تكون له آثار على الجنين. **يجب إيقافه فورًا.**</td>
+            <td>[اسم الدواء]</td>
+            <td>[الجرعة]</td>
+            <td>[الغرض]</td>
+            <td class='box-critical'>❌ **شديد الخطورة:** [التحليل: ممنوع تمامًا أثناء الحمل / جرعة زائدة / ازدواجية علاجية خطرة].</td>
         </tr>
         <tr>
-            <td>Diovan (ديوفان)</td>
-            <td>40 مج</td>
-            <td>علاج ضغط الدم</td>
-            <td class='box-critical'>❌ **شديد الخطورة:** هذا الدواء **ممنوع تمامًا** أثناء الثلث الثاني والثالث من الحمل لأنه قد يسبب ضررًا خطيرًا أو وفاة للجنين.</td>
-        </tr>
-         <tr>
-            <td>Rost (روست)</td>
-            <td>20 مج</td>
-            <td>خفض الكوليسترول</td>
-            <td class='box-critical'>❌ **شديد الخطورة:** أدوية الستاتين (Statins) مثل هذا الدواء **ممنوعة تمامًا** أثناء الحمل.</td>
-        </tr>
-        <tr>
-            <td>Xigduo XR (زيجدو)</td>
-            <td>5/1000 مج</td>
-            <td>علاج السكري</td>
-            <td class='box-critical'>❌ **شديد الخطورة:** لا يوصى به إطلاقًا أثناء الحمل. يجب التحول إلى الأنسولين.</td>
-        </tr>
-        <tr>
-            <td>Triplexam (تريبلكسام)</td>
-            <td>غير محددة</td>
-            <td>علاج ضغط الدم</td>
-            <td class='box-critical'>❌ **ازدواجية علاجية خطرة:** استخدام دوائين للضغط (Diovan و Triplexam) معًا أمر خطير. وكلاهما ممنوع في الحمل.</td>
-        </tr>
-        <tr>
-            <td>Bertigo (برتيجو)</td>
-            <td>8 مج</td>
-            <td>علاج الدوار</td>
-            <td class='box-warning'>⚠️ **يتطلب حذرًا:** بيانات سلامته أثناء الحمل محدودة جدًا. يجب تقييم الفائدة مقابل الخطر مع الطبيب.</td>
-        </tr>
-        <tr>
-            <td>Pantomax (بانتوماكس)</td>
-            <td>40 مج</td>
-            <td>مضاد للحموضة</td>
-            <td class='box-good'>✅ **آمن نسبيًا:** يعتبر من الخيارات الآمنة للحموضة أثناء الحمل، ولكن يجب أن يكون تحت إشراف طبي.</td>
+            <td>[اسم الدواء]</td>
+            <td>[الجرعة]</td>
+            <td>[الغرض]</td>
+            <td class='box-warning'>⚠️ **يتطلب حذرًا:** [التحليل: يتعارض مع حالة الكلى / غير مفضل لكبار السن / يتطلب مراقبة].</td>
         </tr>
     </tbody>
 </table>
 
-<h5><i class="fas fa-search-plus icon"></i> ب) استكشاف الفجوات التشخيصية</h5>
+<h5>ب) استكشاف أخطاء الإجراءات والفجوات التشخيصية</h5>
+<p>هنا يتم تحديد أي إجراءات طبية خاطئة أو فحوصات ضرورية لم يتم القيام بها.</p>
 <table class='custom-table'>
-    <thead>
-        <tr><th>المشكلة / الفجوة المكتشفة</th><th>التحليل والتوصية</th></tr>
+    <thead style='background-color:#fff3cd;'>
+        <tr><th>المشكلة / الفجوة المكتشفة</th><th>التحليل والتوصية المقترحة</th><th>ماذا يجب أن تسأل طبيبك عنه؟</th></tr>
     </thead>
     <tbody>
         <tr>
-            <td>صداع حاد حول العين</td>
-            <td class='box-warning'>لم يتم قياس ضغط العين، وهو فحص ضروري لاستبعاد حالة طارئة مثل الجلوكوما.</td>
+            <td><strong>[مثال: مريض يعاني من صداع حاد حول العين]</strong></td>
+            <td class='box-warning'>لم يتم ذكر قياس ضغط العين، وهو فحص ضروري لاستبعاد حالة طارئة مثل الجلوكوما (الماء الأزرق).</td>
+            <td>"هل نحتاج إلى قياس ضغط العين بشكل عاجل للتأكد من أن الصداع ليس بسبب مشكلة خطيرة في العين؟"</td>
         </tr>
         <tr>
-            <td>حامل + صداع + أدوية ضغط</td>
-            <td class='box-critical'>لم يتم قياس ضغط الدم، وهو أهم إجراء فوري لاستبعاد تسمم الحمل.</td>
+            <td><strong>[مثال: استخدام قسطرة بولية دائمة مع التهابات متكررة]</strong></td>
+            <td class='box-critical'>استخدام القسطرة الدائمة هو سبب العدوى المزمنة ويعتبر ممارسة طبية غير مثالية في هذه الحالة. يجب التحول إلى القسطرة المتقطعة.</td>
+            <td>"هل تعتبر القسطرة المتقطعة خيارًا أفضل وأكثر أمانًا لحالتي؟"</td>
         </tr>
     </tbody>
 </table>
 
-<h4><i class="fas fa-directions icon"></i> 4. خطة العمل المقترحة</h4>
+<h4>4. خطة العمل المقترحة</h4>
 <ul>
-    <li><div class='box-critical'><span class="icon">🚨</span><strong>إجراء عاجل وفوري:</strong> التوجه إلى **طوارئ النساء والولادة فورًا**. يجب إيقاف الأدوية الخطرة المذكورة أعلاه وإجراء تقييم عاجل لضغط الدم وحالة الجنين.</div></li>
+    <li><div class='box-critical'><span class="icon">🚨</span><strong>إجراء عاجل وفوري:</strong> [اكتب الإجراء الأكثر إلحاحًا هنا، مثل: التوقف فورًا عن تناول الأدوية التالية والتوجه إلى الطوارئ].</div></li>
+    <li><div class='box-warning'><span class="icon">⚠️</span><strong>إجراء مهم (خلال 24 ساعة):</strong> [اكتب الإجراء التالي في الأهمية، مثل: حجز موعد لمناقشة الخطة العلاجية].</div></li>
 </ul>
 
-<h4><i class="fas fa-question-circle icon"></i> 5. أسئلة ذكية لمناقشتها مع طبيبك</h4>
+<h4>5. أسئلة ذكية لمناقشتها مع طبيبك</h4>
 <ul class="box-info">
-    <li>ما هي خطة العلاج البديلة والآمنة لي وللجنين؟</li>
-    <li>هل أعراضي علامة على تسمم الحمل؟ وما هي الفحوصات اللازمة للتأكد؟</li>
+    <li>[سؤال ذكي وموجه بناءً على الأخطاء المكتشفة]</li>
+    <li>[سؤال آخر حول البدائل الآمنة]</li>
 </ul>
 
-<h4><i class="fas fa-notes-medical icon"></i> 6. إخلاء مسؤولية هام</h4>
+<h4>6. ملخص عام للتقرير</h4>
+<p>[اكتب هنا ملخصًا نهائيًا يركز على الخطر الأكبر والخطوة التالية الحاسمة].</p>
+
+<h4>7. إخلاء مسؤولية هام جداً</h4>
 <div class="box-warning">
-    <p>هذا التحليل هو أداة مساعدة لزيادة وعيك الصحي، ولا يمثل تشخيصًا طبيًا نهائيًا ولا يغني أبدًا عن الفحص السريري والاستشارة المباشرة من طبيب بشري مؤهل.</p>
+    <p><strong>هذا التحليل هو أداة مساعدة لزيادة وعيك الصحي، ولا يمثل تشخيصًا طبيًا نهائيًا ولا يغني أبدًا عن الفحص السريري والاستشارة المباشرة من طبيب بشري مؤهل.</strong> القرارات العلاجية يجب أن تُتخذ دائمًا بالتشاور الكامل مع طبيبك المعالج.</p>
 </div>
 </div>
 `;
 
-// The rest of your file (buildUserPrompt, handler function, etc.) remains the same.
-// You only need to replace the `systemInstruction` variable.
-
 function buildUserPrompt(caseData) {
-    /* ... same as before ... */
-    return `...`;
+    return `
+        **الملفات المرفوعة:**
+        - ${caseData.imageData && caseData.imageData.length > 0 ? `يوجد صورة مرفقة للتحليل. **هذه هي المصدر الأساسي والوحيد للحقيقة.**` : "لا يوجد صور مرفقة."}
+        
+        **بيانات المريض (إن وجدت كنص):**
+        - الأعراض: ${caseData.symptoms || 'غير محدد'}
+        - التاريخ المرضي: ${caseData.history || 'غير محدد'}
+        - الأدوية الحالية: ${caseData.medications || 'غير محدد'}
+    `;
 }
 
 export default async function handler(req, res) {
-    /* ... same as before ... */
-    // ...
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST", "OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type", "Authorization");
+
+    if (req.method === "OPTIONS") return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
+
+    try {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+
+        const userPrompt = buildUserPrompt(req.body);
+        const parts = [{ text: systemInstruction }, { text: userPrompt }];
+
+        if (req.body.imageData && Array.isArray(req.body.imageData)) {
+            req.body.imageData.forEach(imgData => {
+                parts.push({ inline_data: { mimeType: "image/jpeg", data: imgData } });
+            });
+        }
+
+        const payload = {
+            contents: [{ role: "user", parts: parts }],
+            generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 },
+        };
+
+        const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            console.error("Gemini API Error:", errorBody);
+            throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts) {
+            console.error("Invalid response structure from Gemini:", JSON.stringify(result, null, 2));
+            const finishReason = result.candidates?.[0]?.finishReason || "UNKNOWN";
+            const safetyRatings = result.promptFeedback?.safetyRatings || "Not provided";
+            throw new Error(`فشل النموذج في إنشاء تقرير. السبب المحتمل: ${finishReason}. تقييمات السلامة: ${JSON.stringify(safetyRatings)}`);
+        }
+
+        const reportHtml = result.candidates[0].content.parts[0].text;
+
+        if (!reportHtml) {
+            throw new Error("The model generated an empty report.");
+        }
+        
+        return res.status(200).json({ htmlReport: reportHtml });
+
+    } catch (err) {
+        console.error("🔥 Server-side Error in /api/patient-analyzer:", err);
+        return res.status(500).json({
+            error: "حدث خطأ في الخادم أثناء تحليل الحالة",
+            detail: err.message,
+        });
+    }
 }
