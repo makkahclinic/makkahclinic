@@ -609,25 +609,92 @@
 
     // تحليل الأعراض
     async function analyzeSymptoms() {
-      const symptoms = document.getElementById('symptoms').value;
-      const age = document.getElementById('age').value;
-      const gender = document.getElementById('gender').value;
-      const smoker = document.getElementById('smoker').value;
-      
-      const responseContainer = document.getElementById('response-container');
-      const notificationArea = document.getElementById('notification-area');
-      const loading = document.getElementById('loading');
-      
-      responseContainer.style.display = 'none';
-      responseContainer.innerHTML = '';
-      notificationArea.innerHTML = '';
+    // --- 1. جمع البيانات من جميع الحقول ---
+    const symptoms = document.getElementById('symptoms').value;
+    const age = document.getElementById('age').value;
+    const gender = document.getElementById('gender').value;
+    const smoker = document.getElementById('smoker').value;
+    const weight = document.getElementById('weight').value;
+    const height = document.getElementById('height').value;
+    const vitals = document.getElementById('vitals').value;
+    const currentMedications = document.getElementById('currentMedications').value;
+    const labs = document.getElementById('labs').value;
+    const diagnosis = document.getElementById('diagnosis').value;
 
-      // التحقق من الحقول المطلوبة
-      if (!symptoms || !age || !gender || !smoker) {
+    const isPregnant = document.getElementById('isPregnant').value;
+    const pregnancyMonth = document.getElementById('pregnancyMonth').value;
+    
+    // --- 2. التحكم في واجهة المستخدم ---
+    const responseContainer = document.getElementById('response-container');
+    const notificationArea = document.getElementById('notification-area');
+    const loading = document.getElementById('loading');
+    
+    responseContainer.style.display = 'none';
+    responseContainer.innerHTML = '';
+    notificationArea.innerHTML = '';
+
+    // --- 3. التحقق من الحقول المطلوبة ---
+    if (!symptoms || !age || !gender || !smoker) {
         showNotification("error", "الرجاء ملء جميع الحقول المطلوبة (الأعراض، العمر، الجنس، والتدخين).");
         return;
-      }
-      
+    }
+    
+    // --- 4. إظهار مؤشر التحميل ---
+    loading.style.display = 'block';
+    document.querySelector('button').disabled = true;
+
+    // --- 5. تجميع بيانات التاريخ المرضي والنص ---
+    // هذه الطريقة تضمن إرسال كل البيانات بشكل منظم
+    const historyText = `
+        - العمر: ${age}
+        - الجنس: ${gender}
+        - الوزن: ${weight || 'غير محدد'} كجم
+        - الطول: ${height || 'غير محدد'} سم
+        - مدخن: ${smoker}
+        - العلامات الحيوية: ${vitals || 'غير محدد'}
+        - الحمل: ${gender === 'female' ? (isPregnant === 'yes' ? `نعم، الشهر ${pregnancyMonth}` : 'لا') : 'غير منطبق'}
+        - التشخيصات السابقة: ${diagnosis || 'لا يوجد'}
+        - نتائج التحاليل: ${labs || 'لا يوجد'}
+    `;
+    
+    // --- 6. هذا هو الجزء الأهم: الاتصال الحقيقي بالخادم ---
+    try {
+        const response = await fetch('/api/patient-analyzer.js', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                symptoms: symptoms,
+                history: historyText,
+                medications: currentMedications,
+                imageData: imageBase64Data // هذا المتغير يحتوي على الصور من معالج الصور
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'حدث خطأ من الخادم');
+        }
+
+        const result = await response.json();
+        
+        // --- 7. عرض النتيجة الحقيقية من Gemini ---
+        loading.style.display = 'none';
+        responseContainer.innerHTML = result.htmlReport;
+        responseContainer.style.display = 'block';
+        responseContainer.scrollIntoView({ behavior: 'smooth' });
+
+    } catch (err) {
+        // --- 8. معالجة الأخطاء ---
+        loading.style.display = 'none';
+        showNotification("error", "حدث خطأ أثناء الاتصال بالخادم: " + err.message);
+        console.error("Fetch Error:", err);
+    } finally {
+        // --- 9. إعادة تفعيل الزر في كل الحالات ---
+        document.querySelector('button').disabled = false;
+    }
+}
       // إظهار مؤشر التحميل
       loading.style.display = 'block';
       
