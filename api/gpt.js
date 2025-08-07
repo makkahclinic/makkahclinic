@@ -1,10 +1,5 @@
-// /api/medical-audit.js - THE FINAL, STABLE, AND DEEPLY ANALYTICAL VERSION
+// /api/medical-audit.js - VERSION CORRECTED FOR TEXT AND IMAGE INPUT
 
-/**
- * This is the definitive, robust, and technically correct thinking process for the AI model.
- * It focuses solely on the core task of providing a deep, professional medical audit for clinicians and auditors,
- * restoring the powerful analysis features we developed.
- */
 const systemInstruction = `
 أنت "كبير مدققي المطالبات الطبية والتأمين" ذو معرفة سريرية عميقة. مهمتك هي تحليل الحالات الطبية وإنتاج تقرير HTML واحد، متكامل، ومنظم بشكل ممتاز.
 
@@ -26,8 +21,10 @@ const systemInstruction = `
 **منهجية التحليل وإعداد التقرير الإلزامية:**
 
 **الخطوة 1: استخلاص البيانات والتحليل الأولي**
--   الصورة هي المصدر الأساسي للحقيقة. استخرج كل البيانات منها: رقم الملف، الجنس (من الخانة ✓)، العمر، التشخيصات، وجميع الأدوية بجرعاتها.
--   إذا تم تقديم بيانات نصية، استخدمها للمقارنة وأبلغ عن أي تناقضات كملاحظة حرجة.
+-   **مهمتك هي تحليل كل البيانات المتاحة، سواء من الصورة أو النص.**
+-   **في حال وجود صورة،** أعطها الأولوية لاستخراج الأدوية والتشخيصات المكتوبة بخط اليد.
+-   **استخدم دائمًا البيانات النصية** لتكملة المعلومات (مثل الأعراض والتاريخ المرضي) وللمقارنة مع الصورة.
+-   **في حال عدم وجود صورة،** فإن **البيانات النصية هي المصدر الوحيد للحقيقة**، ويجب أن تبني تحليلك الكامل عليها.
 -   قم بإجراء التحليل العميق بناءً على "قائمة التحقيق في الأخطاء الحرجة".
 
 **الخطوة 2: إنشاء التقرير النهائي (HTML فقط)**
@@ -49,12 +46,24 @@ const systemInstruction = `
     8.  **الخاتمة الإلزامية:** "هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص."
 `;
 
-
+// -- VERSION UPDATED TO PASS TEXT DATA --
 function buildUserPrompt(caseData) {
-    // This prompt is now extremely simple. It ONLY provides the data (the image).
+    // نقوم بتجميع كل البيانات النصية في متغير واحد ومنظم
+    const textInput = `
+        **بيانات المريض المدخلة يدويًا:**
+        - العمر: ${caseData.age || 'غير محدد'}
+        - الجنس: ${caseData.gender || 'غير محدد'}
+        - التشخيص المبدئي: ${caseData.diagnosis || 'غير محدد'}
+        - الأدوية المكتوبة: ${caseData.medications || 'غير محدد'}
+        - ملاحظات إضافية: ${caseData.notes || 'غير محدد'}
+    `;
+
+    // نُنشئ الطلب النهائي الذي يحتوي على معلومات الصورة والنص معًا
     return `
+        ${textInput}
+
         **الملفات المرفوعة:**
-        - ${caseData.imageData && caseData.imageData.length > 0 ? `يوجد صورة مرفقة للتحليل. **هذه هي المصدر الأساسي والوحيد للحقيقة.**.` : "لا يوجد صور مرفقة."}
+        - ${caseData.imageData && caseData.imageData.length > 0 ? `يوجد صورة مرفقة للتحليل.` : "لا يوجد صور مرفقة."}
     `;
 }
 
@@ -71,7 +80,8 @@ export default async function handler(req, res) {
         if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-        const userPrompt = buildUserPrompt(req.body);
+        // We now pass the entire req.body to buildUserPrompt to access all text fields
+        const userPrompt = buildUserPrompt(req.body); 
         const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
         if (req.body.imageData && Array.isArray(req.body.imageData)) {
@@ -99,15 +109,13 @@ export default async function handler(req, res) {
 
         const result = await response.json();
 
-        // --- ROBUST ERROR HANDLING BLOCK ---
         if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts) {
             console.error("Invalid response structure from Gemini:", JSON.stringify(result, null, 2));
             const finishReason = result.candidates?.[0]?.finishReason || "UNKNOWN";
             const safetyRatings = result.promptFeedback?.safetyRatings || "Not provided";
             throw new Error(`فشل النموذج في إنشاء تقرير. السبب المحتمل: ${finishReason}. تقييمات السلامة: ${JSON.stringify(safetyRatings)}`);
         }
-        // --- END OF ROBUST ERROR HANDLING BLOCK ---
-
+        
         const reportHtml = result.candidates[0].content.parts[0].text;
 
         if (!reportHtml) {
@@ -118,7 +126,6 @@ export default async function handler(req, res) {
 
     } catch (err) {
         console.error("🔥 Server-side Error in /api/gpt:", err);
-        // This now sends a clean JSON error instead of crashing the server.
         return res.status(500).json({
             error: "حدث خطأ في الخادم أثناء تحليل الحالة",
             detail: err.message,
