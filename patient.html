@@ -148,7 +148,21 @@
     .notification.error { background-color: #f8d7da; color: #721c24; }
     .notification.info { background-color: #d1ecf1; color: #0c5460; }
     .disclaimer { font-size: 0.8rem; text-align: center; color: #777; margin-top: 2rem; }
-  </style>
+  .preview-wrapper { position: relative; display: inline-block; }
+.delete-btn {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-weight: bold;
+  cursor: pointer;
+}
+</style>
 </head>
 <body>
   <a href="https://www.m2020m.org/portal.html" class="home-icon-link" title="الرجوع إلى البوابة الرئيسية">
@@ -282,22 +296,38 @@
     let imageBase64Data = [];
 
     imageInput.addEventListener('change', (event) => {
-        previewContainer.innerHTML = '';
-        imageBase64Data = [];
-        const files = event.target.files;
-        if (files.length > 0) {
-            Array.from(files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = document.createElement('img');
-                    img.src = e.target.result;
-                    img.classList.add('preview-image');
-                    previewContainer.appendChild(img);
-                    // Store only the base64 part
-                    imageBase64Data.push(e.target.result.split(',')[1]);
-                };
-                reader.readAsDataURL(file);
-            });
+  previewContainer.innerHTML = '';
+  imageBase64Data = [];
+  const files = event.target.files;
+  if (files.length > 0) {
+    Array.from(files).forEach((file, index) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('preview-wrapper');
+
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.classList.add('preview-image');
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.onclick = () => {
+          imageBase64Data.splice(index, 1);
+          wrapper.remove();
+        };
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(deleteBtn);
+        previewContainer.appendChild(wrapper);
+
+        imageBase64Data.push(e.target.result.split(',')[1]);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+});
         }
     });
 
@@ -368,11 +398,24 @@
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || `Server error: ${response.status}`);
+            const rawText = await response.text();
+          let errorDetail = `Server error: ${response.status}`;
+          try {
+            const parsed = JSON.parse(rawText);
+            errorDetail = parsed.detail || errorDetail;
+          } catch (_) {
+            errorDetail = rawText;
+          }
+          throw new Error(errorDetail);
         }
 
-        const json = await response.json();
+        let json;
+        try {
+          json = await response.json();
+        } catch (parseError) {
+          const rawText = await response.text();
+          throw new Error("الاستجابة غير صالحة (ليست JSON): " + rawText);
+        }
 
         // 3. Display the HTML report received from the backend
         if (json.htmlReport) {
