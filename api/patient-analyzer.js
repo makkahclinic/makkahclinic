@@ -94,7 +94,16 @@ export default async function handler(req, res) {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
     const userPrompt = buildUserPrompt(req.body);
-    const parts = [{ text: systemInstruction }, { text: userPrompt }];
+    const parts = [{ text: systemInstruction }];
+
+    if (req.body.imageData && Array.isArray(req.body.imageData) && req.body.imageData.length > 0) {
+      parts.push({ text: "**الصور المرفقة هي المصدر الأساسي للحقيقة السريرية. يجب تحليلها أولاً بدقة.**" });
+      req.body.imageData.forEach(imgData => {
+        parts.push({ inline_data: { mimeType: "image/jpeg", data: imgData } });
+      });
+    }
+
+    parts.push({ text: userPrompt });
 
     if (req.body.imageData && Array.isArray(req.body.imageData)) {
       req.body.imageData.forEach(imgData => {
