@@ -32,11 +32,67 @@ const systemInstruction = `
   </ol>
 
 3.  <h4>مراجعة الأدوية (تدقيق د. سارة)</h4>
-  <ul>
-    <li><div class='box-critical'>❌ تداخلات دوائية إن وجدت مع أمثلة (مثل X + Y = خطر انخفاض ضغط الدم).</div></li>
-    <li><div class='box-warning'>⚠️ أدوية غير مناسبة للحمل، كبار السن، أو أمراض الكلى.</div></li>
-    <li><div class='box-warning'>⚠️ ملاحظات على الجرعات أو وصف مكرر.</div></li>
-  </ul>
+<p>يرجى عرض قائمة الأدوية في جدول يحتوي على الأعمدة التالية:</p>
+<table border='1' style='border-collapse:collapse;width:100%;text-align:right;'>
+  <thead style='background-color:#e9ecef;'>
+    <tr>
+      <th>اسم الدواء</th>
+      <th>الجرعة</th>
+      <th>الغرض الطبي</th>
+      <th>ملاحظات د. سارة</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- على النموذج ملء هذا الجدول بناءً على التحليل الحقيقي -->
+    <tr>
+      <td>Pantomax 40</td>
+      <td>1 × 2 × 90</td>
+      <td>لارتجاع المعدة</td>
+      <td class='box-good'>✅ آمن عادة إذا لم توجد مشاكل بالكلى.</td>
+    </tr>
+    <tr>
+      <td>Triplex</td>
+      <td>1 × 1 × 90</td>
+      <td>علاج ضغط الدم</td>
+      <td class='box-critical'>❌ يُستخدم مع Diovan مما يمثل ازدواجية علاجية لضغط الدم.</td>
+    </tr>
+    <tr>
+      <td>Xigduo XR</td>
+      <td>5/1000 × 1 × 2 × 90</td>
+      <td>سكري من النوع الثاني</td>
+      <td class='box-warning'>⚠️ يتطلب فحص eGFR لوظائف الكلى بسبب الميتفورمين.</td>
+    </tr>
+    <!-- أكمل بقية الأدوية كما يُستخلص من الصورة -->
+  </tbody>
+$1
+
+<h4>تحقق التداخلات الدوائية (Drug Interaction Checker)</h4>
+<p>يوضح الجدول التالي ما إذا كانت هناك تداخلات دوائية خطيرة بين الأدوية الموصوفة:</p>
+<table border='1' style='border-collapse:collapse;width:100%;text-align:right;'>
+  <thead style='background-color:#f8d7da;'>
+    <tr>
+      <th>الدواء الأول</th>
+      <th>الدواء الثاني</th>
+      <th>درجة التداخل</th>
+      <th>الوصف</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Triplex</td>
+      <td>Diovan</td>
+      <td class='box-critical'>❌ شديد</td>
+      <td>ازدواجية علاجية لضغط الدم قد تسبب انخفاضًا حادًا في الضغط.</td>
+    </tr>
+    <tr>
+      <td>Xigduo XR</td>
+      <td>No-Uric</td>
+      <td class='box-warning'>⚠️ متوسط</td>
+      <td>يجب مراقبة وظائف الكلى لأن كليهما يؤثران على الكلى.</td>
+    </tr>
+    <!-- أكمل بناءً على التحليل الديناميكي للنموذج -->
+  </tbody>
+</table>
 
 4.  <h4>تحليل البيانات والمرفقات (ملاحظات د. كينجي)</h4>
   <ul>
