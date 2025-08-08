@@ -1,103 +1,217 @@
-<h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
+// /api/gpt.js – النسخة الفولاذيّة النهائية (Edge-safe, no Buffer)
+// مزايا: retries/timeout، تفادي 413، تصحيح تلقائي للكلاسات/النِّسَب٪، تعليمات إلزامية لذكر "التخصص المراجع" وروابط مصادر في فرص تحسين الخدمة.
 
-<h4>ملخص الحالة</h4>
-<p>
-مريض ذكر، 67 سنة، يعاني من فشل قلبي حاد (EF: 30%)، مرض كلوي مزمن (مرحلة 3b، eGFR: 40 مل/دقيقة)،
-فرط بوتاسيوم الدم (K⁺: 6.0 مليمول/لتر)، التهاب رئوي مجتمعي، ورجفان أذيني.
-يُعاني من ضيق تنفس وتعب عام، وُصف بأنه "مستقر".
-توجد أخطاء دوائية حرجة تتطلب تدخلاً عاجلاً، خاصةً المتعلقة بفرط بوتاسيوم الدم، وظائف الكلى، والتداخلات الدوائية.
-</p>
+const MAX_INLINE_REQUEST_MB = 19.0;
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const DEFAULT_TIMEOUT_MS = 60_000;
 
-<h4>التحليل السريري العميق</h4>
-<p>
-فرط بوتاسيوم الدم (K⁺: 6.0) مع CKD 3b حالة طبية طارئة. وصف مكملات البوتاسيوم وسبيرونولاكتون هنا خطأ جسيم.
-استخدام إيبوبروفين مع CKD يرفع خطر تدهور الوظائف الكلوية. سيبروفلوكساسين بجرعة كاملة يتطلب تعديل مع eGFR < 50.
-الوارفارين يتداخل مع سيبروفلوكساسين، ما يستوجب مراقبة INR دورية. لوحظ ازدواجية علاجية بين فوروسيميد وسبيرونولاكتون
-قد تؤدي إلى اضطراب الكهارل. جميع هذه الأخطاء تتطلب مراجعة عاجلة وخطة تدخل فورية.
-</p>
+// ================ System Instruction (The Steel Edition) ================
+const systemInstruction = `
+أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري فائق الدقة. مهمتك إنتاج تقرير HTML واحد فقط، احترافي، وعميق التحليل.
 
-<h4>جدول الأدوية والإجراءات</h4>
-<table>
-<thead>
-<tr>
+[أ] منهجية التحليل الإلزامية
+1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
+2) افحص بدقة وعمق، مع ذكر التفاصيل السريرية:
+   • **الازدواجية العلاجية** (ضغط/سكر/دوار…).
+   • **أخطاء الجرعات** (XR/MR أكثر من مرة يوميًا، جرعات غير مناسبة لوظائف الكلى).
+   • **أمان الأدوية في سياق الحالة:** تحقق من كل دواء مقابل وظائف الكلى (eGFR)، وظائف الكبد، الحمل، والعمر. (مثال: Ciprofloxacin يتطلب تعديل جرعة مع eGFR < 50).
+   • **التفاعلات الدوائية الحرجة:** (مثال: Ciprofloxacin + Warfarin ⇒ يزيد خطر النزيف ويتطلب مراقبة INR يوميًا).
+   • **وجود تشخيص داعم** لكل دواء/إجراء.
+   • **اقتراح بدائل آمنة:** عند التوصية بإيقاف دواء ضروري (مثل مسكن ألم)، اقترح بديلاً أكثر أمانًا (مثل Paracetamol بدلاً من Ibuprofen في حالة القصور الكلوي).
+
+[ب] قواعد مخاطبة التأمين الإلزامية
+- لكل صف في الجدول: احسب "درجة الخطورة" (0–100%) واكتب علامة %.
+- طبّق class لوني على <td> في عمودي "درجة الخطورة" و"قرار التأمين":
+  • risk-high إذا الدرجة ≥ 70%  • risk-medium إذا 40–69%  • risk-low إذا < 40%
+- صيّغ "قرار التأمين" حصراً بإحدى الصيغ الثلاث واذكر **التخصص المراجع** داخل القرار:
+  • ❌ قابل للرفض — السبب: [طبي/إجرائي محدد] — وللقبول يلزم: [تشخيص/فحص/تعديل جرعة/إلغاء ازدواجية…] — **التخصص المُراجع: [مثال: كلى/قلب/غدد/أمراض معدية]**
+  • ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — **التخصص المُراجع: […]**
+  • ✅ مقبول — **التخصص المُراجع (إن لزم): […]**
+
+[ج] بنية HTML المطلوبة (لا CSS ولا <style>)
+1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
+2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التشخيصات/الملاحظات الحرجة.</p>
+3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...).</p>
+4) <h4>جدول الأدوية والإجراءات</h4>
+<table><thead><tr>
 <th>الدواء/الإجراء</th>
 <th>الجرعة الموصوفة</th>
 <th>الجرعة الصحيحة المقترحة</th>
 <th>التصنيف</th>
 <th>درجة الخطورة (%)</th>
 <th>قرار التأمين</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>إيبوبروفين</td>
-<td>600 ملغ كل 8 ساعات</td>
-<td>إيقاف واستبداله بباراسيتامول ≤3 جم/يوم</td>
-<td>مسكن ألم</td>
-<td class="risk-high">90%</td>
-<td class="risk-high">❌ قابل للرفض — السبب: مضاد استطباب مع CKD — وللقبول يلزم: استبدال بباراسيتامول — <strong>التخصص المُراجع: كلى</strong></td>
-</tr>
-<tr>
-<td>ليكسوتيل (فوروسيميد)</td>
-<td>80 ملغ يومياً</td>
-<td>مراجعة الجرعة وفق حالة السوائل ومدخل/مخرج البول</td>
-<td>مدر للبول</td>
-<td class="risk-medium">60%</td>
-<td class="risk-medium">⚠️ قابل للمراجعة — السبب: ازدواجية علاجية مع سبيرونولاكتون — لتحسين القبول: مراجعة ضرورة الجمع — <strong>التخصص المُراجع: كلى/قلب</strong></td>
-</tr>
-<tr>
-<td>سبيرونولاكتون</td>
-<td>50 ملغ يومياً</td>
-<td>إيقاف فوري</td>
-<td>مدر موفر للبوتاسيوم</td>
-<td class="risk-high">95%</td>
-<td class="risk-high">❌ قابل للرفض — السبب: فرط بوتاسيوم الدم الحالي و CKD — وللقبول يلزم: إيقاف فوري — <strong>التخصص المُراجع: كلى/قلب</strong></td>
-</tr>
-<tr>
-<td>وارفارين</td>
-<td>5 ملغ يومياً</td>
-<td>الاستمرار مع مراقبة INR دورية</td>
-<td>مضاد تخثر</td>
-<td class="risk-medium">50%</td>
-<td class="risk-medium">⚠️ قابل للمراجعة — السبب: نقص مراقبة INR — لتحسين القبول: إجراء فحص INR بانتظام — <strong>التخصص المُراجع: قلب/أمراض دم</strong></td>
-</tr>
-<tr>
-<td>سيبروفلوكساسين</td>
-<td>500 ملغ مرتين يومياً</td>
-<td>250 ملغ مرتين يومياً مع CKD</td>
-<td>مضاد حيوي</td>
-<td class="risk-medium">60%</td>
-<td class="risk-medium">⚠️ قابل للمراجعة — السبب: جرعة عالية مع CKD — لتحسين القبول: تعديل الجرعة حسب eGFR — <strong>التخصص المُراجع: كلى/أمراض معدية</strong></td>
-</tr>
-<tr>
-<td>مكملات البوتاسيوم</td>
-<td>40 مل مكافئ يومياً</td>
-<td>إيقاف فوري</td>
-<td>مكمل غذائي</td>
-<td class="risk-high">100%</td>
-<td class="risk-high">❌ قابل للرفض — السبب: فرط بوتاسيوم الدم — وللقبول يلزم: إيقاف فوري — <strong>التخصص المُراجع: كلى</strong></td>
-</tr>
-</tbody>
-</table>
+</tr></thead><tbody>
+</tbody></table>
 
-<h4>فرص تحسين الخدمة</h4>
-<ul>
-<li><strong>eGFR + UACR</strong> — متابعة CKD — <a href="https://kdigo.org/" target="_blank">KDIGO</a></li>
-<li><strong>Potassium + Creatinine</strong> — مراقبة مستويات البوتاسيوم مع مدرات البوتاسيوم و CKD — <a href="https://www.ahajournals.org/" target="_blank">ACC/AHA</a></li>
-<li><strong>INR</strong> — متابعة INR دورياً مع وارفارين — إرشادات أمراض القلب</li>
-</ul>
+[د] فرص تحسين الخدمة (مدعومة بالأدلة الإلزامية)
+- قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
+  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — **مصدر موثوق + رابط مباشر**.
+- فعّل البنود التالية عندما تنطبق محفزاتها (مع روابط إلزامية):
+  • سكري نوع 2 ⇒ **HbA1c** كل 3 أشهر إن غير منضبط — **ADA Standards of Care**: https://diabetesjournals.org/care
+  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** — **KDIGO**: https://kdigo.org/
+  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — **ACR Gout**: https://www.rheumatology.org/
+  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — **ACC/AHA**: https://www.ahajournals.org/
+  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة ⇒ **Chest X-ray (CXR)** — **ACR Appropriateness**: https://acsearch.acr.org/
+  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — **USPSTF**: https://www.uspreventiveservicestaskforce.org/
 
-<h4>خطة العمل</h4>
-<ol>
-<li>إيقاف مكملات البوتاسيوم فوراً.</li>
-<li>إيقاف سبيرونولاكتون فوراً.</li>
-<li>إيقاف الإيبوبروفين واستبداله بباراسيتامول ≤3 جم/يوم.</li>
-<li>تعديل جرعة سيبروفلوكساسين لـ 250 ملغ مرتين يومياً (eGFR: 40).</li>
-<li>مراقبة INR بانتظام أثناء العلاج بالوارفارين.</li>
-<li>مراجعة استخدام ليكسوتيل مع الطبيب المختص.</li>
-<li>إجراء تخطيط صدى القلب لتقييم وظيفة القلب.</li>
-<li>مراقبة مستويات البوتاسيوم بشكل دوري.</li>
-<li>إجراء فحص شامل لوظائف الكلى (eGFR, Creatinine, UACR).</li>
-</ol>
+[هـ] خطة العمل (يجب أن تكون إجرائية ومحددة)
+- قائمة مرقمة بتصحيحات فورية دقيقة.
+- مثال: "1. إعطاء غلوكونات الكالسيوم IV فوراً لفرط البوتاسيوم (K⁺>6.0)."
+- مثال: "2. استبدال الإيبوبروفين بباراسيتامول (بحد أقصى 3 جم/يوم)."
+- مثال: "3. تعديل جرعة السيبروفلوكساسين لـ 250mg مرتين يومياً بناءً على eGFR."
 
+[و] الخاتمة
 <p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
+`;
+
+// ================ Prompt Builder ================
+function buildUserPrompt(caseData = {}) {
+  return `
+**بيانات المريض (مدخل يدويًا):**
+- العمر: ${caseData.age ?? 'غير محدد'}
+- الجنس: ${caseData.gender ?? 'غير محدد'}
+- التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
+- الأدوية/الإجراءات المكتوبة: ${caseData.medications ?? 'غير محدد'}
+- ملاحظات إضافية: ${caseData.notes ?? 'غير محدد'}
+
+**نتائج مخبرية (اختياري):**
+- eGFR: ${caseData.eGFR ?? 'غير محدد'}
+- HbA1c: ${caseData.hba1c ?? 'غير محدد'}
+- Potassium (K+): ${caseData.k ?? 'غير محدد'}
+- Creatinine (Cr): ${caseData.cr ?? 'غير محدد'}
+- Uric Acid (UA): ${caseData.ua ?? 'غير محدد'}
+- INR: ${caseData.inr ?? 'غير محدد'}
+
+**معلومات إضافية:**
+- مدخّن: ${caseData.isSmoker === true ? 'نعم' : 'لا'}
+- باك-سنة: ${caseData.smokingPackYears ?? 'غير محدد'}
+- مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
+
+**الملفات المرفوعة:**
+- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}
+`;
+}
+
+// ================ Helpers ================
+const _encoder = new TextEncoder();
+function byteLengthUtf8(str) { return _encoder.encode(str || '').length; }
+
+function estimateInlineRequestMB(parts) {
+  let bytes = 0;
+  for (const p of parts) {
+    if (p.text) bytes += byteLengthUtf8(p.text);
+    if (p.inline_data?.data) {
+      const len = p.inline_data.data.length;
+      bytes += Math.floor((len * 3) / 4);
+    }
+  }
+  return bytes / (1024 * 1024);
+}
+
+function applySafetyPostProcessing(html) {
+  try {
+    html = String(html || '');
+    html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi, (_m, o, n, _s, c) => `${o}${n}%${c}`);
+    html = html.replace(/(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
+      (_m, open, numStr, close) => {
+        const v = parseInt(numStr, 10);
+        const klass = v >= 70 ? 'risk-high' : v >= 40 ? 'risk-medium' : 'risk-low';
+        return open.replace('<td', `<td class="${klass}"`) + `${numStr}%` + close;
+      });
+    const i = html.indexOf('<h3'); if (i > 0) html = html.slice(i);
+    return html;
+  } catch (e) {
+    console.error('Post-processing failed:', e);
+    return html;
+  }
+}
+
+async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
+      await new Promise(r => setTimeout(r, (3 - retries) * 800));
+      return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
+    }
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+// ================ API Handler ================
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+    const userPrompt = buildUserPrompt(req.body || {});
+    const parts = [{ text: systemInstruction }, { text: userPrompt }];
+
+    if (Array.isArray(req.body?.imageData)) {
+      for (const img of req.body.imageData) {
+        if (typeof img === 'string' && img.length > 0) {
+          parts.push({ inline_data: { mimeType: 'image/jpeg', data: img } });
+        }
+      }
+    }
+
+    const estMB = estimateInlineRequestMB(parts);
+    if (estMB > MAX_INLINE_REQUEST_MB) {
+      return res.status(413).json({
+        error: 'الطلب كبير جدًا',
+        detail: `الحجم المقدر ~${estMB.toFixed(2)}MB. خفّض جودة الصور أو استخدم Files API.`,
+      });
+    }
+
+    const payload = {
+      contents: [{ role: 'user', parts }],
+      generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 }
+    };
+
+    const response = await fetchWithRetry(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error('Gemini API Error:', response.status, response.statusText, text);
+      return res.status(response.status).json({
+        error: 'فشل الاتصال بـ Gemini API',
+        detail: text.slice(0, 2000),
+      });
+    }
+
+    let result;
+    try { result = JSON.parse(text); }
+    catch {
+      console.error('Non-JSON response from Gemini:', text.slice(0, 600));
+      return res.status(502).json({ error: 'استجابة غير متوقعة من Gemini', detail: text.slice(0, 1200) });
+    }
+
+    const rawHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>⚠️ لم يتمكن النظام من إنشاء التقرير.</p>';
+    const finalizedHtml = applySafetyPostProcessing(rawHtml);
+    return res.status(200).json({ htmlReport: finalizedHtml });
+
+  } catch (err) {
+    console.error('Server Error:', err);
+    return res.status(500).json({
+      error: 'حدث خطأ في الخادم أثناء تحليل الحالة',
+      detail: err.message,
+      stack: err.stack
+    });
+  }
+}
