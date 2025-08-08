@@ -9,6 +9,7 @@
       --primary:#0056b3; --secondary:#6c757d; --danger:#dc3545;
       --bg:#f4f7f9; --text:#333; --card:#fff; --border:#dee2e6; --focus:rgba(0,86,179,.25)
     }
+    *{box-sizing:border-box}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:1rem}
     .container{max-width:960px;margin:2rem auto;background:var(--card);padding:2.2rem;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.08);border:1px solid var(--border)}
     h2{text-align:center;color:var(--primary);margin:0 0 1.6rem;font-weight:700}
@@ -37,10 +38,12 @@
     .notification.error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
     .notification.info{background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb}
 
-    /* تلوين الكلاسات التي يرجعها التقرير */
+    /* ألوان المخاطر التي يرجعها التقرير */
     #response-container .risk-high{color:#721c24;background:#f8d7da;padding:.2rem .6rem;border-radius:6px;font-weight:700;border:1px solid #f5c6cb}
     #response-container .risk-medium{color:#856404;background:#fff3cd;padding:.2rem .6rem;border-radius:6px;font-weight:700;border:1px solid #ffeeba}
     #response-container .risk-low{color:#155724;background:#d4edda;padding:.2rem .6rem;border-radius:6px;font-weight:700;border:1px solid #c3e6cb}
+
+    .hidden{display:none}
   </style>
 </head>
 <body>
@@ -48,7 +51,7 @@
     <h2>تقييم الحالة الطبية وطلبات التأمين</h2>
     <div id="user-info">جاري التحقق من المستخدم...</div>
 
-    <!-- 1) بيانات المريض -->
+    <!-- 1) معلومات المريض -->
     <h3 class="section-title">1) معلومات المريض</h3>
     <div class="grid cols-3">
       <div>
@@ -59,10 +62,12 @@
           <option value="female">أنثى</option>
         </select>
       </div>
+
       <div>
         <label for="age">العمر (سنة)</label>
         <input type="number" id="age" placeholder="مثال: 63">
       </div>
+
       <div id="pregnancy-status-container" class="hidden">
         <label for="pregnancy-status">هل المريضة حامل؟</label>
         <select id="pregnancy-status">
@@ -71,10 +76,12 @@
           <option value="yes">نعم</option>
         </select>
       </div>
+
       <div id="pregnancy-month-container" class="hidden">
         <label for="pregnancy-month">شهر الحمل</label>
         <input type="number" id="pregnancy-month" min="1" max="9" placeholder="مثال: 5">
       </div>
+
       <div>
         <label for="height">الطول (سم)</label>
         <input type="number" id="height" placeholder="مثال: 175">
@@ -93,7 +100,7 @@
       </div>
     </div>
 
-    <!-- 2) عوامل التنفس/التدخين -->
+    <!-- 2) عوامل خطر تنفّسية -->
     <h3 class="section-title">2) عوامل خطر تنفّسية</h3>
     <div class="grid cols-3">
       <div>
@@ -104,17 +111,19 @@
           <option value="no">لا</option>
         </select>
       </div>
-      <div>
+
+      <div id="packYearsContainer" class="hidden">
         <label for="packYears">باك-سنة</label>
         <input type="number" id="packYears" placeholder="مثال: 25">
       </div>
-      <div>
+
+      <div id="coughWeeksContainer" class="hidden">
         <label for="coughWeeks">مدة السعال (أسابيع)</label>
         <input type="number" id="coughWeeks" placeholder="مثال: 10">
       </div>
     </div>
 
-    <!-- 3) العيون -->
+    <!-- 3) عيون -->
     <h3 class="section-title">3) عيون (للسكري/الكبار/أعراض بصرية)</h3>
     <div class="grid cols-3">
       <div>
@@ -206,24 +215,59 @@
 
     window.goToHome = () => { window.location.href = "https://www.m2020m.org/portal.html"; };
 
-    // ===== حقول الحمل حسب الجنس =====
+    // ===== مراجع العناصر =====
     const genderSelect = document.getElementById('gender');
     const pregnancyStatusContainer = document.getElementById('pregnancy-status-container');
     const pregnancyMonthContainer = document.getElementById('pregnancy-month-container');
     const pregnancyStatusSelect = document.getElementById('pregnancy-status');
 
-    genderSelect.addEventListener('change', () => {
-      if (genderSelect.value === 'female') pregnancyStatusContainer.classList.remove('hidden');
-      else {
+    const smokerSelect = document.getElementById('isSmoker');
+    const packYearsContainer = document.getElementById('packYearsContainer');
+    const coughWeeksContainer = document.getElementById('coughWeeksContainer');
+
+    // ===== منطق الحمل =====
+    function togglePregnancyFields() {
+      if (genderSelect.value === 'female') {
+        pregnancyStatusContainer.classList.remove('hidden');
+        if (pregnancyStatusSelect.value === 'yes') {
+          pregnancyMonthContainer.classList.remove('hidden');
+        } else {
+          pregnancyMonthContainer.classList.add('hidden');
+          document.getElementById('pregnancy-month').value = '';
+        }
+      } else {
         pregnancyStatusContainer.classList.add('hidden');
         pregnancyMonthContainer.classList.add('hidden');
-        pregnancyStatusSelect.value = ""; document.getElementById('pregnancy-month').value = "";
+        pregnancyStatusSelect.value = '';
+        document.getElementById('pregnancy-month').value = '';
       }
-    });
-    pregnancyStatusSelect.addEventListener('change', () => {
-      if (pregnancyStatusSelect.value === 'yes') pregnancyMonthContainer.classList.remove('hidden');
-      else { pregnancyMonthContainer.classList.add('hidden'); document.getElementById('pregnancy-month').value=""; }
-    });
+    }
+    genderSelect.addEventListener('change', togglePregnancyFields);
+    pregnancyStatusSelect.addEventListener('change', togglePregnancyFields);
+
+    // ===== منطق التدخين =====
+    function toggleSmokingFields() {
+      const v = smokerSelect.value;
+      if (v === 'yes') {
+        packYearsContainer.classList.remove('hidden');
+        coughWeeksContainer.classList.remove('hidden');
+      } else {
+        packYearsContainer.classList.add('hidden');
+        coughWeeksContainer.classList.add('hidden');
+        const packYears = document.getElementById('packYears');
+        const coughWeeks = document.getElementById('coughWeeks');
+        if (packYears) packYears.value = '';
+        if (coughWeeks) coughWeeks.value = '';
+      }
+    }
+    smokerSelect.addEventListener('change', toggleSmokingFields);
+
+    // ===== تهيئة الحقول عند التحميل =====
+    function initConditionalFields(){
+      togglePregnancyFields();
+      toggleSmokingFields();
+    }
+    initConditionalFields();
 
     // ===== رفع/ضغط الصورة =====
     const imageInput = document.getElementById('image-upload-input');
@@ -295,7 +339,6 @@
       const responseContainer = document.getElementById('response-container');
       clearNotifications(); responseContainer.style.display='none'; responseContainer.innerHTML='';
 
-      // جمع البيانات بنفس المفاتيح اللي يقرأها الـ API
       const caseData = {
         userType: 'doctor',
         age: document.getElementById('age').value,
@@ -307,23 +350,24 @@
         temperature: document.getElementById('temperature').value,
         bloodPressure: document.getElementById('blood-pressure').value,
 
-        // نصوص حرة أساسية
         notes: document.getElementById('case-description').value,
         diagnosis: document.getElementById('diagnosis').value,
         labResults: document.getElementById('lab-results').value,
         medications: document.getElementById('medications-procedures').value,
 
-        // حقول إضافية لتفعيل توصيات ذكية (صدر/عيون/سكري/كلى)
+        // حقل التدخين الذكي
         isSmoker: document.getElementById('isSmoker').value === 'yes'
           ? true
           : (document.getElementById('isSmoker').value === 'no' ? false : undefined),
         smokingPackYears: toNumber(document.getElementById('packYears').value),
         coughDurationWeeks: toNumber(document.getElementById('coughWeeks').value),
+
+        // عيون
         visualSymptoms: document.getElementById('visualSymptoms').value || undefined,
         lastEyeExamDate: document.getElementById('lastEyeExamDate').value || undefined,
         visualAcuity: document.getElementById('visualAcuity').value || undefined,
 
-        // نتائج مخبرية اختيارية (مفاتيح متوافقة مع الـ API)
+        // مخبري اختياري
         eGFR: document.getElementById('egfr').value || undefined,
         hba1c: document.getElementById('hba1c').value || undefined,
         k: document.getElementById('k').value || undefined,
@@ -333,7 +377,6 @@
         imageData: imageBase64 ? [imageBase64] : []
       };
 
-      // تحقق بسيط: لازم فيه شيء واحد على الأقل
       if (
         !caseData.notes && !caseData.diagnosis && !caseData.labResults &&
         !caseData.medications && caseData.imageData.length === 0
