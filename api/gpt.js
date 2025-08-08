@@ -1,7 +1,8 @@
-// /api/gpt.js — النسخة النهائية المستقرة (Edge-safe, no Buffer, no responseMimeType)
-// ميزات: retries/timeout، فحص حجم الطلب لتفادي 413، تصحيح تلقائي للكلاسات/النِّسَب٪، وتعليمات طبية/تأمينية شاملة (تشمل العيون).
+// /api/gpt.js — النسخة النهائية المحسّنة (Edge-safe, no Buffer, no responseMimeType)
+// ميزات: تعليمات طبية صارمة، كشف تداخلات موسّع، فرض ربط الأعراض بالخدمات (CXR/LDCT)،
+// حماية 413، retries/timeout، وتصحيح تلقائي للكلاسات والنِسَب٪.
 
-const MAX_INLINE_REQUEST_MB = 19.0;                // هامش أمان دون حد ~20MB للصور inline في Gemini
+const MAX_INLINE_REQUEST_MB = 19.0; // هامش أمان تحت حد ~20MB للصور inline
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 60_000;
 
@@ -10,15 +11,21 @@ const systemInstruction = `
 أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري. أخرج تقرير HTML واحد فقط (كتلة واحدة) بصياغة احترافية، دون أي CSS أو <style>.
 
 [أ] منهجية إلزامية مختصرة
-1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
-2) افحص بدقة:
-   • الازدواجية العلاجية (خاصة أدوية الضغط/السكر/الدوار)
-   • أخطاء الجرعات (مثل XR/MR موصوف أكثر من مرة يوميًا)
-   • أمان الأدوية عالية الخطورة وفحوصها (Metformin/Xigduo XR ⇠ eGFR؛ Allopurinol ⇠ eGFR + Uric Acid ± HLA-B*58:01)
-   • وجود تشخيص داعم لكل دواء/إجراء (وإلا فاذكر انعدامه صراحة)
-   • مدة الصرف (90 يوم لمرض حاد = علامة تحذير)
-   • مطابقة العلاج للحالة الكلوية/الكبدية والضغط الحالي والعمر
-   • تداخلات كبار السن (مثل: أدوية الدوار/المهدئات ⇒ خطر السقوط)
+1) حلّل كل البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
+2) افحص بدقة وعلى نحو صريح:
+   • الازدواجية العلاجية: السكري، الضغط، مضادات التخثّر/الصفائح، المضادات الحيوية.
+   • أخطاء الجرعات: XR/MR تُعطى أكثر من مرّة يوميًا، جرعات عالية في CKD، وصف طويل لحالات حادّة.
+   • أمان الأدوية عالية الخطورة وفحوصها:
+       - Metformin/Xigduo XR ⇠ eGFR
+       - Allopurinol ⇠ eGFR + Uric Acid ± HLA-B*58:01
+       - ACEi/ARB أو Spironolactone ⇠ Potassium + Creatinine (بعد 1–2 أسبوع من البدء/التعديل)
+   • التداخلات الدوائية الحرجة (أذكرها بالاسم):
+       - "الضربة الثلاثية": ACEi/ARB + Spironolactone (أو أي MRA) + NSAID ⇒ خطر AKI/HyperK
+       - Simvastatin مع Clarithromycin/erythromycin/azole (CYP3A4) ⇒ خطر انحلال ربيدات
+       - تعدد مضادات التخثّر/الصفائح (Warfarin + NOAC + Aspirin/Clopidogrel)
+       - ازدواجية المضادات الحيوية لنفس التشخيص
+   • وجود تشخيص داعم لكل دواء/إجراء. إن غاب التشخيص اذكر ذلك صراحة.
+   • تعارضات المختبر الحرجة: مثال اختلاف eGFR بين قياسات حديثة — اعتبر الأحدث Red Flag واذكره في التحليل السريري.
 
 [ب] قواعد مخاطبة التأمين (إلزامية)
 - لكل صف في الجدول: احسب "درجة الخطورة" (0–100%) واكتب علامة %.
@@ -32,8 +39,12 @@ const systemInstruction = `
 
 [ج] بنية HTML مطلوبة (لا CSS ولا <style>)
 1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التشخيصات/الملاحظات الحرجة (بما في ذلك أي تعارض نص/صورة وأي افتراضات).</p>
-3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr...).</p>
+2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التشخيصات/العلامات الحمراء (تعارض eGFR، إلخ) وأي افتراضات.</p>
+3) <h4>التحليل السريري العميق</h4><p>
+   - اربط الأعراض بالتوجيهات: مريض ≥40 سنة ومدخّن مع سعال مزمن/فقدان وزن ⇒ أذكر ضرورة CXR الآن وLDCT السنوي (إن انطبقت معايير USPSTF).
+   - اشرح بالتفصيل الأخطاء (XR bid، CKD مع Metformin، الضربة الثلاثية، Simvastatin+Clarithromycin...).
+   - علّق على تعارض eGFR واعتبر الأحدث مرجّحًا حتى التثبّت.
+</p>
 4) <h4>جدول الأدوية والإجراءات</h4>
 <table><thead><tr>
 <th>الدواء/الإجراء</th>
@@ -48,20 +59,20 @@ const systemInstruction = `
 <!-- املأ الصفوف -->
 </tbody></table>
 
-[د] فرص تحسين الخدمة ورفع مستوى الدخل (وفق مصلحة المريض – مدعومة بالأدلة، إلزامي)
-- أخرج قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
-  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — منفعة للمريض (تشخيص/أمان/متابعة) — منفعة تشغيلية للعيادة (مختبر/تصوير/متابعة دورية) — **مصدر موثوق + رابط مباشر**.
-- فعّل البنود التالية عندما تنطبق محفزاتها:
-  • سكري نوع 2 ⇒ **HbA1c** (كل 3 أشهر إن غير منضبط، 6–12 أشهر إن مستقر) — ADA 2025 (رابط).
-  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** قبل/أثناء العلاج — FDA + KDIGO/ADA–KDIGO (روابط).
-  • Allopurinol (No-uric) ⇒ **Uric Acid + eGFR ± HLA-B*58:01** (حسب العِرق) — ACR Gout (رابط).
-  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — ACC/AHA HTN (رابط).
-  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة مع أعراض ⇒ **Chest X-ray (CXR)** — ACR Appropriateness (رابط).
-  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — USPSTF (رابط).
-  • سكري بالغ/عمر متقدّم ⇒ **فحص عين شامل مع توسعة الحدقة سنوياً** — ADA 2025 (رابط).
-  • أعراض بصرية أو اشتباه وذمة بقعية سكريّة ⇒ **OCT لماكيولا** — AAO PPP (رابط).
-  • ضعف الوصول لطبيب عيون/فحص أولي داخل العيادة ⇒ **تصوير قاع العين (Non-mydriatic) / Tele-retina** أو **نظام AI ذاتي (مثل IDx-DR)** — AAO/ATA + FDA (روابط).
-- إذا لزم تفعيل توصية لكن نقصت البيانات (العمر/التدخين/المدة/الأعراض)، اكتب: "مشروط بتوفير: …".
+[د] فرص تحسين الخدمة ورفع مستوى الدخل (وفق مصلحة المريض – مدعومة بالأدلة)
+- أخرج قائمة نقطية؛ لكل عنصر الصيغة:
+  **اسم الفحص/الخدمة** — سبب سريري محدد — منفعة للمريض — منفعة تشغيلية للعيادة — **مصدر موثوق + رابط https مباشر**.
+- فعّل البنود حين تنطبق محفزاتها:
+  • سكري نوع 2 ⇒ **HbA1c** كل 3 أشهر إن غير منضبط، 6–12 أشهر إن مستقر — ADA 2025 (رابط).
+  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** قبل/أثناء العلاج — FDA + KDIGO/ADA–KDIGO.
+  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — ACR Gout.
+  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — ACC/AHA HTN.
+  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة مع أعراض ⇒ **CXR الآن** — ACR Appropriateness.
+  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — USPSTF.
+  • سكري بالغ/عمر متقدّم ⇒ **فحص عين شامل مع توسعة الحدقة سنوياً** — ADA 2025.
+  • أعراض بصرية/اشتباه وذمة بقعية ⇒ **OCT لماكيولا** — AAO PPP.
+  • ضعف الوصول لطبيب عيون ⇒ **تصوير قاع العين Non-mydriatic / Tele-retina** أو **نظام AI معتمد (IDx-DR)** — AAO/ATA + FDA.
+- إلزامي: أدرج ≥ 6 مصادر بروابط https صحيحة. إن نقصت البيانات اكتب "مشروط بتوفير: …".
 
 [هـ] خطة العمل
 - قائمة مرقمة بتصحيحات فورية دقيقة (تعديل جرعة XR، إيقاف ازدواجية، طلب eGFR/UA/K+Cr…، إضافة تشخيص داعم…).
@@ -74,7 +85,7 @@ const systemInstruction = `
 - اكتب نسب الخطورة بعلامة % وطبّق الكلاسات (risk-high / risk-medium / risk-low) على <td> في عمودي "درجة الخطورة" و"قرار التأمين".
 `;
 
-// ===================== Prompt Builder (يدعم حقول عيون/تنفس اختيارية) =====================
+// ===================== Prompt Builder (يدعم عيون/تنفس) =====================
 function buildUserPrompt(caseData = {}) {
   return `
 **بيانات المريض (مدخل يدويًا):**
@@ -104,39 +115,46 @@ function buildUserPrompt(caseData = {}) {
 `;
 }
 
-// ===================== Helpers: حجم الطلب، تصحيح المخرجات، fetch مع Timeout/Retry =====================
+// ===================== Helpers =====================
 const _encoder = new TextEncoder();
 function byteLengthUtf8(str) { return _encoder.encode(str || '').length; }
 
-// تقدير حجم الطلب بالميجابايت (Base64 يضيف ~33%)
+// تقدير حجم الطلب بالميجابايت (Base64 ≈ +33%)
 function estimateInlineRequestMB(parts) {
   let bytes = 0;
   for (const p of parts) {
     if (p.text) bytes += byteLengthUtf8(p.text);
     if (p.inline_data?.data) {
-      const len = p.inline_data.data.length;   // طول Base64
-      bytes += Math.floor((len * 3) / 4);      // تقدير bytes الفعلية
+      const len = p.inline_data.data.length;
+      bytes += Math.floor((len * 3) / 4);
     }
   }
   return bytes / (1024 * 1024);
 }
 
-/** تصحيح ذاتي: يضيف % إن نُسيت ويطبّق الكلاس حسب النسبة على خلايا <td> التي بلا class */
+/** تصحيح ذاتي: إضافة % عند اللزوم + تطبيق الكلاسات على خلايا بدون class + تصفية روابط المصادر */
 function applySafetyPostProcessing(html) {
   try {
     html = String(html || '');
-    // أضف % إن كانت أرقام منفردة داخل خلايا
+
+    // % لو مفقودة
     html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi,
       (_m, o, n, _s, c) => `${o}${n}%${c}`);
-    // أضف الكلاس المناسب إذا لم يُذكر class
+
+    // تطبيق الكلاسات على خلايا النِّسب التي بلا class
     html = html.replace(/(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
       (_m, open, numStr, close) => {
         const v = parseInt(numStr, 10);
         const klass = v >= 70 ? 'risk-high' : v >= 40 ? 'risk-medium' : 'risk-low';
         return open.replace('<td', `<td class="${klass}"`) + `${numStr}%` + close;
       });
-    // قص أي ضجيج قبل أول <h3> (لضمان كتلة HTML واحدة)
+
+    // قص أي ضجيج قبل أول <h3>
     const i = html.indexOf('<h3'); if (i > 0) html = html.slice(i);
+
+    // توكيد أن روابط “فرص تحسين الخدمة” تبدأ بـ https
+    html = html.replace(/href="http:\/\//g, 'href="https://');
+
     return html;
   } catch (e) {
     console.error('Post-processing failed:', e);
@@ -144,20 +162,18 @@ function applySafetyPostProcessing(html) {
   }
 }
 
-// fetch مع timeout + retries لرموز معينة
+// fetch مع timeout + retries
 async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
-      await new Promise(r => setTimeout(r, (3 - retries) * 800)); // backoff بسيط
+      await new Promise(r => setTimeout(r, (3 - retries) * 800));
       return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
     }
     return res;
-  } finally {
-    clearTimeout(id);
-  }
+  } finally { clearTimeout(id); }
 }
 
 // ===================== API Handler =====================
@@ -178,7 +194,7 @@ export default async function handler(req, res) {
     const userPrompt = buildUserPrompt(req.body || {});
     const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
-    // إرفاق الصور Base64 (بدون data:…;base64,) — احرص على ضغطها في الواجهة قبل الإرسال
+    // صور Base64 (بدون data:…;base64,) — احرص على ضغطها من الواجهة
     if (Array.isArray(req.body?.imageData)) {
       for (const img of req.body.imageData) {
         if (typeof img === 'string' && img.length > 0) {
@@ -187,13 +203,13 @@ export default async function handler(req, res) {
       }
     }
 
-    // فحص الحجم لتفادي 413 من Google أو البروكسي
+    // حماية 413
     const estMB = estimateInlineRequestMB(parts);
     if (estMB > MAX_INLINE_REQUEST_MB) {
       return res.status(413).json({
         error: 'الطلب كبير جدًا',
-        detail: `الحجم المقدر ~${estMB.toFixed(2)}MB > ${MAX_INLINE_REQUEST_MB}MB (حد inline ~20MB). 
-خفّض جودة/دقّة الصور من الواجهة أو استخدم Files API.`,
+        detail: `الحجم المقدر ~${estMB.toFixed(2)}MB > ${MAX_INLINE_REQUEST_MB}MB (حد inline ~20MB).
+خفّض جودة/دقّة الصور أو استخدم Files API.`,
         docs: [
           'https://ai.google.dev/gemini-api/docs/image-understanding',
           'https://ai.google.dev/gemini-api/docs/files'
