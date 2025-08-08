@@ -1,150 +1,323 @@
-// /api/gpt.js – النسخة العبقرية النهائية والمستقرة
-
-const systemInstruction = `
-أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري. أخرج تقرير HTML واحد فقط (كتلة واحدة) وفق القواعد التالية:
-
-[أ] منهجية إلزامية مختصرة
-1) حلّل كل البيانات النصية والصورية. إن وُجد تعارض نص/صورة فاذكره كملاحظة حرجة.
-2) تحقّق بدقة من:
-   • الازدواجية العلاجية (خصوصًا أدوية الضغط)
-   • أخطاء الجرعات (مثل أدوية XR/MR تؤخذ أكثر من مرة يوميًا)
-   • أدوية عالية الخطورة ومتطلبات فحوصها (مثال: Xigduo XR ⇠ eGFR، Allopurinol ⇠ eGFR/UA)
-   • المبرر السريري لكل دواء/إجراء (يجب وجود تشخيص داعم)
-   • المكملات الغذائية (غالبًا غير مغطاة تأمينيًا)
-   • مدة الصرف غير الملائمة (مثال 90 يوم لعدوى حادة)
-
-[ب] قواعد مخاطبة التأمين (إلزامية)
-- لكل عنصر في الجدول:
-  1) احسب "درجة الخطورة" كنسبة مئوية 0–100% (أكتب معها علامة %) بالاعتماد على شدة الخطأ وتأثيره.
-  2) طبّق كلاس لوني على خلية درجة الخطورة (td) وعلى خلية قرار التأمين وفق العتبات:
-       • risk-high إذا كانت الدرجة ≥ 70%
-       • risk-medium إذا كانت الدرجة بين 40% و 69%
-       • risk-low إذا كانت الدرجة < 40%
-  3) عمود "قرار التأمين" إلزامي وبالصيغة التالية (اختر المناسب):
-       • ❌ قابل للرفض — السبب: [اذكر سببًا محددًا سريريًا/إجرائيًا]
-         — وللقبول يلزم: [اذكر ما يجب إضافته/تعديله: تشخيص، فحص، تعديل جرعة، إلغاء ازدواجية...]
-       • ⚠️ قابل للمراجعة — السبب: […]
-         — لتحسين فرص القبول: […]
-       • ✅ مقبول
-  4) إن كان الدواء/الكريم/الإجراء بلا تشخيص داعم واضح، اذكر ذلك صراحة في القرار.
-
-[ج] بنية HTML مطلوبة (لا تضف CSS ولا <style>)
-1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-2) <h4>ملخص الحالة</h4><p>…</p>
-3) <h4>التحليل السريري العميق</h4><p>… اربط كل ملاحظة بالتشخيصات …</p>
-4) <h4>جدول الأدوية والإجراءات</h4>
-   جدول بالأعمدة بالترتيب:
-   - الدواء/الإجراء
-   - الجرعة الموصوفة
-   - الجرعة الصحيحة المقترحة (اكتب "إيقاف" إن كان غير مبرر)
-   - التصنيف (دواء | مكمل | جهاز فحص | كريم موضعي | إجراء تشخيصي | إجراء تداخلي)
-   - درجة الخطورة (%)  ← ضع class مناسب (risk-high/medium/low) على <td>
-   - قرار التأمين      ← ضع class مناسب (risk-high/medium/low) على <td> وبالصيغ المعيارية أعلاه
-5) <h4>فرص تحسين الرعاية</h4><ul><li>…</li></ul>
-6) <h4>خطة العمل</h4><ol><li>…</li></ol>
-7) <p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
-`;
-
-function buildUserPrompt(caseData) {
-  return `
-**بيانات المريض (مدخل يدويًا):**
-- العمر: ${caseData.age || 'غير محدد'}
-- الجنس: ${caseData.gender || 'غير محدد'}
-- التشخيصات: ${caseData.diagnosis || 'غير محدد'}
-- الأدوية/الإجراءات المكتوبة: ${caseData.medications || 'غير محدد'}
-- ملاحظات إضافية: ${caseData.notes || 'غير محدد'}
-
-**الملفات المرفوعة:**
-- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}
-`;
-}
-
-/**
- * دالة عبقرية من تصميمك: تقوم بتصحيح عمل النموذج إن نسي وضع الكلاسات اللونية.
- * A genius function of your own design: It self-corrects the model's output if it forgets color classes.
- */
-function applySafetyPostProcessing(html) {
-  try {
-    return html.replace(
-      /(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
-      (match, openTag, numberStr, closeTag) => {
-        const riskValue = parseInt(numberStr, 10);
-        const riskClass = riskValue >= 70 ? 'risk-high' : riskValue >= 40 ? 'risk-medium' : 'risk-low';
-        // إعادة بناء الوسم مع إضافة الكلاس الصحيح
-        const newOpenTag = openTag.replace('<td', `<td class="${riskClass}"`);
-        return `${newOpenTag}${numberStr}%${closeTag}`;
-      }
-    );
-  } catch (e) {
-    console.error("Post-processing failed:", e);
-    return html; // In case of any regex error, return the original HTML
-  }
-}
-
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
-
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
-
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
-
-    const userPrompt = buildUserPrompt(req.body);
-    const parts = [{ text: systemInstruction }, { text: userPrompt }];
-
-    if (req.body.imageData && Array.isArray(req.body.imageData)) {
-      for (const imgData of req.body.imageData) {
-        if (typeof imgData === 'string' && imgData.length > 0) {
-          parts.push({
-            inline_data: { mimeType: 'image/jpeg', data: imgData },
-          });
-        }
-      }
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تقييم الحالة الطبية - بوابة الطبيب</title>
+  <style>
+    :root {
+      --primary-color:#0056b3; --secondary-color:#6c757d; --danger-color:#dc3545;
+      --background-color:#f4f7f9; --text-color:#333; --card-bg-color:#fff;
+      --border-color:#dee2e6; --input-focus-color:rgba(0,86,179,.25);
     }
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--background-color);color:var(--text-color);margin:0;padding:1rem}
+    .container{max-width:900px;margin:2rem auto;background:var(--card-bg-color);padding:2.5rem;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.08);border:1px solid var(--border-color)}
+    h2{text-align:center;color:var(--primary-color);margin-bottom:2rem;font-weight:600}
+    .section-title{font-size:1.2rem;color:var(--primary-color);border-bottom:2px solid var(--primary-color);padding-bottom:.5rem;margin:2rem 0 1.5rem}
+    label{font-weight:600;display:block;margin:.8rem 0 .5rem}
+    textarea,input,select{width:100%;padding:.8rem 1rem;font-size:1rem;border:1px solid var(--border-color);border-radius:8px;box-sizing:border-box;transition:border-color .3s,box-shadow .3s}
+    textarea:focus,input:focus,select:focus{outline:none;border-color:var(--primary-color);box-shadow:0 0 0 3px var(--input-focus-color)}
+    textarea{min-height:120px;resize:vertical}
+    .grid-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem}
+    .button-group{display:flex;justify-content:center;gap:1rem;margin-top:2.5rem}
+    .main-action-button{margin-top:2.5rem}
+    button{padding:.8rem 1.5rem;font-size:1.1rem;font-weight:bold;color:#fff;border:none;border-radius:8px;cursor:pointer;transition:background-color .3s,transform .1s;width:100%}
+    button:active{transform:scale(.98)}
+    .btn-primary{background:var(--primary-color)} .btn-primary:hover{background:#004494}
+    .btn-secondary{background:var(--secondary-color)} .btn-secondary:hover{background:#5a6268}
+    .btn-danger{background:var(--danger-color)} .btn-danger:hover{background:#c82333}
+    .image-upload-container{margin-top:1.5rem;border:2px dashed var(--border-color);border-radius:8px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .3s,background-color .3s}
+    .image-upload-container:hover{border-color:var(--primary-color);background:#f8f9fa}
+    #image-upload-input{display:none}
+    #image-preview-container{margin-top:1rem;text-align:center}
+    #image-preview{max-width:100%;max-height:300px;border-radius:8px;border:1px solid var(--border-color);display:none}
+    #image-meta{font-size:.9rem;color:#555;margin-top:.5rem;display:none}
+    #response-container{margin-top:2rem;padding:1.5rem;border:1px solid #e0e0e0;border-radius:8px;background:#fdfdfd;display:none}
+    .notification{padding:1rem;margin-top:1rem;border-radius:8px;text-align:center;display:none}
+    .notification.error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+    .notification.info{background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb}
+    #user-info{margin-bottom:2rem;color:#555;font-size:.9rem;text-align:center}
+    .hidden{display:none}
 
-    const payload = {
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        temperature: 0.2,
-        topP: 0.95,
-        topK: 40,
-      },
+    /* تنسيقات تقرير المخرجات */
+    #response-container h3{color:var(--primary-color);border-bottom:2px solid var(--primary-color);padding-bottom:.5rem;margin-top:0}
+    #response-container h4{color:#007bff;margin-top:1.5rem}
+    #response-container p{line-height:1.7}
+    #response-container ul{padding-right:20px}
+    #response-container li{margin-bottom:.75rem}
+
+    /* تلوين الكلاسات التي يضعها الذكاء */
+    #response-container .risk-high{color:#721c24;background:#f8d7da;padding:.2rem .6rem;border-radius:6px;font-weight:bold;border:1px solid #f5c6cb}
+    #response-container .risk-medium{color:#856404;background:#fff3cd;padding:.2rem .6rem;border-radius:6px;font-weight:bold;border:1px solid #ffeeba}
+    #response-container .risk-low{color:#155724;background:#d4edda;padding:.2rem .6rem;border-radius:6px;font-weight:bold;border:1px solid #c3e6cb}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>تقييم الحالة الطبية وطلبات التأمين</h2>
+    <div id="user-info">جاري التحقق من المستخدم...</div>
+
+    <h3 class="section-title">1. معلومات المريض (اختياري)</h3>
+    <div class="grid-container">
+      <div>
+        <label for="gender">الجنس:</label>
+        <select id="gender">
+          <option value="" disabled selected>اختر...</option>
+          <option value="male">ذكر</option>
+          <option value="female">أنثى</option>
+        </select>
+      </div>
+      <div>
+        <label for="age">العمر:</label>
+        <input type="number" id="age" placeholder="مثال: 63">
+      </div>
+      <div id="pregnancy-status-container" class="hidden">
+        <label for="pregnancy-status">هل المريضة حامل؟</label>
+        <select id="pregnancy-status">
+          <option value="" disabled selected>اختر...</option>
+          <option value="no">لا</option>
+          <option value="yes">نعم</option>
+        </select>
+      </div>
+      <div id="pregnancy-month-container" class="hidden">
+        <label for="pregnancy-month">في أي شهر؟</label>
+        <input type="number" id="pregnancy-month" min="1" max="9" placeholder="مثال: 5">
+      </div>
+      <div>
+        <label for="height">الطول (سم):</label>
+        <input type="number" id="height" placeholder="مثال: 175">
+      </div>
+      <div>
+        <label for="weight">الوزن (كجم):</label>
+        <input type="number" id="weight" placeholder="مثال: 80">
+      </div>
+      <div>
+        <label for="temperature">درجة الحرارة (°م):</label>
+        <input type="text" id="temperature" placeholder="مثال: 37.5">
+      </div>
+      <div>
+        <label for="blood-pressure">ضغط الدم:</label>
+        <input type="text" id="blood-pressure" placeholder="مثال: 120/80">
+      </div>
+    </div>
+
+    <h3 class="section-title">2. تفاصيل الحالة</h3>
+    <div>
+      <label for="case-description">وصف الحالة:</label>
+      <textarea id="case-description" placeholder="مثال: مريض سكري نوع 2 مع التهاب قدم..."></textarea>
+    </div>
+    <div>
+      <label for="diagnosis">التشخيص المبدئي:</label>
+      <textarea id="diagnosis" placeholder="مثال: T2DM, HTN, UTI, غرغرينا إصبع القدم..."></textarea>
+    </div>
+    <div>
+      <label for="lab-results">نتائج التحاليل والأشعة:</label>
+      <textarea id="lab-results" placeholder="مثال: HbA1c, eGFR, CRP, Culture..."></textarea>
+    </div>
+    <div>
+      <label for="medications-procedures">الأدوية والإجراءات الحالية:</label>
+      <textarea id="medications-procedures" placeholder="مثال: Diovan 40 qd, Xigduo XR bid, ..."></textarea>
+    </div>
+
+    <h3 class="section-title">3. رفع الملفات (اختياري)</h3>
+    <div class="image-upload-container" onclick="document.getElementById('image-upload-input').click();">
+      <span>اضغط هنا لرفع صورة (وصفة، تقرير، ...)</span>
+      <input type="file" id="image-upload-input" accept="image/*">
+    </div>
+    <div id="image-preview-container">
+      <img id="image-preview" src="#" alt="معاينة الصورة" />
+      <div id="image-meta"></div>
+    </div>
+
+    <div class="main-action-button">
+      <button id="analyzeBtn" class="btn-primary" onclick="analyzeCase()">تحليل الحالة وتقديم التقرير</button>
+    </div>
+    <div class="button-group">
+      <button onclick="goToHome()" class="btn-secondary">الشاشة الرئيسية</button>
+      <button onclick="logout()" class="btn-danger">تسجيل الخروج</button>
+    </div>
+
+    <div id="notification-area"></div>
+    <div id="response-container"></div>
+  </div>
+
+  <script type="module">
+    // ===== Firebase =====
+    const firebaseConfig = {
+      apiKey:"AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+      authDomain:"insurance-check-6cec9.firebaseapp.com",
+      projectId:"insurance-check-6cec9",
+      storageBucket:"insurance-check-6cec9.appspot.com",
+      messagingSenderId:"992769471393",
+      appId:"1:992769471393:web:c8a9400210a0e7901011e0"
     };
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const { getAuth, onAuthStateChanged, signOut } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    onAuthStateChanged(auth, (user) => {
+      if (user) document.getElementById("user-info").textContent = `مرحبًا بك، ${user.email}`;
+      else window.location.href = "https://www.m2020m.org/login.html";
     });
 
-    if (!response.ok) {
-        const bodyText = await response.text(); // More robust error reading
-        console.error('Gemini API Error:', response.status, response.statusText, bodyText);
-        return res.status(response.status).json({
-          error: 'فشل الاتصال بـ Gemini API',
-          detail: bodyText,
-        });
+    window.logout = () => signOut(auth).then(() => {
+      showNotification("info","تم تسجيل الخروج بنجاح.");
+      setTimeout(()=> window.location.href="https://www.m2020m.org/login.html",1500);
+    });
+
+    window.goToHome = () => { window.location.href = "https://www.m2020m.org/portal.html"; };
+
+    // ===== حقول الحمل حسب الجنس =====
+    const genderSelect = document.getElementById('gender');
+    const pregnancyStatusContainer = document.getElementById('pregnancy-status-container');
+    const pregnancyMonthContainer = document.getElementById('pregnancy-month-container');
+    const pregnancyStatusSelect = document.getElementById('pregnancy-status');
+
+    genderSelect.addEventListener('change', () => {
+      if (genderSelect.value === 'female') pregnancyStatusContainer.classList.remove('hidden');
+      else {
+        pregnancyStatusContainer.classList.add('hidden');
+        pregnancyMonthContainer.classList.add('hidden');
+        pregnancyStatusSelect.value = ""; document.getElementById('pregnancy-month').value = "";
+      }
+    });
+    pregnancyStatusSelect.addEventListener('change', () => {
+      if (pregnancyStatusSelect.value === 'yes') pregnancyMonthContainer.classList.remove('hidden');
+      else { pregnancyMonthContainer.classList.add('hidden'); document.getElementById('pregnancy-month').value=""; }
+    });
+
+    // ===== معاينة الصورة + الضغط قبل الإرسال =====
+    const imageInput = document.getElementById('image-upload-input');
+    const imagePreview = document.getElementById('image-preview');
+    const imageMeta = document.getElementById('image-meta');
+    let imageBase64 = null; // بدون البادئة
+
+    imageInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const { base64, info } = await compressImage(file, { maxW: 1280, maxH: 1280, quality: 0.6 });
+        imageBase64 = base64;
+        imagePreview.src = 'data:image/jpeg;base64,' + base64;
+        imagePreview.style.display = 'block';
+        imageMeta.style.display = 'block';
+        imageMeta.textContent = `الحجم بعد الضغط: ${(info.sizeKB).toFixed(1)} KB، الأبعاد: ${info.w}×${info.h}`;
+      } catch (err) {
+        console.error(err);
+        showNotification('error','تعذر معالجة الصورة.');
+      }
+    });
+
+    async function compressImage(file, { maxW=1280, maxH=1280, quality=0.6 } = {}) {
+      const dataURL = await new Promise((res, rej)=>{
+        const r = new FileReader();
+        r.onload = ()=> res(r.result); r.onerror = rej; r.readAsDataURL(file);
+      });
+      const img = await new Promise((res, rej)=>{
+        const i = new Image();
+        i.onload = ()=> res(i); i.onerror = rej; i.src = dataURL;
+      });
+      let { width:w, height:h } = img;
+      const ratio = Math.min(maxW / w, maxH / h, 1);
+      w = Math.round(w * ratio); h = Math.round(h * ratio);
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+      const out = canvas.toDataURL('image/jpeg', quality);
+      const base64 = out.split(',')[1];
+      // تقدير الحجمKB بعد الضغط
+      const sizeKB = (base64.length * 3) / 4 / 1024;
+      return { base64, info: { w, h, sizeKB } };
     }
 
-    const result = await response.json();
-    const rawHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>⚠️ لم يتمكن النظام من إنشاء التقرير.</p>';
+    // ===== إشعارات بسيطة =====
+    function showNotification(type, message){
+      const area = document.getElementById('notification-area');
+      area.innerHTML = '';
+      const d = document.createElement('div');
+      d.className = `notification ${type}`;
+      d.textContent = message;
+      area.appendChild(d);
+      d.style.display = 'block';
+    }
 
-    // تطبيق دالة التصحيح الذاتي
-    const finalizedHtml = applySafetyPostProcessing(rawHtml);
+    // ===== إرسال وتحليل =====
+    window.analyzeCase = async function(){
+      const btn = document.getElementById('analyzeBtn');
+      const responseContainer = document.getElementById('response-container');
+      const notificationArea = document.getElementById('notification-area');
 
-    return res.status(200).json({ htmlReport: finalizedHtml });
+      // اجمع البيانات
+      const caseData = {
+        userType:'doctor',
+        age: document.getElementById('age').value,
+        gender: document.getElementById('gender').value,
+        isPregnant: document.getElementById('pregnancy-status').value,
+        pregnancyMonth: document.getElementById('pregnancy-month').value,
+        height: document.getElementById('height').value,
+        weight: document.getElementById('weight').value,
+        temperature: document.getElementById('temperature').value,
+        bloodPressure: document.getElementById('blood-pressure').value,
+        notes: document.getElementById('case-description').value,       // ✔️
+        diagnosis: document.getElementById('diagnosis').value,          // ✔️
+        labResults: document.getElementById('lab-results').value,       // ✔️
+        medications: document.getElementById('medications-procedures').value, // ✔️
+        imageData: imageBase64 ? [imageBase64] : []
+      };
 
-  } catch (err) {
-    console.error('Server Error:', err);
-    return res.status(500).json({
-      error: 'حدث خطأ في الخادم أثناء تحليل الحالة',
-      detail: err.message,
-    });
-  }
-}
+      // فاليديشن حقيقي (أحد الحقول أو صورة)
+      if (
+        !caseData.notes && !caseData.diagnosis && !caseData.labResults &&
+        !caseData.medications && caseData.imageData.length === 0
+      ){
+        showNotification('error','الرجاء إدخال بعض تفاصيل الحالة أو رفع صورة.');
+        return;
+      }
+
+      responseContainer.style.display='none'; responseContainer.innerHTML=''; notificationArea.innerHTML='';
+      showNotification('info','جاري تحليل الحالة، قد يستغرق الأمر بعض الوقت...');
+      btn.disabled = true;
+
+      try{
+        if (!auth.currentUser) throw new Error('المستخدم غير مسجل الدخول.');
+
+        const token = await auth.currentUser.getIdToken();
+
+        const res = await fetch('/api/gpt', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
+          body: JSON.stringify(caseData)
+        });
+
+        const text = await res.text();
+
+        if (!res.ok){
+          // 413 أو أي رسالة HTML من الخادم
+          if (res.status === 413 || /Content Too Large|Entity Too Large/i.test(text)){
+            throw new Error('حجم البيانات كبير: صغّر/قلّل جودة الصورة أو ارفع صورة واحدة فقط.');
+          }
+          throw new Error(`فشل الطلب (${res.status}): ${text.slice(0,200)}...`);
+        }
+
+        let data;
+        try { data = JSON.parse(text); }
+        catch { throw new Error('الرد من الخادم ليس JSON صالحاً.'); }
+
+        if (data.htmlReport){
+          document.getElementById('notification-area').innerHTML = '';
+          responseContainer.innerHTML = data.htmlReport;
+          responseContainer.style.display = 'block';
+          responseContainer.scrollIntoView({ behavior:'smooth' });
+        } else {
+          throw new Error('لم يتم استلام تقرير من الخادم.');
+        }
+      } catch(err){
+        console.error(err);
+        showNotification('error', 'حدث خطأ أثناء التحليل: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
