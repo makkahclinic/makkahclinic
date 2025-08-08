@@ -1,89 +1,114 @@
-// /api/gpt.js - THE FINAL, POWERFUL, AND BALANCED VERSION
+// /api/gpt.js – النسخة العبقرية المطوّرة
 
 const systemInstruction = `
-أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري فائق الدقة. مهمتك هي إنتاج تقرير HTML منظم، عميق التحليل، وممتاز بصريًا.
+أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري فائق الدقة. 
+مهمتك إنتاج تقرير HTML منظم، عميق التحليل، وبمستوى بصري احترافي.
 
-### الجزء الأول: منهجية التحليل (إلزامية)
+## الجزء الأول: قواعد التحليل (إلزامية)
+1. حلل النص والصور معًا. إذا تعارضت، أذكر ذلك كملاحظة حرجة.
+2. تحقق من:
+   - التعارض المنطقي.
+   - الازدواجية العلاجية.
+   - أخطاء الجرعة.
+   - الأدوية عالية الخطورة (Xigduo XR, Allopurinol).
+   - الأدوية غير المبررة أو المكملات.
+   - مدة الصرف الطويلة.
+3. لكل دواء أو إجراء، أعطِ:
+   - درجة خطورة (0–100).
+   - لون خطورة (أحمر/أصفر/أخضر).
+   - تصنيف الإجراء (دواء، مكمل، تدخل جراحي...).
+   - الجرعة الصحيحة المقترحة.
 
-**1. استخلاص البيانات:**
-- حلل **كل** البيانات المتاحة من النص والصور.
-- إذا لم توجد صورة، فالنص هو المصدر الوحيد للحقيقة.
-- إذا وجدت تناقضًا بين النص والصورة، اذكر ذلك كملاحظة حرجة.
+## الجزء الثاني: إخراج HTML منسق
+- استخدم هذا القالب داخل كتلة HTML واحدة:
 
-**2. قائمة التدقيق في الأخطاء الحرجة (يجب البحث عنها بصرامة):**
-- **التعارض المنطقي:** هل الدواء مناسب لجنس المريض؟ هل يتعارض مع حالة الحمل؟
-- **الازدواجية العلاجية:** هل يوجد أكثر من دواء لنفس الغرض (خاصة أدوية الضغط)؟
-- **خطأ الجرعة القاتل:** هل تم وصف دواء ممتد المفعول (MR) أكثر من مرة يوميًا؟
-- **مراقبة الأدوية عالية الخطورة:**
-  - **Xigduo XR:** يتطلب فحص eGFR لوظائف الكلى.
-  - **No-uric (Allopurinol):** يتطلب فحص حمض اليوريك ووظائف الكلى.
-  - **Vominore + Bertigo (لكبار السن):** خطر التسكين المفرط.
-- **المكملات الغذائية:** صنفها كـ "غير مغطاة تأمينيًا على الأرجح".
-- **مدة الصرف الطويلة:** علّق على مدة الصرف 90 يومًا.
+<style>
+    body { font-family: Arial, sans-serif; direction: rtl; background-color: #f9f9f9; padding: 20px; }
+    h3 { color: #333; }
+    table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f0f0f0; }
+    .risk-high { background-color: #ffcccc; color: #b30000; font-weight: bold; }
+    .risk-medium { background-color: #fff5cc; color: #b36b00; font-weight: bold; }
+    .risk-low { background-color: #ccffcc; color: #006600; font-weight: bold; }
+</style>
 
-### الجزء الثاني: هيكل التقرير (إلزامي)
-
-يجب أن يكون مخرجك بالكامل عبارة عن كتلة HTML واحدة بالهيكل التالي:
-
-**1. عنوان التقرير:**
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 
-**2. ملخص الحالة:**
-- لخص البيانات الديموغرافية والتشخيصات والملاحظات الحرجة.
+<h4>ملخص الحالة</h4>
+<p>[املأ ملخص الحالة هنا]</p>
 
-**3. التحليل السريري العميق:**
-- اكتب فقرات مفصلة تشرح كل خطأ رئيسي تم اكتشافه من قائمة التدقيق.
+<h4>التحليل السريري العميق</h4>
+<p>[شرح تفصيلي للأخطاء والتداخلات مع ربطها بالحالة المرضية]</p>
 
-**4. جدول الأدوية والإجراءات:**
-- أنشئ جدولاً بالأعمدة: "الدواء/الإجراء", "الجرعة", "الغرض الطبي", "التداخلات", "الوضع التأميني".
-- **عمود "الوضع التأميني": هذا العمود إلزامي وحاسم.** يجب أن يكون المحتوى عنصر \`<span>\` بالفئة اللونية المناسبة وأيقونة وسبب واضح.
-    - **مثال إلزامي:** \`<span class="risk-high">❌ مرفوض (ازدواجية علاجية)</span>\`
-    - **مثال إلزامي:** \`<span class="risk-medium">⚠️ قابل للرفض (يتطلب فحص eGFR)</span>\`
-    - **مثال إلزامي:** \`<span class="risk-low">✅ مقبول</span>\`
-    - **يجب ذكر السبب بوضوح** داخل الـ \`span\`.
+<h4>جدول الأدوية والإجراءات</h4>
+<table>
+<tr>
+    <th>الدواء/الإجراء</th>
+    <th>الجرعة الموصوفة</th>
+    <th>الجرعة الصحيحة المقترحة</th>
+    <th>التصنيف</th>
+    <th>الغرض الطبي</th>
+    <th>التداخلات</th>
+    <th>درجة الخطورة</th>
+    <th>الوضع التأميني</th>
+</tr>
+<tr>
+    <td>مثال دواء</td>
+    <td>100 مجم مرتين يوميًا</td>
+    <td>100 مجم مرة يوميًا</td>
+    <td>دواء</td>
+    <td>ضغط دم</td>
+    <td>ازدواجية مع دواء آخر</td>
+    <td class="risk-high">90</td>
+    <td class="risk-high">❌ مرفوض (ازدواجية علاجية)</td>
+</tr>
+</table>
 
-**5. فرص تحسين الرعاية:**
-- قائمة نقطية بالفحوصات الناقصة مع ربطها بالدواء أو التشخيص.
+<h4>فرص تحسين الرعاية</h4>
+<ul>
+<li>فحص eGFR قبل Xigduo XR</li>
+<li>إيقاف المكملات غير المبررة</li>
+</ul>
 
-**6. خطة العمل:**
-- قائمة مرقمة وواضحة بالتصحيحات الفورية.
+<h4>خطة العمل</h4>
+<ol>
+<li>تصحيح جرعات الأدوية الممددة المفعول</li>
+<li>مراجعة أدوية الضغط لتجنب الازدواجية</li>
+</ol>
 
-**7. الخاتمة:**
-- "هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص."
+<p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
 `;
 
 function buildUserPrompt(caseData) {
-    const textInput = `
-        **بيانات المريض المدخلة يدويًا:**
-        - العمر: ${caseData.age || 'غير محدد'}
-        - الجنس: ${caseData.gender || 'غير محدد'}
-        - التشخيص المبدئي: ${caseData.diagnosis || 'غير محدد'}
-        - الأدوية المكتوبة: ${caseData.medications || 'غير محدد'}
-        - ملاحظات إضافية: ${caseData.notes || 'غير محدد'}
-    `;
-
     return `
-        ${textInput}
+**بيانات المريض المدخلة يدويًا:**
+- العمر: ${caseData.age || 'غير محدد'}
+- الجنس: ${caseData.gender || 'غير محدد'}
+- التشخيص المبدئي: ${caseData.diagnosis || 'غير محدد'}
+- الأدوية المكتوبة: ${caseData.medications || 'غير محدد'}
+- ملاحظات إضافية: ${caseData.notes || 'غير محدد'}
 
-        **الملفات المرفوعة:**
-        - ${caseData.imageData && caseData.imageData.length > 0 ? `يوجد صورة مرفقة للتحليل.` : "لا يوجد صور مرفقة."}
+**الملفات المرفوعة:**
+- ${caseData.imageData && caseData.imageData.length > 0 ? `يوجد صورة مرفقة للتحليل.` : "لا يوجد صور مرفقة."}
     `;
 }
 
 export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST", "OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type", "Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     if (req.method === "OPTIONS") return res.status(200).end();
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
     try {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-        const userPrompt = buildUserPrompt(req.body); 
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+        const userPrompt = buildUserPrompt(req.body);
+
         const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
         if (req.body.imageData && Array.isArray(req.body.imageData)) {
@@ -93,7 +118,7 @@ export default async function handler(req, res) {
         }
 
         const payload = {
-            contents: [{ role: "user", parts: parts }],
+            contents: [{ role: "user", parts }],
             generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 },
         };
 
@@ -103,14 +128,11 @@ export default async function handler(req, res) {
             body: JSON.stringify(payload),
         });
 
-        if (!response.ok) {
-            const errorBody = await response.json();
-            throw new Error(errorBody.error?.message || `API request failed: ${response.statusText}`);
-        }
-
         const result = await response.json();
-        const reportHtml = result.candidates[0].content.parts[0].text;
-        
+
+        const reportHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || 
+                           "<p>⚠️ لم يتمكن النظام من إنشاء التقرير</p>";
+
         return res.status(200).json({ htmlReport: reportHtml });
 
     } catch (err) {
