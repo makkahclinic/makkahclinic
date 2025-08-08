@@ -1,4 +1,4 @@
-// /api/gpt.js — نسخة محسّنة تلائم المتطلبات (بدون CSS ضمن الـ systemInstruction)
+// /api/gpt.js – النسخة العبقرية النهائية والمستقرة
 
 const systemInstruction = `
 أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري. أخرج تقرير HTML واحد فقط (كتلة واحدة) وفق القواعد التالية:
@@ -17,17 +17,16 @@ const systemInstruction = `
 - لكل عنصر في الجدول:
   1) احسب "درجة الخطورة" كنسبة مئوية 0–100% (أكتب معها علامة %) بالاعتماد على شدة الخطأ وتأثيره.
   2) طبّق كلاس لوني على خلية درجة الخطورة (td) وعلى خلية قرار التأمين وفق العتبات:
-     • risk-high إذا كانت الدرجة ≥ 70%
-     • risk-medium إذا كانت الدرجة بين 40% و 69%
-     • risk-low إذا كانت الدرجة < 40%
+       • risk-high إذا كانت الدرجة ≥ 70%
+       • risk-medium إذا كانت الدرجة بين 40% و 69%
+       • risk-low إذا كانت الدرجة < 40%
   3) عمود "قرار التأمين" إلزامي وبالصيغة التالية (اختر المناسب):
-     • ❌ قابل للرفض — السبب: [اذكر سببًا محددًا سريريًا/إجرائيًا]
-       — وللقبول يلزم: [اذكر ما يجب إضافته/تعديله: تشخيص، فحص، تعديل جرعة، إلغاء ازدواجية...]
-     • ⚠️ قابل للمراجعة — السبب: […]
-       — لتحسين فرص القبول: […]
-     • ✅ مقبول
-  4) إن كان الدواء/الكريم/الإجراء بلا تشخيص داعم واضح، اذكر ذلك صراحة في القرار:
-     مثال: "❌ قابل للرفض — السبب: عدم وجود تشخيص التهاب جلدي يبرر الكريم — وللقبول يلزم: إضافة تشخيص التهاب جلدي موثق".
+       • ❌ قابل للرفض — السبب: [اذكر سببًا محددًا سريريًا/إجرائيًا]
+         — وللقبول يلزم: [اذكر ما يجب إضافته/تعديله: تشخيص، فحص، تعديل جرعة، إلغاء ازدواجية...]
+       • ⚠️ قابل للمراجعة — السبب: […]
+         — لتحسين فرص القبول: […]
+       • ✅ مقبول
+  4) إن كان الدواء/الكريم/الإجراء بلا تشخيص داعم واضح، اذكر ذلك صراحة في القرار.
 
 [ج] بنية HTML مطلوبة (لا تضف CSS ولا <style>)
 1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
@@ -39,18 +38,11 @@ const systemInstruction = `
    - الجرعة الموصوفة
    - الجرعة الصحيحة المقترحة (اكتب "إيقاف" إن كان غير مبرر)
    - التصنيف (دواء | مكمل | جهاز فحص | كريم موضعي | إجراء تشخيصي | إجراء تداخلي)
-   - الغرض الطبي (بوضوح)
-   - التداخلات (إن وُجدت، مع تسمية الدواء المقابل)
    - درجة الخطورة (%)  ← ضع class مناسب (risk-high/medium/low) على <td>
-   - قرار التأمين       ← ضع class مناسب (risk-high/medium/low) على <td> وبالصيغ المعيارية أعلاه
+   - قرار التأمين      ← ضع class مناسب (risk-high/medium/low) على <td> وبالصيغ المعيارية أعلاه
 5) <h4>فرص تحسين الرعاية</h4><ul><li>…</li></ul>
 6) <h4>خطة العمل</h4><ol><li>…</li></ol>
 7) <p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
-
-[د] قواعد إضافية صارمة:
-- اكتب درجات الخطورة كنسبة مع علامة % (مثل: 75%).
-- لا تستخدم أي CSS أو وسم <style>. استخدم فقط أسماء الكلاسات المذكورة.
-- لا تُخرِج سوى كتلة HTML واحدة صالحة.
 `;
 
 function buildUserPrompt(caseData) {
@@ -67,21 +59,25 @@ function buildUserPrompt(caseData) {
 `;
 }
 
+/**
+ * دالة عبقرية من تصميمك: تقوم بتصحيح عمل النموذج إن نسي وضع الكلاسات اللونية.
+ * A genius function of your own design: It self-corrects the model's output if it forgets color classes.
+ */
 function applySafetyPostProcessing(html) {
-  // بوست-بروسس بسيط لضمان وجود الكلاسات بناءً على النسبة إن أغفلها النموذج:
-  // يبحث عن خلايا "درجة الخطورة" ويضيف الكلاس حسب النسبة إن لم توجد.
   try {
-    // نستخدم Regex خفيف لأننا لا نريد HTML parser ثقيل على السيرفر.
     return html.replace(
       /(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
-      (m, open, numStr, close) => {
-        const num = parseInt(numStr, 10);
-        const klass = num >= 70 ? 'risk-high' : num >= 40 ? 'risk-medium' : 'risk-low';
-        return open.replace('<td', `<td class="${klass}"`) + `${num}%` + close;
+      (match, openTag, numberStr, closeTag) => {
+        const riskValue = parseInt(numberStr, 10);
+        const riskClass = riskValue >= 70 ? 'risk-high' : riskValue >= 40 ? 'risk-medium' : 'risk-low';
+        // إعادة بناء الوسم مع إضافة الكلاس الصحيح
+        const newOpenTag = openTag.replace('<td', `<td class="${riskClass}"`);
+        return `${newOpenTag}${numberStr}%${closeTag}`;
       }
     );
-  } catch {
-    return html; // لو فشل البوست-بروسس لأي سبب، رجّع الـ HTML كما هو.
+  } catch (e) {
+    console.error("Post-processing failed:", e);
+    return html; // In case of any regex error, return the original HTML
   }
 }
 
@@ -97,12 +93,9 @@ export default async function handler(req, res) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
 
-    const apiUrl =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=' +
-      apiKey;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
     const userPrompt = buildUserPrompt(req.body);
-
     const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
     if (req.body.imageData && Array.isArray(req.body.imageData)) {
@@ -121,8 +114,6 @@ export default async function handler(req, res) {
         temperature: 0.2,
         topP: 0.95,
         topK: 40,
-        // اختياري: تحكم بطول الإخراج إن رغبت
-        // maxOutputTokens: 2048,
       },
     };
 
@@ -133,32 +124,27 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-      const bodyText = await response.text();
-      console.error('Gemini API Error:', response.status, response.statusText, bodyText);
-      return res.status(response.status).json({
-        error: 'فشل الاتصال بـ Gemini API',
-        status: response.status,
-        statusText: response.statusText,
-        detail: bodyText,
-      });
+        const bodyText = await response.text(); // More robust error reading
+        console.error('Gemini API Error:', response.status, response.statusText, bodyText);
+        return res.status(response.status).json({
+          error: 'فشل الاتصال بـ Gemini API',
+          detail: bodyText,
+        });
     }
 
     const result = await response.json();
+    const rawHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>⚠️ لم يتمكن النظام من إنشاء التقرير.</p>';
 
-    const reportHtml =
-      result?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      '<p>⚠️ لم يتمكن النظام من إنشاء التقرير. حاول لاحقًا.</p>';
-
-    // بوست-بروسس لتثبيت الكلاسات حسب النسبة إن لزم:
-    const finalizedHtml = applySafetyPostProcessing(reportHtml);
+    // تطبيق دالة التصحيح الذاتي
+    const finalizedHtml = applySafetyPostProcessing(rawHtml);
 
     return res.status(200).json({ htmlReport: finalizedHtml });
+
   } catch (err) {
     console.error('Server Error:', err);
     return res.status(500).json({
       error: 'حدث خطأ في الخادم أثناء تحليل الحالة',
       detail: err.message,
-      stack: err.stack,
     });
   }
 }
