@@ -1,42 +1,39 @@
-// /api/gpt.js — النسخة النهائية الشاملة (إظهار كل الصفوف، تخصص لكل مراجعة، روابط موثوقة، حماية 413، تصحيح تلقائي)
-const MAX_INLINE_REQUEST_MB = 19.0; // هامش أمان دون حد ~20MB للصور inline في Gemini
+// /api/gpt.js — النسخة الفولاذيّة النهائية (Edge-safe, no Buffer)
+// مزايا: retries/timeout، تفادي 413، تصحيح تلقائي للكلاسات/النِّسَب٪، تعليمات إلزامية لذكر "التخصص المراجع" وروابط مصادر في فرص تحسين الخدمة.
+
+const MAX_INLINE_REQUEST_MB = 19.0;                 // أقل من حد ~20MB للصور inline في Gemini
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-// ===================== System Instruction =====================
+// ================ System Instruction ================
 const systemInstruction = `
 أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري. أخرج تقرير HTML واحد فقط (كتلة واحدة) بصياغة احترافية، دون أي CSS أو <style>.
 
 [أ] منهجية إلزامية مختصرة
 1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
 2) افحص بدقة:
-   • الازدواجية العلاجية (خاصة أدوية الضغط/السكري/التجلط/الدوار)
-   • أخطاء الجرعات (مثل XR/MR موصوف أكثر من مرة يوميًا)
-   • أمان الأدوية عالية الخطورة وفحوصها (Metformin/Xigduo XR ⇠ eGFR؛ Allopurinol ⇠ eGFR + Uric Acid ± HLA-B*58:01؛ Warfarin ⇠ INR؛ ACEi/ARB/MRA ⇠ K+Cr)
+   • الازدواجية العلاجية (ضغط/سكر/دوار…)
+   • أخطاء الجرعات (XR/MR موصوف أكثر من مرة يوميًا)
+   • أمان الأدوية عالية الخطورة وفحوصها (Metformin/Xigduo XR ⇠ eGFR؛ Allopurinol ⇠ eGFR + Uric Acid ± HLA-B*58:01؛ Warfarin ⇠ INR)
    • وجود تشخيص داعم لكل دواء/إجراء (وإلا فاذكر انعدامه صراحة)
    • مدة الصرف (90 يوم لمرض حاد = علامة تحذير)
-   • مطابقة العلاج للحالة الكلوية/الكبدية والضغط الحالي والعمر وكبار السن
-   • تداخلات كبار السن (مثل: أدوية الدوار/المهدئات ⇒ خطر السقوط)
+   • مطابقة العلاج للحالة الكلوية/الكبدية والضغط الحالي والعمر
+   • تداخلات كبار السن (دوار/مهدئات ⇒ سقوط)
 
 [ب] قواعد مخاطبة التأمين (إلزامية)
 - لكل صف في الجدول: احسب "درجة الخطورة" (0–100%) واكتب علامة %.
 - طبّق كلاس لوني على <td> في عمودي "درجة الخطورة" و"قرار التأمين":
   • risk-high إذا الدرجة ≥ 70%  • risk-medium إذا 40–69%  • risk-low إذا < 40%
-- صِغ "قرار التأمين" حصراً بإحدى الصيغ:
-  • ❌ قابل للرفض — السبب: [طبي/إجرائي محدد] — وللقبول يلزم: [تشخيص/فحص/تعديل جرعة/إلغاء ازدواجية/خطة متابعة…] — التخصص المُراجع: [اكتب التخصص المناسب]
-  • ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — التخصص المُراجع: [اكتب التخصص المناسب]
-  • ✅ مقبول
+- صيّغ "قرار التأمين" حصراً بإحدى الصيغ الثلاث واذكر **التخصص المراجع** داخل القرار:
+  • ❌ قابل للرفض — السبب: [طبي/إجرائي محدد] — وللقبول يلزم: [تشخيص/فحص/تعديل جرعة/إلغاء ازدواجية…] — **التخصص المُراجع: [مثال: كلى/قلب/غدد/صدر/روماتيزم/أمراض دم/أشعة/أمراض معدية]**
+  • ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — **التخصص المُراجع: […]**
+  • ✅ مقبول — **التخصص المُراجع (إن لزم): […]**
 - إن كان الدواء/الإجراء بلا تشخيص داعم فاذكر ذلك داخل القرار صراحة.
 
-[ج] إظهار جميع الأدوية والإجراءات (إلزامي)
-- اعرض **كل** الأدوية والإجراءات المذكورة في النص/الصورة **دون حذف أي صف** حتى لو نقصت البيانات.
-- إن تعذّر تحديد خانة ما، اكتب "غير محدد".
-- لا تُهمل مضادات التخثر/الصفيحات أو المضادات الحيوية أو الإلكتروليتات أو الكريمات الموضعية أو الأجهزة/الاختبارات المنزلية.
-
-[د] بنية HTML مطلوبة (لا CSS ولا <style>)
+[ج] بنية HTML مطلوبة (لا CSS ولا <style>)
 1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التدخين/السعال/الأعراض البصرية/التشخيصات/الملاحظات الحرجة (بما في ذلك أي تعارض نص/صورة وأي افتراضات).</p>
-3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...). اربط السعال المزمن + التدخين بـ CXR/LDCT مع سبب الاشتباه.</p>
+2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التشخيصات/الملاحظات الحرجة (بما في ذلك أي تعارض نص/صورة وأي افتراضات).</p>
+3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...).</p>
 4) <h4>جدول الأدوية والإجراءات</h4>
 <table><thead><tr>
 <th>الدواء/الإجراء</th>
@@ -48,45 +45,34 @@ const systemInstruction = `
 <th>درجة الخطورة (%)</th>
 <th>قرار التأمين</th>
 </tr></thead><tbody>
-<!-- املأ الصفوف لكل عنصر دون استثناء -->
+<!-- املأ الصفوف -->
 </tbody></table>
 
-[هـ] فرص تحسين الخدمة ورفع مستوى الدخل (وفق مصلحة المريض – مدعومة بالأدلة، إلزامي)
-- أخرج قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
-  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — منفعة للمريض (تشخيص/أمان/متابعة) — منفعة تشغيلية للعيادة (مختبر/تصوير/متابعة دورية) — **مصدر موثوق + رابط مباشر**.
-- أمثلة روابط موثوقة (استخدمها أو الأحدث منها):
-  • ADA Standards of Care (Diabetes): https://diabetesjournals.org/care
-  • FDA Metformin & Renal Impairment: https://www.fda.gov/drugs/
-  • KDIGO CKD Guideline: https://kdigo.org/guidelines/ckd-evaluation-and-management/
-  • ACR Appropriateness Criteria—Chronic Cough: https://acsearch.acr.org/list
-  • USPSTF Lung Cancer Screening: https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening
-  • ACC/AHA Hypertension Guideline: https://www.ahajournals.org/journal/hyp
-  • ACR Gout Guideline: https://www.rheumatology.org/
-  • AAO Preferred Practice Patterns (Retina/OCT): https://www.aao.org/clinical-guidelines
-- فعّل البنود التالية عندما تنطبق محفزاتها (وأضف الرابط المناسب):
-  • سكري نوع 2 ⇒ **HbA1c** (كل 3 أشهر إن غير منضبط، 6–12 أشهر إن مستقر) — ADA.
-  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** قبل/أثناء العلاج — FDA + KDIGO/ADA–KDIGO.
-  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — ACR Gout.
-  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — ACC/AHA.
-  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة مع أعراض ⇒ **Chest X-ray (CXR)** — ACR.
-  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — USPSTF.
-  • سكري بالغ/عمر متقدّم ⇒ **فحص عين شامل مع توسعة الحدقة سنوياً** — ADA.
-  • أعراض بصرية/اشتباه وذمة بقعية سكريّة ⇒ **OCT لماكيولا** — AAO.
-  • ضعف الوصول لعيون ⇒ **تصوير قاع العين (Non-mydriatic) / Tele-retina** أو **AI-DR** — AAO/ATA/FDA.
-- إذا لزم تفعيل توصية لكن نقصت البيانات (العمر/التدخين/المدة/الأعراض)، اكتب: "مشروط بتوفير: …".
+[د] فرص تحسين الخدمة ورفع مستوى الدخل (وفق مصلحة المريض – مدعومة بالأدلة)
+- قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
+  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — منفعة للمريض (تشخيص/أمان/متابعة) — منفعة تشغيلية للعيادة (مختبر/تصوير/زيارة متابعة) — **مصدر موثوق + رابط مباشر**.
+- فعّل البنود التالية عندما تنطبق محفزاتها (مع روابط إلزامية):
+  • سكري نوع 2 ⇒ **HbA1c** كل 3 أشهر إن غير منضبط — **ADA Standards of Care**: https://diabetesjournals.org/care
+  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** — **FDA**: https://www.fda.gov/  — **KDIGO**: https://kdigo.org/
+  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — **ACR Gout**: https://rheumatology.org/
+  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — **ACC/AHA**: https://www.ahajournals.org/
+  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة ⇒ **Chest X-ray (CXR)** — **ACR Appropriateness**: https://acsearch.acr.org/
+  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — **USPSTF**: https://www.uspreventiveservicestaskforce.org/
+  • سكري بالغ/عمر متقدّم ⇒ **فحص عين شامل مع توسعة الحدقة سنوياً** — **ADA**: https://diabetesjournals.org/care
+  • أعراض بصرية أو اشتباه وذمة بقعية ⇒ **OCT** — **AAO PPP**: https://www.aao.org/preferred-practice-pattern
 
-[و] خطة العمل
-- قائمة مرقمة بتصحيحات فورية دقيقة (تعديل جرعة XR، إيقاف ازدواجية، طلب eGFR/UA/K+Cr/INR…، إضافة تشخيص داعم…)، واذكر **التخصص** لكل بند عند الحاجة (غدد/كُلى/قلب/صدر/عيون/روماتيزم/أمراض معدية/جلدية).
+[هـ] خطة العمل
+- قائمة مرقمة بتصحيحات فورية دقيقة (تعديل جرعة XR، إيقاف ازدواجية، طلب eGFR/UA/K+Cr/INR…، إضافة تشخيص داعم…).
 
-[ز] الخاتمة
+[و] الخاتمة
 <p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
 
-[ح] الإخراج
+[ز] الإخراج
 - أخرج **كتلة HTML واحدة فقط** وصالحة.
 - اكتب نسب الخطورة بعلامة % وطبّق الكلاسات (risk-high / risk-medium / risk-low) على <td> في عمودي "درجة الخطورة" و"قرار التأمين".
 `;
 
-// ===================== Prompt Builder (يدعم حقول تنفس/عيون) =====================
+// ================ Prompt Builder ================
 function buildUserPrompt(caseData = {}) {
   return `
 **بيانات المريض (مدخل يدويًا):**
@@ -110,14 +96,13 @@ function buildUserPrompt(caseData = {}) {
 - Potassium: ${caseData.k ?? 'غير محدد'}
 - Creatinine: ${caseData.cr ?? 'غير محدد'}
 - Uric Acid: ${caseData.ua ?? 'غير محدد'}
-- INR: ${caseData.inr ?? 'غير محدد'}
 
 **الملفات المرفوعة:**
 - ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}
 `;
 }
 
-// ===================== Helpers: حجم الطلب، تصحيح المخرجات، fetch مع Timeout/Retry =====================
+// ================ Helpers ================
 const _encoder = new TextEncoder();
 function byteLengthUtf8(str) { return _encoder.encode(str || '').length; }
 
@@ -138,17 +123,17 @@ function estimateInlineRequestMB(parts) {
 function applySafetyPostProcessing(html) {
   try {
     html = String(html || '');
-    // أضف % إن كانت أرقام منفردة داخل خلايا
+    // أضف % للأرقام داخل خلايا الجدول إن نُسيت
     html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi,
       (_m, o, n, _s, c) => `${o}${n}%${c}`);
-    // أضف الكلاس المناسب إذا لم يُذكر class على خلية نسبة الخطورة
+    // أضف الكلاس المناسب إن لم يُذكر
     html = html.replace(/(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
       (_m, open, numStr, close) => {
         const v = parseInt(numStr, 10);
         const klass = v >= 70 ? 'risk-high' : v >= 40 ? 'risk-medium' : 'risk-low';
         return open.replace('<td', `<td class="${klass}"`) + `${numStr}%` + close;
       });
-    // قص أي ضجيج قبل أول <h3> (لضمان كتلة HTML واحدة)
+    // قص أي شيء قبل أول <h3> لضمان كتلة HTML واحدة
     const i = html.indexOf('<h3'); if (i > 0) html = html.slice(i);
     return html;
   } catch (e) {
@@ -157,14 +142,14 @@ function applySafetyPostProcessing(html) {
   }
 }
 
-// fetch مع timeout + retries لرموز معينة
+// fetch مع timeout + retries
 async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
-      await new Promise(r => setTimeout(r, (3 - retries) * 800)); // backoff بسيط
+      await new Promise(r => setTimeout(r, (3 - retries) * 800)); // backoff
       return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
     }
     return res;
@@ -173,7 +158,7 @@ async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_T
   }
 }
 
-// ===================== API Handler =====================
+// ================ API Handler ================
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -185,6 +170,7 @@ export default async function handler(req, res) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
+
     const apiUrl =
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
@@ -200,13 +186,13 @@ export default async function handler(req, res) {
       }
     }
 
-    // فحص الحجم لتفادي 413 من Google أو البروكسي
+    // فحص الحجم لتفادي 413
     const estMB = estimateInlineRequestMB(parts);
     if (estMB > MAX_INLINE_REQUEST_MB) {
       return res.status(413).json({
         error: 'الطلب كبير جدًا',
         detail: `الحجم المقدر ~${estMB.toFixed(2)}MB > ${MAX_INLINE_REQUEST_MB}MB (حد inline ~20MB). 
-خفّض جودة/دقّة الصور من الواجهة أو استخدم Files API.`,
+خفّض جودة/دقّة الصور أو استخدم Files API.`,
         docs: [
           'https://ai.google.dev/gemini-api/docs/image-understanding',
           'https://ai.google.dev/gemini-api/docs/files'
@@ -216,7 +202,7 @@ export default async function handler(req, res) {
 
     const payload = {
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 } // لا تضع responseMimeType هنا
+      generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 }
     };
 
     const response = await fetchWithRetry(apiUrl, {
