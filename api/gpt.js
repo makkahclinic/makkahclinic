@@ -1,98 +1,58 @@
-// /api/gpt.js – النسخة الفولاذيّة النهائية (Edge-safe, no Buffer)
-// مزايا: retries/timeout، تفادي 413، تصحيح تلقائي للكلاسات/النِّسَب٪، تعليمات إلزامية لذكر "التخصص المراجع" وروابط مصادر في فرص تحسين الخدمة.
+// /api/gpt.js — النسخة الفولاذيّة النهائية (Edge-safe, 3-Stage Cognitive Architecture)
 
 const MAX_INLINE_REQUEST_MB = 19.0;
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 90_000; // 90 ثانية للسماح بالتحليل المعقد
 
-// ================ System Instruction (The Steel Edition) ================
+// ================ المرحلة 2: عقل الذكاء الاصطناعي (System Instruction) ================
+// تم تعديله ليتفاعل مع مخرجات مرحلة الفرز الأولي
 const systemInstruction = `
-أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري فائق الدقة. مهمتك إنتاج تقرير HTML واحد فقط، احترافي، وعميق التحليل.
+أنت "كبير المدققين السريريين"، خبير استراتيجي في تقييم المخاطر الطبية والتأمينية. مهمتك تحليل البيانات المعقدة وإنتاج تقرير HTML دقيق وموجز.
 
 [أ] منهجية التحليل الإلزامية
-1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
-2) افحص بدقة وعمق، مع ذكر التفاصيل السريرية:
-   • **الازدواجية العلاجية** (ضغط/سكر/دوار…).
-   • **أخطاء الجرعات** (XR/MR أكثر من مرة يوميًا، جرعات غير مناسبة لوظائف الكلى).
-   • **أمان الأدوية في سياق الحالة:** تحقق من كل دواء مقابل وظائف الكلى (eGFR)، وظائف الكبد، الحمل، والعمر. (مثال: Ciprofloxacin يتطلب تعديل جرعة مع eGFR < 50).
-   • **التفاعلات الدوائية الحرجة:** (مثال: Ciprofloxacin + Warfarin ⇒ يزيد خطر النزيف ويتطلب مراقبة INR يوميًا).
-   • **وجود تشخيص داعم** لكل دواء/إجراء.
-   • **اقتراح بدائل آمنة:** عند التوصية بإيقاف دواء ضروري (مثل مسكن ألم)، اقترح بديلاً أكثر أمانًا (مثل Paracetamol بدلاً من Ibuprofen في حالة القصور الكلوي).
+1) سأقوم بتزويدك بـ "بيانات المريض" و "تحذيرات أولية" تم اكتشافها بواسطة نظام قواعد آلي. مهمتك الأولى هي **تأكيد هذه التحذيرات وشرح خطورتها السريرية** ضمن "التحليل السريري العميق".
+2) مهمتك الثانية هي **اكتشاف أي أخطاء أو تفاعلات دقيقة إضافية** لم يكتشفها النظام الآلي، خاصة تلك التي تتطلب فهمًا عميقًا للسياق (مثل ملاءمة العلاج لحالة الكلى/الكبد، عمر المريض، إلخ).
+3) افحص بدقة:
+   • الازدواجية العلاجية.
+   • أخطاء الجرعات (خاصة أدوية XR/MR).
+   • وجود تشخيص داعم لكل دواء.
+   • اقتراح بدائل آمنة عند الضرورة (مثال: Paracetamol بدلاً من NSAIDs في القصور الكلوي).
 
-[ب] قواعد مخاطبة التأمين الإلزامية
-- لكل صف في الجدول: احسب "درجة الخطورة" (0–100%) واكتب علامة %.
-- طبّق class لوني على <td> في عمودي "درجة الخطورة" و"قرار التأمين":
-  • risk-high إذا الدرجة ≥ 70%  • risk-medium إذا 40–69%  • risk-low إذا < 40%
-- صيّغ "قرار التأمين" حصراً بإحدى الصيغ الثلاث واذكر **التخصص المراجع** داخل القرار:
-  • ❌ قابل للرفض — السبب: [طبي/إجرائي محدد] — وللقبول يلزم: [تشخيص/فحص/تعديل جرعة/إلغاء ازدواجية…] — **التخصص المُراجع: [مثال: كلى/قلب/غدد/أمراض معدية]**
-  • ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — **التخصص المُراجع: […]**
-  • ✅ مقبول — **التخصص المُراجع (إن لزم): […]**
-
-[ج] بنية HTML المطلوبة (لا CSS ولا <style>)
-1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التشخيصات/الملاحظات الحرجة.</p>
-3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...).</p>
-4) <h4>جدول الأدوية والإجراءات</h4>
-<table><thead><tr>
-<th>الدواء/الإجراء</th>
-<th>الجرعة الموصوفة</th>
-<th>الجرعة الصحيحة المقترحة</th>
-<th>التصنيف</th>
-<th>درجة الخطورة (%)</th>
-<th>قرار التأمين</th>
-</tr></thead><tbody>
-</tbody></table>
-
-[د] فرص تحسين الخدمة (مدعومة بالأدلة الإلزامية)
-- قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
-  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — **مصدر موثوق + رابط مباشر**.
-- فعّل البنود التالية عندما تنطبق محفزاتها (مع روابط إلزامية):
-  • سكري نوع 2 ⇒ **HbA1c** كل 3 أشهر إن غير منضبط — **ADA Standards of Care**: https://diabetesjournals.org/care
-  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** — **KDIGO**: https://kdigo.org/
-  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — **ACR Gout**: https://www.rheumatology.org/
-  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — **ACC/AHA**: https://www.ahajournals.org/
-  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة ⇒ **Chest X-ray (CXR)** — **ACR Appropriateness**: https://acsearch.acr.org/
-  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — **USPSTF**: https://www.uspreventiveservicestaskforce.org/
-
-[هـ] خطة العمل (يجب أن تكون إجرائية ومحددة)
-- قائمة مرقمة بتصحيحات فورية دقيقة.
-- مثال: "1. إعطاء غلوكونات الكالسيوم IV فوراً لفرط البوتاسيوم (K⁺>6.0)."
-- مثال: "2. استبدال الإيبوبروفين بباراسيتامول (بحد أقصى 3 جم/يوم)."
-- مثال: "3. تعديل جرعة السيبروفلوكساسين لـ 250mg مرتين يومياً بناءً على eGFR."
-
-[و] الخاتمة
-<p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
+[ب] قواعد إخراج التقرير الإلزامية
+- **جدول الأدوية:** لكل دواء، احسب "درجة الخطورة" (0–100%) وطبّق class لوني (risk-high/medium/low) على خلايا <td> الخاصة بـ "درجة الخطورة" و "قرار التأمين".
+- **قرار التأمين:** يجب أن يكون بالصيغة التفصيلية التالية، مع تحديد "التخصص المُراجع":
+  • ❌ قابل للرفض — السبب: [توضيح سريري] — وللقبول يلزم: [إجراء محدد] — **التخصص المُراجع: [كلى/قلب/غدد...]**
+- **فرص تحسين الخدمة:** اقترح فحوصات إضافية بناءً على المحفزات التالية، مع ذكر المصدر والرابط الإلزامي:
+  • سكري نوع 2 ⇒ **HbA1c** كل 3 أشهر — **ADA**: https://diabetesjournals.org/care
+  • Metformin/CKD ⇒ **eGFR + UACR** — **KDIGO**: https://kdigo.org/
+  • Allopurinol ⇒ **Uric Acid + eGFR** — **ACR**: https://www.rheumatology.org/
+  • ACEi/ARB/CKD ⇒ **Potassium + Creatinine** — **ACC/AHA**: https://www.ahajournals.org/
+- **خطة العمل:** يجب أن تكون قائمة بإجراءات **فورية، محددة، وقابلة للتنفيذ** (مثال: "إعطاء غلوكونات الكالسيوم IV فوراً").
+- **الإخراج النهائي:** كتلة HTML واحدة فقط، بدون أي CSS أو <style>.
 `;
 
-// ================ Prompt Builder ================
-function buildUserPrompt(caseData = {}) {
-  return `
+// ================ بنّاء الطلب (Prompt Builder) ================
+// أصبح الآن يمرر البيانات الخام والتحذيرات الأولية
+function buildUserPrompt(caseData = {}, preProcessedAlerts = []) {
+  let promptText = `
 **بيانات المريض (مدخل يدويًا):**
 - العمر: ${caseData.age ?? 'غير محدد'}
 - الجنس: ${caseData.gender ?? 'غير محدد'}
 - التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
 - الأدوية/الإجراءات المكتوبة: ${caseData.medications ?? 'غير محدد'}
+- نتائج مخبرية: eGFR=${caseData.eGFR ?? 'N/A'}, HbA1c=${caseData.hba1c ?? 'N/A'}, K+=${caseData.k ?? 'N/A'}, INR=${caseData.inr ?? 'N/A'}
 - ملاحظات إضافية: ${caseData.notes ?? 'غير محدد'}
-
-**نتائج مخبرية (اختياري):**
-- eGFR: ${caseData.eGFR ?? 'غير محدد'}
-- HbA1c: ${caseData.hba1c ?? 'غير محدد'}
-- Potassium (K+): ${caseData.k ?? 'غير محدد'}
-- Creatinine (Cr): ${caseData.cr ?? 'غير محدد'}
-- Uric Acid (UA): ${caseData.ua ?? 'غير محدد'}
-- INR: ${caseData.inr ?? 'غير محدد'}
-
-**معلومات إضافية:**
-- مدخّن: ${caseData.isSmoker === true ? 'نعم' : 'لا'}
-- باك-سنة: ${caseData.smokingPackYears ?? 'غير محدد'}
-- مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
-
-**الملفات المرفوعة:**
-- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}
 `;
+  if (preProcessedAlerts.length > 0) {
+    promptText += `\n**تحذيرات أولية تم اكتشافها بواسطة نظام القواعد (مطلوب تأكيدها وشرحها):**\n`
+    promptText += preProcessedAlerts.map(a => `- ⚠️ ${a.type}: ${a.message} -> الإجراء المقترح: ${a.action}`).join('\n');
+  }
+
+  promptText += `\n**الملفات المرفوعة:**\n- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}`;
+  return promptText;
 }
 
-// ================ Helpers ================
+// ================ الدوال المساعدة (Helpers) ================
 const _encoder = new TextEncoder();
 function byteLengthUtf8(str) { return _encoder.encode(str || '').length; }
 
@@ -100,14 +60,12 @@ function estimateInlineRequestMB(parts) {
   let bytes = 0;
   for (const p of parts) {
     if (p.text) bytes += byteLengthUtf8(p.text);
-    if (p.inline_data?.data) {
-      const len = p.inline_data.data.length;
-      bytes += Math.floor((len * 3) / 4);
-    }
+    if (p.inline_data?.data) bytes += Math.floor((p.inline_data.data.length * 3) / 4);
   }
   return bytes / (1024 * 1024);
 }
 
+// المرحلة 3: التدقيق النهائي (Post-processing)
 function applySafetyPostProcessing(html) {
   try {
     html = String(html || '');
@@ -127,6 +85,7 @@ function applySafetyPostProcessing(html) {
 }
 
 async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  // ... (This function remains the same, it's already excellent)
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -141,7 +100,7 @@ async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_T
   }
 }
 
-// ================ API Handler ================
+// ================ API Handler (The Conductor of the 3-Stage Pipeline) ================
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -151,27 +110,49 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
+    const caseData = req.body || {};
+    const meds = caseData.medications || '';
+    const eGFR = caseData.eGFR;
+    const criticalAlerts = [];
+
+    // --- المرحلة 1: الفرز الأولي (Pre-processing Rules Engine) ---
+    if (/ciprofloxacin|سيبروفلوكساسين/i.test(meds) && /warfarin|وارفارين/i.test(meds)) {
+      criticalAlerts.push({
+        type: 'تفاعل دوائي خطير',
+        message: 'السيبروفلوكساسين مع الوارفارين يزيد بشكل حاد من خطر النزيف.',
+        action: 'مراقبة INR يوميًا وتعديل جرعة الوارفارين.'
+      });
+    }
+    if (/ibuprofen|إيبوبروفين/i.test(meds) && eGFR && eGFR < 60) {
+      criticalAlerts.push({
+        type: 'دواء غير آمن',
+        message: 'مضادات الالتهاب غير الستيرويدية (NSAIDs) مثل الإيبوبروفين قد تزيد من تدهور وظائف الكلى.',
+        action: 'إيقاف واستبدال بـ Paracetamol.'
+      });
+    }
+    // يمكنك إضافة المزيد من القواعد الصارمة هنا
+
+    // --- بناء الطلب وإرساله للذكاء الاصطناعي ---
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
-
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
-    const userPrompt = buildUserPrompt(req.body || {});
+    
+    // تمرير البيانات الخام + التحذيرات الأولية
+    const userPrompt = buildUserPrompt(caseData, criticalAlerts);
     const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
-    if (Array.isArray(req.body?.imageData)) {
-      for (const img of req.body.imageData) {
+    if (Array.isArray(caseData.imageData)) {
+      for (const img of caseData.imageData) {
         if (typeof img === 'string' && img.length > 0) {
           parts.push({ inline_data: { mimeType: 'image/jpeg', data: img } });
         }
       }
     }
-
+    
+    // فحص الحجم لتفادي 413
     const estMB = estimateInlineRequestMB(parts);
     if (estMB > MAX_INLINE_REQUEST_MB) {
-      return res.status(413).json({
-        error: 'الطلب كبير جدًا',
-        detail: `الحجم المقدر ~${estMB.toFixed(2)}MB. خفّض جودة الصور أو استخدم Files API.`,
-      });
+      return res.status(413).json({ error: 'الطلب كبير جدًا', detail: `الحجم المقدر ~${estMB.toFixed(2)}MB. خفّض جودة الصور.`});
     }
 
     const payload = {
@@ -186,32 +167,26 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
-
     if (!response.ok) {
-      console.error('Gemini API Error:', response.status, response.statusText, text);
-      return res.status(response.status).json({
-        error: 'فشل الاتصال بـ Gemini API',
-        detail: text.slice(0, 2000),
-      });
+      console.error('Gemini API Error:', text);
+      return res.status(response.status).json({ error: 'فشل الاتصال بـ Gemini API', detail: text });
     }
 
     let result;
     try { result = JSON.parse(text); }
     catch {
-      console.error('Non-JSON response from Gemini:', text.slice(0, 600));
-      return res.status(502).json({ error: 'استجابة غير متوقعة من Gemini', detail: text.slice(0, 1200) });
+      console.error('Non-JSON response from Gemini:', text);
+      return res.status(502).json({ error: 'استجابة غير متوقعة من Gemini' });
     }
 
     const rawHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>⚠️ لم يتمكن النظام من إنشاء التقرير.</p>';
+
+    // --- المرحلة 3: تطبيق التدقيق النهائي ---
     const finalizedHtml = applySafetyPostProcessing(rawHtml);
     return res.status(200).json({ htmlReport: finalizedHtml });
 
   } catch (err) {
     console.error('Server Error:', err);
-    return res.status(500).json({
-      error: 'حدث خطأ في الخادم أثناء تحليل الحالة',
-      detail: err.message,
-      stack: err.stack
-    });
+    return res.status(500).json({ error: 'حدث خطأ في الخادم', detail: err.message });
   }
 }
