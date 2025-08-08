@@ -447,7 +447,7 @@
         </div>
     </div>
 
-    <button onclick="analyzeSymptoms()" class="btn-primary">
+    <button id="analyze-btn" class="btn-primary">
       <span>تحليل الأعراض</span>
     </button>
     
@@ -465,6 +465,15 @@
   </div>
 
 <script>
+    // ===== التغيير رقم 2: طريقة جديدة وموثوقة لربط الزر بالدالة =====
+    // هذا الكود ينتظر حتى يتم تحميل كل محتوى الصفحة، ثم يربط دالة التحليل بالزر
+    document.addEventListener('DOMContentLoaded', () => {
+        const analyzeButton = document.getElementById('analyze-btn');
+        if (analyzeButton) {
+            analyzeButton.addEventListener('click', analyzeSymptoms);
+        }
+    });
+
     // تتبع حالة الحمل وعرض الحقول المشروطة
     const genderSelect = document.getElementById('gender');
     const pregnancySection = document.getElementById('pregnancy-section');
@@ -525,7 +534,13 @@
                     deleteBtn.innerHTML = '&times;';
                     deleteBtn.className = 'delete-btn';
                     deleteBtn.onclick = () => {
-                        imageBase64Data.splice(index, 1);
+                        // لإيجاد العنصر الصحيح للحذف حتى لو تم حذف عناصر أخرى قبله
+                        const dataUrlToRemove = wrapper.querySelector('.preview-image').src;
+                        const base64ToRemove = dataUrlToRemove.split(',')[1];
+                        const itemIndex = imageBase64Data.indexOf(base64ToRemove);
+                        if(itemIndex > -1) {
+                            imageBase64Data.splice(itemIndex, 1);
+                        }
                         wrapper.remove();
                     };
                     wrapper.appendChild(img);
@@ -541,12 +556,14 @@
     // عرض الإشعارات
     function showNotification(type, message) {
         const notificationArea = document.getElementById('notification-area');
+        notificationArea.innerHTML = ''; // مسح الإشعارات القديمة
         const notificationDiv = document.createElement('div');
         notificationDiv.className = `notification ${type}`;
         const icon = type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle';
         notificationDiv.innerHTML = `<i class="${icon}"></i> ${message}`;
-        notificationArea.innerHTML = '';
         notificationArea.appendChild(notificationDiv);
+        notificationDiv.style.display = 'block'; // إظهار الإشعار
+
         setTimeout(() => {
             notificationDiv.style.opacity = '0';
             setTimeout(() => { notificationDiv.remove(); }, 500);
@@ -555,6 +572,8 @@
 
     // --- هذه هي الدالة الحقيقية والوحيدة لتحليل الأعراض ---
     async function analyzeSymptoms() {
+        console.log("تم الضغط على الزر وبدء التشغيل..."); // سطر الاختبار
+        
         // 1. جمع البيانات من جميع الحقول
         const symptoms = document.getElementById('symptoms').value;
         const age = document.getElementById('age').value;
@@ -586,19 +605,19 @@
         
         // 4. إظهار مؤشر التحميل
         loading.style.display = 'block';
-        document.querySelector('button').disabled = true;
+        document.getElementById('analyze-btn').disabled = true;
 
         // 5. تجميع بيانات التاريخ المرضي والنص
         const historyText = `
-            - العمر: ${age}
-            - الجنس: ${gender}
-            - الوزن: ${weight || 'غير محدد'} كجم
-            - الطول: ${height || 'غير محدد'} سم
-            - مدخن: ${smoker}
-            - العلامات الحيوية: ${vitals || 'غير محدد'}
-            - الحمل: ${gender === 'female' ? (isPregnant === 'yes' ? `نعم، الشهر ${pregnancyMonth}` : 'لا') : 'غير منطبق'}
-            - التشخيصات السابقة: ${diagnosis || 'لا يوجد'}
-            - نتائج التحاليل: ${labs || 'لا يوجد'}
+          - العمر: ${age}
+          - الجنس: ${gender}
+          - الوزن: ${weight || 'غير محدد'} كجم
+          - الطول: ${height || 'غير محدد'} سم
+          - مدخن: ${smoker}
+          - العلامات الحيوية: ${vitals || 'غير محدد'}
+          - الحمل: ${gender === 'female' ? (isPregnant === 'yes' ? `نعم، الشهر ${pregnancyMonth}` : 'لا') : 'غير منطبق'}
+          - التشخيصات السابقة: ${diagnosis || 'لا يوجد'}
+          - نتائج التحاليل: ${labs || 'لا يوجد'}
         `;
         
         // 6. الاتصال الحقيقي بالخادم
@@ -615,8 +634,8 @@
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'حدث خطأ من الخادم');
+                const errorData = await response.json().catch(() => ({ detail: 'فشل في قراءة الخطأ من الخادم' }));
+                throw new Error(errorData.detail || `حدث خطأ من الخادم: ${response.statusText}`);
             }
 
             const result = await response.json();
@@ -634,7 +653,7 @@
             console.error("Fetch Error:", err);
         } finally {
             // 9. إعادة تفعيل الزر في كل الحالات
-            document.querySelector('button').disabled = false;
+            document.getElementById('analyze-btn').disabled = false;
         }
     }
 </script>
