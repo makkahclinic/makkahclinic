@@ -1,45 +1,37 @@
-// /api/gpt.js – النسخة العبقرية المطوّرة
+// /api/gpt.js – نسخة محسنة ومستقرة
 
 const systemInstruction = `
-أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري فائق الدقة. 
-مهمتك إنتاج تقرير HTML منظم، عميق التحليل، وبمستوى بصري احترافي.
+أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري دقيق. 
+مهمتك إنتاج تقرير HTML منظم واحترافي لتحليل وصفة طبية أو إجراءات علاجية.
 
-## الجزء الأول: قواعد التحليل (إلزامية)
-1. حلل النص والصور معًا. إذا تعارضت، أذكر ذلك كملاحظة حرجة.
+## قواعد التحليل
+1. حلل جميع البيانات (نصوص وصور). إذا وجدت تعارضًا بين النص والصورة، أذكره كملاحظة حرجة.
 2. تحقق من:
-   - التعارض المنطقي.
-   - الازدواجية العلاجية.
-   - أخطاء الجرعة.
-   - الأدوية عالية الخطورة (Xigduo XR, Allopurinol).
-   - الأدوية غير المبررة أو المكملات.
-   - مدة الصرف الطويلة.
-3. لكل دواء أو إجراء، أعطِ:
-   - درجة خطورة (0–100).
-   - لون خطورة (أحمر/أصفر/أخضر).
-   - تصنيف الإجراء (دواء، مكمل، تدخل جراحي...).
-   - الجرعة الصحيحة المقترحة.
+   - التعارض المنطقي مع التشخيص.
+   - الازدواجية العلاجية (خاصة أدوية الضغط).
+   - أخطاء الجرعات (مثل دواء ممتد المفعول يُعطى أكثر من مرة يوميًا).
+   - الأدوية عالية الخطورة (Xigduo XR, Allopurinol) واشتراط فحوصات.
+   - المكملات الغذائية (عادة غير مغطاة تأمينيًا).
+   - مدة الصرف الطويلة (90 يومًا) للأدوية الحادة.
+3. لكل دواء/إجراء:
+   - احسب درجة خطورة (0–100).
+   - اختر مباشرة الكلاس المناسب:
+     - risk-high إذا ≥ 70
+     - risk-medium إذا بين 40 و 69
+     - risk-low إذا أقل من 40
+   - اذكر الجرعة الموصوفة، الغرض الطبي، التداخلات، والجرعة الصحيحة المقترحة.
 
-## الجزء الثاني: إخراج HTML منسق
-- استخدم هذا القالب داخل كتلة HTML واحدة:
-
-<style>
-    body { font-family: Arial, sans-serif; direction: rtl; background-color: #f9f9f9; padding: 20px; }
-    h3 { color: #333; }
-    table { border-collapse: collapse; width: 100%; margin-top: 15px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background-color: #f0f0f0; }
-    .risk-high { background-color: #ffcccc; color: #b30000; font-weight: bold; }
-    .risk-medium { background-color: #fff5cc; color: #b36b00; font-weight: bold; }
-    .risk-low { background-color: #ccffcc; color: #006600; font-weight: bold; }
-</style>
+## إخراج HTML
+- استخدم فقط أسماء الكلاسات (risk-high, risk-medium, risk-low) بدون إضافة CSS.
+- بنية التقرير:
 
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 
 <h4>ملخص الحالة</h4>
-<p>[املأ ملخص الحالة هنا]</p>
+<p>[ملخص موجز]</p>
 
 <h4>التحليل السريري العميق</h4>
-<p>[شرح تفصيلي للأخطاء والتداخلات مع ربطها بالحالة المرضية]</p>
+<p>[تفاصيل الأخطاء وربطها بالحالة]</p>
 
 <h4>جدول الأدوية والإجراءات</h4>
 <table>
@@ -67,8 +59,7 @@ const systemInstruction = `
 
 <h4>فرص تحسين الرعاية</h4>
 <ul>
-<li>فحص eGFR قبل Xigduo XR</li>
-<li>إيقاف المكملات غير المبررة</li>
+<li>مثال: فحص eGFR قبل Xigduo XR</li>
 </ul>
 
 <h4>خطة العمل</h4>
@@ -128,17 +119,35 @@ export default async function handler(req, res) {
             body: JSON.stringify(payload),
         });
 
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error("Gemini API Error:", response.status, response.statusText, errorBody);
+            return res.status(response.status).json({
+                error: "فشل الاتصال بـ Gemini API",
+                status: response.status,
+                detail: errorBody
+            });
+        }
+
         const result = await response.json();
 
-        const reportHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || 
-                           "<p>⚠️ لم يتمكن النظام من إنشاء التقرير</p>";
+        if (!result?.candidates?.[0]?.content?.parts?.[0]?.text) {
+            console.error("Gemini API returned unexpected format:", JSON.stringify(result, null, 2));
+            return res.status(500).json({
+                error: "الاستجابة من Gemini لم تكن بالشكل المتوقع",
+                detail: result
+            });
+        }
 
+        const reportHtml = result.candidates[0].content.parts[0].text;
         return res.status(200).json({ htmlReport: reportHtml });
 
     } catch (err) {
+        console.error("Server Error:", err);
         return res.status(500).json({
             error: "حدث خطأ في الخادم أثناء تحليل الحالة",
             detail: err.message,
+            stack: err.stack
         });
     }
 }
