@@ -1,8 +1,241 @@
 // /api/patient-analyzer.js
-// تحليل حالة المريض مع دعم صور أشعة/X-ray وصور طبية أخرى (JPEG/PNG/PDF) وإخراج تقرير HTML منسق (AR/EN).
 
+// ــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ
+// أدوات مساعدة
+// ــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ
+
+// اكتشاف نوع الملف من base64
+function detectMimeType(base64Data = "") {
+  const signatures = {
+    JVBERi0: "application/pdf",
+    iVBORw0: "image/png",
+    "/9j/4A": "image/jpeg",
+    R0lGOD: "image/gif",
+    UklGRg: "image/webp",
+    AAAAIG: "video/mp4",
+    SUQzB: "audio/mpeg",
+  };
+  for (const [sig, mt] of Object.entries(signatures)) {
+    if (base64Data.startsWith(sig)) return mt;
+  }
+  return "image/jpeg"; // افتراضي
+}
+
+// قوالب التقرير (يحافظ على الألوان والعرض)
+const reportTemplates = {
+  ar: `
+  <style>
+    .report-container { font-family: 'Cairo','Segoe UI',Tahoma,Arial,sans-serif; direction: rtl; line-height:1.75 }
+    .box-critical{border-right:5px solid #721c24;background:#f8d7da;color:#721c24;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .box-warning{border-right:5px solid #856404;background:#fff3cd;color:#856404;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .box-good{border-right:5px solid #155724;background:#d4edda;color:#155724;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .box-info{border-right:5px solid #004085;background:#cce5ff;color:#004085;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .custom-table{border-collapse:collapse;width:100%;text-align:right;margin-top:1rem;box-shadow:0 2px 4px rgba(0,0,0,.06)}
+    .custom-table th,.custom-table td{padding:12px;border:1px solid #dee2e6}
+    .custom-table thead{background:#e9ecef}
+    h3,h4{color:#243143;border-bottom:2px solid #0b63c2;padding-bottom:8px;margin-top:1.6rem}
+    .icon{font-size:1.2em;margin-left:.5rem}
+  </style>
+
+  <div class="report-container">
+    <h3>تقرير تحليل طبي شامل</h3>
+    <p class="box-info">بناءً على المعلومات والملفات المرفوعة، أجرى فريقنا تحليلًا سريريًا منظّمًا للحالة مع مراجعة الصور (أشعة/صور تقارير) بدقّة.</p>
+
+    <h4>1) ملخص الحالة والتقييم</h4>
+    <ul>
+      <li><div class="box-good">✅ <strong>الملخص السريري:</strong> [ملخص دقيق للحالة].</div></li>
+      <li><div class="box-critical">❌ <strong>نقاط حرجة:</strong> [تعارض بيانات/معلومة حيوية مفقودة].</div></li>
+      <li><div class="box-warning">⚠️ <strong>بيانات ناقصة:</strong> [فحوص ضرورية مفقودة].</div></li>
+    </ul>
+
+    <h4>2) التشخيصات المحتملة (مرتبة حسب الخطورة)</h4>
+    <ol>
+      <li><div class="box-critical"><strong>الأكثر خطورة ويجب استبعاده أولًا:</strong> [تشخيص + تبرير].</div></li>
+      <li><div class="box-warning"><strong>تشخيص محتمل تالي:</strong> [تشخيص + تبرير].</div></li>
+      <li><div class="box-good"><strong>تشخيصات أقل خطورة:</strong> [قائمة مختصرة].</div></li>
+    </ol>
+
+    <h4>3) مراجعة الأدوية والإجراءات والفجوات</h4>
+    <h5>أ) مراجعة الأدوية</h5>
+    <table class="custom-table">
+      <thead><tr><th>اسم الدواء</th><th>الجرعة/المدة</th><th>الغرض</th><th>تحليل المخاطر</th></tr></thead>
+      <tbody>
+        <tr><td>[دواء]</td><td>[جرعة]</td><td>[غرض]</td><td class="box-critical">❌ <strong>خطر عالٍ:</strong> [سبب].</td></tr>
+        <tr><td>[دواء]</td><td>[جرعة]</td><td>[غرض]</td><td class="box-warning">⚠️ <strong>بحذر:</strong> [سبب].</td></tr>
+      </tbody>
+    </table>
+
+    <h5>ب) أخطاء الإجراءات/الفجوات التشخيصية</h5>
+    <table class="custom-table">
+      <thead><tr><th>المشكلة</th><th>التحليل والإجراء المقترح</th><th>سؤال للطبيب</th></tr></thead>
+      <tbody>
+        <tr><td><strong>مثال: صداع حول العين</strong></td><td class="box-warning">غياب قياس ضغط العين لاستبعاد الزرق الحاد.</td><td>"هل أحتاج قياس ضغط العين بشكل عاجل؟"</td></tr>
+        <tr><td><strong>مثال: قسطرة بولية دائمة</strong></td><td class="box-critical">ترفع خطر العدوى المزمنة؛ الأفضل التحويل لقسطرة متقطعة.</td><td>"هل القسطرة المتقطعة أنسب لحالتي؟"</td></tr>
+      </tbody>
+    </table>
+
+    <h4>4) خطة العمل</h4>
+    <ul>
+      <li><div class="box-critical"><span class="icon">🚨</span><strong>إجراء فوري:</strong> [أوقف/توجّه/اتصل…].</div></li>
+      <li><div class="box-warning"><span class="icon">⚠️</span><strong>خلال 24 ساعة:</strong> [موعد/مراجعة].</div></li>
+    </ul>
+
+    <h4>5) أسئلة ذكية لطبيبك</h4>
+    <ul class="box-info"><li>[سؤال 1]</li><li>[سؤال 2]</li></ul>
+
+    <h4>6) ملخص عام</h4>
+    <p>[أعلى المخاطر + الخطوة التالية].</p>
+
+    <h4>7) إخلاء مسؤولية</h4>
+    <div class="box-warning"><strong>هذا التحليل للتوعية فقط ولا يغني عن الفحص السريري واستشارة طبيب مؤهل.</strong></div>
+  </div>
+  `,
+  en: `
+  <style>
+    .report-container { font-family: Arial, system-ui, sans-serif; direction: ltr; line-height:1.75 }
+    .box-critical{border-left:5px solid #721c24;background:#f8d7da;color:#721c24;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .box-warning{border-left:5px solid #856404;background:#fff3cd;color:#856404;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .box-good{border-left:5px solid #155724;background:#d4edda;color:#155724;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .box-info{border-left:5px solid #004085;background:#cce5ff;color:#004085;padding:1rem;margin:.75rem 0;border-radius:10px}
+    .custom-table{border-collapse:collapse;width:100%;text-align:left;margin-top:1rem;box-shadow:0 2px 4px rgba(0,0,0,.06)}
+    .custom-table th,.custom-table td{padding:12px;border:1px solid #dee2e6}
+    .custom-table thead{background:#e9ecef}
+    h3,h4{color:#243143;border-bottom:2px solid #0b63c2;padding-bottom:8px;margin-top:1.6rem}
+    .icon{font-size:1.2em;margin-right:.5rem}
+  </style>
+
+  <div class="report-container">
+    <h3>Comprehensive Medical Analysis Report</h3>
+    <p class="box-info">Based on the provided information and uploaded files, we performed a structured clinical review, including in‑depth image (radiograph/report) analysis.</p>
+
+    <h4>1) Case Summary & Assessment</h4>
+    <ul>
+      <li><div class="box-good">✅ <strong>Clinical summary:</strong> [Concise summary].</div></li>
+      <li><div class="box-critical">❌ <strong>Critical issues:</strong> [Conflicts / vital omissions].</div></li>
+      <li><div class="box-warning">⚠️ <strong>Missing data:</strong> [Essential tests not done].</div></li>
+    </ul>
+
+    <h4>2) Differential diagnoses (by severity)</h4>
+    <ol>
+      <li><div class="box-critical"><strong>Must‑rule‑out first:</strong> [Dx + rationale].</div></li>
+      <li><div class="box-warning"><strong>Next likely:</strong> [Dx + rationale].</div></li>
+      <li><div class="box-good"><strong>Lower‑risk options:</strong> [List].</div></li>
+    </ol>
+
+    <h4>3) Medication / procedures / gaps</h4>
+    <h5>A) Medication audit</h5>
+    <table class="custom-table">
+      <thead><tr><th>Drug</th><th>Dosage/Duration</th><th>Indication</th><th>Risk analysis</th></tr></thead>
+      <tbody>
+        <tr><td>[Med]</td><td>[Dose]</td><td>[Use]</td><td class="box-critical">❌ <strong>High risk:</strong> [Why].</td></tr>
+        <tr><td>[Med]</td><td>[Dose]</td><td>[Use]</td><td class="box-warning">⚠️ <strong>Caution:</strong> [Why].</td></tr>
+      </tbody>
+    </table>
+
+    <h5>B) Procedure errors / diagnostic gaps</h5>
+    <table class="custom-table">
+      <thead><tr><th>Issue</th><th>Analysis & action</th><th>Ask your doctor</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Example: Peri‑orbital headache</strong></td><td class="box-warning">No intraocular pressure measurement documented.</td><td>"Do I need urgent IOP testing?"</td></tr>
+        <tr><td><strong>Example: Chronic indwelling catheter</strong></td><td class="box-critical">Chronic infection risk; consider intermittent catheterization.</td><td>"Is intermittent catheterization safer for me?"</td></tr>
+      </tbody>
+    </table>
+
+    <h4>4) Action plan</h4>
+    <ul>
+      <li><div class="box-critical"><span class="icon">🚨</span><strong>Immediate:</strong> [Stop/ER/etc.].</div></li>
+      <li><div class="box-warning"><span class="icon">⚠️</span><strong>Next 24h:</strong> [Book/monitor/etc.].</div></li>
+    </ul>
+
+    <h4>5) Smart questions</h4>
+    <ul class="box-info"><li>[Q1]</li><li>[Q2]</li></ul>
+
+    <h4>6) Overall summary</h4>
+    <p>[Top risk + next critical step].</p>
+
+    <h4>7) Disclaimer</h4>
+    <div class="box-warning"><strong>This is a health‑awareness tool and not a medical diagnosis; always consult your physician.</strong></div>
+  </div>
+  `,
+};
+
+// يبني نص المستخدم بإظهار الحقول الجديدة كلها
+function buildUserPrompt(body) {
+  const L = body.uiLang === "en" ? "en" : "ar";
+
+  const lines = [];
+  const push = (k, v) => {
+    if (v !== undefined && v !== null && `${v}`.trim() !== "") {
+      lines.push(`- ${k}: ${v}`);
+    }
+  };
+
+  // معلومات عامة
+  push(L === "ar" ? "العمر" : "Age", body.age);
+  push(L === "ar" ? "الجنس" : "Gender", body.gender);
+  if (body.gender === "female") {
+    push(L === "ar" ? "حامل؟" : "Pregnant?", body.pregnancyStatus);
+    if (body.pregnancyStatus === "yes") {
+      push(L === "ar" ? "شهر الحمل" : "Pregnancy month", body.pregnancyMonth);
+    }
+  }
+
+  // أعراض بصرية
+  push(L === "ar" ? "أعراض بصرية" : "Visual symptoms", body.visualSymptoms);
+  if (body.visualSymptoms === true || body.visualSymptoms === "yes") {
+    push(L === "ar" ? "حدة البصر" : "Visual acuity", body.visualAcuity);
+    push(L === "ar" ? "آخر فحص عين" : "Last eye exam date", body.lastEyeExamDate);
+  }
+
+  // تدخين وسعال
+  push(L === "ar" ? "مدخّن" : "Smoker", body.isSmoker);
+  if (body.isSmoker === true || body.isSmoker === "yes") {
+    push(L === "ar" ? "سنوات التدخين" : "Smoking years", body.smokingYears);
+  }
+  push(L === "ar" ? "سعال" : "Cough", body.hasCough);
+  if (body.hasCough === true || body.hasCough === "yes") {
+    push(L === "ar" ? "وجود دم بالسعال" : "Hemoptysis", body.coughBlood);
+    push(L === "ar" ? "بلغم أصفر" : "Yellow sputum", body.coughYellowSputum);
+    push(L === "ar" ? "سعال جاف" : "Dry cough", body.coughDry);
+  }
+
+  // نصوص حرّة
+  push(L === "ar" ? "الأعراض" : "Symptoms", body.symptoms);
+  push(L === "ar" ? "التاريخ المرضي" : "Medical history", body.history);
+  push(L === "ar" ? "تشخيصات سابقة" : "Previous diagnoses", body.diagnosis);
+  push(L === "ar" ? "الأدوية الحالية" : "Current medications", body.medications);
+  push(L === "ar" ? "تحاليل/أشعة" : "Labs/Imaging", body.labs);
+
+  // وجود صور
+  const filesCount =
+    Array.isArray(body.files) && body.files.length
+      ? body.files.length
+      : Array.isArray(body.imageData) && body.imageData.length
+      ? body.imageData.length
+      : 0;
+
+  const filesLine =
+    filesCount > 0
+      ? L === "ar"
+        ? `يوجد ${filesCount} ملف/صورة مرفوعة للتحليل. **الصور هي المصدر الأساسي للحقيقة. حلّل الأشعة والوثائق بصريًا بعمق مع ذكر النتائج.**`
+        : `There are ${filesCount} uploaded image(s)/file(s). **Treat images as the primary source of truth; analyze radiology deeply and list findings.**`
+      : L === "ar"
+      ? "لا يوجد ملفات مرفوعة."
+      : "No files uploaded.";
+
+  const header =
+    L === "ar"
+      ? "### بيانات الحالة لاستخدامها في إنتاج التقرير وفق القالب المرفق:"
+      : "### Case data to generate the report following the attached template:";
+
+  return `${header}\n${lines.join("\n")}\n\n${filesLine}`;
+}
+
+// ــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ
+// المعالج الرئيسي
+// ــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ
 export default async function handler(req, res) {
-  // ---- CORS ----
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -15,145 +248,83 @@ export default async function handler(req, res) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "System configuration error: missing GEMINI_API_KEY" });
-
-    // ---- Helpers ----
-    const MAX_IMAGE_SIZE = 4 * 1024 * 1024; // 4MB
-    const detectMimeType = (base64Data = "") => {
-      const signatures = {
-        "JVBERi0": "application/pdf",
-        "iVBORw0": "image/png",
-        "/9j/4A": "image/jpeg",
-        "R0lGOD": "image/gif",
-        "UklGRg": "image/webp",
-      };
-      for (const [sig, mime] of Object.entries(signatures)) {
-        if (base64Data.startsWith(sig)) return mime;
-      }
-      return "image/jpeg";
-    };
-
-    // ---- Input normalization (front-end may send synonyms) ----
-    const uiLang = (req.body.uiLang || req.body.language || "ar").toLowerCase().startsWith("en") ? "en" : "ar";
-
-    const caseDescription =
-      req.body.caseDescription ||
-      req.body.symptoms ||
-      req.body.notes ||
-      "";
-    const medicalHistory =
-      req.body.medicalHistory ||
-      req.body.history ||
-      "";
-    const currentMedications =
-      req.body.currentMedications ||
-      req.body.medications ||
-      "";
-    const diagnosis = req.body.diagnosis || "";
-    const labResults = req.body.labResults || "";
-    const vitals = req.body.vitals || req.body.bloodPressure || req.body.temperature || "";
-    const age = req.body.age || "";
-    const gender = req.body.gender || "";
-    const isPregnant = req.body.isPregnant || req.body.pregnancy?.status || req.body["pregnancy-status"] || "";
-    const pregnancyMonth = req.body.pregnancyMonth || req.body["pregnancy-month"] || "";
-
-    // Standardize files array: [{ name?, type?, base64 }]
-    const files = Array.isArray(req.body.files)
-      ? req.body.files
-      : Array.isArray(req.body.imageData)
-      ? req.body.imageData.map((d, i) =>
-          typeof d === "string"
-            ? { name: `img_${i + 1}.jpg`, type: detectMimeType(d), base64: d }
-            : { name: d.name || `img_${i + 1}`, type: d.mimeType || d.type || detectMimeType(d.data), base64: d.data || d.base64 || "" }
-        )
-      : [];
-
-    // ---- Validate & build parts ----
-    const parts = [];
-    // 1) System HTML template (ensures colored boxes + structure are preserved)
-    const systemTemplate = buildReportTemplate(uiLang);
-    // Note: we place the HTML/CSS template inside system instruction + reinforce "return raw HTML".
-    const systemInstruction = {
-      role: "system",
-      parts: [
-        {
-          text:
-            systemTemplate +
-            "\n\nIMPORTANT: Return a single, self-contained HTML snippet (no markdown fences), filling the placeholders with the analysis. Maintain all CSS class names as provided.",
-        },
-      ],
-    };
-
-    // 2) User prompt (text data)
-    const textPrompt = buildUserPrompt({
-      uiLang,
-      caseDescription,
-      medicalHistory,
-      currentMedications,
-      diagnosis,
-      labResults,
-      vitals,
-      age,
-      gender,
-      isPregnant,
-      pregnancyMonth,
-      filesCount: files.length,
-    });
-    parts.push({ text: textPrompt });
-
-    // 3) Attach images/PDF as inline_data with the CORRECT field names
-    for (const f of files) {
-      if (!f || !f.base64) continue;
-      const base64 = f.base64.replace(/\s+/g, "");
-      const sizeInBytes = Math.floor((base64.length * 3) / 4); // rough size; padding ignored
-      if (sizeInBytes > MAX_IMAGE_SIZE) {
-        return res.status(413).json({
-          error:
-            uiLang === "ar"
-              ? `حجم الملف '${f.name || "image"}' يتجاوز 4MB`
-              : `File '${f.name || "image"}' exceeds 4MB`,
-        });
-      }
-      const mime = f.type || detectMimeType(base64);
-      parts.push({
-        inline_data: {
-          mime_type: mime, // <-- required snake_case per Gemini REST spec
-          data: base64,
-        },
-      });
+    if (!apiKey) {
+      return res.status(500).json({ error: "System configuration error: missing GEMINI_API_KEY" });
     }
 
-    // 4) Language guard
-    parts.push({
-      text:
-        uiLang === "ar"
-          ? "يرجى أن يكون التقرير باللغة العربية بالكامل، بصيغة HTML فقط، دون أي أسوار Markdown أو أكواد إضافية."
-          : "Provide the full report in English only, as pure HTML (no markdown fences).",
-    });
+    const model = "models/gemini-1.5-pro-latest";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
 
-    // ---- Build payload (REST v1beta generateContent) ----
-    const payload = {
-      contents: [{ role: "user", parts }],
-      systemInstruction, // official field available in API; see docs
-      generationConfig: {
-        temperature: 0.2,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 8192,
-      },
-      // Optional: relaxed safety to avoid overblocking benign medical terms
-      safetySettings: [
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_ONLY_HIGH" },
-      ],
+    const language = req.body.uiLang === "en" ? "en" : "ar";
+    const systemTemplate = reportTemplates[language];
+
+    // نجمع الأجزاء (نص + صور)
+    const userParts = [{ text: buildUserPrompt(req.body) }];
+
+    // دعم طريقتين لإرسال الصور:
+    // 1) files: [{name,type,base64}]
+    // 2) imageData: [base64, ...]
+    const MAX_IMAGE_SIZE = 4 * 1024 * 1024; // 4MB
+    const addInline = (base64, mime) => {
+      userParts.push({ inline_data: { mime_type: mime, data: base64 } });
     };
 
-    const apiUrl =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=" +
-      encodeURIComponent(apiKey);
+    if (Array.isArray(req.body.files)) {
+      for (const f of req.body.files) {
+        if (!f?.base64) continue;
+        const sizeInBytes = Math.floor((f.base64.length * 3) / 4);
+        if (sizeInBytes > MAX_IMAGE_SIZE) {
+          return res.status(413).json({
+            error:
+              language === "ar"
+                ? `حجم الملف "${f.name || "image"}" يتجاوز 4MB`
+                : `File "${f.name || "image"}" exceeds 4MB`,
+          });
+        }
+        const mt = f.type || detectMimeType(f.base64);
+        addInline(f.base64, mt);
+      }
+    } else if (Array.isArray(req.body.imageData)) {
+      for (const b64 of req.body.imageData) {
+        if (!b64) continue;
+        const sizeInBytes = Math.floor((b64.length * 3) / 4);
+        if (sizeInBytes > MAX_IMAGE_SIZE) {
+          return res.status(413).json({
+            error: language === "ar" ? "حجم الصورة يتجاوز 4MB" : "Image exceeds 4MB",
+          });
+        }
+        const mt = detectMimeType(b64);
+        addInline(b64, mt);
+      }
+    }
+
+    // تعليمات اللغة والتحليل البصري العميق
+    userParts.push({
+      text:
+        language === "ar"
+          ? "أنتج تقريرًا HTML فقط باللغة العربية، مع الحفاظ التام على القالب والألوان. عند وجود صور أشعة (X‑ray/CT/MRI/تقارير)، استخرج **العلامات الشعاعية بدقة** (المكان/الشدة/الاحتمال) وأرفقها ضمن الأقسام المناسبة."
+          : "Return HTML only in English, preserving the template/colors. If radiology images/reports are attached, list **specific radiographic findings** (location/severity/likelihood) in the proper sections.",
+    });
+
+    const payload = {
+      // وفق مستندات Gemini REST: system_instruction + contents + generation_config
+      system_instruction: {
+        role: "system",
+        parts: [{ text: systemTemplate }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: userParts,
+        },
+      ],
+      generation_config: {
+        temperature: 0.2,
+        top_p: 0.95,
+        top_k: 40,
+        max_output_tokens: 8192,
+      },
+    };
 
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -162,22 +333,21 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-      let errMsg = `API request failed (${response.status})`;
+      let errText = await response.text();
       try {
-        const e = await response.json();
-        errMsg = e.error?.message || errMsg;
+        const j = JSON.parse(errText);
+        errText = j.error?.message || errText;
       } catch {}
-      throw new Error(errMsg);
+      throw new Error(errText || `API request failed (${response.status})`);
     }
 
     const result = await response.json();
+    const text =
+      result?.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text || "";
 
-    const reportHtml =
-      result?.candidates?.[0]?.content?.parts?.find((p) => typeof p.text === "string")?.text || "";
+    if (!text) throw new Error("Failed to generate report text from the model.");
 
-    if (!reportHtml) throw new Error("Failed to generate report (empty text).");
-
-    return res.status(200).json({ htmlReport: reportHtml });
+    return res.status(200).json({ htmlReport: text });
   } catch (err) {
     console.error("patient-analyzer error:", err);
     return res.status(500).json({
@@ -185,209 +355,4 @@ export default async function handler(req, res) {
       detail: err.message,
     });
   }
-}
-
-// ---------- TEMPLATES & PROMPTS ----------
-
-function buildReportTemplate(lang) {
-  if (lang === "en") {
-    return `
-<style>
-.report-container { font-family: 'Arial', sans-serif; direction: ltr; }
-.box-critical { border-left: 5px solid #721c24; background-color: #f8d7da; color: #721c24; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.box-warning  { border-left: 5px solid #856404; background-color: #fff3cd; color: #856404; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.box-good     { border-left: 5px solid #155724; background-color: #d4edda; color: #155724; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.box-info     { border-left: 5px solid #004085; background-color: #cce5ff; color: #004085; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.custom-table { border-collapse: collapse; width: 100%; text-align: left; margin-top: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.custom-table th, .custom-table td { padding: 12px; border: 1px solid #dee2e6; }
-.custom-table thead { background-color: #e9ecef; }
-h3, h4 { color: #343a40; border-bottom: 2px solid #0056b3; padding-bottom: 8px; margin-top: 2rem; }
-.icon { font-size: 1.2em; margin-right: 8px; }
-</style>
-
-<div class="report-container">
-  <h3>Comprehensive Medical Analysis Report</h3>
-  <p class="box-info">Based on the provided information (including any imaging), our clinical diagnostics and clinical pharmacy team generated this structured report.</p>
-
-  <h4>1) Case Summary & Assessment</h4>
-  <ul>
-    <li><div class="box-good">✅ <strong>Clinical Summary:</strong> [Concise case summary].</div></li>
-    <li><div class="box-critical">❌ <strong>Critical Issues:</strong> [Data conflicts or red flags].</div></li>
-    <li><div class="box-warning">⚠️ <strong>Missing/Needed Data:</strong> [Key tests not present].</div></li>
-  </ul>
-
-  <h4>2) Imaging Findings (X‑ray / CT / MRI / Ultrasound)</h4>
-  <div class="box-info"><strong>Findings:</strong> [Objective radiology-style findings from the image(s) with localization and sizes if available].</div>
-  <div class="box-warning"><strong>Limitations:</strong> [Mention image quality, projection, artifacts, or missing views].</div>
-  <div class="box-good"><strong>Impression:</strong> [Numbered differential; most concerning first; recommendations if any].</div>
-
-  <h4>3) Potential Diagnoses (ordered by severity)</h4>
-  <ol>
-    <li><div class="box-critical"><strong>Most Critical / must rule out:</strong> [Diagnosis + justification].</div></li>
-    <li><div class="box-warning"><strong>Probable next:</strong> [Diagnosis + justification].</div></li>
-    <li><div class="box-good"><strong>Other considerations:</strong> [Others].</div></li>
-  </ol>
-
-  <h4>4) Medication & Procedure Audit</h4>
-  <p>All medications extracted from images/text are analyzed for risks, contraindications, duplications, dose, and monitoring.</p>
-  <table class="custom-table">
-    <thead>
-      <tr><th>Medication</th><th>Dosage & Duration</th><th>Indication</th><th>Analysis & Risk Points</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>[Name]</td><td>[Dose]</td><td>[Why]</td><td class="box-critical">❌ Contraindicated / overdose / dangerous duplication.</td></tr>
-      <tr><td>[Name]</td><td>[Dose]</td><td>[Why]</td><td class="box-warning">⚠️ Needs caution (renal/hepatic/elderly/monitoring).</td></tr>
-    </tbody>
-  </table>
-
-  <h4>5) Procedure Errors & Diagnostic Gaps</h4>
-  <table class="custom-table">
-    <thead><tr><th>Identified Gap</th><th>Analysis & Action</th><th>Ask Your Doctor</th></tr></thead>
-    <tbody>
-      <tr><td>Headache near eye</td><td class="box-warning">No intraocular pressure documented to exclude glaucoma.</td><td>"Do I need IOP measurement urgently?"</td></tr>
-      <tr><td>Chronic catheter infections</td><td class="box-critical">Consider switching to intermittent catheterization.</td><td>"Is intermittent catheterization safer for me?"</td></tr>
-    </tbody>
-  </table>
-
-  <h4>6) Action Plan</h4>
-  <ul>
-    <li><div class="box-critical"><span class="icon">🚨</span><strong>Immediate:</strong> [Most urgent action].</div></li>
-    <li><div class="box-warning"><span class="icon">⚠️</span><strong>Within 24h:</strong> [Next step].</div></li>
-  </ul>
-
-  <h4>7) Smart Questions for Your Doctor</h4>
-  <ul class="box-info"><li>[Question 1]</li><li>[Question 2]</li></ul>
-
-  <h4>8) Summary</h4>
-  <p>[Focus on highest risk + next critical step].</p>
-
-  <h4>9) Disclaimer</h4>
-  <div class="box-warning"><strong>This is a health awareness tool, not a final diagnosis. It never replaces an in‑person clinical assessment by a qualified physician.</strong></div>
-</div>
-`.trim();
-  }
-
-  // Arabic
-  return `
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap');
-.report-container { font-family: 'Cairo','Arial',sans-serif; direction: rtl; }
-.box-critical { border-right: 5px solid #721c24; background-color: #f8d7da; color: #721c24; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.box-warning  { border-right: 5px solid #856404; background-color: #fff3cd; color: #856404; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.box-good     { border-right: 5px solid #155724; background-color: #d4edda; color: #155724; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.box-info     { border-right: 5px solid #004085; background-color: #cce5ff; color: #004085; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
-.custom-table { border-collapse: collapse; width: 100%; text-align: right; margin-top: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.custom-table th, .custom-table td { padding: 12px; border: 1px solid #dee2e6; }
-.custom-table thead { background-color: #e9ecef; }
-h3, h4 { color: #343a40; border-bottom: 2px solid #0056b3; padding-bottom: 8px; margin-top: 2rem; }
-.icon { font-size: 1.2em; margin-left: 8px; }
-</style>
-
-<div class="report-container">
-  <h3>تقرير تحليل طبي شامل</h3>
-  <p class="box-info">استنادًا إلى المعلومات المقدمة (بما في ذلك أي صور أشعة)، قام فريقنا المختص في التشخيص السريري والصيدلة الإكلينيكية بإعداد هذا التقرير المنظم.</p>
-
-  <h4>1) ملخص الحالة والتقييم</h4>
-  <ul>
-    <li><div class="box-good">✅ <strong>الملخص السريري:</strong> [ملخص موجز للحالة].</div></li>
-    <li><div class="box-critical">❌ <strong>نقاط حرجة:</strong> [تعارض بيانات/علامات خطورة].</div></li>
-    <li><div class="box-warning">⚠️ <strong>بيانات/فحوصات ناقصة:</strong> [اختبارات ضرورية مفقودة].</div></li>
-  </ul>
-
-  <h4>2) نتائج تصويرية (أشعة سينية / مقطعية / رنين / صوتية)</h4>
-  <div class="box-info"><strong>Findings (النتائج الموضوعية):</strong> [تفصيل النتائج بأسلوب Radiology مع التوضع والأبعاد إن أمكن].</div>
-  <div class="box-warning"><strong>الحدود:</strong> [جودة الصورة، الإسقاط، Artefacts، لقطات مفقودة].</div>
-  <div class="box-good"><strong>Impression (الانطباع):</strong> [قائمة مرقمة حسب الأهم/الأخطر + التوصيات].</div>
-
-  <h4>3) تشخيصات محتملة (مرتبة حسب الخطورة)</h4>
-  <ol>
-    <li><div class="box-critical"><strong>الأكثر إلحاحًا للاستبعاد أولًا:</strong> [تشخيص + تبرير].</div></li>
-    <li><div class="box-warning"><strong>التشخيص المرجح التالي:</strong> [تشخيص + تبرير].</div></li>
-    <li><div class="box-good"><strong>احتمالات أخرى:</strong> [تشخيصات أخرى].</div></li>
-  </ol>
-
-  <h4>4) مراجعة الأدوية والإجراءات</h4>
-  <p>يتم استخراج الأدوية من الصور/النصوص وتحليلها لموانع الاستعمال، التداخلات، الجرعات، التكرار، والمتابعة.</p>
-  <table class="custom-table">
-    <thead>
-      <tr><th>الدواء</th><th>الجرعة والمدة</th><th>الغاية</th><th>تحليل ونقاط خطورة</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>[الاسم]</td><td>[الجرعة]</td><td>[الغاية]</td><td class="box-critical">❌ مانع استعمال/جرعة زائدة/تكرار خطير.</td></tr>
-      <tr><td>[الاسم]</td><td>[الجرعة]</td><td>[الغاية]</td><td class="box-warning">⚠️ يتطلب حذرًا (كلوي/كبدي/كبار سن/مراقبة).</td></tr>
-    </tbody>
-  </table>
-
-  <h4>5) فجوات تشخيصية/أخطاء إجراءات</h4>
-  <table class="custom-table">
-    <thead><tr><th>الفجوة</th><th>التحليل والإجراء</th><th>سؤال للطبيب</th></tr></thead>
-    <tbody>
-      <tr><td>صداع حول العين</td><td class="box-warning">غياب قياس ضغط العين لاستبعاد الجلوكوما.</td><td>"هل أحتاج قياس ضغط العين بصورة عاجلة؟"</td></tr>
-      <tr><td>التهابات مع قسطرة دائمة</td><td class="box-critical">التفكير بالتحول إلى قسطرة متقطعة.</td><td>"هل القسطرة المتقطعة أنسب لحالتي؟"</td></tr>
-    </tbody>
-  </table>
-
-  <h4>6) خطة العمل</h4>
-  <ul>
-    <li><div class="box-critical"><span class="icon">🚨</span><strong>فوري:</strong> [الإجراء الأشد إلحاحًا].</div></li>
-    <li><div class="box-warning"><span class="icon">⚠️</span><strong>خلال 24 ساعة:</strong> [الخطوة التالية].</div></li>
-  </ul>
-
-  <h4>7) أسئلة ذكية للطبيب</h4>
-  <ul class="box-info"><li>[سؤال 1]</li><li>[سؤال 2]</li></ul>
-
-  <h4>8) خلاصة</h4>
-  <p>[أعلى خطورة + الخطوة الحرجة التالية].</p>
-
-  <h4>9) إخلاء مسؤولية</h4>
-  <div class="box-warning"><strong>هذه أداة توعوية وليست تشخيصًا نهائيًا، ولا تغني عن الفحص السريري لدى طبيب مؤهل.</strong></div>
-</div>
-`.trim();
-}
-
-function buildUserPrompt(d) {
-  if (d.uiLang === "en") {
-    return `
-**Case Data (text):**
-- Age: ${d.age || "NA"}
-- Gender: ${d.gender || "NA"}
-- Pregnancy: ${d.gender === "female" ? (d.isPregnant || "unspecified") + (d.pregnancyMonth ? ` (month ${d.pregnancyMonth})` : "") : "N/A"}
-- Vitals/Notes: ${d.vitals || "NA"}
-- Case Description: ${d.caseDescription || "NA"}
-- Medical History: ${d.medicalHistory || "NA"}
-- Current Medications: ${d.currentMedications || "NA"}
-- Diagnosis (if any): ${d.diagnosis || "NA"}
-- Lab Results: ${d.labResults || "NA"}
-
-**Uploaded Files:** ${d.filesCount ? `${d.filesCount} file(s) attached. Treat images as the primary source of truth.` : "None"}
-
-**Task for the model:**
-1) Read images first (X-ray/other modalities). Extract objective *Findings* and then a concise *Impression*.
-2) Cross-check text vs imaging; flag conflicts.
-3) Analyze medications (contraindications, duplications, dosing, monitoring).
-4) Return **only** the filled HTML snippet provided in the template (no markdown fences).
-`.trim();
-  }
-
-  // Arabic
-  return `
-**بيانات الحالة (نص):**
-- العمر: ${d.age || "غير محدد"}
-- الجنس: ${d.gender || "غير محدد"}
-- الحمل: ${d.gender === "female" ? (d.isPregnant || "غير محدد") + (d.pregnancyMonth ? ` (الشهر ${d.pregnancyMonth})` : "") : "غير منطبق"}
-- العلامات الحيوية/ملاحظات: ${d.vitals || "غير محدد"}
-- وصف الحالة: ${d.caseDescription || "غير محدد"}
-- التاريخ المرضي: ${d.medicalHistory || "غير محدد"}
-- الأدوية الحالية: ${d.currentMedications || "غير محدد"}
-- تشخيصات مذكورة: ${d.diagnosis || "غير محدد"}
-- نتائج تحاليل: ${d.labResults || "غير محدد"}
-
-**الملفات المرفقة:** ${d.filesCount ? `${d.filesCount} ملف(ات) مرفقة. اعتبر الصور مصدر الحقيقة الأساسي.` : "لا يوجد"}
-
-**مهمة النموذج:**
-1) قراءة صور الأشعة/التصوير أولًا واستخراج *Findings* الموضوعية ثم *Impression* المختصر.
-2) مطابقة النص مع الصور والتنبيه عن أي تعارض.
-3) تدقيق الأدوية (موانع/تكرار/جرعات/متابعة).
-4) إخراج **القطعة HTML** المعبّأة فقط وفق القالب (بدون Markdown).
-`.trim();
 }
