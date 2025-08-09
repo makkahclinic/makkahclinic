@@ -1,795 +1,459 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام تحليل الحالات الطبية - Medical Case Analyzer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --secondary: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --dark: #1e293b;
-            --light: #f8fafc;
-            --gray: #64748b;
-            --border: #cbd5e1;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Cairo', 'Open Sans', sans-serif;
-            background-color: #f0f9ff;
-            color: var(--dark);
-            transition: all 0.3s ease;
-            min-height: 100vh;
-        }
-        
-        body[dir="rtl"] {
-            font-family: 'Cairo', sans-serif;
-        }
-        
-        body[dir="ltr"] {
-            font-family: 'Open Sans', sans-serif;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        /* Header Styles */
-        header {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            padding: 20px 0;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            border-radius: 0 0 20px 20px;
-            margin-bottom: 30px;
-        }
-        
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .logo-icon {
-            font-size: 2.5rem;
-            color: white;
-        }
-        
-        .logo-text {
-            font-size: 1.8rem;
-            font-weight: 700;
-        }
-        
-        .language-switcher {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 15px;
-            border-radius: 30px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .language-switcher:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .lang-flag {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            overflow: hidden;
-        }
-        
-        .lang-name {
-            font-weight: 600;
-        }
-        
-        /* Main Content */
-        .dashboard {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 30px;
-        }
-        
-        @media (min-width: 992px) {
-            .dashboard {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
-        
-        /* Form Styles */
-        .card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
-            padding: 25px;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.1);
-        }
-        
-        .card-title {
-            font-size: 1.4rem;
-            color: var(--primary);
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .card-title i {
-            font-size: 1.6rem;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--dark);
-        }
-        
-        textarea, input, select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: border 0.3s ease;
-        }
-        
-        textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-        
-        textarea:focus, input:focus, select:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-        
-        .image-upload {
-            border: 2px dashed var(--border);
-            border-radius: 10px;
-            padding: 25px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
-        }
-        
-        .image-upload:hover {
-            border-color: var(--primary);
-            background-color: rgba(37, 99, 235, 0.03);
-        }
-        
-        .upload-icon {
-            font-size: 3rem;
-            color: var(--gray);
-            margin-bottom: 15px;
-        }
-        
-        .upload-text {
-            color: var(--gray);
-            font-weight: 600;
-        }
-        
-        .file-input {
-            display: none;
-        }
-        
-        .image-preview {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-top: 20px;
-        }
-        
-        .image-item {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        
-        .image-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .remove-btn {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: var(--danger);
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-        
-        .analyze-btn {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 15px 30px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            cursor: pointer;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-        }
-        
-        .analyze-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 15px rgba(37, 99, 235, 0.3);
-        }
-        
-        .analyze-btn:disabled {
-            background: var(--gray);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        /* Report Styles */
-        .report-section {
-            display: none;
-            margin-top: 30px;
-        }
-        
-        .report-container {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
-            padding: 25px;
-            max-height: 600px;
-            overflow-y: auto;
-        }
-        
-        .report-title {
-            font-size: 1.6rem;
-            color: var(--primary);
-            margin-bottom: 20px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        /* Loading Spinner */
-        .spinner {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        /* Error Message */
-        .error-message {
-            background: #fee2e2;
-            color: var(--danger);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            display: none;
-            border-left: 4px solid var(--danger);
-        }
-        
-        /* Responsive Adjustments */
-        @media (max-width: 768px) {
-            .header-content {
-                flex-direction: column;
-                text-align: center;
-            }
-            
-            .logo {
-                justify-content: center;
-            }
-            
-            .language-switcher {
-                margin: 0 auto;
-            }
-        }
-        
-        /* Report Styles */
-        .report-container .box-critical {
-            border-right: 5px solid #721c24;
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 8px;
-        }
-        
-        .report-container .box-warning {
-            border-right: 5px solid #856404;
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 8px;
-        }
-        
-        .report-container .box-good {
-            border-right: 5px solid #155724;
-            background-color: #d4edda;
-            color: #155724;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 8px;
-        }
-        
-        .report-container .box-info {
-            border-right: 5px solid #004085;
-            background-color: #cce5ff;
-            color: #004085;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border-radius: 8px;
-        }
-        
-        .report-container .custom-table {
-            border-collapse: collapse;
-            width: 100%;
-            text-align: right;
-            margin-top: 1rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .report-container .custom-table th, 
-        .report-container .custom-table td {
-            padding: 12px;
-            border: 1px solid #dee2e6;
-        }
-        
-        .report-container .custom-table thead {
-            background-color: #e9ecef;
-        }
-        
-        .report-container h3, 
-        .report-container h4 {
-            color: #343a40;
-            border-bottom: 2px solid #0056b3;
-            padding-bottom: 8px;
-            margin-top: 2rem;
-        }
-        
-        .report-container .icon {
-            font-size: 1.2em;
-            margin-right: 8px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>تقييم الحالة الطبية - Medical Case & Insurance</title>
+  <style>
+    :root{
+      --primary:#0b63c2; --primary-dark:#084e97; --accent:#00a7c7;
+      --danger:#dc3545; --muted:#66768a; --text:#243143; --border:#e2e8f0;
+      --card:#fff; --bg1:#e9f3ff; --bg2:#f6fbff; --shadow:0 10px 25px rgba(15,57,105,.08);
+      --radius:16px; --home-offset-y:16px; --home-offset-x:16px; --ta-min:220px;
+      --container: 1080px;
+    }
+    html,body{height:100%}
+    body{
+      margin:0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+      color:var(--text); background: radial-gradient(1200px 800px at 80% 0%, var(--bg1), var(--bg2));
+      padding: 2rem .75rem;
+    }
+    .container{
+      max-width: var(--container); margin:0 auto; background:var(--card);
+      border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
+      position:relative; overflow:hidden;
+    }
+    .shell{ padding: 28px 26px 30px; }
+    .top-ribbon{ position:absolute; inset:0 0 auto 0; height:6px; background:linear-gradient(90deg,var(--primary),var(--accent)); }
+
+    /* header */
+    .header{
+      display:flex; align-items:center; gap:12px; justify-content:space-between; margin:6px 0 16px;
+    }
+    .title{
+      font-weight:800; color:var(--primary); letter-spacing:.2px; margin:0; font-size:1.35rem;
+    }
+    .subtext{ color:var(--muted); margin-top:2px; font-size:.92rem; }
+
+    .home-icon{
+      position:absolute; inset-block-start:var(--home-offset-y); inset-inline-start:var(--home-offset-x);
+      width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#0b63c2,#00a7c7);
+      color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;
+      box-shadow:0 6px 18px rgba(11,99,194,.22); cursor:pointer; user-select:none;
+      transition:transform .14s ease, filter .25s ease; z-index:5;
+    }
+    .home-icon:hover{ transform:translateY(-1px) scale(1.04); filter:brightness(.98); }
+
+    /* toolbar */
+    .toolbar{
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:6px;
+    }
+    .seg{
+      display:inline-flex; background:#f3f7fb; border:1px solid var(--border); border-radius:999px; padding:4px;
+    }
+    .seg button{ border:none; background:transparent; padding:.45rem .8rem; border-radius:999px; cursor:pointer; font-weight:700; color:#3b5168; }
+    .seg button.active{ background:#fff; border:1px solid var(--border); color:var(--primary); }
+
+    .btn{
+      display:inline-flex; align-items:center; gap:.5rem; border:none; border-radius:10px; color:#fff;
+      padding:.55rem .9rem; font-weight:700; font-size:.95rem; cursor:pointer; box-shadow:0 6px 14px rgba(0,0,0,.08);
+      transition:transform .06s ease, filter .2s ease;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn-primary{ background:var(--primary); }
+    .btn-primary[disabled]{ background: var(--muted); cursor: not-allowed; }
+    .btn-danger{ background:var(--danger); }
+    .btn-ghost{ background:#eff5fb; color:#114a86; border:1px solid var(--border); }
+    .btn-print{ background:#0f766e; } /* teal */
+
+    .card{
+      border:1px solid var(--border); border-radius:14px; background:#fff; box-shadow:0 6px 14px rgba(0,0,0,.03);
+      padding:16px; margin:14px 0;
+    }
+    .section-title{
+      font-size:1.02rem; font-weight:800; color:#243143; display:flex; align-items:center; gap:.5rem; margin-bottom:12px;
+      border-bottom:2px solid #dbe8f5; padding-bottom:.5rem;
+    }
+    .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); display:inline-block; }
+
+    label{font-weight:700; display:block; margin:.65rem 0 .35rem;}
+    .hint{font-size:.86rem; color:#8496ab; margin-top:.15rem;}
+
+    input, select, textarea{
+      width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:10px; padding:.72rem .9rem; background:#fff;
+      transition:border-color .2s, box-shadow .2s, background .2s; font-size:1rem;
+    }
+    input::placeholder, textarea::placeholder{ color:#9aa8b8; }
+    input:focus, select:focus, textarea:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,99,194,.18); background:#fbfdff; }
+    textarea{ min-height:120px; resize:vertical; }
+
+    .grid{ display:grid; gap:14px; }
+    .grid-2{ grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .grid-3{ grid-template-columns: repeat(3,minmax(0,1fr)); }
+    @media (max-width:900px){ .grid-3{ grid-template-columns: repeat(2,minmax(0,1fr)); } }
+    @media (max-width:720px){ .grid-2,.grid-3{ grid-template-columns: 1fr; } }
+
+    .tall{ min-height: var(--ta-min); }
+    .span-2{ grid-column: 1 / -1; }
+
+    /* uploads */
+    .drop{
+      border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; color:#6c7f95;
+      transition:border-color .25s, background .25s; cursor: pointer;
+    }
+    .drop:hover{ border-color:var(--primary); background:#f6fbff; }
+    #file-input{ display:none; }
+
+    .file-list{ display:grid; gap:10px; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); margin-top:10px; }
+    .thumb{
+      position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff;
+      display:flex; align-items:center; justify-content:center; min-height:140px;
+    }
+    .thumb img{ max-width:100%; max-height:200px; display:block; object-fit: contain; }
+    .thumb .badge{
+      position:absolute; inset-block-start:8px; inset-inline-start:8px; background:#eef5ff; color:#1e3a8a;
+      border:1px solid #cfe6ff; font-size:.78rem; padding:.12rem .45rem; border-radius:999px;
+    }
+    .thumb .remove{
+      position:absolute; inset-block-start:8px; inset-inline-end:8px; width:30px;height:30px; border:none; border-radius:50%;
+      background:var(--danger); color:#fff; font-size:18px; cursor:pointer; box-shadow:0 4px 10px rgba(220,53,69,.25);
+    }
+    .thumb .meta{ position:absolute; inset-block-end:8px; inset-inline-start:8px; color:#4b5563; background:#ffffffd0; border-radius:6px; padding:.15rem .4rem; font-size:.78rem; }
+
+    .actions{ display:flex; gap:10px; justify-content:center; align-items:center; margin-top: 20px; flex-wrap:wrap; }
+
+    .notification{ margin-top:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600; }
+    .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
+    .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
+
+    #response-container{ margin-top: 24px; border:1px solid var(--border); border-radius:12px; background:#fff; display:none; box-shadow: var(--shadow); }
+
+    /* print/export */
+    @media print{
+      body{ padding:0; background:#fff; }
+      .home-icon, .header, .card, .actions, .notification{ display:none !important; }
+      .container{ border:none; box-shadow:none; padding: 0;}
+      .shell{ padding: 0; }
+      #response-container{ display:block !important; border: none; box-shadow: none; margin-top: 0; }
+    }
+
+    .hidden{ display:none !important; }
+  </style>
 </head>
-<body dir="rtl">
-    <header>
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <i class="fas fa-heartbeat logo-icon"></i>
-                    <h1 class="logo-text" id="app-title">نظام تحليل الحالات الطبية</h1>
-                </div>
-                <div class="language-switcher" id="language-switcher">
-                    <div class="lang-flag">
-                        <i class="fas fa-flag"></i>
-                    </div>
-                    <span class="lang-name" id="current-lang">العربية</span>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
+<body>
+  <div class="container">
+    <div class="top-ribbon"></div>
+    <div class="home-icon" title="الشاشة الرئيسية / Home" onclick="goToHome()">🏠</div>
+
+    <div class="shell">
+      <div class="header">
+        <div>
+          <h1 class="title" id="app-title">تقييم الحالة الطبية • Medical Case</h1>
+          <div class="subtext" id="app-sub">واجهة إدخال سريرية — Clinical intake interface</div>
+        </div>
+
+        <div class="toolbar">
+          <div class="seg" role="tablist" aria-label="Language">
+            <button id="lang-ar" class="active" onclick="setLang('ar')" type="button">العربية</button>
+            <button id="lang-en" onclick="setLang('en')" type="button">English</button>
+          </div>
+          <button class="btn-print" type="button" onclick="window.print()">PDF / طباعة</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title"><span class="dot"></span> <span data-t="pinfo">معلومات المريض</span> / <span data-t="pinfo_en" class="hidden">Patient Info</span></div>
+        <div class="grid grid-3">
+          <div>
+            <label for="gender" data-t="genderLbl">الجنس</label><label for="gender" data-t="genderLbl_en" class="hidden">Gender</label>
+            <select id="gender">
+              <option value="" selected disabled data-t="choose">اختر</option><option value="" selected disabled data-t="choose_en" class="hidden">Choose</option>
+              <option value="male" data-t="male">ذكر</option><option value="male" data-t="male_en" class="hidden">Male</option>
+              <option value="female" data-t="female">أنثى</option><option value="female" data-t="female_en" class="hidden">Female</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="age" data-t="ageLbl">العمر</label><label for="age" data-t="ageLbl_en" class="hidden">Age</label>
+            <input id="age" type="number" placeholder="e.g., 63">
+          </div>
+
+          <div id="pregnancy-status-wrap" class="hidden">
+            <label for="pregnancy-status" data-t="pregLbl">هل المريضة حامل؟</label><label for="pregnancy-status" data-t="pregLbl_en" class="hidden">Pregnant?</label>
+            <select id="pregnancy-status">
+              <option value="" selected disabled data-t="choose">اختر</option><option value="" selected disabled data-t="choose_en" class="hidden">Choose</option>
+              <option value="yes" data-t="yes">نعم</option><option value="yes" data-t="yes_en" class="hidden">Yes</option>
+              <option value="no" data-t="no">لا</option><option value="no" data-t="no_en" class="hidden">No</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title"><span class="dot"></span> <span data-t="details">تفاصيل الحالة الطبية</span> / <span data-t="details_en" class="hidden">Medical Case Details</span></div>
+        <div class="grid grid-2">
+            <div class="span-2">
+                <label for="case-description" data-t="caseLbl">الشكوى الرئيسية ووصف الحالة</label><label for="case-description" data-t="caseLbl_en" class="hidden">Main Complaint & Case Description</label>
+                <textarea id="case-description" class="tall" placeholder="مثال: سعال مزمن منذ 3 أشهر مع بلغم، يزداد ليلاً..."></textarea>
+            </div>
+            <div>
+                <label for="history" data-t="histLbl">التاريخ المرضي</label><label for="history" data-t="histLbl_en" class="hidden">Medical History</label>
+                <textarea id="history" placeholder="مثال: سكري نوع ثاني، ارتفاع ضغط الدم"></textarea>
+            </div>
+            <div>
+                <label for="medications-procedures" data-t="medLbl">الأدوية الحالية</label><label for="medications-procedures" data-t="medLbl_en" class="hidden">Current Medications</label>
+                <textarea id="medications-procedures" placeholder="مثال: Metformin 1000mg, Lisinopril 10mg"></textarea>
             </div>
         </div>
-    </header>
-    
-    <main class="container">
-        <div class="dashboard">
-            <div class="card">
-                <h2 class="card-title"><i class="fas fa-user-injured"></i> <span id="patient-data-title">بيانات المريض</span></h2>
-                
-                <div class="error-message" id="error-message"></div>
-                
-                <div class="form-group">
-                    <label for="symptoms" id="symptoms-label">الأعراض</label>
-                    <textarea id="symptoms" placeholder="وصف الأعراض..."></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label for="history" id="history-label">التاريخ المرضي</label>
-                    <textarea id="history" placeholder="التاريخ المرضي..."></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label for="medications" id="medications-label">الأدوية الحالية</label>
-                    <textarea id="medications" placeholder="قائمة الأدوية..."></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label id="images-label">الصور المرفقة (الحد الأقصى 4MB لكل صورة)</label>
-                    
-                    <div class="image-upload" id="upload-area">
-                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
-                        <p class="upload-text" id="upload-text">انقر لرفع الصور أو اسحبها هنا</p>
-                        <input type="file" id="file-input" class="file-input" accept="image/*, .pdf" multiple>
-                    </div>
-                    
-                    <div class="image-preview" id="image-preview"></div>
-                </div>
-                
-                <button class="analyze-btn" id="analyze-btn">
-                    <i class="fas fa-stethoscope"></i>
-                    <span id="analyze-text">بدء التحليل</span>
-                </button>
-            </div>
-            
-            <div class="card">
-                <h2 class="card-title"><i class="fas fa-file-medical-alt"></i> <span id="report-title">تقرير التحليل</span></h2>
-                <div id="report-placeholder">
-                    <div style="text-align: center; padding: 50px 20px; color: var(--gray);">
-                        <i class="fas fa-file-medical" style="font-size: 4rem; margin-bottom: 20px;"></i>
-                        <h3 id="placeholder-title">سيظهر التقرير هنا</h3>
-                        <p id="placeholder-text">بعد إدخال بيانات المريض والضغط على "بدء التحليل"، سيتم عرض التقرير الطبي هنا.</p>
-                    </div>
-                </div>
-                <div class="report-section" id="report-section">
-                    <div class="report-title">
-                        <i class="fas fa-file-medical-alt"></i>
-                        <span id="report-title-text">تقرير التحليل الطبي</span>
-                    </div>
-                    <div class="report-container" id="report-container"></div>
-                </div>
-            </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title"><span class="dot"></span> <span data-t="uploads">رفع ملفات (وصفات، تقارير، صور)</span> / <span data-t="uploads_en" class="hidden">Upload Files (Rx, Reports, Images)</span></div>
+        <div class="drop" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+          <div data-t="drop">اضغط أو اسحب صور (PNG/JPG) أو PDF هنا</div>
+          <div class="hidden" data-t="drop_en">Click or drop images (PNG/JPG) or PDF here</div>
+          <input id="file-input" type="file" accept="image/*,.pdf" multiple>
+          <div class="hint" data-t="dropHint">ملف أو اثنين بوضوح كافٍ.</div>
+          <div class="hint hidden" data-t="dropHint_en">1–2 clear files are preferred.</div>
         </div>
-    </main>
-    
-    <footer style="margin-top: 50px; text-align: center; padding: 20px; color: var(--gray);">
-        <p id="disclaimer-text">هذا النظام لا يقدم تشخيصاً طبياً بديلاً عن الطبيب المختص</p>
-    </footer>
+        <div id="file-list" class="file-list"></div>
+      </div>
 
-    <script>
-        // Language data
-        const languages = {
-            ar: {
-                title: "نظام تحليل الحالات الطبية",
-                patientData: "بيانات المريض",
-                symptoms: "الأعراض",
-                history: "التاريخ المرضي",
-                medications: "الأدوية الحالية",
-                images: "الصور المرفقة (الحد الأقصى 4MB لكل صورة)",
-                uploadText: "انقر لرفع الصور أو اسحبها هنا",
-                analyze: "بدء التحليل",
-                analyzing: "جاري التحليل...",
-                report: "تقرير التحليل",
-                reportTitle: "تقرير التحليل الطبي",
-                placeholderTitle: "سيظهر التقرير هنا",
-                placeholderText: "بعد إدخال بيانات المريض والضغط على \"بدء التحليل\"، سيتم عرض التقرير الطبي هنا.",
-                disclaimer: "هذا النظام لا يقدم تشخيصاً طبياً بديلاً عن الطبيب المختص",
-                langName: "العربية",
-                error: {
-                    noData: "الرجاء إدخال بيانات المريض على الأقل في حقل واحد",
-                    fileSize: "حجم الملف يتجاوز الحد المسموح (4MB): ",
-                    apiError: "حدث خطأ أثناء تحليل الحالة: "
-                }
-            },
-            en: {
-                title: "Medical Case Analyzer",
-                patientData: "Patient Data",
-                symptoms: "Symptoms",
-                history: "Medical History",
-                medications: "Current Medications",
-                images: "Attached Images (Max 4MB per image)",
-                uploadText: "Click to upload images or drag them here",
-                analyze: "Start Analysis",
-                analyzing: "Analyzing...",
-                report: "Analysis Report",
-                reportTitle: "Medical Analysis Report",
-                placeholderTitle: "Report will appear here",
-                placeholderText: "After entering patient data and clicking \"Start Analysis\", the medical report will be displayed here.",
-                disclaimer: "This system does not provide medical diagnosis as a substitute for a specialist doctor",
-                langName: "English",
-                error: {
-                    noData: "Please enter patient data in at least one field",
-                    fileSize: "File size exceeds allowed limit (4MB): ",
-                    apiError: "Error during case analysis: "
-                }
-            }
-        };
+      <div class="actions">
+        <button id="analyzeBtn" class="btn btn-primary" onclick="analyzeCase()">
+          <span data-t="analyze">تحليل الحالة</span><span data-t="analyze_en" class="hidden">Analyze Case</span>
+        </button>
+        <button class="btn btn-danger" onclick="logout()">
+          <span data-t="logout">تسجيل الخروج</span><span data-t="logout_en" class="hidden">Logout</span>
+        </button>
+      </div>
 
-        // Current language (default: Arabic)
-        let currentLang = 'ar';
-        let uploadedImages = [];
+      <div id="notification-area" class="notification"></div>
+      <div id="response-container"></div>
+    </div>
+  </div>
 
-        // DOM Elements
-        const bodyElement = document.body;
-        const appTitle = document.getElementById('app-title');
-        const currentLangElement = document.getElementById('current-lang');
-        const langSwitcher = document.getElementById('language-switcher');
-        const patientDataTitle = document.getElementById('patient-data-title');
-        const symptomsLabel = document.getElementById('symptoms-label');
-        const historyLabel = document.getElementById('history-label');
-        const medicationsLabel = document.getElementById('medications-label');
-        const imagesLabel = document.getElementById('images-label');
-        const uploadText = document.getElementById('upload-text');
-        const analyzeBtn = document.getElementById('analyze-btn');
-        const analyzeText = document.getElementById('analyze-text');
-        const reportTitle = document.getElementById('report-title');
-        const placeholderTitle = document.getElementById('placeholder-title');
-        const placeholderText = document.getElementById('placeholder-text');
-        const reportTitleText = document.getElementById('report-title-text');
-        const disclaimerText = document.getElementById('disclaimer-text');
-        const reportSection = document.getElementById('report-section');
-        const reportContainer = document.getElementById('report-container');
-        const uploadArea = document.getElementById('upload-area');
-        const fileInput = document.getElementById('file-input');
-        const imagePreview = document.getElementById('image-preview');
-        const errorMessage = document.getElementById('error-message');
+  <script>
+    let currentLang = 'ar';
+    const translations = {
+        ar: { analyzing: 'جاري التحليل… الرجاء الانتظار.', provideDetails: 'يرجى إدخال وصف للحالة أو إرفاق ملف واحد على الأقل.', error: 'حدث خطأ: ', fileProcessError: 'حدث خطأ أثناء معالجة الملف.', unsupportedFile: 'نوع الملف غير مدعوم. يدعم فقط الصور و PDF.', payloadTooLarge: 'حجم الملفات كبير جدًا. يرجى تقليل حجم أو عدد الملفات.', loggedOut: 'تم تسجيل الخروج.' },
+        en: { analyzing: 'Analyzing… Please wait.', provideDetails: 'Please provide a case description or attach at least one file.', error: 'An error occurred: ', fileProcessError: 'File could not be processed.', unsupportedFile: 'Unsupported file type. Only images and PDF are supported.', payloadTooLarge: 'File payload is too large. Please reduce the size or number of files.', loggedOut: 'Logged out.' }
+    };
 
-        // Language switcher
-        function switchLanguage() {
-            currentLang = currentLang === 'ar' ? 'en' : 'ar';
-            applyLanguage();
+    function T(key) {
+        return translations[currentLang][key] || key;
+    }
+
+    function setLang(lang){
+      currentLang = lang;
+      document.querySelectorAll('[data-t]').forEach(el => {
+        const key = el.getAttribute('data-t');
+        el.classList.toggle('hidden', !key.endsWith(`_${lang}`) && !key.includes('_en') && lang === 'en');
+        if (!key.endsWith('_en')) el.classList.toggle('hidden', lang === 'en');
+      });
+      document.querySelectorAll(`[data-t$="_${lang}"]`).forEach(el => el.classList.remove('hidden'));
+      
+      document.getElementById('lang-ar').classList.toggle('active', lang==='ar');
+      document.getElementById('lang-en').classList.toggle('active', lang==='en');
+      
+      document.documentElement.dir = (lang==='en') ? 'ltr' : 'rtl';
+      document.documentElement.lang = lang;
+    }
+
+    /************** conditional fields **************/
+    const genderEl = document.getElementById('gender');
+    const pregStatWrap = document.getElementById('pregnancy-status-wrap');
+    genderEl.addEventListener('change', () => {
+      pregStatWrap.classList.toggle('hidden', genderEl.value !== 'female');
+      if (genderEl.value !== 'female') {
+          document.getElementById('pregnancy-status').value = "";
+      }
+    });
+
+    /************** uploads (images + PDFs) **************/
+    const fileInput = document.getElementById('file-input');
+    const fileListEl = document.getElementById('file-list');
+    let filesState = [];
+    let nextId = 1;
+
+    fileInput.addEventListener('change', async (e) => {
+      if (!e.target.files?.length) return;
+      await addFiles([...e.target.files]);
+      fileInput.value = "";
+    });
+
+    async function handleDrop(ev){
+      ev.preventDefault();
+      await addFiles([...(ev.dataTransfer?.files || [])]);
+    }
+
+    async function addFiles(files){
+      for (const file of files){
+        const type = file.type || '';
+        try{
+          if (type.startsWith('image/')){
+            const { base64, info } = await compressImage(file, { maxW: 1600, maxH: 1600, quality: 0.75 });
+            filesState.push({ id: nextId++, name:file.name, type:'image/jpeg', base64, width:info.w, height:info.h, sizeKB:info.sizeKB, isImage:true });
+          } else if (type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')){
+            const base64 = await fileToBase64(file);
+            const sizeKB = (base64.length * 3) / 4 / 1024;
+            filesState.push({ id: nextId++, name:file.name, type:'application/pdf', base64, sizeKB, isImage:false });
+          } else {
+            showNote('error', T('unsupportedFile'));
+          }
+        }catch(err){
+          console.error(err);
+          showNote('error', T('fileProcessError'));
         }
+      }
+      renderFiles();
+    }
 
-        // Apply current language to UI
-        function applyLanguage() {
-            const langData = languages[currentLang];
-            
-            // Set body direction
-            bodyElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
-            
-            // Update text content
-            appTitle.textContent = langData.title;
-            currentLangElement.textContent = langData.langName;
-            patientDataTitle.textContent = langData.patientData;
-            symptomsLabel.textContent = langData.symptoms;
-            historyLabel.textContent = langData.history;
-            medicationsLabel.textContent = langData.medications;
-            imagesLabel.textContent = langData.images;
-            uploadText.textContent = langData.uploadText;
-            analyzeText.textContent = langData.analyze;
-            reportTitle.textContent = langData.report;
-            placeholderTitle.textContent = langData.placeholderTitle;
-            placeholderText.textContent = langData.placeholderText;
-            reportTitleText.textContent = langData.reportTitle;
-            disclaimerText.textContent = langData.disclaimer;
-            
-            // Update placeholders
-            document.getElementById('symptoms').placeholder = 
-                currentLang === 'ar' ? 'وصف الأعراض...' : 'Describe symptoms...';
-            document.getElementById('history').placeholder = 
-                currentLang === 'ar' ? 'التاريخ المرضي...' : 'Medical history...';
-            document.getElementById('medications').placeholder = 
-                currentLang === 'ar' ? 'قائمة الأدوية...' : 'List of medications...';
+    function renderFiles(){
+      fileListEl.innerHTML = '';
+      filesState.forEach(f=>{
+        const card = document.createElement('div');
+        card.className = 'thumb';
+        const badge = document.createElement('div');
+        badge.className='badge';
+        badge.textContent = f.isImage ? 'IMAGE' : 'PDF';
+        card.appendChild(badge);
+
+        const remove = document.createElement('button');
+        remove.className='remove'; remove.innerHTML='&times;';
+        remove.title='Remove'; remove.onclick=()=>{ filesState = filesState.filter(x=>x.id!==f.id); renderFiles(); };
+        card.appendChild(remove);
+
+        if (f.isImage){
+          const img = new Image();
+          img.src = 'data:image/jpeg;base64,' + f.base64;
+          card.appendChild(img);
+        } else {
+          const pdfIcon = document.createElement('div');
+          pdfIcon.style.fontSize='56px'; pdfIcon.style.color='#64748b'; pdfIcon.textContent='📄';
+          card.appendChild(pdfIcon);
         }
+        const meta = document.createElement('div');
+        meta.className='meta';
+        meta.textContent = `${f.name.substring(0,20)}... (${f.sizeKB.toFixed(0)} KB)`;
+        card.appendChild(meta);
+        fileListEl.appendChild(card);
+      });
+    }
 
-        // Initialize language
-        applyLanguage();
+    function fileToBase64(file){
+      return new Promise((res, rej) => {
+        const r = new FileReader(); r.onload = ()=> res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file);
+      });
+    }
 
-        // Event listeners
-        langSwitcher.addEventListener('click', switchLanguage);
-        
-        // Upload area click handler
-        uploadArea.addEventListener('click', () => {
-            fileInput.click();
+    async function compressImage(file, { maxW=1600, maxH=1600, quality=0.75 } = {}){
+      const dataURL = await new Promise(res => { const r = new FileReader(); r.onload = ()=> res(r.result); r.readAsDataURL(file); });
+      const img = await new Promise(res => { const i = new Image(); i.onload = ()=> res(i); i.src = dataURL; });
+      let { width:w, height:h } = img;
+      const ratio = Math.min(maxW/w, maxH/h, 1);
+      w = Math.round(w*ratio); h = Math.round(h*ratio);
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+      const out = canvas.toDataURL('image/jpeg', quality);
+      const base64 = out.split(',')[1];
+      const sizeKB = (base64.length * 3) / 4 / 1024;
+      return { base64, info:{ w,h,sizeKB } };
+    }
+
+    /************** notifications & routing **************/
+    const noteArea = document.getElementById('notification-area');
+    function showNote(type, text, duration = 5000){
+      noteArea.className = 'notification ' + (type === 'error' ? 'error' : 'info');
+      noteArea.textContent = text;
+      noteArea.style.display = 'block';
+      if(duration > 0) setTimeout(clearNote, duration);
+    }
+    function clearNote(){ noteArea.style.display='none'; noteArea.textContent=''; }
+    function goToHome(){ window.location.href = 'https://www.m2020m.org/portal.html'; }
+    function logout(){ showNote('info', T('loggedOut')); }
+
+    /************** analyze (API call) **************/
+    function buildPayload(){
+      return {
+        uiLang: currentLang,
+        caseDescription: val('case-description'),
+        medicalHistory: val('history'),
+        currentMedications: val('medications-procedures'),
+        age: val('age'),
+        gender: val('gender'),
+        isPregnant: document.getElementById('gender').value === 'female' ? val('pregnancy-status') : undefined,
+        files: filesState.map(f=>({name:f.name, type:f.type, base64:f.base64}))
+      };
+    }
+    function val(id){ return (document.getElementById(id)?.value || '').trim() || undefined; }
+
+    async function analyzeCase(){
+      const responseContainer = document.getElementById('response-container');
+      const btn = document.getElementById('analyzeBtn');
+      clearNote(); responseContainer.style.display='none'; responseContainer.innerHTML='';
+
+      const payload = buildPayload();
+      if (!payload.caseDescription && (!payload.files || payload.files.length === 0)){
+        showNote('error', T('provideDetails'));
+        return;
+      }
+
+      showNote('info', T('analyzing'), 0); // show indefinitely until cleared
+      btn.disabled = true;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90-second timeout
+
+      try{
+        // THIS IS THE CORRECTED API ENDPOINT
+        const res = await fetch('/api/patient-analyzer.js', {
+          method:'POST', 
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify(payload), 
+          signal: controller.signal
         });
         
-        // Drag and drop functionality
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.style.borderColor = '#2563eb';
-            uploadArea.style.backgroundColor = 'rgba(37, 99, 235, 0.05)';
-        });
-        
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.style.borderColor = '#cbd5e1';
-            uploadArea.style.backgroundColor = '';
-        });
-        
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.style.borderColor = '#cbd5e1';
-            uploadArea.style.backgroundColor = '';
-            
-            if (e.dataTransfer.files.length > 0) {
-                handleFiles(e.dataTransfer.files);
-            }
-        });
-        
-        // File input change handler
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFiles(e.target.files);
-            }
-        });
-        
-        // Handle uploaded files
-        function handleFiles(files) {
-            errorMessage.style.display = 'none';
-            
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                
-                // Check file size (max 4MB)
-                if (file.size > 4 * 1024 * 1024) {
-                    showError(languages[currentLang].error.fileSize + file.name);
-                    continue;
-                }
-                
-                // Create preview
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const imgData = e.target.result;
-                    
-                    // Add to uploaded images
-                    uploadedImages.push({
-                        name: file.name,
-                        data: imgData.split(',')[1],
-                        mimeType: file.type
-                    });
-                    
-                    // Create preview element
-                    const previewItem = document.createElement('div');
-                    previewItem.className = 'image-item';
-                    
-                    if (file.type.startsWith('image/')) {
-                        previewItem.innerHTML = `
-                            <img src="${imgData}" alt="${file.name}">
-                            <div class="remove-btn" data-index="${uploadedImages.length - 1}">
-                                <i class="fas fa-times"></i>
-                            </div>
-                        `;
-                    } else {
-                        previewItem.innerHTML = `
-                            <div style="background:#e2e8f0;height:100%;display:flex;align-items:center;justify-content:center;">
-                                <i class="fas fa-file-pdf" style="font-size:2.5rem;color:#ef4444;"></i>
-                            </div>
-                            <div class="remove-btn" data-index="${uploadedImages.length - 1}">
-                                <i class="fas fa-times"></i>
-                            </div>
-                        `;
-                    }
-                    
-                    imagePreview.appendChild(previewItem);
-                    
-                    // Add remove event listener
-                    const removeBtn = previewItem.querySelector('.remove-btn');
-                    removeBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const index = parseInt(removeBtn.getAttribute('data-index'));
-                        uploadedImages.splice(index, 1);
-                        previewItem.remove();
-                        
-                        // Update data-index for remaining items
-                        const removeButtons = document.querySelectorAll('.remove-btn');
-                        removeButtons.forEach((btn, idx) => {
-                            btn.setAttribute('data-index', idx);
-                        });
-                    });
-                };
-                
-                reader.readAsDataURL(file);
-            }
+        const text = await res.text();
+        if (!res.ok){
+          if (res.status === 413) throw new Error(T('payloadTooLarge'));
+          let errorDetail = text;
+          try {
+              const errorJson = JSON.parse(text);
+              errorDetail = errorJson.detail || errorJson.error || text;
+          } catch {}
+          throw new Error(`HTTP ${res.status}: ${errorDetail}`);
         }
         
-        // Show error message
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.style.display = 'block';
+        const data = JSON.parse(text);
+
+        if (data?.htmlReport){
+          clearNote();
+          responseContainer.innerHTML = data.htmlReport;
+          responseContainer.style.display = 'block';
+          responseContainer.scrollIntoView({ behavior:'smooth', block:'start' });
+        } else {
+          throw new Error('Server response did not contain the expected report.');
         }
-        
-        // Analyze button click handler
-        analyzeBtn.addEventListener('click', async () => {
-            // Get form data
-            const symptoms = document.getElementById('symptoms').value;
-            const history = document.getElementById('history').value;
-            const medications = document.getElementById('medications').value;
-            
-            // Validate at least one field has data
-            if (!symptoms && !history && !medications && uploadedImages.length === 0) {
-                showError(languages[currentLang].error.noData);
-                return;
-            }
-            
-            errorMessage.style.display = 'none';
-            
-            // Show loading state
-            analyzeBtn.disabled = true;
-            analyzeText.textContent = languages[currentLang].analyzing;
-            analyzeBtn.innerHTML = `<div class="spinner"></div> ${languages[currentLang].analyzing}`;
-            
-            try {
-                // Prepare request data
-                const requestData = {
-                    language: currentLang,
-                    symptoms,
-                    history,
-                    medications,
-                    imageData: uploadedImages
-                };
-                
-                // Call API
-                const response = await fetch('/api/patient-analyzer', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(requestData)
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || languages[currentLang].error.apiError);
-                }
-                
-                // Display report
-                document.getElementById('report-placeholder').style.display = 'none';
-                reportSection.style.display = 'block';
-                reportContainer.innerHTML = data.htmlReport;
-                
-            } catch (error) {
-                showError(languages[currentLang].error.apiError + error.message);
-                console.error('Analysis error:', error);
-            } finally {
-                // Reset button
-                analyzeBtn.disabled = false;
-                analyzeText.textContent = languages[currentLang].analyze;
-                analyzeBtn.innerHTML = `<i class="fas fa-stethoscope"></i> ${languages[currentLang].analyze}`;
-            }
-        });
-    </script>
+      } catch(err){
+        console.error(err);
+        showNote('error', T('error') + err.message);
+      } finally {
+        clearTimeout(timeoutId);
+        btn.disabled = false;
+        if (noteArea.textContent === T('analyzing')) {
+          clearNote();
+        }
+      }
+    }
+
+    // Initial setup
+    setLang('ar');
+    window.setLang = setLang;
+    window.goToHome = goToHome;
+    window.logout = logout;
+    window.analyzeCase = analyzeCase;
+    window.handleDrop = handleDrop;
+  </script>
 </body>
 </html>
