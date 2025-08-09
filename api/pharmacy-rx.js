@@ -1,394 +1,610 @@
-// pages/api/pharmacy-rx.js
-// Bilingual (AR/EN) clinical rules engine for Rx OCR lists — Next.js API Route
-// لا يحتاج مكتبات خارجية
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>بوابة الصيدلية – تحليل وصفات وتقييم مريض</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-// ========== 0) Utilities ==========
-function norm(s = "") {
-  // نحافظ على العربية + الإنجليزية + الأرقام وبعض الرموز
-  return (s || "")
-    .toLowerCase()
-    .replace(/[^a-z\u0600-\u06FF0-9\s\-\/\.\+]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+  <!-- لالتقاط التقرير إلى PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-// Tiny Levenshtein
-function editDistance(a, b) {
-  a = norm(a); b = norm(b);
-  const dp = Array(b.length + 1).fill(0).map((_, i) => [i]);
-  for (let j = 0; j <= a.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      dp[i][j] = Math.min(
-        dp[i-1][j] + 1,
-        dp[i][j-1] + 1,
-        dp[i-1][j-1] + (a[j-1] === b[i-1] ? 0 : 1)
-      );
+  <!-- OCR عبر Tesseract.js -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+
+  <style>
+    :root{
+      --primary:#0b63c2;--primary-dark:#094f9c;--accent:#ffd54d;--bg:#f4f8ff;--card:#fff;
+      --border:#e2e8f0;--muted:#66768a;--danger:#d63031;--ok:#10b981;--focus:rgba(11,99,194,.15);
+      --shadow:0 12px 28px rgba(15,57,105,.08);--radius:16px
     }
-  }
-  return dp[b.length][a.length];
-}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 80% 0%,#e9f3ff,#f6fbff);font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,'Amiri',serif;color:#243143}
+    [lang="ar"] body,[lang="ar"] h1,[lang="ar"] h2,[lang="ar"] h3,[lang="ar"] label,[lang="ar"] input,[lang="ar"] select,[lang="ar"] textarea,[lang="ar"] button{font-family:'Amiri', serif}
+    .container{max-width:1100px;margin:0 auto;padding:20px}
 
-function fuzzyFind(token, dictKeys, thresh = 0.34) {
-  const t = norm(token);
-  let best = null, bestScore = Infinity;
-  for (const k of dictKeys) {
-    const d = editDistance(t, k);
-    const score = d / Math.max(k.length, t.length);
-    if (score < bestScore) { bestScore = score; best = k; }
-  }
-  return bestScore <= thresh ? best : null;
-}
-
-// ========== 1) Knowledge base (extendable) ==========
-// هيكل قابل للتوسيع: أضف ما تشاء من aliases عربي/إنجليزي/أسماء تجارية/اختصارات OCR
-const DRUG_ENTRIES = [
-  // --- Antihypertensives (CCB) ---
-  {
-    aliases: ["amlodipine", "أملوديبين", "amlodipin", "amlodipine 10", "norvasc"],
-    generic: "amlodipine", class: "CCB (dihydropyridine)", indications: ["HTN","angina"]
-  },
-
-  // --- ARB / ACEi ---
-  { aliases: ["valsartan", "فالسارتان"], generic: "valsartan", class: "ARB", indications: ["HTN","HF"] },
-  { aliases: ["losartan", "لوسارتان"], generic: "losartan", class: "ARB", indications: ["HTN"] },
-  { aliases: ["olmesartan", "أولميسارتان"], generic: "olmesartan", class: "ARB", indications: ["HTN"] },
-  { aliases: ["candesartan", "كانديسارتان"], generic: "candesartan", class: "ARB", indications: ["HTN","HF"] },
-  { aliases: ["perindopril", "بيريندوبريل"], generic: "perindopril", class: "ACEi", indications: ["HTN","CV"] },
-  { aliases: ["lisinopril", "ليزينوبريل"], generic: "lisinopril", class: "ACEi", indications: ["HTN","HF"] },
-
-  // --- ARB/Thiazide combos & misc combos ---
-  {
-    aliases: ["co-taburan 160/12.5", "co taburan", "valsartan/hydrochlorothiazide", "فالسارتان/هيدروكلوروثيازيد", "hct", "hctz"],
-    generic: "valsartan/hydrochlorothiazide", class: "ARB + thiazide", indications: ["HTN"]
-  },
-  {
-    aliases: ["exforge", "exforge hct", "amlodipine/valsartan", "amlodipine/valsartan/hct", "أملوديبين/فالسارتان"],
-    generic: "amlodipine/valsartan(+/-HCT)", class: "CCB + ARB (+/- thiazide)", indications: ["HTN"]
-  },
-  {
-    aliases: ["triplixam", "perindopril/indapamide/amlodipine", "تريپليكسام", "triplex"], // يشمل “triplex” الشائع بالمنطقة
-    generic: "perindopril/indapamide/amlodipine", class: "ACEi + thiazide-like + CCB", indications: ["HTN"]
-  },
-
-  // --- BPH ---
-  {
-    aliases: ["duodart 0.5/0.4", "duodart", "ديوادارت", "dutasteride/tamsulosin", "jalyn"],
-    generic: "dutasteride/tamsulosin", class: "5ARI + α1-blocker", indications: ["BPH"]
-  },
-  { aliases: ["tamsulosin", "تامسولوسين", "flomax"], generic: "tamsulosin", class: "α1-blocker", indications: ["BPH"] },
-
-  // --- Lipids (statins) ---
-  { aliases: ["rosuvastatin", "روزوفاستاتين", "crestor", "rozavi", "rozavi 10"], generic: "rosuvastatin", class: "statin", indications: ["dyslipidemia"] },
-  { aliases: ["atorvastatin", "أتورفاستاتين", "lipitor"], generic: "atorvastatin", class: "statin", indications: ["dyslipidemia"] },
-
-  // --- Diabetes ---
-  { aliases: ["metformin", "ميتفورمين", "glucophage", "glucophage xr", "formet xr 750", "formot xr 750"], generic: "metformin XR/IR", class: "biguanide", indications: ["T2D"] },
-  { aliases: ["gliclazide mr 30", "diamicron mr 30", "damicron mr 30", "جليكلازايد ام ار"], generic: "gliclazide MR", class: "sulfonylurea", indications: ["T2D"] },
-  { aliases: ["sitagliptin", "سيتاجلبتين", "januvia"], generic: "sitagliptin", class: "DPP-4 inhibitor", indications: ["T2D"] },
-
-  // --- GI (PPI) ---
-  { aliases: ["pantoprazole", "بانتوبرازول", "pantomax 40", "pantomax", "protonix"], generic: "pantoprazole", class: "PPI", indications: ["GERD","ulcer"] },
-  { aliases: ["esomeprazole", "إيزوميبرازول", "nexium"], generic: "esomeprazole", class: "PPI", indications: ["GERD","ulcer"] },
-
-  // --- Analgesic ---
-  { aliases: ["paracetamol", "acetaminophen", "باراسيتامول", "أسيتامينوفين", "adol", "panadol"], generic: "paracetamol (acetaminophen)", class: "analgesic/antipyretic", indications: ["pain","fever"] },
-
-  // --- NSAIDs (مهم لسلامة الكلى/الضغط) ---
-  { aliases: ["ibuprofen", "ايبوبروفين", "brufen", "advil"], generic: "ibuprofen", class: "NSAID", indications: ["pain","inflammation"] },
-  { aliases: ["diclofenac", "ديكلوفيناك", "voltaren"], generic: "diclofenac", class: "NSAID", indications: ["pain","inflammation"] },
-
-  // --- Devices / supplies ---
-  { aliases: ["lancet", "لنست"], generic: "lancets (device)", class: "device", indications: ["glucose monitoring"], device: true },
-  { aliases: ["e-core strip", "e care strip", "glucose test strips", "شرائط سكر"], generic: "glucose test strips", class: "device", indications: ["glucose monitoring"], device: true },
-
-  // --- Unknowns from your case ---
-  { aliases: ["intras"], generic: "unknown", class: "unknown", indications: [], needsConfirm: true },
-  { aliases: ["pika-ur eff", "pika ur"], generic: "urinary alkalinizer? (effervescent)", class: "urology", indications: ["verify"], needsConfirm: true },
-  { aliases: ["suden cream"], generic: "topical (verify)", class: "dermatology", indications: ["verify"], needsConfirm: true },
-];
-
-// نحول الـ entries إلى قاموس aliases → data
-const DRUG_DB = (() => {
-  const map = {};
-  for (const e of DRUG_ENTRIES) {
-    for (const alias of e.aliases) {
-      map[norm(alias)] = { generic: e.generic, class: e.class, indications: e.indications || [], device: !!e.device, needsConfirm: !!e.needsConfirm };
+    .navbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--primary)}
+    .lang-switcher{font-weight:700;border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
+    .home-btn{
+      background:linear-gradient(90deg,#fff,#ffd54d);color:#2b3a55;border:1px solid #ffe082;
+      padding:.6rem 1rem;border-radius:12px;font-weight:800;text-decoration:none;
+      box-shadow:0 6px 14px rgba(0,0,0,.08)
     }
+    .home-btn:hover{filter:brightness(1.02)}
+
+    .hero{background:linear-gradient(145deg,#ffffff, #eef6ff);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;margin:10px 0 22px;position:relative;overflow:hidden}
+    .hero::after{content:"";position:absolute;inset:auto -80px -90px auto;width:240px;height:240px;border-radius:50%;background:radial-gradient(closest-side, #ffd54d, transparent 70%);opacity:.45;}
+    .hero h1{margin:0 0 8px;color:#0b63c2}
+    .hero p{margin:0;color:var(--muted)}
+    .cta{margin-top:16px;display:flex;gap:12px;align-items:center}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;border:none;border-radius:12px;padding:.8rem 1.2rem;font-weight:800;cursor:pointer;box-shadow:0 6px 14px rgba(0,0,0,.08);transition:transform .06s ease,filter .2s ease, background .25s ease}
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{background:linear-gradient(90deg,#fff,#ffd54d);color:#2b3a55;border:1px solid #ffe082}
+    .btn-primary:hover{filter:brightness(1.02)}
+    .btn-outline{background:#fff;border:1px solid var(--border);color:var(--primary)}
+
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+    .section-title{display:flex;align-items:center;gap:.5rem;border-bottom:2px solid var(--primary);color:var(--primary);font-weight:800;padding-bottom:6px;margin:18px 0 14px}
+    .dot{width:9px;height:9px;background:#ffd54d;border-radius:50%}
+
+    label{font-weight:700;display:block;margin:.7rem 0 .35rem}
+    .hint{font-size:.92rem;color:var(--muted)}
+    input,select,textarea{width:100%;box-sizing:border-box;border:1px solid var(--border);background:#fff;border-radius:12px;padding:.7rem .9rem;font-size:1rem;transition:border-color .2s, box-shadow .2s}
+    input:focus,select:focus,textarea:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px var(--focus)}
+    textarea{min-height:110px;resize:vertical}
+    .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+    .row{display:flex;gap:10px;align-items:center}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#f1f5ff;border:1px solid var(--border);font-weight:700;color:#0b63c2}
+
+    .file-drop{border:2px dashed var(--border);border-radius:12px;padding:18px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .2s, background .2s}
+    .file-drop:hover{border-color:var(--primary);background:#f6fbff}
+    .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:12px}
+    .thumb{position:relative;border:1px solid var(--border);border-radius:10px;background:#fcfdff;padding:6px}
+    .thumb .name{font-size:.86rem;word-break:break-all;text-align:center;margin-top:6px}
+    .thumb .x{position:absolute;inset:4px 4px auto auto;background:#d63031;color:#fff;border:0;border-radius:50%;width:22px;height:22px;line-height:22px;text-align:center;cursor:pointer}
+
+    .notification{margin-top:12px;padding:12px;border-radius:10px;display:none;font-weight:700;text-align:center}
+    .notification.info{background:#e9f4ff;color:#114a86;border:1px solid #cfe6ff}
+    .notification.err{background:#fde8ea;color:#7a1f27;border:1px solid #f5c6cb}
+
+    #report{display:none;margin-top:16px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{border:1px solid var(--border);padding:8px 10px;text-align:right}
+    th{background:#e9f3ff;color:#0b63c2}
+
+    .footer-note{margin-top:18px;color:#8aa}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div class="brand">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Rx Portal
+      </div>
+      <div class="row">
+        <a class="home-btn" href="/portal.html">الصفحة الرئيسية</a>
+        <button id="langSwitcher" class="lang-switcher">English</button>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="hero">
+      <h1 data-i18n="hero.title">منصة الصيدلية الذكية</h1>
+      <p data-i18n="hero.subtitle">تجميع بيانات المريض، تحليل تفاعلات/جرعات، وتصدير تقرير PDF احترافي.</p>
+      <div class="cta">
+        <button class="btn btn-primary" id="startBtn"><span data-i18n="hero.cta">بدء تحليل جديد</span> ▸</button>
+        <button class="btn btn-outline" id="scrollToReport"><span data-i18n="hero.viewLast">عرض آخر تقرير</span></button>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <div class="card" id="formCard">
+      <div class="section-title"><span class="dot"></span><span data-i18n="sec.patient">١) بيانات المريض</span></div>
+      <div class="grid">
+        <div><label data-i18n="f.age">العمر</label><input id="age" type="number" placeholder="63"></div>
+        <div>
+          <label data-i18n="f.gender">الجنس</label>
+          <select id="gender">
+            <option value="" data-i18n="opt.select">اختر</option>
+            <option value="male" data-i18n="opt.male">ذكر</option>
+            <option value="female" data-i18n="opt.female">أنثى</option>
+          </select>
+        </div>
+        <div><label data-i18n="f.height">الطول (سم)</label><input id="height" type="number" placeholder="170"></div>
+        <div><label data-i18n="f.weight">الوزن (كجم)</label><input id="weight" type="number" placeholder="72"></div>
+      </div>
+
+      <div class="grid" id="pregWrap" style="margin-top:8px;display:none">
+        <div>
+          <label data-i18n="f.pregnant">هل المريضة حامل؟</label>
+          <select id="pregnancy">
+            <option value="" data-i18n="opt.select">اختر</option>
+            <option value="yes" data-i18n="opt.yes">نعم</option>
+            <option value="no" data-i18n="opt.no">لا</option>
+          </select>
+        </div>
+        <div id="gestWrap" style="display:none">
+          <label data-i18n="f.gestation">مدة الحمل (أسابيع)</label>
+          <input id="gestation" type="number" min="1" max="42" placeholder="20">
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:18px"><span class="dot"></span><span data-i18n="sec.organs">٢) تقييم وظائف الأعضاء</span></div>
+      <div class="grid">
+        <div><label data-i18n="f.egfr">معدل الترشيح الكبيبي (eGFR)</label><input id="egfr" type="number" step="0.1" placeholder="60"></div>
+        <div><label data-i18n="f.crea">مستوى الكرياتينين (mg/dL)</label><input id="creatinine" type="number" step="0.01" placeholder="1.1"></div>
+        <div>
+          <label data-i18n="f.liver">حالة الكبد</label>
+          <select id="liver">
+            <option value="normal" data-i18n="liver.normal">سليم</option>
+            <option value="mild" data-i18n="liver.mild">قصور طفيف</option>
+            <option value="moderate" data-i18n="liver.moderate">قصور متوسط</option>
+            <option value="severe" data-i18n="liver.severe">قصور حاد</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:18px"><span class="dot"></span><span data-i18n="sec.allergy">٣) الحساسية</span></div>
+      <div class="row" style="flex-wrap:wrap;gap:12px">
+        <div style="min-width:260px;flex:1">
+          <label data-i18n="f.foodAllergy">هل توجد حساسية طعام؟</label>
+          <select id="foodAllergy">
+            <option value="no" data-i18n="opt.no">لا</option>
+            <option value="yes" data-i18n="opt.yes">نعم</option>
+          </select>
+          <input id="foodAllergyTxt" style="margin-top:8px;display:none" placeholder="مثال: فستق، بيض…">
+        </div>
+        <button class="btn btn-outline" id="addAllergy"><span data-i18n="btn.addAllergy">+ إضافة حساسية أخرى</span></button>
+      </div>
+      <div id="allergyList" class="grid" style="margin-top:10px"></div>
+
+      <div class="section-title" style="margin-top:18px"><span class="dot"></span><span data-i18n="sec.symptoms">٤) معلومات سريرية إضافية</span></div>
+      <label data-i18n="f.symptoms">الأعراض الإكلينيكية</label>
+      <textarea id="symptoms" placeholder="مثال: دوخة، غثيان، ألم صدري…"></textarea>
+
+      <div class="grid" style="margin-top:10px">
+        <div>
+          <label data-i18n="f.meds">قائمة الأدوية (سطر لكل دواء أو مفصولة بفواصل)</label>
+          <textarea id="meds" placeholder="Amlodipine 10 mg
+Duodart 0.5/0.4
+Rosuvastatin 20 mg"></textarea>
+        </div>
+        <div>
+          <label data-i18n="f.apap">إجمالي باراسيتامول يوميًا (mg) – اختياري</label>
+          <input id="apap" type="number" step="1" placeholder="0">
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:12px">
+        <div>
+          <label data-i18n="f.uploadLab">تحميل نتائج المختبر</label>
+          <div class="file-drop" onclick="document.getElementById('labInput').click()" data-i18n="f.dropHere">اضغط لرفع ملفات (صور/PDF)</div>
+          <input id="labInput" type="file" accept="image/*,application/pdf" multiple style="display:none">
+          <div id="labThumbs" class="thumbs"></div>
+        </div>
+        <div>
+          <label data-i18n="f.uploadRad">تحميل تقارير الأشعة</label>
+          <div class="file-drop" onclick="document.getElementById('radInput').click()" data-i18n="f.dropHere">اضغط لرفع ملفات (صور/PDF)</div>
+          <input id="radInput" type="file" accept="image/*,application/pdf" multiple style="display:none">
+          <div id="radThumbs" class="thumbs"></div>
+        </div>
+      </div>
+
+      <!-- ملفات أخرى + زر OCR -->
+      <div class="grid" style="margin-top:12px">
+        <div>
+          <label>ملفات أخرى (مثلاً صور روشتة/إحالات)</label>
+          <div class="file-drop" onclick="document.getElementById('otherInput').click()">اضغط لرفع ملفات (صور/PDF)</div>
+          <input id="otherInput" type="file" accept="image/*,application/pdf" multiple style="display:none">
+          <div id="otherThumbs" class="thumbs"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn btn-outline" id="ocrBtn">استخراج الأدوية من الصور</button>
+            <span class="hint">سيتم دمج الأدوية المستخرجة مع القائمة أعلاه.</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
+        <button class="btn btn-primary" id="analyzeBtn"><span data-i18n="btn.analyze">تحليل وتصدير</span> ▸</button>
+        <span class="hint" data-i18n="hint.analyze">سيتم توليد تقرير شامل قابل للطباعة وPDF.</span>
+      </div>
+      <div id="note" class="notification info"></div>
+    </div>
+
+    <!-- Report -->
+    <div id="report" class="card">
+      <div id="reportContent"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+        <button class="btn btn-outline" id="downloadPDF">PDF</button>
+        <button class="btn btn-outline" onclick="window.print()" data-i18n="btn.print">طباعة</button>
+      </div>
+      <div class="footer-note" data-i18n="hint.security">* لا يتم تخزين ملفاتك على الخادم؛ تستخدم فقط لتوليد التقرير محليًا.</div>
+    </div>
+  </div>
+
+<script>
+/* ===================== إعدادات عامة ===================== */
+const API_ENDPOINT = '/api/pharmacy-rx';
+const { jsPDF } = window.jspdf;
+
+/* ===================== I18N ===================== */
+const i18n = {
+  ar:{hero:{title:'منصة الصيدلية الذكية',subtitle:'تجميع بيانات المريض، تحليل تفاعلات/جرعات، وتصدير تقرير PDF احترافي.',cta:'بدء تحليل جديد',viewLast:'عرض آخر تقرير'},
+      sec:{patient:'١) بيانات المريض',organs:'٢) تقييم وظائف الأعضاء',allergy:'٣) الحساسية',symptoms:'٤) معلومات سريرية إضافية'},
+      f:{age:'العمر',gender:'الجنس',height:'الطول (سم)',weight:'الوزن (كجم)',pregnant:'هل المريضة حامل؟',gestation:'مدة الحمل (أسابيع)',egfr:'معدل الترشيح الكبيبي (eGFR)',crea:'مستوى الكرياتينين (mg/dL)',liver:'حالة الكبد',foodAllergy:'هل توجد حساسية طعام؟',symptoms:'الأعراض الإكلينيكية',meds:'قائمة الأدوية (سطر لكل دواء أو مفصولة بفواصل)',apap:'إجمالي باراسيتامول يوميًا (mg) – اختياري',uploadLab:'تحميل نتائج المختبر',uploadRad:'تحميل تقارير الأشعة',dropHere:'اضغط لرفع ملفات (صور/PDF)'},
+      opt:{select:'اختر',male:'ذكر',female:'أنثى',yes:'نعم',no:'لا'},
+      liver:{normal:'سليم',mild:'قصور طفيف',moderate:'قصور متوسط',severe:'قصور حاد'},
+      btn:{addAllergy:'+ إضافة حساسية أخرى',analyze:'تحليل وتصدير',print:'طباعة'},
+      hint:{analyze:'سيتم توليد تقرير شامل قابل للطباعة وPDF.',security:'* لا يتم تخزين ملفاتك على الخادم؛ تستخدم فقط لتوليد التقرير محليًا.'},
+      report:{title:'ملخص تقييم المريض',patient:'بيانات المريض',allergies:'الحساسية',files:'المرفقات',analysis:'تحليل الأدوية'},
+      ocr:{start:'جاري استخراج الأدوية من الصور…',none:'لا توجد صور مناسبة للاستخراج.',done:'تم استخراج الأدوية ودمجها.',err:'فشل استخراج النص من بعض الصور.'},
+      ui:{needData:'الرجاء إدخال أدوية أو أعراض على الأقل.',reqFail:'فشل الطلب: ',pdfFail:'فشل إنشاء PDF.'}
+  },
+  en:{hero:{title:'Smart Pharmacy Portal',subtitle:'Capture patient data, analyze interactions/doses, export a professional PDF.',cta:'Start New Analysis',viewLast:'View Last Report'},
+      sec:{patient:'1) Patient Information',organs:'2) Organ Function',allergy:'3) Allergies',symptoms:'4) Additional Clinical Information'},
+      f:{age:'Age',gender:'Gender',height:'Height (cm)',weight:'Weight (kg)',pregnant:'Is the patient pregnant?',gestation:'Gestation (weeks)',egfr:'eGFR',crea:'Creatinine (mg/dL)',liver:'Liver status',foodAllergy:'Any food allergies?',symptoms:'Clinical Symptoms',meds:'Medications list (one per line or comma-separated)',apap:'Total paracetamol per day (mg) – optional',uploadLab:'Upload Lab Results',uploadRad:'Upload Radiology Reports',dropHere:'Click to upload files (images/PDF)'},
+      opt:{select:'Select',male:'Male',female:'Female',yes:'Yes',no:'No'},
+      liver:{normal:'Normal',mild:'Mild impairment',moderate:'Moderate impairment',severe:'Severe impairment'},
+      btn:{addAllergy:'+ Add Another Allergy',analyze:'Analyze & Export',print:'Print'},
+      hint:{analyze:'A comprehensive, printable PDF will be generated.',security:'* Your files are not stored on the server; they are used locally to build the report.'},
+      report:{title:'Patient Assessment Summary',patient:'Patient Details',allergies:'Allergies',files:'Attachments',analysis:'Rx Analysis'},
+      ocr:{start:'Extracting meds from images…',none:'No suitable images to read.',done:'Extracted and merged into the list.',err:'OCR failed on some images.'},
+      ui:{needData:'Please provide medications or symptoms at least.',reqFail:'Request failed: ',pdfFail:'PDF failed.'}
   }
-  return map;
-})();
-
-const DB_KEYS = Object.keys(DRUG_DB);
-
-const CLASS_GROUPS = {
-  antihypertensive: ["CCB (dihydropyridine)", "ARB", "ACEi", "ARB + thiazide", "CCB + ARB (+/- thiazide)", "ACEi + thiazide-like + CCB"],
-  thiazide_like: ["thiazide", "thiazide-like"],
-  alpha1: ["α1-blocker", "5ARI + α1-blocker"],
-  diabetes: ["biguanide", "sulfonylurea", "DPP-4 inhibitor"],
-  statin: ["statin"],
-  ppi: ["PPI"],
-  nsaid: ["NSAID"],
 };
-
-// ========== 2) Core mapping ==========
-function mapItem(rawName, doseText = "") {
-  const key = fuzzyFind(rawName, DB_KEYS) || norm(rawName);
-  const base = DRUG_DB[key] || { generic: rawName, class: "unknown", indications: [], needsConfirm: true };
-  return { original: rawName, doseText, ...base, keyMatched: key };
-}
-
-// ========== 3) Clinical rules ==========
-
-// A) HTN overlap / justification
-function checkHypertensionOverlap(items, patient) {
-  const antiHTN = items.filter(x => CLASS_GROUPS.antihypertensive.includes(x.class));
-  if (antiHTN.length >= 2) {
-    return {
-      id: "HTN_COMBO_JUSTIFY",
-      level: "review",
-      summary: "أكثر من خافض ضغط واحد",
-      detail: "وجود أكثر من دواء خافض للضغط يستلزم تبرير سريري (هدف ضغط واضح، مقاومة علاجية، إلخ).",
-      refs: ["ACC_AHA_2017"],
-    };
-  }
-  return null;
-}
-
-// B) Dual RAS blockade (ACEi + ARB) — avoid
-function checkDualRAS(items) {
-  const hasACEi = items.some(x => x.class === "ACEi");
-  const hasARB  = items.some(x => x.class === "ARB" || x.generic.includes("/hydrochlorothiazide") || x.class === "ARB + thiazide");
-  if (hasACEi && hasARB) {
-    return {
-      id: "DUAL_RAS_AVOID",
-      level: "high",
-      summary: "تجنّب الجمع بين ACEi و ARB",
-      detail: "الدمج يزيد مخاطر الفشل الكلوي وفرط بوتاسيوم الدم دون فائدة واضحة.",
-      refs: ["ACC_AHA_2017"],
-    };
-  }
-  return null;
-}
-
-// C) α1-blocker + BP drugs → orthostatic hypotension
-function checkBPHWithBP(items, patient) {
-  const hasAlpha1 = items.some(x => CLASS_GROUPS.alpha1.includes(x.class));
-  const hasBPDrugs = items.some(x => CLASS_GROUPS.antihypertensive.includes(x.class));
-  if (hasAlpha1 && hasBPDrugs) {
-    return {
-      id: "ORTHO_HYPOTENSION_RISK",
-      level: (patient?.age >= 65 ? "high" : "caution"),
-      summary: "خطر هبوط ضغط وضعي (خاصةً مع العمر)",
-      detail: "محصرات ألفا (تامسولوسين/ديوادارت) قد تزيد الدوخة والسقوط مع خافضات الضغط الأخرى.",
-      refs: ["JALYN_LABEL"],
-    };
-  }
-  return null;
-}
-
-// D) Metformin renal rule (KDIGO)
-function checkMetforminRenal(items, eGFR) {
-  const hasMet = items.some(x => x.generic.startsWith("metformin"));
-  if (!hasMet || eGFR == null) return null;
-  if (eGFR < 30) {
-    return { id: "METFORMIN_CONTRA", level: "high", summary: "الميتفورمين مُضاد استطباب عند eGFR < 30", detail: "أوقف/لا تبدأ الميتفورمين. بدائل أخرى.", refs: ["KDIGO_2022"] };
-  } else if (eGFR >= 30 && eGFR < 45) {
-    return { id: "METFORMIN_REDUCE", level: "review", summary: "تقليل جرعة الميتفورمين عند eGFR 30–44", detail: "حدّ الجرعة اليومية (≈≤1000مغ XR) ومراقبة وظائف الكلى وB12.", refs: ["KDIGO_2022"] };
-  }
-  return null;
-}
-
-// E) Sulfonylurea caution in elderly/CKD
-function checkSU_Elderly_CKD(items, patient) {
-  const hasSU = items.some(x => x.class === "sulfonylurea");
-  if (!hasSU) return null;
-  if ((patient?.age >= 65) || (patient?.eGFR != null && patient.eGFR < 60)) {
-    return {
-      id: "SU_HYPO_RISK",
-      level: "review",
-      summary: "السلفونيل يوريا: خطر هبوط سكر أعلى في الكِبار/CKD",
-      detail: "فكّر ببدائل أو جرعات أقل ومراقبة لصيقة للجلوكوز.",
-      refs: ["ADA_2025"],
-    };
-  }
-  return null;
-}
-
-// F) Rosuvastatin renal max dose
-function checkRosuvastatinRenal(items, eGFR, doseTextMap) {
-  const rosu = items.find(x => x.generic.startsWith("rosuvastatin"));
-  if (!rosu || eGFR == null) return null;
-  if (eGFR < 30) {
-    const txt = doseTextMap.get(rosu.original) || rosu.doseText || "";
-    const mgMatch = txt.match(/(\d+)\s*mg/) || rosu.generic.match(/(\d+)\s*mg/);
-    const mg = mgMatch ? parseInt(mgMatch[1], 10) : null;
-    if (mg == null || mg > 10) {
-      return {
-        id: "ROSU_MAX10_SEVERE_CKD",
-        level: "high",
-        summary: "روزوفاستاتين: لا تتجاوز 10mg عند قصور كلوي شديد",
-        detail: "يوصى ببدء 5mg ولا تتجاوز 10mg في القصور الكلوي الشديد.",
-        refs: ["CRESTOR_LABEL"],
-      };
-    }
-  }
-  return null;
-}
-
-// G) Thiazide with gout / hyperuricemia
-function checkThiazide_Gout(items, patient) {
-  const hasThiazide = items.some(x => (x.class.includes("thiazide")));
-  if (!hasThiazide) return null;
-  if (patient?.gout === true || (patient?.uricAcid && patient.uricAcid > 7.0)) {
-    return {
-      id: "THIAZIDE_GOUT",
-      level: "caution",
-      summary: "الثيازايد قد ترفع حمض اليوريك",
-      detail: "راجع خطة الضغط إذا المريض لديه نقرس/حمض يوريك مرتفع.",
-      refs: ["ACC_AHA_2017"],
-    };
-  }
-  return null;
-}
-
-// H) NSAID in CKD/HTN
-function checkNSAID_CKD(items, patient) {
-  const hasNSAID = items.some(x => CLASS_GROUPS.nsaid.includes(x.class));
-  if (!hasNSAID) return null;
-  if (patient?.eGFR != null && patient.eGFR < 60) {
-    return {
-      id: "NSAID_CKD",
-      level: (patient.eGFR < 30 ? "high" : "review"),
-      summary: "NSAID مع قصور كلوي",
-      detail: "تجنّب NSAIDs في CKD (خصوصاً eGFR <30). قد ترفع الضغط وتضعف الكلى.",
-      refs: ["KDIGO_2022"],
-    };
-  }
-  return null;
-}
-
-// I) Acetaminophen daily cap
-function checkAcetaminophenMax(items, totalDailyMg) {
-  const apap = items.find(x => x.generic.includes("paracetamol") || x.generic.includes("acetaminophen"));
-  if (!apap || totalDailyMg == null) return null;
-  if (totalDailyMg > 4000) {
-    return { id: "APAP_MAX_4G", level: "high", summary: "الباراسيتامول > 4 جم/يوم", detail: "تجاوز الحد الأقصى الموصى به للبالغين (4 جم/24 ساعة).", refs: ["APAP_ADULT_MAX"] };
-  }
-  return null;
-}
-
-// J) PPI long duration
-function checkPPIDuration(items, durationDays) {
-  const ppi = items.find(x => x.class === "PPI");
-  if (!ppi || durationDays == null) return null;
-  if (durationDays >= 90) {
-    return { id: "PPI_LONG_DURATION", level: "caution", summary: "مدة PPI طويلة", detail: "الاستخدام المزمن يحتاج مبررات واضحة؛ 8 أسابيع شائعة ثم إعادة التقييم.", refs: ["PANTOPRAZOLE_LABEL"] };
-  }
-  return null;
-}
-
-// ========== 4) Analyzer ==========
-function analyzePrescription({
-  ocrList, // [{name, dose}]
-  patient = {} // {age, sex, eGFR, gout, uricAcid, apapDailyMg, ppiDurationDays}
-}) {
-  const items = (ocrList || []).map(x => mapItem(x.name, x.dose || ""));
-  const doseTextMap = new Map((ocrList || []).map(x => [x.name, x.dose || ""]));
-
-  const findings = [];
-  const push = f => { if (f) findings.push(f); };
-
-  push(checkHypertensionOverlap(items, patient));
-  push(checkDualRAS(items));
-  push(checkBPHWithBP(items, patient));
-  push(checkMetforminRenal(items, patient.eGFR));
-  push(checkSU_Elderly_CKD(items, patient));
-  push(checkRosuvastatinRenal(items, patient.eGFR, doseTextMap));
-  push(checkThiazide_Gout(items, patient));
-  push(checkNSAID_CKD(items, patient));
-
-  if (patient.apapDailyMg != null) push(checkAcetaminophenMax(items, patient.apapDailyMg));
-  if (patient.ppiDurationDays != null) push(checkPPIDuration(items, patient.ppiDurationDays));
-
-  // Score بسيط
-  let score = 100;
-  for (const f of findings) {
-    if (!f) continue;
-    if (f.level === "high") score -= 25;
-    else if (f.level === "review") score -= 15;
-    else score -= 8;
-  }
-  score = Math.max(0, Math.min(100, score));
-
-  const REF_MAP = {
-    ACC_AHA_2017: {
-      title: "2017 ACC/AHA Hypertension Guideline",
-      url: "https://www.acc.org/~/media/Non-Clinical/Files-PDFs-Excel-MS-Word-etc/Guidelines/2017/Guidelines_Made_Simple_2017_HBP.pdf",
-    },
-    KDIGO_2022: {
-      title: "KDIGO 2022 Diabetes in CKD",
-      url: "https://kdigo.org/wp-content/uploads/2022/10/KDIGO-2022-Clinical-Practice-Guideline-for-Diabetes-Management-in-CKD.pdf",
-    },
-    CRESTOR_LABEL: {
-      title: "CRESTOR (rosuvastatin) FDA label – renal dosing",
-      url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2023/021366s043s044lbl.pdf",
-    },
-    JALYN_LABEL: {
-      title: "JALYN (dutasteride/tamsulosin) FDA label – orthostatic hypotension",
-      url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2011/022460s001lbl.pdf",
-    },
-    PANTOPRAZOLE_LABEL: {
-      title: "Pantoprazole (PROTONIX) label – typical durations",
-      url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2012/020987s045lbl.pdf",
-    },
-    ADA_2025: {
-      title: "ADA Standards of Care (latest)",
-      url: "https://diabetesjournals.org/care/issue",
-    },
-    APAP_ADULT_MAX: {
-      title: "Adult paracetamol maximum daily dose (4g)",
-      url: "https://www.nhs.uk/medicines/paracetamol-for-adults/how-and-when-to-take-paracetamol-for-adults/",
-    },
-  };
-
-  const table = items.map(x => {
-    let status = "✅ مقبول";
-    if (x.needsConfirm) status = "⚠️ يحتاج تأكيد اسم/غرض";
-    if (x.class === "unknown") status = "⚠️ غير واضح";
-    if (x.device) status = "ℹ️ لوازم/أدوات";
-    return {
-      original: x.original,
-      mapped: x.generic,
-      class: x.class,
-      indications: x.indications.join(", "),
-      doseText: x.doseText || "",
-      status,
-    };
+let currentLang = 'ar';
+function t(key){ return key.split('.').reduce((o,k)=>o&&o[k], i18n[currentLang]); }
+function setLanguage(lang){
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.documentElement.dir  = (lang==='ar'?'rtl':'ltr');
+  document.getElementById('langSwitcher').textContent = (lang==='ar'?'English':'العربية');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.getAttribute('data-i18n');
+    el.textContent = t(key);
   });
+}
+
+/* ===================== مراجع DOM ===================== */
+const startBtn=document.getElementById('startBtn');
+const scrollToReportBtn=document.getElementById('scrollToReport');
+const note=document.getElementById('note');
+const out=document.getElementById('reportContent');
+const genderEl=document.getElementById('gender');
+const pregWrap=document.getElementById('pregWrap');
+const pregnancyEl=document.getElementById('pregnancy');
+const gestWrap=document.getElementById('gestWrap');
+const foodAllergyEl=document.getElementById('foodAllergy');
+const foodAllergyTxt=document.getElementById('foodAllergyTxt');
+const allergyList=document.getElementById('allergyList');
+const addAllergyBtn=document.getElementById('addAllergy');
+const ocrBtn=document.getElementById('ocrBtn');
+
+function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36);}
+function showNote(type,text){ note.className='notification '+(type==='err'?'err':'info'); note.textContent=text; note.style.display='block'; }
+function clearNote(){ note.style.display='none'; note.textContent=''; }
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]))}
+
+/* ===================== تفاعل واجهة ===================== */
+startBtn.addEventListener('click',()=>document.getElementById('formCard').scrollIntoView({behavior:'smooth'}));
+scrollToReportBtn.addEventListener('click',()=>document.getElementById('report').scrollIntoView({behavior:'smooth'}));
+document.getElementById('langSwitcher').addEventListener('click',()=>setLanguage(currentLang==='ar'?'en':'ar'));
+
+genderEl.addEventListener('change',()=>{
+  pregWrap.style.display = (genderEl.value==='female') ? '' : 'none';
+  if (genderEl.value!=='female'){ pregnancyEl.value=''; gestWrap.style.display='none'; document.getElementById('gestation').value=''; }
+});
+pregnancyEl?.addEventListener('change',()=>{
+  gestWrap.style.display = (pregnancyEl.value==='yes') ? '' : 'none';
+  if (pregnancyEl.value!=='yes'){ document.getElementById('gestation').value=''; }
+});
+foodAllergyEl.addEventListener('change',()=>{
+  foodAllergyTxt.style.display = (foodAllergyEl.value==='yes')? '' : 'none';
+  if (foodAllergyEl.value!=='yes') foodAllergyTxt.value='';
+});
+
+addAllergyBtn.addEventListener('click',()=>{
+  const id=uid();
+  const card=document.createElement('div');
+  card.className='card';
+  card.style.padding='12px';
+  card.innerHTML=`
+    <div class="grid">
+      <div>
+        <label>${currentLang==='ar'?'نوع الحساسية':'Allergy Type'}</label>
+        <select data-id="${id}" class="allType">
+          <option value="drug">${currentLang==='ar'?'دواء':'Drug'}</option>
+          <option value="chemical">${currentLang==='ar'?'مادة كيميائية':'Chemical'}</option>
+          <option value="dust">${currentLang==='ar'?'غبار':'Dust'}</option>
+          <option value="other">${currentLang==='ar'?'أخرى':'Other'}</option>
+        </select>
+      </div>
+      <div>
+        <label>${currentLang==='ar'?'التفاصيل':'Details'}</label>
+        <input data-id="${id}" class="allDetail" placeholder="${currentLang==='ar'?'مثال: بنسلين، لاتكس':'e.g., Penicillin, Latex'}">
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px"><button class="btn btn-outline" data-remove="${id}">✕ ${currentLang==='ar'?'حذف':'Remove'}</button></div>
+  `;
+  allergyList.appendChild(card);
+});
+allergyList.addEventListener('click',(e)=>{
+  const id=e.target.getAttribute('data-remove');
+  if (id) e.target.closest('.card').remove();
+});
+
+/* ===================== مُلتقِطات الملفات ===================== */
+function bindFilePicker(inputId,gridId,store){
+  const input=document.getElementById(inputId);
+  const grid=document.getElementById(gridId);
+  input.addEventListener('change',()=>{
+    for (const file of input.files){
+      const id=uid();
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        store.push({id,name:file.name,preview:ev.target.result,type:file.type});
+        const isImg = file.type.startsWith('image/');
+        const content=isImg?`<img src="${ev.target.result}" style="width:100%;height:110px;object-fit:cover;border-radius:6px">`
+                           :`<div style="display:flex;align-items:center;justify-content:center;height:110px"><span class="pill">PDF</span></div>`;
+        const div=document.createElement('div');
+        div.className='thumb';
+        div.innerHTML=`<button class="x" data-x="${id}">×</button>${content}<div class="name">${file.name}</div>`;
+        grid.appendChild(div);
+      };
+      reader.readAsDataURL(file);
+    }
+    input.value='';
+  });
+  grid.addEventListener('click',(e)=>{
+    const id=e.target.getAttribute('data-x');
+    if (!id) return;
+    const idx=store.findIndex(x=>x.id===id);
+    if (idx>-1) store.splice(idx,1);
+    e.target.closest('.thumb').remove();
+  });
+}
+let labFiles=[], radFiles=[], otherFiles=[];
+bindFilePicker('labInput','labThumbs',labFiles);
+bindFilePicker('radInput','radThumbs',radFiles);
+bindFilePicker('otherInput','otherThumbs',otherFiles);
+
+/* ===================== OCR: استخراج الأدوية من الصور ===================== */
+function parseMedsFromText(text){
+  // تنظيف وتقسيم
+  const lines = (text||'')
+    .replace(/\r/g,'\n')
+    .split('\n')
+    .map(s=>s.trim())
+    .filter(s=>s.length>2);
+
+  // فلترة بسيطة: سطر فيه حروف وأرقام/جرعات غالبًا دواء
+  const rx = /[A-Za-z][A-Za-z\- ]+(?:\d+(\.\d+)?\s?(?:mg|mcg|g|ml|IU|units|/)?|\bXR\b|\bSR\b|\bCR\b)?/i;
+
+  const meds = [];
+  for (const line of lines){
+    // أزل الرموز الشائعة
+    const clean = line.replace(/^[-•*]+/,'').replace(/\s{2,}/g,' ').trim();
+    if (rx.test(clean)) meds.push(clean);
+  }
+  return meds;
+}
+
+async function doOCR(){
+  // نجمع كل الصور من "ملفات أخرى" (تقدر توسع لتشمل lab/rad لو حبيت)
+  const imgs = otherFiles.filter(f=> (f.type||'').startsWith('image/'));
+  if (!imgs.length){ showNote('err', t('ocr.none')); return; }
+
+  showNote('info', t('ocr.start'));
+  const found = new Set();
+  try{
+    for (const f of imgs){
+      const result = await Tesseract.recognize(f.preview, 'eng', { logger:()=>{} });
+      const meds = parseMedsFromText(result.data.text);
+      meds.forEach(m=>found.add(m));
+    }
+  }catch(e){
+    console.error(e);
+    showNote('err', t('ocr.err'));
+  }
+
+  // دمج مع خانة الأدوية
+  const medsBox = document.getElementById('meds');
+  const existing = medsBox.value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
+  const merged = Array.from(new Set([...existing, ...found]));
+  medsBox.value = merged.join('\n');
+
+  if (found.size) showNote('info', t('ocr.done')); else showNote('err', t('ocr.none'));
+}
+ocrBtn.addEventListener('click', doOCR);
+
+/* ===================== بناء الحمولة ===================== */
+function gatherPayload(){
+  const age=parseInt(document.getElementById('age').value,10);
+  const height=parseFloat(document.getElementById('height').value);
+  const weight=parseFloat(document.getElementById('weight').value);
+  const gender=document.getElementById('gender').value||undefined;
+  const egfr=parseFloat(document.getElementById('egfr')?.value);
+  const creatinine=parseFloat(document.getElementById('creatinine')?.value);
+  const liver=document.getElementById('liver').value;
+  const preg=document.getElementById('pregnancy')?.value;
+  const gest=parseInt(document.getElementById('gestation')?.value,10);
+  const symptoms=document.getElementById('symptoms').value||'';
+  const apap=parseInt(document.getElementById('apap').value,10);
+
+  const medsLines=(document.getElementById('meds').value||'').split(/\n|,/).map(s=>s.trim()).filter(Boolean);
+  const ocrList=medsLines.map(x=>({name:x,dose:''}));
+
+  const extra=[];
+  document.querySelectorAll('.allType').forEach(el=>{
+    const id=el.getAttribute('data-id');
+    const detail=document.querySelector(`.allDetail[data-id="${id}"]`)?.value||'';
+    if (el.value||detail){ extra.push({type:el.value,detail}); }
+  });
+  if (document.getElementById('foodAllergy').value==='yes' && document.getElementById('foodAllergyTxt').value.trim()){
+    extra.push({type:'food',detail:document.getElementById('foodAllergyTxt').value.trim()});
+  }
 
   return {
-    patient: { ...patient },
-    summaryScore: score,
-    items: table,
-    findings: findings.filter(Boolean),
-    references: REF_MAP,
+    patient:{
+      age:Number.isFinite(age)?age:undefined,
+      sex:(gender==='male'?'M':(gender==='female'?'F':undefined)),
+      height:Number.isFinite(height)?height:undefined,
+      weight:Number.isFinite(weight)?weight:undefined,
+      pregnancy:(preg==='yes')?{pregnant:true,weeks:Number.isFinite(gest)?gest:undefined}:(preg==='no'?{pregnant:false}:undefined),
+      eGFR:Number.isFinite(egfr)?egfr:undefined,
+      creatinine:Number.isFinite(creatinine)?creatinine:undefined,
+      liver,
+      symptoms,
+      allergies:extra,
+      apapDailyMg:Number.isFinite(apap)?apap:undefined
+    },
+    ocrList,
+    files:{
+      labs:labFiles.map(x=>({name:x.name})),
+      radiology:radFiles.map(x=>({name:x.name})),
+      other:otherFiles.map(x=>({name:x.name}))
+    }
   };
 }
 
-// ========== 5) Next.js API handler ==========
-export default async function handler(req, res) {
-  try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "method_not_allowed" });
-    }
-    const { ocrList, patient } = req.body || {};
-    const result = analyzePrescription({ ocrList, patient });
-    return res.status(200).json(result);
-  } catch (e) {
+/* ===================== إخراج التقرير ===================== */
+function renderReport(data,payload){
+  const L=i18n[currentLang];
+  const p=payload.patient||{};
+  const items=data?.items||[];
+  const findings=data?.findings||[];
+  const refs=data?.references||{};
+  const badge=(lvl)=>{
+    const m=String(lvl||'').toLowerCase();
+    const cls=m==='high'?'background:#fde8ea;color:#7a1f27':(m==='review'?'background:#fff3cd;color:#856404':'background:#e9f4ff;color:#114a86');
+    return `<span style="display:inline-block;padding:3px 8px;border-radius:999px;${cls};font-weight:800">${String(lvl||'').toUpperCase()}</span>`;
+  };
+  const findHtml=findings.length?findings.map(f=>{
+    const links=(f.refs||[]).map(k=>refs[k]?`<a href="${refs[k].url}" target="_blank" rel="noopener">${refs[k].title}</a>`:'').filter(Boolean).join(' • ');
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0">
+      ${badge(f.level)}
+      <div style="margin-top:6px"><b>${escapeHtml(f.summary||'')}</b></div>
+      <div style="color:#66768a;margin-top:4px">${escapeHtml(f.detail||'')}</div>
+      ${links?`<div style="margin-top:6px">${links}</div>`:''}
+    </div>`;
+  }).join(''):`<div class="hint">${currentLang==='ar'?'لا توجد ملاحظات حرجة.':'No critical findings.'}</div>`;
+
+  const rows=items.map(x=>`<tr>
+    <td>${escapeHtml(x.original||'')}</td>
+    <td>${escapeHtml(x.mapped||'')}</td>
+    <td>${escapeHtml(x.class||'')}</td>
+    <td>${escapeHtml(x.indications||'')}</td>
+    <td>${escapeHtml(x.doseText||'')}</td>
+    <td>${escapeHtml(x.status||'')}</td>
+  </tr>`).join('');
+
+  const allHtml=(p.allergies||[]).map(a=>`<span class="pill">${escapeHtml(a.type)} — ${escapeHtml(a.detail)}</span>`).join(' ');
+  const labs=(payload.files?.labs||[]).map(f=>`<span class="pill">${escapeHtml(f.name)}</span>`).join(' ');
+  const rads=(payload.files?.radiology||[]).map(f=>`<span class="pill">${escapeHtml(f.name)}</span>`).join(' ');
+  const others=(payload.files?.other||[]).map(f=>`<span class="pill">${escapeHtml(f.name)}</span>`).join(' ');
+
+  const bmi=(p.height&&p.weight)?(p.weight/Math.pow(p.height/100,2)):null;
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-weight:800;color:#0b63c2">${L.report.title}</div>
+      <div class="pill">${new Date().toLocaleString()}</div>
+    </div>
+
+    <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.patient}</h3>
+    <div class="grid">
+      <div><b>${currentLang==='ar'?'العمر':'Age'}:</b> ${p.age??'-'}</div>
+      <div><b>${currentLang==='ar'?'الجنس':'Gender'}:</b> ${p.sex||'-'}</div>
+      <div><b>${currentLang==='ar'?'الطول':'Height'}:</b> ${p.height??'-'} cm</div>
+      <div><b>${currentLang==='ar'?'الوزن':'Weight'}:</b> ${p.weight??'-'} kg</div>
+      <div><b>eGFR:</b> ${p.eGFR??'-'}</div>
+      <div><b>${currentLang==='ar'?'كرياتينين':'Creatinine'}:</b> ${p.creatinine??'-'}</div>
+      <div><b>${currentLang==='ar'?'الكبد':'Liver'}:</b> ${p.liver||'-'}</div>
+      <div><b>${currentLang==='ar'?'مؤشر كتلة الجسم':'BMI'}:</b> ${bmi?bmi.toFixed(1):'-'}</div>
+      ${p.pregnancy?`<div><b>${currentLang==='ar'?'الحمل':'Pregnancy'}:</b> ${p.pregnancy.pregnant?(currentLang==='ar'?'نعم':'Yes'):(currentLang==='ar'?'لا':'No')} ${p.pregnancy.weeks? '('+p.pregnancy.weeks+' '+(currentLang==='ar'?'أسابيع':'weeks')+')':''}</div>`:''}
+    </div>
+
+    <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.allergies}</h3>
+    <div>${allHtml || '<span class="hint">'+(currentLang==='ar'?'لا يوجد':'None reported')+'</span>'}</div>
+
+    <h3 style="margin:12px 0 6px;color:#0b63c2">${currentLang==='ar'?'الأعراض السريرية':'Clinical Symptoms'}</h3>
+    <div style="white-space:pre-wrap;border:1px solid var(--border);border-radius:10px;padding:8px">${escapeHtml(p.symptoms||'')}</div>
+
+    <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.files}</h3>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div><b>${currentLang==='ar'?'مختبر':'Labs'}:</b> ${labs||'-'}</div>
+      <div><b>${currentLang==='ar'?'أشعة':'Radiology'}:</b> ${rads||'-'}</div>
+      <div><b>${currentLang==='ar'?'أخرى':'Other'}:</b> ${others||'-'}</div>
+    </div>
+
+    <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.analysis}</h3>
+    <table><thead><tr>
+      <th>${currentLang==='ar'?'الاسم الأصلي':'Original name'}</th>
+      <th>${currentLang==='ar'?'الاسم/التركيب':'Mapped/Ingredient'}</th>
+      <th>${currentLang==='ar'?'الفئة':'Class'}</th>
+      <th>${currentLang==='ar'?'الدواعي':'Indications'}</th>
+      <th>${currentLang==='ar'?'الجرعة/الوصف':'Dose/Notes'}</th>
+      <th>${currentLang==='ar'?'الحالة':'Status'}</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+
+    <h4 style="margin:12px 0 6px">${currentLang==='ar'?'الملاحظات':'Findings'}</h4>
+    ${findHtml}
+  `;
+}
+
+/* ===================== طلب التحليل ===================== */
+async function doAnalyze(){
+  const payload = gatherPayload();
+  if (!payload.ocrList.length && !payload.patient.symptoms){
+    showNote('err', i18n[currentLang].ui.needData);
+    return;
+  }
+  showNote('info', currentLang==='ar'?'جاري التحليل…':'Analyzing…');
+  try{
+    const res = await fetch(API_ENDPOINT,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ocrList: payload.ocrList, patient: payload.patient }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.message||res.statusText);
+    clearNote();
+    const html = renderReport(data, payload);
+    document.getElementById('report').style.display='block';
+    out.innerHTML = html;
+    document.getElementById('report').scrollIntoView({behavior:'smooth'});
+    window.__lastReportLang=currentLang;
+  }catch(e){
     console.error(e);
-    return res.status(500).json({ error: "analysis_failed", message: e?.message });
+    showNote('err', i18n[currentLang].ui.reqFail + e.message);
   }
 }
 
-export { analyzePrescription };
+/* ===================== PDF ===================== */
+async function downloadPDF(){
+  const el=document.getElementById('report');
+  if (!el || el.style.display==='none'){ showNote('err', currentLang==='ar'?'لا يوجد تقرير للتصدير.':'No report to export.'); return; }
+  showNote('info', currentLang==='ar'?'جاري توليد PDF…':'Generating PDF…');
+  const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+  try{
+    const canvas=await html2canvas(document.getElementById('reportContent'),{scale:2,useCORS:true,onclone:(doc2)=>{ doc2.documentElement.dir=(window.__lastReportLang==='ar'?'rtl':'ltr'); }});
+    const img=canvas.toDataURL('image/png');
+    const w=doc.internal.pageSize.getWidth()-20;
+    const h=(canvas.height*w)/canvas.width;
+    let y=10; let left=h;
+    doc.addImage(img,'PNG',10,y,w,h);
+    left-=doc.internal.pageSize.getHeight();
+    while(left>=0){ y=left-h+10; doc.addPage(); doc.addImage(img,'PNG',10,y,w,h); left-=doc.internal.pageSize.getHeight(); }
+    doc.save('Patient-Assessment.pdf');
+    clearNote();
+  }catch(err){ console.error(err); showNote('err', i18n[currentLang].ui.pdfFail); }
+}
+
+/* ===================== ربط الأزرار وبدء اللغة ===================== */
+document.getElementById('analyzeBtn').addEventListener('click',doAnalyze);
+document.getElementById('downloadPDF').addEventListener('click',downloadPDF);
+setLanguage('ar');
+</script>
+</body>
+</html>
