@@ -854,7 +854,74 @@ function showNote(type, text) {
   noteArea.textContent = text;
   noteArea.style.display = 'block';
 }
+function buildRxAnalysisHTML(data){
+  const score = data?.summaryScore ?? '';
+  const findings = data?.findings || [];
+  const items = data?.items || [];
+  const refs = data?.references || {};
 
+  const scoreHtml = (score === '' ? '' :
+    `<div style="margin-bottom:10px">
+      <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#f0f4ff;color:#0b63c2;font-weight:700">
+        درجة التحليل: ${score}/100
+      </span>
+    </div>`);
+
+  const findingsHtml = findings.length ? findings.map(f => {
+    const lvl = (f.level||'').toLowerCase();
+    const badgeStyle =
+      lvl==='high' ? 'background:#fde8ea;color:#7a1f27' :
+      (lvl==='review' ? 'background:#fff3cd;color:#856404' : 'background:#e9f4ff;color:#114a86');
+    const refLinks = (f.refs||[]).map(r => refs[r] ? `<a href="${refs[r].url}" target="_blank" rel="noopener">${refs[r].title}</a>` : '').filter(Boolean).join(' • ');
+    return `
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin:8px 0">
+        <span style="display:inline-block;padding:2px 8px;border-radius:999px;${badgeStyle};font-weight:700">${(f.level||'').toUpperCase()}</span>
+        <div style="margin-top:6px"><b>${escapeHtml(f.summary||'')}</b></div>
+        <div style="color:#66768a;margin-top:4px">${escapeHtml(f.detail||'')}</div>
+        ${refLinks ? `<div style="margin-top:6px">${refLinks}</div>` : ''}
+      </div>`;
+  }).join('') : `<div class="muted">لا توجد ملاحظات حرجة.</div>`;
+
+  const itemsRows = items.map(x => `
+    <tr>
+      <td>${escapeHtml(x.original||'')}</td>
+      <td>${escapeHtml(x.mapped||'')}</td>
+      <td>${escapeHtml(x.class||'')}</td>
+      <td>${escapeHtml(x.indications||'')}</td>
+      <td>${escapeHtml(x.doseText||'')}</td>
+      <td>${escapeHtml(x.status||'')}</td>
+    </tr>
+  `).join('');
+
+  const tableHtml = `
+    <table style="width:100%;border-collapse:collapse;margin-top:6px">
+      <thead>
+        <tr style="background:#e9f3ff;color:#0b63c2">
+          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الاسم الأصلي</th>
+          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الاسم/التركيب</th>
+          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الفئة</th>
+          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الدواعي</th>
+          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الجرعة/الوصف</th>
+          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الحالة</th>
+        </tr>
+      </thead>
+      <tbody>${itemsRows}</tbody>
+    </table>
+  `;
+
+  return `
+    <h3 style="color:#0b63c2;border-bottom:2px solid #00a7c7;padding-bottom:6px">نتيجة تحليل الأدوية</h3>
+    ${scoreHtml}
+    <h4 style="margin-top:14px">الملاحظات السريرية</h4>
+    ${findingsHtml}
+    <h4 style="margin-top:14px">جدول الأدوية</h4>
+    ${tableHtml}
+  `;
+}
+
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 </script>
 </body>
 </html>
