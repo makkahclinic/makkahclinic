@@ -642,25 +642,13 @@ async function analyzeCase() {
   const responseContainer = document.getElementById('response-container');
   const btn = document.getElementById('analyzeBtn');
   const exportContainer = document.getElementById('export-container');
-  
-  clearNote();
-  responseContainer.style.display = 'none';
-  responseContainer.innerHTML = '';
-  exportContainer.classList.add('hidden');
-
-  // **FINALIZED DATA COLLECTION**
-  // This object now collects data from ALL relevant form fields to ensure deep analysis.
-async function analyzeCase() {
-  const responseContainer = document.getElementById('response-container');
-  const btn = document.getElementById('analyzeBtn');
-  const exportContainer = document.getElementById('export-container');
 
   clearNote();
   responseContainer.style.display = 'none';
   responseContainer.innerHTML = '';
   exportContainer.classList.add('hidden');
 
-  // 1) نجمع بيانات المريض من نفس النموذج الحالي
+  // 1) جمع بيانات المريض
   const ageVal = parseInt(document.getElementById('age').value, 10);
   const genderVal = document.getElementById('gender').value || null;
   const notes = document.getElementById('case-description').value || '';
@@ -668,36 +656,35 @@ async function analyzeCase() {
   const labResults = document.getElementById('lab-results').value || '';
   const medsText = document.getElementById('medications-procedures').value || '';
 
-  // 2) نحاول نلقط eGFR من خانة التحاليل إن لقيّناه (اختياري)
-  // أمثلة مقبولة: eGFR 40 / eGFR: 38 / eGFR=62
-  let eGFR = undefined;
-  const egfrMatch = labResults.match(/egfr\s*[:=]?\s*(\d+(\.\d+)?)/i);
-  if (egfrMatch) eGFR = parseFloat(egfrMatch[1]);
+  // 2) eGFR من الخانة الجديدة أو من التحاليل
+  let eGFR;
+  const egfrDirectEl = document.getElementById('egfr-direct');
+  const egfrDirect = egfrDirectEl ? parseFloat((egfrDirectEl.value || '').trim()) : undefined;
+  if (Number.isFinite(egfrDirect)) {
+    eGFR = egfrDirect;
+  } else {
+    const egfrMatch = labResults.match(/egfr\s*[:=]?\s*(\d+(\.\d+)?)/i);
+    if (egfrMatch) eGFR = parseFloat(egfrMatch[1]);
+  }
 
-  // 3) نبني ocrList من خانة الأدوية (نفصل بأسطر أو فواصل)
-  // مثال: "Amlodipine 10, Duodart 0.5/0.4" أو كل واحد بسطر
+  // 3) قائمة الأدوية من خانة الأدوية/الإجراءات
   const ocrList = medsText
     .split(/\n|,/)
     .map(s => s.trim())
     .filter(Boolean)
-    .map(line => {
-      // نخلي الاسم كله كـ name، والجرعة نتركها فاضية (المحلّل يعرف يتصرف)
-      return { name: line, dose: "" };
-    });
+    .map(line => ({ name: line, dose: "" }));
 
-  // 4) نبني كائن patient حسب اللي متوفر
+  // 4) كائن المريض
   const patient = {
     age: Number.isFinite(ageVal) ? ageVal : undefined,
     sex: genderVal === 'male' ? 'M' : (genderVal === 'female' ? 'F' : undefined),
-    eGFR,             // قد يكون undefined لو مالقيناه
-    // إعدادات اختيارية: لو ودّك تضيفها لاحقًا في النموذج، أتركها undefined الآن
+    eGFR,
     ppiDurationDays: undefined,
     apapDailyMg: undefined,
     gout: undefined,
     uricAcid: undefined
   };
 
-  // تأكيد وجود بيانات
   if (ocrList.length === 0 && !notes && !diagnosis && !labResults) {
     showNote('error', getTranslation('validation.error_formIncomplete'));
     return;
@@ -707,7 +694,6 @@ async function analyzeCase() {
   btn.disabled = true;
 
   try {
-    // 5) نطلب من /api/DranalyzeRx التحليل الدوائي
     const res = await fetch(API_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type':'application/json' },
@@ -720,8 +706,6 @@ async function analyzeCase() {
     }
 
     const data = await res.json();
-
-    // 6) نرسم النتيجة داخل نفس الصندوق response-container
     const html = buildRxAnalysisHTML(data);
     responseContainer.innerHTML = html;
     responseContainer.style.display = 'block';
@@ -736,43 +720,6 @@ async function analyzeCase() {
     btn.disabled = false;
   }
 }
-
-  showNote('info', getTranslation('validation.info_analyzing'));
-  btn.disabled = true;
-
-  try {
-    const response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(caseData),
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-        throw new Error(`${response.status}: ${errorData.detail || 'Unknown server error'}`);
-    }
-
-    const result = await response.json();
-
-    if (result?.htmlReport) {
-      clearNote();
-      responseContainer.innerHTML = result.htmlReport;
-      responseContainer.style.display = 'block';
-      exportContainer.classList.remove('hidden');
-      responseContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      throw new Error(getTranslation('validation.error_missingReport'));
-    }
-  } catch (err) {
-    console.error(err);
-    showNote('error', getTranslation('validation.error_requestFailed') + err.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
 
 // =================================================================================
 // PDF EXPORT LOGIC
