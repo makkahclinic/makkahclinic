@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -21,7 +20,12 @@
       --focus:rgba(11,99,194,.18);
       --shadow:0 10px 25px rgba(15, 57, 105, .08);
       --radius:16px;
+
+      /* === تحريك أيقونة الهوم بسهولة === */
+      --home-offset-y: 18px;   /* المسافة من الأعلى (نزّلها زوّد الرقم) */
+      --home-offset-x: 18px;   /* المسافة الأفقية من الحافة اليمنى في RTL */
     }
+
     html,body{height:100%}
     body{
       margin:0;
@@ -46,17 +50,27 @@
       position:absolute; inset:0 0 auto 0; height:6px;
       background: linear-gradient(90deg, var(--primary), var(--accent));
     }
-    /* أيقونة الهوم (أكبر وواضحة) */
+
+    /* أيقونة الهوم - تصميم مُحسّن وتحرّك منطقي RTL */
     .home-icon{
-      position:absolute; top:14px; right:14px;
-      width:54px; height:54px; border-radius:50%;
-      background: var(--primary);
+      position:absolute;
+      inset-block-start: var(--home-offset-y);   /* بديل top */
+      inset-inline-start: var(--home-offset-x);  /* في RTL = يمين */
+      width:54px; height:54px;
+      border-radius:14px;                         /* زوايا ناعمة */
+      background: linear-gradient(135deg, #0b63c2, #00a7c7);
       color:#fff; font-size:24px; display:flex; align-items:center; justify-content:center;
       box-shadow: 0 6px 18px rgba(11, 99, 194, .22);
       cursor:pointer; user-select:none;
-      transition: transform .12s ease, background .25s ease;
+      transition: transform .14s ease, background .25s ease, box-shadow .25s ease;
+      z-index: 5;
     }
-    .home-icon:hover{ background:var(--primary-dark); transform: translateY(-1px); }
+    .home-icon:hover{
+      background: linear-gradient(135deg, #084e97, #0091a8);
+      transform: translateY(-1px) scale(1.04);
+      box-shadow: 0 10px 24px rgba(11, 99, 194, .28);
+    }
+
     h2{
       margin: 10px 0 24px;
       font-weight:700;
@@ -151,6 +165,9 @@
     #response-container .risk-low{ color:#155724; background:#d4edda; padding:.18rem .5rem; border-radius:6px; border:1px solid #c3e6cb; font-weight:700; }
 
     .muted-mini{ font-size:.82rem; color:#92a3b6; text-align:center; margin-top:10px; }
+
+    /* مفقودة في كودك الأصلي: نحتاج إخفاء العناصر عند إضافة .hidden */
+    .hidden{ display:none !important; }
   </style>
 </head>
 <body>
@@ -308,7 +325,11 @@
     genderEl.addEventListener('change', () => {
       const isFemale = genderEl.value === 'female';
       pregStatWrap.classList.toggle('hidden', !isFemale);
-      if (!isFemale){ pregMonthWrap.classList.add('hidden'); pregStatEl.value = ""; document.getElementById('pregnancy-month').value=""; }
+      if (!isFemale){
+        pregMonthWrap.classList.add('hidden');
+        pregStatEl.value = "";
+        document.getElementById('pregnancy-month').value="";
+      }
     });
     pregStatEl.addEventListener('change', () => {
       const showMonth = pregStatEl.value === 'yes';
@@ -327,7 +348,10 @@
     const eyeWrap = document.getElementById('eye-wrap');
     visualEl.addEventListener('change', () => {
       eyeWrap.classList.toggle('hidden', visualEl.value !== 'yes');
-      if (visualEl.value !== 'yes'){ document.getElementById('last-eye-exam').value=""; document.getElementById('visual-acuity').value=""; }
+      if (visualEl.value !== 'yes'){
+        document.getElementById('last-eye-exam').value="";
+        document.getElementById('visual-acuity').value="";
+      }
     });
 
     // معاينة وضغط الصورة
@@ -447,7 +471,8 @@
 
         let data;
         try{ data = JSON.parse(text); }
-        catch{ throw new Error('الرد ليس JSON صالحًا من الخادم.'); }
+        catch{ throw new Error('الرد ليس JSON صالحًا من الخادم.');
+        }
 
         if (data?.htmlReport){
           clearNote();
