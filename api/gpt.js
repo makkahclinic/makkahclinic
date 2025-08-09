@@ -1,155 +1,160 @@
-
-// /api/gpt.js — النسخة النهائية الشاملة (إظهار كل الصفوف، تخصص لكل مراجعة، روابط موثوقة، حماية 413، تصحيح تلقائي)
-const MAX_INLINE_REQUEST_MB = 19.0; // هامش أمان دون حد ~20MB للصور inline في Gemini
+// /api/gpt.js — Final integrated backend (bilingual, multi-file, evidence, inline+Files API, 413 guard, retries)
+const MAX_INLINE_REQUEST_MB = 19.0; // safety margin below ~20MB inline limit
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-// ===================== System Instruction =====================
+// ===================== System Instruction (bilingual, strict, single HTML block) =====================
 const systemInstruction = `
-أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري. أخرج تقرير HTML واحد فقط (كتلة واحدة) بصياغة احترافية، دون أي CSS أو <style>.
+You are the "Senior Medical & Insurance Claims Auditor" (clinician level).
+Output exactly ONE valid HTML block (no CSS, no <style>), in the language requested by the user (see LOCALE below). 
+If LOCALE = "bi", output Arabic section first, then English section, separated by a clear <hr>.
 
-[أ] منهجية إلزامية مختصرة
-1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
-2) افحص بدقة:
-   • الازدواجية العلاجية (خاصة أدوية الضغط/السكري/التجلط/الدوار)
-   • أخطاء الجرعات (مثل XR/MR موصوف أكثر من مرة يوميًا)
-   • أمان الأدوية عالية الخطورة وفحوصها (Metformin/Xigduo XR ⇠ eGFR؛ Allopurinol ⇠ eGFR + Uric Acid ± HLA-B*58:01؛ Warfarin ⇠ INR؛ ACEi/ARB/MRA ⇠ K+Cr)
-   • وجود تشخيص داعم لكل دواء/إجراء (وإلا فاذكر انعدامه صراحة)
-   • مدة الصرف (90 يوم لمرض حاد = علامة تحذير)
-   • مطابقة العلاج للحالة الكلوية/الكبدية والضغط الحالي والعمر وكبار السن
-   • تداخلات كبار السن (مثل: أدوية الدوار/المهدئات ⇒ خطر السقوط)
+[LOCALE & OUTPUT RULES]
+- LOCALE will be one of: "ar" (Arabic RTL), "en" (English LTR), or "bi" (both).
+- Match the requested LOCALE for all headings, paragraphs, table headers/cells, and conclusions.
+- For "bi": produce a complete Arabic report followed by a complete English report (not a summary).
 
-[ب] قواعد مخاطبة التأمين (إلزامية)
-- لكل صف في الجدول: احسب "درجة الخطورة" (0–100%) واكتب علامة %.
-- طبّق كلاس لوني على <td> في عمودي "درجة الخطورة" و"قرار التأمين":
-  • risk-high إذا الدرجة ≥ 70%  • risk-medium إذا 40–69%  • risk-low إذا < 40%
-- صِغ "قرار التأمين" حصراً بإحدى الصيغ:
-  • ❌ قابل للرفض — السبب: [طبي/إجرائي محدد] — وللقبول يلزم: [تشخيص/فحص/تعديل جرعة/إلغاء ازدواجية/خطة متابعة…] — التخصص المُراجع: [اكتب التخصص المناسب]
-  • ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — التخصص المُراجع: [اكتب التخصص المناسب]
-  • ✅ مقبول
-- إن كان الدواء/الإجراء بلا تشخيص داعم فاذكر ذلك داخل القرار صراحة.
+[MANDATORY SCOPE]
+1) Analyze ALL textual data AND ALL uploaded files. If any text contradicts an image, flag it as a critical note and state which source is more reliable and why.
+2) For EACH FILE (X-ray, MRI, MRA, CT, Ultrasound, prescription photo, clinic photo, or any image):
+   - Create a dedicated subsection describing findings, clinical implications, safety issues, and what documentation is needed for payer approval.
+3) Audit thoroughly:
+   • Therapeutic duplication (esp. HTN/DM/anticoag/vertigo drugs)
+   • Dose errors (e.g., XR/MR given > once daily)
+   • High-risk meds safety with required labs (Metformin/Xigduo XR ⇠ eGFR; Allopurinol ⇠ eGFR + Uric Acid ± HLA-B*58:01; Warfarin ⇠ INR; ACEi/ARB/MRA ⇠ K+Cr)
+   • Supporting diagnosis for every drug/procedure (if lacking, say so explicitly)
+   • 90-day supply red flags for acute conditions
+   • Fit to renal/hepatic function, current BP, age/geriatrics
+   • Geriatric interactions (vertigo/sedatives ⇒ fall risk)
+4) NEVER omit any drug/procedure found in text or images; if unknown, write "غير محدد" (Arabic) or "Unspecified" (English).
 
-[ج] إظهار جميع الأدوية والإجراءات (إلزامي)
-- اعرض **كل** الأدوية والإجراءات المذكورة في النص/الصورة **دون حذف أي صف** حتى لو نقصت البيانات.
-- إن تعذّر تحديد خانة ما، اكتب "غير محدد".
-- لا تُهمل مضادات التخثر/الصفيحات أو المضادات الحيوية أو الإلكتروليتات أو الكريمات الموضعية أو الأجهزة/الاختبارات المنزلية.
+[HTML STRUCTURE — produce exactly these sections]
+<h3>Medical Audit & Insurance Claims Report</h3>
+<h4>Case Summary</h4>
+<p>Summarize age/gender/smoking/pack-years/cough duration/visual symptoms/diagnoses/critical notes (including any text-vs-image conflicts and assumptions).</p>
 
-[د] بنية HTML مطلوبة (لا CSS ولا <style>)
-1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التدخين/السعال/الأعراض البصرية/التشخيصات/الملاحظات الحرجة (بما في ذلك أي تعارض نص/صورة وأي افتراضات).</p>
-3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...). اربط السعال المزمن + التدخين بـ CXR/LDCT مع سبب الاشتباه.</p>
-4) <h4>جدول الأدوية والإجراءات</h4>
+<h4>Per-File Analysis (Images/Scans)</h4>
+<!-- Create one subsection per file with clear heading and findings -->
+
+<h4>Deep Clinical Analysis</h4>
+<p>Explain major issues & tie them to the case context (CKD/HTN/age/XR dosing...), and list required safety labs (eGFR/UA/K/Cr/INR...). If chronic cough + smoking, connect to CXR/LDCT rationale.</p>
+
+<h4>Medications & Procedures Table</h4>
 <table><thead><tr>
-<th>الدواء/الإجراء</th>
-<th>الجرعة الموصوفة</th>
-<th>الجرعة الصحيحة المقترحة</th>
-<th>التصنيف</th>
-<th>الغرض الطبي</th>
-<th>التداخلات</th>
-<th>درجة الخطورة (%)</th>
-<th>قرار التأمين</th>
+<th>Drug/Procedure</th>
+<th>Prescribed Dose</th>
+<th>Correct Suggested Dose</th>
+<th>Class</th>
+<th>Medical Purpose</th>
+<th>Interactions</th>
+<th>Risk Score (%)</th>
+<th>Insurance Decision</th>
 </tr></thead><tbody>
-<!-- املأ الصفوف لكل عنصر دون استثناء -->
+<!-- Fill ALL rows, no exceptions -->
 </tbody></table>
 
-[هـ] فرص تحسين الخدمة ورفع مستوى الدخل (وفق مصلحة المريض – مدعومة بالأدلة، إلزامي)
-- أخرج قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
-  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — منفعة للمريض (تشخيص/أمان/متابعة) — منفعة تشغيلية للعيادة (مختبر/تصوير/متابعة دورية) — **مصدر موثوق + رابط مباشر**.
-- أمثلة روابط موثوقة (استخدمها أو الأحدث منها):
-  • ADA Standards of Care (Diabetes): https://diabetesjournals.org/care
-  • FDA Metformin & Renal Impairment: https://www.fda.gov/drugs/
-  • KDIGO CKD Guideline: https://kdigo.org/guidelines/ckd-evaluation-and-management/
-  • ACR Appropriateness Criteria—Chronic Cough: https://acsearch.acr.org/list
-  • USPSTF Lung Cancer Screening: https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening
-  • ACC/AHA Hypertension Guideline: https://www.ahajournals.org/journal/hyp
-  • ACR Gout Guideline: https://www.rheumatology.org/
-  • AAO Preferred Practice Patterns (Retina/OCT): https://www.aao.org/clinical-guidelines
-- فعّل البنود التالية عندما تنطبق محفزاتها (وأضف الرابط المناسب):
-  • سكري نوع 2 ⇒ **HbA1c** (كل 3 أشهر إن غير منضبط، 6–12 أشهر إن مستقر) — ADA.
-  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** قبل/أثناء العلاج — FDA + KDIGO/ADA–KDIGO.
-  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — ACR Gout.
-  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — ACC/AHA.
-  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة مع أعراض ⇒ **Chest X-ray (CXR)** — ACR.
-  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — USPSTF.
-  • سكري بالغ/عمر متقدّم ⇒ **فحص عين شامل مع توسعة الحدقة سنوياً** — ADA.
-  • أعراض بصرية/اشتباه وذمة بقعية سكريّة ⇒ **OCT لماكيولا** — AAO.
-  • ضعف الوصول لعيون ⇒ **تصوير قاع العين (Non-mydriatic) / Tele-retina** أو **AI-DR** — AAO/ATA/FDA.
-- إذا لزم تفعيل توصية لكن نقصت البيانات (العمر/التدخين/المدة/الأعراض)، اكتب: "مشروط بتوفير: …".
+<h4>Care Opportunities & Clinic Growth (Evidence-Based)</h4>
+<ul>
+<!-- Each item 1 line: Name — specific clinical reason (age/symptom/disease/med) — patient benefit — operational benefit — credible source + direct link -->
+</ul>
 
-[و] خطة العمل
-- قائمة مرقمة بتصحيحات فورية دقيقة (تعديل جرعة XR، إيقاف ازدواجية، طلب eGFR/UA/K+Cr/INR…، إضافة تشخيص داعم…)، واذكر **التخصص** لكل بند عند الحاجة (غدد/كُلى/قلب/صدر/عيون/روماتيزم/أمراض معدية/جلدية).
+<h4>Action Plan</h4>
+<ol>
+<!-- Immediate, precise corrections (dose fix, stop duplication, request eGFR/UA/K+Cr/INR, add supporting dx...), include specialty for referral when needed -->
+</ol>
 
-[ز] الخاتمة
-<p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
+<p><strong>Conclusion:</strong> Preliminary analysis — not a substitute for specialty clinical review.</p>
 
-[ح] الإخراج
-- أخرج **كتلة HTML واحدة فقط** وصالحة.
-- اكتب نسب الخطورة بعلامة % وطبّق الكلاسات (risk-high / risk-medium / risk-low) على <td> في عمودي "درجة الخطورة" و"قرار التأمين".
+[INSURANCE WORDING RULES]
+- For every table row compute "Risk Score (0–100%)" and render a %.
+- Apply <td> class by risk: risk-high (≥70), risk-medium (40–69), risk-low (<40).
+- "Insurance Decision" must be exactly one of:
+  • ❌ Deny — reason: [specific medical/procedural] — To approve: [dx/lab/dose fix/stop duplication/follow-up plan…] — Specialty: [name]
+  • ⚠️ Review — reason: […] — To improve approval: […] — Specialty: [name]
+  • ✅ Approve
+- If a drug/procedure lacks a supporting diagnosis, state that explicitly within the decision.
+
+[GUIDELINE SOURCES — cite in the opportunities list (use latest you know)]
+• ADA Standards of Care (Diabetes): https://diabetesjournals.org/care
+• FDA Metformin & Renal Impairment: https://www.fda.gov/drugs/
+• KDIGO CKD Guideline: https://kdigo.org/guidelines/ckd-evaluation-and-management/
+• ACR Appropriateness Criteria—Chronic Cough: https://acsearch.acr.org/list
+• USPSTF Lung Cancer Screening: https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening
+• ACC/AHA Hypertension Guideline: https://www.ahajournals.org/journal/hyp
+• ACR Gout Guideline: https://www.rheumatology.org/
+• AAO Preferred Practice Patterns (Retina/OCT): https://www.aao.org/clinical-guidelines
+
+[OUTPUT]
+- Output one valid HTML block only.
+- Add % sign if the model forgot it, and ensure correct <td class="risk-..."> according to the numeric %.
+
 `;
 
-// ===================== Prompt Builder (يدعم حقول تنفس/عيون) =====================
+// ===================== Prompt Builder (locale-aware text wrappers) =====================
 function buildUserPrompt(caseData = {}) {
+  // We pass LOCALE value explicitly and also mirror key facts to keep the model on track
+  const locale = caseData.locale === 'ar' || caseData.locale === 'bi' ? caseData.locale : 'en';
   return `
-**بيانات المريض (مدخل يدويًا):**
-- العمر: ${caseData.age ?? 'غير محدد'}
-- الجنس: ${caseData.gender ?? 'غير محدد'}
-- التدخين: ${caseData.isSmoker === true ? 'مدخّن' : caseData.isSmoker === false ? 'غير مدخّن' : 'غير محدد'}
-- باك-سنة: ${caseData.smokingPackYears ?? 'غير محدد'}
-- مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
-- أعراض بصرية: ${caseData.visualSymptoms ?? 'غير محدد'}
-- تاريخ آخر فحص عين: ${caseData.lastEyeExamDate ?? 'غير محدد'}
-- حدة الإبصار: ${caseData.visualAcuity ?? 'غير محدد'}
-- مدة السكري (سنوات): ${caseData.diabetesDurationYears ?? 'غير محدد'}
-- مدة ارتفاع الضغط (سنوات): ${caseData.htnDurationYears ?? 'غير محدد'}
-- التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
-- الأدوية/الإجراءات المكتوبة: ${caseData.medications ?? 'غير محدد'}
-- نتائج/ملاحظات إضافية: ${caseData.notes ?? 'غير محدد'}
+LOCALE: ${locale}
 
-**نتائج مخبرية (اختياري):**
-- eGFR: ${caseData.eGFR ?? 'غير محدد'}
-- HbA1c: ${caseData.hba1c ?? 'غير محدد'}
-- Potassium: ${caseData.k ?? 'غير محدد'}
-- Creatinine: ${caseData.cr ?? 'غير محدد'}
-- Uric Acid: ${caseData.ua ?? 'غير محدد'}
-- INR: ${caseData.inr ?? 'غير محدد'}
+Patient-entered data:
+- Age: ${caseData.age ?? 'Unspecified'}
+- Gender: ${caseData.gender ?? 'Unspecified'}
+- Smoker: ${caseData.isSmoker === true ? 'Yes' : caseData.isSmoker === false ? 'No' : 'Unspecified'}
+- Pack-years: ${caseData.smokingPackYears ?? 'Unspecified'}
+- Cough duration (weeks): ${caseData.coughDurationWeeks ?? 'Unspecified'}
+- Visual symptoms: ${caseData.visualSymptoms ?? 'Unspecified'}
+- Last eye exam date: ${caseData.lastEyeExamDate ?? 'Unspecified'}
+- Visual acuity: ${caseData.visualAcuity ?? 'Unspecified'}
+- Diabetes duration (years): ${caseData.diabetesDurationYears ?? 'Unspecified'}
+- Hypertension duration (years): ${caseData.htnDurationYears ?? 'Unspecified'}
+- Diagnoses: ${caseData.diagnosis ?? 'Unspecified'}
+- Meds/Procedures written: ${caseData.medications ?? 'Unspecified'}
+- Notes: ${caseData.notes ?? 'Unspecified'}
 
-**الملفات المرفوعة:**
-- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}
+Labs (optional):
+- eGFR: ${caseData.eGFR ?? 'Unspecified'}
+- HbA1c: ${caseData.hba1c ?? 'Unspecified'}
+- Potassium: ${caseData.k ?? 'Unspecified'}
+- Creatinine: ${caseData.cr ?? 'Unspecified'}
+- Uric Acid: ${caseData.ua ?? 'Unspecified'}
+- INR: ${caseData.inr ?? 'Unspecified'}
+
+Uploaded files:
+- ${Array.isArray(caseData.imagesInline) && caseData.imagesInline.length > 0 ? 'There are inline images to analyze (create a dedicated subsection per file).' : 'No inline images.'}
+- ${Array.isArray(caseData.fileUris) && caseData.fileUris.length > 0 ? 'There are file URIs (Files API) to analyze; include them like any image with a dedicated subsection.' : 'No Files API URIs.'}
 `;
 }
 
-// ===================== Helpers: حجم الطلب، تصحيح المخرجات، fetch مع Timeout/Retry =====================
+// ===================== Helpers: size calc, post-process, fetch with retry =====================
 const _encoder = new TextEncoder();
 function byteLengthUtf8(str) { return _encoder.encode(str || '').length; }
 
-// تقدير حجم الطلب بالميجابايت (Base64 يضيف ~33%)
+// Estimate total inline payload size in MB (Base64 overhead ~33%)
 function estimateInlineRequestMB(parts) {
   let bytes = 0;
   for (const p of parts) {
     if (p.text) bytes += byteLengthUtf8(p.text);
     if (p.inline_data?.data) {
-      const len = p.inline_data.data.length;   // طول Base64
-      bytes += Math.floor((len * 3) / 4);      // تقدير bytes الفعلية
+      const len = p.inline_data.data.length; // Base64 length
+      bytes += Math.floor((len * 3) / 4);    // estimated real bytes
     }
   }
   return bytes / (1024 * 1024);
 }
 
-/** تصحيح ذاتي: يضيف % إن نُسيت ويطبّق الكلاس حسب النسبة على خلايا <td> التي بلا class */
+/** Post-process: ensure % suffix and risk td classes when missing; trim noise before first <h3> */
 function applySafetyPostProcessing(html) {
   try {
     html = String(html || '');
-    // أضف % إن كانت أرقام منفردة داخل خلايا
     html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi,
       (_m, o, n, _s, c) => `${o}${n}%${c}`);
-    // أضف الكلاس المناسب إذا لم يُذكر class على خلية نسبة الخطورة
     html = html.replace(/(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
       (_m, open, numStr, close) => {
         const v = parseInt(numStr, 10);
         const klass = v >= 70 ? 'risk-high' : v >= 40 ? 'risk-medium' : 'risk-low';
         return open.replace('<td', `<td class="${klass}"`) + `${numStr}%` + close;
       });
-    // قص أي ضجيج قبل أول <h3> (لضمان كتلة HTML واحدة)
     const i = html.indexOf('<h3'); if (i > 0) html = html.slice(i);
     return html;
   } catch (e) {
@@ -158,14 +163,13 @@ function applySafetyPostProcessing(html) {
   }
 }
 
-// fetch مع timeout + retries لرموز معينة
 async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
-      await new Promise(r => setTimeout(r, (3 - retries) * 800)); // backoff بسيط
+      await new Promise(r => setTimeout(r, (3 - retries) * 800));
       return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
     }
     return res;
@@ -189,25 +193,39 @@ export default async function handler(req, res) {
     const apiUrl =
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-    const userPrompt = buildUserPrompt(req.body || {});
+    const body = req.body || {};
+    const userPrompt = buildUserPrompt(body);
+
+    // Build parts: system instruction + user prompt
     const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
-    // إرفاق الصور Base64 (بدون data:…;base64,) — احرص على ضغطها في الواجهة قبل الإرسال
-    if (Array.isArray(req.body?.imageData)) {
-      for (const img of req.body.imageData) {
-        if (typeof img === 'string' && img.length > 0) {
-          parts.push({ inline_data: { mimeType: 'image/jpeg', data: img } });
+    // Attach Files API URIs, if any (preferred for large media)
+    if (Array.isArray(body.fileUris)) {
+      for (const f of body.fileUris) {
+        if (f && typeof f.fileUri === 'string' && f.fileUri.length > 0) {
+          const mt = typeof f.mimeType === 'string' && f.mimeType ? f.mimeType : 'application/octet-stream';
+          parts.push({ file_data: { mimeType: mt, fileUri: f.fileUri } });
         }
       }
     }
 
-    // فحص الحجم لتفادي 413 من Google أو البروكسي
+    // Attach inline Base64 images for small items (no data: prefix)
+    if (Array.isArray(body.imagesInline)) {
+      for (const img of body.imagesInline) {
+        if (img && typeof img.data === 'string' && img.data.length > 0) {
+          const mt = typeof img.mimeType === 'string' && img.mimeType ? img.mimeType : 'image/jpeg';
+          parts.push({ inline_data: { mimeType: mt, data: img.data } });
+        }
+      }
+    }
+
+    // Guard inline size
     const estMB = estimateInlineRequestMB(parts);
     if (estMB > MAX_INLINE_REQUEST_MB) {
       return res.status(413).json({
         error: 'الطلب كبير جدًا',
         detail: `الحجم المقدر ~${estMB.toFixed(2)}MB > ${MAX_INLINE_REQUEST_MB}MB (حد inline ~20MB). 
-خفّض جودة/دقّة الصور من الواجهة أو استخدم Files API.`,
+استخدم Files API (ارفع الملف أولاً واحصل على fileUri) أو خفّض جودة الصور.`,
         docs: [
           'https://ai.google.dev/gemini-api/docs/image-understanding',
           'https://ai.google.dev/gemini-api/docs/files'
@@ -217,7 +235,12 @@ export default async function handler(req, res) {
 
     const payload = {
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 } // لا تضع responseMimeType هنا
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: 8192
+      }
     };
 
     const response = await fetchWithRetry(apiUrl, {
@@ -227,7 +250,6 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
-
     if (!response.ok) {
       console.error('Gemini API Error:', response.status, response.statusText, text);
       if (response.status === 413 || /Request Entity Too Large|Content Too Large/i.test(text)) {
@@ -253,6 +275,12 @@ export default async function handler(req, res) {
     catch {
       console.error('Non-JSON response from Gemini:', text.slice(0, 600));
       return res.status(502).json({ error: 'استجابة غير متوقعة من Gemini', detail: text.slice(0, 1200) });
+    }
+
+    // (Optional) Inspect finishReason for debugging
+    const finishReason = result?.candidates?.[0]?.finishReason;
+    if (finishReason && finishReason !== 'STOP') {
+      console.warn('Gemini finishReason:', finishReason);
     }
 
     const rawHtml =
