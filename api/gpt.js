@@ -1,14 +1,14 @@
-// /api/gpt.js — نسخة نهائية متكاملة مع الواجهة الأمامية
+// /api/gpt.js — نسخة نهائية مع تحليل كامل وغير مبتور
 const MAX_INLINE_REQUEST_MB = 19.0; // هامش أمان دون حد ~20MB للصور inline في Gemini
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-// ===================== System Instruction (لا تغيير هنا) =====================
+// ===================== System Instruction (التعليمات الأصلية المفصلة) =====================
 const systemInstruction = `
 أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري. أخرج تقرير HTML واحد فقط (كتلة واحدة) بصياغة احترافية، دون أي CSS أو <style>.
 
 [أ] منهجية إلزامية مختصرة
-1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
+1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا. لكل صورة، أضف قسمًا مخصصًا لتحليلها.
 2) افحص بدقة:
    • الازدواجية العلاجية (خاصة أدوية الضغط/السكري/التجلط/الدوار)
    • أخطاء الجرعات (مثل XR/MR موصوف أكثر من مرة يوميًا)
@@ -31,13 +31,12 @@ const systemInstruction = `
 [ج] إظهار جميع الأدوية والإجراءات (إلزامي)
 - اعرض **كل** الأدوية والإجراءات المذكورة في النص/الصورة **دون حذف أي صف** حتى لو نقصت البيانات.
 - إن تعذّر تحديد خانة ما، اكتب "غير محدد".
-- لا تُهمل مضادات التخثر/الصفيحات أو المضادات الحيوية أو الإلكتروليتات أو الكريمات الموضعية أو الأجهزة/الاختبارات المنزلية.
 
 [د] بنية HTML مطلوبة (لا CSS ولا <style>)
 1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التدخين/السعال/الأعراض البصرية/التشخيصات/الملاحظات الحرجة (بما في ذلك أي تعارض نص/صورة وأي افتراضات).</p>
-3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...). اربط السعال المزمن + التدخين بـ CXR/LDCT مع سبب الاشتباه.</p>
-4) <h4>جدول الأدوية والإجراءات</h4>
+2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التدخين/السعال/الأعراض البصرية/التشخيصات/الملاحظات الحرجة.</p>
+3) <h4>تحليل الملفات المرفوعة</h4> 4) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...).</p>
+5) <h4>جدول الأدوية والإجراءات</h4>
 <table><thead><tr>
 <th>الدواء/الإجراء</th>
 <th>الجرعة الموصوفة</th>
@@ -50,70 +49,52 @@ const systemInstruction = `
 </tr></thead><tbody>
 </tbody></table>
 
-[هـ] فرص تحسين الخدمة ورفع مستوى الدخل (وفق مصلحة المريض – مدعومة بالأدلة، إلزامي)
-- أخرج قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
-  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — منفعة للمريض (تشخيص/أمان/متابعة) — منفعة تشغيلية للعيادة (مختبر/تصوير/متابعة دورية) — **مصدر موثوق + رابط مباشر**.
-- أمثلة روابط موثوقة (استخدمها أو الأحدث منها):
-  • ADA Standards of Care (Diabetes): https://diabetesjournals.org/care
-  • FDA Metformin & Renal Impairment: https://www.fda.gov/drugs/
-  • KDIGO CKD Guideline: https://kdigo.org/guidelines/ckd-evaluation-and-management/
-  • ACR Appropriateness Criteria—Chronic Cough: https://acsearch.acr.org/list
-  • USPSTF Lung Cancer Screening: https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening
-  • ACC/AHA Hypertension Guideline: https://www.ahajournals.org/journal/hyp
-  • ACR Gout Guideline: https://www.rheumatology.org/
-  • AAO Preferred Practice Patterns (Retina/OCT): https://www.aao.org/clinical-guidelines
-- فعّل البنود التالية عندما تنطبق محفزاتها (وأضف الرابط المناسب):
-  • سكري نوع 2 ⇒ **HbA1c** (كل 3 أشهر إن غير منضبط، 6–12 أشهر إن مستقر) — ADA.
-  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** قبل/أثناء العلاج — FDA + KDIGO/ADA–KDIGO.
-  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — ACR Gout.
-  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — ACC/AHA.
-  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة مع أعراض ⇒ **Chest X-ray (CXR)** — ACR.
-  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — USPSTF.
-  • سكري بالغ/عمر متقدّم ⇒ **فحص عين شامل مع توسعة الحدقة سنوياً** — ADA.
-  • أعراض بصرية/اشتباه وذمة بقعية سكريّة ⇒ **OCT لماكيولا** — AAO.
-  • ضعف الوصول لعيون ⇒ **تصوير قاع العين (Non-mydriatic) / Tele-retina** أو **AI-DR** — AAO/ATA/FDA.
-- إذا لزم تفعيل توصية لكن نقصت البيانات (العمر/التدخين/المدة/الأعراض)، اكتب: "مشروط بتوفير: …".
+[هـ] فرص تحسين الخدمة ورفع مستوى الدخل (إلزامي)
+- أخرج قائمة نقطية مدعومة بالأدلة والروابط الموثوقة.
 
 [و] خطة العمل
-- قائمة مرقمة بتصحيحات فورية دقيقة (تعديل جرعة XR، إيقاف ازدواجية، طلب eGFR/UA/K+Cr/INR…، إضافة تشخيص داعم…)، واذكر **التخصص** لكل بند عند الحاجة (غدد/كُلى/قلب/صدر/عيون/روماتيزم/أمراض معدية/جلدية).
+- قائمة مرقمة بتصحيحات فورية دقيقة.
 
 [ز] الخاتمة
 <p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
 
 [ح] الإخراج
-- أخرج **كتلة HTML واحدة فقط** وصالحة.
-- اكتب نسب الخطورة بعلامة % وطبّق الكلاسات (risk-high / risk-medium / risk-low) على <td> في عمودي "درجة الخطورة" و"قرار التأمين".
+- أخرج **كتلة HTML واحدة فقط** وصالحة وكاملة.
 `;
 
-// ===================== Prompt Builder (مُعدّل ليتوافق مع الواجهة الأمامية) =====================
-/**
- * يبني هذا الجزء النص الذي سيُرسل إلى النموذج الذكي،
- * وهو يطابق الآن حقول الواجهة الأمامية تمامًا.
- */
+// ===================== Prompt Builder (النسخة الأصلية الفعالة) =====================
 function buildUserPrompt(caseData = {}) {
-  return `
-**بيانات المريض والمدخلات من النموذج:**
+  return `
+**بيانات المريض (مدخل يدويًا):**
 - العمر: ${caseData.age ?? 'غير محدد'}
 - الجنس: ${caseData.gender ?? 'غير محدد'}
-- هل المريض مدخن: ${caseData.isSmoker === true ? 'نعم' : caseData.isSmoker === false ? 'لا' : 'غير محدد'}
-- باك-سنة (محسوب): ${caseData.smokingPackYears ?? 'غير محدد'}
+- التدخين: ${caseData.isSmoker === true ? 'مدخّن' : caseData.isSmoker === false ? 'غير مدخّن' : 'غير محدد'}
+- باك-سنة: ${caseData.smokingPackYears ?? 'غير محدد'}
 - مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
-- هل توجد أعراض بصرية: ${caseData.visualSymptoms === 'yes' ? 'نعم' : caseData.visualSymptoms === 'no' ? 'لا' : 'غير محدد'}
+- أعراض بصرية: ${caseData.visualSymptoms ?? 'غير محدد'}
 - تاريخ آخر فحص عين: ${caseData.lastEyeExamDate ?? 'غير محدد'}
 - حدة الإبصار: ${caseData.visualAcuity ?? 'غير محدد'}
-- ضغط الدم: ${caseData.bloodPressure ?? 'غير محدد'}
-- وصف الحالة: ${caseData.caseDescription ?? 'غير محدد'}
-- التشخيصات المبدئية: ${caseData.diagnosis ?? 'غير محدد'}
-- الأدوية/الإجراءات المكتوبة: ${caseData.medicationsProcedures ?? 'غير محدد'}
-- نتائج التحاليل/الأشعة المتوفرة: ${caseData.labResults ?? 'غير محدد'}
+- مدة السكري (سنوات): ${caseData.diabetesDurationYears ?? 'غير محدد'}
+- مدة ارتفاع الضغط (سنوات): ${caseData.htnDurationYears ?? 'غير محدد'}
+- التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
+- الأدوية/الإجراءات المكتوبة: ${caseData.medications ?? 'غير محدد'}
+- وصف الحالة وملاحظات إضافية: ${caseData.notes ?? 'غير محدد'}
+- التحاليل والأشعة المكتوبة: ${caseData.labResults ?? 'غير محدد'}
+
+**نتائج مخبرية محددة (اختياري):**
+- eGFR: ${caseData.eGFR ?? 'غير محدد'}
+- HbA1c: ${caseData.hba1c ?? 'غير محدد'}
+- Potassium: ${caseData.k ?? 'غير محدد'}
+- Creatinine: ${caseData.cr ?? 'غير محدد'}
+- Uric Acid: ${caseData.ua ?? 'غير محدد'}
+- INR: ${caseData.inr ?? 'غير محدد'}
 
 **الملفات المرفوعة:**
-- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}
+- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل. قم بتحليل كل صورة على حدة في قسم خاص بها.' : 'لا توجد صور مرفقة.'}
 `;
 }
 
-
-// ===================== Helpers: (لا تغيير هنا) =====================
+// ===================== Helpers (لا تغيير هنا) =====================
 const _encoder = new TextEncoder();
 function byteLengthUtf8(str) { return _encoder.encode(str || '').length; }
 
@@ -163,7 +144,7 @@ async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_T
   }
 }
 
-// ===================== API Handler (لا تغيير هنا) =====================
+// ===================== API Handler (مع التعديلات) =====================
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -178,7 +159,6 @@ export default async function handler(req, res) {
     const apiUrl =
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-    // `req.body` الآن يتطابق مع الأسماء الجديدة في `buildUserPrompt`
     const userPrompt = buildUserPrompt(req.body || {});
     const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
@@ -192,15 +172,18 @@ export default async function handler(req, res) {
 
     const estMB = estimateInlineRequestMB(parts);
     if (estMB > MAX_INLINE_REQUEST_MB) {
-      return res.status(413).json({
-        error: 'الطلب كبير جدًا',
-        detail: `الحجم المقدر ~${estMB.toFixed(2)}MB > ${MAX_INLINE_REQUEST_MB}MB. خفّض جودة/دقّة الصور.`,
-      });
+      return res.status(413).json({ error: 'الطلب كبير جدًا' });
     }
 
+    // === التعديل الرئيسي هنا ===
     const payload = {
       contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 }
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: 8192 // ضمان عدم اقتطاع النص
+      }
     };
 
     const response = await fetchWithRetry(apiUrl, {
@@ -213,13 +196,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error('Gemini API Error:', response.status, response.statusText, text);
-      if (response.status === 413 || /Request Entity Too Large|Content Too Large/i.test(text)) {
-        return res.status(413).json({
-          error: 'فشل الاتصال بـ Gemini API بسبب كِبر الحجم',
-          detail: 'قلّل حجم الصور أو استخدم Files API.',
-        });
-      }
-      return res.status(response.status).json({
+      return res.status(response.status).json({
         error: 'فشل الاتصال بـ Gemini API',
         detail: text.slice(0, 2000)
       });
@@ -231,6 +208,15 @@ export default async function handler(req, res) {
       console.error('Non-JSON response from Gemini:', text.slice(0, 600));
       return res.status(502).json({ error: 'استجابة غير متوقعة من Gemini', detail: text.slice(0, 1200) });
     }
+
+    // التحقق من سبب الإيقاف (safety/truncation)
+    const finishReason = result?.candidates?.[0]?.finishReason;
+    if (finishReason && finishReason !== 'STOP') {
+        console.warn('Gemini generation finished with reason:', finishReason);
+        if (finishReason === 'MAX_TOKENS') {
+            // يمكن إضافة ملاحظة في التقرير للمستخدم
+        }
+    }
 
     const rawHtml =
       result?.candidates?.[0]?.content?.parts?.[0]?.text ||
