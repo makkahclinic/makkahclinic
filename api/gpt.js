@@ -1,471 +1,272 @@
+// /api/gpt.js — النسخة النهائية الشاملة (إظهار كل الصفوف، تخصص لكل مراجعة، روابط موثوقة، حماية 413، تصحيح تلقائي)
+const MAX_INLINE_REQUEST_MB = 19.0; // هامش أمان دون حد ~20MB للصور inline في Gemini
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const DEFAULT_TIMEOUT_MS = 60_000;
 
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>تقييم الحالة الطبية - بوابة الطبيب</title>
-  <style>
-    :root{
-      --primary:#0b63c2;         /* أزرق عيادي */
-      --primary-dark:#084e97;
-      --accent:#00a7c7;
-      --secondary:#6c757d;
-      --danger:#dc3545;
-      --bg-grad-1:#e9f3ff;       /* خلفية تدرّج */
-      --bg-grad-2:#f6fbff;
-      --card:#ffffff;
-      --text:#243143;
-      --muted:#66768a;
-      --border:#e2e8f0;
-      --focus:rgba(11,99,194,.18);
-      --shadow:0 10px 25px rgba(15, 57, 105, .08);
-      --radius:16px;
+// ===================== System Instruction =====================
+const systemInstruction = `
+أنت "كبير مدققي المطالبات الطبية والتأمين" خبير سريري. أخرج تقرير HTML واحد فقط (كتلة واحدة) بصياغة احترافية، دون أي CSS أو <style>.
+
+[أ] منهجية إلزامية مختصرة
+1) حلّل جميع البيانات النصّيّة والصُّوَر. إن تعارض النص مع الصورة فاذكر ذلك كملاحظة حرجة وحدّد أيّهما يُعتمد ولماذا.
+2) افحص بدقة:
+   • الازدواجية العلاجية (خاصة أدوية الضغط/السكري/التجلط/الدوار)
+   • أخطاء الجرعات (مثل XR/MR موصوف أكثر من مرة يوميًا)
+   • أمان الأدوية عالية الخطورة وفحوصها (Metformin/Xigduo XR ⇠ eGFR؛ Allopurinol ⇠ eGFR + Uric Acid ± HLA-B*58:01؛ Warfarin ⇠ INR؛ ACEi/ARB/MRA ⇠ K+Cr)
+   • وجود تشخيص داعم لكل دواء/إجراء (وإلا فاذكر انعدامه صراحة)
+   • مدة الصرف (90 يوم لمرض حاد = علامة تحذير)
+   • مطابقة العلاج للحالة الكلوية/الكبدية والضغط الحالي والعمر وكبار السن
+   • تداخلات كبار السن (مثل: أدوية الدوار/المهدئات ⇒ خطر السقوط)
+
+[ب] قواعد مخاطبة التأمين (إلزامية)
+- لكل صف في الجدول: احسب "درجة الخطورة" (0–100%) واكتب علامة %.
+- طبّق كلاس لوني على <td> في عمودي "درجة الخطورة" و"قرار التأمين":
+  • risk-high إذا الدرجة ≥ 70%  • risk-medium إذا 40–69%  • risk-low إذا < 40%
+- صِغ "قرار التأمين" حصراً بإحدى الصيغ:
+  • ❌ قابل للرفض — السبب: [طبي/إجرائي محدد] — وللقبول يلزم: [تشخيص/فحص/تعديل جرعة/إلغاء ازدواجية/خطة متابعة…] — التخصص المُراجع: [اكتب التخصص المناسب]
+  • ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — التخصص المُراجع: [اكتب التخصص المناسب]
+  • ✅ مقبول
+- إن كان الدواء/الإجراء بلا تشخيص داعم فاذكر ذلك داخل القرار صراحة.
+
+[ج] إظهار جميع الأدوية والإجراءات (إلزامي)
+- اعرض **كل** الأدوية والإجراءات المذكورة في النص/الصورة **دون حذف أي صف** حتى لو نقصت البيانات.
+- إن تعذّر تحديد خانة ما، اكتب "غير محدد".
+- لا تُهمل مضادات التخثر/الصفيحات أو المضادات الحيوية أو الإلكتروليتات أو الكريمات الموضعية أو الأجهزة/الاختبارات المنزلية.
+
+[د] بنية HTML مطلوبة (لا CSS ولا <style>)
+1) <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
+2) <h4>ملخص الحالة</h4><p>لخّص العمر/الجنس/التدخين/السعال/الأعراض البصرية/التشخيصات/الملاحظات الحرجة (بما في ذلك أي تعارض نص/صورة وأي افتراضات).</p>
+3) <h4>التحليل السريري العميق</h4><p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...). اربط السعال المزمن + التدخين بـ CXR/LDCT مع سبب الاشتباه.</p>
+4) <h4>جدول الأدوية والإجراءات</h4>
+<table><thead><tr>
+<th>الدواء/الإجراء</th>
+<th>الجرعة الموصوفة</th>
+<th>الجرعة الصحيحة المقترحة</th>
+<th>التصنيف</th>
+<th>الغرض الطبي</th>
+<th>التداخلات</th>
+<th>درجة الخطورة (%)</th>
+<th>قرار التأمين</th>
+</tr></thead><tbody>
+<!-- املأ الصفوف لكل عنصر دون استثناء -->
+</tbody></table>
+
+[هـ] فرص تحسين الخدمة ورفع مستوى الدخل (وفق مصلحة المريض – مدعومة بالأدلة، إلزامي)
+- أخرج قائمة نقطية؛ لكل عنصر سطر واحد بالصيغة:
+  **اسم الفحص/الخدمة** — سبب سريري محدد (مرتبط بعمر/أعراض/مرض/دواء) — منفعة للمريض (تشخيص/أمان/متابعة) — منفعة تشغيلية للعيادة (مختبر/تصوير/متابعة دورية) — **مصدر موثوق + رابط مباشر**.
+- أمثلة روابط موثوقة (استخدمها أو الأحدث منها):
+  • ADA Standards of Care (Diabetes): https://diabetesjournals.org/care
+  • FDA Metformin & Renal Impairment: https://www.fda.gov/drugs/
+  • KDIGO CKD Guideline: https://kdigo.org/guidelines/ckd-evaluation-and-management/
+  • ACR Appropriateness Criteria—Chronic Cough: https://acsearch.acr.org/list
+  • USPSTF Lung Cancer Screening: https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening
+  • ACC/AHA Hypertension Guideline: https://www.ahajournals.org/journal/hyp
+  • ACR Gout Guideline: https://www.rheumatology.org/
+  • AAO Preferred Practice Patterns (Retina/OCT): https://www.aao.org/clinical-guidelines
+- فعّل البنود التالية عندما تنطبق محفزاتها (وأضف الرابط المناسب):
+  • سكري نوع 2 ⇒ **HbA1c** (كل 3 أشهر إن غير منضبط، 6–12 أشهر إن مستقر) — ADA.
+  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** قبل/أثناء العلاج — FDA + KDIGO/ADA–KDIGO.
+  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — ACR Gout.
+  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — ACC/AHA.
+  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة مع أعراض ⇒ **Chest X-ray (CXR)** — ACR.
+  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — USPSTF.
+  • سكري بالغ/عمر متقدّم ⇒ **فحص عين شامل مع توسعة الحدقة سنوياً** — ADA.
+  • أعراض بصرية/اشتباه وذمة بقعية سكريّة ⇒ **OCT لماكيولا** — AAO.
+  • ضعف الوصول لعيون ⇒ **تصوير قاع العين (Non-mydriatic) / Tele-retina** أو **AI-DR** — AAO/ATA/FDA.
+- إذا لزم تفعيل توصية لكن نقصت البيانات (العمر/التدخين/المدة/الأعراض)، اكتب: "مشروط بتوفير: …".
+
+[و] خطة العمل
+- قائمة مرقمة بتصحيحات فورية دقيقة (تعديل جرعة XR، إيقاف ازدواجية، طلب eGFR/UA/K+Cr/INR…، إضافة تشخيص داعم…)، واذكر **التخصص** لكل بند عند الحاجة (غدد/كُلى/قلب/صدر/عيون/روماتيزم/أمراض معدية/جلدية).
+
+[ز] الخاتمة
+<p><strong>الخاتمة:</strong> هذا التقرير هو تحليل مبدئي ولا يغني عن المراجعة السريرية من قبل طبيب متخصص.</p>
+
+[ح] الإخراج
+- أخرج **كتلة HTML واحدة فقط** وصالحة.
+- اكتب نسب الخطورة بعلامة % وطبّق الكلاسات (risk-high / risk-medium / risk-low) على <td> في عمودي "درجة الخطورة" و"قرار التأمين".
+`;
+
+// ===================== Prompt Builder (يدعم حقول تنفس/عيون) =====================
+function buildUserPrompt(caseData = {}) {
+  return `
+**بيانات المريض (مدخل يدويًا):**
+- العمر: ${caseData.age ?? 'غير محدد'}
+- الجنس: ${caseData.gender ?? 'غير محدد'}
+- التدخين: ${caseData.isSmoker === true ? 'مدخّن' : caseData.isSmoker === false ? 'غير مدخّن' : 'غير محدد'}
+- باك-سنة: ${caseData.smokingPackYears ?? 'غير محدد'}
+- مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
+- أعراض بصرية: ${caseData.visualSymptoms ?? 'غير محدد'}
+- تاريخ آخر فحص عين: ${caseData.lastEyeExamDate ?? 'غير محدد'}
+- حدة الإبصار: ${caseData.visualAcuity ?? 'غير محدد'}
+- مدة السكري (سنوات): ${caseData.diabetesDurationYears ?? 'غير محدد'}
+- مدة ارتفاع الضغط (سنوات): ${caseData.htnDurationYears ?? 'غير محدد'}
+- التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
+- الأدوية/الإجراءات المكتوبة: ${caseData.medications ?? 'غير محدد'}
+- نتائج/ملاحظات إضافية: ${caseData.notes ?? 'غير محدد'}
+
+**نتائج مخبرية (اختياري):**
+- eGFR: ${caseData.eGFR ?? 'غير محدد'}
+- HbA1c: ${caseData.hba1c ?? 'غير محدد'}
+- Potassium: ${caseData.k ?? 'غير محدد'}
+- Creatinine: ${caseData.cr ?? 'غير محدد'}
+- Uric Acid: ${caseData.ua ?? 'غير محدد'}
+- INR: ${caseData.inr ?? 'غير محدد'}
+
+**الملفات المرفوعة:**
+- ${Array.isArray(caseData.imageData) && caseData.imageData.length > 0 ? 'يوجد صور مرفقة للتحليل.' : 'لا توجد صور مرفقة.'}
+`;
+}
+
+// ===================== Helpers: حجم الطلب، تصحيح المخرجات، fetch مع Timeout/Retry =====================
+const _encoder = new TextEncoder();
+function byteLengthUtf8(str) { return _encoder.encode(str || '').length; }
+
+// تقدير حجم الطلب بالميجابايت (Base64 يضيف ~33%)
+function estimateInlineRequestMB(parts) {
+  let bytes = 0;
+  for (const p of parts) {
+    if (p.text) bytes += byteLengthUtf8(p.text);
+    if (p.inline_data?.data) {
+      const len = p.inline_data.data.length;   // طول Base64
+      bytes += Math.floor((len * 3) / 4);      // تقدير bytes الفعلية
     }
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      color:var(--text);
-      background: radial-gradient(1200px 800px at 80% 0%, var(--bg-grad-1), var(--bg-grad-2));
-      padding: 2rem 1rem;
-    }
-    .container{
-      max-width: 980px;
-      margin: 0 auto;
-      background: var(--card);
-      border:1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 28px 26px 30px;
-      position: relative;
-      overflow: hidden;
-    }
-    /* شريط علوي لطيف */
-    .top-ribbon{
-      position:absolute; inset:0 0 auto 0; height:6px;
-      background: linear-gradient(90deg, var(--primary), var(--accent));
-    }
-    /* أيقونة الهوم (أكبر وواضحة) */
-    .home-icon{
-      position:absolute; top:14px; right:14px;
-      width:54px; height:54px; border-radius:50%;
-      background: var(--primary);
-      color:#fff; font-size:24px; display:flex; align-items:center; justify-content:center;
-      box-shadow: 0 6px 18px rgba(11, 99, 194, .22);
-      cursor:pointer; user-select:none;
-      transition: transform .12s ease, background .25s ease;
-    }
-    .home-icon:hover{ background:var(--primary-dark); transform: translateY(-1px); }
-    h2{
-      margin: 10px 0 24px;
-      font-weight:700;
-      letter-spacing:.2px;
-      color:var(--primary);
-      text-align:center;
-    }
-    .subtext{
-      text-align:center; color:var(--muted); margin-top:-10px; margin-bottom:22px; font-size:.95rem;
-    }
-    .section-title{
-      font-size:1.08rem; font-weight:700; color:var(--primary);
-      border-bottom:2px solid var(--primary);
-      display:flex; align-items:center; gap:.5rem;
-      padding-bottom:.5rem; margin: 26px 0 16px;
-    }
-    .section-title .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); display:inline-block; }
+  }
+  return bytes / (1024 * 1024);
+}
 
-    label{font-weight:600; display:block; margin:.8rem 0 .35rem;}
-    .hint{font-size:.86rem; color:var(--muted); margin-top:.15rem;}
-
-    input, select, textarea{
-      width:100%; box-sizing:border-box;
-      border:1px solid var(--border); border-radius:10px; padding:.75rem .9rem;
-      font-size:1rem; background:#fff;
-      transition:border-color .2s, box-shadow .2s, background .2s;
-    }
-    input::placeholder, textarea::placeholder{ color:#9aa8b8; }
-    input:focus, select:focus, textarea:focus{
-      outline:none; border-color:var(--primary);
-      box-shadow: 0 0 0 3px var(--focus);
-      background:#fbfdff;
-    }
-    textarea{ min-height:120px; resize:vertical; }
-
-    .grid{
-      display:grid; gap:16px;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    }
-
-    /* زرّان أنحف وأنيق */
-    .btn{
-      display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
-      border:none; border-radius:10px; color:#fff; cursor:pointer;
-      padding:.6rem 1rem; font-weight:700; font-size:.98rem;
-      transition: transform .06s ease, filter .2s ease, background .25s ease;
-      box-shadow: 0 6px 14px rgba(0,0,0,.08);
-    }
-    .btn:active{ transform: translateY(1px); }
-    .btn-primary{ background: var(--primary); }
-    .btn-primary:hover{ background: var(--primary-dark); }
-    .btn-danger{ background: var(--danger); }
-    .btn-danger:hover{ filter: brightness(.95); }
-    .btn-compact{ padding:.5rem .9rem; font-size:.95rem; border-radius:9px; }
-
-    .actions{
-      display:flex; gap:10px; justify-content: center; align-items:center;
-      margin-top: 20px;
-    }
-
-    .image-upload{
-      border:2px dashed var(--border); border-radius:12px; padding:18px;
-      text-align:center; color:var(--muted);
-      transition: border-color .25s, background .25s;
-      cursor:pointer;
-    }
-    .image-upload:hover{ border-color:var(--primary); background: #f6fbff; }
-    #image-upload-input{ display:none; }
-    #image-preview{ max-width:100%; max-height:320px; display:none; border-radius:10px; border:1px solid var(--border); }
-    #image-meta{ font-size:.9rem; color:var(--muted); margin-top:8px; display:none; }
-
-    .note{
-      padding:12px 14px; border:1px dashed var(--border); border-radius:10px;
-      background:#fcfdff; color:var(--muted); font-size:.92rem; margin-top:8px;
-    }
-
-    .notification{
-      margin-top:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600;
-    }
-    .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
-    .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
-
-    #response-container{
-      margin-top: 20px;
-      padding:16px; border:1px solid var(--border); border-radius:12px; background:#fff; display:none;
-      box-shadow: var(--shadow);
-    }
-
-    /* تلوين كروت القرار/المخاطر داخل التقرير */
-    #response-container .risk-high{ color:#721c24; background:#f8d7da; padding:.18rem .5rem; border-radius:6px; border:1px solid #f5c6cb; font-weight:700; }
-    #response-container .risk-medium{ color:#856404; background:#fff3cd; padding:.18rem .5rem; border-radius:6px; border:1px solid #ffeeba; font-weight:700; }
-    #response-container .risk-low{ color:#155724; background:#d4edda; padding:.18rem .5rem; border-radius:6px; border:1px solid #c3e6cb; font-weight:700; }
-
-    .muted-mini{ font-size:.82rem; color:#92a3b6; text-align:center; margin-top:10px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="top-ribbon"></div>
-    <div class="home-icon" title="الشاشة الرئيسية" onclick="goToHome()">🏠</div>
-
-    <h2>تقييم الحالة الطبية وطلبات التأمين</h2>
-    <div class="subtext">واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين</div>
-
-    <!-- معلومات المريض -->
-    <div class="section-title"><span class="dot"></span> 1) معلومات المريض</div>
-    <div class="grid">
-      <div>
-        <label for="gender">الجنس</label>
-        <select id="gender">
-          <option value="" selected disabled>اختر الجنس</option>
-          <option value="male">ذكر</option>
-          <option value="female">أنثى</option>
-        </select>
-        <div class="hint">لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.</div>
-      </div>
-
-      <div>
-        <label for="age">العمر</label>
-        <input id="age" type="number" placeholder="مثال: 63">
-      </div>
-
-      <div id="pregnancy-status-wrap" class="hidden">
-        <label for="pregnancy-status">هل المريضة حامل؟</label>
-        <select id="pregnancy-status">
-          <option value="" selected disabled>اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
-        </select>
-      </div>
-
-      <div id="pregnancy-month-wrap" class="hidden">
-        <label for="pregnancy-month">شهر الحمل</label>
-        <input id="pregnancy-month" type="number" min="1" max="9" placeholder="مثال: 5">
-      </div>
-
-      <div>
-        <label for="height">الطول (سم)</label>
-        <input id="height" type="number" placeholder="مثال: 175">
-      </div>
-
-      <div>
-        <label for="weight">الوزن (كجم)</label>
-        <input id="weight" type="number" placeholder="مثال: 80">
-      </div>
-
-      <div>
-        <label for="temperature">درجة الحرارة (°م)</label>
-        <input id="temperature" type="text" placeholder="مثال: 37.6">
-      </div>
-
-      <div>
-        <label for="blood-pressure">ضغط الدم</label>
-        <input id="blood-pressure" type="text" placeholder="مثال: 120/80">
-      </div>
-    </div>
-
-    <!-- تنفس وتدخين وعيون -->
-    <div class="section-title"><span class="dot"></span> 2) نمط الحياة والأعراض</div>
-    <div class="grid">
-      <div>
-        <label for="smoker">هل المريض مدخّن؟</label>
-        <select id="smoker">
-          <option value="" selected disabled>اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
-        </select>
-      </div>
-
-      <div id="pack-years-wrap" class="hidden">
-        <label for="pack-years">عدد الباك-سنة</label>
-        <input id="pack-years" type="number" placeholder="مثال: 35">
-        <div class="hint">الباك-سنة = (عدد العلب يوميًا × عدد سنوات التدخين)</div>
-      </div>
-
-      <div>
-        <label for="cough-duration">مدة السعال (أسابيع)</label>
-        <input id="cough-duration" type="number" placeholder="مثال: 12">
-      </div>
-
-      <div>
-        <label for="visual-symptoms">أعراض بصرية؟</label>
-        <select id="visual-symptoms">
-          <option value="" selected disabled>اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
-        </select>
-      </div>
-
-      <div id="eye-wrap" class="hidden">
-        <label for="last-eye-exam">تاريخ آخر فحص قاع عين</label>
-        <input id="last-eye-exam" type="date">
-        <label for="visual-acuity">حدة البصر (اختياري)</label>
-        <input id="visual-acuity" type="text" placeholder="مثال: 6/12 أو 20/40">
-      </div>
-    </div>
-
-    <!-- تفاصيل الحالة -->
-    <div class="section-title"><span class="dot"></span> 3) تفاصيل الحالة الطبية</div>
-    <div class="grid">
-      <div>
-        <label for="case-description">وصف الحالة</label>
-        <textarea id="case-description" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط ودوخة متقطعة..."></textarea>
-      </div>
-      <div>
-        <label for="diagnosis">التشخيصات المبدئية</label>
-        <textarea id="diagnosis" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea>
-      </div>
-      <div>
-        <label for="lab-results">التحاليل/الأشعة المتوفرة</label>
-        <textarea id="lab-results" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6, INR غير متاح..."></textarea>
-      </div>
-      <div>
-        <label for="medications-procedures">الأدوية/الإجراءات المكتوبة</label>
-        <textarea id="medications-procedures" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid, Ramipril 10 bid, Spironolactone 50 bid, Ibuprofen 400 tid, Warfarin + Aspirin + Clopidogrel + Rivaroxaban, Clarithromycin + Ciprofloxacin, Allopurinol 300 qd, CT contrast اليوم, قسطرة قلب عاجلة..."></textarea>
-      </div>
-    </div>
-
-    <!-- رفع الملفات -->
-    <div class="section-title"><span class="dot"></span> 4) رفع ملفات (وصفة/تقرير) — اختياري</div>
-    <div class="image-upload" onclick="document.getElementById('image-upload-input').click()">
-      اضغط هنا لرفع صورة (PNG/JPG)
-      <input id="image-upload-input" type="file" accept="image/*">
-      <div class="note">ننصح برفع صورة واحدة واضحة. سنضغطها تلقائيًا لتفادي أخطاء الحجم.</div>
-    </div>
-    <div style="margin-top:10px;">
-      <img id="image-preview" alt="معاينة الصورة">
-      <div id="image-meta"></div>
-    </div>
-
-    <!-- أزرار -->
-    <div class="actions">
-      <button id="analyzeBtn" class="btn btn-primary btn-compact" onclick="analyzeCase()">تحليل الحالة</button>
-      <button class="btn btn-danger btn-compact" onclick="logout()">تسجيل الخروج</button>
-    </div>
-    <div class="muted-mini">بالضغط على "تحليل الحالة" سيتم إرسال المدخلات لتوليد تقرير HTML شامل للعيادة والتأمين.</div>
-
-    <div id="notification-area" class="notification info"></div>
-    <div id="response-container"></div>
-  </div>
-
-  <script>
-    // منطق الحقول الشرطية
-    const genderEl = document.getElementById('gender');
-    const pregStatWrap = document.getElementById('pregnancy-status-wrap');
-    const pregMonthWrap = document.getElementById('pregnancy-month-wrap');
-    const pregStatEl = document.getElementById('pregnancy-status');
-
-    genderEl.addEventListener('change', () => {
-      const isFemale = genderEl.value === 'female';
-      pregStatWrap.classList.toggle('hidden', !isFemale);
-      if (!isFemale){ pregMonthWrap.classList.add('hidden'); pregStatEl.value = ""; document.getElementById('pregnancy-month').value=""; }
-    });
-    pregStatEl.addEventListener('change', () => {
-      const showMonth = pregStatEl.value === 'yes';
-      pregMonthWrap.classList.toggle('hidden', !showMonth);
-      if (!showMonth){ document.getElementById('pregnancy-month').value=""; }
-    });
-
-    const smokerEl = document.getElementById('smoker');
-    const packYearsWrap = document.getElementById('pack-years-wrap');
-    smokerEl.addEventListener('change', () => {
-      packYearsWrap.classList.toggle('hidden', smokerEl.value !== 'yes');
-      if (smokerEl.value !== 'yes') document.getElementById('pack-years').value="";
-    });
-
-    const visualEl = document.getElementById('visual-symptoms');
-    const eyeWrap = document.getElementById('eye-wrap');
-    visualEl.addEventListener('change', () => {
-      eyeWrap.classList.toggle('hidden', visualEl.value !== 'yes');
-      if (visualEl.value !== 'yes'){ document.getElementById('last-eye-exam').value=""; document.getElementById('visual-acuity').value=""; }
-    });
-
-    // معاينة وضغط الصورة
-    const imageInput = document.getElementById('image-upload-input');
-    const imagePreview = document.getElementById('image-preview');
-    const imageMeta = document.getElementById('image-meta');
-    let imageBase64 = null;
-
-    imageInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const { base64, info } = await compressImage(file, { maxW: 1400, maxH: 1400, quality: 0.7 });
-        imageBase64 = base64;
-        imagePreview.src = 'data:image/jpeg;base64,' + base64;
-        imagePreview.style.display = 'block';
-        imageMeta.style.display = 'block';
-        imageMeta.textContent = `الحجم بعد الضغط: ${info.sizeKB.toFixed(1)} KB — الأبعاد: ${info.w}×${info.h}`;
-      } catch (err) {
-        showNote('error', 'تعذر معالجة الصورة. حاول صورة أصغر/أوضح.');
-        console.error(err);
-      }
-    });
-
-    async function compressImage(file, { maxW=1400, maxH=1400, quality=0.7 } = {}){
-      const dataURL = await new Promise((res, rej)=>{
-        const r = new FileReader(); r.onload = ()=> res(r.result); r.onerror = rej; r.readAsDataURL(file);
+/** تصحيح ذاتي: يضيف % إن نُسيت ويطبّق الكلاس حسب النسبة على خلايا <td> التي بلا class */
+function applySafetyPostProcessing(html) {
+  try {
+    html = String(html || '');
+    // أضف % إن كانت أرقام منفردة داخل خلايا
+    html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi,
+      (_m, o, n, _s, c) => `${o}${n}%${c}`);
+    // أضف الكلاس المناسب إذا لم يُذكر class على خلية نسبة الخطورة
+    html = html.replace(/(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
+      (_m, open, numStr, close) => {
+        const v = parseInt(numStr, 10);
+        const klass = v >= 70 ? 'risk-high' : v >= 40 ? 'risk-medium' : 'risk-low';
+        return open.replace('<td', `<td class="${klass}"`) + `${numStr}%` + close;
       });
-      const img = await new Promise((res, rej)=>{
-        const i = new Image(); i.onload = ()=> res(i); i.onerror = rej; i.src = dataURL;
-      });
-      let { width:w, height:h } = img;
-      const ratio = Math.min(maxW/w, maxH/h, 1);
-      w = Math.round(w*ratio); h = Math.round(h*ratio);
-      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-      const out = canvas.toDataURL('image/jpeg', quality);
-      const base64 = out.split(',')[1];
-      const sizeKB = (base64.length * 3) / 4 / 1024;
-      return { base64, info:{ w,h,sizeKB } };
+    // قص أي ضجيج قبل أول <h3> (لضمان كتلة HTML واحدة)
+    const i = html.indexOf('<h3'); if (i > 0) html = html.slice(i);
+    return html;
+  } catch (e) {
+    console.error('Post-processing failed:', e);
+    return html;
+  }
+}
+
+// fetch مع timeout + retries لرموز معينة
+async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
+      await new Promise(r => setTimeout(r, (3 - retries) * 800)); // backoff بسيط
+      return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
     }
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
+}
 
-    // إشعارات
-    const noteArea = document.getElementById('notification-area');
-    function showNote(type, text){
-      noteArea.className = 'notification ' + (type === 'error' ? 'error' : 'info');
-      noteArea.textContent = text;
-      noteArea.style.display = 'block';
-    }
-    function clearNote(){ noteArea.style.display='none'; noteArea.textContent=''; }
+// ===================== API Handler =====================
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    // انتقالات
-    function goToHome(){ window.location.href = 'https://www.m2020m.org/portal.html'; }
-    function logout(){ /* اربط تسجيل خروجك الحقيقي هنا */ showNote('info','تم تسجيل الخروج (نموذج).'); }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-    // إرسال التحليل
-    async function analyzeCase(){
-      const responseContainer = document.getElementById('response-container');
-      const btn = document.getElementById('analyzeBtn');
-      clearNote(); responseContainer.style.display='none'; responseContainer.innerHTML='';
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
+    const apiUrl =
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-      // جمع البيانات
-      const caseData = {
-        userType:'doctor',
-        age: document.getElementById('age').value || undefined,
-        gender: document.getElementById('gender').value || undefined,
-        isSmoker: document.getElementById('smoker').value === 'yes' ? true : (document.getElementById('smoker').value === 'no' ? false : undefined),
-        smokingPackYears: document.getElementById('pack-years').value || undefined,
-        coughDurationWeeks: document.getElementById('cough-duration').value || undefined,
-        visualSymptoms: document.getElementById('visual-symptoms').value || undefined,
-        lastEyeExamDate: document.getElementById('last-eye-exam').value || undefined,
-        visualAcuity: document.getElementById('visual-acuity').value || undefined,
-        height: document.getElementById('height').value || undefined,
-        weight: document.getElementById('weight').value || undefined,
-        temperature: document.getElementById('temperature').value || undefined,
-        bloodPressure: document.getElementById('blood-pressure').value || undefined,
+    const userPrompt = buildUserPrompt(req.body || {});
+    const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
-        notes: document.getElementById('case-description').value || '',
-        diagnosis: document.getElementById('diagnosis').value || '',
-        labResults: document.getElementById('lab-results').value || '',
-        medications: document.getElementById('medications-procedures').value || '',
-        imageData: imageBase64 ? [imageBase64] : []
-      };
-
-      if (
-        !caseData.notes && !caseData.diagnosis && !caseData.labResults &&
-        !caseData.medications && caseData.imageData.length === 0
-      ){
-        showNote('error','الرجاء إدخال تفاصيل الحالة أو رفع صورة.');
-        return;
+    // إرفاق الصور Base64 (بدون data:…;base64,) — احرص على ضغطها في الواجهة قبل الإرسال
+    if (Array.isArray(req.body?.imageData)) {
+      for (const img of req.body.imageData) {
+        if (typeof img === 'string' && img.length > 0) {
+          parts.push({ inline_data: { mimeType: 'image/jpeg', data: img } });
+        }
       }
+    }
 
-      showNote('info','جاري تحليل الحالة… قد يستغرق الأمر قليلًا حسب حجم البيانات.');
-      btn.disabled = true;
+    // فحص الحجم لتفادي 413 من Google أو البروكسي
+    const estMB = estimateInlineRequestMB(parts);
+    if (estMB > MAX_INLINE_REQUEST_MB) {
+      return res.status(413).json({
+        error: 'الطلب كبير جدًا',
+        detail: `الحجم المقدر ~${estMB.toFixed(2)}MB > ${MAX_INLINE_REQUEST_MB}MB (حد inline ~20MB). 
+خفّض جودة/دقّة الصور من الواجهة أو استخدم Files API.`,
+        docs: [
+          'https://ai.google.dev/gemini-api/docs/image-understanding',
+          'https://ai.google.dev/gemini-api/docs/files'
+        ]
+      });
+    }
 
-      // طلب مع مهلة (timeout)
-      const controller = new AbortController();
-      const t = setTimeout(()=> controller.abort(), 60000);
+    const payload = {
+      contents: [{ role: 'user', parts }],
+      generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 } // لا تضع responseMimeType هنا
+    };
 
-      try{
-        const res = await fetch('/api/gpt', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify(caseData),
-          signal: controller.signal
+    const response = await fetchWithRetry(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error('Gemini API Error:', response.status, response.statusText, text);
+      if (response.status === 413 || /Request Entity Too Large|Content Too Large/i.test(text)) {
+        return res.status(413).json({
+          error: 'فشل الاتصال بـ Gemini API بسبب كِبر الحجم',
+          detail: 'قلّل حجم الصور أو استخدم Files API.',
+          docs: [
+            'https://ai.google.dev/gemini-api/docs/image-understanding',
+            'https://ai.google.dev/gemini-api/docs/files'
+          ]
         });
-
-        const text = await res.text();
-        if (!res.ok){
-          // أحجام كبيرة
-          if (res.status === 413 || /Entity Too Large|Content Too Large/i.test(text)){
-            throw new Error('الحجم كبير: قلّل جودة/عدد الصور ثم أعد المحاولة.');
-          }
-          // خطأ عام
-          throw new Error(`فشل (${res.status}): ${text.slice(0,200)}…`);
-        }
-
-        let data;
-        try{ data = JSON.parse(text); }
-        catch{ throw new Error('الرد ليس JSON صالحًا من الخادم.'); }
-
-        if (data?.htmlReport){
-          clearNote();
-          responseContainer.innerHTML = data.htmlReport;
-          responseContainer.style.display = 'block';
-          responseContainer.scrollIntoView({ behavior:'smooth', block:'start' });
-        } else {
-          throw new Error('لم يتم استلام تقرير HTML من الخادم.');
-        }
-      } catch(err){
-        console.error(err);
-        showNote('error', 'حدث خطأ أثناء التحليل: ' + err.message);
-      } finally {
-        clearTimeout(t);
-        btn.disabled = false;
       }
+      return res.status(response.status).json({
+        error: 'فشل الاتصال بـ Gemini API',
+        status: response.status,
+        statusText: response.statusText,
+        detail: text.slice(0, 2000)
+      });
     }
-    window.analyzeCase = analyzeCase;
-  </script>
-</body>
-</html>
+
+    let result;
+    try { result = JSON.parse(text); }
+    catch {
+      console.error('Non-JSON response from Gemini:', text.slice(0, 600));
+      return res.status(502).json({ error: 'استجابة غير متوقعة من Gemini', detail: text.slice(0, 1200) });
+    }
+
+    const rawHtml =
+      result?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      '<p>⚠️ لم يتمكن النظام من إنشاء التقرير.</p>';
+
+    const finalizedHtml = applySafetyPostProcessing(rawHtml);
+    return res.status(200).json({ htmlReport: finalizedHtml });
+
+  } catch (err) {
+    console.error('Server Error:', err);
+    return res.status(500).json({
+      error: 'حدث خطأ في الخادم أثناء تحليل الحالة',
+      detail: err.message,
+      stack: err.stack
+    });
+  }
+}
