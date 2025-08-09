@@ -7,8 +7,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- لالتقاط التقرير إلى PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <!-- OCR عبر Tesseract.js -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+
   <style>
     :root{
       --primary:#0b63c2;--primary-dark:#094f9c;--accent:#ffd54d;--bg:#f4f8ff;--card:#fff;
@@ -23,8 +29,12 @@
     .navbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     .brand{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--primary)}
     .lang-switcher{font-weight:700;border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
-    .home-btn{background:#fff;border:2px solid #ffd54d;color:#2b3a55;border-radius:12px;padding:.55rem .9rem;font-weight:800;cursor:pointer;text-decoration:none}
-    .home-btn:hover{background:#fff9da}
+    .home-btn{
+      background:linear-gradient(90deg,#fff,#ffd54d);color:#2b3a55;border:1px solid #ffe082;
+      padding:.6rem 1rem;border-radius:12px;font-weight:800;text-decoration:none;
+      box-shadow:0 6px 14px rgba(0,0,0,.08)
+    }
+    .home-btn:hover{filter:brightness(1.02)}
 
     .hero{background:linear-gradient(145deg,#ffffff, #eef6ff);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;margin:10px 0 22px;position:relative;overflow:hidden}
     .hero::after{content:"";position:absolute;inset:auto -80px -90px auto;width:240px;height:240px;border-radius:50%;background:radial-gradient(closest-side, #ffd54d, transparent 70%);opacity:.45;}
@@ -47,7 +57,8 @@
     input:focus,select:focus,textarea:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px var(--focus)}
     textarea{min-height:110px;resize:vertical}
     .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .row{display:flex;gap:10px;align-items:center}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#f1f5ff;border:1px solid var(--border);font-weight:700;color:#0b63c2}
 
     .file-drop{border:2px dashed var(--border);border-radius:12px;padding:18px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .2s, background .2s}
     .file-drop:hover{border-color:var(--primary);background:#f6fbff}
@@ -65,25 +76,23 @@
     th,td{border:1px solid var(--border);padding:8px 10px;text-align:right}
     th{background:#e9f3ff;color:#0b63c2}
 
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#f1f5ff;border:1px solid var(--border);font-weight:700;color:#0b63c2}
     .footer-note{margin-top:18px;color:#8aa}
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- NAV -->
     <div class="navbar">
       <div class="brand">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         Rx Portal
       </div>
-      <div style="display:flex;gap:10px;align-items:center">
-        <a href="portal.html" class="home-btn">⌂ الصفحة الرئيسية</a>
+      <div class="row">
+        <a class="home-btn" href="/portal.html">الصفحة الرئيسية</a>
         <button id="langSwitcher" class="lang-switcher">English</button>
       </div>
     </div>
 
-    <!-- HERO -->
+    <!-- Hero -->
     <div class="hero">
       <h1 data-i18n="hero.title">منصة الصيدلية الذكية</h1>
       <p data-i18n="hero.subtitle">تجميع بيانات المريض، تحليل تفاعلات/جرعات، وتصدير تقرير PDF احترافي.</p>
@@ -93,7 +102,7 @@
       </div>
     </div>
 
-    <!-- FORM -->
+    <!-- Form -->
     <div class="card" id="formCard">
       <div class="section-title"><span class="dot"></span><span data-i18n="sec.patient">١) بيانات المريض</span></div>
       <div class="grid">
@@ -141,7 +150,7 @@
       </div>
 
       <div class="section-title" style="margin-top:18px"><span class="dot"></span><span data-i18n="sec.allergy">٣) الحساسية</span></div>
-      <div class="row">
+      <div class="row" style="flex-wrap:wrap;gap:12px">
         <div style="min-width:260px;flex:1">
           <label data-i18n="f.foodAllergy">هل توجد حساسية طعام؟</label>
           <select id="foodAllergy">
@@ -161,7 +170,9 @@
       <div class="grid" style="margin-top:10px">
         <div>
           <label data-i18n="f.meds">قائمة الأدوية (سطر لكل دواء أو مفصولة بفواصل)</label>
-          <textarea id="meds" placeholder="Amlodipine 10&#10;Duodart 0.5/0.4&#10;Rosuvastatin 20 mg"></textarea>
+          <textarea id="meds" placeholder="Amlodipine 10 mg
+Duodart 0.5/0.4
+Rosuvastatin 20 mg"></textarea>
         </div>
         <div>
           <label data-i18n="f.apap">إجمالي باراسيتامول يوميًا (mg) – اختياري</label>
@@ -169,7 +180,6 @@
         </div>
       </div>
 
-      <!-- Uploads: Lab / Radiology -->
       <div class="grid" style="margin-top:12px">
         <div>
           <label data-i18n="f.uploadLab">تحميل نتائج المختبر</label>
@@ -185,13 +195,17 @@
         </div>
       </div>
 
-      <!-- Other files -->
+      <!-- ملفات أخرى + زر OCR -->
       <div class="grid" style="margin-top:12px">
         <div>
-          <label>ملفات أخرى (مثلاً صور روشتة/مراسلات)</label>
+          <label>ملفات أخرى (مثلاً صور روشتة/إحالات)</label>
           <div class="file-drop" onclick="document.getElementById('otherInput').click()">اضغط لرفع ملفات (صور/PDF)</div>
           <input id="otherInput" type="file" accept="image/*,application/pdf" multiple style="display:none">
           <div id="otherThumbs" class="thumbs"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn btn-outline" id="ocrBtn">استخراج الأدوية من الصور</button>
+            <span class="hint">سيتم دمج الأدوية المستخرجة مع القائمة أعلاه.</span>
+          </div>
         </div>
       </div>
 
@@ -202,7 +216,7 @@
       <div id="note" class="notification info"></div>
     </div>
 
-    <!-- REPORT -->
+    <!-- Report -->
     <div id="report" class="card">
       <div id="reportContent"></div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
@@ -214,13 +228,11 @@
   </div>
 
 <script>
-/* ======== IMPORTANT: ضع رابط Vercel هنا ======== */
-const API_ENDPOINT = 'https://www.m2020m.org/api/pharmacy-rx';
-/* =============================================== */
-
+/* ===================== إعدادات عامة ===================== */
+const API_ENDPOINT = '/api/pharmacy-rx';
 const { jsPDF } = window.jspdf;
 
-/* I18N */
+/* ===================== I18N ===================== */
 const i18n = {
   ar:{hero:{title:'منصة الصيدلية الذكية',subtitle:'تجميع بيانات المريض، تحليل تفاعلات/جرعات، وتصدير تقرير PDF احترافي.',cta:'بدء تحليل جديد',viewLast:'عرض آخر تقرير'},
       sec:{patient:'١) بيانات المريض',organs:'٢) تقييم وظائف الأعضاء',allergy:'٣) الحساسية',symptoms:'٤) معلومات سريرية إضافية'},
@@ -229,7 +241,10 @@ const i18n = {
       liver:{normal:'سليم',mild:'قصور طفيف',moderate:'قصور متوسط',severe:'قصور حاد'},
       btn:{addAllergy:'+ إضافة حساسية أخرى',analyze:'تحليل وتصدير',print:'طباعة'},
       hint:{analyze:'سيتم توليد تقرير شامل قابل للطباعة وPDF.',security:'* لا يتم تخزين ملفاتك على الخادم؛ تستخدم فقط لتوليد التقرير محليًا.'},
-      report:{title:'ملخص تقييم المريض',patient:'بيانات المريض',allergies:'الحساسية',files:'المرفقات',analysis:'تحليل الأدوية'}},
+      report:{title:'ملخص تقييم المريض',patient:'بيانات المريض',allergies:'الحساسية',files:'المرفقات',analysis:'تحليل الأدوية'},
+      ocr:{start:'جاري استخراج الأدوية من الصور…',none:'لا توجد صور مناسبة للاستخراج.',done:'تم استخراج الأدوية ودمجها.',err:'فشل استخراج النص من بعض الصور.'},
+      ui:{needData:'الرجاء إدخال أدوية أو أعراض على الأقل.',reqFail:'فشل الطلب: ',pdfFail:'فشل إنشاء PDF.'}
+  },
   en:{hero:{title:'Smart Pharmacy Portal',subtitle:'Capture patient data, analyze interactions/doses, export a professional PDF.',cta:'Start New Analysis',viewLast:'View Last Report'},
       sec:{patient:'1) Patient Information',organs:'2) Organ Function',allergy:'3) Allergies',symptoms:'4) Additional Clinical Information'},
       f:{age:'Age',gender:'Gender',height:'Height (cm)',weight:'Weight (kg)',pregnant:'Is the patient pregnant?',gestation:'Gestation (weeks)',egfr:'eGFR',crea:'Creatinine (mg/dL)',liver:'Liver status',foodAllergy:'Any food allergies?',symptoms:'Clinical Symptoms',meds:'Medications list (one per line or comma-separated)',apap:'Total paracetamol per day (mg) – optional',uploadLab:'Upload Lab Results',uploadRad:'Upload Radiology Reports',dropHere:'Click to upload files (images/PDF)'},
@@ -237,23 +252,29 @@ const i18n = {
       liver:{normal:'Normal',mild:'Mild impairment',moderate:'Moderate impairment',severe:'Severe impairment'},
       btn:{addAllergy:'+ Add Another Allergy',analyze:'Analyze & Export',print:'Print'},
       hint:{analyze:'A comprehensive, printable PDF will be generated.',security:'* Your files are not stored on the server; they are used locally to build the report.'},
-      report:{title:'Patient Assessment Summary',patient:'Patient Details',allergies:'Allergies',files:'Attachments',analysis:'Rx Analysis'}}
+      report:{title:'Patient Assessment Summary',patient:'Patient Details',allergies:'Allergies',files:'Attachments',analysis:'Rx Analysis'},
+      ocr:{start:'Extracting meds from images…',none:'No suitable images to read.',done:'Extracted and merged into the list.',err:'OCR failed on some images.'},
+      ui:{needData:'Please provide medications or symptoms at least.',reqFail:'Request failed: ',pdfFail:'PDF failed.'}
+  }
 };
-let currentLang='ar';
+let currentLang = 'ar';
+function t(key){ return key.split('.').reduce((o,k)=>o&&o[k], i18n[currentLang]); }
 function setLanguage(lang){
-  currentLang=lang;
-  document.documentElement.lang=lang;
-  document.documentElement.dir=(lang==='ar'?'rtl':'ltr');
-  document.getElementById('langSwitcher').textContent=(lang==='ar'?'English':'العربية');
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.documentElement.dir  = (lang==='ar'?'rtl':'ltr');
+  document.getElementById('langSwitcher').textContent = (lang==='ar'?'English':'العربية');
   document.querySelectorAll('[data-i18n]').forEach(el=>{
-    const key=el.getAttribute('data-i18n'); el.textContent = key.split('.').reduce((o,k)=>o&&o[k], i18n[lang]);
+    const key=el.getAttribute('data-i18n');
+    el.textContent = t(key);
   });
 }
-function t(en,ar){return currentLang==='ar'?ar:en}
 
-/* UI refs */
+/* ===================== مراجع DOM ===================== */
 const startBtn=document.getElementById('startBtn');
 const scrollToReportBtn=document.getElementById('scrollToReport');
+const note=document.getElementById('note');
+const out=document.getElementById('reportContent');
 const genderEl=document.getElementById('gender');
 const pregWrap=document.getElementById('pregWrap');
 const pregnancyEl=document.getElementById('pregnancy');
@@ -262,63 +283,76 @@ const foodAllergyEl=document.getElementById('foodAllergy');
 const foodAllergyTxt=document.getElementById('foodAllergyTxt');
 const allergyList=document.getElementById('allergyList');
 const addAllergyBtn=document.getElementById('addAllergy');
+const ocrBtn=document.getElementById('ocrBtn');
 
-let labFiles=[]; let radFiles=[]; let otherFiles=[];
+function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36);}
+function showNote(type,text){ note.className='notification '+(type==='err'?'err':'info'); note.textContent=text; note.style.display='block'; }
+function clearNote(){ note.style.display='none'; note.textContent=''; }
+function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]))}
 
-function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
-
+/* ===================== تفاعل واجهة ===================== */
 startBtn.addEventListener('click',()=>document.getElementById('formCard').scrollIntoView({behavior:'smooth'}));
 scrollToReportBtn.addEventListener('click',()=>document.getElementById('report').scrollIntoView({behavior:'smooth'}));
 document.getElementById('langSwitcher').addEventListener('click',()=>setLanguage(currentLang==='ar'?'en':'ar'));
 
 genderEl.addEventListener('change',()=>{
-  pregWrap.style.display = (genderEl.value==='female')?'':'none';
-  if(genderEl.value!=='female'){ pregnancyEl && (pregnancyEl.value=''); gestWrap.style.display='none'; const g=document.getElementById('gestation'); if(g) g.value='';}
+  pregWrap.style.display = (genderEl.value==='female') ? '' : 'none';
+  if (genderEl.value!=='female'){ pregnancyEl.value=''; gestWrap.style.display='none'; document.getElementById('gestation').value=''; }
 });
 pregnancyEl?.addEventListener('change',()=>{
-  gestWrap.style.display = (pregnancyEl.value==='yes')?'':'none';
-  if(pregnancyEl.value!=='yes'){ const g=document.getElementById('gestation'); if(g) g.value='';}
+  gestWrap.style.display = (pregnancyEl.value==='yes') ? '' : 'none';
+  if (pregnancyEl.value!=='yes'){ document.getElementById('gestation').value=''; }
 });
 foodAllergyEl.addEventListener('change',()=>{
-  foodAllergyTxt.style.display=(foodAllergyEl.value==='yes')?'':'none';
-  if(foodAllergyEl.value!=='yes') foodAllergyTxt.value='';
+  foodAllergyTxt.style.display = (foodAllergyEl.value==='yes')? '' : 'none';
+  if (foodAllergyEl.value!=='yes') foodAllergyTxt.value='';
 });
+
 addAllergyBtn.addEventListener('click',()=>{
   const id=uid();
   const card=document.createElement('div');
-  card.className='card'; card.style.padding='12px';
+  card.className='card';
+  card.style.padding='12px';
   card.innerHTML=`
     <div class="grid">
       <div>
-        <label>${t('Allergy Type','نوع الحساسية')}</label>
+        <label>${currentLang==='ar'?'نوع الحساسية':'Allergy Type'}</label>
         <select data-id="${id}" class="allType">
-          <option value="drug">${t('Drug','دواء')}</option>
-          <option value="chemical">${t('Chemical','مادة كيميائية')}</option>
-          <option value="dust">${t('Dust','غبار')}</option>
-          <option value="other">${t('Other','أخرى')}</option>
+          <option value="drug">${currentLang==='ar'?'دواء':'Drug'}</option>
+          <option value="chemical">${currentLang==='ar'?'مادة كيميائية':'Chemical'}</option>
+          <option value="dust">${currentLang==='ar'?'غبار':'Dust'}</option>
+          <option value="other">${currentLang==='ar'?'أخرى':'Other'}</option>
         </select>
       </div>
       <div>
-        <label>${t('Details','التفاصيل')}</label>
-        <input data-id="${id}" class="allDetail" placeholder="${t('e.g., Penicillin, Latex','مثال: بنسلين، لاتكس')}">
+        <label>${currentLang==='ar'?'التفاصيل':'Details'}</label>
+        <input data-id="${id}" class="allDetail" placeholder="${currentLang==='ar'?'مثال: بنسلين، لاتكس':'e.g., Penicillin, Latex'}">
       </div>
     </div>
-    <div class="row" style="margin-top:8px"><button class="btn btn-outline" data-remove="${id}">✕ ${t('Remove','حذف')}</button></div>`;
+    <div class="row" style="margin-top:8px"><button class="btn btn-outline" data-remove="${id}">✕ ${currentLang==='ar'?'حذف':'Remove'}</button></div>
+  `;
   allergyList.appendChild(card);
 });
-allergyList.addEventListener('click',(e)=>{const id=e.target.getAttribute('data-remove'); if(id){ e.target.closest('.card').remove(); }});
+allergyList.addEventListener('click',(e)=>{
+  const id=e.target.getAttribute('data-remove');
+  if (id) e.target.closest('.card').remove();
+});
 
-/* Files binding */
-function bindFilePicker(inputId, gridId, store){
+/* ===================== مُلتقِطات الملفات ===================== */
+function bindFilePicker(inputId,gridId,store){
   const input=document.getElementById(inputId);
   const grid=document.getElementById(gridId);
   input.addEventListener('change',()=>{
-    for(const file of input.files){
-      const id=uid(); const reader=new FileReader();
+    for (const file of input.files){
+      const id=uid();
+      const reader=new FileReader();
       reader.onload=ev=>{
-        store.push({id,name:file.name,preview:ev.target.result});
-        const content=file.type.startsWith('image/')?`<img src="${ev.target.result}" style="width:100%;height:110px;object-fit:cover;border-radius:6px">`:`<div style="display:flex;align-items:center;justify-content:center;height:110px"><span class="pill">PDF</span></div>`;
-        const div=document.createElement('div'); div.className='thumb';
+        store.push({id,name:file.name,preview:ev.target.result,type:file.type});
+        const isImg = file.type.startsWith('image/');
+        const content=isImg?`<img src="${ev.target.result}" style="width:100%;height:110px;object-fit:cover;border-radius:6px">`
+                           :`<div style="display:flex;align-items:center;justify-content:center;height:110px"><span class="pill">PDF</span></div>`;
+        const div=document.createElement('div');
+        div.className='thumb';
         div.innerHTML=`<button class="x" data-x="${id}">×</button>${content}<div class="name">${file.name}</div>`;
         grid.appendChild(div);
       };
@@ -327,34 +361,81 @@ function bindFilePicker(inputId, gridId, store){
     input.value='';
   });
   grid.addEventListener('click',(e)=>{
-    const id=e.target.getAttribute('data-x'); if(!id) return;
-    const idx=store.findIndex(x=>x.id===id); if(idx>-1) store.splice(idx,1);
+    const id=e.target.getAttribute('data-x');
+    if (!id) return;
+    const idx=store.findIndex(x=>x.id===id);
+    if (idx>-1) store.splice(idx,1);
     e.target.closest('.thumb').remove();
   });
 }
+let labFiles=[], radFiles=[], otherFiles=[];
 bindFilePicker('labInput','labThumbs',labFiles);
 bindFilePicker('radInput','radThumbs',radFiles);
 bindFilePicker('otherInput','otherThumbs',otherFiles);
 
-/* Helpers */
-const note=document.getElementById('note');
-const out=document.getElementById('reportContent');
-function showNote(type,text){ note.className='notification '+(type==='err'?'err':'info'); note.textContent=text; note.style.display='block';}
-function clearNote(){ note.style.display='none'; note.textContent=''; }
-function escapeHtml(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+/* ===================== OCR: استخراج الأدوية من الصور ===================== */
+function parseMedsFromText(text){
+  // تنظيف وتقسيم
+  const lines = (text||'')
+    .replace(/\r/g,'\n')
+    .split('\n')
+    .map(s=>s.trim())
+    .filter(s=>s.length>2);
 
+  // فلترة بسيطة: سطر فيه حروف وأرقام/جرعات غالبًا دواء
+  const rx = /[A-Za-z][A-Za-z\- ]+(?:\d+(\.\d+)?\s?(?:mg|mcg|g|ml|IU|units|/)?|\bXR\b|\bSR\b|\bCR\b)?/i;
+
+  const meds = [];
+  for (const line of lines){
+    // أزل الرموز الشائعة
+    const clean = line.replace(/^[-•*]+/,'').replace(/\s{2,}/g,' ').trim();
+    if (rx.test(clean)) meds.push(clean);
+  }
+  return meds;
+}
+
+async function doOCR(){
+  // نجمع كل الصور من "ملفات أخرى" (تقدر توسع لتشمل lab/rad لو حبيت)
+  const imgs = otherFiles.filter(f=> (f.type||'').startsWith('image/'));
+  if (!imgs.length){ showNote('err', t('ocr.none')); return; }
+
+  showNote('info', t('ocr.start'));
+  const found = new Set();
+  try{
+    for (const f of imgs){
+      const result = await Tesseract.recognize(f.preview, 'eng', { logger:()=>{} });
+      const meds = parseMedsFromText(result.data.text);
+      meds.forEach(m=>found.add(m));
+    }
+  }catch(e){
+    console.error(e);
+    showNote('err', t('ocr.err'));
+  }
+
+  // دمج مع خانة الأدوية
+  const medsBox = document.getElementById('meds');
+  const existing = medsBox.value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
+  const merged = Array.from(new Set([...existing, ...found]));
+  medsBox.value = merged.join('\n');
+
+  if (found.size) showNote('info', t('ocr.done')); else showNote('err', t('ocr.none'));
+}
+ocrBtn.addEventListener('click', doOCR);
+
+/* ===================== بناء الحمولة ===================== */
 function gatherPayload(){
   const age=parseInt(document.getElementById('age').value,10);
   const height=parseFloat(document.getElementById('height').value);
   const weight=parseFloat(document.getElementById('weight').value);
   const gender=document.getElementById('gender').value||undefined;
-  const egfr=parseFloat(document.getElementById('egfr').value);
-  const creatinine=parseFloat(document.getElementById('creatinine').value);
+  const egfr=parseFloat(document.getElementById('egfr')?.value);
+  const creatinine=parseFloat(document.getElementById('creatinine')?.value);
   const liver=document.getElementById('liver').value;
   const preg=document.getElementById('pregnancy')?.value;
   const gest=parseInt(document.getElementById('gestation')?.value,10);
   const symptoms=document.getElementById('symptoms').value||'';
   const apap=parseInt(document.getElementById('apap').value,10);
+
   const medsLines=(document.getElementById('meds').value||'').split(/\n|,/).map(s=>s.trim()).filter(Boolean);
   const ocrList=medsLines.map(x=>({name:x,dose:''}));
 
@@ -362,10 +443,10 @@ function gatherPayload(){
   document.querySelectorAll('.allType').forEach(el=>{
     const id=el.getAttribute('data-id');
     const detail=document.querySelector(`.allDetail[data-id="${id}"]`)?.value||'';
-    if(el.value||detail){ extra.push({type:el.value, detail}); }
+    if (el.value||detail){ extra.push({type:el.value,detail}); }
   });
-  if(document.getElementById('foodAllergy').value==='yes' && document.getElementById('foodAllergyTxt').value.trim()){
-    extra.push({type:'food', detail:document.getElementById('foodAllergyTxt').value.trim()});
+  if (document.getElementById('foodAllergy').value==='yes' && document.getElementById('foodAllergyTxt').value.trim()){
+    extra.push({type:'food',detail:document.getElementById('foodAllergyTxt').value.trim()});
   }
 
   return {
@@ -377,35 +458,56 @@ function gatherPayload(){
       pregnancy:(preg==='yes')?{pregnant:true,weeks:Number.isFinite(gest)?gest:undefined}:(preg==='no'?{pregnant:false}:undefined),
       eGFR:Number.isFinite(egfr)?egfr:undefined,
       creatinine:Number.isFinite(creatinine)?creatinine:undefined,
-      liver, symptoms, allergies:extra,
+      liver,
+      symptoms,
+      allergies:extra,
       apapDailyMg:Number.isFinite(apap)?apap:undefined
     },
     ocrList,
     files:{
-      labs: labFiles.map(x=>({name:x.name})),
-      radiology: radFiles.map(x=>({name:x.name})),
-      others: otherFiles.map(x=>({name:x.name}))
+      labs:labFiles.map(x=>({name:x.name})),
+      radiology:radFiles.map(x=>({name:x.name})),
+      other:otherFiles.map(x=>({name:x.name}))
     }
   };
 }
 
-/* Render report */
+/* ===================== إخراج التقرير ===================== */
 function renderReport(data,payload){
-  const L=i18n[currentLang]; const p=payload.patient||{};
-  const items=data?.items||[]; const findings=data?.findings||[]; const refs=data?.references||{};
-  const badge=(lvl)=>{const m=String(lvl||'').toLowerCase();
+  const L=i18n[currentLang];
+  const p=payload.patient||{};
+  const items=data?.items||[];
+  const findings=data?.findings||[];
+  const refs=data?.references||{};
+  const badge=(lvl)=>{
+    const m=String(lvl||'').toLowerCase();
     const cls=m==='high'?'background:#fde8ea;color:#7a1f27':(m==='review'?'background:#fff3cd;color:#856404':'background:#e9f4ff;color:#114a86');
-    return `<span style="display:inline-block;padding:3px 8px;border-radius:999px;${cls};font-weight:800">${String(lvl||'').toUpperCase()}</span>`;};
+    return `<span style="display:inline-block;padding:3px 8px;border-radius:999px;${cls};font-weight:800">${String(lvl||'').toUpperCase()}</span>`;
+  };
   const findHtml=findings.length?findings.map(f=>{
     const links=(f.refs||[]).map(k=>refs[k]?`<a href="${refs[k].url}" target="_blank" rel="noopener">${refs[k].title}</a>`:'').filter(Boolean).join(' • ');
     return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0">
-      ${badge(f.level)}<div style="margin-top:6px"><b>${escapeHtml(f.summary||'')}</b></div>
-      <div style="color:#66768a;margin-top:4px">${escapeHtml(f.detail||'')}</div>${links?`<div style="margin-top:6px">${links}</div>`:''}</div>`;
-  }).join(''):`<div class="hint">${t('No critical findings.','لا توجد ملاحظات حرجة.')}</div>`;
-  const rows=items.map(x=>`<tr><td>${escapeHtml(x.original||'')}</td><td>${escapeHtml(x.mapped||'')}</td><td>${escapeHtml(x.class||'')}</td><td>${escapeHtml(x.indications||'')}</td><td>${escapeHtml(x.doseText||'')}</td><td>${escapeHtml(x.status||'')}</td></tr>`).join('');
+      ${badge(f.level)}
+      <div style="margin-top:6px"><b>${escapeHtml(f.summary||'')}</b></div>
+      <div style="color:#66768a;margin-top:4px">${escapeHtml(f.detail||'')}</div>
+      ${links?`<div style="margin-top:6px">${links}</div>`:''}
+    </div>`;
+  }).join(''):`<div class="hint">${currentLang==='ar'?'لا توجد ملاحظات حرجة.':'No critical findings.'}</div>`;
+
+  const rows=items.map(x=>`<tr>
+    <td>${escapeHtml(x.original||'')}</td>
+    <td>${escapeHtml(x.mapped||'')}</td>
+    <td>${escapeHtml(x.class||'')}</td>
+    <td>${escapeHtml(x.indications||'')}</td>
+    <td>${escapeHtml(x.doseText||'')}</td>
+    <td>${escapeHtml(x.status||'')}</td>
+  </tr>`).join('');
+
+  const allHtml=(p.allergies||[]).map(a=>`<span class="pill">${escapeHtml(a.type)} — ${escapeHtml(a.detail)}</span>`).join(' ');
   const labs=(payload.files?.labs||[]).map(f=>`<span class="pill">${escapeHtml(f.name)}</span>`).join(' ');
   const rads=(payload.files?.radiology||[]).map(f=>`<span class="pill">${escapeHtml(f.name)}</span>`).join(' ');
-  const others=(payload.files?.others||[]).map(f=>`<span class="pill">${escapeHtml(f.name)}</span>`).join(' ');
+  const others=(payload.files?.other||[]).map(f=>`<span class="pill">${escapeHtml(f.name)}</span>`).join(' ');
+
   const bmi=(p.height&&p.weight)?(p.weight/Math.pow(p.height/100,2)):null;
 
   return `
@@ -416,85 +518,92 @@ function renderReport(data,payload){
 
     <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.patient}</h3>
     <div class="grid">
-      <div><b>${t('Age','العمر')}:</b> ${p.age??'-'}</div>
-      <div><b>${t('Gender','الجنس')}:</b> ${p.sex||'-'}</div>
-      <div><b>${t('Height','الطول')}:</b> ${p.height??'-'} cm</div>
-      <div><b>${t('Weight','الوزن')}:</b> ${p.weight??'-'} kg</div>
+      <div><b>${currentLang==='ar'?'العمر':'Age'}:</b> ${p.age??'-'}</div>
+      <div><b>${currentLang==='ar'?'الجنس':'Gender'}:</b> ${p.sex||'-'}</div>
+      <div><b>${currentLang==='ar'?'الطول':'Height'}:</b> ${p.height??'-'} cm</div>
+      <div><b>${currentLang==='ar'?'الوزن':'Weight'}:</b> ${p.weight??'-'} kg</div>
       <div><b>eGFR:</b> ${p.eGFR??'-'}</div>
-      <div><b>${t('Creatinine','كرياتينين')}:</b> ${p.creatinine??'-'}</div>
-      <div><b>${t('Liver','الكبد')}:</b> ${p.liver||'-'}</div>
-      <div><b>${t('BMI','مؤشر كتلة الجسم')}:</b> ${bmi?bmi.toFixed(1):'-'}</div>
-      ${p.pregnancy?`<div><b>${t('Pregnancy','الحمل')}:</b> ${p.pregnancy.pregnant?t('Yes','نعم'):t('No','لا')} ${p.pregnancy.weeks? '('+p.pregnancy.weeks+' '+t('weeks','أسابيع')+')':''}</div>`:''}
+      <div><b>${currentLang==='ar'?'كرياتينين':'Creatinine'}:</b> ${p.creatinine??'-'}</div>
+      <div><b>${currentLang==='ar'?'الكبد':'Liver'}:</b> ${p.liver||'-'}</div>
+      <div><b>${currentLang==='ar'?'مؤشر كتلة الجسم':'BMI'}:</b> ${bmi?bmi.toFixed(1):'-'}</div>
+      ${p.pregnancy?`<div><b>${currentLang==='ar'?'الحمل':'Pregnancy'}:</b> ${p.pregnancy.pregnant?(currentLang==='ar'?'نعم':'Yes'):(currentLang==='ar'?'لا':'No')} ${p.pregnancy.weeks? '('+p.pregnancy.weeks+' '+(currentLang==='ar'?'أسابيع':'weeks')+')':''}</div>`:''}
     </div>
 
     <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.allergies}</h3>
-    <div>${(p.allergies||[]).map(a=>`<span class="pill">${escapeHtml(a.type)} — ${escapeHtml(a.detail)}</span>`).join(' ') || '<span class="hint">'+t('None reported','لا يوجد')+'</span>'}</div>
+    <div>${allHtml || '<span class="hint">'+(currentLang==='ar'?'لا يوجد':'None reported')+'</span>'}</div>
 
-    <h3 style="margin:12px 0 6px;color:#0b63c2">${t('Clinical Symptoms','الأعراض السريرية')}</h3>
+    <h3 style="margin:12px 0 6px;color:#0b63c2">${currentLang==='ar'?'الأعراض السريرية':'Clinical Symptoms'}</h3>
     <div style="white-space:pre-wrap;border:1px solid var(--border);border-radius:10px;padding:8px">${escapeHtml(p.symptoms||'')}</div>
 
     <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.files}</h3>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <div><b>${t('Labs','مختبر')}:</b> ${labs||'-'}</div>
-      <div><b>${t('Radiology','أشعة')}:</b> ${rads||'-'}</div>
-      <div><b>${t('Other files','ملفات أخرى')}:</b> ${others||'-'}</div>
+      <div><b>${currentLang==='ar'?'مختبر':'Labs'}:</b> ${labs||'-'}</div>
+      <div><b>${currentLang==='ar'?'أشعة':'Radiology'}:</b> ${rads||'-'}</div>
+      <div><b>${currentLang==='ar'?'أخرى':'Other'}:</b> ${others||'-'}</div>
     </div>
 
     <h3 style="margin:12px 0 6px;color:#0b63c2">${L.report.analysis}</h3>
     <table><thead><tr>
-      <th>${t('Original name','الاسم الأصلي')}</th>
-      <th>${t('Mapped/Ingredient','الاسم/التركيب')}</th>
-      <th>${t('Class','الفئة')}</th>
-      <th>${t('Indications','الدواعي')}</th>
-      <th>${t('Dose/Notes','الجرعة/الوصف')}</th>
-      <th>${t('Status','الحالة')}</th>
+      <th>${currentLang==='ar'?'الاسم الأصلي':'Original name'}</th>
+      <th>${currentLang==='ar'?'الاسم/التركيب':'Mapped/Ingredient'}</th>
+      <th>${currentLang==='ar'?'الفئة':'Class'}</th>
+      <th>${currentLang==='ar'?'الدواعي':'Indications'}</th>
+      <th>${currentLang==='ar'?'الجرعة/الوصف':'Dose/Notes'}</th>
+      <th>${currentLang==='ar'?'الحالة':'Status'}</th>
     </tr></thead><tbody>${rows}</tbody></table>
 
-    <h4 style="margin:12px 0 6px">${t('Findings','الملاحظات')}</h4>
+    <h4 style="margin:12px 0 6px">${currentLang==='ar'?'الملاحظات':'Findings'}</h4>
     ${findHtml}
   `;
 }
 
-/* Analyze & PDF */
+/* ===================== طلب التحليل ===================== */
 async function doAnalyze(){
-  const payload=gatherPayload();
-  if(!payload.ocrList.length && !payload.patient.symptoms){
-    showNote('err',t('Please provide medications or symptoms at least.','الرجاء إدخال أدوية أو أعراض على الأقل.'));
+  const payload = gatherPayload();
+  if (!payload.ocrList.length && !payload.patient.symptoms){
+    showNote('err', i18n[currentLang].ui.needData);
     return;
   }
-  showNote('info',t('Analyzing…','جاري التحليل…'));
+  showNote('info', currentLang==='ar'?'جاري التحليل…':'Analyzing…');
   try{
-    const res=await fetch(API_ENDPOINT,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ocrList:payload.ocrList, patient:payload.patient})
-    });
-    const text=await res.text();
-    let data; try{ data=JSON.parse(text);}catch{ throw new Error(`الخادم لم يُرجع JSON صحيح (status ${res.status}). تحقق من رابط API.`); }
-    if(!res.ok){ throw new Error(data?.message || `HTTP ${res.status}`); }
+    const res = await fetch(API_ENDPOINT,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ocrList: payload.ocrList, patient: payload.patient }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.message||res.statusText);
     clearNote();
-    const html=renderReport(data,payload);
+    const html = renderReport(data, payload);
     document.getElementById('report').style.display='block';
-    out.innerHTML=html;
+    out.innerHTML = html;
     document.getElementById('report').scrollIntoView({behavior:'smooth'});
     window.__lastReportLang=currentLang;
-  }catch(e){ console.error(e); showNote('err', t('Request failed: ','فشل الطلب: ')+e.message); }
+  }catch(e){
+    console.error(e);
+    showNote('err', i18n[currentLang].ui.reqFail + e.message);
+  }
 }
+
+/* ===================== PDF ===================== */
 async function downloadPDF(){
-  const el=document.getElementById('report'); if(!el || el.style.display==='none'){ showNote('err', t('No report to export.','لا يوجد تقرير للتصدير.')); return; }
-  showNote('info', t('Generating PDF…','جاري توليد PDF…'));
+  const el=document.getElementById('report');
+  if (!el || el.style.display==='none'){ showNote('err', currentLang==='ar'?'لا يوجد تقرير للتصدير.':'No report to export.'); return; }
+  showNote('info', currentLang==='ar'?'جاري توليد PDF…':'Generating PDF…');
   const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
   try{
-    const canvas=await html2canvas(document.getElementById('reportContent'),{ scale:2, useCORS:true, onclone:(doc2)=>{ doc2.documentElement.dir=(window.__lastReportLang==='ar'?'rtl':'ltr'); }});
-    const img=canvas.toDataURL('image/png'); const w=doc.internal.pageSize.getWidth()-20; const h=(canvas.height*w)/canvas.width;
-    let y=10,left=h; doc.addImage(img,'PNG',10,y,w,h); left-=doc.internal.pageSize.getHeight();
-    while(left>=0){ y=left - h + 10; doc.addPage(); doc.addImage(img,'PNG',10,y,w,h); left-=doc.internal.pageSize.getHeight(); }
-    doc.save('Patient-Assessment.pdf'); clearNote();
-  }catch(err){ console.error(err); showNote('err', t('PDF failed.','فشل إنشاء PDF.')); }
+    const canvas=await html2canvas(document.getElementById('reportContent'),{scale:2,useCORS:true,onclone:(doc2)=>{ doc2.documentElement.dir=(window.__lastReportLang==='ar'?'rtl':'ltr'); }});
+    const img=canvas.toDataURL('image/png');
+    const w=doc.internal.pageSize.getWidth()-20;
+    const h=(canvas.height*w)/canvas.width;
+    let y=10; let left=h;
+    doc.addImage(img,'PNG',10,y,w,h);
+    left-=doc.internal.pageSize.getHeight();
+    while(left>=0){ y=left-h+10; doc.addPage(); doc.addImage(img,'PNG',10,y,w,h); left-=doc.internal.pageSize.getHeight(); }
+    doc.save('Patient-Assessment.pdf');
+    clearNote();
+  }catch(err){ console.error(err); showNote('err', i18n[currentLang].ui.pdfFail); }
 }
+
+/* ===================== ربط الأزرار وبدء اللغة ===================== */
 document.getElementById('analyzeBtn').addEventListener('click',doAnalyze);
 document.getElementById('downloadPDF').addEventListener('click',downloadPDF);
-
-/* Init */
 setLanguage('ar');
 </script>
 </body>
