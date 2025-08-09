@@ -644,36 +644,92 @@ async function analyzeCase() {
 
   // **FINALIZED DATA COLLECTION**
   // This object now collects data from ALL relevant form fields to ensure deep analysis.
-  const caseData = {
-    // Patient Info
-    age: document.getElementById('age').value || null,
-    gender: document.getElementById('gender').value || null,
-    isPregnant: document.getElementById('pregnancy-status').value === 'yes',
-    pregnancyMonth: document.getElementById('pregnancy-month').value || null,
-    
-    // Lifestyle & Symptoms
-    isSmoker: document.getElementById('smoker').value === 'yes',
-    packYears: document.getElementById('pack-years-result').textContent,
-    coughDurationWeeks: document.getElementById('cough-duration').value || null,
-    visualSymptoms: document.getElementById('visual-symptoms').value || null,
-    lastEyeExamDate: document.getElementById('last-eye-exam').value || null,
-    visualAcuity: document.getElementById('visual-acuity').value || '',
+async function analyzeCase() {
+  const responseContainer = document.getElementById('response-container');
+  const btn = document.getElementById('analyzeBtn');
+  const exportContainer = document.getElementById('export-container');
 
-    // Medical Details
-    notes: document.getElementById('case-description').value || '',
-    diagnosis: document.getElementById('diagnosis').value || '',
-    labResults: document.getElementById('lab-results').value || '',
-    medications: document.getElementById('medications-procedures').value || '',
-    
-    // Files
-    files: uploadedFiles.map(f => ({ name: f.file.name, type: f.file.type, data: f.base64 }))
+  clearNote();
+  responseContainer.style.display = 'none';
+  responseContainer.innerHTML = '';
+  exportContainer.classList.add('hidden');
+
+  // 1) نجمع بيانات المريض من نفس النموذج الحالي
+  const ageVal = parseInt(document.getElementById('age').value, 10);
+  const genderVal = document.getElementById('gender').value || null;
+  const notes = document.getElementById('case-description').value || '';
+  const diagnosis = document.getElementById('diagnosis').value || '';
+  const labResults = document.getElementById('lab-results').value || '';
+  const medsText = document.getElementById('medications-procedures').value || '';
+
+  // 2) نحاول نلقط eGFR من خانة التحاليل إن لقيّناه (اختياري)
+  // أمثلة مقبولة: eGFR 40 / eGFR: 38 / eGFR=62
+  let eGFR = undefined;
+  const egfrMatch = labResults.match(/egfr\s*[:=]?\s*(\d+(\.\d+)?)/i);
+  if (egfrMatch) eGFR = parseFloat(egfrMatch[1]);
+
+  // 3) نبني ocrList من خانة الأدوية (نفصل بأسطر أو فواصل)
+  // مثال: "Amlodipine 10, Duodart 0.5/0.4" أو كل واحد بسطر
+  const ocrList = medsText
+    .split(/\n|,/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(line => {
+      // نخلي الاسم كله كـ name، والجرعة نتركها فاضية (المحلّل يعرف يتصرف)
+      return { name: line, dose: "" };
+    });
+
+  // 4) نبني كائن patient حسب اللي متوفر
+  const patient = {
+    age: Number.isFinite(ageVal) ? ageVal : undefined,
+    sex: genderVal === 'male' ? 'M' : (genderVal === 'female' ? 'F' : undefined),
+    eGFR,             // قد يكون undefined لو مالقيناه
+    // إعدادات اختيارية: لو ودّك تضيفها لاحقًا في النموذج، أتركها undefined الآن
+    ppiDurationDays: undefined,
+    apapDailyMg: undefined,
+    gout: undefined,
+    uricAcid: undefined
   };
 
-  const hasTextualInput = caseData.notes || caseData.diagnosis || caseData.labResults || caseData.medications;
-  if (!hasTextualInput && caseData.files.length === 0) {
+  // تأكيد وجود بيانات
+  if (ocrList.length === 0 && !notes && !diagnosis && !labResults) {
     showNote('error', getTranslation('validation.error_formIncomplete'));
     return;
   }
+
+  showNote('info', getTranslation('validation.info_analyzing'));
+  btn.disabled = true;
+
+  try {
+    // 5) نطلب من /api/DranalyzeRx التحليل الدوائي
+    const res = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ ocrList, patient })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(()=> ({}));
+      throw new Error(`${res.status}: ${err?.message || res.statusText}`);
+    }
+
+    const data = await res.json();
+
+    // 6) نرسم النتيجة داخل نفس الصندوق response-container
+    const html = buildRxAnalysisHTML(data);
+    responseContainer.innerHTML = html;
+    responseContainer.style.display = 'block';
+    exportContainer.classList.remove('hidden');
+    clearNote();
+    responseContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (e) {
+    console.error(e);
+    showNote('error', getTranslation('validation.error_requestFailed') + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
   showNote('info', getTranslation('validation.info_analyzing'));
   btn.disabled = true;
