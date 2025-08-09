@@ -1,161 +1,179 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>بوابة الطبيب — تقييم الحالة الطبية</title>
-<style>
-  :root{
-    --primary:#0b63c2; --primary-dark:#084e97; --accent:#00a7c7;
-    --danger:#dc3545; --muted:#66768a; --text:#243143; --border:#e2e8f0;
-    --card:#fff; --bg1:#e9f3ff; --bg2:#f6fbff; --shadow:0 10px 25px rgba(15,57,105,.08);
-    --radius:16px; --home-offset-b: 16px; --home-offset-i: 16px; --ta-min:220px;
-    --container:1080px;
-    /* Focus Visible per WCAG 2.2 */
-    --focus-ring: 0 0 0 3px rgba(11,99,194,.28);
-    --focus-outline: 3px solid #0b63c2;
-  }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>بوابة الطبيب — تقييم الحالة الطبية</title>
+  <style>
+    :root{
+      --primary:#0b63c2; --primary-dark:#084e97; --accent:#00a7c7;
+      --danger:#dc3545; --muted:#66768a; --text:#243143; --border:#e2e8f0;
+      --card:#fff; --bg1:#e9f3ff; --bg2:#f6fbff; --shadow:0 10px 25px rgba(15,57,105,.08);
+      --radius:16px;
+      --focus-outline: 3px solid #0b63c2;
+      --focus-ring: 0 0 0 3px rgba(11,99,194,.28);
+    }
+    html,body{height:100%}
+    body{
+      margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color:var(--text);
+      background: radial-gradient(1200px 800px at 80% 0%, var(--bg1), var(--bg2));
+      padding: 2rem .75rem;
+    }
+    .container{
+      max-inline-size:1080px; margin-inline:auto; background:var(--card);
+      border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
+      position:relative; overflow:hidden;
+    }
+    .top-ribbon{ position:absolute; inset-block-start:0; inset-inline:0; height:6px; background:linear-gradient(90deg,var(--primary),var(--accent)); }
+    .shell{ padding: 28px 26px 30px; }
 
-  html,body{height:100%}
-  body{
-    margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    color:var(--text);
-    background: radial-gradient(1200px 800px at 80% 0%, var(--bg1), var(--bg2));
-    padding: 2rem .75rem;
-  }
-  .container{
-    max-width: var(--container); margin-inline:auto; background:var(--card);
-    border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
-    position:relative; overflow:hidden;
-  }
-  .shell{ padding: 28px 26px 30px; }
-  .top-ribbon{ position:absolute; inset-block-start:0; inset-inline:0; height:6px; background:linear-gradient(90deg,var(--primary),var(--accent)); }
+    /* Header */
+    .header{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-block:6px 8px; }
+    .title-wrap{ display:flex; align-items:center; gap:12px; min-block-size:52px; }
+    .title{ margin:0; font-weight:800; color:var(--primary); letter-spacing:.2px; font-size:1.35rem; }
+    .subtext{ color:var(--muted); margin-block-start:2px; font-size:.92rem; }
 
-  /* Header row: no overlap with home */
-  .header{
-    display:flex; align-items:center; justify-content:space-between; gap:16px; margin-block:6px 8px;
-  }
-  .title-wrap{ display:flex; align-items:center; gap:12px; min-height:52px; }
-  .title{ margin:0; font-weight:800; color:var(--primary); letter-spacing:.2px; font-size:1.35rem; }
-  .subtext{ color:var(--muted); margin-block-start:2px; font-size:.92rem; }
+    /* Home icon + tooltip (accessible) */
+    .home-icon{
+      inline-size:52px; block-size:52px; border-radius:14px;
+      background:linear-gradient(135deg,#0b63c2,#00a7c7); color:#fff; font-size:24px;
+      display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;
+      box-shadow:0 6px 18px rgba(11,99,194,.22);
+    }
+    .home-icon:hover{ filter:brightness(.98); transform:translateY(-1px); }
+    .home-icon:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
 
-  /* Home icon aligned with title using logical insets */
-  .home-icon{
-    inline-size:52px; block-size:52px; border-radius:14px;
-    background:linear-gradient(135deg,#0b63c2,#00a7c7); color:#fff; font-size:24px;
-    display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;
-    box-shadow:0 6px 18px rgba(11,99,194,.22);
-    margin-inline-start:0;
-  }
-  .home-icon:hover{ filter:brightness(.98); transform:translateY(-1px); }
-  .home-icon:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    .tooltip{
+      position:absolute; z-index:10; background:#111827; color:#fff; padding:.35rem .55rem; border-radius:8px; font-size:.85rem;
+      opacity:0; pointer-events:none; transition:opacity .15s ease;
+      inset-block-start:calc(6px + 52px); inset-inline-start:16px;
+    }
+    .tooltip[data-show="true"]{ opacity:1; }
+    .tooltip:focus-visible{ outline: var(--focus-outline); }
 
-  /* Accessible tooltip */
-  .tooltip{ position:absolute; z-index:10; background:#111827; color:#fff; padding:.35rem .55rem; border-radius:8px; font-size:.85rem; opacity:0; pointer-events:none; transition:opacity .15s ease; inset-block-start:calc(6px + 52px); inset-inline-start:var(--home-offset-i); }
-  .tooltip[data-show="true"]{ opacity:1; }
-  .tooltip:focus-visible{ outline: var(--focus-outline); }
+    /* Bars */
+    .langbar, .exportbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .langbar{ margin-block:6px 10px; }
+    .divider{ block-size:1px; background:#e6eef8; margin-block:8px; inline-size:100%; }
 
-  /* Bars */
-  .langbar, .exportbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .langbar{ margin-block:6px 10px; }
-  .divider{ block-size:1px; background:#e6eef8; margin-block:8px; inline-size:100%; }
+    /* Language Segmented */
+    .seg{ display:inline-flex; background:#f3f7fb; border:1px solid var(--border); border-radius:999px; padding:4px; }
+    .seg button{ border:none; background:transparent; padding:.45rem .9rem; border-radius:999px; cursor:pointer; font-weight:700; color:#3b5168; }
+    .seg button.active{ background:#fff; border:1px solid var(--border); color:var(--primary); }
+    .seg button:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
 
-  .seg{
-    display:inline-flex; background:#f3f7fb; border:1px solid var(--border); border-radius:999px; padding:4px;
-  }
-  .seg button{ border:none; background:transparent; padding:.45rem .9rem; border-radius:999px; cursor:pointer; font-weight:700; color:#3b5168; }
-  .seg button.active{ background:#fff; border:1px solid var(--border); color:var(--primary); }
-  .seg button:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    /* Export toolbar */
+    .exportbar{ justify-content:flex-end; }
+    .menu{ position:relative; }
+    .menu-btn{
+      background:var(--primary); color:#fff; border:none; border-radius:10px; padding:.55rem .9rem; font-weight:700; cursor:pointer;
+      min-block-size:44px;
+    }
+    .menu-btn:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    .menu-list{
+      position:absolute; inset-block-start:calc(100% + 6px); inset-inline-end:0; background:#fff;
+      border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.08);
+      min-inline-size:240px; padding:.35rem; display:none;
+    }
+    .menu-list[aria-hidden="false"]{ display:block; }
+    .menuitem{ display:flex; align-items:center; gap:8px; inline-size:100%; border:none; background:transparent;
+      padding:.6rem .7rem; border-radius:8px; text-align:start; cursor:pointer; }
+    .menuitem:hover{ background:#f5f9ff; }
+    .menuitem:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
 
-  /* Export toolbar */
-  .exportbar{ justify-content:flex-end; }
-  .toolbar{ display:flex; gap:8px; align-items:center; }
-  .toolbar[role="toolbar"] button{ border:none; border-radius:10px; padding:.55rem .9rem; font-weight:700; font-size:.95rem; cursor:pointer; }
-  .btn-primary{ background:var(--primary); color:#fff; }
-  .btn-primary:hover{ background:var(--primary-dark); }
-  .btn-primary:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    /* Cards & inputs */
+    .card{ border:1px solid var(--border); border-radius:14px; background:#fff; box-shadow:0 6px 14px rgba(0,0,0,.03); padding:16px; margin-block:14px; }
+    .section-title{ font-size:1.02rem; font-weight:800; color:#243143; display:flex; align-items:center; gap:.5rem; margin-block-end:12px; border-bottom:2px solid #dbe8f5; padding-block-end:.5rem; }
+    .dot{ inline-size:8px; block-size:8px; border-radius:50%; background:var(--accent); display:inline-block; }
+    label{ font-weight:700; display:block; margin:.65rem 0 .35rem; }
+    .hint{ font-size:.86rem; color:#8496ab; margin-block-start:.15rem; }
+    input, select, textarea{
+      inline-size:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:10px; padding:.72rem .9rem; background:#fff; font-size:1rem;
+      transition:border-color .2s, box-shadow .2s, background .2s;
+    }
+    input::placeholder, textarea::placeholder{ color:#9aa8b8; }
+    input:focus-visible, select:focus-visible, textarea:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    textarea{ min-block-size:120px; resize:vertical; }
+    .grid{ display:grid; gap:14px; }
+    .grid-2{ grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .grid-3{ grid-template-columns: repeat(3,minmax(0,1fr)); }
+    .tall{ min-block-size:220px; }
+    .span-2{ grid-column: 1 / -1; }
 
-  /* Export menu */
-  .menu{ position:relative; }
-  .menu-btn{ background:var(--primary); color:#fff; border:none; border-radius:10px; padding:.55rem .9rem; font-weight:700; }
-  .menu-btn:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
-  .menu-list{
-    position:absolute; inset-block-start:calc(100% + 6px); inset-inline-end:0;
-    background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.08);
-    min-inline-size:240px; padding:.35rem; display:none;
-  }
-  .menu-list[aria-hidden="false"]{ display:block; }
-  .menuitem{ display:flex; align-items:center; gap:8px; inline-size:100%; border:none; background:transparent; padding:.6rem .7rem; border-radius:8px; text-align:start; cursor:pointer; }
-  .menuitem:hover{ background:#f5f9ff; }
-  .menuitem:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    /* Uploads */
+    .drop{ border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; color:#6c7f95; transition:border-color .25s, background .25s; cursor:pointer; }
+    .drop:hover{ border-color:var(--primary); background:#f6fbff; }
+    #file-input{ display:none; }
+    .file-list{ display:grid; gap:10px; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); margin-block-start:10px; }
+    .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; min-block-size:140px; display:flex; align-items:center; justify-content:center; }
+    .thumb img{ max-inline-size:100%; max-block-size:200px; display:block; }
+    .thumb .badge{ position:absolute; inset-block-start:8px; inset-inline-start:8px; background:#eef5ff; color:#1e3a8a; border:1px solid #cfe6ff; font-size:.78rem; padding:.12rem .45rem; border-radius:999px; }
+    .thumb .remove{ position:absolute; inset-block-start:8px; inset-inline-end:8px; inline-size:30px; block-size:30px; border:none; border-radius:50%; background:var(--danger); color:#fff; font-size:18px; cursor:pointer; box-shadow:0 4px 10px rgba(220,53,69,.25); }
+    .thumb .remove:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    .thumb .meta{ position:absolute; inset-block-end:8px; inset-inline-start:8px; color:#4b5563; background:#ffffffd0; border-radius:6px; padding:.15rem .4rem; font-size:.78rem; }
 
-  /* Cards/fields */
-  .card{ border:1px solid var(--border); border-radius:14px; background:#fff; box-shadow:0 6px 14px rgba(0,0,0,.03); padding:16px; margin-block:14px; }
-  .section-title{ font-size:1.02rem; font-weight:800; color:#243143; display:flex; align-items:center; gap:.5rem; margin-block-end:12px; border-bottom:2px solid #dbe8f5; padding-block-end:.5rem; }
-  .dot{ inline-size:8px; block-size:8px; border-radius:50%; background:var(--accent); display:inline-block; }
+    /* Actions + big Analyze button */
+    .actions{ display:flex; gap:12px; justify-content:center; align-items:center; margin-block-start:14px; flex-wrap:wrap; }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:.6rem; border:none; border-radius:12px; color:#fff; cursor:pointer;
+      padding:.7rem 1.1rem; font-weight:800; font-size:1rem; min-inline-size: 9.5rem; min-block-size: 48px;
+      box-shadow: 0 6px 14px rgba(0,0,0,.08); transition: transform .06s ease, filter .2s ease, background .25s ease;
+    }
+    .btn-lg{ font-size:1.06rem; padding:.9rem 1.25rem; min-inline-size:11rem; }
+    .btn:active{ transform: translateY(1px); }
+    .btn:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
+    .btn-primary{ background: var(--primary); }
+    .btn-primary:hover{ background: var(--primary-dark); }
+    .btn-danger{ background: var(--danger); }
+    .btn-danger:hover{ filter: brightness(.95); }
 
-  label{ font-weight:700; display:block; margin:.65rem 0 .35rem; }
-  .hint{ font-size:.86rem; color:#8496ab; margin-block-start:.15rem; }
+    .notification{ margin-block-start:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600; }
+    .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
+    .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
 
-  input, select, textarea{
-    inline-size:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:10px; padding:.72rem .9rem; background:#fff; font-size:1rem;
-    transition:border-color .2s, box-shadow .2s, background .2s;
-  }
-  input::placeholder, textarea::placeholder{ color:#9aa8b8; }
-  input:focus-visible, select:focus-visible, textarea:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
-  textarea{ min-block-size:120px; resize:vertical; }
-  .grid{ display:grid; gap:14px; }
-  .grid-2{ grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .grid-3{ grid-template-columns: repeat(3,minmax(0,1fr)); }
-  .tall{ min-block-size: var(--ta-min); }
-  .span-2{ grid-column: 1 / -1; }
+    /* Report container (we style only the shell, not the HTML the model outputs) */
+    #response-container{ margin-block-start:16px; border:1px solid var(--border); border-radius:14px; background:#fff; display:none; box-shadow: var(--shadow); overflow:hidden;}
+    #response-container .report-wrap{ overflow:auto; }
+    #response-container table{ border-collapse:separate; border-spacing:0; inline-size:100%; table-layout:fixed; font-size:.98rem; direction:inherit; }
+    #response-container thead th{
+      position:sticky; inset-block-start:0; background:#f6fbff; color:#0b3766; z-index:1; font-weight:800; text-align:start;
+      padding-block:.85rem; padding-inline:.9rem; border-block-end:2px solid #dbe8f5;
+    }
+    #response-container td{
+      padding-block:.7rem; padding-inline:.9rem; vertical-align:top; border-block-end:1px solid #eef2f7;
+      overflow-wrap:anywhere; white-space:break-spaces;
+    }
+    #response-container tbody tr:nth-child(odd){ background:#fafcff; }
+    #response-container td.risk-low   { background:#eaf8f0; color:#0f5132; font-weight:800; }
+    #response-container td.risk-medium{ background:#fff6db; color:#7a5b00; font-weight:800; }
+    #response-container td.risk-high  { background:#fde7ea; color:#842029; font-weight:800; }
+    #response-container h3, #response-container h4{ margin-block:1rem .4rem; margin-inline:1rem; }
+    #response-container p{ margin-inline:1rem; }
 
-  /* Uploads */
-  .drop{
-    border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; color:#6c7f95;
-    transition:border-color .25s, background .25s; cursor:pointer;
-  }
-  .drop:hover{ border-color:var(--primary); background:#f6fbff; }
-  #file-input{ display:none; }
-  .file-list{ display:grid; gap:10px; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); margin-block-start:10px; }
-  .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; min-block-size:140px; display:flex; align-items:center; justify-content:center; }
-  .thumb img{ max-inline-size:100%; max-block-size:200px; display:block; }
-  .thumb .badge{ position:absolute; inset-block-start:8px; inset-inline-start:8px; background:#eef5ff; color:#1e3a8a; border:1px solid #cfe6ff; font-size:.78rem; padding:.12rem .45rem; border-radius:999px; }
-  .thumb .remove{ position:absolute; inset-block-start:8px; inset-inline-end:8px; inline-size:30px; block-size:30px; border:none; border-radius:50%; background:var(--danger); color:#fff; font-size:18px; cursor:pointer; box-shadow:0 4px 10px rgba(220,53,69,.25); }
-  .thumb .remove:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
-  .thumb .meta{ position:absolute; inset-block-end:8px; inset-inline-start:8px; color:#4b5563; background:#ffffffd0; border-radius:6px; padding:.15rem .4rem; font-size:.78rem; }
+    /* Print: show only the report */
+    @media print{
+      body{ padding:0; background:#fff; }
+      .langbar, .exportbar, .actions, .notification, .drop, .file-list, .section-title, .header .home-icon { display:none !important; }
+      .container{ border:none; box-shadow:none; }
+      #response-container{ display:block !important; }
+    }
 
-  .actions{ display:flex; gap:10px; justify-content:center; align-items:center; margin-block-start:10px; flex-wrap:wrap; }
-  .notification{ margin-block-start:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600; }
-  .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
-  .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
-
-  #response-container{ margin-block-start:16px; padding:16px; border:1px solid var(--border); border-radius:12px; background:#fff; display:none; box-shadow: var(--shadow); }
-
-  /* Print: فقط التقرير */
-  @media print{
-    body{ padding:0; background:#fff; }
-    .langbar, .exportbar, .actions, .notification, .drop, .file-list, .section-title, .header .home-icon { display:none !important; }
-    .container{ border:none; box-shadow:none; }
-    #response-container{ display:block !important; }
-  }
-
-  /* Responsive breakpoints (MUI spirit): sm=600, md=900, lg=1200 */
-  @media (max-width: 900px){ .grid-3{ grid-template-columns: repeat(2,minmax(0,1fr)); } }
-  @media (max-width: 720px){
-    .grid-2, .grid-3{ grid-template-columns: 1fr; }
-    .toolbar{ inline-size:100%; justify-content:flex-end; }
-  }
-
-  .hidden{ display:none !important; }
-</style>
+    /* Responsive */
+    @media (max-width: 900px){ .grid-3{ grid-template-columns: repeat(2,minmax(0,1fr)); } }
+    @media (max-width: 720px){
+      .grid-2, .grid-3{ grid-template-columns: 1fr; }
+      .menu-btn{ inline-size:100%; }
+      .btn-lg{ inline-size:100%; }
+    }
+    .hidden{ display:none !important; }
+  </style>
 </head>
 <body>
   <div class="container">
     <div class="top-ribbon"></div>
-
     <div class="shell">
-      <!-- Header (no overlap with home) -->
+      <!-- Header -->
       <div class="header">
         <div class="title-wrap">
           <button id="homeBtn" class="home-icon" type="button" aria-label="الانتقال إلى الرئيسية" aria-describedby="homeTip">🏠</button>
@@ -166,7 +184,7 @@
           </div>
         </div>
 
-        <!-- Language bar -->
+        <!-- Language bar (AR/EN only, no Both) -->
         <div class="langbar" aria-label="Language Switcher">
           <div class="seg" role="tablist" aria-label="Language">
             <button id="lang-ar" class="active" type="button">العربية</button>
@@ -177,16 +195,14 @@
 
       <div class="divider" aria-hidden="true"></div>
 
-      <!-- Export bar (separate from language) -->
+      <!-- Export bar (PDF only) -->
       <div class="exportbar">
-        <div class="toolbar" role="toolbar" aria-label="Export">
-          <div class="menu">
-            <button id="exportBtn" class="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">PDF / طباعة</button>
-            <div id="exportMenu" class="menu-list" role="menu" aria-hidden="true">
-              <button class="menuitem" role="menuitem" data-mode="ar">Arabic PDF</button>
-              <button class="menuitem" role="menuitem" data-mode="en">English PDF</button>
-              <button class="menuitem" role="menuitem" data-mode="both">Bilingual PDF</button>
-            </div>
+        <div class="menu">
+          <button id="exportBtn" class="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">PDF / طباعة</button>
+          <div id="exportMenu" class="menu-list" role="menu" aria-hidden="true">
+            <button class="menuitem" role="menuitem" data-mode="ar">Arabic PDF</button>
+            <button class="menuitem" role="menuitem" data-mode="en">English PDF</button>
+            <button class="menuitem" role="menuitem" data-mode="both">Bilingual PDF</button>
           </div>
         </div>
       </div>
@@ -204,12 +220,10 @@
             </select>
             <div class="hint" data-i="pregHint">لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.</div>
           </div>
-
           <div>
             <label for="age" data-i="age">العمر</label>
             <input id="age" type="number" placeholder="63">
           </div>
-
           <div id="pregnancy-status-wrap" class="hidden">
             <label for="pregnancy-status" data-i="pregLbl">هل المريضة حامل؟</label>
             <select id="pregnancy-status">
@@ -218,27 +232,22 @@
               <option value="no" data-i="no">لا</option>
             </select>
           </div>
-
           <div id="pregnancy-month-wrap" class="hidden">
             <label for="pregnancy-month" data-i="pregMonth">شهر الحمل</label>
             <input id="pregnancy-month" type="number" min="1" max="9" placeholder="5">
           </div>
-
           <div>
             <label for="height" data-i="height">الطول (سم)</label>
             <input id="height" type="number" placeholder="175">
           </div>
-
           <div>
             <label for="weight" data-i="weight">الوزن (كجم)</label>
             <input id="weight" type="number" placeholder="80">
           </div>
-
           <div>
             <label for="temperature" data-i="temperature">درجة الحرارة (°م)</label>
             <input id="temperature" type="text" placeholder="37.6">
           </div>
-
           <div>
             <label for="blood-pressure" data-i="bp">ضغط الدم</label>
             <input id="blood-pressure" type="text" placeholder="120/80">
@@ -258,18 +267,15 @@
               <option value="no" data-i="no">لا</option>
             </select>
           </div>
-
           <div id="pack-years-wrap" class="hidden">
             <label for="pack-years" data-i="packYears">عدد الباك-سنة</label>
             <input id="pack-years" type="number" placeholder="35">
             <div class="hint" data-i="packHint">الباك-سنة = (عدد العلب يوميًا × سنوات التدخين)</div>
           </div>
-
           <div>
             <label for="cough-duration" data-i="cough">مدة السعال (أسابيع)</label>
             <input id="cough-duration" type="number" placeholder="12">
           </div>
-
           <div>
             <label for="visual-symptoms" data-i="vision">أعراض بصرية؟</label>
             <select id="visual-symptoms">
@@ -278,7 +284,6 @@
               <option value="no" data-i="no">لا</option>
             </select>
           </div>
-
           <div id="eye-wrap" class="hidden">
             <label for="last-eye-exam" data-i="fundus">تاريخ آخر فحص قاع عين</label>
             <input id="last-eye-exam" type="date">
@@ -324,8 +329,8 @@
 
       <!-- Actions -->
       <div class="actions">
-        <button id="analyzeBtn" class="btn-primary" type="button">تحليل الحالة</button>
-        <button id="logoutBtn" class="btn-primary" type="button" style="background:#dc3545">تسجيل الخروج</button>
+        <button id="analyzeBtn" class="btn btn-primary btn-lg" type="button">تحليل الحالة</button>
+        <button id="logoutBtn" class="btn btn-danger" type="button">تسجيل الخروج</button>
       </div>
 
       <div id="notification-area" class="notification info"></div>
@@ -348,11 +353,9 @@ const I18N = {
     details:'تفاصيل الحالة الطبية', caseDesc:'وصف الحالة', dx:'التشخيصات المبدئية', labs:'التحاليل/الأشعة المتوفرة', meds:'الأدوية/الإجراءات المكتوبة',
     uploads:'رفع ملفات (صورة/PDF)', drop:'اضغط أو اسحب صور (PNG/JPG) أو PDF', dropHint:'ننصح بملف أو اثنين واضحين — الصور تُضغط تلقائيًا',
     analyze:'تحليل الحالة', logout:'تسجيل الخروج',
-    pdfBtn:'PDF / طباعة',
-    pdfAr:'Arabic PDF', pdfEn:'English PDF', pdfBi:'Bilingual PDF',
+    pdfBtn:'PDF / طباعة', pdfAr:'Arabic PDF', pdfEn:'English PDF', pdfBi:'Bilingual PDF',
     tooltipHome:'الانتقال إلى الرئيسية',
-    needData:'أدخل تفاصيل الحالة أو أرفق ملفًا.',
-    analyzing:'جاري التحليل…'
+    needData:'أدخل تفاصيل الحالة أو أرفق ملفًا.', analyzing:'جاري التحليل…'
   },
   en: {
     title:'Medical Case Assessment', sub:'Clinical intake with insurance linkage',
@@ -366,29 +369,19 @@ const I18N = {
     details:'Medical Case Details', caseDesc:'Case Description', dx:'Initial Diagnoses', labs:'Labs / Imaging', meds:'Medications / Procedures',
     uploads:'Upload Files (Image/PDF)', drop:'Click or drop images (PNG/JPG) or PDF', dropHint:'Prefer 1–2 clear files — images are auto-compressed',
     analyze:'Analyze', logout:'Logout',
-    pdfBtn:'PDF / Print',
-    pdfAr:'Arabic PDF', pdfEn:'English PDF', pdfBi:'Bilingual PDF',
+    pdfBtn:'PDF / Print', pdfAr:'Arabic PDF', pdfEn:'English PDF', pdfBi:'Bilingual PDF',
     tooltipHome:'Go to Home',
-    needData:'Provide case details or attach a file.',
-    analyzing:'Analyzing…'
+    needData:'Provide case details or attach a file.', analyzing:'Analyzing…'
   }
 };
-
 let currentLang = (localStorage.getItem('uiLang') === 'en') ? 'en' : 'ar';
 applyLang(currentLang);
-
 document.getElementById('lang-ar').addEventListener('click', ()=> setLang('ar'));
 document.getElementById('lang-en').addEventListener('click', ()=> setLang('en'));
-
-function setLang(lang){
-  currentLang = lang;
-  localStorage.setItem('uiLang', lang);
-  applyLang(lang);
-}
+function setLang(lang){ currentLang=lang; localStorage.setItem('uiLang', lang); applyLang(lang); }
 function applyLang(lang){
   document.documentElement.lang = (lang==='en'?'en':'ar');
   document.documentElement.dir  = (lang==='en'?'ltr':'rtl');
-
   const t = I18N[lang];
   document.getElementById('app-title').textContent = t.title;
   document.getElementById('app-sub').textContent   = t.sub;
@@ -396,14 +389,7 @@ function applyLang(lang){
   document.getElementById('homeTip').textContent   = t.tooltipHome;
   document.getElementById('analyzeBtn').textContent = t.analyze;
   document.getElementById('logoutBtn').textContent  = t.logout;
-
-  // labels
-  document.querySelectorAll('[data-i]').forEach(el=>{
-    const key = el.getAttribute('data-i');
-    el.textContent = t[key] ?? el.textContent;
-  });
-
-  // mark active tab
+  document.querySelectorAll('[data-i]').forEach(el=>{ const key=el.getAttribute('data-i'); el.textContent = t[key] ?? el.textContent; });
   document.getElementById('lang-ar').classList.toggle('active', lang==='ar');
   document.getElementById('lang-en').classList.toggle('active', lang==='en');
 }
@@ -424,7 +410,6 @@ const genderEl = document.getElementById('gender');
 const pregStatWrap = document.getElementById('pregnancy-status-wrap');
 const pregMonthWrap = document.getElementById('pregnancy-month-wrap');
 const pregStatEl = document.getElementById('pregnancy-status');
-
 genderEl.addEventListener('change', () => {
   const isFemale = genderEl.value === 'female';
   pregStatWrap.classList.toggle('hidden', !isFemale);
@@ -435,14 +420,12 @@ pregStatEl.addEventListener('change', () => {
   pregMonthWrap.classList.toggle('hidden', !showMonth);
   if (!showMonth){ document.getElementById('pregnancy-month').value=""; }
 });
-
 const smokerEl = document.getElementById('smoker');
 const packYearsWrap = document.getElementById('pack-years-wrap');
 smokerEl.addEventListener('change', () => {
   packYearsWrap.classList.toggle('hidden', smokerEl.value !== 'yes');
   if (smokerEl.value !== 'yes') document.getElementById('pack-years').value="";
 });
-
 const visualEl = document.getElementById('visual-symptoms');
 const eyeWrap = document.getElementById('eye-wrap');
 visualEl.addEventListener('change', () => {
@@ -456,7 +439,6 @@ const fileListEl = document.getElementById('file-list');
 const noteArea = document.getElementById('notification-area');
 let filesState = []; // {id,name,type,base64,width,height,sizeKB,isImage}
 let nextId = 1;
-
 fileInput.addEventListener('change', async (e) => {
   if (!e.target.files?.length) return;
   await addFiles([...e.target.files]); fileInput.value="";
@@ -479,7 +461,7 @@ async function addFiles(files){
         const sizeKB = (base64.length * 3) / 4 / 1024;
         filesState.push({ id: nextId++, name:file.name, type:'application/pdf', base64, sizeKB, isImage:false });
       } else {
-        showNote('error', I18N[currentLang].drop + ' (Images/PDF only)');
+        showNote('error', (currentLang==='ar'?'الملفات المدعومة: صور/PDF':'Supported files: images/PDF only'));
       }
     }catch(err){
       console.error(err); showNote('error','تعذّر معالجة الملف / File could not be processed');
@@ -533,7 +515,7 @@ function buildPayload(uiLangOverride){
     visualSymptoms: val('visual-symptoms'), lastEyeExamDate: val('last-eye-exam'), visualAcuity: val('visual-acuity'),
     height: val('height'), weight: val('weight'), temperature: val('temperature'), bloodPressure: val('blood-pressure'),
     notes: val('case-description', true), diagnosis: val('diagnosis', true), labResults: val('lab-results', true), medications: val('medications-procedures', true),
-    files: filesState.map(f=>({name:f.name,type:f.type,base64:f.base64}))
+    files: filesState.map(f=>({name:f.name,type:f.type,base64:f.base64}))  // images + PDFs
   };
 }
 function val(id, allowEmpty=false){ const v=(document.getElementById(id)?.value||'').trim(); return (allowEmpty?v:(v||undefined)); }
@@ -544,6 +526,7 @@ async function analyzeCase(){
   const responseContainer = document.getElementById('response-container');
   const btn = document.getElementById('analyzeBtn');
   clearNote(); responseContainer.style.display='none'; responseContainer.innerHTML='';
+
   const payload = buildPayload();
   if (!payload.notes && !payload.diagnosis && !payload.labResults && !payload.medications && (!payload.files || !payload.files.length)){
     showNote('error', t.needData); return;
@@ -557,21 +540,22 @@ async function analyzeCase(){
     if (!res.ok){ throw new Error(`HTTP ${res.status}: ${text.slice(0,200)}…`); }
     const data = JSON.parse(text);
     if (data?.htmlReport){
-      clearNote(); responseContainer.innerHTML = data.htmlReport; responseContainer.style.display='block';
+      clearNote();
+      responseContainer.innerHTML = `<div class="report-wrap">${data.htmlReport}</div>`;
+      responseContainer.style.display = 'block';
       responseContainer.scrollIntoView({ behavior:'smooth', block:'start' });
     } else { throw new Error('No htmlReport'); }
   } catch(err){ console.error(err); showNote('error','Error: '+err.message);
   } finally { clearTimeout(timer); btn.disabled=false; }
 }
 
-/* ================== Export PDF menu (keyboard accessible) ================== */
+/* ================== Export PDF menu ================== */
 const exportBtn  = document.getElementById('exportBtn');
 const exportMenu = document.getElementById('exportMenu');
 exportBtn.addEventListener('click', toggleMenu);
 exportBtn.addEventListener('keydown', (e)=>{ if(e.key==='ArrowDown'){ openMenu(); focusFirst(); } });
 document.addEventListener('click', (e)=>{ if(!exportMenu.contains(e.target) && e.target!==exportBtn) closeMenu(); });
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); });
-
 [...exportMenu.querySelectorAll('.menuitem')].forEach((item, idx, arr)=>{
   item.addEventListener('click', ()=> exportPDF(item.dataset.mode));
   item.addEventListener('keydown', (e)=>{
@@ -595,32 +579,30 @@ async function exportPDF(mode){
   const originalLang = document.documentElement.lang;
 
   try{
-    // Build payload with requested language
     const payload = buildPayload(mode); // 'ar' | 'en' | 'both'
     const res = await fetch('/api/gpt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const data = await res.json();
     if (!res.ok || !data?.htmlReport) throw new Error('Export generation failed');
 
-    // Temporarily set doc dir/lang to requested print language (bilingual uses RTL for structure)
+    // Temporarily set doc dir/lang to requested print language (bilingual uses RTL by default)
     if (mode==='en'){ document.documentElement.dir='ltr'; document.documentElement.lang='en'; }
     else { document.documentElement.dir='rtl'; document.documentElement.lang='ar'; }
 
-    responseContainer.innerHTML = data.htmlReport;
+    responseContainer.innerHTML = `<div class="report-wrap">${data.htmlReport}</div>`;
     responseContainer.style.display = 'block';
 
     await new Promise(resolve=>{
       const handler = ()=>{ window.removeEventListener('afterprint', handler); resolve(); };
       window.addEventListener('afterprint', handler);
       window.print();
-      // safety timeout in case afterprint not fired
-      setTimeout(resolve, 2500);
+      setTimeout(resolve, 2500); // fallback
     });
 
   } catch (e){
     console.error(e);
     showNote('error', currentLang==='ar'?'فشل إنشاء PDF':'Failed to create PDF');
   } finally {
-    // Restore original UI language/dir and report
+    // Restore UI language and report
     responseContainer.innerHTML = originalHTML;
     if (originalHTML) responseContainer.style.display='block'; else responseContainer.style.display='none';
     document.documentElement.dir = originalDir;
@@ -629,7 +611,7 @@ async function exportPDF(mode){
   }
 }
 
-/* ================== Notes ================== */
+/* Notes */
 function showNote(type, text){
   const note = document.getElementById('notification-area');
   note.className = 'notification ' + (type === 'error' ? 'error' : 'info');
