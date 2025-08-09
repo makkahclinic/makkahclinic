@@ -2,303 +2,686 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>تقييم الحالة الطبية - بوابة الطبيب</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n="ui.appTitle">تقييم الحالة الطبية - بوابة الطبيب</title>
+
+  <!-- External Libraries for PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" xintegrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoVBL5r+e3fYHoY5dtV3bbA/SETeIQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" xintegrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <!-- Google Fonts for Arabic (Amiri) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+
   <style>
-    :root{
-      --primary:#0b63c2;         /* أزرق عيادي */
-      --primary-dark:#084e97;
-      --accent:#00a7c7;
-      --secondary:#6c757d;
-      --danger:#dc3545;
-      --bg-grad-1:#e9f3ff;       /* خلفية تدرّج */
-      --bg-grad-2:#f6fbff;
-      --card:#ffffff;
-      --text:#243143;
-      --muted:#66768a;
-      --border:#e2e8f0;
-      --focus:rgba(11,99,194,.18);
-      --shadow:0 10px 25px rgba(15, 57, 105, .08);
-      --radius:16px;
+    /* ============================================
+      SETUP & VARIABLES
+      ============================================
+    */
+    :root {
+      --primary: #0b63c2;
+      --primary-dark: #084e97;
+      --accent: #00a7c7;
+      --secondary: #6c757d;
+      --danger: #dc3545;
+      --bg-grad-1: #e9f3ff;
+      --bg-grad-2: #f6fbff;
+      --card: #ffffff;
+      --text: #243143;
+      --muted: #66768a;
+      --border: #e2e8f0;
+      --focus: rgba(11, 99, 194, .18);
+      --shadow: 0 10px 25px rgba(15, 57, 105, .08);
+      --radius: 16px;
     }
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      color:var(--text);
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: var(--text);
       background: radial-gradient(1200px 800px at 80% 0%, var(--bg-grad-1), var(--bg-grad-2));
       padding: 2rem 1rem;
+      line-height: 1.6;
     }
-    .container{
+    
+    /* Apply Amiri font for Arabic text */
+    [lang="ar"] body, [lang="ar"] h1, [lang="ar"] h2, [lang="ar"] button, [lang="ar"] label, [lang="ar"] input, [lang="ar"] select, [lang="ar"] textarea {
+        font-family: 'Amiri', serif;
+    }
+
+    /* ============================================
+      MAIN LAYOUT & RTL-SAFE STYLES
+      ============================================
+    */
+    .container {
       max-width: 980px;
       margin: 0 auto;
       background: var(--card);
-      border:1px solid var(--border);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       padding: 28px 26px 30px;
       position: relative;
       overflow: hidden;
     }
-    /* شريط علوي لطيف */
-    .top-ribbon{
-      position:absolute; inset:0 0 auto 0; height:6px;
+
+    .top-ribbon {
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 6px;
       background: linear-gradient(90deg, var(--primary), var(--accent));
     }
-    /* أيقونة الهوم (أكبر وواضحة) */
-    .home-icon{
-      position:absolute; top:14px; right:14px;
-      width:54px; height:54px; border-radius:50%;
-      background: var(--primary);
-      color:#fff; font-size:24px; display:flex; align-items:center; justify-content:center;
-      box-shadow: 0 6px 18px rgba(11, 99, 194, .22);
-      cursor:pointer; user-select:none;
-      transition: transform .12s ease, background .25s ease;
+
+    .header-controls {
+      position: absolute;
+      top: 14px;
+      inset-inline-end: 14px; /* LTR: right, RTL: left */
+      display: flex;
+      gap: 10px;
+      align-items: center;
     }
-    .home-icon:hover{ background:var(--primary-dark); transform: translateY(-1px); }
-    h2{
+
+    .home-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: #fff;
+        border: 1px solid var(--border);
+        color: var(--primary); /* SVG stroke color */
+        text-decoration: none;
+        transition: background-color .2s, color .2s;
+    }
+    .home-btn:hover {
+        background-color: var(--bg-grad-1);
+        color: var(--primary-dark);
+    }
+    .home-btn svg {
+        stroke: currentColor;
+    }
+
+    .lang-switcher {
+      font-size: 14px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background-color: #fff;
+      cursor: pointer;
+      transition: background-color .2s, box-shadow .2s;
+    }
+    .lang-switcher:hover {
+        background-color: #f6fbff;
+        border-color: var(--primary);
+    }
+
+    h2 {
       margin: 10px 0 24px;
-      font-weight:700;
-      letter-spacing:.2px;
-      color:var(--primary);
-      text-align:center;
+      font-weight: 700;
+      color: var(--primary);
+      text-align: center;
     }
-    .subtext{
-      text-align:center; color:var(--muted); margin-top:-10px; margin-bottom:22px; font-size:.95rem;
-    }
-    .section-title{
-      font-size:1.08rem; font-weight:700; color:var(--primary);
-      border-bottom:2px solid var(--primary);
-      display:flex; align-items:center; gap:.5rem;
-      padding-bottom:.5rem; margin: 26px 0 16px;
-    }
-    .section-title .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); display:inline-block; }
 
-    label{font-weight:600; display:block; margin:.8rem 0 .35rem;}
-    .hint{font-size:.86rem; color:var(--muted); margin-top:.15rem;}
-
-    input, select, textarea{
-      width:100%; box-sizing:border-box;
-      border:1px solid var(--border); border-radius:10px; padding:.75rem .9rem;
-      font-size:1rem; background:#fff;
-      transition:border-color .2s, box-shadow .2s, background .2s;
+    .subtext {
+      text-align: center;
+      color: var(--muted);
+      margin-top: -10px;
+      margin-bottom: 22px;
+      font-size: .95rem;
     }
-    input::placeholder, textarea::placeholder{ color:#9aa8b8; }
-    input:focus, select:focus, textarea:focus{
-      outline:none; border-color:var(--primary);
+
+    .section-title {
+      font-size: 1.08rem;
+      font-weight: 700;
+      color: var(--primary);
+      border-bottom: 2px solid var(--primary);
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding-bottom: .5rem;
+      margin: 26px 0 16px;
+    }
+
+    .section-title .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    label {
+      font-weight: 600;
+      display: block;
+      margin: .8rem 0 .35rem;
+    }
+
+    .hint {
+      font-size: .86rem;
+      color: var(--muted);
+      margin-top: .15rem;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .75rem .9rem;
+      font-size: 1rem;
+      background: #fff;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
       box-shadow: 0 0 0 3px var(--focus);
-      background:#fbfdff;
-    }
-    textarea{ min-height:120px; resize:vertical; }
-
-    .grid{
-      display:grid; gap:16px;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
 
-    /* زرّان أنحف وأنيق */
-    .btn{
-      display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
-      border:none; border-radius:10px; color:#fff; cursor:pointer;
-      padding:.6rem 1rem; font-weight:700; font-size:.98rem;
-      transition: transform .06s ease, filter .2s ease, background .25s ease;
-      box-shadow: 0 6px 14px rgba(0,0,0,.08);
-    }
-    .btn:active{ transform: translateY(1px); }
-    .btn-primary{ background: var(--primary); }
-    .btn-primary:hover{ background: var(--primary-dark); }
-    .btn-danger{ background: var(--danger); }
-    .btn-danger:hover{ filter: brightness(.95); }
-    .btn-compact{ padding:.5rem .9rem; font-size:.95rem; border-radius:9px; }
+    textarea { min-height: 120px; resize: vertical; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: none; border-radius: 10px; color: #fff; cursor: pointer; padding: .6rem 1rem; font-weight: 700; font-size: .98rem; transition: transform .06s ease, filter .2s ease, background .25s ease; box-shadow: 0 6px 14px rgba(0, 0, 0, .08); }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { background-color: var(--secondary); cursor: not-allowed; filter: brightness(1); }
+    .btn-primary { background: var(--primary); }
+    .btn-primary:not(:disabled):hover { background: var(--primary-dark); }
+    .actions { display: flex; gap: 10px; justify-content: center; align-items: center; margin-top: 20px; position: relative; }
+    .export-dropdown { display: none; position: absolute; bottom: 100%; margin-bottom: 10px; background-color: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); z-index: 10; min-width: 220px; padding: 5px; }
+    .export-dropdown.show { display: block; }
+    .export-option { display: block; width: 100%; padding: 10px 15px; text-align: start; border: none; background: none; cursor: pointer; font-size: 0.95rem; border-radius: 6px; }
+    .export-option:hover { background-color: var(--bg-grad-1); color: var(--primary); }
+    .muted-mini { font-size: .82rem; color: #92a3b6; text-align: center; margin-top: 10px; }
+    .notification { margin-top: 16px; padding: 12px 14px; border-radius: 10px; display: none; text-align: center; font-weight: 600; }
+    .notification.info { background: #e9f4ff; color: #114a86; border: 1px solid #cfe6ff; }
+    .notification.error { background: #fde8ea; color: #7a1f27; border: 1px solid #f5c6cb; }
+    #response-container { margin-top: 20px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: #fff; display: none; box-shadow: var(--shadow); }
+    #response-container h3 { color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+    #response-container .risk-high { color: #721c24; background: #f8d7da; padding: .18rem .5rem; border-radius: 6px; border: 1px solid #f5c6cb; font-weight: 700; display: inline-block; }
+    #response-container .risk-medium { color: #856404; background: #fff3cd; padding: .18rem .5rem; border-radius: 6px; border: 1px solid #ffeeba; font-weight: 700; display: inline-block; }
+    #response-container .risk-low { color: #155724; background: #d4edda; padding: .18rem .5rem; border-radius: 6px; border: 1px solid #c3e6cb; font-weight: 700; display: inline-block; }
+    .hidden { display: none !important; }
 
-    .actions{
-      display:flex; gap:10px; justify-content: center; align-items:center;
-      margin-top: 20px;
-    }
-
-    .image-upload{
-      border:2px dashed var(--border); border-radius:12px; padding:18px;
-      text-align:center; color:var(--muted);
+    /* ============================================
+      NEW STYLES FOR FILE UPLOAD & PACK-YEARS
+      ============================================
+    */
+    .file-upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+      color: var(--muted);
       transition: border-color .25s, background .25s;
-      cursor:pointer;
+      cursor: pointer;
     }
-    .image-upload:hover{ border-color:var(--primary); background: #f6fbff; }
-    #image-upload-input{ display:none; }
-    #image-preview{ max-width:100%; max-height:320px; display:none; border-radius:10px; border:1px solid var(--border); }
-    #image-meta{ font-size:.9rem; color:var(--muted); margin-top:8px; display:none; }
-
-    .note{
-      padding:12px 14px; border:1px dashed var(--border); border-radius:10px;
-      background:#fcfdff; color:var(--muted); font-size:.92rem; margin-top:8px;
+    .file-upload-area:hover {
+      border-color: var(--primary);
+      background: #f6fbff;
     }
+    #file-upload-input { display: none; }
 
-    .notification{
-      margin-top:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600;
+    #file-preview-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
     }
-    .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
-    .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
-
-    #response-container{
-      margin-top: 20px;
-      padding:16px; border:1px solid var(--border); border-radius:12px; background:#fff; display:none;
-      box-shadow: var(--shadow);
+    .file-preview-item {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fcfdff;
+        padding: 8px;
+        font-size: 0.85rem;
+        overflow: hidden;
     }
-
-    /* تلوين كروت القرار/المخاطر داخل التقرير */
-    #response-container .risk-high{ color:#721c24; background:#f8d7da; padding:.18rem .5rem; border-radius:6px; border:1px solid #f5c6cb; font-weight:700; }
-    #response-container .risk-medium{ color:#856404; background:#fff3cd; padding:.18rem .5rem; border-radius:6px; border:1px solid #ffeeba; font-weight:700; }
-    #response-container .risk-low{ color:#155724; background:#d4edda; padding:.18rem .5rem; border-radius:6px; border:1px solid #c3e6cb; font-weight:700; }
-
-    .muted-mini{ font-size:.82rem; color:#92a3b6; text-align:center; margin-top:10px; }
+    .file-preview-item .thumb {
+        width: 100%;
+        height: 100px;
+        border-radius: 6px;
+        background-color: #f0f4f8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 5px;
+    }
+    .file-preview-item .thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .file-preview-item .thumb svg { /* For PDF icon */
+        width: 40px;
+        height: 40px;
+        color: var(--danger);
+    }
+    .file-preview-item .file-name {
+        word-break: break-all;
+        color: var(--text);
+        text-align: center;
+    }
+    .file-remove-btn {
+        position: absolute;
+        top: 2px;
+        inset-inline-end: 2px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: none;
+        background-color: rgba(220, 53, 69, 0.8);
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        line-height: 1;
+        transition: background-color .2s;
+    }
+    .file-remove-btn:hover {
+        background-color: var(--danger);
+    }
+    
+    .pack-years-calc-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: end;
+    }
+    .pack-years-result-box {
+        background-color: var(--bg-grad-1);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        text-align: center;
+    }
+    .pack-years-result-box span {
+        font-weight: 700;
+        font-size: 1.2rem;
+        color: var(--primary);
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="top-ribbon"></div>
-    <div class="home-icon" title="الشاشة الرئيسية" onclick="goToHome()">🏠</div>
+    <div class="header-controls">
+        <a href="https://www.m2020m.org/portal.html" class="home-btn" data-i18n-title="ui.homeTooltip" title="الشاشة الرئيسية">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        </a>
+        <button id="lang-switcher" class="lang-switcher">English</button>
+    </div>
 
-    <h2>تقييم الحالة الطبية وطلبات التأمين</h2>
-    <div class="subtext">واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين</div>
+    <h2 data-i18n="ui.pageHeader">تقييم الحالة الطبية وطلبات التأمين</h2>
+    <div class="subtext" data-i18n="ui.subHeader">واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين</div>
 
-    <!-- معلومات المريض -->
-    <div class="section-title"><span class="dot"></span> 1) معلومات المريض</div>
+    <!-- Patient Information -->
+    <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section1Title">1) معلومات المريض</span></div>
     <div class="grid">
       <div>
-        <label for="gender">الجنس</label>
+        <label for="gender" data-i18n="ui.label_gender">الجنس</label>
         <select id="gender">
-          <option value="" selected disabled>اختر الجنس</option>
-          <option value="male">ذكر</option>
-          <option value="female">أنثى</option>
+          <option value="" selected disabled data-i18n="ui.option_gender_placeholder">اختر الجنس</option>
+          <option value="male" data-i18n="ui.option_gender_male">ذكر</option>
+          <option value="female" data-i18n="ui.option_gender_female">أنثى</option>
         </select>
-        <div class="hint">لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.</div>
+        <div class="hint" data-i18n="ui.hint_gender">لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.</div>
       </div>
-
       <div>
-        <label for="age">العمر</label>
-        <input id="age" type="number" placeholder="مثال: 63">
+        <label for="age" data-i18n="ui.label_age">العمر</label>
+        <input id="age" type="number" data-i18n-placeholder="ui.placeholder_age" placeholder="مثال: 63">
       </div>
-
       <div id="pregnancy-status-wrap" class="hidden">
-        <label for="pregnancy-status">هل المريضة حامل؟</label>
+        <label for="pregnancy-status" data-i18n="ui.label_pregnancy_status">هل المريضة حامل؟</label>
         <select id="pregnancy-status">
-          <option value="" selected disabled>اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
+          <option value="" selected disabled data-i18n="ui.option_pregnancy_placeholder">اختر</option>
+          <option value="yes" data-i18n="ui.option_yes">نعم</option>
+          <option value="no" data-i18n="ui.option_no">لا</option>
         </select>
       </div>
-
       <div id="pregnancy-month-wrap" class="hidden">
-        <label for="pregnancy-month">شهر الحمل</label>
-        <input id="pregnancy-month" type="number" min="1" max="9" placeholder="مثال: 5">
+        <label for="pregnancy-month" data-i18n="ui.label_pregnancy_month">شهر الحمل</label>
+        <input id="pregnancy-month" type="number" min="1" max="9" data-i18n-placeholder="ui.placeholder_pregnancy_month" placeholder="مثال: 5">
       </div>
-
       <div>
-        <label for="height">الطول (سم)</label>
-        <input id="height" type="number" placeholder="مثال: 175">
+        <label for="height" data-i18n="ui.label_height">الطول (سم)</label>
+        <input id="height" type="number" data-i18n-placeholder="ui.placeholder_height" placeholder="مثال: 175">
       </div>
-
       <div>
-        <label for="weight">الوزن (كجم)</label>
-        <input id="weight" type="number" placeholder="مثال: 80">
+        <label for="weight" data-i18n="ui.label_weight">الوزن (كجم)</label>
+        <input id="weight" type="number" data-i18n-placeholder="ui.placeholder_weight" placeholder="مثال: 80">
       </div>
-
       <div>
-        <label for="temperature">درجة الحرارة (°م)</label>
-        <input id="temperature" type="text" placeholder="مثال: 37.6">
+        <label for="temperature" data-i18n="ui.label_temperature">درجة الحرارة (°م)</label>
+        <input id="temperature" type="text" data-i18n-placeholder="ui.placeholder_temperature" placeholder="مثال: 37.6">
       </div>
-
       <div>
-        <label for="blood-pressure">ضغط الدم</label>
-        <input id="blood-pressure" type="text" placeholder="مثال: 120/80">
+        <label for="blood-pressure" data-i18n="ui.label_blood_pressure">ضغط الدم</label>
+        <input id="blood-pressure" type="text" data-i18n-placeholder="ui.placeholder_blood_pressure" placeholder="مثال: 120/80">
       </div>
     </div>
 
-    <!-- تنفس وتدخين وعيون -->
-    <div class="section-title"><span class="dot"></span> 2) نمط الحياة والأعراض</div>
+    <!-- Lifestyle and Symptoms -->
+    <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section2Title">2) نمط الحياة والأعراض</span></div>
     <div class="grid">
       <div>
-        <label for="smoker">هل المريض مدخّن؟</label>
+        <label for="smoker" data-i18n="ui.label_smoker">هل المريض مدخّن؟</label>
         <select id="smoker">
-          <option value="" selected disabled>اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
+          <option value="" selected disabled data-i18n="ui.option_pregnancy_placeholder">اختر</option>
+          <option value="yes" data-i18n="ui.option_yes">نعم</option>
+          <option value="no" data-i18n="ui.option_no">لا</option>
         </select>
       </div>
-
-      <div id="pack-years-wrap" class="hidden">
-        <label for="pack-years">عدد الباك-سنة</label>
-        <input id="pack-years" type="number" placeholder="مثال: 35">
-        <div class="hint">الباك-سنة = (عدد العلب يوميًا × عدد سنوات التدخين)</div>
-      </div>
-
       <div>
-        <label for="cough-duration">مدة السعال (أسابيع)</label>
-        <input id="cough-duration" type="number" placeholder="مثال: 12">
+        <label for="cough-duration" data-i18n="ui.label_cough_duration">مدة السعال (أسابيع)</label>
+        <input id="cough-duration" type="number" data-i18n-placeholder="ui.placeholder_cough_duration" placeholder="مثال: 12">
       </div>
-
       <div>
-        <label for="visual-symptoms">أعراض بصرية؟</label>
+        <label for="visual-symptoms" data-i18n="ui.label_visual_symptoms">أعراض بصرية؟</label>
         <select id="visual-symptoms">
-          <option value="" selected disabled>اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
+          <option value="" selected disabled data-i18n="ui.option_pregnancy_placeholder">اختر</option>
+          <option value="yes" data-i18n="ui.option_yes">نعم</option>
+          <option value="no" data-i18n="ui.option_no">لا</option>
         </select>
       </div>
-
       <div id="eye-wrap" class="hidden">
-        <label for="last-eye-exam">تاريخ آخر فحص قاع عين</label>
+        <label for="last-eye-exam" data-i18n="ui.label_last_eye_exam">تاريخ آخر فحص قاع عين</label>
         <input id="last-eye-exam" type="date">
-        <label for="visual-acuity">حدة البصر (اختياري)</label>
-        <input id="visual-acuity" type="text" placeholder="مثال: 6/12 أو 20/40">
+        <label for="visual-acuity" data-i18n="ui.label_visual_acuity">حدة البصر (اختياري)</label>
+        <input id="visual-acuity" type="text" data-i18n-placeholder="ui.placeholder_visual_acuity" placeholder="مثال: 6/12 أو 20/40">
       </div>
     </div>
+    
+    <!-- Pack-Years Calculator -->
+    <div id="pack-years-section" class="hidden" style="margin-top: 1rem;">
+        <div class="pack-years-calc-grid">
+            <div>
+                <label for="packs-per-day" data-i18n="ui.label_packs_per_day">عدد العلب يوميًا</label>
+                <input id="packs-per-day" type="number" min="0" step="0.5" data-i18n-placeholder="ui.placeholder_packs_per_day" placeholder="مثال: 1.5">
+            </div>
+            <div>
+                <label for="smoking-years" data-i18n="ui.label_smoking_years">عدد سنوات التدخين</label>
+                <input id="smoking-years" type="number" min="0" data-i18n-placeholder="ui.placeholder_smoking_years" placeholder="مثال: 20">
+            </div>
+        </div>
+        <div style="margin-top: 1rem;">
+            <label data-i18n="ui.label_pack_years_result">النتيجة (باك-سنة)</label>
+            <div class="pack-years-result-box">
+                <span id="pack-years-result">--</span>
+            </div>
+            <div class="hint" data-i18n="ui.hint_pack_years">الباك-سنة هو مقياس لتقدير كمية التدخين مدى الحياة.</div>
+        </div>
+    </div>
 
-    <!-- تفاصيل الحالة -->
-    <div class="section-title"><span class="dot"></span> 3) تفاصيل الحالة الطبية</div>
+
+    <!-- Medical Details -->
+    <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section3Title">3) تفاصيل الحالة الطبية</span></div>
     <div class="grid">
       <div>
-        <label for="case-description">وصف الحالة</label>
-        <textarea id="case-description" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط ودوخة متقطعة..."></textarea>
+        <label for="case-description" data-i18n="ui.label_case_description">وصف الحالة</label>
+        <textarea id="case-description" data-i18n-placeholder="ui.placeholder_case_description" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط ودوخة متقطعة..."></textarea>
       </div>
       <div>
-        <label for="diagnosis">التشخيصات المبدئية</label>
-        <textarea id="diagnosis" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea>
+        <label for="diagnosis" data-i18n="ui.label_diagnosis">التشخيصات المبدئية</label>
+        <textarea id="diagnosis" data-i18n-placeholder="ui.placeholder_diagnosis" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea>
       </div>
       <div>
-        <label for="lab-results">التحاليل/الأشعة المتوفرة</label>
-        <textarea id="lab-results" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6, INR غير متاح..."></textarea>
+        <label for="lab-results" data-i18n="ui.label_lab_results">التحاليل/الأشعة المتوفرة</label>
+        <textarea id="lab-results" data-i18n-placeholder="ui.placeholder_lab_results" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6, INR غير متاح..."></textarea>
       </div>
       <div>
-        <label for="medications-procedures">الأدوية/الإجراءات المكتوبة</label>
-        <textarea id="medications-procedures" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid, Ramipril 10 bid, Spironolactone 50 bid, Ibuprofen 400 tid, Warfarin + Aspirin + Clopidogrel + Rivaroxaban, Clarithromycin + Ciprofloxacin, Allopurinol 300 qd, CT contrast اليوم, قسطرة قلب عاجلة..."></textarea>
+        <label for="medications-procedures" data-i18n="ui.label_medications">الأدوية/الإجراءات المكتوبة</label>
+        <textarea id="medications-procedures" data-i18n-placeholder="ui.placeholder_medications" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid..."></textarea>
       </div>
     </div>
 
-    <!-- رفع الملفات -->
-    <div class="section-title"><span class="dot"></span> 4) رفع ملفات (وصفة/تقرير) — اختياري</div>
-    <div class="image-upload" onclick="document.getElementById('image-upload-input').click()">
-      اضغط هنا لرفع صورة (PNG/JPG)
-      <input id="image-upload-input" type="file" accept="image/*">
-      <div class="note">ننصح برفع صورة واحدة واضحة. سنضغطها تلقائيًا لتفادي أخطاء الحجم.</div>
+    <!-- File Upload -->
+    <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section4Title">4) رفع ملفات (صور/PDF) — اختياري</span></div>
+    <div class="file-upload-area" onclick="document.getElementById('file-upload-input').click()">
+      <span data-i18n="ui.upload_cta">اضغط هنا لرفع ملف واحد أو أكثر</span>
+      <input id="file-upload-input" type="file" accept="image/*,application/pdf" multiple>
     </div>
-    <div style="margin-top:10px;">
-      <img id="image-preview" alt="معاينة الصورة">
-      <div id="image-meta"></div>
-    </div>
+    <div id="file-preview-container"></div>
 
-    <!-- أزرار -->
+    <!-- Actions -->
     <div class="actions">
-      <button id="analyzeBtn" class="btn btn-primary btn-compact" onclick="analyzeCase()">تحليل الحالة</button>
-      <button class="btn btn-danger btn-compact" onclick="logout()">تسجيل الخروج</button>
+      <button id="analyzeBtn" class="btn btn-primary" onclick="analyzeCase()" data-i18n="ui.btn_analyze">تحليل الحالة</button>
+      <div id="export-container" class="hidden">
+        <button id="exportBtn" class="btn btn-primary" data-i18n="export.exportButtonLabel">تصدير التقرير</button>
+        <div id="export-dropdown" class="export-dropdown">
+            <button class="export-option" onclick="exportPDF('ar')" data-i18n="export.pdf_ar_only">PDF (عربي فقط)</button>
+            <button class="export-option" onclick="exportPDF('en')" data-i18n="export.pdf_en_only">PDF (إنجليزي فقط)</button>
+            <button class="export-option" onclick="exportPDF('bi')" data-i18n="export.pdf_bilingual">PDF (ثنائي اللغة)</button>
+        </div>
+      </div>
     </div>
-    <div class="muted-mini">بالضغط على "تحليل الحالة" سيتم إرسال المدخلات لتوليد تقرير HTML شامل للعيادة والتأمين.</div>
+    <div class="muted-mini" data-i18n="ui.hint_analyze">بالضغط على "تحليل الحالة" سيتم إرسال المدخلات لتوليد تقرير شامل.</div>
 
     <div id="notification-area" class="notification info"></div>
     <div id="response-container"></div>
   </div>
 
-  <script>
-    // منطق الحقول الشرطية
+<script>
+// =================================================================================
+// I18N - INTERNATIONALIZATION SYSTEM
+// =================================================================================
+const translations = {
+  ar: {
+    ui: {
+      appTitle: "تقييم الحالة الطبية - بوابة الطبيب",
+      pageHeader: "تقييم الحالة الطبية وطلبات التأمين",
+      subHeader: "واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين",
+      homeTooltip: "الشاشة الرئيسية",
+      section1Title: "1) معلومات المريض",
+      label_gender: "الجنس",
+      option_gender_placeholder: "اختر الجنس",
+      option_gender_male: "ذكر",
+      option_gender_female: "أنثى",
+      hint_gender: "لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.",
+      label_age: "العمر",
+      placeholder_age: "مثال: 63",
+      label_pregnancy_status: "هل المريضة حامل؟",
+      option_pregnancy_placeholder: "اختر",
+      option_yes: "نعم",
+      option_no: "لا",
+      label_pregnancy_month: "شهر الحمل",
+      placeholder_pregnancy_month: "مثال: 5",
+      label_height: "الطول (سم)",
+      placeholder_height: "مثال: 175",
+      label_weight: "الوزن (كجم)",
+      placeholder_weight: "مثال: 80",
+      label_temperature: "درجة الحرارة (°م)",
+      placeholder_temperature: "مثال: 37.6",
+      label_blood_pressure: "ضغط الدم",
+      placeholder_blood_pressure: "مثال: 120/80",
+      section2Title: "2) نمط الحياة والأعراض",
+      label_smoker: "هل المريض مدخّن؟",
+      label_packs_per_day: "عدد العلب يوميًا",
+      placeholder_packs_per_day: "مثال: 1.5",
+      label_smoking_years: "عدد سنوات التدخين",
+      placeholder_smoking_years: "مثال: 20",
+      label_pack_years_result: "النتيجة (باك-سنة)",
+      hint_pack_years: "الباك-سنة هو مقياس لتقدير كمية التدخين مدى الحياة. كلما زاد الرقم، زاد التأثير الصحي السلبي.",
+      label_cough_duration: "مدة السعال (أسابيع)",
+      placeholder_cough_duration: "مثال: 12",
+      label_visual_symptoms: "أعراض بصرية؟",
+      label_last_eye_exam: "تاريخ آخر فحص قاع عين",
+      label_visual_acuity: "حدة البصر (اختياري)",
+      placeholder_visual_acuity: "مثال: 6/12 أو 20/40",
+      section3Title: "3) تفاصيل الحالة الطبية",
+      label_case_description: "وصف الحالة",
+      placeholder_case_description: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...",
+      label_diagnosis: "التشخيصات المبدئية",
+      placeholder_diagnosis: "مثال: T2DM, HTN, COPD? Dermatitis",
+      label_lab_results: "التحاليل/الأشعة المتوفرة",
+      placeholder_lab_results: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6...",
+      label_medications: "الأدوية/الإجراءات المكتوبة",
+      placeholder_medications: "مثال: Xigduo XR bid, Metformin 1000 tid...",
+      section4Title: "4) رفع ملفات (صور/PDF) — اختياري",
+      upload_cta: "اضغط هنا لرفع ملف واحد أو أكثر",
+      btn_analyze: "تحليل الحالة",
+      hint_analyze: "بالضغط على 'تحليل الحالة' سيتم إرسال المدخلات لتوليد تقرير شامل.",
+      remove_file: "إزالة الملف"
+    },
+    validation: {
+      error_formIncomplete: "الرجاء إدخال تفاصيل الحالة أو رفع ملف.",
+      error_imageProcessing: "تعذر معالجة الصورة. حاول بصورة أصغر أو مختلفة.",
+      error_requestFailed: "حدث خطأ أثناء التحليل: ",
+      error_payloadTooLarge: "حجم البيانات كبير جدًا. قلل جودة أو عدد الملفات ثم أعد المحاولة.",
+      error_timeout: "انتهت مهلة الطلب. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
+      error_invalidJson: "تم استلام رد غير صالح من الخادم.",
+      error_missingReport: "لم يتم استلام تقرير HTML من الخادم.",
+      info_analyzing: "جاري تحليل الحالة... قد يستغرق الأمر لحظات.",
+    },
+    report: {
+        reportTitle: "التقرير التحليلي للحالة الطبية",
+        summary: "ملخص الحالة وقرار التأمين",
+        riskAssessment: "تقييم المخاطر الدوائية والسريرية",
+        recommendations: "التوصيات الطبية والإجرائية",
+    },
+    export: {
+        exportButtonLabel: "تصدير التقرير",
+        pdf_ar_only: "PDF (عربي فقط)",
+        pdf_en_only: "PDF (إنجليزي فقط)",
+        pdf_bilingual: "PDF (ثنائي اللغة)",
+    }
+  },
+  en: {
+    ui: {
+      appTitle: "Medical Case Assessment - Doctor Portal",
+      pageHeader: "Medical Case & Insurance Claim Assessment",
+      subHeader: "User-friendly clinical interface — automated analysis for insurance needs.",
+      homeTooltip: "Home Screen",
+      section1Title: "1) Patient Information",
+      label_gender: "Gender",
+      option_gender_placeholder: "Select Gender",
+      option_gender_male: "Male",
+      option_gender_female: "Female",
+      hint_gender: "If the patient is female, pregnancy questions will appear automatically.",
+      label_age: "Age",
+      placeholder_age: "Example: 63",
+      label_pregnancy_status: "Is the patient pregnant?",
+      option_pregnancy_placeholder: "Select",
+      option_yes: "Yes",
+      option_no: "No",
+      label_pregnancy_month: "Month of Pregnancy",
+      placeholder_pregnancy_month: "Example: 5",
+      label_height: "Height (cm)",
+      placeholder_height: "Example: 175",
+      label_weight: "Weight (kg)",
+      placeholder_weight: "Example: 80",
+      label_temperature: "Temperature (°C)",
+      placeholder_temperature: "Example: 37.6",
+      label_blood_pressure: "Blood Pressure",
+      placeholder_blood_pressure: "Example: 120/80",
+      section2Title: "2) Lifestyle & Symptoms",
+      label_smoker: "Is the patient a smoker?",
+      label_packs_per_day: "Packs per day",
+      placeholder_packs_per_day: "Example: 1.5",
+      label_smoking_years: "Number of years smoking",
+      placeholder_smoking_years: "Example: 20",
+      label_pack_years_result: "Result (Pack-Years)",
+      hint_pack_years: "Pack-years estimate lifetime smoking exposure. Higher numbers indicate greater health risk.",
+      label_cough_duration: "Cough Duration (weeks)",
+      placeholder_cough_duration: "Example: 12",
+      label_visual_symptoms: "Visual Symptoms?",
+      label_last_eye_exam: "Last Fundus Exam Date",
+      label_visual_acuity: "Visual Acuity (optional)",
+      placeholder_visual_acuity: "Example: 6/12 or 20/40",
+      section3Title: "3) Medical Case Details",
+      label_case_description: "Case Description",
+      placeholder_case_description: "Example: Chronic cough for 12 weeks with slight weight loss...",
+      label_diagnosis: "Provisional Diagnoses",
+      placeholder_diagnosis: "Example: T2DM, HTN, COPD? Dermatitis",
+      label_lab_results: "Available Labs/Imaging",
+      placeholder_lab_results: "Example: HbA1c 8.7%, eGFR 38→62, K 5.6...",
+      label_medications: "Prescribed Medications/Procedures",
+      placeholder_medications: "Example: Xigduo XR bid, Metformin 1000 tid...",
+      section4Title: "4) Upload Files (Images/PDF) — Optional",
+      upload_cta: "Click here to upload one or more files",
+      btn_analyze: "Analyze Case",
+      hint_analyze: "Clicking 'Analyze Case' sends the inputs to generate a comprehensive report.",
+      remove_file: "Remove file"
+    },
+    validation: {
+      error_formIncomplete: "Please enter case details or upload a file.",
+      error_imageProcessing: "Could not process the image. Try a smaller or different image.",
+      error_requestFailed: "An error occurred during analysis: ",
+      error_payloadTooLarge: "Request payload is too large. Reduce image quality or count and try again.",
+      error_timeout: "The request timed out. Please check your internet connection and try again.",
+      error_invalidJson: "Received an invalid response from the server.",
+      error_missingReport: "Did not receive an HTML report from the server.",
+      info_analyzing: "Analyzing case... This may take a moment.",
+    },
+    report: {
+        reportTitle: "Medical Case Analysis Report",
+        summary: "Case Summary & Insurance Decision",
+        riskAssessment: "Clinical & Pharmacological Risk Assessment",
+        recommendations: "Medical & Procedural Recommendations",
+    },
+    export: {
+        exportButtonLabel: "Export Report",
+        pdf_ar_only: "PDF (Arabic Only)",
+        pdf_en_only: "PDF (English Only)",
+        pdf_bilingual: "PDF (Bilingual)",
+    }
+  }
+};
+
+let currentLang = 'ar';
+
+function setLanguage(lang) {
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  
+  const langSwitcher = document.getElementById('lang-switcher');
+  langSwitcher.textContent = lang === 'ar' ? 'English' : 'العربية';
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const translation = getTranslation(key);
+    if (translation) el.textContent = translation;
+  });
+
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    const translation = getTranslation(key);
+    if (translation) el.placeholder = translation;
+  });
+  
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.getAttribute('data-i18n-title');
+    const translation = getTranslation(key);
+    if (translation) el.title = translation;
+  });
+}
+
+function getTranslation(key) {
+  return key.split('.').reduce((obj, k) => obj && obj[k], translations[currentLang]);
+}
+
+document.getElementById('lang-switcher').addEventListener('click', () => {
+  const newLang = currentLang === 'ar' ? 'en' : 'ar';
+  setLanguage(newLang);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    setLanguage('ar');
+    attachEventListeners();
+});
+
+// =================================================================================
+// UI LOGIC & FORM HANDLING
+// =================================================================================
+function attachEventListeners() {
     const genderEl = document.getElementById('gender');
     const pregStatWrap = document.getElementById('pregnancy-status-wrap');
     const pregMonthWrap = document.getElementById('pregnancy-month-wrap');
@@ -307,164 +690,286 @@
     genderEl.addEventListener('change', () => {
       const isFemale = genderEl.value === 'female';
       pregStatWrap.classList.toggle('hidden', !isFemale);
-      if (!isFemale){ pregMonthWrap.classList.add('hidden'); pregStatEl.value = ""; document.getElementById('pregnancy-month').value=""; }
+      if (!isFemale) {
+        pregMonthWrap.classList.add('hidden');
+        pregStatEl.value = "";
+        document.getElementById('pregnancy-month').value = "";
+      }
     });
     pregStatEl.addEventListener('change', () => {
       const showMonth = pregStatEl.value === 'yes';
       pregMonthWrap.classList.toggle('hidden', !showMonth);
-      if (!showMonth){ document.getElementById('pregnancy-month').value=""; }
+      if (!showMonth) document.getElementById('pregnancy-month').value = "";
     });
 
     const smokerEl = document.getElementById('smoker');
-    const packYearsWrap = document.getElementById('pack-years-wrap');
+    const packYearsSection = document.getElementById('pack-years-section');
     smokerEl.addEventListener('change', () => {
-      packYearsWrap.classList.toggle('hidden', smokerEl.value !== 'yes');
-      if (smokerEl.value !== 'yes') document.getElementById('pack-years').value="";
+      packYearsSection.classList.toggle('hidden', smokerEl.value !== 'yes');
+      if (smokerEl.value !== 'yes') {
+          document.getElementById('packs-per-day').value = "";
+          document.getElementById('smoking-years').value = "";
+          updatePackYears(); // Reset calculation
+      }
     });
 
     const visualEl = document.getElementById('visual-symptoms');
     const eyeWrap = document.getElementById('eye-wrap');
     visualEl.addEventListener('change', () => {
       eyeWrap.classList.toggle('hidden', visualEl.value !== 'yes');
-      if (visualEl.value !== 'yes'){ document.getElementById('last-eye-exam').value=""; document.getElementById('visual-acuity').value=""; }
-    });
-
-    // معاينة وضغط الصورة
-    const imageInput = document.getElementById('image-upload-input');
-    const imagePreview = document.getElementById('image-preview');
-    const imageMeta = document.getElementById('image-meta');
-    let imageBase64 = null;
-
-    imageInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const { base64, info } = await compressImage(file, { maxW: 1400, maxH: 1400, quality: 0.7 });
-        imageBase64 = base64;
-        imagePreview.src = 'data:image/jpeg;base64,' + base64;
-        imagePreview.style.display = 'block';
-        imageMeta.style.display = 'block';
-        imageMeta.textContent = `الحجم بعد الضغط: ${info.sizeKB.toFixed(1)} KB — الأبعاد: ${info.w}×${info.h}`;
-      } catch (err) {
-        showNote('error', 'تعذر معالجة الصورة. حاول صورة أصغر/أوضح.');
-        console.error(err);
+      if (visualEl.value !== 'yes') {
+        document.getElementById('last-eye-exam').value = "";
+        document.getElementById('visual-acuity').value = "";
       }
     });
 
-    async function compressImage(file, { maxW=1400, maxH=1400, quality=0.7 } = {}){
-      const dataURL = await new Promise((res, rej)=>{
-        const r = new FileReader(); r.onload = ()=> res(r.result); r.onerror = rej; r.readAsDataURL(file);
-      });
-      const img = await new Promise((res, rej)=>{
-        const i = new Image(); i.onload = ()=> res(i); i.onerror = rej; i.src = dataURL;
-      });
-      let { width:w, height:h } = img;
-      const ratio = Math.min(maxW/w, maxH/h, 1);
-      w = Math.round(w*ratio); h = Math.round(h*ratio);
-      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-      const out = canvas.toDataURL('image/jpeg', quality);
-      const base64 = out.split(',')[1];
-      const sizeKB = (base64.length * 3) / 4 / 1024;
-      return { base64, info:{ w,h,sizeKB } };
+    // Pack-years calculation listeners
+    document.getElementById('packs-per-day').addEventListener('input', updatePackYears);
+    document.getElementById('smoking-years').addEventListener('input', updatePackYears);
+    
+    // File upload listener
+    document.getElementById('file-upload-input').addEventListener('change', handleFilesSelect);
+}
+
+function updatePackYears() {
+    const packsPerDay = parseFloat(document.getElementById('packs-per-day').value) || 0;
+    const smokingYears = parseFloat(document.getElementById('smoking-years').value) || 0;
+    const resultEl = document.getElementById('pack-years-result');
+
+    if (packsPerDay > 0 && smokingYears > 0) {
+        const packYears = packsPerDay * smokingYears;
+        resultEl.textContent = packYears.toFixed(1);
+    } else {
+        resultEl.textContent = '--';
+    }
+}
+
+// =================================================================================
+// MULTI-FILE HANDLING
+// =================================================================================
+let uploadedFiles = []; // Array to store file objects { id, file, base64 }
+
+function handleFilesSelect(event) {
+    const files = event.target.files;
+    for (const file of files) {
+        const fileId = Date.now() + '-' + Math.random();
+        const fileReader = new FileReader();
+
+        fileReader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1];
+            uploadedFiles.push({ id: fileId, file: file, base64: base64 });
+            renderFilePreview(fileId, file, e.target.result);
+        };
+        
+        fileReader.readAsDataURL(file);
+    }
+    // Clear the input so the same file can be selected again if removed
+    event.target.value = '';
+}
+
+function renderFilePreview(fileId, file, dataUrl) {
+    const previewContainer = document.getElementById('file-preview-container');
+    const item = document.createElement('div');
+    item.className = 'file-preview-item';
+    item.dataset.fileId = fileId;
+
+    let thumbHtml;
+    if (file.type.startsWith('image/')) {
+        thumbHtml = `<img src="${dataUrl}" alt="${file.name}">`;
+    } else if (file.type === 'application/pdf') {
+        thumbHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+    } else {
+        thumbHtml = `<span>${file.type.split('/')[1] || 'file'}</span>`;
     }
 
-    // إشعارات
-    const noteArea = document.getElementById('notification-area');
-    function showNote(type, text){
-      noteArea.className = 'notification ' + (type === 'error' ? 'error' : 'info');
-      noteArea.textContent = text;
-      noteArea.style.display = 'block';
+    item.innerHTML = `
+        <div class="thumb">${thumbHtml}</div>
+        <div class="file-name">${file.name}</div>
+        <button class="file-remove-btn" title="${getTranslation('ui.remove_file')}" onclick="removeFile('${fileId}')">&times;</button>
+    `;
+    previewContainer.appendChild(item);
+}
+
+function removeFile(fileId) {
+    // Remove from array
+    uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
+    // Remove from DOM
+    const itemToRemove = document.querySelector(`.file-preview-item[data-file-id="${fileId}"]`);
+    if (itemToRemove) {
+        itemToRemove.remove();
     }
-    function clearNote(){ noteArea.style.display='none'; noteArea.textContent=''; }
+}
 
-    // انتقالات
-    function goToHome(){ window.location.href = 'https://www.m2020m.org/portal.html'; }
-    function logout(){ /* اربط تسجيل خروجك الحقيقي هنا */ showNote('info','تم تسجيل الخروج (نموذج).'); }
+// =================================================================================
+// API ANALYSIS & MOCKING
+// =================================================================================
+async function analyzeCase() {
+  const responseContainer = document.getElementById('response-container');
+  const btn = document.getElementById('analyzeBtn');
+  const exportContainer = document.getElementById('export-container');
+  
+  clearNote();
+  responseContainer.style.display = 'none';
+  responseContainer.innerHTML = '';
+  exportContainer.classList.add('hidden');
 
-    // إرسال التحليل
-    async function analyzeCase(){
-      const responseContainer = document.getElementById('response-container');
-      const btn = document.getElementById('analyzeBtn');
-      clearNote(); responseContainer.style.display='none'; responseContainer.innerHTML='';
+  const caseData = {
+    notes: document.getElementById('case-description').value || '',
+    diagnosis: document.getElementById('diagnosis').value || '',
+    labResults: document.getElementById('lab-results').value || '',
+    medications: document.getElementById('medications-procedures').value || '',
+    packYears: document.getElementById('pack-years-result').textContent,
+    files: uploadedFiles.map(f => ({ name: f.file.name, type: f.file.type, data: f.base64 }))
+  };
 
-      // جمع البيانات
-      const caseData = {
-        userType:'doctor',
-        age: document.getElementById('age').value || undefined,
-        gender: document.getElementById('gender').value || undefined,
-        isSmoker: document.getElementById('smoker').value === 'yes' ? true : (document.getElementById('smoker').value === 'no' ? false : undefined),
-        smokingPackYears: document.getElementById('pack-years').value || undefined,
-        coughDurationWeeks: document.getElementById('cough-duration').value || undefined,
-        visualSymptoms: document.getElementById('visual-symptoms').value || undefined,
-        lastEyeExamDate: document.getElementById('last-eye-exam').value || undefined,
-        visualAcuity: document.getElementById('visual-acuity').value || undefined,
-        height: document.getElementById('height').value || undefined,
-        weight: document.getElementById('weight').value || undefined,
-        temperature: document.getElementById('temperature').value || undefined,
-        bloodPressure: document.getElementById('blood-pressure').value || undefined,
+  if (!caseData.notes && !caseData.diagnosis && !caseData.labResults && !caseData.medications && caseData.files.length === 0) {
+    showNote('error', getTranslation('validation.error_formIncomplete'));
+    return;
+  }
 
-        notes: document.getElementById('case-description').value || '',
-        diagnosis: document.getElementById('diagnosis').value || '',
-        labResults: document.getElementById('lab-results').value || '',
-        medications: document.getElementById('medications-procedures').value || '',
-        imageData: imageBase64 ? [imageBase64] : []
-      };
+  showNote('info', getTranslation('validation.info_analyzing'));
+  btn.disabled = true;
 
-      if (
-        !caseData.notes && !caseData.diagnosis && !caseData.labResults &&
-        !caseData.medications && caseData.imageData.length === 0
-      ){
-        showNote('error','الرجاء إدخال تفاصيل الحالة أو رفع صورة.');
-        return;
-      }
+  try {
+    const mockApiResponse = await mockFetchApi(caseData, currentLang);
+    if (mockApiResponse?.htmlReport) {
+      clearNote();
+      responseContainer.innerHTML = mockApiResponse.htmlReport;
+      responseContainer.style.display = 'block';
+      exportContainer.classList.remove('hidden');
+      responseContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      throw new Error(getTranslation('validation.error_missingReport'));
+    }
+  } catch (err) {
+    console.error(err);
+    showNote('error', getTranslation('validation.error_requestFailed') + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
-      showNote('info','جاري تحليل الحالة… قد يستغرق الأمر قليلًا حسب حجم البيانات.');
-      btn.disabled = true;
+function mockFetchApi(data, lang) {
+  console.log("Mock API called with lang:", lang, "and data:", data);
+  return new Promise(resolve => {
+    setTimeout(() => {
+      const report = generateMockReport(lang);
+      resolve({ htmlReport: report });
+    }, 1500);
+  });
+}
 
-      // طلب مع مهلة (timeout)
-      const controller = new AbortController();
-      const t = setTimeout(()=> controller.abort(), 60000);
+function generateMockReport(lang) {
+    const reportStrings = translations[lang].report;
+    if (lang === 'ar') {
+        return `
+            <h3 dir="rtl">${reportStrings.summary}</h3>
+            <p dir="rtl">المريض، ذكر يبلغ من العمر 63 عامًا، يعاني من سعال مزمن لمدة 12 أسبوعًا. التشخيصات تشمل السكري من النوع الثاني وارتفاع ضغط الدم. بناءً على البيانات، يُعتبر الإجراء الطبي ضروريًا وتتم الموافقة على التغطية.</p>
+            <h3 dir="rtl">${reportStrings.riskAssessment}</h3>
+            <p dir="rtl">تم تحديد <span class="risk-high">مخاطر عالية</span> للتفاعلات الدوائية. هناك <span class="risk-medium">مخاطر متوسطة</span> لحدوث قصور كلوي حاد.</p>
+            <h3 dir="rtl">${reportStrings.recommendations}</h3>
+            <p dir="rtl">1. إيقاف الأدوية الخطرة. 2. مراقبة وظائف الكلى عن كثب. 3. استشارة طبيب القلب.</p>
+        `;
+    } else {
+        return `
+            <h3>${reportStrings.summary}</h3>
+            <p>The patient, a 63-year-old male, presents with a 12-week chronic cough. Diagnoses include T2DM and HTN. The medical procedure is deemed necessary and coverage is approved.</p>
+            <h3>${reportStrings.riskAssessment}</h3>
+            <p>A <span class="risk-high">High Risk</span> of drug-drug interaction is identified. A <span class="risk-medium">Medium Risk</span> of acute kidney injury exists.</p>
+            <h3>${reportStrings.recommendations}</h3>
+            <p>1. Discontinue high-risk medications. 2. Monitor renal function closely. 3. Cardiology consult.</p>
+        `;
+    }
+}
 
-      try{
-        const res = await fetch('/api/gpt', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify(caseData),
-          signal: controller.signal
-        });
+// =================================================================================
+// PDF EXPORT LOGIC
+// =================================================================================
+const { jsPDF } = window.jspdf;
 
-        const text = await res.text();
-        if (!res.ok){
-          // أحجام كبيرة
-          if (res.status === 413 || /Entity Too Large|Content Too Large/i.test(text)){
-            throw new Error('الحجم كبير: قلّل جودة/عدد الصور ثم أعد المحاولة.');
-          }
-          // خطأ عام
-          throw new Error(`فشل (${res.status}): ${text.slice(0,200)}…`);
+const exportBtn = document.getElementById('exportBtn');
+const exportDropdown = document.getElementById('export-dropdown');
+exportBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    exportDropdown.classList.toggle('show');
+});
+window.addEventListener('click', (event) => {
+    if (!exportBtn.contains(event.target) && !exportDropdown.contains(event.target)) {
+        exportDropdown.classList.remove('show');
+    }
+});
+
+async function exportPDF(mode) {
+    showNote('info', 'Generating PDF...');
+    exportDropdown.classList.remove('show');
+    const originalLang = currentLang;
+    const reportContainer = document.getElementById('response-container');
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    
+    try {
+        if (mode === 'ar' || mode === 'en') {
+            await addContentToPdf(doc, reportContainer, mode);
+        } else if (mode === 'bi') {
+            await setLanguageForExport('ar');
+            await addContentToPdf(doc, reportContainer, 'ar');
+            doc.addPage();
+            await setLanguageForExport('en');
+            await addContentToPdf(doc, reportContainer, 'en');
         }
-
-        let data;
-        try{ data = JSON.parse(text); }
-        catch{ throw new Error('الرد ليس JSON صالحًا من الخادم.'); }
-
-        if (data?.htmlReport){
-          clearNote();
-          responseContainer.innerHTML = data.htmlReport;
-          responseContainer.style.display = 'block';
-          responseContainer.scrollIntoView({ behavior:'smooth', block:'start' });
-        } else {
-          throw new Error('لم يتم استلام تقرير HTML من الخادم.');
+        doc.save(`Medical-Report-${mode}-${new Date().toISOString().slice(0,10)}.pdf`);
+        clearNote();
+    } catch (error) {
+        console.error("PDF Generation Error:", error);
+        showNote('error', 'Failed to generate PDF. See console for details.');
+    } finally {
+        if (originalLang !== currentLang) {
+            await setLanguageForExport(originalLang);
         }
-      } catch(err){
-        console.error(err);
-        showNote('error', 'حدث خطأ أثناء التحليل: ' + err.message);
-      } finally {
-        clearTimeout(t);
-        btn.disabled = false;
-      }
     }
-    window.analyzeCase = analyzeCase;
-  </script>
+}
+
+async function setLanguageForExport(lang) {
+    return new Promise(resolve => {
+        setLanguage(lang);
+        const report = generateMockReport(lang);
+        document.getElementById('response-container').innerHTML = report;
+        setTimeout(resolve, 100);
+    });
+}
+
+async function addContentToPdf(doc, element, lang) {
+    const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        onclone: (clonedDoc) => {
+            clonedDoc.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+            const container = clonedDoc.querySelector('#response-container');
+            if(container) container.style.display = 'block';
+        }
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const imgProps = doc.getImageProperties(imgData);
+    const pdfWidth = doc.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+}
+
+// =================================================================================
+// UTILITIES
+// =================================================================================
+function clearNote() {
+  const noteArea = document.getElementById('notification-area');
+  noteArea.style.display = 'none';
+  noteArea.textContent = '';
+}
+function showNote(type, text) {
+  const noteArea = document.getElementById('notification-area');
+  noteArea.className = 'notification ' + (type === 'error' ? 'error' : 'info');
+  noteArea.textContent = text;
+  noteArea.style.display = 'block';
+}
+
+</script>
 </body>
 </html>
