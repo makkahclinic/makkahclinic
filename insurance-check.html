@@ -1,356 +1,317 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>بوابة الطبيب — تقييم الحالة الطبية</title>
-  <style>
-    :root{
-      --primary:#0b63c2; --primary-dark:#084e97; --accent:#00a7c7;
-      --danger:#dc3545; --muted:#66768a; --text:#243143; --border:#e2e8f0;
-      --card:#fff; --bg1:#e9f3ff; --bg2:#f6fbff; --shadow:0 10px 25px rgba(15,57,105,.08);
-      --radius:16px; --focus-outline:3px solid #0b63c2; --focus-ring:0 0 0 3px rgba(11,99,194,.28);
-    }
-    html,body{height:100%}
-    body{
-      margin:0; font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-      color:var(--text);
-      background: radial-gradient(1200px 800px at 80% 0%, var(--bg1), var(--bg2));
-      padding: 2rem .75rem;
-    }
-    .container{
-      max-inline-size:1080px; margin-inline:auto; background:var(--card);
-      border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
-      position:relative; overflow:hidden;
-    }
-    .top-ribbon{ position:absolute; inset-block-start:0; inset-inline:0; block-size:6px; background:linear-gradient(90deg,var(--primary),var(--accent)); }
-    .shell{ padding: 28px 26px 30px; }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>بوابة الطبيب — تقييم الحالة الطبية</title>
+<style>
+  :root{
+    --primary:#0b63c2; --primary-dark:#084e97; --accent:#00a7c7;
+    --danger:#dc3545; --muted:#66768a; --text:#243143; --border:#e2e8f0;
+    --card:#fff; --bg1:#e9f3ff; --bg2:#f6fbff; --shadow:0 10px 25px rgba(15,57,105,.08);
+    --radius:16px; --focus-outline:3px solid #0b63c2; --focus-ring:0 0 0 3px rgba(11,99,194,.28);
+  }
+  html,body{height:100%}
+  body{
+    margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color:var(--text); background: radial-gradient(1200px 800px at 80% 0%, var(--bg1), var(--bg2));
+    padding: 2rem .75rem;
+  }
+  .container{ max-inline-size:1080px; margin-inline:auto; background:var(--card); border:1px solid var(--border);
+    border-radius:var(--radius); box-shadow:var(--shadow); position:relative; overflow:hidden; }
+  .top-ribbon{ position:absolute; inset-block-start:0; inset-inline:0; height:6px; background:linear-gradient(90deg,var(--primary),var(--accent)); }
+  .shell{ padding:28px 26px 92px; } /* مساحة بالأسفل لبار الأزرار الثابت */
 
-    /* Header */
-    .header{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-block:6px 8px; }
-    .title-wrap{ display:flex; align-items:center; gap:12px; min-block-size:52px; }
-    .title{ margin:0; font-weight:800; color:var(--primary); letter-spacing:.2px; font-size:1.35rem; }
-    .subtext{ color:var(--muted); margin-block-start:2px; font-size:.92rem; }
+  /* Header */
+  .header{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-block:6px 8px; }
+  .title-wrap{ display:flex; align-items:center; gap:12px; min-block-size:52px; }
+  .title{ margin:0; font-weight:800; color:var(--primary); font-size:1.35rem; }
+  .subtext{ color:var(--muted); margin-block-start:2px; font-size:.92rem; }
 
-    /* Home icon + tooltip */
-    .home-icon{
-      inline-size:52px; block-size:52px; border-radius:14px;
-      background:linear-gradient(135deg,#0b63c2,#00a7c7); color:#fff; font-size:24px;
-      display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;
-      box-shadow:0 6px 18px rgba(11,99,194,.22);
-    }
-    .home-icon:hover{ filter:brightness(.98); transform:translateY(-1px); }
-    .home-icon:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
-    .tooltip{
-      position:absolute; z-index:10; background:#111827; color:#fff; padding:.35rem .55rem; border-radius:8px; font-size:.85rem;
-      opacity:0; pointer-events:none; transition:opacity .15s ease;
-      inset-block-start:calc(6px + 52px); inset-inline-start:16px;
-    }
-    .tooltip[data-show="true"]{ opacity:1; }
-    .tooltip:focus-visible{ outline:var(--focus-outline); }
+  .home-icon{
+    inline-size:52px; block-size:52px; border-radius:14px; background:linear-gradient(135deg,#0b63c2,#00a7c7);
+    color:#fff; font-size:24px; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;
+    box-shadow:0 6px 18px rgba(11,99,194,.22);
+  }
+  .home-icon:hover{ filter:brightness(.98); transform:translateY(-1px); }
+  .home-icon:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
+  .tooltip{ position:absolute; z-index:10; background:#111827; color:#fff; padding:.35rem .55rem; border-radius:8px;
+    font-size:.85rem; opacity:0; pointer-events:none; transition:opacity .15s ease; inset-block-start:calc(6px + 52px); inset-inline-start:16px; }
+  .tooltip[data-show="true"]{ opacity:1; }
 
-    /* Bars */
-    .langbar,.exportbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .langbar{ margin-block:6px 10px; }
-    .divider{ block-size:1px; background:#e6eef8; margin-block:8px; inline-size:100%; }
+  .langbar,.exportbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .langbar{ margin-block:6px 10px; }
+  .divider{ block-size:1px; background:#e6eef8; margin-block:8px; inline-size:100%; }
 
-    /* Language segmented */
-    .seg{ display:inline-flex; background:#f3f7fb; border:1px solid var(--border); border-radius:999px; padding:4px; }
-    .seg button{ border:none; background:transparent; padding:.45rem .9rem; border-radius:999px; cursor:pointer; font-weight:700; color:#3b5168; }
-    .seg button.active{ background:#fff; border:1px solid var(--border); color:var(--primary); }
-    .seg button:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
+  .seg{ display:inline-flex; background:#f3f7fb; border:1px solid var(--border); border-radius:999px; padding:4px; }
+  .seg button{ border:none; background:transparent; padding:.45rem .9rem; border-radius:999px; cursor:pointer; font-weight:700; color:#3b5168; }
+  .seg button.active{ background:#fff; border:1px solid var(--border); color:var(--primary); }
+  .seg button:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
 
-    /* Export menu */
-    .exportbar{ justify-content:flex-end; }
-    .menu{ position:relative; }
-    .menu-btn{
-      background:var(--primary); color:#fff; border:none; border-radius:10px; padding:.55rem .9rem; font-weight:700; cursor:pointer; min-block-size:44px;
-    }
-    .menu-btn:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
-    .menu-list{
-      position:absolute; inset-block-start:calc(100% + 6px); inset-inline-end:0;
-      background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.08);
-      min-inline-size:240px; padding:.35rem; display:none;
-    }
-    .menu-list[aria-hidden="false"]{ display:block; }
-    .menuitem{ display:flex; align-items:center; gap:8px; inline-size:100%; border:none; background:transparent; padding:.6rem .7rem; border-radius:8px; text-align:start; cursor:pointer; }
-    .menuitem:hover{ background:#f5f9ff; }
-    .menuitem:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
+  .exportbar{ justify-content:flex-end; }
+  .menu{ position:relative; }
+  .menu-btn{ background:var(--primary); color:#fff; border:none; border-radius:10px; padding:.6rem 1rem; font-weight:800; min-block-size:44px; cursor:pointer; }
+  .menu-btn:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
+  .menu-list{ position:absolute; inset-block-start:calc(100% + 6px); inset-inline-end:0; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.08); min-inline-size:240px; padding:.35rem; display:none; }
+  .menu-list[aria-hidden="false"]{ display:block; }
+  .menuitem{ display:flex; align-items:center; gap:8px; inline-size:100%; border:none; background:transparent; padding:.6rem .7rem; border-radius:8px; text-align:start; cursor:pointer; }
+  .menuitem:hover{ background:#f5f9ff; }
+  .menuitem:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
 
-    /* Cards & inputs */
-    .card{ border:1px solid var(--border); border-radius:14px; background:#fff; box-shadow:0 6px 14px rgba(0,0,0,.03); padding:16px; margin-block:14px; }
-    .section-title{ font-size:1.02rem; font-weight:800; color:#243143; display:flex; align-items:center; gap:.5rem; margin-block-end:12px; border-bottom:2px solid #dbe8f5; padding-block-end:.5rem; }
-    .dot{ inline-size:8px; block-size:8px; border-radius:50%; background:var(--accent); display:inline-block; }
-    label{ font-weight:700; display:block; margin:.65rem 0 .35rem; }
-    .hint{ font-size:.86rem; color:#8496ab; margin-block-start:.15rem; }
-    input,select,textarea{
-      inline-size:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:10px; padding:.72rem .9rem; background:#fff; font-size:1rem;
-      transition:border-color .2s, box-shadow .2s, background .2s;
-    }
-    input::placeholder,textarea::placeholder{ color:#9aa8b8; }
-    input:focus-visible,select:focus-visible,textarea:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
-    textarea{ min-block-size:120px; resize:vertical; }
-    .grid{ display:grid; gap:14px; }
-    .grid-2{ grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .grid-3{ grid-template-columns:repeat(3,minmax(0,1fr)); }
-    .tall{ min-block-size:220px; }
-    .span-2{ grid-column: 1 / -1; }
+  .card{ border:1px solid var(--border); border-radius:14px; background:#fff; box-shadow:0 6px 14px rgba(0,0,0,.03); padding:16px; margin-block:14px; }
+  .section-title{ font-size:1.02rem; font-weight:800; color:#243143; display:flex; align-items:center; gap:.5rem; margin-block-end:12px; border-bottom:2px solid #dbe8f5; padding-block-end:.5rem; }
+  .dot{ inline-size:8px; block-size:8px; border-radius:50%; background:var(--accent); display:inline-block; }
+  label{ font-weight:700; display:block; margin:.65rem 0 .35rem; }
+  .hint{ font-size:.86rem; color:#8496ab; margin-block-start:.15rem; }
+  input,select,textarea{
+    inline-size:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:10px; padding:.72rem .9rem; background:#fff; font-size:1rem;
+    transition:border-color .2s, box-shadow .2s, background .2s;
+  }
+  input::placeholder,textarea::placeholder{ color:#9aa8b8; }
+  input:focus-visible,select:focus-visible,textarea:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
+  textarea{ min-block-size:120px; resize:vertical; }
+  .grid{ display:grid; gap:14px; }
+  .grid-2{ grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .grid-3{ grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .tall{ min-block-size:220px; }
+  .span-2{ grid-column:1 / -1; }
 
-    /* Uploads */
-    .drop{ border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; color:#6c7f95; transition:border-color .25s, background .25s; cursor:pointer; }
-    .drop:hover{ border-color:var(--primary); background:#f6fbff; }
-    #file-input{ display:none; }
-    .file-list{ display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); margin-block-start:10px; }
-    .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; min-block-size:140px; display:flex; align-items:center; justify-content:center; }
-    .thumb img{ max-inline-size:100%; max-block-size:200px; display:block; }
-    .thumb .badge{ position:absolute; inset-block-start:8px; inset-inline-start:8px; background:#eef5ff; color:#1e3a8a; border:1px solid #cfe6ff; font-size:.78rem; padding:.12rem .45rem; border-radius:999px; }
-    .thumb .remove{ position:absolute; inset-block-start:8px; inset-inline-end:8px; inline-size:30px; block-size:30px; border:none; border-radius:50%; background:var(--danger); color:#fff; font-size:18px; cursor:pointer; box-shadow:0 4px 10px rgba(220,53,69,.25); }
-    .thumb .remove:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
-    .thumb .meta{ position:absolute; inset-block-end:8px; inset-inline-start:8px; color:#4b5563; background:#ffffffd0; border-radius:6px; padding:.15rem .4rem; font-size:.78rem; }
+  .drop{ border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; color:#6c7f95; transition:border-color .25s, background .25s; cursor:pointer; }
+  .drop:hover{ border-color:var(--primary); background:#f6fbff; }
+  #file-input{ display:none; }
+  .file-list{ display:grid; gap:10px; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); margin-block-start:10px; }
+  .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; min-block-size:140px; display:flex; align-items:center; justify-content:center; }
+  .thumb img{ max-inline-size:100%; max-block-size:200px; display:block; }
+  .thumb .badge{ position:absolute; inset-block-start:8px; inset-inline-start:8px; background:#eef5ff; color:#1e3a8a; border:1px solid #cfe6ff; font-size:.78rem; padding:.12rem .45rem; border-radius:999px; }
+  .thumb .remove{ position:absolute; inset-block-start:8px; inset-inline-end:8px; inline-size:30px; block-size:30px; border:none; border-radius:50%; background:var(--danger); color:#fff; font-size:18px; cursor:pointer; box-shadow:0 4px 10px rgba(220,53,69,.25); }
+  .thumb .remove:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
+  .thumb .meta{ position:absolute; inset-block-end:8px; inset-inline-start:8px; color:#4b5563; background:#ffffffd0; border-radius:6px; padding:.15rem .4rem; font-size:.78rem; }
 
-    /* Actions + big Analyze button */
-    .actions{ display:flex; gap:12px; justify-content:center; align-items:center; margin-block-start:14px; flex-wrap:wrap; }
-    .btn{
-      display:inline-flex; align-items:center; justify-content:center; gap:.6rem;
-      border:none; border-radius:12px; color:#fff; cursor:pointer;
-      padding:.8rem 1.2rem; font-weight:800; font-size:1.06rem;
-      min-inline-size:11rem; min-block-size:48px; /* ≥ 44px (WCAG) */
-      box-shadow:0 6px 14px rgba(0,0,0,.08);
-      transition:transform .06s ease, filter .2s ease, background .25s ease;
-    }
-    .btn:active{ transform:translateY(1px); }
-    .btn:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
-    .btn-primary{ background:var(--primary); }
-    .btn-primary:hover{ background:var(--primary-dark); }
-    .btn-danger{ background:var(--danger); }
-    .btn-danger:hover{ filter:brightness(.95); }
+  /* منطقة الإخراج + تحسين الجدول */
+  #response-container{ margin-block-start:16px; border:1px solid var(--border); border-radius:14px; background:#fff; display:none; box-shadow:var(--shadow); overflow:hidden; }
+  #response-container .report-wrap{ overflow:auto; }
+  #response-container table{ border-collapse:separate; border-spacing:0; inline-size:100%; table-layout:fixed; font-size:.98rem; direction:inherit; }
+  /* colgroup يُحقن بالسكريبت لتكبير عمودي النسبة والقرار */
+  #response-container thead th{
+    position:sticky; inset-block-start:0; background:#f6fbff; color:#0b3766; z-index:1; font-weight:800; text-align:start;
+    padding:.85rem .9rem; border-block-end:2px solid #dbe8f5;
+  }
+  #response-container td{
+    padding:.7rem .9rem; vertical-align:top; border-block-end:1px solid #eef2f7;
+    overflow-wrap:anywhere; white-space:break-spaces;
+  }
+  #response-container tbody tr:nth-child(odd){ background:#fafcff; }
+  #response-container td.risk-low   { background:#eaf8f0; color:#0f5132; font-weight:800; }
+  #response-container td.risk-medium{ background:#fff6db; color:#7a5b00; font-weight:800; }
+  #response-container td.risk-high  { background:#fde7ea; color:#842029; font-weight:800; }
+  #response-container h3,#response-container h4{ margin:1rem 1rem .4rem; }
+  #response-container p{ margin-inline:1rem; }
 
-    /* Floating Action Button (يظهر عند النزول) */
-    .fab{
-      position:fixed; inset-inline-end:18px; inset-block-end:18px;
-      border-radius:999px; padding:1rem 1.2rem; z-index:1000; display:none;
-    }
-    .fab[data-show="true"]{ display:inline-flex; }
+  /* شريط الأزرار ثابت بأسفل الحاوية */
+  .sticky-actions{
+    position:sticky; inset-block-end:0; background:linear-gradient(180deg, #ffffffcc, #fff);
+    padding:12px; display:flex; gap:12px; justify-content:center; align-items:center; border-block-start:1px solid #e9eef7;
+    backdrop-filter:saturate(1.2) blur(4px);
+  }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:.6rem; border:none; border-radius:12px; color:#fff; cursor:pointer;
+    padding:.9rem 1.25rem; font-weight:800; font-size:1.06rem; min-inline-size:11rem; min-block-size:48px;
+    box-shadow:0 6px 14px rgba(0,0,0,.08); transition:transform .06s ease, filter .2s ease, background .25s ease;
+  }
+  .btn:active{ transform:translateY(1px); }
+  .btn:focus-visible{ outline:var(--focus-outline); box-shadow:var(--focus-ring); }
+  .btn-primary{ background:var(--primary); } .btn-primary:hover{ background:var(--primary-dark); }
+  .btn-danger{ background:var(--danger); } .btn-danger:hover{ filter:brightness(.95); }
+  .notification{ margin-block-start:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600; }
+  .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
+  .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
 
-    .notification{ margin-block-start:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600; }
-    .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
-    .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
-
-    /* Report container (نزيّن الوعاء فقط) */
-    #response-container{ margin-block-start:16px; border:1px solid var(--border); border-radius:14px; background:#fff; display:none; box-shadow:var(--shadow); overflow:hidden; }
-    #response-container .report-wrap{ overflow:auto; }
-    #response-container table{ border-collapse:separate; border-spacing:0; inline-size:100%; table-layout:fixed; font-size:.98rem; direction:inherit; }
-    #response-container thead th{
-      position:sticky; inset-block-start:0; background:#f6fbff; color:#0b3766; z-index:1; font-weight:800; text-align:start;
-      padding-block:.85rem; padding-inline:.9rem; border-block-end:2px solid #dbe8f5;
-    }
-    #response-container td{
-      padding-block:.7rem; padding-inline:.9rem; vertical-align:top; border-block-end:1px solid #eef2f7;
-      overflow-wrap:anywhere; white-space:break-spaces;
-    }
-    #response-container tbody tr:nth-child(odd){ background:#fafcff; }
-    #response-container td.risk-low   { background:#eaf8f0; color:#0f5132; font-weight:800; }
-    #response-container td.risk-medium{ background:#fff6db; color:#7a5b00; font-weight:800; }
-    #response-container td.risk-high  { background:#fde7ea; color:#842029; font-weight:800; }
-    #response-container h3,#response-container h4{ margin-block:1rem .4rem; margin-inline:1rem; }
-    #response-container p{ margin-inline:1rem; }
-
-    /* Print: أظهر التقرير فقط */
-    @media print{
-      body{ padding:0; background:#fff; }
-      .langbar,.exportbar,.actions,.fab,.notification,.drop,.file-list,.section-title,.header .home-icon{ display:none !important; }
-      .container{ border:none; box-shadow:none; }
-      #response-container{ display:block !important; }
-    }
-
-    /* Responsive */
-    @media (max-width:900px){ .grid-3{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
-    @media (max-width:720px){
-      .grid-2,.grid-3{ grid-template-columns:1fr; }
-      .menu-btn{ inline-size:100%; }
-      .btn{ inline-size:100%; }
-    }
-    .hidden{ display:none !important; }
-  </style>
+  @media (max-width:900px){ .grid-3{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:720px){ .grid-2,.grid-3{ grid-template-columns:1fr; } .menu-btn{ inline-size:100%; } .btn{ inline-size:100%; } }
+  @media print{
+    body{ padding:0; background:#fff; }
+    .langbar,.exportbar,.sticky-actions,.notification,.drop,.file-list,.section-title,.header .home-icon{ display:none !important; }
+    .container{ border:none; box-shadow:none; }
+    #response-container{ display:block !important; }
+  }
+  .hidden{ display:none !important; }
+</style>
 </head>
 <body>
-  <div class="container">
-    <div class="top-ribbon"></div>
-    <div class="shell">
-      <!-- Header -->
-      <div class="header">
-        <div class="title-wrap">
-          <button id="homeBtn" class="home-icon" type="button" aria-label="الانتقال إلى الرئيسية" aria-describedby="homeTip">🏠</button>
-          <div id="homeTip" class="tooltip" role="tooltip">الانتقال إلى الرئيسية</div>
-          <div>
-            <h1 class="title" id="app-title">تقييم الحالة الطبية</h1>
-            <div class="subtext" id="app-sub">واجهة إدخال سريرية وربط مع التأمين</div>
-          </div>
-        </div>
-        <!-- Language bar -->
-        <div class="langbar" aria-label="Language Switcher">
-          <div class="seg" role="tablist" aria-label="Language">
-            <button id="lang-ar" class="active" type="button">العربية</button>
-            <button id="lang-en" type="button">English</button>
-          </div>
+<div class="container">
+  <div class="top-ribbon"></div>
+  <div class="shell">
+    <!-- Header -->
+    <div class="header">
+      <div class="title-wrap">
+        <button id="homeBtn" class="home-icon" type="button" aria-label="الانتقال إلى الرئيسية" aria-describedby="homeTip">🏠</button>
+        <div id="homeTip" class="tooltip" role="tooltip">الانتقال إلى الرئيسية</div>
+        <div>
+          <h1 class="title" id="app-title">تقييم الحالة الطبية</h1>
+          <div class="subtext" id="app-sub">واجهة إدخال سريرية وربط مع التأمين</div>
         </div>
       </div>
-
-      <div class="divider" aria-hidden="true"></div>
-
-      <!-- Export bar (PDF only) -->
-      <div class="exportbar">
-        <div class="menu">
-          <button id="exportBtn" class="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">PDF / طباعة</button>
-          <div id="exportMenu" class="menu-list" role="menu" aria-hidden="true">
-            <button class="menuitem" role="menuitem" data-mode="ar">Arabic PDF</button>
-            <button class="menuitem" role="menuitem" data-mode="en">English PDF</button>
-            <button class="menuitem" role="menuitem" data-mode="both">Bilingual PDF</button>
-          </div>
+      <!-- Language -->
+      <div class="langbar" aria-label="Language Switcher">
+        <div class="seg" role="tablist" aria-label="Language">
+          <button id="lang-ar" class="active" type="button">العربية</button>
+          <button id="lang-en" type="button">English</button>
         </div>
       </div>
-
-      <!-- Patient Info -->
-      <div class="card">
-        <div class="section-title"><span class="dot"></span> <span data-i="pinfo">معلومات المريض</span></div>
-        <div class="grid grid-3">
-          <div>
-            <label for="gender" data-i="gender">الجنس</label>
-            <select id="gender">
-              <option value="" selected disabled data-i="choose">اختر</option>
-              <option value="male" data-i="male">ذكر</option>
-              <option value="female" data-i="female">أنثى</option>
-            </select>
-            <div class="hint" data-i="pregHint">لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.</div>
-          </div>
-          <div>
-            <label for="age" data-i="age">العمر</label>
-            <input id="age" type="number" placeholder="63">
-          </div>
-          <div id="pregnancy-status-wrap" class="hidden">
-            <label for="pregnancy-status" data-i="pregLbl">هل المريضة حامل؟</label>
-            <select id="pregnancy-status">
-              <option value="" selected disabled data-i="choose">اختر</option>
-              <option value="yes" data-i="yes">نعم</option>
-              <option value="no" data-i="no">لا</option>
-            </select>
-          </div>
-          <div id="pregnancy-month-wrap" class="hidden">
-            <label for="pregnancy-month" data-i="pregMonth">شهر الحمل</label>
-            <input id="pregnancy-month" type="number" min="1" max="9" placeholder="5">
-          </div>
-          <div>
-            <label for="height" data-i="height">الطول (سم)</label>
-            <input id="height" type="number" placeholder="175">
-          </div>
-          <div>
-            <label for="weight" data-i="weight">الوزن (كجم)</label>
-            <input id="weight" type="number" placeholder="80">
-          </div>
-          <div>
-            <label for="temperature" data-i="temperature">درجة الحرارة (°م)</label>
-            <input id="temperature" type="text" placeholder="37.6">
-          </div>
-          <div>
-            <label for="blood-pressure" data-i="bp">ضغط الدم</label>
-            <input id="blood-pressure" type="text" placeholder="120/80">
-          </div>
-        </div>
-      </div>
-
-      <!-- Lifestyle & symptoms -->
-      <div class="card">
-        <div class="section-title"><span class="dot"></span> <span data-i="life">نمط الحياة والأعراض</span></div>
-        <div class="grid grid-3">
-          <div>
-            <label for="smoker" data-i="smoker">هل المريض مدخّن؟</label>
-            <select id="smoker">
-              <option value="" selected disabled data-i="choose">اختر</option>
-              <option value="yes" data-i="yes">نعم</option>
-              <option value="no" data-i="no">لا</option>
-            </select>
-          </div>
-          <div id="pack-years-wrap" class="hidden">
-            <label for="pack-years" data-i="packYears">عدد الباك-سنة</label>
-            <input id="pack-years" type="number" placeholder="35">
-            <div class="hint" data-i="packHint">الباك-سنة = (عدد العلب يوميًا × سنوات التدخين)</div>
-          </div>
-          <div>
-            <label for="cough-duration" data-i="cough">مدة السعال (أسابيع)</label>
-            <input id="cough-duration" type="number" placeholder="12">
-          </div>
-          <div>
-            <label for="visual-symptoms" data-i="vision">أعراض بصرية؟</label>
-            <select id="visual-symptoms">
-              <option value="" selected disabled data-i="choose">اختر</option>
-              <option value="yes" data-i="yes">نعم</option>
-              <option value="no" data-i="no">لا</option>
-            </select>
-          </div>
-          <div id="eye-wrap" class="hidden">
-            <label for="last-eye-exam" data-i="fundus">تاريخ آخر فحص قاع عين</label>
-            <input id="last-eye-exam" type="date">
-            <label for="visual-acuity" data-i="acuity">حدة البصر (اختياري)</label>
-            <input id="visual-acuity" type="text" placeholder="6/12 أو 20/40">
-          </div>
-        </div>
-      </div>
-
-      <!-- Medical details -->
-      <div class="card">
-        <div class="section-title"><span class="dot"></span> <span data-i="details">تفاصيل الحالة الطبية</span></div>
-        <div class="grid grid-2">
-          <div>
-            <label for="case-description" data-i="caseDesc">وصف الحالة</label>
-            <textarea id="case-description" class="tall" placeholder="مثال: سعال مزمن 12 أسبوعًا..."></textarea>
-          </div>
-          <div>
-            <label for="diagnosis" data-i="dx">التشخيصات المبدئية</label>
-            <textarea id="diagnosis" class="tall" placeholder="T2DM, HTN, COPD? Dermatitis"></textarea>
-          </div>
-          <div>
-            <label for="lab-results" data-i="labs">التحاليل/الأشعة المتوفرة</label>
-            <textarea id="lab-results" class="tall" placeholder="HbA1c 8.7%, eGFR 38→62, …"></textarea>
-          </div>
-          <div class="span-2">
-            <label for="medications-procedures" data-i="meds">الأدوية/الإجراءات المكتوبة</label>
-            <textarea id="medications-procedures" class="tall" placeholder="Xigduo XR bid, Metformin 1000 tid, …"></textarea>
-          </div>
-        </div>
-      </div>
-
-      <!-- Uploads -->
-      <div class="card">
-        <div class="section-title"><span class="dot"></span> <span data-i="uploads">رفع ملفات (صورة/PDF)</span></div>
-        <div class="drop" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
-          <div data-i="drop">اضغط أو اسحب صور (PNG/JPG) أو PDF</div>
-          <input id="file-input" type="file" accept="image/*,.pdf" multiple>
-          <div class="hint" data-i="dropHint">ننصح بملف أو اثنين واضحين — الصور تُضغط تلقائيًا</div>
-        </div>
-        <div id="file-list" class="file-list"></div>
-      </div>
-
-      <!-- Actions -->
-      <div class="actions" id="actions">
-        <button id="analyzeBtn" class="btn btn-primary" type="button">تحليل الحالة</button>
-        <button id="logoutBtn" class="btn btn-danger" type="button">تسجيل الخروج</button>
-      </div>
-      <!-- FAB يظهر عند النزول بعيدًا عن أزرار الإجراءات -->
-      <button id="fabAnalyze" class="btn btn-primary fab" type="button" aria-label="تحليل الحالة (زر عائم)">تحليل الحالة</button>
-
-      <div id="notification-area" class="notification info"></div>
-      <div id="response-container"></div>
     </div>
+
+    <div class="divider" aria-hidden="true"></div>
+
+    <!-- Export bar -->
+    <div class="exportbar">
+      <div class="menu">
+        <button id="exportBtn" class="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">PDF / طباعة</button>
+        <div id="exportMenu" class="menu-list" role="menu" aria-hidden="true">
+          <button class="menuitem" role="menuitem" data-mode="ar">Arabic PDF</button>
+          <button class="menuitem" role="menuitem" data-mode="en">English PDF</button>
+          <button class="menuitem" role="menuitem" data-mode="both">Bilingual PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Patient Info -->
+    <div class="card">
+      <div class="section-title"><span class="dot"></span> <span data-i="pinfo">معلومات المريض</span></div>
+      <div class="grid grid-3">
+        <div>
+          <label for="gender" data-i="gender">الجنس</label>
+          <select id="gender">
+            <option value="" selected disabled data-i="choose">اختر</option>
+            <option value="male" data-i="male">ذكر</option>
+            <option value="female" data-i="female">أنثى</option>
+          </select>
+          <div class="hint" data-i="pregHint">لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.</div>
+        </div>
+        <div>
+          <label for="age" data-i="age">العمر</label>
+          <input id="age" type="number" placeholder="63">
+        </div>
+        <div id="pregnancy-status-wrap" class="hidden">
+          <label for="pregnancy-status" data-i="pregLbl">هل المريضة حامل؟</label>
+          <select id="pregnancy-status">
+            <option value="" selected disabled data-i="choose">اختر</option>
+            <option value="yes" data-i="yes">نعم</option>
+            <option value="no" data-i="no">لا</option>
+          </select>
+        </div>
+        <div id="pregnancy-month-wrap" class="hidden">
+          <label for="pregnancy-month" data-i="pregMonth">شهر الحمل</label>
+          <input id="pregnancy-month" type="number" min="1" max="9" placeholder="5">
+        </div>
+        <div>
+          <label for="height" data-i="height">الطول (سم)</label>
+          <input id="height" type="number" placeholder="175">
+        </div>
+        <div>
+          <label for="weight" data-i="weight">الوزن (كجم)</label>
+          <input id="weight" type="number" placeholder="80">
+        </div>
+        <div>
+          <label for="temperature" data-i="temperature">درجة الحرارة (°م)</label>
+          <input id="temperature" type="text" placeholder="37.6">
+        </div>
+        <div>
+          <label for="blood-pressure" data-i="bp">ضغط الدم</label>
+          <input id="blood-pressure" type="text" placeholder="120/80">
+        </div>
+      </div>
+    </div>
+
+    <!-- Lifestyle -->
+    <div class="card">
+      <div class="section-title"><span class="dot"></span> <span data-i="life">نمط الحياة والأعراض</span></div>
+      <div class="grid grid-3">
+        <div>
+          <label for="smoker" data-i="smoker">هل المريض مدخّن؟</label>
+          <select id="smoker">
+            <option value="" selected disabled data-i="choose">اختر</option>
+            <option value="yes" data-i="yes">نعم</option>
+            <option value="no" data-i="no">لا</option>
+          </select>
+        </div>
+        <div id="pack-years-wrap" class="hidden">
+          <label for="pack-years" data-i="packYears">عدد الباك-سنة</label>
+          <input id="pack-years" type="number" placeholder="35">
+          <div class="hint" data-i="packHint">الباك-سنة = (عدد العلب يوميًا × سنوات التدخين)</div>
+        </div>
+        <div>
+          <label for="cough-duration" data-i="cough">مدة السعال (أسابيع)</label>
+          <input id="cough-duration" type="number" placeholder="12">
+        </div>
+        <div>
+          <label for="visual-symptoms" data-i="vision">أعراض بصرية؟</label>
+          <select id="visual-symptoms">
+            <option value="" selected disabled data-i="choose">اختر</option>
+            <option value="yes" data-i="yes">نعم</option>
+            <option value="no" data-i="no">لا</option>
+          </select>
+        </div>
+        <div id="eye-wrap" class="hidden">
+          <label for="last-eye-exam" data-i="fundus">تاريخ آخر فحص قاع عين</label>
+          <input id="last-eye-exam" type="date">
+          <label for="visual-acuity" data-i="acuity">حدة البصر (اختياري)</label>
+          <input id="visual-acuity" type="text" placeholder="6/12 أو 20/40">
+        </div>
+      </div>
+    </div>
+
+    <!-- Medical details -->
+    <div class="card">
+      <div class="section-title"><span class="dot"></span> <span data-i="details">تفاصيل الحالة الطبية</span></div>
+      <div class="grid grid-2">
+        <div>
+          <label for="case-description" data-i="caseDesc">وصف الحالة</label>
+          <textarea id="case-description" class="tall" placeholder="مثال: سعال مزمن 12 أسبوعًا..."></textarea>
+        </div>
+        <div>
+          <label for="diagnosis" data-i="dx">التشخيصات المبدئية</label>
+          <textarea id="diagnosis" class="tall" placeholder="T2DM, HTN, COPD? Dermatitis"></textarea>
+        </div>
+        <div>
+          <label for="lab-results" data-i="labs">التحاليل/الأشعة المتوفرة</label>
+          <textarea id="lab-results" class="tall" placeholder="HbA1c 8.7%, eGFR 38→62, …"></textarea>
+        </div>
+        <div class="span-2">
+          <label for="medications-procedures" data-i="meds">الأدوية/الإجراءات المكتوبة</label>
+          <textarea id="medications-procedures" class="tall" placeholder="انسخ أي نص إضافي هنا (اختياري)"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Uploads -->
+    <div class="card">
+      <div class="section-title"><span class="dot"></span> <span data-i="uploads">رفع ملفات (صورة/PDF)</span></div>
+      <div class="drop" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+        <div data-i="drop">اضغط أو اسحب صور (PNG/JPG) أو PDF</div>
+        <input id="file-input" type="file" accept="image/*,.pdf" multiple>
+        <div class="hint" data-i="dropHint">ننصح بملف أو اثنين واضحين — الصور تُضغط تلقائيًا</div>
+      </div>
+      <div id="file-list" class="file-list"></div>
+    </div>
+
+    <!-- Output -->
+    <div id="notification-area" class="notification info"></div>
+    <div id="response-container"></div>
   </div>
 
+  <!-- شريط أزرار ثابت -->
+  <div class="sticky-actions" role="toolbar" aria-label="Actions">
+    <button id="analyzeBtn" class="btn btn-primary" type="button">تحليل الحالة</button>
+    <button id="logoutBtn" class="btn btn-danger" type="button">تسجيل الخروج</button>
+  </div>
+</div>
+
 <script>
-/* ================== i18n (AR/EN only) ================== */
+/* ===== i18n (AR/EN only) ===== */
 const I18N = {
-  ar: {
-    title:'تقييم الحالة الطبية', sub:'واجهة إدخال سريرية وربط مع التأمين',
+  ar:{ title:'تقييم الحالة الطبية', sub:'واجهة إدخال سريرية وربط مع التأمين',
     pinfo:'معلومات المريض', gender:'الجنس', choose:'اختر', male:'ذكر', female:'أنثى',
-    pregHint:'لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.',
-    age:'العمر', pregLbl:'هل المريضة حامل؟', pregMonth:'شهر الحمل',
+    pregHint:'لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.', age:'العمر', pregLbl:'هل المريضة حامل؟', pregMonth:'شهر الحمل',
     height:'الطول (سم)', weight:'الوزن (كجم)', temperature:'درجة الحرارة (°م)', bp:'ضغط الدم',
     life:'نمط الحياة والأعراض', smoker:'هل المريض مدخّن؟', yes:'نعم', no:'لا',
     packYears:'عدد الباك-سنة', packHint:'الباك-سنة = (عدد العلب يوميًا × سنوات التدخين)',
@@ -358,15 +319,11 @@ const I18N = {
     details:'تفاصيل الحالة الطبية', caseDesc:'وصف الحالة', dx:'التشخيصات المبدئية', labs:'التحاليل/الأشعة المتوفرة', meds:'الأدوية/الإجراءات المكتوبة',
     uploads:'رفع ملفات (صورة/PDF)', drop:'اضغط أو اسحب صور (PNG/JPG) أو PDF', dropHint:'ننصح بملف أو اثنين واضحين — الصور تُضغط تلقائيًا',
     analyze:'تحليل الحالة', logout:'تسجيل الخروج',
-    pdfBtn:'PDF / طباعة', pdfAr:'Arabic PDF', pdfEn:'English PDF', pdfBi:'Bilingual PDF',
-    tooltipHome:'الانتقال إلى الرئيسية',
-    needData:'أدخل تفاصيل الحالة أو أرفق ملفًا.', analyzing:'جاري التحليل…'
+    pdfBtn:'PDF / طباعة', tooltipHome:'الانتقال إلى الرئيسية', needData:'أدخل تفاصيل الحالة أو أرفق ملفًا.', analyzing:'جاري التحليل…'
   },
-  en: {
-    title:'Medical Case Assessment', sub:'Clinical intake with insurance linkage',
+  en:{ title:'Medical Case Assessment', sub:'Clinical intake with insurance linkage',
     pinfo:'Patient Info', gender:'Gender', choose:'Choose', male:'Male', female:'Female',
-    pregHint:'If female, pregnancy questions appear automatically.',
-    age:'Age', pregLbl:'Pregnant?', pregMonth:'Pregnancy Month',
+    pregHint:'If female, pregnancy questions appear automatically.', age:'Age', pregLbl:'Pregnant?', pregMonth:'Pregnancy Month',
     height:'Height (cm)', weight:'Weight (kg)', temperature:'Temperature (°C)', bp:'Blood Pressure',
     life:'Lifestyle & Symptoms', smoker:'Smoker?', yes:'Yes', no:'No',
     packYears:'Pack-Years', packHint:'Pack-years = packs/day × years smoked',
@@ -374,16 +331,14 @@ const I18N = {
     details:'Medical Case Details', caseDesc:'Case Description', dx:'Initial Diagnoses', labs:'Labs / Imaging', meds:'Medications / Procedures',
     uploads:'Upload Files (Image/PDF)', drop:'Click or drop images (PNG/JPG) or PDF', dropHint:'Prefer 1–2 clear files — images are auto-compressed',
     analyze:'Analyze', logout:'Logout',
-    pdfBtn:'PDF / Print', pdfAr:'Arabic PDF', pdfEn:'English PDF', pdfBi:'Bilingual PDF',
-    tooltipHome:'Go to Home',
-    needData:'Provide case details or attach a file.', analyzing:'Analyzing…'
+    pdfBtn:'PDF / Print', tooltipHome:'Go to Home', needData:'Provide case details or attach a file.', analyzing:'Analyzing…'
   }
 };
 let currentLang = (localStorage.getItem('uiLang') === 'en') ? 'en' : 'ar';
 applyLang(currentLang);
 document.getElementById('lang-ar').addEventListener('click', ()=> setLang('ar'));
 document.getElementById('lang-en').addEventListener('click', ()=> setLang('en'));
-function setLang(lang){ currentLang=lang; localStorage.setItem('uiLang', lang); applyLang(lang); }
+function setLang(lang){ currentLang=lang; localStorage.setItem('uiLang',lang); applyLang(lang); }
 function applyLang(lang){
   document.documentElement.lang = (lang==='en'?'en':'ar');
   document.documentElement.dir  = (lang==='en'?'ltr':'rtl');
@@ -392,15 +347,14 @@ function applyLang(lang){
   document.getElementById('app-sub').textContent   = t.sub;
   document.getElementById('exportBtn').textContent = t.pdfBtn;
   document.getElementById('homeTip').textContent   = t.tooltipHome;
-  document.getElementById('analyzeBtn').textContent = t.analyze;
-  document.getElementById('fabAnalyze').textContent = t.analyze;
-  document.getElementById('logoutBtn').textContent  = t.logout;
-  document.querySelectorAll('[data-i]').forEach(el=>{ const key=el.getAttribute('data-i'); el.textContent = t[key] ?? el.textContent; });
+  document.getElementById('analyzeBtn').textContent= t.analyze;
+  document.getElementById('logoutBtn').textContent = t.logout;
+  document.querySelectorAll('[data-i]').forEach(el=>{ const k=el.getAttribute('data-i'); el.textContent = t[k] ?? el.textContent; });
   document.getElementById('lang-ar').classList.toggle('active', lang==='ar');
   document.getElementById('lang-en').classList.toggle('active', lang==='en');
 }
 
-/* ================== Tooltip (hover/focus + Esc) ================== */
+/* ===== Tooltip ===== */
 const homeBtn = document.getElementById('homeBtn');
 const homeTip = document.getElementById('homeTip');
 homeBtn.addEventListener('mouseenter', ()=> showTip(true));
@@ -409,295 +363,180 @@ homeBtn.addEventListener('focus', ()=> showTip(true));
 homeBtn.addEventListener('blur',  ()=> showTip(false));
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') showTip(false); });
 function showTip(on){ homeTip.setAttribute('data-show', on?'true':'false'); }
-homeBtn.addEventListener('click', ()=> { window.location.href='https://www.m2020m.org/portal.html'; });
+homeBtn.addEventListener('click', ()=>{ window.location.href='https://www.example.com'; });
 
-/* ================== Conditional fields ================== */
-const genderEl = document.getElementById('gender');
-const pregStatWrap = document.getElementById('pregnancy-status-wrap');
-const pregMonthWrap = document.getElementById('pregnancy-month-wrap');
-const pregStatEl = document.getElementById('pregnancy-status');
-genderEl.addEventListener('change', () => {
-  const isFemale = genderEl.value === 'female';
-  pregStatWrap.classList.toggle('hidden', !isFemale);
-  if (!isFemale){ pregMonthWrap.classList.add('hidden'); pregStatEl.value = ""; document.getElementById('pregnancy-month').value=""; }
+/* ===== Dynamic fields ===== */
+const genderEl=document.getElementById('gender'), pregStatWrap=document.getElementById('pregnancy-status-wrap'),
+      pregMonthWrap=document.getElementById('pregnancy-month-wrap'), pregStatEl=document.getElementById('pregnancy-status');
+genderEl.addEventListener('change',()=>{
+  const f=genderEl.value==='female'; pregStatWrap.classList.toggle('hidden',!f);
+  if(!f){ pregMonthWrap.classList.add('hidden'); pregStatEl.value=""; document.getElementById('pregnancy-month').value=""; }
 });
-pregStatEl.addEventListener('change', () => {
-  const showMonth = pregStatEl.value === 'yes';
-  pregMonthWrap.classList.toggle('hidden', !showMonth);
-  if (!showMonth){ document.getElementById('pregnancy-month').value=""; }
-});
-const smokerEl = document.getElementById('smoker');
-const packYearsWrap = document.getElementById('pack-years-wrap');
-smokerEl.addEventListener('change', () => {
-  packYearsWrap.classList.toggle('hidden', smokerEl.value !== 'yes');
-  if (smokerEl.value !== 'yes') document.getElementById('pack-years').value="";
-});
-const visualEl = document.getElementById('visual-symptoms');
-const eyeWrap = document.getElementById('eye-wrap');
-visualEl.addEventListener('change', () => {
-  eyeWrap.classList.toggle('hidden', visualEl.value !== 'yes');
-  if (visualEl.value !== 'yes'){ document.getElementById('last-eye-exam').value=""; document.getElementById('visual-acuity').value=""; }
-});
+pregStatEl.addEventListener('change',()=>{ const on=pregStatEl.value==='yes'; pregMonthWrap.classList.toggle('hidden',!on); if(!on){ document.getElementById('pregnancy-month').value=""; }});
+const smokerEl=document.getElementById('smoker'), packYearsWrap=document.getElementById('pack-years-wrap');
+smokerEl.addEventListener('change',()=>{ const on=smokerEl.value==='yes'; packYearsWrap.classList.toggle('hidden',!on); if(!on) document.getElementById('pack-years').value=""; });
 
-/* ================== Uploads (images + PDFs) ================== */
-const fileInput = document.getElementById('file-input');
-const fileListEl = document.getElementById('file-list');
-let filesState = []; // {id,name,type,base64,width,height,sizeKB,isImage}
-let nextId = 1;
-fileInput.addEventListener('change', async (e) => {
-  if (!e.target.files?.length) return;
-  await addFiles([...e.target.files]); fileInput.value="";
-});
-async function handleDrop(ev){
-  ev.preventDefault();
-  const dtFiles = [...(ev.dataTransfer?.files || [])];
-  if (!dtFiles.length) return;
-  await addFiles(dtFiles);
-}
+/* ===== Uploads ===== */
+const fileInput=document.getElementById('file-input'), fileListEl=document.getElementById('file-list');
+let filesState=[]; let nextId=1;
+fileInput.addEventListener('change',async(e)=>{ if(!e.target.files?.length) return; await addFiles([...e.target.files]); fileInput.value=""; });
+async function handleDrop(ev){ ev.preventDefault(); const f=[...(ev.dataTransfer?.files||[])]; if(!f.length) return; await addFiles(f); }
 async function addFiles(files){
-  for (const file of files){
+  for(const file of files){
     const type = file.type || '';
     try{
-      if (type.startsWith('image/')){
-        const { base64, info } = await compressImage(file, { maxW:1600, maxH:1600, quality:0.72 });
-        filesState.push({ id: nextId++, name:file.name, type, base64, width:info.w, height:info.h, sizeKB:info.sizeKB, isImage:true });
-      } else if (type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')){
-        const base64 = await fileToBase64(file);
-        const sizeKB = (base64.length * 3) / 4 / 1024;
-        filesState.push({ id: nextId++, name:file.name, type:'application/pdf', base64, sizeKB, isImage:false });
-      } else {
-        showNote('error', (currentLang==='ar'?'الملفات المدعومة: صور/PDF':'Supported files: images/PDF only'));
-      }
-    }catch(err){
-      console.error(err); showNote('error','تعذّر معالجة الملف / File could not be processed');
-    }
-  }
-  renderFiles();
+      if(type.startsWith('image/')){
+        const {base64,info}=await compressImage(file,{maxW:1600,maxH:1600,quality:0.72});
+        filesState.push({id:nextId++,name:file.name,type,base64,width:info.w,height:info.h,sizeKB:info.sizeKB,isImage:true});
+      }else if(type==='application/pdf' || file.name.toLowerCase().endsWith('.pdf')){
+        const base64=await fileToBase64(file); const sizeKB=(base64.length*3)/4/1024;
+        filesState.push({id:nextId++,name:file.name,type:'application/pdf',base64,sizeKB,isImage:false});
+      }else{ showNote('error', currentLang==='ar'?'الملفات المدعومة: صور/PDF فقط':'Supported files: images/PDF only'); }
+    }catch(e){ console.error(e); showNote('error','تعذّر معالجة الملف / File could not be processed'); }
+  } renderFiles();
 }
 function renderFiles(){
-  fileListEl.innerHTML = '';
-  filesState.forEach(f=>{
-    const card = document.createElement('div'); card.className='thumb';
-    const badge = document.createElement('div'); badge.className='badge'; badge.textContent = f.isImage ? 'IMAGE' : 'PDF'; card.appendChild(badge);
-    const remove = document.createElement('button'); remove.className='remove'; remove.textContent='✕';
-    remove.title='Remove'; remove.onclick=()=>{ filesState = filesState.filter(x=>x.id!==f.id); renderFiles(); }; card.appendChild(remove);
-    if (f.isImage){
-      const img = new Image(); img.src = 'data:image/jpeg;base64,' + f.base64; card.appendChild(img);
-      const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `${f.width}×${f.height} • ${f.sizeKB.toFixed(1)} KB`; card.appendChild(meta);
-    } else {
-      const pdfIcon = document.createElement('div'); pdfIcon.style.fontSize='56px'; pdfIcon.style.color='#64748b'; pdfIcon.textContent='📄'; card.appendChild(pdfIcon);
-      const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `${f.name} • ${f.sizeKB.toFixed(1)} KB`; card.appendChild(meta);
-    }
-    fileListEl.appendChild(card);
-  });
+  fileListEl.innerHTML='';
+  for(const f of filesState){
+    const card=document.createElement('div'); card.className='thumb';
+    const badge=document.createElement('div'); badge.className='badge'; badge.textContent=f.isImage?'IMAGE':'PDF'; card.appendChild(badge);
+    const remove=document.createElement('button'); remove.className='remove'; remove.textContent='✕'; remove.title='Remove';
+    remove.onclick=()=>{ filesState=filesState.filter(x=>x.id!==f.id); renderFiles(); }; card.appendChild(remove);
+    if(f.isImage){ const img=new Image(); img.src='data:image/jpeg;base64,'+f.base64; card.appendChild(img);
+      const meta=document.createElement('div'); meta.className='meta'; meta.textContent=`${f.width}×${f.height} • ${f.sizeKB.toFixed(1)} KB`; card.appendChild(meta);
+    }else{ const pdfIcon=document.createElement('div'); pdfIcon.style.fontSize='56px'; pdfIcon.style.color='#64748b'; pdfIcon.textContent='📄'; card.appendChild(pdfIcon);
+      const meta=document.createElement('div'); meta.className='meta'; meta.textContent=`${f.name} • ${f.sizeKB.toFixed(1)} KB`; card.appendChild(meta);
+    } fileListEl.appendChild(card);
+  }
 }
-async function fileToBase64(file){
-  return await new Promise((res, rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); });
-}
-async function compressImage(file, { maxW=1600, maxH=1600, quality=0.72 } = {}){
-  const dataURL = await new Promise((res, rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
-  const img = await new Promise((res, rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=dataURL; });
-  let { width:w, height:h } = img;
-  const ratio = Math.min(maxW/w, maxH/h, 1); w=Math.round(w*ratio); h=Math.round(h*ratio);
-  const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
-  const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h);
-  const out=canvas.toDataURL('image/jpeg', quality);
-  const base64=out.split(',')[1]; const sizeKB=(base64.length*3)/4/1024;
-  return { base64, info:{ w,h,sizeKB } };
+async function fileToBase64(file){ return await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
+async function compressImage(file,{maxW=1600,maxH=1600,quality=0.72}={}){
+  const dataURL=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+  const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=dataURL; });
+  let {width:w,height:h}=img; const ratio=Math.min(maxW/w,maxH/h,1); w=Math.round(w*ratio); h=Math.round(h*ratio);
+  const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+  const out=canvas.toDataURL('image/jpeg',quality); const base64=out.split(',')[1]; const sizeKB=(base64.length*3)/4/1024;
+  return {base64,info:{w,h,sizeKB}};
 }
 
-/* ================== FAB يظهر/يختفي تلقائيًا ================== */
-const fab = document.getElementById('fabAnalyze');
-const analyzeBtn = document.getElementById('analyzeBtn');
-if ('IntersectionObserver' in window){
-  const io = new IntersectionObserver((entries)=>{
-    const visible = entries.some(e=> e.isIntersecting);
-    fab.setAttribute('data-show', visible ? 'false' : 'true');
-  }, { root:null, threshold:0.1 });
-  io.observe(analyzeBtn);
-} else {
-  // fallback: اعتمادًا على التمرير
-  window.addEventListener('scroll', ()=>{
-    const rect = analyzeBtn.getBoundingClientRect();
-    const visible = rect.top >= 0 && rect.bottom <= (window.innerHeight||document.documentElement.clientHeight);
-    fab.setAttribute('data-show', visible ? 'false' : 'true');
-  });
-}
-fab.addEventListener('click', ()=> analyzeCase());
-
-/* ================== Analyze ================== */
-document.getElementById('analyzeBtn').addEventListener('click', analyzeCase);
-document.getElementById('logoutBtn').addEventListener('click', ()=> showNote('info', currentLang==='ar'?'تم تسجيل الخروج (نموذج).':'Logged out (demo).'));
-
-function buildPayload(uiLangOverride){
-  return {
-    uiLang: uiLangOverride || currentLang, // 'ar' | 'en' | 'both'
-    userType:'doctor',
-    age: val('age'), gender: val('gender'),
-    isSmoker: sel('smoker'),
-    smokingPackYears: val('pack-years'), coughDurationWeeks: val('cough-duration'),
-    visualSymptoms: val('visual-symptoms'), lastEyeExamDate: val('last-eye-exam'), visualAcuity: val('visual-acuity'),
-    height: val('height'), weight: val('weight'), temperature: val('temperature'), bloodPressure: val('blood-pressure'),
-    notes: val('case-description', true), diagnosis: val('diagnosis', true), labResults: val('lab-results', true), medications: val('medications-procedures', true),
-    files: filesState.map(f=>({name:f.name,type:f.type,base64:f.base64}))  // images + PDFs
-  };
-}
+/* ===== Analyze ===== */
+const noteArea=document.getElementById('notification-area');
 function val(id, allowEmpty=false){ const v=(document.getElementById(id)?.value||'').trim(); return (allowEmpty?v:(v||undefined)); }
 function sel(id){ const v=document.getElementById(id)?.value; if(v==='yes') return true; if(v==='no') return false; return undefined; }
 
+document.getElementById('analyzeBtn').addEventListener('click', analyzeCase);
+document.getElementById('logoutBtn').addEventListener('click', ()=> showNote('info', currentLang==='ar'?'تم تسجيل الخروج (تجريبي).':'Logged out (demo).'));
+
 async function analyzeCase(){
-  const t = I18N[currentLang];
-  const container = document.getElementById('response-container');
-  clearNote(); container.style.display='none'; container.innerHTML='';
-  const payload = buildPayload();
-  if (!payload.notes && !payload.diagnosis && !payload.labResults && !payload.medications && (!payload.files || !payload.files.length)){
+  const t=I18N[currentLang]; const responseContainer=document.getElementById('response-container');
+  clearNote(); responseContainer.style.display='none'; responseContainer.innerHTML='';
+  const payload={
+    uiLang: currentLang, userType:'doctor',
+    age: val('age'), gender: val('gender'),
+    isSmoker: sel('smoker'), smokingPackYears: val('pack-years'), coughDurationWeeks: val('cough-duration'),
+    visualSymptoms: val('visual-symptoms'), lastEyeExamDate: val('last-eye-exam'), visualAcuity: val('visual-acuity'),
+    height: val('height'), weight: val('weight'), temperature: val('temperature'), bloodPressure: val('blood-pressure'),
+    notes: val('case-description', true), diagnosis: val('diagnosis', true), labResults: val('lab-results', true), medications: val('medications-procedures', true),
+    files: filesState.map(f=>({name:f.name,type:f.type,base64:f.base64}))
+  };
+  if(!payload.notes && !payload.diagnosis && !payload.labResults && !payload.medications && (!payload.files || !payload.files.length)){
     showNote('error', t.needData); return;
   }
   showNote('info', t.analyzing);
-  const controller = new AbortController(); const timer = setTimeout(()=> controller.abort(), 90000);
+  const btn=document.getElementById('analyzeBtn'); btn.disabled=true;
   try{
-    const res = await fetch('/api/gpt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), signal: controller.signal });
-    const text = await res.text();
-    if (!res.ok){ throw new Error(`HTTP ${res.status}: ${text.slice(0,200)}…`); }
-    const data = JSON.parse(text);
-    if (data?.htmlReport){
-      clearNote();
-      container.innerHTML = `<div class="report-wrap">${data.htmlReport}</div>`;
-      container.style.display = 'block';
-      // حسّن الجدول (colgroup + اتساعات)
-      enhanceReportTable(container);
-      container.scrollIntoView({ behavior:'smooth', block:'start' });
-    } else { throw new Error('No htmlReport'); }
-  } catch(err){ console.error(err); showNote('error','Error: '+err.message);
-  } finally { clearTimeout(timer); }
+    const res=await fetch('/api/gpt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json(); if(!res.ok) throw new Error((data&&data.detail)||'HTTP '+res.status);
+    injectReportHTML(data.htmlReport);
+  }catch(e){ console.error(e); showNote('error','Error: '+e.message);
+  }finally{ btn.disabled=false; }
 }
 
-/* ================== Export PDF menu ================== */
-const exportBtn  = document.getElementById('exportBtn');
-const exportMenu = document.getElementById('exportMenu');
-exportBtn.addEventListener('click', toggleMenu);
-exportBtn.addEventListener('keydown', (e)=>{ if(e.key==='ArrowDown'){ openMenu(); focusFirst(); } });
-document.addEventListener('click', (e)=>{ if(!exportMenu.contains(e.target) && e.target!==exportBtn) closeMenu(); });
-document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); });
-[...exportMenu.querySelectorAll('.menuitem')].forEach((item, idx, arr)=>{
+function injectReportHTML(html){
+  const responseContainer=document.getElementById('response-container');
+  // ملفوفة لتفعيل scroll + نضيف colgroup لتوسعة الأعمدة الأخيرة
+  const wrap=document.createElement('div'); wrap.className='report-wrap';
+  wrap.innerHTML=html; responseContainer.innerHTML=''; responseContainer.appendChild(wrap); responseContainer.style.display='block';
+  const table=wrap.querySelector('table'); if(table && !table.querySelector('colgroup')){
+    const cg=document.createElement('colgroup');
+    // ترتيب الأعمدة حسب المواصفة: 1..8
+    for(let i=1;i<=8;i++){ const c=document.createElement('col'); if(i===7){ c.style.width='9ch'; }
+      if(i===8){ c.style.width='28ch'; } if(i===1){ c.style.width='18ch'; } cg.appendChild(c); }
+    table.insertBefore(cg, table.firstChild);
+  }
+  responseContainer.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+/* ===== Export PDF ===== */
+const exportBtn=document.getElementById('exportBtn'), exportMenu=document.getElementById('exportMenu');
+exportBtn.addEventListener('click',toggleMenu);
+exportBtn.addEventListener('keydown',(e)=>{ if(e.key==='ArrowDown'){ openMenu(); focusFirst(); }});
+document.addEventListener('click',(e)=>{ if(!exportMenu.contains(e.target) && e.target!==exportBtn) closeMenu(); });
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeMenu(); });
+[...exportMenu.querySelectorAll('.menuitem')].forEach((item,idx,arr)=>{
   item.addEventListener('click', ()=> exportPDF(item.dataset.mode));
-  item.addEventListener('keydown', (e)=>{
-    if(e.key==='Enter' || e.key===' ') { e.preventDefault(); exportPDF(item.dataset.mode); }
+  item.addEventListener('keydown',(e)=>{
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); exportPDF(item.dataset.mode); }
     else if(e.key==='ArrowDown'){ e.preventDefault(); (arr[idx+1]||arr[0]).focus(); }
     else if(e.key==='ArrowUp'){ e.preventDefault(); (arr[idx-1]||arr[arr.length-1]).focus(); }
   });
 });
-function toggleMenu(){ const open = exportMenu.getAttribute('aria-hidden')!=='false'; open?openMenu():closeMenu(); }
+function toggleMenu(){ const open=exportMenu.getAttribute('aria-hidden')!=='false'; open?openMenu():closeMenu(); }
 function openMenu(){ exportMenu.setAttribute('aria-hidden','false'); exportBtn.setAttribute('aria-expanded','true'); }
 function closeMenu(){ exportMenu.setAttribute('aria-hidden','true'); exportBtn.setAttribute('aria-expanded','false'); }
-function focusFirst(){ const first = exportMenu.querySelector('.menuitem'); first && first.focus(); }
+function focusFirst(){ const first=exportMenu.querySelector('.menuitem'); first && first.focus(); }
 
-/* ======== تحسين الجدول: حقن <colgroup> وتوزيع العرض ======== */
-function enhanceReportTable(root=document){
-  const tbl = root.querySelector('table');
-  if(!tbl) return;
-  // لا تعيد الحقن مرتين
-  if (tbl.querySelector('colgroup')) return;
-  const cols = tbl.querySelectorAll('thead th').length || 8; // الافتراضي 8
-  const cg = document.createElement('colgroup');
-  for (let i=0;i<cols;i++){
-    const col = document.createElement('col');
-    // توزيع افتراضي مع عمود أخير أوسع (قرار التأمين)
-    // [الدواء, الجرعة الموصوفة, الجرعة الصحيحة, التصنيف, الغرض الطبي, التداخلات, درجة الخطورة, قرار التأمين]
-    const widths = ['14%','14%','14%','10%','14%','14%','8%','22%'];
-    col.style.width = widths[i] || `${Math.round(100/cols)}%`;
-    cg.appendChild(col);
-  }
-  tbl.insertBefore(cg, tbl.firstChild);
-}
-
-/* ======== طباعة مع آلية احتياطية لو ما ظهر أي شيء ======== */
 async function exportPDF(mode){
   closeMenu();
-  const savedLang = currentLang;
-  const container = document.getElementById('response-container');
-  const originalHTML = container.innerHTML;
-  const originalDir  = document.documentElement.dir;
-  const originalLang = document.documentElement.lang;
-
+  const savedLang=currentLang;
+  const responseContainer=document.getElementById('response-container');
+  const originalHTML=responseContainer.innerHTML;
+  const originalDir=document.documentElement.dir;
+  const originalLang=document.documentElement.lang;
   try{
-    const payload = buildPayload(mode); // 'ar' | 'en' | 'both'
-    const res = await fetch('/api/gpt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    const data = await res.json();
-    if (!res.ok || !data?.htmlReport) throw new Error('Export generation failed');
-
-    // اضبط dir/lang مؤقتًا لصفحة الطباعة (bilingual: RTL للهيكل)
-    if (mode==='en'){ document.documentElement.dir='ltr'; document.documentElement.lang='en'; }
+    const payload=buildPayloadForExport(mode);
+    const res=await fetch('/api/gpt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json(); if(!res.ok || !data?.htmlReport) throw new Error('Export generation failed');
+    // ضبط الاتجاه مؤقتًا (البيلنغوال نطبعه RTL كبنية)
+    if(mode==='en'){ document.documentElement.dir='ltr'; document.documentElement.lang='en'; }
     else { document.documentElement.dir='rtl'; document.documentElement.lang='ar'; }
-
-    container.innerHTML = `<div class="report-wrap">${data.htmlReport}</div>`;
-    container.style.display = 'block';
-    enhanceReportTable(container);
-
-    // انتظر تحميل أي صور داخل التقرير قبل الطباعة
-    await waitForImages(container);
-
-    await printWithFallback(container.innerHTML, document.documentElement.dir, document.documentElement.lang);
-
-  } catch (e){
-    console.error(e);
-    showNote('error', currentLang==='ar'?'فشل إنشاء PDF':'Failed to create PDF');
-  } finally {
-    // أعد الحالة
-    container.innerHTML = originalHTML;
-    container.style.display = originalHTML ? 'block' : 'none';
-    document.documentElement.dir = originalDir;
-    document.documentElement.lang = originalLang;
-    setLang(savedLang);
+    injectReportHTML(data.htmlReport);
+    // مهلة قصيرة قبل الطباعة (Safari/iOS)
+    await new Promise(r=>setTimeout(r, 250));
+    const after = new Promise(r=>{
+      const h=()=>{ window.removeEventListener('afterprint',h); r(); };
+      window.addEventListener('afterprint', h);
+      // Fallback
+      setTimeout(r, 2500);
+    });
+    window.print(); await after;
+  }catch(e){ console.error(e); showNote('error', currentLang==='ar'?'فشل إنشاء PDF':'Failed to create PDF'); }
+  finally{
+    responseContainer.innerHTML=originalHTML;
+    responseContainer.style.display = originalHTML ? 'block':'none';
+    document.documentElement.dir=originalDir; document.documentElement.lang=originalLang; setLang(savedLang);
   }
 }
-
-function waitForImages(scope=document){
-  const imgs = Array.from(scope.querySelectorAll('img'));
-  if (!imgs.length) return Promise.resolve();
-  return Promise.allSettled(imgs.map(img=>{
-    if (img.complete) return Promise.resolve();
-    return new Promise(res=>{
-      img.addEventListener('load', res, { once:true });
-      img.addEventListener('error', res, { once:true });
-    });
-  }));
+function buildPayloadForExport(mode){
+  return {
+    uiLang: mode || currentLang,
+    userType:'doctor',
+    age: val('age'), gender: val('gender'),
+    isSmoker: sel('smoker'), smokingPackYears: val('pack-years'), coughDurationWeeks: val('cough-duration'),
+    visualSymptoms: val('visual-symptoms'), lastEyeExamDate: val('last-eye-exam'), visualAcuity: val('visual-acuity'),
+    height: val('height'), weight: val('weight'), temperature: val('temperature'), bloodPressure: val('blood-pressure'),
+    notes: val('case-description', true), diagnosis: val('diagnosis', true), labResults: val('lab-results', true), medications: val('medications-procedures', true),
+    files: filesState.map(f=>({name:f.name,type:f.type,base64:f.base64}))
+  };
 }
 
-function printWithFallback(innerHtml, dir, lang){
-  // جرب window.print أولًا (مع afterprint)
-  return new Promise((resolve)=>{
-    let done = false;
-    const cleanup = ()=>{ if(!done){ done=true; resolve(); window.removeEventListener('afterprint', onAfter); } };
-    const onAfter = ()=> cleanup();
-    window.addEventListener('afterprint', onAfter, { once:true });
-    // افتح مربع الطباعة
-    window.print(); // قد لا يطلق afterprint دائمًا في بعض البيئات (Safari/موبايل). :contentReference[oaicite:0]{index=0}
-    // مهلة 2.2ث ثم احتياط: نافذة طباعة منفصلة
-    setTimeout(()=>{
-      if (done) return;
-      // افتح نافذة خفيفة للطباعة
-      const w = window.open('', '_blank', 'noopener,noreferrer,width=1024,height=768');
-      if (!w){ cleanup(); return; }
-      w.document.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8"><title>Print</title>
-        <style>@media print{body{margin:0} .wrap{padding:0}} table{width:100%; table-layout:fixed}</style></head>
-        <body><div class="wrap">${innerHtml}</div></body></html>`);
-      w.document.close();
-      w.focus();
-      // انتظر لحظة ثم اطبع
-      setTimeout(()=>{ w.print(); try{ w.close(); }catch{} cleanup(); }, 350);
-    }, 2200);
-  });
+/* ===== Notes ===== */
+function showNote(type,text){
+  const note=document.getElementById('notification-area');
+  note.className='notification ' + (type==='error'?'error':'info');
+  note.textContent=text; note.style.display='block';
 }
-
-/* ================== Notes ================== */
-function showNote(type, text){
-  const note = document.getElementById('notification-area');
-  note.className = 'notification ' + (type === 'error' ? 'error' : 'info');
-  note.textContent = text;
-  note.style.display = 'block';
-}
-function clearNote(){ const note = document.getElementById('notification-area'); note.style.display='none'; note.textContent=''; }
+function clearNote(){ const n=document.getElementById('notification-area'); n.style.display='none'; n.textContent=''; }
 </script>
 </body>
 </html>
