@@ -1,332 +1,470 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>تدقيق المطالبات الطبية</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>تقييم الحالة الطبية - بوابة الطبيب</title>
   <style>
     :root{
-      --container-max: 1100px;
-      --gap-xxs: 4px;
-      --gap-xs: 8px;
-      --gap-s: 12px;
-      --gap-m: 16px;
-      --gap-l: 20px;
-      --radius: 14px;
-      --shadow: 0 6px 20px rgba(20,20,50,.08);
-      --line: rgba(0,0,0,.08);
-      --brand: #0d6efd;
-      --danger: #e63946;
-      --bg: #f6f8fb;
-      --card: #fff;
-      --text: #1b2a3a;
-      --muted: #5f6b7a;
+      --primary:#0b63c2;         /* أزرق عيادي */
+      --primary-dark:#084e97;
+      --accent:#00a7c7;
+      --secondary:#6c757d;
+      --danger:#dc3545;
+      --bg-grad-1:#e9f3ff;       /* خلفية تدرّج */
+      --bg-grad-2:#f6fbff;
+      --card:#ffffff;
+      --text:#243143;
+      --muted:#66768a;
+      --border:#e2e8f0;
+      --focus:rgba(11,99,194,.18);
+      --shadow:0 10px 25px rgba(15, 57, 105, .08);
+      --radius:16px;
     }
-    html,body{height:100%;}
+    html,body{height:100%}
     body{
       margin:0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Naskh Arabic UI", "Tajawal", "Cairo", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color:var(--text);
+      background: radial-gradient(1200px 800px at 80% 0%, var(--bg-grad-1), var(--bg-grad-2));
+      padding: 2rem 1rem;
     }
-    .wrap{
-      max-width: var(--container-max);
-      margin-inline:auto;
-      padding-inline: clamp(12px,4vw,20px);
-      padding-block: 20px 80px; /* مساحة سفليّة مريحة بدون إفراط */
-    }
-    header{
-      display:flex; align-items:center; gap:var(--gap-s);
-      margin-block: 4px 16px;
-    }
-    .home{
-      inline-size:44px; block-size:44px; border-radius:12px;
-      display:grid; place-items:center;
-      background:linear-gradient(180deg,#2aa7f7,#0d6efd);
-      box-shadow: var(--shadow);
-      color:#fff; font-size:22px; text-decoration:none;
-    }
-    h1{
-      font-size: clamp(18px,3.8vw,26px);
-      margin:0; font-weight:800; color:#0b2239;
-    }
-    .hint{ color:var(--muted); font-size:14px; }
-
-    .card{
+    .container{
+      max-width: 980px;
+      margin: 0 auto;
       background: var(--card);
+      border:1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      border: 1px solid var(--line);
-      padding: 14px; /* تم تصغير البادينغ لتقليل المسافات */
-      margin-block: 12px; /* مسافة عمودية معقولة */
+      padding: 28px 26px 30px;
+      position: relative;
+      overflow: hidden;
     }
-    .drop-title{
-      display:flex; align-items:center; justify-content:space-between;
-      font-weight:700; padding-block:6px 10px;
+    /* شريط علوي لطيف */
+    .top-ribbon{
+      position:absolute; inset:0 0 auto 0; height:6px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
     }
+    /* أيقونة الهوم (أكبر وواضحة) */
+    .home-icon{
+      position:absolute; top:14px; right:14px;
+      width:54px; height:54px; border-radius:50%;
+      background: var(--primary);
+      color:#fff; font-size:24px; display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 6px 18px rgba(11, 99, 194, .22);
+      cursor:pointer; user-select:none;
+      transition: transform .12s ease, background .25s ease;
+    }
+    .home-icon:hover{ background:var(--primary-dark); transform: translateY(-1px); }
+    h2{
+      margin: 10px 0 24px;
+      font-weight:700;
+      letter-spacing:.2px;
+      color:var(--primary);
+      text-align:center;
+    }
+    .subtext{
+      text-align:center; color:var(--muted); margin-top:-10px; margin-bottom:22px; font-size:.95rem;
+    }
+    .section-title{
+      font-size:1.08rem; font-weight:700; color:var(--primary);
+      border-bottom:2px solid var(--primary);
+      display:flex; align-items:center; gap:.5rem;
+      padding-bottom:.5rem; margin: 26px 0 16px;
+    }
+    .section-title .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); display:inline-block; }
 
-    /* Dropzone */
-    .dropzone{
-      display:flex; align-items:center; justify-content:center;
-      border:2px dashed #c8d3e1;
-      border-radius:12px;
+    label{font-weight:600; display:block; margin:.8rem 0 .35rem;}
+    .hint{font-size:.86rem; color:var(--muted); margin-top:.15rem;}
+
+    input, select, textarea{
+      width:100%; box-sizing:border-box;
+      border:1px solid var(--border); border-radius:10px; padding:.75rem .9rem;
+      font-size:1rem; background:#fff;
+      transition:border-color .2s, box-shadow .2s, background .2s;
+    }
+    input::placeholder, textarea::placeholder{ color:#9aa8b8; }
+    input:focus, select:focus, textarea:focus{
+      outline:none; border-color:var(--primary);
+      box-shadow: 0 0 0 3px var(--focus);
       background:#fbfdff;
-      min-block-size: 150px; /* أقل من السابق لتقليل الفراغ */
-      padding: 8px;
-      transition: background .2s, border-color .2s;
     }
-    .dropzone.drag{ background:#f0f6ff; border-color:#9bbcf4;}
-    .dropzone p{ margin:0; color:var(--muted); text-align:center; }
-    .preview{
-      display:grid; place-items:center; padding:10px; margin-block:10px 0;
-      border:1px solid var(--line); border-radius:12px; background:#fff;
-    }
-    .preview figure{ margin:0; }
-    .preview img{ max-inline-size: 360px; border-radius:10px; display:block; }
+    textarea{ min-height:120px; resize:vertical; }
 
-    /* Actions (شريط واحد فقط أعلى الصفحة) */
-    .actions{
-      display:flex; gap:var(--gap-m); justify-content:center; flex-wrap:wrap;
-      margin-block: 12px 6px;
+    .grid{
+      display:grid; gap:16px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
-    button.btn{
-      border:0; border-radius: 12px; padding: 11px 18px;
-      font-weight:800; font-size:16px; cursor:pointer;
-      transition: transform .08s ease, box-shadow .15s ease;
-      box-shadow: var(--shadow);
-      min-inline-size: 140px; /* هدف لمس مُناسب */
+
+    /* زرّان أنحف وأنيق */
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+      border:none; border-radius:10px; color:#fff; cursor:pointer;
+      padding:.6rem 1rem; font-weight:700; font-size:.98rem;
+      transition: transform .06s ease, filter .2s ease, background .25s ease;
+      box-shadow: 0 6px 14px rgba(0,0,0,.08);
     }
     .btn:active{ transform: translateY(1px); }
-    .btn.primary{ background:var(--brand); color:#fff; }
-    .btn.danger{ background:var(--danger); color:#fff; }
-    .btn.ghost{ background:#eef2f8; color:#0b2239; }
+    .btn-primary{ background: var(--primary); }
+    .btn-primary:hover{ background: var(--primary-dark); }
+    .btn-danger{ background: var(--danger); }
+    .btn-danger:hover{ filter: brightness(.95); }
+    .btn-compact{ padding:.5rem .9rem; font-size:.95rem; border-radius:9px; }
 
-    /* صندوق المخرجات */
+    .actions{
+      display:flex; gap:10px; justify-content: center; align-items:center;
+      margin-top: 20px;
+    }
+
+    .image-upload{
+      border:2px dashed var(--border); border-radius:12px; padding:18px;
+      text-align:center; color:var(--muted);
+      transition: border-color .25s, background .25s;
+      cursor:pointer;
+    }
+    .image-upload:hover{ border-color:var(--primary); background: #f6fbff; }
+    #image-upload-input{ display:none; }
+    #image-preview{ max-width:100%; max-height:320px; display:none; border-radius:10px; border:1px solid var(--border); }
+    #image-meta{ font-size:.9rem; color:var(--muted); margin-top:8px; display:none; }
+
+    .note{
+      padding:12px 14px; border:1px dashed var(--border); border-radius:10px;
+      background:#fcfdff; color:var(--muted); font-size:.92rem; margin-top:8px;
+    }
+
+    .notification{
+      margin-top:16px; padding:12px 14px; border-radius:10px; display:none; text-align:center; font-weight:600;
+    }
+    .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
+    .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
+
     #response-container{
-      max-block-size: 60vh; overflow:auto;
-      padding: 10px; border-radius:12px; border:1px solid var(--line);
-      background:#fff;
+      margin-top: 20px;
+      padding:16px; border:1px solid var(--border); border-radius:12px; background:#fff; display:none;
+      box-shadow: var(--shadow);
     }
 
-    /* شريط عائم ذكي يظهر فقط عند الابتعاد عن الأعلى */
-    .fab{
-      position: fixed; inset-inline:0; bottom: 14px;
-      display:none; justify-content:center; gap:10px;
-      pointer-events: none; /* تمنع الضغط خارج الأزرار */
-      z-index: 50;
-    }
-    .fab .btn{ pointer-events:auto; }
-    .fab.show{ display:flex; }
+    /* تلوين كروت القرار/المخاطر داخل التقرير */
+    #response-container .risk-high{ color:#721c24; background:#f8d7da; padding:.18rem .5rem; border-radius:6px; border:1px solid #f5c6cb; font-weight:700; }
+    #response-container .risk-medium{ color:#856404; background:#fff3cd; padding:.18rem .5rem; border-radius:6px; border:1px solid #ffeeba; font-weight:700; }
+    #response-container .risk-low{ color:#155724; background:#d4edda; padding:.18rem .5rem; border-radius:6px; border:1px solid #c3e6cb; font-weight:700; }
 
-    /* طباعة: نوحّد تقرير نظيف */
-    @media print {
-      body{ background:#fff; }
-      .no-print, header, .fab{ display:none !important; }
-      #print-root{ display:block !important; }
-    }
-    /* جدولة بسيطة داخل التقرير */
-    .report table{ width:100%; border-collapse: collapse; font-size:14px; }
-    .report th, .report td{ border-block:1px solid #e6ecf3; padding:10px 8px; text-align: start; }
-    .report th{ background:#f6f9ff; white-space:nowrap; }
-    .risk-hi{ color:#b00020; font-weight:700; }
-    .risk-mid{ color:#a05a00; font-weight:700; }
-    .risk-lo{ color:#0b7a34; font-weight:700; }
+    .muted-mini{ font-size:.82rem; color:#92a3b6; text-align:center; margin-top:10px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="no-print">
-      <a class="home" href="/" aria-label="الصفحة الرئيسية">🏠</a>
+  <div class="container">
+    <div class="top-ribbon"></div>
+    <div class="home-icon" title="الشاشة الرئيسية" onclick="goToHome()">🏠</div>
+
+    <h2>تقييم الحالة الطبية وطلبات التأمين</h2>
+    <div class="subtext">واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين</div>
+
+    <!-- معلومات المريض -->
+    <div class="section-title"><span class="dot"></span> 1) معلومات المريض</div>
+    <div class="grid">
       <div>
-        <h1>تدقيق المطالبات الطبية</h1>
-        <div class="hint">ارفع صورة/‏PDF للوصفة، ثم اضغط “تحليل الحالة”.</div>
+        <label for="gender">الجنس</label>
+        <select id="gender">
+          <option value="" selected disabled>اختر الجنس</option>
+          <option value="male">ذكر</option>
+          <option value="female">أنثى</option>
+        </select>
+        <div class="hint">لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.</div>
       </div>
-    </header>
 
-    <section class="card no-print" aria-labelledby="uploaderTitle">
-      <div class="drop-title">
-        <div id="uploaderTitle">رفع ملفات (صورة/‏PDF)</div>
-        <span style="color:#36b37e;font-weight:700">●</span>
+      <div>
+        <label for="age">العمر</label>
+        <input id="age" type="number" placeholder="مثال: 63">
       </div>
-      <div id="drop" class="dropzone" tabindex="0" role="button" aria-label="انقر أو اسحب ملفًا">
-        <p>اضغط أو اسحب صور PNG/JPG أو ملفات PDF هنا</p>
-        <input id="file-input" type="file" accept=".png,.jpg,.jpeg,.pdf" multiple hidden />
-      </div>
-      <div id="preview" class="preview" hidden></div>
-    </section>
 
-    <div class="actions no-print" id="top-actions">
-      <button class="btn danger" id="resetBtn">تسجيل الخروج</button>
-      <button class="btn primary" id="analyzeBtn">تحليل الحالة</button>
-      <button class="btn ghost" id="pdfBtn" title="تصدير/طباعة التقرير">PDF</button>
+      <div id="pregnancy-status-wrap" class="hidden">
+        <label for="pregnancy-status">هل المريضة حامل؟</label>
+        <select id="pregnancy-status">
+          <option value="" selected disabled>اختر</option>
+          <option value="yes">نعم</option>
+          <option value="no">لا</option>
+        </select>
+      </div>
+
+      <div id="pregnancy-month-wrap" class="hidden">
+        <label for="pregnancy-month">شهر الحمل</label>
+        <input id="pregnancy-month" type="number" min="1" max="9" placeholder="مثال: 5">
+      </div>
+
+      <div>
+        <label for="height">الطول (سم)</label>
+        <input id="height" type="number" placeholder="مثال: 175">
+      </div>
+
+      <div>
+        <label for="weight">الوزن (كجم)</label>
+        <input id="weight" type="number" placeholder="مثال: 80">
+      </div>
+
+      <div>
+        <label for="temperature">درجة الحرارة (°م)</label>
+        <input id="temperature" type="text" placeholder="مثال: 37.6">
+      </div>
+
+      <div>
+        <label for="blood-pressure">ضغط الدم</label>
+        <input id="blood-pressure" type="text" placeholder="مثال: 120/80">
+      </div>
     </div>
 
-    <section class="card" aria-live="polite" aria-busy="false">
-      <div id="response-container">— سيتم عرض التقرير هنا —</div>
-    </section>
+    <!-- تنفس وتدخين وعيون -->
+    <div class="section-title"><span class="dot"></span> 2) نمط الحياة والأعراض</div>
+    <div class="grid">
+      <div>
+        <label for="smoker">هل المريض مدخّن؟</label>
+        <select id="smoker">
+          <option value="" selected disabled>اختر</option>
+          <option value="yes">نعم</option>
+          <option value="no">لا</option>
+        </select>
+      </div>
 
-    <!-- شريط عائم يظهر فقط عند الابتعاد عن الأزرار العلوية -->
-    <div class="fab no-print" id="fab">
-      <button class="btn primary" id="fabAnalyze">تحليل الحالة</button>
-      <button class="btn ghost" id="fabPdf">PDF</button>
+      <div id="pack-years-wrap" class="hidden">
+        <label for="pack-years">عدد الباك-سنة</label>
+        <input id="pack-years" type="number" placeholder="مثال: 35">
+        <div class="hint">الباك-سنة = (عدد العلب يوميًا × عدد سنوات التدخين)</div>
+      </div>
+
+      <div>
+        <label for="cough-duration">مدة السعال (أسابيع)</label>
+        <input id="cough-duration" type="number" placeholder="مثال: 12">
+      </div>
+
+      <div>
+        <label for="visual-symptoms">أعراض بصرية؟</label>
+        <select id="visual-symptoms">
+          <option value="" selected disabled>اختر</option>
+          <option value="yes">نعم</option>
+          <option value="no">لا</option>
+        </select>
+      </div>
+
+      <div id="eye-wrap" class="hidden">
+        <label for="last-eye-exam">تاريخ آخر فحص قاع عين</label>
+        <input id="last-eye-exam" type="date">
+        <label for="visual-acuity">حدة البصر (اختياري)</label>
+        <input id="visual-acuity" type="text" placeholder="مثال: 6/12 أو 20/40">
+      </div>
     </div>
 
-    <footer class="no-print" style="margin-block:20px 0;color:#6b778c;font-size:13px">
-      <div>إرشادات الوصول والتصميم مُستندة إلى WCAG وMDN/Material.</div>
+    <!-- تفاصيل الحالة -->
+    <div class="section-title"><span class="dot"></span> 3) تفاصيل الحالة الطبية</div>
+    <div class="grid">
       <div>
-        مراجع: WCAG Quickref · CSS Logical Properties (MDN) · طباعة بالمتصفح (MDN) · Gemini generateContent (Google AI).
+        <label for="case-description">وصف الحالة</label>
+        <textarea id="case-description" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط ودوخة متقطعة..."></textarea>
       </div>
-    </footer>
+      <div>
+        <label for="diagnosis">التشخيصات المبدئية</label>
+        <textarea id="diagnosis" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea>
+      </div>
+      <div>
+        <label for="lab-results">التحاليل/الأشعة المتوفرة</label>
+        <textarea id="lab-results" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6, INR غير متاح..."></textarea>
+      </div>
+      <div>
+        <label for="medications-procedures">الأدوية/الإجراءات المكتوبة</label>
+        <textarea id="medications-procedures" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid, Ramipril 10 bid, Spironolactone 50 bid, Ibuprofen 400 tid, Warfarin + Aspirin + Clopidogrel + Rivaroxaban, Clarithromycin + Ciprofloxacin, Allopurinol 300 qd, CT contrast اليوم, قسطرة قلب عاجلة..."></textarea>
+      </div>
+    </div>
+
+    <!-- رفع الملفات -->
+    <div class="section-title"><span class="dot"></span> 4) رفع ملفات (وصفة/تقرير) — اختياري</div>
+    <div class="image-upload" onclick="document.getElementById('image-upload-input').click()">
+      اضغط هنا لرفع صورة (PNG/JPG)
+      <input id="image-upload-input" type="file" accept="image/*">
+      <div class="note">ننصح برفع صورة واحدة واضحة. سنضغطها تلقائيًا لتفادي أخطاء الحجم.</div>
+    </div>
+    <div style="margin-top:10px;">
+      <img id="image-preview" alt="معاينة الصورة">
+      <div id="image-meta"></div>
+    </div>
+
+    <!-- أزرار -->
+    <div class="actions">
+      <button id="analyzeBtn" class="btn btn-primary btn-compact" onclick="analyzeCase()">تحليل الحالة</button>
+      <button class="btn btn-danger btn-compact" onclick="logout()">تسجيل الخروج</button>
+    </div>
+    <div class="muted-mini">بالضغط على "تحليل الحالة" سيتم إرسال المدخلات لتوليد تقرير HTML شامل للعيادة والتأمين.</div>
+
+    <div id="notification-area" class="notification info"></div>
+    <div id="response-container"></div>
   </div>
 
   <script>
-    // ====== عناصر DOM
-    const drop = document.getElementById('drop');
-    const fileInput = document.getElementById('file-input');
-    const preview = document.getElementById('preview');
-    const responseEl = document.getElementById('response-container');
-    const analyzeBtn = document.getElementById('analyzeBtn');
-    const pdfBtn = document.getElementById('pdfBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const fab = document.getElementById('fab');
-    const fabAnalyze = document.getElementById('fabAnalyze');
-    const fabPdf = document.getElementById('fabPdf');
+    // منطق الحقول الشرطية
+    const genderEl = document.getElementById('gender');
+    const pregStatWrap = document.getElementById('pregnancy-status-wrap');
+    const pregMonthWrap = document.getElementById('pregnancy-month-wrap');
+    const pregStatEl = document.getElementById('pregnancy-status');
 
-    // ====== حالة
-    const state = { files: [] };
-
-    // ====== مساعدات
-    const toBase64 = (file) => new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result.split(',')[1]);
-      r.onerror = reject;
-      r.readAsDataURL(file);
+    genderEl.addEventListener('change', () => {
+      const isFemale = genderEl.value === 'female';
+      pregStatWrap.classList.toggle('hidden', !isFemale);
+      if (!isFemale){ pregMonthWrap.classList.add('hidden'); pregStatEl.value = ""; document.getElementById('pregnancy-month').value=""; }
+    });
+    pregStatEl.addEventListener('change', () => {
+      const showMonth = pregStatEl.value === 'yes';
+      pregMonthWrap.classList.toggle('hidden', !showMonth);
+      if (!showMonth){ document.getElementById('pregnancy-month').value=""; }
     });
 
-    const humanSize = (n) => n>1024*1024 ? (n/1024/1024).toFixed(1)+' MB' : Math.round(n/1024)+' KB';
+    const smokerEl = document.getElementById('smoker');
+    const packYearsWrap = document.getElementById('pack-years-wrap');
+    smokerEl.addEventListener('change', () => {
+      packYearsWrap.classList.toggle('hidden', smokerEl.value !== 'yes');
+      if (smokerEl.value !== 'yes') document.getElementById('pack-years').value="";
+    });
 
-    function showPreview() {
-      if (!state.files.length) { preview.hidden = true; preview.innerHTML=''; return; }
-      const f = state.files[0]; // أول مرفق للعرض
-      const isImg = /^image\//i.test(f.type);
-      preview.hidden = false;
-      preview.innerHTML = `<figure>
-        ${isImg ? `<img alt="معاينة" src="${URL.createObjectURL(f)}"/>`
-                : `<div style="padding:20px;text-align:center">📄 ملف PDF — ${f.name}</div>`}
-      </figure>
-      <div style="color:#6b778c;font-size:12px;margin-block:6px 0">${humanSize(f.size)} · ${f.type}</div>`;
+    const visualEl = document.getElementById('visual-symptoms');
+    const eyeWrap = document.getElementById('eye-wrap');
+    visualEl.addEventListener('change', () => {
+      eyeWrap.classList.toggle('hidden', visualEl.value !== 'yes');
+      if (visualEl.value !== 'yes'){ document.getElementById('last-eye-exam').value=""; document.getElementById('visual-acuity').value=""; }
+    });
+
+    // معاينة وضغط الصورة
+    const imageInput = document.getElementById('image-upload-input');
+    const imagePreview = document.getElementById('image-preview');
+    const imageMeta = document.getElementById('image-meta');
+    let imageBase64 = null;
+
+    imageInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const { base64, info } = await compressImage(file, { maxW: 1400, maxH: 1400, quality: 0.7 });
+        imageBase64 = base64;
+        imagePreview.src = 'data:image/jpeg;base64,' + base64;
+        imagePreview.style.display = 'block';
+        imageMeta.style.display = 'block';
+        imageMeta.textContent = `الحجم بعد الضغط: ${info.sizeKB.toFixed(1)} KB — الأبعاد: ${info.w}×${info.h}`;
+      } catch (err) {
+        showNote('error', 'تعذر معالجة الصورة. حاول صورة أصغر/أوضح.');
+        console.error(err);
+      }
+    });
+
+    async function compressImage(file, { maxW=1400, maxH=1400, quality=0.7 } = {}){
+      const dataURL = await new Promise((res, rej)=>{
+        const r = new FileReader(); r.onload = ()=> res(r.result); r.onerror = rej; r.readAsDataURL(file);
+      });
+      const img = await new Promise((res, rej)=>{
+        const i = new Image(); i.onload = ()=> res(i); i.onerror = rej; i.src = dataURL;
+      });
+      let { width:w, height:h } = img;
+      const ratio = Math.min(maxW/w, maxH/h, 1);
+      w = Math.round(w*ratio); h = Math.round(h*ratio);
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+      const out = canvas.toDataURL('image/jpeg', quality);
+      const base64 = out.split(',')[1];
+      const sizeKB = (base64.length * 3) / 4 / 1024;
+      return { base64, info:{ w,h,sizeKB } };
     }
 
-    function pickFiles() { fileInput.click(); }
-    drop.addEventListener('click', pickFiles);
-    drop.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); pickFiles(); } });
-    drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('drag'); });
-    drop.addEventListener('dragleave', ()=> drop.classList.remove('drag'));
-    drop.addEventListener('drop', (e)=>{
-      e.preventDefault(); drop.classList.remove('drag');
-      const files = Array.from(e.dataTransfer.files || []);
-      state.files = files;
-      showPreview();
-    });
-    fileInput.addEventListener('change', (e)=>{
-      state.files = Array.from(e.target.files || []);
-      showPreview();
-    });
-
-    // زر إعادة الضبط
-    resetBtn.addEventListener('click', ()=>{
-      state.files = [];
-      fileInput.value = '';
-      preview.hidden = true; preview.innerHTML = '';
-      responseEl.innerHTML = '— تم المسح، ارفع ملفات جديدة —';
-      window.scrollTo({top:0, behavior:'smooth'});
-    });
-
-    // شريط عائم ذكي (لا يظهر إذا كانت الأزرار العلوية ضمن مجال الرؤية)
-    function updateFabVisibility() {
-      const rect = document.getElementById('top-actions').getBoundingClientRect();
-      const inView = rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
-      fab.classList.toggle('show', !inView);
+    // إشعارات
+    const noteArea = document.getElementById('notification-area');
+    function showNote(type, text){
+      noteArea.className = 'notification ' + (type === 'error' ? 'error' : 'info');
+      noteArea.textContent = text;
+      noteArea.style.display = 'block';
     }
-    window.addEventListener('scroll', updateFabVisibility, {passive:true});
-    window.addEventListener('resize', updateFabVisibility);
-    updateFabVisibility();
+    function clearNote(){ noteArea.style.display='none'; noteArea.textContent=''; }
 
-    // طلب التحليل
+    // انتقالات
+    function goToHome(){ window.location.href = 'https://www.m2020m.org/portal.html'; }
+    function logout(){ /* اربط تسجيل خروجك الحقيقي هنا */ showNote('info','تم تسجيل الخروج (نموذج).'); }
+
+    // إرسال التحليل
     async function analyzeCase(){
+      const responseContainer = document.getElementById('response-container');
+      const btn = document.getElementById('analyzeBtn');
+      clearNote(); responseContainer.style.display='none'; responseContainer.innerHTML='';
+
+      // جمع البيانات
+      const caseData = {
+        userType:'doctor',
+        age: document.getElementById('age').value || undefined,
+        gender: document.getElementById('gender').value || undefined,
+        isSmoker: document.getElementById('smoker').value === 'yes' ? true : (document.getElementById('smoker').value === 'no' ? false : undefined),
+        smokingPackYears: document.getElementById('pack-years').value || undefined,
+        coughDurationWeeks: document.getElementById('cough-duration').value || undefined,
+        visualSymptoms: document.getElementById('visual-symptoms').value || undefined,
+        lastEyeExamDate: document.getElementById('last-eye-exam').value || undefined,
+        visualAcuity: document.getElementById('visual-acuity').value || undefined,
+        height: document.getElementById('height').value || undefined,
+        weight: document.getElementById('weight').value || undefined,
+        temperature: document.getElementById('temperature').value || undefined,
+        bloodPressure: document.getElementById('blood-pressure').value || undefined,
+
+        notes: document.getElementById('case-description').value || '',
+        diagnosis: document.getElementById('diagnosis').value || '',
+        labResults: document.getElementById('lab-results').value || '',
+        medications: document.getElementById('medications-procedures').value || '',
+        imageData: imageBase64 ? [imageBase64] : []
+      };
+
+      if (
+        !caseData.notes && !caseData.diagnosis && !caseData.labResults &&
+        !caseData.medications && caseData.imageData.length === 0
+      ){
+        showNote('error','الرجاء إدخال تفاصيل الحالة أو رفع صورة.');
+        return;
+      }
+
+      showNote('info','جاري تحليل الحالة… قد يستغرق الأمر قليلًا حسب حجم البيانات.');
+      btn.disabled = true;
+
+      // طلب مع مهلة (timeout)
+      const controller = new AbortController();
+      const t = setTimeout(()=> controller.abort(), 60000);
+
       try{
-        const filesOut = [];
-        for(const f of state.files){
-          filesOut.push({
-            name: f.name,
-            type: f.type,
-            data: await toBase64(f)
-          });
-        }
-        responseEl.innerHTML = '⏳ يتم التحليل…';
         const res = await fetch('/api/gpt', {
           method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            language: 'ar',
-            notes: '',
-            files: filesOut
-          })
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify(caseData),
+          signal: controller.signal
         });
-        if(!res.ok){
-          const txt = await res.text();
-          throw new Error(`HTTP ${res.status}: ${txt}`);
-        }
-        const data = await res.json();
-        responseEl.innerHTML = `<div class="report">${data.htmlReport || 'تعذر توليد التقرير.'}</div>`;
-        updateFabVisibility();
-      }catch(err){
-        console.error(err);
-        responseEl.innerHTML = `<div style="color:#b00020">حدث خطأ في الخادم أثناء تحليل الحالة:<br>${err.message}</div>`;
-      }
-    }
-    analyzeBtn.addEventListener('click', analyzeCase);
-    fabAnalyze.addEventListener('click', analyzeCase);
 
-    // تصدير/طباعة PDF — نفتح نافذة نظيفة ونطبعها (حسب توصية MDN)
-    async function exportPDF(){
-      try{
-        // إن وُجد تقرير في الصفحة نستعمله مباشرة للطباعة
-        const current = responseEl.innerHTML.trim();
-        if(!current || current.includes('سيتم عرض التقرير')){
-          // لم يُنشأ تقرير بعد — نستدعي واجهة الذكاء أولًا
-          await analyzeCase();
+        const text = await res.text();
+        if (!res.ok){
+          // أحجام كبيرة
+          if (res.status === 413 || /Entity Too Large|Content Too Large/i.test(text)){
+            throw new Error('الحجم كبير: قلّل جودة/عدد الصور ثم أعد المحاولة.');
+          }
+          // خطأ عام
+          throw new Error(`فشل (${res.status}): ${text.slice(0,200)}…`);
         }
-        const html = `<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8"/><title>تقرير التدقيق الطبي</title>
-<style>
-  body{font-family:system-ui,"Noto Naskh Arabic UI","Cairo",sans-serif;color:#111;margin:0;padding:24px;}
-  h1,h2{margin:.2em 0;}
-  .report table{width:100%;border-collapse:collapse;font-size:12.5px}
-  .report th,.report td{border:1px solid #e3e7ed;padding:8px 6px;text-align:start}
-  .report th{background:#f6f9ff}
-  .meta{color:#555;font-size:12px;margin-bottom:8px}
-  @page{size:auto;margin:16mm}
-</style>
-</head>
-<body>
-  <div class="meta">تم التوليد: ${new Date().toLocaleString('ar')}</div>
-  <div class="report">${responseEl.innerHTML}</div>
-  <script>window.onload=()=>{window.print(); setTimeout(()=>window.close(), 250);};<\/script>
-</body></html>`;
-        const w = window.open('', '_blank', 'noopener,noreferrer');
-        w.document.open(); w.document.write(html); w.document.close();
-      }catch(err){
+
+        let data;
+        try{ data = JSON.parse(text); }
+        catch{ throw new Error('الرد ليس JSON صالحًا من الخادم.'); }
+
+        if (data?.htmlReport){
+          clearNote();
+          responseContainer.innerHTML = data.htmlReport;
+          responseContainer.style.display = 'block';
+          responseContainer.scrollIntoView({ behavior:'smooth', block:'start' });
+        } else {
+          throw new Error('لم يتم استلام تقرير HTML من الخادم.');
+        }
+      } catch(err){
         console.error(err);
-        alert('تعذر إنشاء ملف للطباعة: ' + err.message);
+        showNote('error', 'حدث خطأ أثناء التحليل: ' + err.message);
+      } finally {
+        clearTimeout(t);
+        btn.disabled = false;
       }
     }
-    pdfBtn.addEventListener('click', exportPDF);
-    fabPdf.addEventListener('click', exportPDF);
+    window.analyzeCase = analyzeCase;
   </script>
 </body>
 </html>
