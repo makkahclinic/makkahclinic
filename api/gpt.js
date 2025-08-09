@@ -1,12 +1,11 @@
-// /api/gpt.js — Final Production Version
+// /api/gpt.js — Final Production Version (Corrected)
 // Implements:
 // 1. Detailed, non-truncated analysis via maxOutputTokens.
 // 2. Mandatory evidence-based section for clinical value.
 // 3. Google AI Files API for robust handling of large images (>4MB).
-// 4. Clean HTML output via responseMimeType.
+// 4. REMOVED responseMimeType to fix INVALID_ARGUMENT error.
 
 // --- CONFIGURATION CONSTANTS ---
-const MAX_INLINE_REQUEST_MB = 19.0;
 const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB threshold for switching to Files API
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 120_000; // Increased timeout for potentially longer processing
@@ -82,14 +81,14 @@ const systemInstruction = `
 - أخرج **كتلة HTML واحدة فقط** وصالحة وكاملة.
 `;
 
-// ===================== Prompt Builder (CORRECTED to match Front-End) =====================
+// ===================== Prompt Builder (Matches user's preferred Front-End) =====================
 function buildUserPrompt(caseData = {}) {
-  // This version now uses the EXACT keys sent from the front-end JS.
-  // e.g., `caseData.notes` instead of `caseData.caseDescription`
   return `
 **بيانات المريض (مدخل يدويًا):**
 - العمر: ${caseData.age ?? 'غير محدد'}
 - الجنس: ${caseData.gender ?? 'غير محدد'}
+- هل المريضة حامل: ${caseData.isPregnant ?? 'غير محدد'}
+- شهر الحمل: ${caseData.pregnancyMonth ?? 'غير محدد'}
 - التدخين: ${caseData.isSmoker ? 'مدخّن' : 'غير مدخّن'}
 - باك-سنة: ${caseData.packYears ?? 'غير محدد'}
 - مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
@@ -107,39 +106,23 @@ function buildUserPrompt(caseData = {}) {
 }
 
 // ===================== API & File Helpers =====================
-
-/**
- * Uploads a file to the Google AI Files API.
- * This is used for large files (>4MB) to avoid hitting payload limits.
- * @param {string} apiKey - The Google AI API key.
- * @param {Buffer} fileBuffer - The raw file data as a Buffer.
- * @param {string} mimeType - The MIME type of the file (e.g., 'image/jpeg').
- * @returns {Promise<string>} The file URI (e.g., 'files/xxxxxxxx').
- */
 async function uploadFileToGemini(apiKey, fileBuffer, mimeType) {
     const uploadUrl = `https://generativelanguage.googleapis.com/v1beta/files?key=${apiKey}`;
-    
     console.log(`Uploading file of type ${mimeType} to Google AI Files API...`);
-
     const response = await fetch(uploadUrl, {
         method: 'POST',
-        headers: {
-            'Content-Type': mimeType,
-        },
+        headers: { 'Content-Type': mimeType },
         body: fileBuffer,
     });
-
     if (!response.ok) {
         const errorText = await response.text();
         console.error('Google AI Files API upload failed:', errorText);
         throw new Error(`File API upload failed with status ${response.status}`);
     }
-
     const result = await response.json();
     console.log(`File uploaded successfully. URI: ${result.file.uri}`);
     return result.file.uri;
 }
-
 
 async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
@@ -168,60 +151,39 @@ export default async function handler(req, res) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
-    const apiUrl =
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
-    // --- Build the prompt parts ---
     const userPrompt = buildUserPrompt(req.body || {});
     const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
-    // --- Process and attach files ---
     if (Array.isArray(req.body?.files)) {
         for (const file of req.body.files) {
             if (typeof file.data === 'string' && file.data.length > 0) {
                 const fileBuffer = Buffer.from(file.data, 'base64');
-
-                // **DECISION LOGIC**: Use Files API for large files, inline for small ones.
                 if (fileBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
                     try {
                         const fileUri = await uploadFileToGemini(apiKey, fileBuffer, file.type);
-                        parts.push({
-                            file_data: {
-                                mime_type: file.type,
-                                file_uri: fileUri,
-                            },
-                        });
+                        parts.push({ file_data: { mime_type: file.type, file_uri: fileUri } });
                     } catch (uploadError) {
-                        // If a single file upload fails, we can choose to skip it or fail the whole request.
-                        // Here, we'll log it and continue, so the report can still be generated.
                         console.error(`Skipping file ${file.name} due to upload error:`, uploadError.message);
                     }
                 } else {
-                    // Use inline data for smaller files
-                    parts.push({
-                        inline_data: {
-                            mime_type: file.type,
-                            data: file.data,
-                        },
-                    });
+                    parts.push({ inline_data: { mime_type: file.type, data: file.data } });
                 }
             }
         }
     }
 
-    // --- Final Payload with Enhanced Generation Config ---
     const payload = {
       contents: [{ role: 'user', parts }],
       generationConfig: {
         temperature: 0.25,
         topP: 0.95,
         topK: 40,
-        maxOutputTokens: 8192, // Guarantee full, non-truncated output
-        responseMimeType: "text/html" // Ensure clean HTML block as response
+        maxOutputTokens: 8192,
       }
     };
 
-    // --- Make the API call ---
     const response = await fetchWithRetry(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -238,26 +200,19 @@ export default async function handler(req, res) {
       });
     }
 
-    // The response should now be clean HTML, but we parse it just in case
-    // the API returns a JSON wrapper despite the MIME type.
     let rawHtml;
     try {
         const result = JSON.parse(text);
         rawHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>⚠️ Could not extract report from API response.</p>';
-        
         const finishReason = result?.candidates?.[0]?.finishReason;
         if (finishReason && finishReason !== 'STOP') {
             console.warn('Gemini generation finished with reason:', finishReason);
         }
-
     } catch (e) {
-        // If it's not JSON, it's likely the raw HTML we requested.
         rawHtml = text;
     }
 
-    // Final safety check to remove any potential markdown backticks
     const finalizedHtml = rawHtml.replace(/```html|```/g, '').trim();
-
     return res.status(200).json({ htmlReport: finalizedHtml });
 
   } catch (err) {
