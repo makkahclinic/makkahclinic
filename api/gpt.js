@@ -1,261 +1,133 @@
-// /api/gpt.js — Steel+OCR Edition (Stable, Edge-safe)
-// Requires: Node 18+ (global fetch). Set env: GEMINI_API_KEY
+export const config = { runtime: 'edge' };
 
-const MAX_INLINE_REQUEST_MB = 19.0;
-const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
-const DEFAULT_TIMEOUT_MS = 60_000;
+// ميثاق النظام: توجيه دقيق لاستخراج خط اليد + بناء تقرير HTML نظيف
+const SYSTEM_INSTRUCTIONS = `
+أنت خبير تدقيق مطالبات طبية. هدفك:
+1) استخراج قائمة الأدوية من صور/‏PDF الوصفة بخط اليد بدقة عالية.
+2) إنتاج تقرير HTML نظيف (بدون CSS خارجي) يتضمن:
+   أ) ملخص الحالة السريرية.
+   ب) تحليل سريري عميق مختصر.
+   ج) جدول الأدوية والإجراءات بالأعمدة التالية: [الدواء/الإجراء | الجرعة الموصوفة | الجرعة الصحيحة المقترحة | التصنيف | الغرض الطبي | التداخلات | درجة الخطورة (%) | قرار التأمين].
+   د) فرص تحسين الخدمة (HbA1c, eGFR, UACR… مع مرجع موجز).
+   هـ) خطة عمل عملية.
+   و) خاتمة قصيرة.
 
-// ============= System instruction (final report) =============
-const systemInstructionReport =
-`أنت "كبير مدققي المطالبات الطبية والتأمين". أخرج تقرير HTML واحد فقط بصياغة احترافية، **دون أي CSS أو <style>**.
+قواعد استخراج خط اليد (بالغة العربية):
+- فسّر صيغ مثل:
+  • "od" = مرة يوميًا، "bid" = مرتان يوميًا، "tid" = ثلاث مرات يوميًا.
+  • "1x1x90" ≈ قرص واحد يوميًا لمدة 90 يوم.
+  • "1x2x90" ≈ قرصان يوميًا لمدة 90 يوم.
+  • الرمز × أو x أو X كلها تفيد "مرّات".
+- طبّع الأخطاء الإملائية الشائعة إن ظهرت:
+  Amlopine→Amlodipine، Rozavi→Rosuvastatin، Pantomax→Pantoprazole،
+  Formet/Formot→Metformin XR، Dramicron/Dramacron→Diamicron MR،
+  Co-taburan→(ارجّح Valsartan/HCT أو Losartan/HCT حسب السياق).
+- إن كان الاسم غير واضح اكتب: "اسم غير واضح (احتمال: …)" ولا تترك خانة فارغة.
+- دوّن المدة إذا ظهرت (مثل 90 يوم).
 
-[أ] التحليل المطلوب:
-1) حلّل النص والصور/الملفات واذكر أي تعارض.
-2) اكشف بدقة:
-   • الازدواجية العلاجية
-   • أخطاء الجرعات (XR/MR أكثر من مرة يوميًا، جرعات غير ملائمة لوظائف الكلى/الكبد، العمر، الحمل)
-   • الأدوية عالية الخطورة ومتطلبات الأمان (Metformin/Xigduo XR ⇠ eGFR، Allopurinol ⇠ eGFR + UA ± HLA-B*58:01، Warfarin ⇠ INR)
-   • التفاعلات الدوائية الحرجة (مثال: Ciprofloxacin + Warfarin ⇠ نزيف)
-   • ملاءمة العلاج لوضع CKD/HTN/DM والعمر
-   • المدد غير المناسبة (مثل صرف 90 يوم لحالة حادة) أو صلاحية تنتهي قريبًا
-   • غياب التشخيص الداعم لكل دواء/إجراء
-   • قدّم بدائل آمنة مع جرعات مقترحة عند الإيقاف
+قواعد ضمان الجودة:
+- اذكر الازدواجيات (مثل وجود خافضي ضغط متعددين).
+- اضبط تحذيرات كبار السن ووظائف الكلى (أشر إلى الحاجة لـ eGFR و HbA1c).
+- لا تُفصح عن معلومات حساسة غير موجودة في المدخلات.
+- أخرج النتيجة على شكل HTML منسّق بعناوين فرعية (<h2>) وجداول (<table>) وفقرات (<p>) فقط.
+- لا تُدرج CSS أو JavaScript أو صور؛ HTML نصي فقط.
+`;
 
-[ب] جدول الأدوية والإجراءات (إلزامي):
-<table><thead><tr>
-<th>الدواء/الإجراء</th>
-<th>الجرعة الموصوفة</th>
-<th>الجرعة الصحيحة المقترحة</th>
-<th>التصنيف</th>
-<th>الغرض الطبي</th>
-<th>التداخلات</th>
-<th>درجة الخطورة (%)</th>
-<th>قرار التأمين</th>
-</tr></thead><tbody>
-</tbody></table>
-- "درجة الخطورة": اكتب النسبة % وأضف كلاس td: risk-high (≥70) / risk-medium (40–69) / risk-low (<40).
-- "قرار التأمين" حصراً بإحدى الصيغ الثلاث مع **التخصص المراجع** داخل القرار:
-  ❌ قابل للرفض — السبب: […] — وللقبول يلزم: […] — **التخصص المُراجع: […]**
-  ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — **التخصص المُراجع: […]**
-  ✅ مقبول — **التخصص المُراجع: […]**
-- إذا أوصيت بإيقاف دواء، قدّم بديلًا وجرعة آمنة.
+function userPromptArabic(notes){
+  return `
+[سياق]
+ملاحظات إضافية من المستخدم (قد تكون فارغة):
+${notes || '—'}
 
-[ج] فرص تحسين الخدمة (مدعومة بالأدلة وروابط مباشرة):
-- كل عنصر سطر واحد: **اسم الفحص/الخدمة** — سبب سريري محدد — **رابط مصدر موثوق**.
-- فعّل الروابط الشائعة عند انطباق الحالة:
-  • HbA1c — https://diabetesjournals.org/care
-  • eGFR + UACR — https://kdigo.org/
-  • Uric Acid + eGFR ± HLA-B*58:01 — https://rheumatology.org/
-  • Potassium + Creatinine — https://www.ahajournals.org/
-  • Chest X-ray (CXR) — https://acsearch.acr.org/
-  • LDCT سنوي — https://www.uspreventiveservicestaskforce.org/
-  • فحص عين شامل — https://diabetesjournals.org/care
-  • OCT — https://www.aao.org/preferred-practice-pattern
+[مطلوب]
+- اقرأ كل الصور/الملفات المرفوعة (وصفة طبية بخط اليد).
+- استخرج الأدوية والجرعات والمدة.
+- قدّم تقريرًا عربيًا كاملًا وفق القالب المذكور في "قواعد الإخراج".
+- إذا كان عنصر غير واضح، اذكر الاحتمال الأقرب.
+- لا تذكر أنك نموذج؛ فقط التقرير.
 
-[د] خطة العمل:
-- نقاط مرقمة؛ ابدأ بالإجراءات العاجلة (مثال: K⁺>6.0 ⇒ غلوكونات كالسيوم IV + إنسولين/غلوكوز…).
-- اذكر بدائل الأدوية الموقوفة + جرعاتها الآمنة.
-
-[هـ] الخاتمة:
-<p><strong>الخاتمة:</strong> هذا التقرير تحليل مبدئي ولا يغني عن مراجعة متخصص.</p>`;
-
-// ============= Step‑A: OCR instruction (better recall) =============
-const systemInstructionOCR =
-`أنت خبير OCR في وصفات طبية مكتوبة بخط اليد.
-استخرج قائمة مرتبة بكل عنصر دوائي مذكور في الصور أو النص، بالصيغـة:
-- الاسم التجاري أو العلمي | القوة (إن وجدت) | الجرعة/التكرار | المدة (مثل 90 يوم) | ملاحظات
-
-إن كان الاسم غير واضح، اكتب (غير واضح) لكن لا تُسقط العنصر. لا تُخرج HTML، أخرج نقاط نصّية فقط.`;
-
-// ============= Prompt builders =============
-function buildUserPromptReport(caseData = {}, ocrListText = '') {
-  const uiLangLine =
-    caseData.uiLang === 'en'  ? 'اكتب التقرير بالإنجليزية فقط.'
-  : caseData.uiLang === 'both'? 'اكتب العناوين والتسميات ثنائية اللغة (عربي + إنجليزي) مع محتوى موحّد.'
-                              : 'اكتب التقرير بالعربية فقط.';
-
-  return `${uiLangLine}
-
-**بيانات المريض:**
-- العمر: ${caseData.age ?? 'غير محدد'}
-- الجنس: ${caseData.gender ?? 'غير محدد'}
-- التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
-- الأدوية/الإجراءات المكتوبة (من المستخدم وقد تتضمن ناتج OCR): ${caseData.medications ?? 'غير محدد'}
-
-**OCR — قائمة الأدوية المستخرجة من الصور (إن وُجدت):**
-${ocrListText || '- لا يوجد OCR أو لم تُرفع صور.'}
-
-**ملاحظات إضافية:** ${caseData.notes ?? 'غير محدد'}
-
-**تحاليل/قيم (اختياري):**
-- eGFR: ${caseData.eGFR ?? 'غير محدد'}
-- HbA1c: ${caseData.hba1c ?? 'غير محدد'}
-- Potassium (K+): ${caseData.k ?? 'غير محدد'}
-- Creatinine (Cr): ${caseData.cr ?? 'غير محدد'}
-- Uric Acid (UA): ${caseData.ua ?? 'غير محدد'}
-- INR: ${caseData.inr ?? 'غير محدد'}
-
-**نمط حياة/أعراض:**
-- مدخّن: ${caseData.isSmoker === true ? 'نعم' : (caseData.isSmoker === false ? 'لا' : 'غير محدد')}
-- باك-سنة: ${caseData.smokingPackYears ?? 'غير محدد'}
-- مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
-- أعراض بصرية: ${caseData.visualSymptoms ?? 'غير محدد'}
-- آخر فحص قاع عين: ${caseData.lastEyeExamDate ?? 'غير محدد'}
-- حدة البصر: ${caseData.visualAcuity ?? 'غير محدد'}
+[قواعد الإخراج]
+- استخدم عناوين: ملخص الحالة، التحليل السريري العميق، جدول الأدوية والإجراءات، فرص تحسين الخدمة، خطة العمل، الخاتمة.
+- جدول الأدوية يجب أن يتضمن كامل الأعمدة وبالترتيب.
+- استخدم نسب تقديرية للخطورة (%).
 `;
 }
 
-function summarizeFiles(caseData){
-  const files = []
-    .concat(Array.isArray(caseData.files) ? caseData.files : [])
-    .concat(Array.isArray(caseData.imageData) ? caseData.imageData.map(b64 => ({ type:'image/jpeg', base64:b64, name:'image.jpg' })) : []);
-  return files;
-}
-
-// ============= Helpers =============
-const _encoder = new TextEncoder();
-const byteLengthUtf8 = (s) => _encoder.encode(s || '').length;
-
-function estimateInlineRequestMB(parts) {
-  let bytes = 0;
-  for (const p of parts) {
-    if (p.text) bytes += byteLengthUtf8(p.text);
-    if (p.inline_data?.data) bytes += Math.floor((p.inline_data.data.length * 3) / 4);
+export default async function handler(req) {
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({error: 'Method not allowed'}), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
   }
-  return bytes / (1024 * 1024);
-}
-
-function stripStyles(html) {
-  try { return String(html || '').replace(/<style[\s\S]*?<\/style>/gi, ''); }
-  catch { return html; }
-}
-
-function applySafetyPostProcessing(html) {
-  try {
-    html = String(html || '');
-    // أضف % إن سقطت
-    html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi,
-      (_m, o, n, _s, c) => `${o}${n}%${c}`);
-    // أضف كلاس الخطر إن غير موجود
-    html = html.replace(/(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
-      (_m, open, numStr, close) => {
-        const v = parseInt(numStr, 10);
-        const klass = v >= 70 ? 'risk-high' : v >= 40 ? 'risk-medium' : 'risk-low';
-        return open.replace('<td', `<td class="${klass}"`) + `${numStr}%` + close;
-      });
-    // ابدأ من أول <h3> وقص أي مقدمة
-    const i = html.indexOf('<h3'); if (i > 0) html = html.slice(i);
-    // أزل أي <style> تسرب
-    html = stripStyles(html);
-    return html;
-  } catch {
-    return html;
-  }
-}
-
-async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
-      await new Promise(r => setTimeout(r, (3 - retries) * 800));
-      return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
-    }
-    return res;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ============= Gemini call helper =============
-async function genContent(apiKey, parts) {
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
-
-  // حجم الطلب
-  const estMB = estimateInlineRequestMB(parts);
-  if (estMB > MAX_INLINE_REQUEST_MB) {
-    const err = new Error(`الحجم ~${estMB.toFixed(2)}MB > ${MAX_INLINE_REQUEST_MB}MB`);
-    err.status = 413;
-    throw err;
-  }
-  const payload = {
-    contents: [{ role: 'user', parts }],
-    generationConfig: { temperature: 0.2, topP: 0.95, topK: 40 }
-  };
-
-  const response = await fetchWithRetry(apiUrl, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-  }, { retries: 2, timeoutMs: DEFAULT_TIMEOUT_MS });
-
-  const text = await response.text();
-  if (!response.ok) {
-    const e = new Error(text.slice(0, 2000));
-    e.status = response.status;
-    throw e;
-  }
-  let json; try { json = JSON.parse(text); } catch {
-    const e = new Error('Non-JSON from Gemini: ' + text.slice(0, 600));
-    e.status = 502; throw e;
-  }
-  const out = json?.candidates?.[0]?.content?.parts?.find(p => typeof p.text === 'string')?.text || '';
-  return out;
-}
-
-// ============= API Handler =============
-export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'HEAD, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS' || req.method === 'HEAD') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
+    const { language = 'ar', notes = '', files = [] } = await req.json();
 
-    const body = req.body || {};
-    const files = summarizeFiles(body);
+    const parts = [];
+    // تعليمات النظام
+    parts.push({ text: SYSTEM_INSTRUCTIONS });
 
-    // ===== Build attachments (images only inline; PDFs often work but may be large) =====
-    const attachments = [];
+    // ملاحظات المستخدم
+    parts.push({ text: userPromptArabic(notes) });
+
+    // المرفقات (صور/‏PDF) — inline_data
     for (const f of files) {
-      if (!f || typeof f.base64 !== 'string') continue;
-      let mime = f.type || '';
-      if (!mime) mime = (f.name || '').toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
-      // نفضّل الصور؛ PDF يُرسل كما هو إن كان الحجم يسمح
-      attachments.push({ mimeType: mime, data: f.base64 });
+      if (!f?.data || !f?.type) continue;
+      parts.push({
+        inline_data: {
+          mime_type: f.type,
+          data: f.data
+        }
+      });
     }
 
-    // ===== Step A — OCR extraction =====
-    const ocrParts = [{ text: systemInstructionOCR }, { text: 'استخرج جميع الأدوية بدقة من هذه الصور (إن وُجدت):' }];
-    attachments.forEach(a => ocrParts.push({ inline_data: a }));
-    let ocrListText = '';
-    try {
-      if (attachments.length) {
-        ocrListText = await genContent(apiKey, ocrParts);
-      }
-    } catch (e) {
-      // لا نفشل التقرير إن تعثّر OCR
-      console.error('OCR step failed:', e.status, e.message);
+    const payload = {
+      contents: [{ role: 'user', parts }],
+      // إعدادات توليد متحفظة لتقليل الهلوسة
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.9,
+        maxOutputTokens: 3500
+      },
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUAL_CONTENT', threshold: 'BLOCK_NONE' }
+      ]
+    };
+
+    const key = process.env.GOOGLE_API_KEY;
+    if (!key) {
+      return new Response(JSON.stringify({error: 'Missing GOOGLE_API_KEY'}), { status: 500, headers: {'Content-Type':'application/json','Access-Control-Allow-Origin':'*'} });
     }
 
-    // ===== Step B — Final report =====
-    const reportParts = [{ text: systemInstructionReport }, { text: buildUserPromptReport(body, ocrListText) }];
-    attachments.forEach(a => reportParts.push({ inline_data: a }));
-    const rawHtml = await genContent(apiKey, reportParts);
-    const finalizedHtml = applySafetyPostProcessing(rawHtml || '<p>⚠️ لم يتمكن النظام من إنشاء التقرير.</p>');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${key}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
-    return res.status(200).json({ htmlReport: finalizedHtml });
+    if (!r.ok) {
+      const errText = await r.text();
+      return new Response(JSON.stringify({error: `Gemini ${r.status}`, detail: errText}), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
 
-  } catch (err) {
-    console.error('Server Error:', err);
-    const status = err.status && Number.isInteger(err.status) ? err.status : 500;
-    return res.status(status).json({
-      error: 'حدث خطأ في الخادم أثناء تحليل الحالة',
-      detail: err.message
+    const data = await r.json();
+    const txt = data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+    return new Response(JSON.stringify({ htmlReport: txt }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'Server error', detail: String(e) }), {
+      status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 }
