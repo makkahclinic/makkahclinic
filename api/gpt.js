@@ -82,23 +82,23 @@ const systemInstruction = `
 - أخرج **كتلة HTML واحدة فقط** وصالحة وكاملة.
 `;
 
-// ===================== Prompt Builder (Restored to Full Detail) =====================
+// ===================== Prompt Builder (CORRECTED to match Front-End) =====================
 function buildUserPrompt(caseData = {}) {
-  // This prompt structure is intentionally detailed to trigger the comprehensive analysis.
-  // It matches the front-end data structure.
+  // This version now uses the EXACT keys sent from the front-end JS.
+  // e.g., `caseData.notes` instead of `caseData.caseDescription`
   return `
 **بيانات المريض (مدخل يدويًا):**
 - العمر: ${caseData.age ?? 'غير محدد'}
 - الجنس: ${caseData.gender ?? 'غير محدد'}
 - التدخين: ${caseData.isSmoker ? 'مدخّن' : 'غير مدخّن'}
-- باك-سنة: ${caseData.smokingPackYears ?? 'غير محدد'}
+- باك-سنة: ${caseData.packYears ?? 'غير محدد'}
 - مدة السعال (أسابيع): ${caseData.coughDurationWeeks ?? 'غير محدد'}
 - أعراض بصرية: ${caseData.visualSymptoms ?? 'غير محدد'}
 - تاريخ آخر فحص عين: ${caseData.lastEyeExamDate ?? 'غير محدد'}
 - حدة الإبصار: ${caseData.visualAcuity ?? 'غير محدد'}
 - التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
-- الأدوية/الإجراءات المكتوبة: ${caseData.medicationsProcedures ?? 'غير محدد'}
-- وصف الحالة وملاحظات إضافية: ${caseData.caseDescription ?? 'غير محدد'}
+- الأدوية/الإجراءات المكتوبة: ${caseData.medications ?? 'غير محدد'}
+- وصف الحالة وملاحظات إضافية: ${caseData.notes ?? 'غير محدد'}
 - نتائج التحاليل والأشعة المكتوبة: ${caseData.labResults ?? 'غير محدد'}
 
 **الملفات المرفوعة:**
