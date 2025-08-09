@@ -1,44 +1,44 @@
-// /api/gpt.js — Steel/Rich (Stable, Edge-safe, Full Coverage)
-// - صف لكل دواء/إجراء (لا إسقاط لعناصر)
-// - فحص تواريخ/مدد الصلاحية خلال 12 شهرًا
-// - فرص تحسين بخدمات مع روابط موثوقة
-// - uiLang: 'ar' | 'en' | 'both' (للـBilingual فقط)
-// - يدعم files[] و imageData[] (صور/PDF) + حارس حجم 19MB + Retries/Timeout
-// - تصحيح % + risk-* + شطب أي <style> + قص أي مقدمة قبل <h3>
+// /api/gpt.js — النسخة التحفة/الفولاذية الموحّدة (Stable, Edge-safe, Rich Output)
+// - يضمن استخراج كل الأدوية وإظهارها في صفوف
+// - فرص تحسين الخدمة بروابط موثوقة
+// - uiLang: 'ar' | 'en' | 'both' (للطباعة الثنائية فقط)
+// - يدعم files[] و imageData[] (صور + PDF) مع تقدير الحجم لتفادي 413
+// - تصحيح % + risk-* + إزالة <style> + قص المقدمة
+// - CORS + Retries + Timeout
 
 const MAX_INLINE_REQUEST_MB = 19.0;
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-// =================== SYSTEM INSTRUCTION (Rich & Strict) ===================
-const systemInstruction = `
-أنت "كبير مدققي المطالبات الطبية والتأمين". أخرج تقرير HTML واحد فقط بصياغة احترافية، **دون أي CSS أو <style>**.
+/* =================== SYSTEM INSTRUCTION (Rich & Strict) =================== */
+const systemInstruction =
+`أنت "كبير مدققي المطالبات الطبية والتأمين". أخرج تقرير HTML واحد فقط بصياغة احترافية، **دون أي CSS أو <style>**.
 
-[0] لغة الإخراج:
-- إذا قيل: "اكتب بالعربية" ⇒ استخدم العربية فقط.
-- إذا قيل: "بالإنجليزية" ⇒ الإنجليزية فقط.
-- إذا قيل: "ثنائي اللغة" ⇒ اجعل العناوين/التسميات بالعربي والإنجليزي مع نفس القيم.
+[أ] قواعد عامة صارمة
+- استخرج **كل دواء/إجراء** مذكور نصيًا أو مستنتجًا من الصور/الوصفات حتى لو كان الاسم غير واضح؛ في عدم اليقين اكتب "غير محدد" بدل ترك الخانة فارغة.
+- فسّر أي تعارض بين النص والصور كملاحظة حرجة وحدد ما يُعتمد ولماذا.
+- حلّل **المدد** (مثال: 90 يوم) واذكر عدم الملاءمة إن كانت الحالة حادة.
+- فسّر اختصارات الجرعات الشائعة: qd/od=مرة يوميًا، bid=مرتان يوميًا، tid=ثلاث مرات، qid=أربع مرات، prn=عند اللزوم.
 
-[أ] منهجية التحليل (إلزامية):
-1) حلّل النص وجميع الملفات/الصور. اذكر أي تعارض نص↔صورة كملاحظة حرجة وحدّد المرجّح ولماذا.
-2) **استخرج أولاً قائمة بجميع الأدوية والإجراءات** المذكورة (في النص أو الصور)، ثم:
-   - أنشئ **صفًا لكل عنصر** في الجدول (لا تُسقط أي عنصر إطلاقًا).
-   - إذا كانت الجرعة غير واضحة، اكتب "غير محدد".
-3) اكشف بدقة:
-   • الازدواجية العلاجية. 
-   • أخطاء الجرعات (XR/MR أكثر من مرة يوميًا؛ جرعات غير مناسبة لـ eGFR/الكبد/العمر/الحمل).
-   • أدوية عالية الخطورة ومتطلبات الأمان (Metformin/Xigduo XR⇠eGFR؛ Allopurinol⇠eGFR+UA±HLA-B*58:01؛ Warfarin⇠INR).
-   • التفاعلات الدوائية الحرجة (مثل Ciprofloxacin+Warfarin ⇒ خطر نزيف/INR).
-   • ملاءمة العلاج لـ CKD/HTN/DM والعمر.
-   • **المدد غير المناسبة** (مثل 90 يوم لحالة حادة) و**تواريخ الانتهاء خلال 12 شهرًا** (صلاحية أدوية/تصاريح/تقارير) إن وُجدت.
-   • إذا أوصيت بإيقاف دواء، قدّم **بديلًا آمنًا** مع جرعته.
+[ب] التحليل السريري الإلزامي
+اكشف بدقة:
+• الازدواجية العلاجية (ضغط/سكر/دوار/مضادات حموضة…)
+• أخطاء الجرعات (XR/MR أكثر من مرة يوميًا، جرعات غير ملائمة لعمر/حمل/eGFR/كبد)
+• أدوية عالية الخطورة ومتطلبات الأمان (Metformin/Xigduo XR ⇠ eGFR، Allopurinol ⇠ eGFR+UA±HLA-B*58:01، Warfarin ⇠ INR)
+• التفاعلات الدوائية الحرجة (مثال: Ciprofloxacin + Warfarin ⇠ نزيف)
+• ملاءمة العلاج لـ CKD/HTN/DM والعمر والحمل
+• غياب التشخيص الداعم لكل دواء/إجراء
+• عند التوصية بإيقاف دواء، اقترح **بديلًا آمنًا بجرعة**.
 
-[ب] بنية HTML مطلوبة (لا CSS):
+[ج] بنية HTML المطلوبة (لا CSS ولا <style>)
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
+
 <h4>ملخص الحالة</h4>
-<p>لخّص العمر/الجنس/التشخيصات/الأدوية البارزة/الملاحظات الحرجة، واذكر أي عناصر تنتهي صلاحيتها قريبًا.</p>
+<p>لخّص العمر/الجنس/التشخيصات/الأعراض/الملاحظات الحرجة (تعارض نص/صور، مدد غير ملائمة).</p>
+
 <h4>التحليل السريري العميق</h4>
-<p>اشرح الأخطاء المحورية وربطها بالحالة (CKD/HTN/DM/عمر/XR…)، واذكر فحوص الأمان المطلوبة (eGFR/UACR/K/Cr/INR...).</p>
+<p>اشرح الأخطاء الرئيسية واربطها بالحالة (CKD/ضغط/عمر/دواء XR…)، واذكر فحوص الأمان اللازمة (eGFR/UA/K/Cr/INR...).</p>
+
 <h4>جدول الأدوية والإجراءات</h4>
 <table><thead><tr>
 <th>الدواء/الإجراء</th>
@@ -50,37 +50,35 @@ const systemInstruction = `
 <th>درجة الخطورة (%)</th>
 <th>قرار التأمين</th>
 </tr></thead><tbody>
-<!-- املأ صفًا واحدًا على الأقل لكل عنصر مستخلص -->
+<!-- أنشئ صفًا لكل دواء/إجراء تم ذكره أو استنتاجه -->
 </tbody></table>
 
-[ج] قواعد قرار التأمين (إلزامي):
-- "درجة الخطورة": 0–100 **مع علامة %** + صنّف الخلية: risk-high (≥70) / risk-medium (40–69) / risk-low (<40).
-- "قرار التأمين" حصراً بإحدى الصيغ الثلاث واذكر **التخصص المُراجع** داخل القرار:
+قواعد الأعمدة:
+- "درجة الخطورة": اكتب النسبة **مع علامة %**، وأضف class على <td> نفسها:
+  • risk-high (≥70) • risk-medium (40–69) • risk-low (<40)
+- "قرار التأمين" **حصريًا** بإحدى الصيغ الثلاث، مع **التخصص المراجع** داخل القرار:
   ❌ قابل للرفض — السبب: […] — وللقبول يلزم: […] — **التخصص المُراجع: […]**
   ⚠️ قابل للمراجعة — السبب: […] — لتحسين فرص القبول: […] — **التخصص المُراجع: […]**
   ✅ مقبول — **التخصص المُراجع: […]**
-- إذا تعذّر الجزم بجرعة/مبرر دواء، اجعل القرار "⚠️ قابل للمراجعة" بدرجة 55–65%.
+- إن أوصيت بإيقاف دواء، اذكر **بديلًا** وجرعة آمنة.
 
-[د] فرص تحسين الخدمة (بأدلة وروابط مباشرة):
-- كل عنصر: **اسم الفحص/الخدمة** — سبب سريري محدد — **رابط مصدر موثوق**.
-- فعّل الروابط الشائعة عند انطباق الحالة:
-  • HbA1c — https://diabetesjournals.org/care
-  • eGFR + UACR — https://kdigo.org/
-  • Uric Acid + eGFR ± HLA-B*58:01 — https://rheumatology.org/
-  • Potassium + Creatinine — https://www.ahajournals.org/
-  • Chest X-ray (CXR) — https://acsearch.acr.org/
-  • LDCT سنوي — https://www.uspreventiveservicestaskforce.org/
-  • فحص عين شامل — https://diabetesjournals.org/care
-  • OCT — https://www.aao.org/preferred-practice-pattern
+[د] فرص تحسين الخدمة (مدعومة بالأدلة وروابط مباشرة)
+- كل عنصر سطر واحد: **اسم الفحص/الخدمة** — سبب سريري محدد — **رابط مصدر موثوق**.
+- فعّل تلقائيًا عندما تنطبق الحالة:
+  • سكري ⇒ **HbA1c** كل 3 أشهر إن غير منضبط — **ADA Standards of Care**: https://diabetesjournals.org/care
+  • Metformin/Xigduo XR أو سكري/CKD ⇒ **eGFR + UACR** — **KDIGO**: https://kdigo.org/
+  • Allopurinol ⇒ **Uric Acid + eGFR ± HLA-B*58:01** — **ACR Gout**: https://www.rheumatology.org/
+  • ACEi/ARB + Spironolactone أو CKD ⇒ **Potassium + Creatinine خلال 1–2 أسبوع** — **ACC/AHA**: https://www.ahajournals.org/
+  • سعال مزمن (>8 أسابيع) أو مدخّن ≥40 سنة ⇒ **Chest X-ray (CXR)** — **ACR Appropriateness**: https://acsearch.acr.org/
+  • مدخّن 50–80 سنة مع ≥20 باك-سنة ⇒ **LDCT سنوي** — **USPSTF**: https://www.uspreventiveservicestaskforce.org/
 
-[هـ] خطة العمل:
-- نقاط مرقمة بإجراءات محددة (العاجلة أولاً) + بدائل الأدوية الموقوفة مع جرعاتها.
+[هـ] خطة العمل (خطوات قصيرة ومباشرة)
+- قائمة مرقمة بإجراءات تصحيح فورية، ثم بدائل الأدوية بجرعات.
 
-[و] الخاتمة:
-<p><strong>الخاتمة:</strong> هذا التقرير تحليل مبدئي ولا يغني عن مراجعة متخصص.</p>
-`;
+[و] الخاتمة
+<p><strong>الخاتمة:</strong> هذا التقرير تحليل مبدئي ولا يغني عن مراجعة متخصص.</p>`;
 
-// =================== PROMPT BUILDER ===================
+/* =================== PROMPT BUILDER =================== */
 function buildUserPrompt(caseData = {}) {
   const uiLangLine =
     caseData.uiLang === 'en'  ? 'اكتب التقرير بالإنجليزية فقط.'
@@ -89,25 +87,20 @@ function buildUserPrompt(caseData = {}) {
 
   const filesInfo = summarizeFilesForPrompt(caseData);
 
-  return `
-${uiLangLine}
+  return `${uiLangLine}
 
 **بيانات المريض:**
 - العمر: ${caseData.age ?? 'غير محدد'}
 - الجنس: ${caseData.gender ?? 'غير محدد'}
 - التشخيصات: ${caseData.diagnosis ?? 'غير محدد'}
+- الأدوية/الإجراءات المكتوبة: ${caseData.medications ?? 'غير محدد'}
+- الملاحظات الإضافية: ${caseData.notes ?? 'غير محدد'}
 
-**الأدوية/الإجراءات المكتوبة (نص حر):**
-${caseData.medications ?? 'غير محدد'}
-
-**التحاليل/الأشعة (نص حر):**
-${caseData.labResults ?? 'غير محدد'}
-
-**قيم متاحة (إن وُجدت):**
+**التحاليل/القيم:**
 - eGFR: ${caseData.eGFR ?? 'غير محدد'}
 - HbA1c: ${caseData.hba1c ?? 'غير محدد'}
-- Potassium (K+): ${caseData.k ?? 'غير محدد'}
-- Creatinine (Cr): ${caseData.cr ?? 'غير محدد'}
+- البوتاسيوم (K+): ${caseData.k ?? 'غير محدد'}
+- الكرياتينين (Cr): ${caseData.cr ?? 'غير محدد'}
 - Uric Acid (UA): ${caseData.ua ?? 'غير محدد'}
 - INR: ${caseData.inr ?? 'غير محدد'}
 
@@ -119,9 +112,6 @@ ${caseData.labResults ?? 'غير محدد'}
 - آخر فحص قاع عين: ${caseData.lastEyeExamDate ?? 'غير محدد'}
 - حدة البصر: ${caseData.visualAcuity ?? 'غير محدد'}
 
-**ملاحظات إضافية:**
-${caseData.notes ?? 'غير محدد'}
-
 **الملفات المرفوعة:**
 ${filesInfo}
 `;
@@ -132,7 +122,7 @@ function summarizeFilesForPrompt(caseData) {
     .concat(Array.isArray(caseData.files) ? caseData.files : [])
     .concat(Array.isArray(caseData.imageData) ? caseData.imageData.map(b64 => ({ type:'image/jpeg', base64:b64, name:'image.jpg' })) : []);
   if (!files.length) return '- لا توجد ملفات.';
-  const lines = files.slice(0, 12).map((f, i) => {
+  const lines = files.slice(0, 16).map((f, i) => {
     const mime = f.type || ((f.name||'').toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
     const label = mime.startsWith('image/') ? 'صورة' : (mime === 'application/pdf' ? 'PDF' : 'ملف');
     const name = f.name || `attachment-${i+1}`;
@@ -142,7 +132,7 @@ function summarizeFilesForPrompt(caseData) {
   return lines.join('\n');
 }
 
-// =================== HELPERS ===================
+/* =================== HELPERS =================== */
 const _encoder = new TextEncoder();
 const byteLengthUtf8 = (s) => _encoder.encode(s || '').length;
 
@@ -164,8 +154,7 @@ function applySafetyPostProcessing(html) {
   try {
     html = String(html || '');
     // أضف % إن سقطت
-    html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi,
-      (_m, o, n, _s, c) => `${o}${n}%${c}`);
+    html = html.replace(/(<td\b[^>]*>\s*)(\d{1,3})(\s*)(<\/td>)/gi, (_m, o, n, _s, c) => `${o}${n}%${c}`);
     // أضف كلاس الخطر إن غير موجود
     html = html.replace(/(<td\b(?![^>]*class=)[^>]*>\s*)(\d{1,3})\s*%\s*(<\/td>)/gi,
       (_m, open, numStr, close) => {
@@ -173,9 +162,9 @@ function applySafetyPostProcessing(html) {
         const klass = v >= 70 ? 'risk-high' : v >= 40 ? 'risk-medium' : 'risk-low';
         return open.replace('<td', `<td class="${klass}"`) + `${numStr}%` + close;
       });
-    // ابدأ من أول <h3> وقص أي مقدمة
+    // ابدأ من أول <h3>
     const i = html.indexOf('<h3'); if (i > 0) html = html.slice(i);
-    // أزل أي <style> تسرب
+    // أزل أي <style>
     html = stripStyles(html);
     return html;
   } catch {
@@ -198,7 +187,7 @@ async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_T
   }
 }
 
-// =================== HANDLER ===================
+/* =================== API HANDLER =================== */
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -288,7 +277,8 @@ export default async function handler(req, res) {
     console.error('Server Error:', err);
     return res.status(500).json({
       error: 'حدث خطأ في الخادم أثناء تحليل الحالة',
-      detail: err.message
+      detail: err.message,
+      stack: err.stack
     });
   }
 }
