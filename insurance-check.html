@@ -278,12 +278,6 @@
     <!-- Medical Details -->
     <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section3Title">3) تفاصيل الحالة الطبية</span></div>
     <div class="grid">
-  <div>
-    <label>eGFR (اختياري)</label>
-    <input id="egfr-direct" type="number" step="0.1" placeholder="مثال: 40">
-  </div>
-</div>
-    <div class="grid">
       <div>
         <label for="case-description" data-i18n="ui.label_case_description">وصف الحالة</label>
         <textarea id="case-description" data-i18n-placeholder="ui.placeholder_case_description" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط ودوخة متقطعة..."></textarea>
@@ -332,7 +326,8 @@
 // =================================================================================
 // CONFIGURATION
 // =================================================================================
-const API_ENDPOINT = '/api/DranalyzeRx'; // يتصل بمحلل الأدوية الجديد
+const API_ENDPOINT = '/api/gpt'; // For local/Vercel deployment
+
 
 // =================================================================================
 // I18N - INTERNATIONALIZATION SYSTEM
@@ -642,50 +637,41 @@ async function analyzeCase() {
   const responseContainer = document.getElementById('response-container');
   const btn = document.getElementById('analyzeBtn');
   const exportContainer = document.getElementById('export-container');
-
+  
   clearNote();
   responseContainer.style.display = 'none';
   responseContainer.innerHTML = '';
   exportContainer.classList.add('hidden');
 
-  // 1) جمع بيانات المريض
-  const ageVal = parseInt(document.getElementById('age').value, 10);
-  const genderVal = document.getElementById('gender').value || null;
-  const notes = document.getElementById('case-description').value || '';
-  const diagnosis = document.getElementById('diagnosis').value || '';
-  const labResults = document.getElementById('lab-results').value || '';
-  const medsText = document.getElementById('medications-procedures').value || '';
+  // **FINALIZED DATA COLLECTION**
+  // This object now collects data from ALL relevant form fields to ensure deep analysis.
+  const caseData = {
+    // Patient Info
+    age: document.getElementById('age').value || null,
+    gender: document.getElementById('gender').value || null,
+    isPregnant: document.getElementById('pregnancy-status').value === 'yes',
+    pregnancyMonth: document.getElementById('pregnancy-month').value || null,
+    
+    // Lifestyle & Symptoms
+    isSmoker: document.getElementById('smoker').value === 'yes',
+    packYears: document.getElementById('pack-years-result').textContent,
+    coughDurationWeeks: document.getElementById('cough-duration').value || null,
+    visualSymptoms: document.getElementById('visual-symptoms').value || null,
+    lastEyeExamDate: document.getElementById('last-eye-exam').value || null,
+    visualAcuity: document.getElementById('visual-acuity').value || '',
 
-  // 2) eGFR من الخانة الجديدة أو من التحاليل
-  let eGFR;
-  const egfrDirectEl = document.getElementById('egfr-direct');
-  const egfrDirect = egfrDirectEl ? parseFloat((egfrDirectEl.value || '').trim()) : undefined;
-  if (Number.isFinite(egfrDirect)) {
-    eGFR = egfrDirect;
-  } else {
-    const egfrMatch = labResults.match(/egfr\s*[:=]?\s*(\d+(\.\d+)?)/i);
-    if (egfrMatch) eGFR = parseFloat(egfrMatch[1]);
-  }
-
-  // 3) قائمة الأدوية من خانة الأدوية/الإجراءات
-  const ocrList = medsText
-    .split(/\n|,/)
-    .map(s => s.trim())
-    .filter(Boolean)
-    .map(line => ({ name: line, dose: "" }));
-
-  // 4) كائن المريض
-  const patient = {
-    age: Number.isFinite(ageVal) ? ageVal : undefined,
-    sex: genderVal === 'male' ? 'M' : (genderVal === 'female' ? 'F' : undefined),
-    eGFR,
-    ppiDurationDays: undefined,
-    apapDailyMg: undefined,
-    gout: undefined,
-    uricAcid: undefined
+    // Medical Details
+    notes: document.getElementById('case-description').value || '',
+    diagnosis: document.getElementById('diagnosis').value || '',
+    labResults: document.getElementById('lab-results').value || '',
+    medications: document.getElementById('medications-procedures').value || '',
+    
+    // Files
+    files: uploadedFiles.map(f => ({ name: f.file.name, type: f.file.type, data: f.base64 }))
   };
 
-  if (ocrList.length === 0 && !notes && !diagnosis && !labResults) {
+  const hasTextualInput = caseData.notes || caseData.diagnosis || caseData.labResults || caseData.medications;
+  if (!hasTextualInput && caseData.files.length === 0) {
     showNote('error', getTranslation('validation.error_formIncomplete'));
     return;
   }
@@ -694,32 +680,38 @@ async function analyzeCase() {
   btn.disabled = true;
 
   try {
-    const res = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ ocrList, patient })
+    const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(caseData),
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(()=> ({}));
-      throw new Error(`${res.status}: ${err?.message || res.statusText}`);
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(`${response.status}: ${errorData.detail || 'Unknown server error'}`);
     }
 
-    const data = await res.json();
-    const html = buildRxAnalysisHTML(data);
-    responseContainer.innerHTML = html;
-    responseContainer.style.display = 'block';
-    exportContainer.classList.remove('hidden');
-    clearNote();
-    responseContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const result = await response.json();
 
-  } catch (e) {
-    console.error(e);
-    showNote('error', getTranslation('validation.error_requestFailed') + e.message);
+    if (result?.htmlReport) {
+      clearNote();
+      responseContainer.innerHTML = result.htmlReport;
+      responseContainer.style.display = 'block';
+      exportContainer.classList.remove('hidden');
+      responseContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      throw new Error(getTranslation('validation.error_missingReport'));
+    }
+  } catch (err) {
+    console.error(err);
+    showNote('error', getTranslation('validation.error_requestFailed') + err.message);
   } finally {
     btn.disabled = false;
   }
 }
+
 
 // =================================================================================
 // PDF EXPORT LOGIC
@@ -807,74 +799,7 @@ function showNote(type, text) {
   noteArea.textContent = text;
   noteArea.style.display = 'block';
 }
-function buildRxAnalysisHTML(data){
-  const score = data?.summaryScore ?? '';
-  const findings = data?.findings || [];
-  const items = data?.items || [];
-  const refs = data?.references || {};
 
-  const scoreHtml = (score === '' ? '' :
-    `<div style="margin-bottom:10px">
-      <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#f0f4ff;color:#0b63c2;font-weight:700">
-        درجة التحليل: ${score}/100
-      </span>
-    </div>`);
-
-  const findingsHtml = findings.length ? findings.map(f => {
-    const lvl = (f.level||'').toLowerCase();
-    const badgeStyle =
-      lvl==='high' ? 'background:#fde8ea;color:#7a1f27' :
-      (lvl==='review' ? 'background:#fff3cd;color:#856404' : 'background:#e9f4ff;color:#114a86');
-    const refLinks = (f.refs||[]).map(r => refs[r] ? `<a href="${refs[r].url}" target="_blank" rel="noopener">${refs[r].title}</a>` : '').filter(Boolean).join(' • ');
-    return `
-      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin:8px 0">
-        <span style="display:inline-block;padding:2px 8px;border-radius:999px;${badgeStyle};font-weight:700">${(f.level||'').toUpperCase()}</span>
-        <div style="margin-top:6px"><b>${escapeHtml(f.summary||'')}</b></div>
-        <div style="color:#66768a;margin-top:4px">${escapeHtml(f.detail||'')}</div>
-        ${refLinks ? `<div style="margin-top:6px">${refLinks}</div>` : ''}
-      </div>`;
-  }).join('') : `<div class="muted">لا توجد ملاحظات حرجة.</div>`;
-
-  const itemsRows = items.map(x => `
-    <tr>
-      <td>${escapeHtml(x.original||'')}</td>
-      <td>${escapeHtml(x.mapped||'')}</td>
-      <td>${escapeHtml(x.class||'')}</td>
-      <td>${escapeHtml(x.indications||'')}</td>
-      <td>${escapeHtml(x.doseText||'')}</td>
-      <td>${escapeHtml(x.status||'')}</td>
-    </tr>
-  `).join('');
-
-  const tableHtml = `
-    <table style="width:100%;border-collapse:collapse;margin-top:6px">
-      <thead>
-        <tr style="background:#e9f3ff;color:#0b63c2">
-          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الاسم الأصلي</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الاسم/التركيب</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الفئة</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الدواعي</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الجرعة/الوصف</th>
-          <th style="border:1px solid #e2e8f0;padding:8px 10px;text-align:right">الحالة</th>
-        </tr>
-      </thead>
-      <tbody>${itemsRows}</tbody>
-    </table>
-  `;
-
-  return `
-    <h3 style="color:#0b63c2;border-bottom:2px solid #00a7c7;padding-bottom:6px">نتيجة تحليل الأدوية</h3>
-    ${scoreHtml}
-    <h4 style="margin-top:14px">الملاحظات السريرية</h4>
-    ${findingsHtml}
-    <h4 style="margin-top:14px">جدول الأدوية</h4>
-    ${tableHtml}
-  `;
-}
-
-function escapeHtml(s){
-  return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
 </script>
 </body>
 </html>
