@@ -60,15 +60,15 @@
     /* Language Segmented */
     .seg{ display:inline-flex; background:#f3f7fb; border:1px solid var(--border); border-radius:999px; padding:4px; }
     .seg button{ border:none; background:transparent; padding:.45rem .9rem; border-radius:999px; cursor:pointer; font-weight:700; color:#3b5168; }
-    .seg button.active{ background:#fff; border:1px solid var(--border); color:var(--primary); }
+    .seg button.active{ background:#fff; border:1px solid var(--border); color:#var(--primary); }
     .seg button:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
 
-    /* Export toolbar */
+    /* Export toolbar (menu button per ARIA APG) */
     .exportbar{ justify-content:flex-end; }
     .menu{ position:relative; }
     .menu-btn{
       background:var(--primary); color:#fff; border:none; border-radius:10px; padding:.55rem .9rem; font-weight:700; cursor:pointer;
-      min-block-size:44px;
+      min-block-size:44px; /* WCAG target size */
     }
     .menu-btn:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
     .menu-list{
@@ -117,10 +117,9 @@
     .actions{ display:flex; gap:12px; justify-content:center; align-items:center; margin-block-start:14px; flex-wrap:wrap; }
     .btn{
       display:inline-flex; align-items:center; justify-content:center; gap:.6rem; border:none; border-radius:12px; color:#fff; cursor:pointer;
-      padding:.7rem 1.1rem; font-weight:800; font-size:1rem; min-inline-size: 9.5rem; min-block-size: 48px;
+      padding:.9rem 1.25rem; font-weight:800; font-size:1.06rem; min-inline-size: 11rem; min-block-size: 48px;
       box-shadow: 0 6px 14px rgba(0,0,0,.08); transition: transform .06s ease, filter .2s ease, background .25s ease;
     }
-    .btn-lg{ font-size:1.06rem; padding:.9rem 1.25rem; min-inline-size:11rem; }
     .btn:active{ transform: translateY(1px); }
     .btn:focus-visible{ outline: var(--focus-outline); box-shadow: var(--focus-ring); }
     .btn-primary{ background: var(--primary); }
@@ -132,7 +131,7 @@
     .notification.info{ background:#e9f4ff; color:#114a86; border:1px solid #cfe6ff; }
     .notification.error{ background:#fde8ea; color:#7a1f27; border:1px solid #f5c6cb; }
 
-    /* Report container (we style only the shell, not the HTML the model outputs) */
+    /* Report container (style shell only; model HTML remains unstyled) */
     #response-container{ margin-block-start:16px; border:1px solid var(--border); border-radius:14px; background:#fff; display:none; box-shadow: var(--shadow); overflow:hidden;}
     #response-container .report-wrap{ overflow:auto; }
     #response-container table{ border-collapse:separate; border-spacing:0; inline-size:100%; table-layout:fixed; font-size:.98rem; direction:inherit; }
@@ -164,7 +163,7 @@
     @media (max-width: 720px){
       .grid-2, .grid-3{ grid-template-columns: 1fr; }
       .menu-btn{ inline-size:100%; }
-      .btn-lg{ inline-size:100%; }
+      .btn{ inline-size:100%; }
     }
     .hidden{ display:none !important; }
   </style>
@@ -184,7 +183,7 @@
           </div>
         </div>
 
-        <!-- Language bar (AR/EN only, no Both) -->
+        <!-- Language bar -->
         <div class="langbar" aria-label="Language Switcher">
           <div class="seg" role="tablist" aria-label="Language">
             <button id="lang-ar" class="active" type="button">العربية</button>
@@ -307,11 +306,11 @@
           </div>
           <div>
             <label for="lab-results" data-i="labs">التحاليل/الأشعة المتوفرة</label>
-            <textarea id="lab-results" class="tall" placeholder="HbA1c 8.7%, eGFR 38→62, …"></textarea>
+            <textarea id="lab-results" class="tall" placeholder="HbA1c 8.7%, eGFR 38→62, K 5.6, Cr 1.9, UA 9.2, INR 3.1 …"></textarea>
           </div>
           <div class="span-2">
             <label for="medications-procedures" data-i="meds">الأدوية/الإجراءات المكتوبة</label>
-            <textarea id="medications-procedures" class="tall" placeholder="Xigduo XR bid, Metformin 1000 tid, …"></textarea>
+            <textarea id="medications-procedures" class="tall" placeholder="Xigduo XR bid, Metformin 1000 tid, Warfarin 5 mg qd, Allopurinol 300 mg qd…"></textarea>
           </div>
         </div>
       </div>
@@ -329,7 +328,7 @@
 
       <!-- Actions -->
       <div class="actions">
-        <button id="analyzeBtn" class="btn btn-primary btn-lg" type="button">تحليل الحالة</button>
+        <button id="analyzeBtn" class="btn btn-primary" type="button">تحليل الحالة</button>
         <button id="logoutBtn" class="btn btn-danger" type="button">تسجيل الخروج</button>
       </div>
 
@@ -436,7 +435,6 @@ visualEl.addEventListener('change', () => {
 /* ================== Uploads (images + PDFs) ================== */
 const fileInput = document.getElementById('file-input');
 const fileListEl = document.getElementById('file-list');
-const noteArea = document.getElementById('notification-area');
 let filesState = []; // {id,name,type,base64,width,height,sizeKB,isImage}
 let nextId = 1;
 fileInput.addEventListener('change', async (e) => {
@@ -501,6 +499,15 @@ async function compressImage(file, { maxW=1600, maxH=1600, quality=0.72 } = {}){
   return { base64, info:{ w,h,sizeKB } };
 }
 
+/* ================== Notes ================== */
+function showNote(type, text){
+  const note = document.getElementById('notification-area');
+  note.className = 'notification ' + (type === 'error' ? 'error' : 'info');
+  note.textContent = text;
+  note.style.display = 'block';
+}
+function clearNote(){ const note = document.getElementById('notification-area'); note.style.display='none'; note.textContent=''; }
+
 /* ================== Analyze ================== */
 document.getElementById('analyzeBtn').addEventListener('click', analyzeCase);
 document.getElementById('logoutBtn').addEventListener('click', ()=> showNote('info', currentLang==='ar'?'تم تسجيل الخروج (نموذج).':'Logged out (demo).'));
@@ -514,7 +521,9 @@ function buildPayload(uiLangOverride){
     smokingPackYears: val('pack-years'), coughDurationWeeks: val('cough-duration'),
     visualSymptoms: val('visual-symptoms'), lastEyeExamDate: val('last-eye-exam'), visualAcuity: val('visual-acuity'),
     height: val('height'), weight: val('weight'), temperature: val('temperature'), bloodPressure: val('blood-pressure'),
-    notes: val('case-description', true), diagnosis: val('diagnosis', true), labResults: val('lab-results', true), medications: val('medications-procedures', true),
+    notes: val('case-description', true), diagnosis: val('diagnosis', true),
+    labResults: val('lab-results', true), // نص حر للتحاليل/الأشعة
+    medications: val('medications-procedures', true),
     files: filesState.map(f=>({name:f.name,type:f.type,base64:f.base64}))  // images + PDFs
   };
 }
@@ -541,7 +550,8 @@ async function analyzeCase(){
     const data = JSON.parse(text);
     if (data?.htmlReport){
       clearNote();
-      responseContainer.innerHTML = `<div class="report-wrap">${data.htmlReport}</div>`;
+      const wrap = `<div class="report-wrap">${data.htmlReport}</div>`;
+      responseContainer.innerHTML = wrap;
       responseContainer.style.display = 'block';
       responseContainer.scrollIntoView({ behavior:'smooth', block:'start' });
     } else { throw new Error('No htmlReport'); }
@@ -549,7 +559,7 @@ async function analyzeCase(){
   } finally { clearTimeout(timer); btn.disabled=false; }
 }
 
-/* ================== Export PDF menu ================== */
+/* ================== Export PDF menu (accessible) ================== */
 const exportBtn  = document.getElementById('exportBtn');
 const exportMenu = document.getElementById('exportMenu');
 exportBtn.addEventListener('click', toggleMenu);
@@ -564,12 +574,12 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); })
     else if(e.key==='ArrowUp'){ e.preventDefault(); (arr[idx-1]||arr[arr.length-1]).focus(); }
   });
 });
-function toggleMenu(){ const open = exportMenu.getAttribute('aria-hidden')!=='false'; open?openMenu():closeMenu(); }
+function toggleMenu(){ const closed = exportMenu.getAttribute('aria-hidden')!=='false'; closed?openMenu():closeMenu(); }
 function openMenu(){ exportMenu.setAttribute('aria-hidden','false'); exportBtn.setAttribute('aria-expanded','true'); }
 function closeMenu(){ exportMenu.setAttribute('aria-hidden','true'); exportBtn.setAttribute('aria-expanded','false'); }
 function focusFirst(){ const first = exportMenu.querySelector('.menuitem'); first && first.focus(); }
 
-/* Generate PDF in selected language (or bilingual) without changing UI state */
+/* ======== Reliable print: open a window synchronously, then fill & print ======== */
 async function exportPDF(mode){
   closeMenu();
   const savedLang = currentLang;
@@ -578,47 +588,68 @@ async function exportPDF(mode){
   const originalDir  = document.documentElement.dir;
   const originalLang = document.documentElement.lang;
 
+  // افتح نافذة طباعة مباشرة من حدث النقرة (تجنّب الحظر)
+  let printWin = window.open('', '_blank', 'noopener,noreferrer,width=980,height=800');
+  const usePopup = !!printWin;
+
   try{
     const payload = buildPayload(mode); // 'ar' | 'en' | 'both'
     const res = await fetch('/api/gpt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const data = await res.json();
     if (!res.ok || !data?.htmlReport) throw new Error('Export generation failed');
 
-    // Temporarily set doc dir/lang to requested print language (bilingual uses RTL by default)
-    if (mode==='en'){ document.documentElement.dir='ltr'; document.documentElement.lang='en'; }
-    else { document.documentElement.dir='rtl'; document.documentElement.lang='ar'; }
+    const printable = `<div class="report-wrap">${data.htmlReport}</div>`;
 
-    responseContainer.innerHTML = `<div class="report-wrap">${data.htmlReport}</div>`;
-    responseContainer.style.display = 'block';
-
-    await new Promise(resolve=>{
-      const handler = ()=>{ window.removeEventListener('afterprint', handler); resolve(); };
-      window.addEventListener('afterprint', handler);
-      window.print();
-      setTimeout(resolve, 2500); // fallback
-    });
+    if (usePopup){
+      // نغلف بـHTML بسيط مع CSS طباعة خفيفة (غلاف فقط، لا نلمس HTML النموذج)
+      const rtl = (mode!=='en');
+      const doc = printWin.document;
+      doc.open();
+      doc.write(`<!doctype html><html lang="${rtl?'ar':'en'}" dir="${rtl?'rtl':'ltr'}">
+        <head><meta charset="utf-8">
+        <title>Report</title>
+        <style>
+          @page{ margin: 14mm; }
+          body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+          .report-wrap{ overflow: visible; }
+          table{ border-collapse:separate; border-spacing:0; inline-size:100%; table-layout:fixed; font-size:.98rem; }
+          thead th{ position:sticky; top:0; background:#f6fbff; color:#0b3766; font-weight:800; text-align:start; padding:.6rem .7rem; border-bottom:2px solid #dbe8f5; }
+          td{ padding:.6rem .7rem; vertical-align:top; border-bottom:1px solid #eef2f7; white-space:break-spaces; overflow-wrap:anywhere; }
+          td.risk-low{background:#eaf8f0;color:#0f5132;font-weight:800;}
+          td.risk-medium{background:#fff6db;color:#7a5b00;font-weight:800;}
+          td.risk-high{background:#fde7ea;color:#842029;font-weight:800;}
+          h3,h4{ margin:.6rem .2rem; }
+          p{ margin-inline:.2rem; }
+        </style></head>
+        <body>${printable}
+        <script>window.onload = function(){ window.focus(); window.print(); setTimeout(()=>window.close(), 1000); }<\/script>
+        </body></html>`);
+      doc.close();
+    } else {
+      // بديل: طباعة نفس الصفحة
+      const rtl = (mode!=='en');
+      if (rtl){ document.documentElement.dir='rtl'; document.documentElement.lang='ar'; }
+      else { document.documentElement.dir='ltr'; document.documentElement.lang='en'; }
+      responseContainer.innerHTML = printable;
+      responseContainer.style.display = 'block';
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); // انتظر الرسم
+      window.print(); // مدعوم عبر المتصفحات الحديثة. :contentReference[oaicite:3]{index=3}
+    }
 
   } catch (e){
     console.error(e);
-    showNote('error', currentLang==='ar'?'فشل إنشاء PDF':'Failed to create PDF');
+    showNote('error', currentLang==='ar'?'فشل إنشاء/طباعة PDF':'Failed to create/print PDF');
   } finally {
-    // Restore UI language and report
-    responseContainer.innerHTML = originalHTML;
-    if (originalHTML) responseContainer.style.display='block'; else responseContainer.style.display='none';
-    document.documentElement.dir = originalDir;
-    document.documentElement.lang = originalLang;
-    setLang(savedLang);
+    // استرجاع حالة الواجهة
+    if (!usePopup){
+      responseContainer.innerHTML = originalHTML;
+      if (originalHTML) responseContainer.style.display='block'; else responseContainer.style.display='none';
+      document.documentElement.dir = originalDir;
+      document.documentElement.lang = originalLang;
+      setLang(savedLang);
+    }
   }
 }
-
-/* Notes */
-function showNote(type, text){
-  const note = document.getElementById('notification-area');
-  note.className = 'notification ' + (type === 'error' ? 'error' : 'info');
-  note.textContent = text;
-  note.style.display = 'block';
-}
-function clearNote(){ const note = document.getElementById('notification-area'); note.style.display='none'; note.textContent=''; }
 </script>
 </body>
 </html>
