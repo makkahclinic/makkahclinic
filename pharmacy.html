@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -224,6 +225,7 @@ Rosuvastatin 20 mg"></textarea>
     // ===== إعدادات عامة =====
     const API_ENDPOINT = '/api/pharmacy-rx';
     const { jsPDF } = window.jspdf;
+    // تكوين عامل PDF.js (مطلوب)
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
     // i18n بسيط
@@ -231,4 +233,259 @@ Rosuvastatin 20 mg"></textarea>
       ar:{hero:{title:'منصة الصيدلية الذكية',subtitle:'تجميع بيانات المريض، تحليل تفاعلات/جرعات، وPDF أنيق للطباعة.',cta:'بدء تحليل جديد',viewLast:'عرض آخر تقرير'},
           sec:{patient:'١) بيانات المريض',organs:'٢) تقييم وظائف الأعضاء',allergy:'٣) الحساسية',symptoms:'٤) معلومات سريرية إضافية'}},
       en:{hero:{title:'Smart Pharmacy Portal',subtitle:'Capture patient data, analyze interactions/doses, and export a polished PDF.',cta:'Start New Analysis',viewLast:'View Last Report'},
-          sec:{patient:'1) Patient Information',organs:'2) Organ Function',allergy:
+          sec:{patient:'1) Patient Information',organs:'2) Organ Function',allergy:'3) Allergies',symptoms:'4) Additional Clinical Information'}}
+    };
+    let currentLang='ar';
+    function setLanguage(lang){
+      currentLang=lang;
+      document.documentElement.lang=lang;
+      document.documentElement.dir=(lang==='ar'?'rtl':'ltr');
+      document.getElementById('langSwitcher').textContent=(lang==='ar'?'English':'العربية');
+      document.querySelectorAll('[data-i18n]').forEach(el=>{
+        const key=el.getAttribute('data-i18n');
+        const t = key.split('.').reduce((o,k)=>o&&o[k], i18n[lang]);
+        if (t) el.textContent=t;
+      });
+      document.getElementById('analyzeText').textContent = (lang==='ar'?'تحليل وفحص متقدم':'Advanced Check & Analysis');
+    }
+    function t(en,ar){return currentLang==='ar'?ar:en;}
+    function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36);}
+
+    // DOM عناصر
+    const startBtn=document.getElementById('startBtn');
+    const scrollToReportBtn=document.getElementById('scrollToReport');
+    const genderEl=document.getElementById('gender');
+    const pregWrap=document.getElementById('pregWrap');
+    const pregnancyEl=document.getElementById('pregnancy');
+    const gestWrap=document.getElementById('gestWrap');
+    const foodAllergyEl=document.getElementById('foodAllergy');
+    const foodAllergyTxt=document.getElementById('foodAllergyTxt');
+    const allergyList=document.getElementById('allergyList');
+    const addAllergyBtn=document.getElementById('addAllergy');
+    const note=document.getElementById('note');
+    const out=document.getElementById('reportContent');
+
+    startBtn.addEventListener('click',()=>document.getElementById('formCard').scrollIntoView({behavior:'smooth',block:'start'}));
+    scrollToReportBtn.addEventListener('click',()=>document.getElementById('report').scrollIntoView({behavior:'smooth',block:'start'}));
+    document.getElementById('langSwitcher').addEventListener('click',()=>setLanguage(currentLang==='ar'?'en':'ar'));
+
+    genderEl.addEventListener('change',()=>{
+      pregWrap.style.display=(genderEl.value==='female')?'':'none';
+      if(genderEl.value!=='female'){ pregnancyEl.value=''; gestWrap.style.display='none'; document.getElementById('gestation').value=''; }
+    });
+    pregnancyEl?.addEventListener('change',()=>{
+      gestWrap.style.display=(pregnancyEl.value==='yes')?'':'none';
+      if(pregnancyEl.value!=='yes'){ document.getElementById('gestation').value=''; }
+    });
+
+    foodAllergyEl.addEventListener('change',()=>{
+      foodAllergyTxt.style.display=(foodAllergyEl.value==='yes')?'':'none';
+      if(foodAllergyEl.value!=='yes') foodAllergyTxt.value='';
+    });
+
+    addAllergyBtn.addEventListener('click',()=>{
+      const id=uid();
+      const card=document.createElement('div');
+      card.className='card';
+      card.style.padding='12px';
+      card.innerHTML=`
+        <div class="grid">
+          <div>
+            <label>${t('Allergy Type','نوع الحساسية')}</label>
+            <select data-id="${id}" class="allType">
+              <option value="drug">${t('Drug','دواء')}</option>
+              <option value="chemical">${t('Chemical','مادة كيميائية')}</option>
+              <option value="dust">${t('Dust','غبار')}</option>
+              <option value="other">${t('Other','أخرى')}</option>
+            </select>
+          </div>
+          <div>
+            <label>${t('Details','التفاصيل')}</label>
+            <input data-id="${id}" class="allDetail" placeholder="${t('e.g., Penicillin, Latex','مثال: بنسلين، لاتكس')}">
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px"><button class="btn btn-outline" data-remove="${id}">✕ ${t('Remove','حذف')}</button></div>
+      `;
+      allergyList.appendChild(card);
+    });
+    allergyList.addEventListener('click',(e)=>{
+      const id=e.target.getAttribute('data-remove');
+      if(id){ e.target.closest('.card').remove(); }
+    });
+
+    // إدارة الملفات
+    let labFiles=[], radFiles=[], otherFiles=[];
+    function bindFilePicker(inputId,gridId,store){
+      const input=document.getElementById(inputId);
+      const grid=document.getElementById(gridId);
+      input.addEventListener('change',()=>{
+        for(const file of input.files){
+          const id=uid();
+          const reader=new FileReader();
+          reader.onload=ev=>{
+            const type=file.type || '';
+            store.push({id,name:file.name,preview:ev.target.result,type,file});
+            const content= type.startsWith('image/')
+              ? `<img src="${ev.target.result}" style="width:100%;height:110px;object-fit:cover;border-radius:6px">`
+              : `<div style="display:flex;align-items:center;justify-content:center;height:110px"><span class="pill">PDF</span></div>`;
+            const div=document.createElement('div');
+            div.className='thumb';
+            div.innerHTML=`<button class="x" data-x="${id}">×</button>${content}<div class="name">${file.name}</div>`;
+            grid.appendChild(div);
+          };
+          reader.readAsDataURL(file);
+        }
+        input.value='';
+      });
+      grid.addEventListener('click',(e)=>{
+        const id=e.target.getAttribute('data-x');
+        if(!id) return;
+        const idx=store.findIndex(x=>x.id===id);
+        if(idx>-1) store.splice(idx,1);
+        e.target.closest('.thumb').remove();
+      });
+    }
+    bindFilePicker('labInput','labThumbs',labFiles);
+    bindFilePicker('radInput','radThumbs',radFiles);
+    bindFilePicker('otherInput','otherThumbs',otherFiles);
+
+    // ملاحظات
+    function showNote(type,text){
+      note.className='notification '+(type==='err'?'err':'info');
+      note.textContent=text; note.style.display='block';
+    }
+    function clearNote(){ note.style.display='none'; note.textContent=''; }
+
+    // تحويل PDF إلى صور (للإرسال إلى الباك-إند فقط)
+    async function renderPdfToImages(file){
+      const images = [];
+      const ab = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+      for(let p=1; p<=pdf.numPages; p++){
+        const page = await pdf.getPage(p);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        images.push(canvas.toDataURL('image/png'));
+      }
+      return images;
+    }
+
+    async function collectImagesForBackend(){
+      const pools = [labFiles, radFiles, otherFiles].filter(Boolean);
+      const out = [];
+      for (const pool of pools){
+        for (const f of pool){
+          try{
+            if ((f.type||'').includes('pdf')){
+              const pages = await renderPdfToImages(f.file);
+              out.push(...pages);
+            } else if ((f.type||'').startsWith('image/')){
+              out.push(f.preview);
+            }
+          }catch(e){ console.warn('Failed to prep file', f?.name, e); }
+        }
+      }
+      return out;
+    }
+
+    function gatherPatient(){
+      const age=parseInt(document.getElementById('age').value,10);
+      const height=parseFloat(document.getElementById('height').value);
+      const weight=parseFloat(document.getElementById('weight').value);
+      const gender=document.getElementById('gender').value||undefined;
+      const egfr=parseFloat(document.getElementById('egfr').value);
+      const creatinine=parseFloat(document.getElementById('creatinine').value);
+      const liver=document.getElementById('liver').value;
+      const preg=document.getElementById('pregnancy')?.value;
+      const gest=parseInt(document.getElementById('gestation')?.value,10);
+      const lactation=false;
+
+      return {
+        age:Number.isFinite(age)?age:undefined,
+        sex:(gender==='male'?'M':(gender==='female'?'F':undefined)),
+        weight:Number.isFinite(weight)?weight:undefined,
+        height:Number.isFinite(height)?height:undefined,
+        eGFR:Number.isFinite(egfr)?egfr:undefined,
+        creatinine:Number.isFinite(creatinine)?creatinine:undefined,
+        liverDisease:(liver && liver!=='normal')?true:false,
+        pregnancy:(preg==='yes')?{pregnant:true,weeks:Number.isFinite(gest)?gest:undefined}:(preg==='no'?{pregnant:false}:undefined),
+        lactation:{breastfeeding:!!lactation}
+      };
+    }
+
+    async function doAnalyze(){
+      const medsText = (document.getElementById('meds').value || '').trim();
+      const texts = medsText ? medsText.split(/\n+/).map(s => s.trim()).filter(Boolean) : [];
+      const images = await collectImagesForBackend();
+      const patient = gatherPatient();
+
+      if (!texts.length && !images.length) {
+        showNote('err', (currentLang==='ar'?'الرجاء إدخال أدوية أو رفع صورة/ملف.':'Please type meds or upload a file/image.'));
+        return;
+      }
+
+      showNote('info', (currentLang==='ar'?'جاري التحليل…':'Analyzing…'));
+      try{
+        const res = await fetch(API_ENDPOINT, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ texts, images, patient })
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.ok) throw new Error(data?.message || data?.error || res.statusText);
+
+        clearNote();
+        document.getElementById('report').style.display='block';
+        out.innerHTML = data.html; // HTML النهائي من الباك-إند
+        document.getElementById('report').scrollIntoView({behavior:'smooth'});
+
+      } catch(e){
+        console.error(e);
+        showNote('err', (currentLang==='ar'?'فشل الطلب: ':'Request failed: ')+e.message);
+      }
+    }
+
+    async function downloadPDF(){
+      const el=document.getElementById('reportContent');
+      if(!el || document.getElementById('report').style.display==='none'){
+        showNote('err',t('No report to export.','لا يوجد تقرير للتصدير.'));
+        return;
+      }
+      showNote('info',t('Generating PDF…','جاري توليد PDF…'));
+      try{
+        const canvas=await html2canvas(el,{scale:2,useCORS:true});
+        const img=canvas.toDataURL('image/png');
+        const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const imgWidth = pageWidth - 20;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 10;
+        doc.addImage(img,'PNG',10,position,imgWidth,imgHeight);
+        heightLeft -= pageHeight;
+        while (heightLeft > 0){
+          position = heightLeft - imgHeight + 10;
+          doc.addPage();
+          doc.addImage(img,'PNG',10,position,imgWidth,imgHeight);
+          heightLeft -= pageHeight;
+        }
+        doc.save('Patient-Assessment.pdf');
+        clearNote();
+      }catch(err){
+        console.error(err);
+        showNote('err',t('PDF failed.','فشل إنشاء PDF.'));
+      }
+    }
+
+    document.getElementById('analyzeBtn').addEventListener('click',doAnalyze);
+    document.getElementById('downloadPDF').addEventListener('click',downloadPDF);
+    setLanguage('ar');
+  </script>
+</body>
+</html>
