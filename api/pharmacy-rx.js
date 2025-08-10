@@ -2,23 +2,22 @@
 // ==            الكود النهائي لتحليل الوصفات الطبية              ==
 // ==                     (الإصدار العبقري)                        ==
 // ==================================================================
-// هذا الكود يمثل النسخة النهائية والمصقولة التي تدمج أفضل بنية
-// مع أقوى prompt للحصول على تحليل طبي احترافي، دقيق، وتفاعلي بصريًا.
+// يدمج هذا الكود أفضل بنية تشغيلية مع "Prompt" فائق الذكاء لإنتاج
+// تقرير طبي احترافي، دقيق، وتفاعلي بصريًا، محققًا لرؤية المشروع.
 // ==================================================================
 
 // --- إعدادات أساسية ---
 export const config = {
-    api: { bodyParser: { sizeLimit: '25mb' } } // السماح بملفات تصل إلى 25 ميجابايت
+    api: { bodyParser: { sizeLimit: '25mb' } }
 };
 
-const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB (حد أقصى للملفات المضمنة)
-const RETRY_STATUS = new Set([429, 500, 502, 503, 504]); // حالات الخطأ التي تستدعي إعادة المحاولة
-const DEFAULT_TIMEOUT_MS = 120 * 1000; // مهلة زمنية 120 ثانية للطلب
+const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const DEFAULT_TIMEOUT_MS = 120 * 1000; // 120 ثانية
 
 // ===================== التعليمات الرئيسية للنموذج (System Instruction) =====================
-// هذا هو "عقل" التطبيق الذي يوجه Gemini لإنشاء التقرير الاحترافي
 const systemInstruction = `
-أنت "صيدلي إكلينيكي خبير" ومصمم واجهات طبية دقيق جدًا. مهمتك هي إنشاء تقرير HTML تفاعلي بصريًا، باتباع القواعد التالية بحذافيرها دون أي استثناء.
+أنت "صيدلي إكلينيكي خبير" ومستشار في تصميم واجهات المعلومات الطبية. مهمتك هي تحليل البيانات السريرية للمريض وإنشاء تقرير HTML تفاعلي بصريًا، دقيق، وجميل المظهر.
 
 [أ] منهجية التحليل (إلزامية)
 1.  حلّل جميع البيانات النصية والصور المرفقة لاستخراج قائمة كاملة بالأدوية.
@@ -29,72 +28,9 @@ const systemInstruction = `
     * **معلومات هامة:** أي ملاحظات أخرى ضرورية (مثل التفاعل مع طعام معين، تحذيرات عامة).
 4.  قم بترقيم كل ملاحظة أو تداخل تجده بشكل تسلسلي (1, 2, 3, ...).
 
-[ب] بنية التقرير الإلزامية
-يجب أن يحتوي التقرير على الأقسام التالية بالترتيب:
-1.  **وسم <style>:** يحتوي على كود الـ CSS المرفق في الأسفل.
-2.  **حاوية رئيسية:** <div class="report-container">.
-3.  **عنوان التقرير:** <h3 class="report-title">.
-4.  **ملخص المريض:** <div class="patient-summary">.
-5.  **جدول الأدوية:** <table class="meds-table"> بخمسة أعمدة.
-6.  **قائمة الملاحظات:** <ol class="findings-list"> مرقمة.
-7.  **خطة العمل:** <div class="recommendations">.
-8.  **إخلاء المسؤولية:** <p class="disclaimer">.
+[ب] بنية تقرير HTML المطلوبة (إلزامية)
 
-[ج] القاعدة الأهم: آلية الربط البصري (إلزامية)
-هذه هي أهم قاعدة ويجب تطبيقها بدقة.
-1.  عندما تجد أي ملاحظة سريرية (تداخل، تعارض، إلخ)، قم بترقيمها (1, 2, 3...).
-2.  اعرض الشرح الكامل لهذه الملاحظة في قسم "تفاصيل التحليل السريري".
-3.  في **جدول الأدوية**، لكل دواء له علاقة بهذه الملاحظة، يجب أن تضع في العمود المناسب ("التداخلات" أو "التعارض") شارة مرقمة وملونة.
-
-**مثال توضيحي إلزامي:**
-لو وجدت أن الدواء (أ) والدواء (ب) بينهما تداخل دوائي خطير (الملاحظة رقم 1)، وأن الدواء (ج) يتعارض مع حالة الكلى للمريض (الملاحظة رقم 2)، فيجب أن يبدو الجدول وقائمة الملاحظات هكذا بالضبط:
-
-    <table class="meds-table">
-      ...
-      <tbody>
-        <tr>
-          <td>الدواء (أ)</td>
-          <td class="dose-cell">10mg</td>
-          <td>...</td>
-          <td><span class="interaction-badge high">1</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td>الدواء (ب)</td>
-          <td class="dose-cell">20mg</td>
-          <td>...</td>
-          <td><span class="interaction-badge high">1</span></td>
-          <td></td>
-        </tr>
-        <tr>
-          <td>الدواء (ج)</td>
-          <td class="dose-cell">500mg</td>
-          <td>...</td>
-          <td></td>
-          <td><span class="interaction-badge moderate">2</span></td>
-        </tr>
-      </tbody>
-    </table>
-    ...
-    <ol class="findings-list">
-      <li data-severity="high">
-        <div class="finding-header">
-          <h5 class="finding-title">1. تداخل دوائي خطير: الدواء (أ) + الدواء (ب)</h5>
-          ...
-        </div>
-        ...
-      </li>
-      <li data-severity="moderate">
-        <div class="finding-header">
-          <h5 class="finding-title">2. تعارض مع حالة المريض: الدواء (ج)</h5>
-          ...
-        </div>
-        ...
-      </li>
-    </ol>
-
-[د] كود CSS (إلزامي)
-**ابدأ ردك بهذا الكود مباشرة:**
+**أولاً: ابدأ ردك بوسم <style> يحتوي على كود الـ CSS التالي بالضبط:**
 <style>
     .report-container { direction: rtl; font-family: 'Amiri', serif; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
     .report-title { font-size: 24px; font-weight: 700; color: #1e40af; margin-bottom: 12px; border-bottom: 2px solid #60a5fa; padding-bottom: 8px; }
@@ -122,10 +58,48 @@ const systemInstruction = `
     .disclaimer { margin-top: 20px; font-size: 12px; text-align: center; color: #6b7280; }
 </style>
 
+**ثانياً: بعد الـ style، أنشئ التقرير داخل حاوية <div class="report-container"> بالهيكل التالي:**
+
+1.  <h3 class="report-title">تحليل الوصفة الطبية الشامل</h3>
+2.  <div class="patient-summary"> <h4 class="report-subtitle">ملخص حالة المريض</h4> ... </div>
+3.  <div>
+        <h4 class="report-subtitle">جدول الأدوية والتحليل المبدئي</h4>
+        <table class="meds-table">
+            <thead><tr>
+                <th>الدواء</th>
+                <th>الجرعة</th>
+                <th>طريقة الأخذ</th>
+                <th>التداخلات الدوائية</th>
+                <th>التعارض مع الحالة</th>
+            </tr></thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+4.  <div>
+        <h4 class="report-subtitle">تفاصيل التحليل السريري والملاحظات</h4>
+        <ol class="findings-list">
+            </ol>
+    </div>
+5.  <div class="recommendations">
+        <h4 class="report-subtitle">خطة العمل والتوصيات</h4>
+        <ol>
+            </ol>
+    </div>
+6.  <p class="disclaimer"><strong>إخلاء مسؤولية:</strong> هذا التقرير هو للمساعدة المعلوماتية فقط ولا يغني عن الاستشارة الطبية المتخصصة.</p>
+
+[ج] **آلية الربط البصري (مهم جدًا)**
+-   عندما تجد ملاحظة (مثلاً، تداخل بين دوائين)، أعطها رقمًا (مثلاً، رقم 1).
+-   في قائمة "تفاصيل التحليل السريري"، اعرض الملاحظة رقم 1 مع شرحها الكامل.
+-   في **جدول الأدوية**، في صف كل دواء من الدوائين المتداخلين، ضع في عمود "التداخلات الدوائية" شارة ملونة <span class="interaction-badge"> بنفس لون الخطورة وتحمل الرقم 1.
+-   بهذه الطريقة، يمكن للمستخدم رؤية شارة حمراء رقمها "1" في الجدول، ثم يذهب إلى الملاحظة رقم "1" في الأسفل ليقرأ التفاصيل. طبق هذا المبدأ على كل الملاحظات.
+
+[د] **عمود الجرعة**
+-   عندما تنشئ الخلية <td> لعمود الجرعة، أضف لها الكلاس \`dose-cell\`.
+
 [هـ] الإخراج النهائي
 -   يجب أن يكون ردك عبارة عن **كتلة HTML واحدة فقط**، تبدأ بـ <style>. لا تضف أي نص تمهيدي أو ختامي.
 `;
-
 
 // ===================== بناء طلب المستخدم (Prompt) =====================
 function buildUserPrompt(patientData = {}) {
@@ -145,7 +119,6 @@ ${patientData.medicationsText ?? 'لا يوجد'}
 ${Array.isArray(patientData.files) && patientData.files.length > 0 ? 'يوجد ملفات مرفقة للتحليل.' : 'لا توجد ملفات مرفقة.'}
 `;
 }
-
 
 // ===================== دوال مساعدة للـ API والملفات =====================
 async function uploadFileToGemini(apiKey, fileBuffer, mimeType) {
@@ -229,7 +202,7 @@ export default async function handler(req, res) {
         
         const payload = {
             contents: [{ role: 'user', parts }],
-            generationConfig: { maxOutputTokens: 8192, temperature: 0.2 } // تقليل درجة الحرارة لزيادة الدقة
+            generationConfig: { maxOutputTokens: 8192 }
         };
 
         const response = await fetchWithRetry(apiUrl, {
@@ -241,11 +214,11 @@ export default async function handler(req, res) {
         const responseText = await response.text();
         if (!response.ok) {
             console.error('Gemini API Error:', response.status, responseText);
-            throw new Error(`Gemini API responded with status ${response.status}: ${responseText.slice(0, 500)}`);
+            throw new Error(`Gemini API responded with status ${response.status}: ${responseText}`);
         }
 
         const result = JSON.parse(responseText);
-        const finalHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>خطأ: لم يتمكن النموذج من إنشاء تقرير. قد يكون بسبب سياسات السلامة.</p>';
+        const finalHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>خطأ: لم يتمكن النموذج من إنشاء تقرير.</p>';
         
         return res.status(200).json({ ok: true, html: finalHtml.replace(/```html|```/g, '').trim() });
 
