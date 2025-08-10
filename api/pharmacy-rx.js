@@ -1,406 +1,538 @@
+/* eslint-disable */
 // pages/api/pharmacy-rx.js
-// Smart bilingual Rx rules engine (AR/EN) — Next.js API Route
-// No external deps
+//
+// عقلٌ مدبّر (AR/EN) لتحليل روشتات وصور + نصوص:
+// - OCR (OCR.space أو tesseract.js اختياري)
+// - Post-processing لتصحيح أسماء الأدوية
+// - استخراج {name, dose} من كل سطر
+// - تحليل تداخلات ومحاذير: عمر/كلية/كبد/حمل/إرضاع/وزن
+// - إخراج JSON + HTML ملون بالخطورة (🟥 🟧 🟩 🔵)
+// -------------------------------------------------------------------
 
-/* ===================== 0) Utilities ===================== */
-function norm(s = "") {
-  // Keep Arabic/Latin digits/units and a few symbols
-  return (s || "")
-    .toLowerCase()
-    .replace(/[؛،]/g, " ")
-    .replace(/[*•●▪️・]+/g, " ")
-    .replace(/[^a-z\u0600-\u06FF0-9\s\-\/\.\+\(\)]/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+const USE_OCRSPACE = !!process.env.OCRSPACE_API_KEY;
+const OCRSPACE_API_KEY = process.env.OCRSPACE_API_KEY || "";
+const TESSERACT_ENABLED = process.env.TESSERACT_ENABLED === "1";
+
+// تحميل tesseract فقط إذا فعّلته
+let Tesseract = null;
+if (!USE_OCRSPACE && TESSERACT_ENABLED) {
+  try { Tesseract = require("tesseract.js"); } catch { /* ignore */ }
 }
 
-// Tiny Levenshtein
-function editDistance(a, b) {
-  a = norm(a); b = norm(b);
-  const dp = Array(b.length + 1).fill(0).map((_, i) => [i]);
-  for (let j = 0; j <= a.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      dp[i][j] = Math.min(
-        dp[i-1][j] + 1,
-        dp[i][j-1] + 1,
-        dp[i-1][j-1] + (a[j-1] === b[i-1] ? 0 : 1)
-      );
-    }
-  }
-  return dp[b.length][a.length];
-}
-
-function tokenSet(s) {
-  return new Set(
-    norm(s)
-      .split(/\s+/)
-      .filter(Boolean)
-  );
-}
-
-function similarity(a, b) {
-  // mix of normalized edit distance + token overlap
-  const na = norm(a), nb = norm(b);
-  if (!na || !nb) return 0;
-  const ed = editDistance(na, nb);
-  const edScore = 1 - ed / Math.max(na.length, nb.length);
-  const ta = tokenSet(na), tb = tokenSet(nb);
-  let inter = 0; ta.forEach(t => tb.has(t) && inter++);
-  const union = new Set([...ta, ...tb]).size || 1;
-  const jacc = inter / union;
-  return 0.65 * edScore + 0.35 * jacc; // 0..1
-}
-
-/* ===================== 1) Knowledge base ===================== */
-// Expandable list: aliases (AR/EN/brands/OCR variants)
-const DRUG_ENTRIES = [
-  // --- CCB / ARB / ACEi
-  { aliases: ["amlodipine","أملوديبين","amlodipin","norvasc","amlodipine 10"], generic: "amlodipine", class: "CCB (dihydropyridine)", indications: ["HTN","angina"] },
-  { aliases: ["valsartan","فالسارتان"], generic: "valsartan", class: "ARB", indications: ["HTN","HF"] },
-  { aliases: ["losartan","لوسارتان"], generic: "losartan", class: "ARB", indications: ["HTN"] },
-  { aliases: ["olmesartan","أولميسارتان","olmi"], generic: "olmesartan", class: "ARB", indications: ["HTN"] },
-  { aliases: ["candesartan","كانديسارتان"], generic: "candesartan", class: "ARB", indications: ["HTN","HF"] },
-  { aliases: ["perindopril","بيريندوبريل"], generic: "perindopril", class: "ACEi", indications: ["HTN","CV"] },
-  { aliases: ["lisinopril","ليزينوبريل"], generic: "lisinopril", class: "ACEi", indications: ["HTN","HF"] },
-
-  // combos
-  { aliases: ["co-taburan 160/12.5","co taburan","valsartan/hydrochlorothiazide","فالسارتان/هيدروكلوروثيازيد","hct","hctz"], generic: "valsartan/hydrochlorothiazide", class: "ARB + thiazide", indications: ["HTN"] },
-  { aliases: ["exforge","exforge hct","amlodipine/valsartan","amlodipine/valsartan/hct","أملوديبين/فالسارتان"], generic: "amlodipine/valsartan(+/-HCT)", class: "CCB + ARB (+/- thiazide)", indications: ["HTN"] },
-  { aliases: ["triplixam","تريپليكسام","perindopril/indapamide/amlodipine","triplex"], generic: "perindopril/indapamide/amlodipine", class: "ACEi + thiazide-like + CCB", indications: ["HTN"] },
-
-  // --- BPH
-  { aliases: ["duodart 0.5/0.4","duodart","ديوادارت","dutasteride/tamsulosin","jalyn"], generic: "dutasteride/tamsulosin", class: "5ARI + α1-blocker", indications: ["BPH"] },
-  { aliases: ["tamsulosin","تامسولوسين","flomax"], generic: "tamsulosin", class: "α1-blocker", indications: ["BPH"] },
-
-  // --- Statins
-  { aliases: ["rosuvastatin","روزوفاستاتين","crestor","rozavi","rozavi 10"], generic: "rosuvastatin", class: "statin", indications: ["dyslipidemia"] },
-  { aliases: ["atorvastatin","أتورفاستاتين","lipitor"], generic: "atorvastatin", class: "statin", indications: ["dyslipidemia"] },
-
-  // --- Diabetes
-  { aliases: ["metformin","ميتفورمين","glucophage","glucophage xr","formet xr 750","formot xr 750"], generic: "metformin XR/IR", class: "biguanide", indications: ["T2D"] },
-  { aliases: ["gliclazide mr 30","diamicron mr 30","damicron mr 30","جليكلازايد ام ار"], generic: "gliclazide MR", class: "sulfonylurea", indications: ["T2D"] },
-  { aliases: ["sitagliptin","سيتاجلبتين","januvia"], generic: "sitagliptin", class: "DPP-4 inhibitor", indications: ["T2D"] },
-
-  // --- PPI
-  { aliases: ["pantoprazole","بانتوبرازول","pantomax 40","pantomax","protonix"], generic: "pantoprazole", class: "PPI", indications: ["GERD","ulcer"] },
-  { aliases: ["esomeprazole","إيزوميبرازول","nexium"], generic: "esomeprazole", class: "PPI", indications: ["GERD","ulcer"] },
-
-  // --- Analgesic / NSAIDs
-  { aliases: ["paracetamol","acetaminophen","باراسيتامول","أسيتامينوفين","adol","panadol"], generic: "paracetamol (acetaminophen)", class: "analgesic/antipyretic", indications: ["pain","fever"] },
-  { aliases: ["ibuprofen","ايبوبروفين","brufen","advil"], generic: "ibuprofen", class: "NSAID", indications: ["pain","inflammation"] },
-  { aliases: ["diclofenac","ديكلوفيناك","voltaren"], generic: "diclofenac", class: "NSAID", indications: ["pain","inflammation"] },
-
-  // --- Devices
-  { aliases: ["lancet","لنست"], generic: "lancets (device)", class: "device", indications: ["glucose monitoring"], device: true },
-  { aliases: ["e-core strip","e care strip","glucose test strips","شرائط سكر"], generic: "glucose test strips", class: "device", indications: ["glucose monitoring"], device: true },
-
-  // --- Unknowns seen
-  { aliases: ["intras"], generic: "unknown", class: "unknown", indications: [], needsConfirm: true },
-  { aliases: ["pika-ur eff","pika ur"], generic: "urinary alkalinizer? (effervescent)", class: "urology", indications: ["verify"], needsConfirm: true },
-  { aliases: ["suden cream"], generic: "topical (verify)", class: "dermatology", indications: ["verify"], needsConfirm: true },
-];
-
-const DRUG_DB = (() => {
-  const map = {};
-  for (const e of DRUG_ENTRIES) {
-    for (const alias of e.aliases) {
-      map[norm(alias)] = {
-        generic: e.generic,
-        class: e.class,
-        indications: e.indications || [],
-        device: !!e.device,
-        needsConfirm: !!e.needsConfirm,
-      };
-    }
-  }
-  // Synonyms for OCR shortcuts
-  map["hct"]  = map["valsartan/hydrochlorothiazide"];
-  map["hctz"] = map["valsartan/hydrochlorothiazide"];
-  return map;
-})();
-
-const DB_KEYS = Object.keys(DRUG_DB);
-
-const CLASS_GROUPS = {
-  antihypertensive: ["CCB (dihydropyridine)", "ARB", "ACEi", "ARB + thiazide", "CCB + ARB (+/- thiazide)", "ACEi + thiazide-like + CCB"],
-  thiazide_like: ["thiazide", "thiazide-like"],
-  alpha1: ["α1-blocker", "5ARI + α1-blocker"],
-  diabetes: ["biguanide", "sulfonylurea", "DPP-4 inhibitor"],
-  statin: ["statin"],
-  ppi: ["PPI"],
-  nsaid: ["NSAID"],
+// ------------------ أدوات عامة ------------------
+const SEV = {
+  HIGH: { code: "HIGH", label: "شديد جدًا", color: "#DC2626", emoji: "🟥" },
+  MOD:  { code: "MOD",  label: "متوسط",    color: "#F59E0B", emoji: "🟧" },
+  LOW:  { code: "LOW",  label: "منخفض",    color: "#16A34A", emoji: "🟩" },
+  INFO: { code: "INFO", label: "تنبيه",    color: "#0891B2", emoji: "🔵" },
 };
 
-/* ===================== 2) Parsing helpers ===================== */
-const UNIT_PAT = "(mg|mcg|µg|g|ml|iu|units|ملغ|مج|جم|مل)";
-const FREQ_PAT = "(?:qd|od|bid|tid|qid|qhs|prn|once|twice|daily|every ?\\d+ ?h|مرة|مرتين|كل ?\\d+ ?ساعة)";
-const REL_PAT  = "(?:xr|sr|cr|mr)";
-
-function extractDoseText(s) {
-  const re = new RegExp(
-    `(?:\\b\\d+(?:\\.\\d+)?\\s*${UNIT_PAT}\\b(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?\\s*${UNIT_PAT}\\b)?` +
-    `(?:\\s*\\+\\s*\\d+(?:\\.\\d+)?\\s*${UNIT_PAT})*` +
-    `(?:\\s*${REL_PAT})?` +
-    `|\\b${REL_PAT}\\b)`,"i");
-  const m = s.match(re);
-  return m ? m[0].trim() : "";
-}
-
-function normalizeLine(line) {
-  return norm(line)
-    .replace(/^(?:-|\+|•|\*|\d+\.)\s*/,'')
-    .replace(/\s{2,}/g,' ')
+function norm(s = "") {
+  return String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06FF\.\-\/\+\(\)\s]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
+function softNormalizeLine(s = "") {
+  return String(s)
+    .replace(/[^\w\u0600-\u06FF\.\-\/\s\+]/g, " ")
+    .replace(/(\d+)\s*mg\b/ig, "$1 mg")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function escapeHTML(s){ return String(s||"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c])) }
+function parseDoseMg(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d+(\.\d+)?)\s*mg\b/i);
+  return m ? parseFloat(m[1]) : null;
+}
 
-function splitFreeText(text="") {
-  const raw = text
-    .replace(/\r/g,"\n")
-    .split("\n")
-    .map(s => s.trim())
-    .filter(Boolean);
+// ------------------ تصحيحات OCR دوائية ------------------
+const OCR_CORRECTIONS = [
+  [/^amilodipin(e)?\b/i, 'amlodipine'], [/\bamlodipin\b/i, 'amlodipine'],
+  [/\brozavi\b/i, 'rosuvastatin'], [/\bcrestor\b/i, 'rosuvastatin'],
+  [/\batorva(statin)?\b/i, 'atorvastatin'],
+  [/\bduodart\b/i, 'dutasteride/tamsulosin'], [/\bjalyn\b/i, 'dutasteride/tamsulosin'],
+  [/\btams?ulosin\b/i, 'tamsulosin'],
+  [/\bglucophage(\s*xr)?\b/i, 'metformin xr'],
+  [/\b(formet|formot)\s*xr?\s*([0-9]+)\b/i, (m,_,d)=> `metformin xr ${d} mg`],
+  [/\bmetfor(r|rn?in)\b/i, 'metformin'],
+  [/\bdiam?icron\s*mr?\s*([0-9]+)?\b/i, (m,d)=> `gliclazide mr ${d?d+' mg':''}`.trim()],
+  [/\bgliclazide\s*m(r)?\b/i, 'gliclazide mr'],
+  [/\bsita(gliptin)?\b/i, 'sitagliptin'],
+  [/\bpanto(max|prazole)\b/i, 'pantoprazole'], [/\bnexium\b/i, 'esomeprazole'],
+  [/\bparacetam(o|a)l\b/i, 'paracetamol'], [/\bacetaminophen\b/i, 'paracetamol'],
+  [/\bibu(profen)?\b/i, 'ibuprofen'], [/\bdiclofenac\b/i, 'diclofenac'],
+  [/\b(hct|hctz)\b/i, 'hydrochlorothiazide'],
+  [/\bexforge(\s*hct)?\b/i, (m,h)=> h? 'amlodipine/valsartan/hydrochlorothiazide' : 'amlodipine/valsartan'],
 
-  // أيضاً نفصل على الفواصل
-  const out = [];
-  raw.forEach(s=>{
-    s.split(/[،,;]/).forEach(p=>{
-      const t = p.trim();
-      if (t.length>1) out.push(t);
-    });
-  });
+  // عربي
+  [/أملود?ي?بين/gi, 'amlodipine'],
+  [/روزوفاستاتين/gi, 'rosuvastatin'], [/أتورفاستاتين/gi, 'atorvastatin'],
+  [/ديوادارت/gi, 'dutasteride/tamsulosin'], [/تامسولوسين/gi, 'tamsulosin'],
+  [/ميتفورمين/gi, 'metformin'], [/جليك?لازايد\s*ام\s*ار/gi, 'gliclazide mr'],
+  [/بانتوبرازول/gi, 'pantoprazole'], [/اي?بوبروفين/gi, 'ibuprofen'],
+  [/ديكلوفيناك/gi, 'diclofenac'],
+  [/فالسارتان\s*\/?\s*ه?ي?در?و?كلوروثيازيد/gi, 'valsartan/hydrochlorothiazide'],
+];
+function applyCorrections(line){
+  let out = ' ' + softNormalizeLine(line) + ' ';
+  for (const [re, rep] of OCR_CORRECTIONS) out = out.replace(re, rep);
+  // أضف mg المفقودة لأدوية شائعة لو تبعها رقم فقط
+  out = out.replace(/\b(amlodipine|rosuvastatin|atorvastatin|gliclazide mr|metformin( xr)?)\s+(\d+)\b/gi,
+    (m,drug, xr, dose)=> `${drug} ${dose} mg`);
+  return out.trim();
+}
+function splitLines(text=""){
+  if (!text) return [];
+  const lines = text.split(/\r?\n+/).map(softNormalizeLine).map(applyCorrections).filter(Boolean);
+  const uniq = new Set(); const out = [];
+  for (const l of lines) { const k=l.toLowerCase(); if(!uniq.has(k)){uniq.add(k); out.push(l);} }
   return out;
 }
 
-/* ===================== 3) Mapping / fuzzy ===================== */
-function fuzzyFindBest(token, dictKeys, threshold = 0.68) {
-  const t = normalizeLine(token);
-  let bestKey = null, bestScore = 0;
-  for (const k of dictKeys) {
-    const sc = similarity(t, k);
-    if (sc > bestScore) { bestScore = sc; bestKey = k; }
+// ------------------ OCR من الصور ------------------
+async function ocrWithOcrSpace(image){
+  // image: dataURL (base64) أو URL مباشر
+  const isUrl = /^https?:\/\//i.test(image);
+  const form = new URLSearchParams();
+  form.append("language", "eng"); // أسماء الأدوية غالبًا إنجليزية
+  form.append("isOverlayRequired", "false");
+  form.append("scale", "true");
+  form.append("OCREngine", "2");
+  if (isUrl) form.append("url", image);
+  else {
+    const b64 = image.replace(/^data:.+;base64,/, "");
+    form.append("base64Image", "data:image/jpeg;base64," + b64);
   }
-  return bestScore >= threshold ? { key: bestKey, score: bestScore } : { key: null, score: 0 };
-}
-
-function mapItem(rawName, doseText = "") {
-  const { key, score } = fuzzyFindBest(rawName, DB_KEYS);
-  const base = key ? DRUG_DB[key] : { generic: rawName, class: "unknown", indications: [], needsConfirm: true };
-  return { original: rawName, doseText, confidence: Number(score.toFixed(2)), ...base, keyMatched: key || norm(rawName) };
-}
-
-/* ===================== 4) Clinical rules ===================== */
-function checkHypertensionOverlap(items) {
-  const antiHTN = items.filter(x => CLASS_GROUPS.antihypertensive.includes(x.class));
-  if (antiHTN.length >= 2) {
-    return { id:"HTN_COMBO_JUSTIFY", level:"review", summary:"أكثر من خافض ضغط واحد", detail:"وجود أكثر من دواء خافض للضغط يستلزم تبرير سريري (هدف ضغط واضح/مقاومة).", refs:["ACC_AHA_2017"] };
-  }
-  return null;
-}
-function checkDualRAS(items) {
-  const hasACEi = items.some(x => x.class === "ACEi");
-  const hasARB  = items.some(x => x.class === "ARB" || x.class === "ARB + thiazide" || (x.generic||"").includes("/hydrochlorothiazide"));
-  if (hasACEi && hasARB) {
-    return { id:"DUAL_RAS_AVOID", level:"high", summary:"تجنّب الجمع بين ACEi و ARB", detail:"يزيد مخاطر الكلى وفرط بوتاسيوم دون فائدة.", refs:["ACC_AHA_2017"] };
-  }
-  return null;
-}
-function checkBPHWithBP(items, patient) {
-  const hasAlpha1 = items.some(x => CLASS_GROUPS.alpha1.includes(x.class));
-  const hasBPDrugs = items.some(x => CLASS_GROUPS.antihypertensive.includes(x.class));
-  if (hasAlpha1 && hasBPDrugs) {
-    return { id:"ORTHO_HYPOTENSION_RISK", level:(patient?.age>=65?"high":"caution"), summary:"خطر هبوط ضغط وضعي", detail:"تامسولوسين/ديوادارت مع خافضات الضغط قد يزيد الدوخة والسقوط.", refs:["JALYN_LABEL"] };
-  }
-  return null;
-}
-function checkMetforminRenal(items, eGFR) {
-  const hasMet = items.some(x => x.generic.startsWith("metformin"));
-  if (!hasMet || eGFR == null) return null;
-  if (eGFR < 30) return { id:"METFORMIN_CONTRA", level:"high", summary:"ميتفورمين مضاد استطباب عند eGFR < 30", detail:"أوقف/لا تبدأ. بدائل أخرى.", refs:["KDIGO_2022"] };
-  if (eGFR < 45) return { id:"METFORMIN_REDUCE", level:"review", summary:"تقليل جرعة الميتفورمين عند eGFR 30–44", detail:"حدّ الجرعة اليومية≈≤1000mg XR ومراقبة.", refs:["KDIGO_2022"] };
-  return null;
-}
-function checkSU_Elderly_CKD(items, patient) {
-  const hasSU = items.some(x => x.class === "sulfonylurea");
-  if (!hasSU) return null;
-  if ((patient?.age>=65) || (patient?.eGFR!=null && patient.eGFR<60)) {
-    return { id:"SU_HYPO_RISK", level:"review", summary:"السلفونيل يوريا: خطر هبوط سكر أعلى في الكِبار/CKD", detail:"فكّر ببدائل أو جرعات أقل ومراقبة.", refs:["ADA_2025"] };
-  }
-  return null;
-}
-function checkRosuvastatinRenal(items, eGFR, doseTextMap) {
-  const rosu = items.find(x => x.generic.startsWith("rosuvastatin"));
-  if (!rosu || eGFR == null) return null;
-  if (eGFR < 30) {
-    const txt = doseTextMap.get(rosu.original) || rosu.doseText || "";
-    const mgMatch = txt.match(/(\d+)\s*mg/);
-    const mg = mgMatch ? parseInt(mgMatch[1],10) : null;
-    if (mg == null || mg > 10) {
-      return { id:"ROSU_MAX10_SEVERE_CKD", level:"high", summary:"روزوفاستاتين: لا تتجاوز 10mg عند قصور شديد", detail:"يوصى ببدء 5mg ولا تتجاوز 10mg.", refs:["CRESTOR_LABEL"] };
-    }
-  }
-  return null;
-}
-function checkThiazide_Gout(items, patient) {
-  const hasThiazide = items.some(x => (x.class||"").includes("thiazide"));
-  if (!hasThiazide) return null;
-  if (patient?.gout === true || (patient?.uricAcid && patient.uricAcid > 7.0)) {
-    return { id:"THIAZIDE_GOUT", level:"caution", summary:"الثيازايد قد ترفع حمض اليوريك", detail:"راجع خطة الضغط عند النقرس/حمض يوريك مرتفع.", refs:["ACC_AHA_2017"] };
-  }
-  return null;
-}
-function checkNSAID_CKD(items, patient) {
-  const hasNSAID = items.some(x => CLASS_GROUPS.nsaid.includes(x.class));
-  if (!hasNSAID) return null;
-  if (patient?.eGFR != null && patient.eGFR < 60) {
-    return { id:"NSAID_CKD", level:(patient.eGFR<30?"high":"review"), summary:"NSAID مع قصور كلوي", detail:"تجنب NSAIDs في CKD، قد ترفع الضغط وتضعف الكلى.", refs:["KDIGO_2022"] };
-  }
-  return null;
-}
-function checkAcetaminophenMax(items, totalDailyMg) {
-  const apap = items.find(x => x.generic.includes("paracetamol") || x.generic.includes("acetaminophen"));
-  if (!apap || totalDailyMg == null) return null;
-  if (totalDailyMg > 4000) return { id:"APAP_MAX_4G", level:"high", summary:"الباراسيتامول > 4 جم/يوم", detail:"تجاوز الحد الأقصى للبالغين (4 جم/24 ساعة).", refs:["APAP_ADULT_MAX"] };
-  return null;
-}
-function checkPPIDuration(items, durationDays) {
-  const ppi = items.find(x => x.class === "PPI");
-  if (!ppi || durationDays == null) return null;
-  if (durationDays >= 90) return { id:"PPI_LONG_DURATION", level:"caution", summary:"مدة PPI طويلة", detail:"الاستخدام المزمن يحتاج تبرير؛ عادة 8 أسابيع ثم إعادة تقييم.", refs:["PANTOPRAZOLE_LABEL"] };
-  return null;
-}
-
-/* ===================== 5) Ingestion / dedupe ===================== */
-function parseFreeTextMeds(freeText="") {
-  const lines = splitFreeText(freeText);
-  const meds = [];
-  for (const raw of lines) {
-    const cleaned = normalizeLine(raw);
-    if (!cleaned) continue;
-    // استخرج جرعة/شكل/إطلاق
-    const dose = extractDoseText(raw);
-    // اسم بدون الجرعة
-    const nameOnly = cleaned.replace(dose ? norm(dose) : "", "").trim();
-    if (nameOnly) meds.push({ name: nameOnly, dose: dose || "" });
-  }
-  return meds;
-}
-
-function dedupeByGeneric(mappedItems) {
-  const byGen = new Map();
-  for (const it of mappedItems) {
-    const k = it.generic || it.original;
-    if (!byGen.has(k)) byGen.set(k, it);
-    else {
-      // احتفظ بالأعلى ثقة، وادمج النصوص
-      const prev = byGen.get(k);
-      if ((it.confidence||0) > (prev.confidence||0)) prev.confidence = it.confidence;
-      const parts = new Set([prev.doseText, it.doseText].filter(Boolean));
-      prev.doseText = Array.from(parts).join(" + ");
-      prev.original = prev.original === it.original ? prev.original : `${prev.original} | ${it.original}`;
-      byGen.set(k, prev);
-    }
-  }
-  return Array.from(byGen.values());
-}
-
-/* ===================== 6) Analyzer ===================== */
-function analyzePrescription({
-  ocrList = [],       // [{ name, dose }]
-  freeText = "",      // string — optional
-  patient = {}        // {age, sex, eGFR, gout, uricAcid, apapDailyMg, ppiDurationDays}
-}) {
-  // Combine sources
-  const fromFree = parseFreeTextMeds(freeText);
-  const allRaw = []
-    .concat(ocrList || [])
-    .concat(fromFree || [])
-    .filter(x => (x?.name||"").trim().length > 0);
-
-  // Map and dedupe
-  const mapped = allRaw.map(x => mapItem(x.name, x.dose || extractDoseText(x.name)));
-  const itemsMapped = dedupeByGeneric(mapped);
-
-  // Build dose map using original names
-  const doseTextMap = new Map(allRaw.map(x => [x.name, x.dose || extractDoseText(x.name)]));
-
-  const findings = [];
-  const push = f => { if (f) findings.push(f); };
-  push(checkHypertensionOverlap(itemsMapped, patient));
-  push(checkDualRAS(itemsMapped));
-  push(checkBPHWithBP(itemsMapped, patient));
-  push(checkMetforminRenal(itemsMapped, patient.eGFR));
-  push(checkSU_Elderly_CKD(itemsMapped, patient));
-  push(checkRosuvastatinRenal(itemsMapped, patient.eGFR, doseTextMap));
-  push(checkThiazide_Gout(itemsMapped, patient));
-  push(checkNSAID_CKD(itemsMapped, patient));
-  if (patient.apapDailyMg != null) push(checkAcetaminophenMax(itemsMapped, patient.apapDailyMg));
-  if (patient.ppiDurationDays != null) push(checkPPIDuration(itemsMapped, patient.ppiDurationDays));
-
-  // Score
-  let score = 100;
-  for (const f of findings) {
-    if (!f) continue;
-    if (f.level === "high") score -= 25;
-    else if (f.level === "review") score -= 15;
-    else score -= 8;
-  }
-  score = Math.max(0, Math.min(100, score));
-
-  const REF_MAP = {
-    ACC_AHA_2017: { title: "2017 ACC/AHA Hypertension Guideline", url: "https://www.acc.org/~/media/Non-Clinical/Files-PDFs-Excel-MS-Word-etc/Guidelines/2017/Guidelines_Made_Simple_2017_HBP.pdf" },
-    KDIGO_2022: { title: "KDIGO 2022 Diabetes in CKD", url: "https://kdigo.org/wp-content/uploads/2022/10/KDIGO-2022-Clinical-Practice-Guideline-for-Diabetes-Management-in-CKD.pdf" },
-    CRESTOR_LABEL: { title: "CRESTOR (rosuvastatin) FDA label – renal dosing", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2023/021366s043s044lbl.pdf" },
-    JALYN_LABEL: { title: "JALYN (dutasteride/tamsulosin) FDA label – orthostatic hypotension", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2011/022460s001lbl.pdf" },
-    PANTOPRAZOLE_LABEL: { title: "Pantoprazole label – typical durations", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2012/020987s045lbl.pdf" },
-    ADA_2025: { title: "ADA Standards of Care (latest)", url: "https://diabetesjournals.org/care/issue" },
-    APAP_ADULT_MAX: { title: "Adult paracetamol max daily dose (4g)", url: "https://www.nhs.uk/medicines/paracetamol-for-adults/how-and-when-to-take-paracetamol-for-adults/" },
-  };
-
-  const table = itemsMapped.map(x => {
-    let status = "✅ مقبول";
-    if (x.needsConfirm) status = "⚠️ يحتاج تأكيد اسم/غرض";
-    if (x.class === "unknown") status = "⚠️ غير واضح";
-    if (x.device) status = "ℹ️ لوازم/أدوات";
-    return {
-      original: x.original,
-      mapped: x.generic,
-      class: x.class,
-      indications: (x.indications||[]).join(", "),
-      doseText: x.doseText || "",
-      status,
-      confidence: x.confidence ?? undefined
-    };
+  const r = await fetch("https://api.ocr.space/parse/image", {
+    method: "POST",
+    headers: { apikey: OCRSPACE_API_KEY, "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
   });
-
-  const notes = [];
-  if (!table.length) notes.push("لم نلتقط أدوية واضحة — جرّب تحسين جودة OCR أو اكتب أسماء تقريبية.");
-  if (table.some(x=>x.class==="unknown")) notes.push("بعض الأسماء غير واضحة؛ تأكيد الصياغة أو الاسم التجاري يساعد.");
-
-  return {
-    patient: { ...patient },
-    summaryScore: score,
-    items: table,
-    findings: findings.filter(Boolean),
-    references: REF_MAP,
-    notes,
-    debug: { parsedFromFreeText: fromFree, totalInput: allRaw.length }
-  };
+  const j = await r.json();
+  if (!r.ok || !j?.ParsedResults?.length) throw new Error("OCR.space failed");
+  return (j.ParsedResults.map(x => x.ParsedText || "").join("\n")).trim();
+}
+async function ocrWithTesseract(image){
+  if (!Tesseract) throw new Error("tesseract.js not available");
+  let img = image;
+  if (!/^data:/.test(img) && /^https?:\/\//.test(img)) {
+    const rr = await fetch(img); const buf = Buffer.from(await rr.arrayBuffer());
+    img = "data:image/jpeg;base64," + buf.toString("base64");
+  }
+  const { data } = await Tesseract.recognize(img, "eng+ara", { tessedit_pageseg_mode: 6 });
+  return (data?.text || "").trim();
+}
+async function extractTextFromImages(images = []){
+  const chunks = [];
+  for (const img of images) {
+    try {
+      const txt = USE_OCRSPACE ? await ocrWithOcrSpace(img)
+                : (Tesseract ? await ocrWithTesseract(img) : "");
+      if (txt) chunks.push(txt);
+    } catch { /* تجاهل الصورة الفاشلة ونكمل */ }
+  }
+  return chunks.join("\n").trim();
 }
 
-/* ===================== 7) Next.js API handler ===================== */
+// ------------------ قاعدة مصغّرة لأسماء/فئات/محاذير ------------------
+// (مكان مناسب للتوسع لاحقًا/ربطه بقاعدة أكبر)
+const ALIASES = {
+  aspirin: ["asa","acetylsalicylic","أسبرين","اسبرين"],
+  warfarin: ["coumadin","warf","وارفارين","كومادين"],
+  apixaban: ["eliquis","أبيكسابان","إليكويس"],
+  rivaroxaban: ["xarelto","ريفاروكسابان","زاريلتو"],
+  dabigatran: ["pradaxa","دابيغاتران","براداكسا","براداكسـا"],
+  edoxaban: ["savaysa","إدوكسابان","سافيسا"],
+  amlodipine: ["norvasc","أملوديبين"],
+  valsartan: ["فالسارتان"],
+  losartan: ["لوسارتان"],
+  olmesartan: ["أولميسارتان"],
+  candesartan: ["كانديسارتان"],
+  lisinopril: ["ليزينوبريل"],
+  perindopril: ["بيريندوبريل"],
+  hct: ["hydrochlorothiazide","hct","hctz","هيدروكلوروثيازيد"],
+  exforge: ["amlodipine/valsartan","exforge","أملوديبين/فالسارتان"],
+  rosuvastatin: ["crestor","روزوفاستاتين","rozavi"],
+  atorvastatin: ["lipitor","أتورفاستاتين"],
+  metformin: ["glucophage","ميتفورمين","metformin xr","glucophage xr"],
+  gliclazide: ["diamicron mr","جليكلازايد mr","damicron mr"],
+  sitagliptin: ["januvia","سيتاجلبتين"],
+  pantoprazole: ["protonix","بانتوبرازول","pantomax"],
+  esomeprazole: ["nexium","إيزوميبرازول"],
+  ibuprofen: ["advil","brufen","ايبوبروفين"],
+  diclofenac: ["voltaren","ديكلوفيناك"],
+  tamsulosin: ["flomax","تامسولوسين"],
+  "dutasteride/tamsulosin": ["duodart","jalyn","ديوادارت"],
+  nitroglycerin: ["nitro","نترات الغليسيريل","glyceryl trinitrate"],
+  sildenafil: ["viagra","سيلدينافيل"],
+  tadalafil: ["cialis","تادالافيل"],
+  spironolactone: ["aldactone","سبيرونولاكتون"],
+};
+
+// فئات سريعة للاستخدام في القواعد
+const ORAL_ANTICOAGULANTS = ["warfarin","apixaban","rivaroxaban","dabigatran","edoxaban"];
+const NSAIDS = ["ibuprofen","diclofenac"];
+const ACEI = ["lisinopril","perindopril","ramipril","captopril","enalapril"];
+const ARB  = ["valsartan","losartan","olmesartan","candesartan"];
+const STATINS = ["rosuvastatin","atorvastatin","simvastatin","pravastatin"];
+const PDE5 = ["sildenafil","tadalafil"];
+const NITRATES = ["nitroglycerin"];
+const K_SPARING = ["spironolactone"];
+
+// ------------------ بناء قائمة أدوية من الأسطر ------------------
+function parseLinesToMeds(allLines = []){
+  const meds = [];
+  for (const raw of allLines) {
+    const line = applyCorrections(raw);
+    if (!line) continue;
+    // حاول فصل الجرعة
+    const mgm = line.match(/(\d+(?:\.\d+)?)\s*mg\b/i);
+    let name = line, dose = null;
+    if (mgm) { dose = `${mgm[1]} mg`; name = line.replace(mgm[0], "").trim(); }
+    meds.push({ name, dose });
+  }
+  // إزالة تكرارات
+  const seen = new Set(); const out = [];
+  for (const m of meds) {
+    const k = norm(m.name) + "|" + (m.dose||"");
+    if (!seen.has(k)) { seen.add(k); out.push(m); }
+  }
+  return out;
+}
+
+// تحويل اسم خام إلى "اسم قياسي" لو أمكن (للربط بالقواعد)
+function mapToCanonical(drugName=""){
+  const n = norm(drugName);
+  // بحث مباشر
+  for (const key of Object.keys(ALIASES)) {
+    if (n.includes(key)) return key;
+  }
+  // بحث ضمن الأسماء المرادفة
+  for (const [key, arr] of Object.entries(ALIASES)) {
+    if (arr.some(a => n.includes(norm(a)))) return key;
+  }
+  // fallback
+  return n.split(/\s+/)[0]; // أول كلمة
+}
+
+// ------------------ القواعد السريرية ------------------
+function hasDrug(meds, keyList){ // يقبل مفاتيح canonical
+  return meds.some(m => keyList.includes(mapToCanonical(m.name)));
+}
+function findDrug(meds, key){
+  return meds.find(m => mapToCanonical(m.name) === key);
+}
+
+// 1) أسبرين + مضاد تخثر فموي ⇒ نزف (شديد)
+function ruleAspirinWithOAC(ctx){
+  const { meds } = ctx;
+  const hasAsp = hasDrug(meds, ["aspirin"]);
+  const hasOAC = ORAL_ANTICOAGULANTS.some(k => hasDrug(meds, [k]));
+  if (hasAsp && hasOAC) return {applies:true, sev:SEV.HIGH, code:"ASPIRIN_OAC",
+    title:"تداخل خطير: أسبرين + مضاد تخثر",
+    message:"الجمع يرفع خطر النزف بشكل ملحوظ. راجِع الإيقاف/التعديل فورًا مع الطبيب."};
+  if (!hasAsp && hasOAC) return {applies:true, sev:SEV.INFO, code:"ASPIRIN_INFO",
+    title:"تنبيه حول إضافة الأسبرين",
+    message:"تجنّب إضافة الأسبرين دون استطباب واضح مع مضاد تخثر."};
+  return {applies:false};
+}
+
+// 2) حمل وإرضاع + NSAIDs/أسبرين
+function rulePregnancyLactation(ctx){
+  const { conditions, meds } = ctx;
+  const pregnant = !!conditions?.pregnancy?.pregnant;
+  const weeks = conditions?.pregnancy?.weeks || null;
+  const lact = !!conditions?.lactation; // { breastfeeding:true } ⇒ true
+
+  const hasNSAID = NSAIDS.some(k => hasDrug(meds,[k]));
+  const asp = findDrug(meds,"aspirin");
+  const aspDose = asp ? parseDoseMg(asp.dose) : null;
+
+  // حمل: بعد الأسبوع 20 تجنّب NSAIDs، والأسبرين العالي خطِر
+  if (pregnant) {
+    if (weeks!=null && weeks >= 20 && hasNSAID)
+      return {applies:true, sev:SEV.HIGH, code:"PREG_NSAID_20W",
+        title:"حمل ≥20 أسبوعًا وNSAIDs",
+        message:"يُتجنّب NSAIDs بعد الأسبوع 20 لمخاطر كلوية جنينية/انخفاض السائل الأمنيوسي."};
+    if (asp && aspDose!=null && aspDose>150)
+      return {applies:true, sev:SEV.HIGH, code:"PREG_ASP_HIGH",
+        title:"أسبرين عالي الجرعة أثناء الحمل",
+        message:"جرعات الأسبرين العالية غير محبذة عمومًا في الحمل. راجِع الإيقاف/التعديل فورًا."};
+    if (asp && (aspDose==null || aspDose<=150))
+      return {applies:true, sev:SEV.MOD, code:"PREG_ASP_LOW",
+        title:"أسبرين منخفض الجرعة أثناء الحمل",
+        message:"قد يُستخدم لاستطبابات توليدية خاصة وتحت إشراف نسائية. أكّد الضرورة والمتابعة."};
+  }
+
+  // إرضاع: الأسبرين بجرعات عالية غير مفضّل؛ الإيبوبروفين يُعد خيارًا أفضل عادة
+  if (lact) {
+    if (asp && aspDose && aspDose>100)
+      return {applies:true, sev:SEV.MOD, code:"LACT_ASP_HIGH",
+        title:"أسبرين عالي الجرعة أثناء الإرضاع",
+        message:"فضّل بدائل (مثل إيبوبروفين بجرعات مناسبة) لتقليل مخاطر على الرضيع/النزف."};
+    if (hasNSAID)
+      return {applies:true, sev:SEV.INFO, code:"LACT_NSAID_INFO",
+        title:"NSAIDs والإرضاع",
+        message:"إيبوبروفين غالبًا آمن بجرعات معتدلة. التزِم بأقل جرعة لأقصر مدة وتابع أي آثار غير معتادة."};
+  }
+
+  return {applies:false};
+}
+
+// 3) CKD + NSAIDs / أسبرين جرعات أعلى
+function ruleCKD(ctx){
+  const { conditions, meds } = ctx;
+  const eGFR = conditions?.eGFR;
+  const ckdStage = conditions?.ckdStage || (typeof eGFR==="number" ? (eGFR<15?5: eGFR<30?4: eGFR<60?3:2) : null);
+  if (!ckdStage || ckdStage < 3) return {applies:false};
+
+  const hasNsaid = NSAIDS.some(k => hasDrug(meds,[k]));
+  if (hasNsaid) return {applies:true, sev:(ckdStage>=4?SEV.HIGH:SEV.MOD), code:"CKD_NSAID",
+    title:"NSAIDs ومرض كلوي مزمن",
+    message:"تُتجنّب NSAIDs في CKD خاصة المراحل المتقدمة؛ قد ترفع الضغط وتضعف وظائف الكلى."};
+
+  const asp = findDrug(meds,"aspirin"); const d = asp?parseDoseMg(asp.dose):null;
+  if (asp && d && d>81) return {applies:true, sev:SEV.MOD, code:"CKD_ASP_DOSE",
+    title:"أسبرين وCKD",
+    message:"الجرعات الأعلى من المنخفضة قد لا تكون مفضلة في CKD. ناقش خفض الجرعة/بدائل ومراقبة النزف."};
+
+  return {applies:false};
+}
+
+// 4) كبد
+function ruleLiver(ctx){
+  const { conditions, meds } = ctx;
+  if (!conditions?.liverDisease) return {applies:false};
+  const asp = hasDrug(meds,["aspirin"]);
+  if (asp) return {applies:true, sev:SEV.MOD, code:"LIVER_ASP",
+    title:"أسبرين ومرض كبدي",
+    message:"قد ترتفع مخاطر النزف مع اضطرابات التخثر. راجع ضرورة الاستعمال والجرعة والمراقبة."};
+  return {applies:true, sev:SEV.INFO, code:"LIVER_INFO",
+    title:"تنبيه كبدي عام",
+    message:"مع المرض الكبدي، استخدم أقل جرعة ومدة ممكنة وفكّر ببدائل أكثر أمانًا."};
+}
+
+// 5) جرعة بالوزن (مثال مبسط على الأسبرين)
+function ruleDoseByWeight(ctx){
+  const { demographics, meds } = ctx;
+  const w = demographics?.weightKg;
+  if (!w) return {applies:false};
+  const asp = findDrug(meds,"aspirin");
+  if (asp) {
+    const d = parseDoseMg(asp.dose);
+    if (d && d>100) return {applies:true, sev:SEV.MOD, code:"DOSE_ASP_WEIGHT",
+      title:"جرعة الأسبرين أعلى من المنخفضة",
+      message:`جرعة ${d} mg قد تتجاوز المنخفضة المعتادة للوقاية. تحقّق من الاستطباب وخطر النزف (وزن ${w} كغ).`};
+  }
+  return {applies:false};
+}
+
+// 6) ACEi + ARB (تجنّب)
+function ruleDualRAS(ctx){
+  const meds = ctx.meds.map(m=>mapToCanonical(m.name));
+  const hasAce = meds.some(x => ACEI.includes(x));
+  const hasArb = meds.some(x => ARB.includes(x) || x==="valsartan/hydrochlorothiazide");
+  if (hasAce && hasArb) return {applies:true, sev:SEV.HIGH, code:"DUAL_RAS",
+    title:"تجنّب الجمع ACEi + ARB",
+    message:"يزيد مخاطر الكُلى وفرط بوتاسيوم دون فائدة واضحة."};
+  return {applies:false};
+}
+
+// 7) ARB/ACEi + سبيرونولاكتون + CKD ⇒ فرط بوتاسيوم
+function ruleHyperK(ctx){
+  const meds = ctx.meds.map(m=>mapToCanonical(m.name));
+  const hasRas = meds.some(x => ACEI.includes(x) || ARB.includes(x));
+  const hasSpir = meds.some(x => K_SPARING.includes(x));
+  const eGFR = ctx.conditions?.eGFR;
+  if (hasRas && hasSpir && (eGFR!=null && eGFR<60))
+    return {applies:true, sev:SEV.HIGH, code:"HYPERK_RISK",
+      title:"خطر فرط بوتاسيوم الدم",
+      message:"الجمع مع قصور كلوي يزيد خطر فرط بوتاسيوم. راجع الجرعات/الضرورة والمراقبة اللصيقة."};
+  return {applies:false};
+}
+
+// 8) PDE5 + Nitrates ⇒ هبوط ضغط شديد
+function rulePDE5_Nitrates(ctx){
+  const hasPDE5 = ctx.meds.some(m => PDE5.includes(mapToCanonical(m.name)));
+  const hasNit = ctx.meds.some(m => NITRATES.includes(mapToCanonical(m.name)));
+  if (hasPDE5 && hasNit) return {applies:true, sev:SEV.HIGH, code:"PDE5_NIT",
+    title:"تداخل خطير: نترات + مثبط PDE5",
+    message:"هبوط ضغط شديد/خطر إغماء. يُمنع الجمع."};
+  return {applies:false};
+}
+
+// 9) Metformin + eGFR
+function ruleMetforminRenal(ctx){
+  const hasMet = ctx.meds.some(m => mapToCanonical(m.name).startsWith("metformin"));
+  const egfr = ctx.conditions?.eGFR;
+  if (!hasMet || egfr==null) return {applies:false};
+  if (egfr<30) return {applies:true, sev:SEV.HIGH, code:"MET_CONTRA",
+    title:"ميتفورمين: eGFR < 30",
+    message:"مُضاد استطباب. أوقف/لا تبدأ الميتفورمين."};
+  if (egfr>=30 && egfr<45) return {applies:true, sev:SEV.MOD, code:"MET_REDUCE",
+    title:"ميتفورمين: تقليل جرعة (eGFR 30–44)",
+    message:"حدّ الجرعة ومراقبة B12 والوظائف."};
+  return {applies:false};
+}
+
+// 10) Rosuvastatin + CKD شديد
+function ruleRosuvastatinRenal(ctx){
+  const rosu = ctx.meds.find(m => mapToCanonical(m.name)==="rosuvastatin");
+  const egfr = ctx.conditions?.eGFR;
+  if (!rosu || egfr==null) return {applies:false};
+  const mg = parseDoseMg(rosu.dose);
+  if (egfr<30 && (!mg || mg>10))
+    return {applies:true, sev:SEV.HIGH, code:"ROSU_MAX10",
+      title:"روزوفاستاتين والقصور الكلوي",
+      message:"في القصور الشديد يُفضّل ≤10 mg (البدء 5 mg) أو بدائل."};
+  return {applies:false};
+}
+
+// 11) عمر متقدّم + سلفونيل يوريا ⇒ خطر هبوط سكر
+function ruleSU_Elderly(ctx){
+  const hasSU = ctx.meds.some(m => mapToCanonical(m.name).startsWith("gliclazide"));
+  const age = ctx.demographics?.age;
+  const egfr = ctx.conditions?.eGFR;
+  if (!hasSU) return {applies:false};
+  if ((age && age>=65) || (egfr!=null && egfr<60))
+    return {applies:true, sev:SEV.MOD, code:"SU_HYPO",
+      title:"سلفونيل يوريا في الكبار/CKD",
+      message:"خطر هبوط سكر أعلى؛ فكّر ببدائل/جرعات أقل ومراقبة لصيقة."};
+  return {applies:false};
+}
+
+const RULES = [
+  ruleAspirinWithOAC,
+  rulePregnancyLactation,
+  ruleCKD,
+  ruleLiver,
+  ruleDoseByWeight,
+  ruleDualRAS,
+  ruleHyperK,
+  rulePDE5_Nitrates,
+  ruleMetforminRenal,
+  ruleRosuvastatinRenal,
+  ruleSU_Elderly,
+];
+
+// ------------------ تقديم HTML (عامودان) ------------------
+function badge(sev){
+  return `<span style="display:inline-flex;align-items:center;gap:6px;
+    padding:4px 10px;border-radius:9999px;font-weight:700;color:#fff;background:${sev.color};
+    font-size:12px;">${sev.emoji} ${sev.label}</span>`;
+}
+
+function renderHTML({ meds, findings }){
+  const style = `
+  <style>
+    .rx-wrap{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,'Amiri',serif;background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:16px}
+    .rx-title{font-size:20px;font-weight:800;margin:12px 0;color:#0b63c2}
+    .rx-table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    .rx-row{background:#fff;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+    .rx-cell{padding:12px 14px;vertical-align:top}
+    .rx-head{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em}
+    .rx-drug{font-weight:800}
+    .rx-note{font-size:14px;line-height:1.55}
+    .rx-muted{font-size:12px;color:#374151;margin:8px 0 0}
+  </style>`;
+
+  const medsRows = meds.map(m => `
+    <tr class="rx-row">
+      <td class="rx-cell rx-drug">${escapeHTML(m.name)}${m.dose?` — <span style="color:#475569">${escapeHTML(m.dose)}</span>`:''}</td>
+      <td class="rx-cell rx-note">—</td>
+    </tr>`).join("");
+
+  const fxRows = (findings||[]).map(f => `
+    <tr class="rx-row">
+      <td class="rx-cell rx-drug">${escapeHTML(f.title)}</td>
+      <td class="rx-cell rx-note">${badge(f.sev)}<div style="height:6px"></div>${escapeHTML(f.message)}</td>
+    </tr>`).join("");
+
+  return `
+  ${style}
+  <div class="rx-wrap">
+    <div class="rx-title">🧾 قائمة الأدوية</div>
+    <table class="rx-table">
+      <thead>
+        <tr><th class="rx-cell rx-head">الدواء</th><th class="rx-cell rx-head">ملاحظات</th></tr>
+      </thead>
+      <tbody>${medsRows || `<tr class="rx-row"><td class="rx-cell" colspan="2">—</td></tr>`}</tbody>
+    </table>
+
+    <div class="rx-title" style="margin-top:20px">⚠️ التحذيرات والتداخلات</div>
+    <table class="rx-table">
+      <thead>
+        <tr><th class="rx-cell rx-head">العنوان</th><th class="rx-cell rx-head">التفاصيل / مستوى الخطورة</th></tr>
+      </thead>
+      <tbody>${fxRows || `<tr class="rx-row"><td class="rx-cell" colspan="2">لا توجد ملاحظات حرجة بناءً على القواعد الحالية.</td></tr>`}</tbody>
+    </table>
+
+    <div class="rx-muted">الألوان: 🟥 شديد جدًا، 🟧 متوسط، 🟩 منخفض، 🔵 تنبيه.</div>
+  </div>`;
+}
+
+// ------------------ API Handler ------------------
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
-      return res.status(405).json({ error: "method_not_allowed" });
+      return res.status(405).json({ ok:false, error:"method_not_allowed" });
     }
-    const { ocrList, patient, freeText } = req.body || {};
-    const result = analyzePrescription({ ocrList, patient, freeText });
-    return res.status(200).json(result);
+
+    const { texts = [], images = [], patient = {}, demographics = {} } = req.body || {};
+
+    // 1) OCR من الصور (اختياري)
+    let ocrText = "";
+    if (images && images.length) {
+      ocrText = await extractTextFromImages(images);
+    }
+
+    // 2) جمع النصوص وتصحيحها
+    const linesFromOCR = splitLines(ocrText);
+    const linesFromTexts = splitLines((texts || []).join("\n"));
+    const allLines = [...linesFromOCR, ...linesFromTexts];
+
+    // 3) تحويل إلى أدوية
+    const meds = parseLinesToMeds(allLines);
+
+    // 4) سياق المريض
+    const conditions = {
+      pregnancy: patient?.pregnancy || null,                 // { pregnant:true, weeks:22 }
+      eGFR: (typeof patient?.eGFR === "number" ? patient.eGFR : null),
+      ckdStage: patient?.ckdStage || null,
+      liverDisease: !!patient?.liverDisease,
+      lactation: !!(patient?.lactation?.breastfeeding || patient?.lactation === true),
+    };
+    const demo = {
+      weightKg: patient?.weight || demographics?.weightKg || null,
+      age: patient?.age || demographics?.age || null,
+      sex: patient?.sex || demographics?.sex || null,
+    };
+
+    // 5) تطبيق القواعد
+    const ctx = { meds, conditions, demographics: demo };
+    const findings = [];
+    for (const rule of RULES) {
+      const r = rule(ctx);
+      if (r && r.applies) findings.push(r);
+    }
+
+    // 6) HTML
+    const html = renderHTML({ meds, findings });
+
+    // 7) نتيجة
+    return res.status(200).json({
+      ok: true,
+      meds,
+      findings,
+      html,
+      raw: { ocrText, linesFromOCR, linesFromTexts }
+    });
+
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: "analysis_failed", message: e?.message });
+    return res.status(500).json({ ok:false, error:"analysis_failed", message:e?.message || "Internal error" });
   }
 }
-
-export { analyzePrescription };
