@@ -172,7 +172,6 @@ const ALIASES = {
   spironolactone: ["aldactone","سبيرونولاكتون"],
 };
 
-// فئات سريعة للاستخدام في القواعد
 const ORAL_ANTICOAGULANTS = ["warfarin","apixaban","rivaroxaban","dabigatran","edoxaban"];
 const NSAIDS = ["ibuprofen","diclofenac"];
 const ACEI = ["lisinopril","perindopril","ramipril","captopril","enalapril"];
@@ -206,16 +205,13 @@ function parseLinesToMeds(allLines = []){
 // تحويل اسم خام إلى "اسم قياسي" لو أمكن (للربط بالقواعد)
 function mapToCanonical(drugName=""){
   const n = norm(drugName);
-  // بحث مباشر
   for (const key of Object.keys(ALIASES)) {
     if (n.includes(key)) return key;
   }
-  // بحث ضمن الأسماء المرادفة
   for (const [key, arr] of Object.entries(ALIASES)) {
     if (arr.some(a => n.includes(norm(a)))) return key;
   }
-  // fallback
-  return n.split(/\s+/)[0]; // أول كلمة
+  return n.split(/\s+/)[0]; // fallback: أول كلمة
 }
 
 // ------------------ القواعد السريرية ------------------
@@ -245,7 +241,7 @@ function rulePregnancyLactation(ctx){
   const { conditions, meds } = ctx;
   const pregnant = !!conditions?.pregnancy?.pregnant;
   const weeks = conditions?.pregnancy?.weeks || null;
-  const lact = !!conditions?.lactation; // { breastfeeding:true } ⇒ true
+  const lact = !!conditions?.lactation;
 
   const hasNSAID = NSAIDS.some(k => hasDrug(meds,[k]));
   const asp = findDrug(meds,"aspirin");
@@ -354,7 +350,7 @@ function ruleHyperK(ctx){
   return {applies:false};
 }
 
-// 8) PDE5 + Nitrates ⇒ هبوط ضغط شديد
+// 8) PDE5 + نترات ⇒ هبوط ضغط شديد (ممنوع)
 function rulePDE5_Nitrates(ctx){
   const hasPDE5 = ctx.meds.some(m => PDE5.includes(mapToCanonical(m.name)));
   const hasNit = ctx.meds.some(m => NITRATES.includes(mapToCanonical(m.name)));
@@ -439,7 +435,7 @@ function renderHTML({ meds, findings }){
     .rx-muted{font-size:12px;color:#374151;margin:8px 0 0}
   </style>`;
 
-  const medsRows = meds.map(m => `
+  const medsRows = (meds||[]).map(m => `
     <tr class="rx-row">
       <td class="rx-cell rx-drug">${escapeHTML(m.name)}${m.dose?` — <span style="color:#475569">${escapeHTML(m.dose)}</span>`:''}</td>
       <td class="rx-cell rx-note">—</td>
@@ -470,7 +466,7 @@ function renderHTML({ meds, findings }){
       <tbody>${fxRows || `<tr class="rx-row"><td class="rx-cell" colspan="2">لا توجد ملاحظات حرجة بناءً على القواعد الحالية.</td></tr>`}</tbody>
     </table>
 
-    <div class="rx-muted">الألوان: 🟥 شديد جدًا، 🟧 متوسط، 🟩 منخفض، 🔵 تنبيه.</div>
+    <div class="rx-muted">الأساطير اللونية: 🟥 شديد جدًا، 🟧 متوسط، 🟩 منخفض، 🔵 تنبيه.</div>
   </div>`;
 }
 
