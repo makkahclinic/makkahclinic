@@ -1,6 +1,5 @@
-// /api/pharmacy-rx.js (الإصدار النهائي - مبني على هندسة المستخدم الناجحة)
-// هذا الكود يستخدم نفس بنية الكود العامل الخاص بالمستخدم مع تعديل التعليمات (Prompt)
-// لتناسب تحليل الوصفات الطبية بدلاً من التدقيق التأميني.
+// /api/pharmacy-rx.js (الإصدار النهائي المصحح)
+// هذا الكود يستخدم الهندسة الناجحة من كود المستخدم مع إصلاح الخلل البرمجي السابق.
 
 // --- إعدادات أساسية ---
 export const config = {
@@ -12,7 +11,6 @@ const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_TIMEOUT_MS = 120 * 1000; // 120 ثانية
 
 // ===================== التعليمات الرئيسية للنموذج (System Instruction) =====================
-// تم تعديل هذا الجزء ليناسب تحليل الصيدلية
 const systemInstruction = `
 أنت "صيدلي إكلينيكي خبير" ومطور ويب محترف. مهمتك هي تحليل البيانات السريرية للمريض وإنشاء تقرير HTML مفصل ودقيق.
 
@@ -54,9 +52,7 @@ const systemInstruction = `
 -   يجب أن يكون ردك عبارة عن **كتلة HTML واحدة فقط**، صالحة وكاملة. لا تضف أي نص تمهيدي أو ختامي مثل \`\`\`html.
 `;
 
-
 // ===================== بناء طلب المستخدم (Prompt) =====================
-// تم تبسيطه ليناسب الواجهة الأمامية لتطبيق الصيدلية
 function buildUserPrompt(patientData = {}) {
     return `
 **بيانات المريض:**
@@ -110,7 +106,6 @@ async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_T
     }
 }
 
-
 // ===================== معالج الطلب الرئيسي (Main API Handler) =====================
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -118,7 +113,7 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') return res.status(200).end();
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
+    if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
 
     try {
         const apiKey = process.env.GEMINI_API_KEY;
@@ -134,7 +129,16 @@ export default async function handler(req, res) {
         if (Array.isArray(images)) {
             for (const imageDataUrl of images) {
                 if (typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:')) {
-                    const { buffer, mimeType } = Buffer.from(imageDataUrl.split(',')[1], 'base64');
+                    // --- بداية الجزء الذي تم إصلاحه ---
+                    const match = imageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (!match) {
+                        console.warn('Skipping invalid data URL format.');
+                        continue;
+                    }
+                    const mimeType = match[1];
+                    const base64Data = match[2];
+                    const buffer = Buffer.from(base64Data, 'base64');
+                    // --- نهاية الجزء الذي تم إصلاحه ---
 
                     if (buffer.byteLength > MAX_INLINE_FILE_BYTES) {
                         try {
@@ -144,7 +148,7 @@ export default async function handler(req, res) {
                             console.error(`Skipping a file due to upload error:`, uploadError.message);
                         }
                     } else {
-                        parts.push({ inline_data: { mime_type: mimeType, data: imageDataUrl.split(',')[1] } });
+                        parts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
                     }
                 }
             }
@@ -164,16 +168,19 @@ export default async function handler(req, res) {
         const responseText = await response.text();
         if (!response.ok) {
             console.error('Gemini API Error:', response.status, responseText);
-            throw new Error(`Gemini API responded with status ${response.status}`);
+            // أعدنا رسالة الخطأ من Gemini مباشرة إلى الواجهة الأمامية لتشخيص أفضل
+            throw new Error(`Gemini API responded with status ${response.status}: ${responseText}`);
         }
 
         const result = JSON.parse(responseText);
         const finalHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>خطأ: لم يتمكن النموذج من إنشاء تقرير.</p>';
         
+        // إرسال رد JSON صحيح إلى الواجهة الأمامية
         return res.status(200).json({ ok: true, html: finalHtml.replace(/```html|```/g, '').trim() });
 
     } catch (err) {
         console.error('Server Error:', err);
+        // إرسال رد JSON صحيح في حالة حدوث خطأ
         return res.status(500).json({ ok: false, error: 'Internal Server Error', message: err.message });
     }
 }
