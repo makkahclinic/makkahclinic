@@ -1,105 +1,179 @@
-// /api/pharmacy-rx.js (الإصدار النهائي المبسط والموثوق)
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// /api/pharmacy-rx.js (الإصدار النهائي - مبني على هندسة المستخدم الناجحة)
+// هذا الكود يستخدم نفس بنية الكود العامل الخاص بالمستخدم مع تعديل التعليمات (Prompt)
+// لتناسب تحليل الوصفات الطبية بدلاً من التدقيق التأميني.
 
 // --- إعدادات أساسية ---
 export const config = {
     api: { bodyParser: { sizeLimit: '25mb' } }
 };
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-pro-latest';
+const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
+const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+const DEFAULT_TIMEOUT_MS = 120 * 1000; // 120 ثانية
 
-// --- دوال مساعدة ---
-function dataUrlToBuffer(dataUrl) {
-    const match = dataUrl.match(/^data:(.*);base64,(.*)$/);
-    if (!match) return null;
-    return { mimeType: match[1], buffer: Buffer.from(match[2], 'base64') };
+// ===================== التعليمات الرئيسية للنموذج (System Instruction) =====================
+// تم تعديل هذا الجزء ليناسب تحليل الصيدلية
+const systemInstruction = `
+أنت "صيدلي إكلينيكي خبير" ومطور ويب محترف. مهمتك هي تحليل البيانات السريرية للمريض وإنشاء تقرير HTML مفصل ودقيق.
+
+[أ] منهجية التحليل (إلزامية)
+1.  حلّل جميع البيانات النصية والصور المرفقة لاستخراج قائمة كاملة بالأدوية.
+2.  لكل دواء، حدد اسمه، جرعته، وتعليمات تناوله قدر الإمكان.
+3.  قم بإجراء تحليل سريري عميق، مع التركيز على:
+    * **التداخلات الدوائية:** بين الأدوية الموجودة في القائمة فقط.
+    * **التعارض مع حالة المريض:** هل يتعارض أي دواء مع بيانات المريض (العمر، وظائف الكلى eGFR، الحمل، الرضاعة، أمراض الكبد).
+    * **معلومات هامة:** أي ملاحظات أخرى ضرورية (مثل التفاعل مع طعام معين، تحذيرات عامة، إلخ).
+
+[ب] بنية تقرير HTML المطلوبة (إلزامية، بدون CSS أو <style> في هذا الجزء)
+1.  <h3>تحليل الوصفة الطبية</h3>
+2.  <h4>ملخص حالة المريض</h4><p>اكتب ملخصًا موجزًا لبيانات المريض (العمر، الجنس، eGFR، الحمل...).</p>
+3.  <h4>جدول الأدوية</h4>
+    <table><thead><tr>
+    <th>الدواء</th><th>الجرعة</th><th>طريقة الأخذ</th>
+    </tr></thead><tbody>
+    </tbody></table>
+4.  <h4>التحليل السريري والملاحظات</h4>
+    <div class="findings-list">
+    </div>
+
+[ج] هيكل بطاقة الملاحظة (finding-card) داخل findings-list (إلزامي)
+-   يجب أن تكون كل ملاحظة داخل <div class="finding-card">.
+-   يجب أن تحتوي البطاقة على شارة <span class="badge"> لتحديد الخطورة.
+-   استخدم السمة data-severity لتحديد المستوى:
+    * **data-severity="high"**: للخطورة العالية (الأحمر).
+    * **data-severity="moderate"**: للخطورة المتوسطة (الأصفر).
+    * **data-severity="low"**: للخطورة المنخفضة (الأخضر).
+    * **data-severity="info"**: للمعلومات العامة (الأزرق).
+-   يجب أن تحتوي البطاقة على <h5> لعنوان الملاحظة (مثال: "تداخل دوائي: Amlodipine + Simvastatin").
+-   يجب أن تحتوي البطاقة على <p> لشرح الملاحظة والتوصية.
+
+[د] الخاتمة (إلزامية)
+<p><strong>إخلاء مسؤولية:</strong> هذا التقرير هو للمساعدة المعلوماتية فقط ولا يغني عن الاستشارة الطبية المتخصصة.</p>
+
+[هـ] الإخراج النهائي
+-   يجب أن يكون ردك عبارة عن **كتلة HTML واحدة فقط**، صالحة وكاملة. لا تضف أي نص تمهيدي أو ختامي مثل \`\`\`html.
+`;
+
+
+// ===================== بناء طلب المستخدم (Prompt) =====================
+// تم تبسيطه ليناسب الواجهة الأمامية لتطبيق الصيدلية
+function buildUserPrompt(patientData = {}) {
+    return `
+**بيانات المريض:**
+- العمر: ${patientData.age ?? 'غير محدد'}
+- الجنس: ${patientData.sex ?? 'غير محدد'}
+- وظائف الكلى (eGFR): ${patientData.eGFR ?? 'غير محدد'}
+- هل المريضة حامل: ${patientData.pregnancy?.pregnant ? 'نعم' : 'لا'}
+- أسابيع الحمل: ${patientData.pregnancy?.weeks ?? 'غير محدد'}
+- حالة الكبد: ${patientData.liverDisease ? 'يوجد مرض كبدي' : 'طبيعي'}
+
+**الأدوية المكتوبة (نصًا):**
+${patientData.medicationsText ?? 'لا يوجد'}
+
+**الملفات المرفوعة:**
+${Array.isArray(patientData.files) && patientData.files.length > 0 ? 'يوجد ملفات مرفقة للتحليل.' : 'لا توجد ملفات مرفقة.'}
+`;
 }
 
-// ============================ معالج الطلب الرئيسي (API Handler) ============================
-export default async function handler(req, res) {
-    console.log("Step 1: Handler started.");
 
-    // التعامل مع CORS
+// ===================== دوال مساعدة للـ API والملفات (من كودك الناجح) =====================
+async function uploadFileToGemini(apiKey, fileBuffer, mimeType) {
+    const uploadUrl = `https://generativelanguage.googleapis.com/v1beta/files?key=${apiKey}`;
+    console.log(`Uploading file of type ${mimeType}...`);
+    const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType },
+        body: fileBuffer,
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('File API upload failed:', errorText);
+        throw new Error(`File API upload failed with status ${response.status}`);
+    }
+    const result = await response.json();
+    console.log(`File uploaded. URI: ${result.file.uri}`);
+    return result.file.uri;
+}
+
+async function fetchWithRetry(url, options, { retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
+            await new Promise(r => setTimeout(r, (3 - retries) * 1000));
+            return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
+        }
+        return res;
+    } finally {
+        clearTimeout(id);
+    }
+}
+
+
+// ===================== معالج الطلب الرئيسي (Main API Handler) =====================
+export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
 
-    if (req.method !== 'POST') {
-        return res.status(405).json({ ok: false, error: "Method Not Allowed" });
-    }
-
-    if (!GEMINI_API_KEY) {
-        console.error("Fatal Error: GEMINI_API_KEY is not configured.");
-        return res.status(500).json({ ok: false, message: "مفتاح Gemini API غير معرف على الخادم." });
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
     try {
-        const { texts = [], images = [], patient = {} } = req.body;
-        console.log(`Step 2: Received request with ${texts.length} text parts and ${images.length} images.`);
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
 
-        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
-
-        // تحويل الصور من dataURL إلى الصيغة التي تفهمها المكتبة
-        const imageParts = images
-            .map(dataUrlToBuffer)
-            .filter(Boolean) // تجاهل أي صيغ غير صالحة
-            .map(({ mimeType, buffer }) => ({
-                inlineData: { data: buffer.toString('base64'), mimeType }
-            }));
+        const { texts = [], images = [], patient = {} } = req.body || {};
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
         
-        console.log(`Step 3: Converted ${imageParts.length} images to generative parts.`);
+        const patientDataForPrompt = { ...patient, medicationsText: texts.join('\n'), files: images };
+        const userPrompt = buildUserPrompt(patientDataForPrompt);
+        const parts = [{ text: systemInstruction }, { text: userPrompt }];
 
-        if (texts.length === 0 && imageParts.length === 0) {
-            return res.status(400).json({ ok: false, message: "الرجاء إدخال نص أو رفع ملف يحتوي على الأدوية." });
+        if (Array.isArray(images)) {
+            for (const imageDataUrl of images) {
+                if (typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:')) {
+                    const { buffer, mimeType } = Buffer.from(imageDataUrl.split(',')[1], 'base64');
+
+                    if (buffer.byteLength > MAX_INLINE_FILE_BYTES) {
+                        try {
+                            const fileUri = await uploadFileToGemini(apiKey, buffer, mimeType);
+                            parts.push({ file_data: { mime_type: mimeType, file_uri: fileUri } });
+                        } catch (uploadError) {
+                            console.error(`Skipping a file due to upload error:`, uploadError.message);
+                        }
+                    } else {
+                        parts.push({ inline_data: { mime_type: mimeType, data: imageDataUrl.split(',')[1] } });
+                    }
+                }
+            }
+        }
+        
+        const payload = {
+            contents: [{ role: 'user', parts }],
+            generationConfig: { maxOutputTokens: 8192 }
+        };
+
+        const response = await fetchWithRetry(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const responseText = await response.text();
+        if (!response.ok) {
+            console.error('Gemini API Error:', response.status, responseText);
+            throw new Error(`Gemini API responded with status ${response.status}`);
         }
 
-        // بناء الـ Prompt النهائي
-        const ultimatePrompt = `
-            أنت صيدلي إكلينيكي خبير، ومهمتك هي تحليل حالة المريض التالية وتقديم تقرير احترافي بصيغة HTML.
-
-            **بيانات المريض:**
-            - العمر: ${patient.age || 'غير محدد'}
-            - الجنس: ${patient.sex === 'M' ? 'ذكر' : 'أنثى'}
-            - الوزن: ${patient.weight ? `${patient.weight} كجم` : 'غير محدد'}
-            - وظائف الكلى (eGFR): ${patient.eGFR || 'غير محدد'}
-            - الحمل: ${patient.pregnancy?.pregnant ? `نعم، ${patient.pregnancy.weeks || ''} أسابيع` : 'لا'}
-
-            **مهمتك:**
-            قم بقراءة وفهم كل النصوص والصور المرفقة، ثم قم بإنشاء تقرير HTML كامل ومنسق يحتوي على الأقسام التالية بالترتيب:
-
-            **القسم الأول: جدول الأدوية**
-            - أنشئ جدولاً <table id="meds-table"> بالأعمدة: "الدواء", "الجرعة", "طريقة الأخذ".
-
-            **القسم الثاني: التحليل السريري**
-            - أنشئ حاوية <div id="findings-list">.
-            - لكل ملاحظة، أنشئ بطاقة <div class="finding-card">.
-            - لكل بطاقة، حدد نوعها (تداخل دوائي, تعارض مع الحالة, معلومة عامة) ومستوى خطورتها (أحمر للخطر جداً, أصفر للمتوسط, أخضر للمنخفض, أزرق للمعلومات). استخدم شارة <span class="badge"> مع السمة data-severity.
-
-            **القسم الثالث: التنسيق (CSS)**
-            - ابدأ ردك بوسم <style> يحتوي على تنسيق احترافي يدعم اللغة العربية.
-            
-            **تعليمات هامة:**
-            - ردك يجب أن يكون بصيغة HTML فقط.
-        `;
-
-        const requestParts = [ultimatePrompt, ...texts, ...imageParts];
+        const result = JSON.parse(responseText);
+        const finalHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text || '<p>خطأ: لم يتمكن النموذج من إنشاء تقرير.</p>';
         
-        console.log("Step 4: Sending request to Gemini...");
-        const result = await model.generateContent({ contents: [{ parts: requestParts }] });
-        const response = await result.response;
-        const finalHtml = response.text();
-        console.log("Step 5: Received response from Gemini. Sending to client.");
+        return res.status(200).json({ ok: true, html: finalHtml.replace(/```html|```/g, '').trim() });
 
-        return res.status(200).json({ ok: true, html: finalHtml });
-
-    } catch (error) {
-        console.error("CRITICAL ERROR in handler:", error);
-        return res.status(500).json({ ok: false, error: "analysis_failed", message: error.message });
+    } catch (err) {
+        console.error('Server Error:', err);
+        return res.status(500).json({ ok: false, error: 'Internal Server Error', message: err.message });
     }
 }
