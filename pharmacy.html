@@ -572,25 +572,74 @@ function renderReport(data,payload){
 }
 
 /* ====== تحليل شامل ====== */
+<script>
 async function doAnalyze(){
-  // 0) OCR للصور و PDF
-  showNote('info', t('Scanning uploads (OCR)…','جاري قراءة الملفات (OCR)…'));
-  const ocrText = await ocrAllUploads();
-  const ocrMeds = extractMedLinesFromOCR(ocrText);
+  // 1) خذ النص المكتوب (حقل الأدوية)
+  const medsText = (document.getElementById('meds').value || '').trim();
+  const texts = medsText ? medsText.split(/\n+/).map(s => s.trim()).filter(Boolean) : [];
 
-  // 1) مدخلات المستخدم
-  const payload = gatherPayload();
+  // 2) خذ الصور المرفوعة كـ base64 (عندك مخزّنة في labFiles/radFiles.preview)
+  const images = []
+    .concat((window.labFiles||[]).map(f => f.preview).filter(Boolean))
+    .concat((window.radFiles||[]).map(f => f.preview).filter(Boolean));
 
-  // 2) دمج بدون تكرار
-  const typedMeds = (payload.ocrList || []).map(x => x.name);
-  const mergedSet = new Set([...typedMeds, ...ocrMeds]);
-  payload.ocrList = Array.from(mergedSet).map(name => ({ name, dose: '' }));
+  // 3) جهّز معطيات المريض (اللي موجود عندك بالحقلّات)
+  const age = parseInt(document.getElementById('age').value,10);
+  const gender = document.getElementById('gender').value || undefined;
+  const height = parseFloat(document.getElementById('height').value);
+  const weight = parseFloat(document.getElementById('weight').value);
+  const egfr = parseFloat(document.getElementById('egfr').value);
+  const creatinine = parseFloat(document.getElementById('creatinine').value);
+  const liver = document.getElementById('liver').value;
+  const preg = document.getElementById('pregnancy')?.value;
+  const gest = parseInt(document.getElementById('gestation')?.value,10);
+  // اختياري: لو عندك خيار إرضاع، خلّيه true/false
+  const lactation = false; // عدّل حسب واجهتك لو أضفت خانة
 
-  // 3) تحقق
-  if (!payload.ocrList.length && !payload.patient.symptoms){
-    showNote('err', t('Please provide medications or symptoms at least.','الرجاء إدخال أدوية أو أعراض على الأقل.'));
+  const patient = {
+    age: Number.isFinite(age)?age:undefined,
+    sex: (gender==='male'?'M':(gender==='female'?'F':undefined)),
+    weight: Number.isFinite(weight)?weight:undefined,
+    height: Number.isFinite(height)?height:undefined,
+    eGFR: Number.isFinite(egfr)?egfr:undefined,
+    creatinine: Number.isFinite(creatinine)?creatinine:undefined,
+    liverDisease: (liver && liver !== 'normal') ? true : false,
+    pregnancy: (preg==='yes') ? { pregnant:true, weeks: Number.isFinite(gest)?gest:undefined }
+              : (preg==='no') ? { pregnant:false } : undefined,
+    lactation: { breastfeeding: !!lactation }
+  };
+
+  // 4) تنبيه لو ما في نص ولا صور
+  if (!texts.length && !images.length) {
+    showNote('err', (currentLang==='ar'?'الرجاء إدخال أدوية أو رفع صورة روشتة.':'Please type meds or upload a prescription image.'));
     return;
   }
+
+  showNote('info', (currentLang==='ar'?'جاري التحليل…':'Analyzing…'));
+
+  try {
+    const res = await fetch(API_ENDPOINT, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ texts, images, patient })
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.ok) throw new Error(data?.message || res.statusText);
+
+    // 5) اعرض الـHTML القادم من العقل المدبر (ولا تستخدم جدولك القديم هنا)
+    clearNote();
+    const reportEl = document.getElementById('report');
+    const out = document.getElementById('reportContent');
+    out.innerHTML = data.html;   // <<< أهم خطوة
+    reportEl.style.display = 'block';
+    reportEl.scrollIntoView({behavior:'smooth'});
+
+  } catch (e) {
+    console.error(e);
+    showNote('err', (currentLang==='ar'?'فشل الطلب: ':'Request failed: ')+e.message);
+  }
+}
+</script>
 
   // 4) نداء API
   showNote('info', t('Analyzing…','جاري التحليل…'));
