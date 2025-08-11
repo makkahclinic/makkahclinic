@@ -5,10 +5,10 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v14 (DEFINITIVE EDITION) ===============
-// 1. Added a specific rule to correctly identify blood glucose monitoring supplies (Strips, Lancets).
-// 2. Implemented a rule to detect "hidden" therapeutic duplication where a single drug is also part of a combination pill.
-// 3. This is the most refined and complete version, addressing all identified edge cases.
+// =============== ULTIMATE ENHANCEMENTS v15 (INSURANCE LOGIC) ===============
+// 1. Added a final, critical rule for "Insurance Quantity Logic".
+// 2. The model now flags excessive supply durations for both drugs and medical supplies.
+// 3. This definitive version combines clinical, pharmaceutical, and insurance intelligence.
 // ==============================================================================
 
 import { createHash } from 'crypto';
@@ -66,6 +66,9 @@ const systemInstruction = `
   - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
   - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam). إذا وجدتها، أشر إلى هذا التكرار.
 - **قاعدة المستلزمات الطبية:** إذا وجدت كلمات مثل 'Strips', 'Lancets', 'Sensor'، صنفها بشكل صحيح كـ **"مستلزمات قياس سكر الدم"** وليست أدوية أو مكملات.
+- **قاعدة منطق الكمية والتأمين:**
+  - **للأدوية:** إذا كانت مدة الصرف طويلة (90 يومًا) لدواء جديد أو لحالة حادة، يجب اعتبار هذا سببًا لجعل القرار "⚠️ قابل للمراجعة".
+  - **للمستلزمات:** عند تحليل المستلزمات الطبية (مثل Strips)، قم بتقييم الكمية. إذا كانت الكمية كبيرة (مثال: TID x90 = 270 شريط)، أشر إلى أن "هذه الكمية قد تتجاوز حدود التغطية التأمينية لبعض الخطط وتتطلب تبريرًا طبيًا".
 
 [تحليل التداخلات الدوائية (DDI) - قاعدة إلزامية]
 - في عمود "التداخلات"، حدد اسم الدواء المتداخل، صف التأثير السريري، واقترح خطة للتعامل.
