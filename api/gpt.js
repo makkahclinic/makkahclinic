@@ -5,11 +5,10 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== CREATIVE ENHANCEMENTS v5 ===============
-// 1. Added "Confidence Score" to the table for handwritten OCR.
-// 2. Added a new "Clinical Pearls" section for high-value insights.
-// 3. Implemented a file cache to avoid re-uploading the same file, saving time and cost.
-// 4. Enhanced prompt engineering for higher clinical accuracy.
+// =============== ULTIMATE ENHANCEMENTS v6 ===============
+// 1. Final prompt engineering for 10/10 analysis quality.
+// 2. Explicit instructions on how to use the Ensemble (OpenAI JSON) analysis.
+// 3. Added guidance for handling non-drug items like medical supplies.
 // ==========================================================
 
 import { createHash } from 'crypto';
@@ -51,15 +50,23 @@ function getFileHash(base64Data) {
 
 // =============== SYSTEM PROMPTS ===============
 const systemInstruction = `
-أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير. هدفك هو الدقة السريرية الفائقة. أخرج كتلة HTML واحدة فقط (بدون CSS).
+أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط (بدون CSS).
 
 [منهجية]
 - الخطوة الأولى والأهم: قم بقراءة واستخراج كل النصوص والمعلومات من الملفات المرفقة بدقة شديدة.
 - عند قراءة دواء من وصفة مكتوبة بخط اليد، أضف "درجة ثقة" بجانب اسمه (مثال: "Amlodipine - ثقة 95%").
+- إذا وجدت مواد غير دوائية (مثل Lancet, Strips)، صنفها كـ "مستلزمات طبية" وحدد الغرض منها (مثال: "لقياس سكر الدم").
 - اربط الأعراض بالأسباب (Differential) مع تبرير سريري.
 - راقب أمان الأدوية (eGFR/K/Cr/INR/UA…), ازدواجية, XR/MR, كبار السن.
 - طبّق الإرشادات (اذكر المرجع والرابط في قسم الأدلة).
 - بيّن فجوات البيانات وما يلزم لسدها.
+
+[طريقة عمل التحليل المزدوج (Ensemble)]
+- قد يتم تزويدك بتحليل أولي بصيغة JSON من نموذج آخر (OpenAI). مهمتك هي:
+  1. مراجعة هذا التحليل وتدقيقه كنقطة انطلاق.
+  2. دمج نقاط قوته في تقريرك النهائي.
+  3. تصحيح أي أخطاء أو نقاط ضعف تلاحظها فيه بصرامة.
+  4. استخدمه لإنتاج تحليل نهائي أكثر عمقًا وشمولية.
 
 [الجدول]
 - صف لكل بند دون حذف. درجة الخطورة (%) مع كلاس: risk-low / risk-medium / risk-high.
@@ -202,7 +209,9 @@ export default async function handler(req,res){
     const body = req.body || {};
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
     
-    const analysisMode = (body.analysisMode || "gemini-only").toLowerCase();
+    // Default mode is now ensemble for maximum quality, if OpenAI key is present.
+    const defaultMode = openaiKey ? "ensemble" : "gemini-only";
+    const analysisMode = (body.analysisMode || defaultMode).toLowerCase();
 
     // 1) Optional OCR (Parallel)
     let ocrBlocks = [];
@@ -220,7 +229,6 @@ export default async function handler(req,res){
                 const fileBuffer = Buffer.from(f.data, 'base64');
                 const hash = getFileHash(f.data);
 
-                // Check cache first
                 if (fileCache.has(hash)) {
                     console.log(`Cache HIT for file ${f.name}`);
                     resolve(fileCache.get(hash));
@@ -230,15 +238,13 @@ export default async function handler(req,res){
 
                 let part;
                 if (fileBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
-                    // Large file -> Use Files API
                     const uri = await geminiUpload(geminiKey, f.data, mimeType);
                     part = { file_data: { mime_type: mimeType, file_uri: uri } };
                 } else {
-                    // Small file -> Use inline data
                     part = { inline_data: { mime_type: mimeType, data: f.data } };
                 }
                 
-                fileCache.set(hash, part); // Store result in cache
+                fileCache.set(hash, part);
                 resolve(part);
 
             } catch (e) {
@@ -263,7 +269,7 @@ export default async function handler(req,res){
         try { ensembleJson = await analyzeWithOpenAI(openaiKey, body, ocrJoined); }
         catch(e){ console.warn("Ensemble OpenAI analysis failed:", e.message); }
         if (ensembleJson){
-            allParts.push({ text: `تحليل موازٍ (OpenAI) بصيغة JSON — للإستئناس والدمج:\n${JSON.stringify(ensembleJson)}` });
+            allParts.push({ text: `[تحليل أولي من نموذج مساعد]\n${JSON.stringify(ensembleJson)}` });
         }
     }
 
