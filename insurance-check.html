@@ -1,194 +1,108 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title data-i18n="ui.appTitle">تقييم الحالة الطبية - بوابة الطبيب</title>
 
-  <!-- External Libraries for PDF Export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" xintegrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoVBL5r+e3fYHoY5dtV3bbA/SETeIQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" xintegrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- PDF Export libs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
 
-  <!-- Google Fonts for Arabic (Amiri) -->
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
 
   <style>
-    :root {
-      --primary: #0b63c2; --primary-dark: #084e97; --accent: #00a7c7;
-      --secondary: #6c757d; --danger: #dc3545; --bg-grad-1: #e9f3ff;
-      --bg-grad-2: #f6fbff; --card: #ffffff; --text: #243143;
-      --muted: #66768a; --border: #e2e8f0; --focus: rgba(11, 99, 194, .18);
-      --shadow: 0 10px 25px rgba(15, 57, 105, .08); --radius: 16px;
-    }
-    html, body { height: 100%; }
-    body {
-      margin: 0; font-family: 'Roboto', sans-serif; color: var(--text);
-      background: radial-gradient(1200px 800px at 80% 0%, var(--bg-grad-1), var(--bg-grad-2));
-      padding: 2rem 1rem; line-height: 1.6;
-    }
-    [lang="ar"] body, [lang="ar"] h1, [lang="ar"] h2, [lang="ar"] button, [lang="ar"] label, [lang="ar"] input, [lang="ar"] select, [lang="ar"] textarea {
-        font-family: 'Amiri', serif;
-    }
-    .container {
-      max-width: 980px; margin: 0 auto; background: var(--card);
-      border: 1px solid var(--border); border-radius: var(--radius);
-      box-shadow: var(--shadow); padding: 28px 26px 30px;
-      position: relative; overflow: hidden;
-    }
-    .top-ribbon {
-      position: absolute; inset: 0 0 auto 0; height: 6px;
-      background: linear-gradient(90deg, var(--primary), var(--accent));
-    }
-    .header-controls {
-      position: absolute; top: 14px; inset-inline-end: 14px;
-      display: flex; gap: 10px; align-items: center;
-    }
-    .home-btn {
-        display: flex; align-items: center; justify-content: center;
-        width: 40px; height: 40px; border-radius: 50%; background-color: #fff;
-        border: 1px solid var(--border); color: var(--primary); text-decoration: none;
-        transition: background-color .2s, color .2s;
-    }
-    .home-btn:hover { background-color: var(--bg-grad-1); color: var(--primary-dark); }
-    .home-btn svg { stroke: currentColor; }
-    .lang-switcher {
-      font-size: 14px; font-weight: 700; padding: 8px 12px;
-      border-radius: 8px; border: 1px solid var(--border);
-      background-color: #fff; cursor: pointer; transition: background-color .2s, box-shadow .2s;
-    }
-    .lang-switcher:hover { background-color: #f6fbff; border-color: var(--primary); }
-    h2 { margin: 10px 0 24px; font-weight: 700; color: var(--primary); text-align: center; }
-    .subtext { text-align: center; color: var(--muted); margin-top: -10px; margin-bottom: 22px; font-size: .95rem; }
-    .section-title {
-      font-size: 1.08rem; font-weight: 700; color: var(--primary);
-      border-bottom: 2px solid var(--primary); display: flex;
-      align-items: center; gap: .5rem; padding-bottom: .5rem; margin: 26px 0 16px;
-    }
-    .section-title .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
-    label { font-weight: 600; display: block; margin: .8rem 0 .35rem; }
-    .hint { font-size: .86rem; color: var(--muted); margin-top: .15rem; }
-    input, select, textarea {
-      width: 100%; box-sizing: border-box; border: 1px solid var(--border);
-      border-radius: 10px; padding: .75rem .9rem; font-size: 1rem;
-      background: #fff; transition: border-color .2s, box-shadow .2s;
-    }
-    input:focus, select:focus, textarea:focus {
-      outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus);
-    }
-    textarea { min-height: 120px; resize: vertical; }
-    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-      border: none; border-radius: 10px; color: #fff; cursor: pointer; padding: .6rem 1rem;
-      font-weight: 700; font-size: .98rem; transition: transform .06s ease, filter .2s ease, background .25s ease;
-      box-shadow: 0 6px 14px rgba(0, 0, 0, .08);
-    }
-    .btn:active { transform: translateY(1px); }
-    .btn:disabled { background-color: var(--secondary); cursor: not-allowed; filter: brightness(1); }
-    .btn-primary { background: var(--primary); }
-    .btn-primary:not(:disabled):hover { background: var(--primary-dark); }
-    .actions { display: flex; gap: 10px; justify-content: center; align-items: center; margin-top: 20px; position: relative; }
-    .export-dropdown {
-      display: none; position: absolute; bottom: 100%; margin-bottom: 10px;
-      background-color: white; border: 1px solid var(--border); border-radius: 10px;
-      box-shadow: var(--shadow); z-index: 10; min-width: 220px; padding: 5px;
-    }
-    .export-dropdown.show { display: block; }
-    .export-option {
-      display: block; width: 100%; padding: 10px 15px; text-align: start;
-      border: none; background: none; cursor: pointer; font-size: 0.95rem; border-radius: 6px;
-    }
-    .export-option:hover { background-color: var(--bg-grad-1); color: var(--primary); }
-    .muted-mini { font-size: .82rem; color: #92a3b6; text-align: center; margin-top: 10px; }
-    .notification { margin-top: 16px; padding: 12px 14px; border-radius: 10px; display: none; text-align: center; font-weight: 600; }
-    .notification.info { background: #e9f4ff; color: #114a86; border: 1px solid #cfe6ff; }
-    .notification.error { background: #fde8ea; color: #7a1f27; border: 1px solid #f5c6cb; }
-    #response-container { margin-top: 20px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: #fff; display: none; box-shadow: var(--shadow); }
-    #response-container h3 { color: var(--primary); border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
-    #response-container .risk-high { color: #721c24; background: #f8d7da; padding: .18rem .5rem; border-radius: 6px; border: 1px solid #f5c6cb; font-weight: 700; display: inline-block; }
-    #response-container .risk-medium { color: #856404; background: #fff3cd; padding: .18rem .5rem; border-radius: 6px; border: 1px solid #ffeeba; font-weight: 700; display: inline-block; }
-    #response-container .risk-low { color: #155724; background: #d4edda; padding: .18rem .5rem; border-radius: 6px; border: 1px solid #c3e6cb; font-weight: 700; display: inline-block; }
-    
-    /* --- NEW TABLE STYLES --- */
-    #response-container table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 1rem;
-    }
-    #response-container th, #response-container td {
-        border: 1px solid var(--border);
-        padding: 8px 10px;
-        text-align: right; /* Default for Arabic */
-    }
-    #response-container th {
-        background-color: var(--bg-grad-1);
-        font-weight: 700;
-        color: var(--primary);
-    }
-    [dir="ltr"] #response-container th, [dir="ltr"] #response-container td {
-        text-align: left; /* For English */
-    }
-
-    .hidden { display: none !important; }
-    .file-upload-area {
-      border: 2px dashed var(--border); border-radius: 12px; padding: 18px;
-      text-align: center; color: var(--muted); transition: border-color .25s, background .25s; cursor: pointer;
-    }
-    .file-upload-area:hover { border-color: var(--primary); background: #f6fbff; }
-    #file-upload-input { display: none; }
-    #file-preview-container {
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        gap: 15px; margin-top: 15px;
-    }
-    .file-preview-item {
-        position: relative; border: 1px solid var(--border); border-radius: 10px;
-        background: #fcfdff; padding: 8px; font-size: 0.85rem; overflow: hidden;
-    }
-    .file-preview-item .thumb {
-        width: 100%; height: 100px; border-radius: 6px; background-color: #f0f4f8;
-        display: flex; align-items: center; justify-content: center; margin-bottom: 5px;
-    }
-    .file-preview-item .thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .file-preview-item .thumb svg { width: 40px; height: 40px; color: var(--danger); }
-    .file-preview-item .file-name { word-break: break-all; color: var(--text); text-align: center; }
-    .file-remove-btn {
-        position: absolute; top: 2px; inset-inline-end: 2px;
-        width: 24px; height: 24px; border-radius: 50%; border: none;
-        background-color: rgba(220, 53, 69, 0.8); color: white; cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 16px; line-height: 1; transition: background-color .2s;
-    }
-    .file-remove-btn:hover { background-color: var(--danger); }
-    .pack-years-calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: end; }
-    .pack-years-result-box {
-        background-color: var(--bg-grad-1); border: 1px solid var(--border);
-        border-radius: 10px; padding: 0.75rem 0.9rem; text-align: center;
-    }
-    .pack-years-result-box span { font-weight: 700; font-size: 1.2rem; color: var(--primary); }
-    
-    .form-group-box {
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 0.25rem 1rem 1rem 1rem;
-      margin-top: 1rem;
-      background-color: #fcfdff;
-    }
+    :root { --primary:#0b63c2;--primary-dark:#084e97;--accent:#00a7c7;--secondary:#6c757d;--danger:#dc3545;--bg-grad-1:#e9f3ff;--bg-grad-2:#f6fbff;--card:#fff;--text:#243143;--muted:#66768a;--border:#e2e8f0;--focus:rgba(11,99,194,.18);--shadow:0 10px 25px rgba(15,57,105,.08);--radius:16px;}
+    html,body{height:100%}
+    body{margin:0;font-family:'Roboto',sans-serif;color:var(--text);background:radial-gradient(1200px 800px at 80% 0%,var(--bg-grad-1),var(--bg-grad-2));padding:2rem 1rem;line-height:1.6}
+    [lang="ar"] body,[lang="ar"] h1,[lang="ar"] h2,[lang="ar"] button,[lang="ar"] label,[lang="ar"] input,[lang="ar"] select,[lang="ar"] textarea{font-family:'Amiri',serif}
+    .container{max-width:980px;margin:0 auto;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 26px 30px;position:relative;overflow:hidden}
+    .top-ribbon{position:absolute;inset:0 0 auto 0;height:6px;background:linear-gradient(90deg,var(--primary),var(--accent))}
+    .header-controls{position:absolute;top:14px;inset-inline-end:14px;display:flex;gap:10px;align-items:center}
+    .home-btn{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background-color:#fff;border:1px solid var(--border);color:var(--primary);text-decoration:none;transition:background-color .2s,color .2s}
+    .home-btn:hover{background-color:var(--bg-grad-1);color:var(--primary-dark)}
+    .lang-switcher{font-size:14px;font-weight:700;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background-color:#fff;cursor:pointer}
+    h2{margin:10px 0 24px;font-weight:700;color:var(--primary);text-align:center}
+    .subtext{text-align:center;color:var(--muted);margin-top:-10px;margin-bottom:22px;font-size:.95rem}
+    .section-title{font-size:1.08rem;font-weight:700;color:var(--primary);border-bottom:2px solid var(--primary);display:flex;align-items:center;gap:.5rem;padding-bottom:.5rem;margin:26px 0 16px}
+    .section-title .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+    label{font-weight:600;display:block;margin:.8rem 0 .35rem}
+    .hint{font-size:.86rem;color:var(--muted);margin-top:.15rem}
+    input,select,textarea{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;font-size:1rem;background:#fff;transition:border-color .2s,box-shadow .2s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--focus)}
+    textarea{min-height:120px;resize:vertical}
+    .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border:none;border-radius:10px;color:#fff;cursor:pointer;padding:.6rem 1rem;font-weight:700;font-size:.98rem;transition:transform .06s ease;background:var(--primary);box-shadow:0 6px 14px rgba(0,0,0,.08)}
+    .btn:active{transform:translateY(1px)}
+    .btn:disabled{background-color:var(--secondary);cursor:not-allowed}
+    .actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;margin-top:20px;position:relative}
+    .export-dropdown{display:none;position:absolute;bottom:100%;margin-bottom:10px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);z-index:10;min-width:220px;padding:5px}
+    .export-dropdown.show{display:block}
+    .export-option{display:block;width:100%;padding:10px 15px;text-align:start;border:none;background:none;cursor:pointer;font-size:.95rem;border-radius:6px}
+    .export-option:hover{background-color:var(--bg-grad-1);color:var(--primary)}
+    .muted-mini{font-size:.82rem;color:#92a3b6;text-align:center;margin-top:10px}
+    .notification{margin-top:16px;padding:12px 14px;border-radius:10px;display:none;text-align:center;font-weight:600}
+    .notification.info{background:#e9f4ff;color:#114a86;border:1px solid #cfe6ff}
+    .notification.error{background:#fde8ea;color:#7a1f27;border:1px solid #f5c6cb}
+    #response-container{margin-top:20px;padding:16px;border:1px solid var(--border);border-radius:12px;background:#fff;display:none;box-shadow:var(--shadow)}
+    #response-container h3{color:var(--primary);border-bottom:2px solid var(--accent);padding-bottom:8px}
+    #response-container .risk-high{color:#721c24;background:#f8d7da;padding:.18rem .5rem;border-radius:6px;border:1px solid #f5c6cb;font-weight:700;display:inline-block}
+    #response-container .risk-medium{color:#856404;background:#fff3cd;padding:.18rem .5rem;border-radius:6px;border:1px solid #ffeeba;font-weight:700;display:inline-block}
+    #response-container .risk-low{color:#155724;background:#d4edda;padding:.18rem .5rem;border-radius:6px;border:1px solid #c3e6cb;font-weight:700;display:inline-block}
+    #response-container table{width:100%;border-collapse:collapse;margin-top:1rem}
+    #response-container th,#response-container td{border:1px solid var(--border);padding:8px 10px;text-align:right}
+    #response-container th{background-color:var(--bg-grad-1);font-weight:700;color:var(--primary)}
+    [dir="ltr"] #response-container th,[dir="ltr"] #response-container td{text-align:left}
+    .hidden{display:none!important}
+    .file-upload-area{border:2px dashed var(--border);border-radius:12px;padding:18px;text-align:center;color:var(--muted);transition:border-color .25s,background .25s;cursor:pointer}
+    .file-upload-area.drag{border-color:var(--primary);background:#f6fbff}
+    #file-upload-input{display:none}
+    #file-preview-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px;margin-top:15px}
+    .file-preview-item{position:relative;border:1px solid var(--border);border-radius:10px;background:#fcfdff;padding:8px;font-size:.85rem;overflow:hidden}
+    .file-preview-item .thumb{width:100%;height:100px;border-radius:6px;background-color:#f0f4f8;display:flex;align-items:center;justify-content:center;margin-bottom:5px}
+    .file-preview-item .thumb img{width:100%;height:100%;object-fit:cover}
+    .file-preview-item .file-name{word-break:break-all;color:var(--text);text-align:center}
+    .file-remove-btn{position:absolute;top:2px;inset-inline-end:2px;width:24px;height:24px;border-radius:50%;border:none;background-color:rgba(220,53,69,.8);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1}
+    .form-group-box{border:1px solid var(--border);border-radius:12px;padding:.25rem 1rem 1rem 1rem;margin-top:1rem;background-color:#fcfdff}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+    .progress{height:8px;background:#eef3f7;border-radius:999px;overflow:hidden}
+    .progress>span{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));width:0%}
+    .chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 10px}
   </style>
 </head>
 <body>
   <div class="container">
     <div class="top-ribbon"></div>
     <div class="header-controls">
-        <a href="https://www.m2020m.org/portal.html" class="home-btn" data-i18n-title="ui.homeTooltip" title="الشاشة الرئيسية">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-        </a>
-        <button id="lang-switcher" class="lang-switcher">English</button>
+      <a href="https://www.m2020m.org/portal.html" class="home-btn" title="الشاشة الرئيسية">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      </a>
+      <button id="lang-switcher" class="lang-switcher">English</button>
     </div>
 
     <h2 data-i18n="ui.pageHeader">تقييم الحالة الطبية وطلبات التأمين</h2>
     <div class="subtext" data-i18n="ui.subHeader">واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين</div>
+
+    <!-- Analysis Mode -->
+    <div class="section-title"><span class="dot"></span> وضع التحليل</div>
+    <div class="row">
+      <div style="min-width:220px;flex:1">
+        <label>اختر نمط التحليل</label>
+        <select id="analysis-mode">
+          <option value="gemini-only">Gemini فقط</option>
+          <option value="ocr+gemini">OCR ثم Gemini (موصى به للصور)</option>
+          <option value="ensemble">Ensemble: OpenAI + Gemini</option>
+        </select>
+        <div class="hint">يمكنك تغييره حسب الحاجة. الـ Ensemble يعطي دمج رأيين.</div>
+      </div>
+      <label class="chip" style="cursor:pointer">
+        <input id="enable-compress" type="checkbox" style="accent-color:#0b63c2">
+        ضغط الصور الكبيرة لتحميل أسرع (اختياري)
+      </label>
+    </div>
 
     <!-- Patient Information -->
     <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section1Title">1) معلومات المريض</span></div>
@@ -222,584 +136,389 @@
 
     <!-- Lifestyle and Symptoms -->
     <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section2Title">2) نمط الحياة والأعراض</span></div>
-    
     <div class="form-group-box">
-        <div>
-            <label for="smoker" data-i18n="ui.label_smoker">هل المريض مدخّن؟</label>
-            <select id="smoker">
-              <option value="" selected disabled data-i18n="ui.option_pregnancy_placeholder">اختر</option>
-              <option value="yes" data-i18n="ui.option_yes">نعم</option>
-              <option value="no" data-i18n="ui.option_no">لا</option>
-            </select>
+      <div>
+        <label for="smoker" data-i18n="ui.label_smoker">هل المريض مدخّن؟</label>
+        <select id="smoker">
+          <option value="" selected disabled>اختر</option>
+          <option value="yes">نعم</option>
+          <option value="no">لا</option>
+        </select>
+      </div>
+      <div id="pack-years-section" class="hidden">
+        <div class="grid">
+          <div>
+            <label for="packs-per-day">عدد العلب يوميًا</label>
+            <input id="packs-per-day" type="number" min="0" step="0.5" placeholder="مثال: 1.5">
+          </div>
+          <div>
+            <label for="smoking-years">عدد سنوات التدخين</label>
+            <input id="smoking-years" type="number" min="0" placeholder="مثال: 20">
+          </div>
         </div>
-        
-        <div id="pack-years-section" class="hidden">
-            <div class="pack-years-calc-grid">
-                <div>
-                    <label for="packs-per-day" data-i18n="ui.label_packs_per_day">عدد العلب يوميًا</label>
-                    <input id="packs-per-day" type="number" min="0" step="0.5" data-i18n-placeholder="ui.placeholder_packs_per_day" placeholder="مثال: 1.5">
-                </div>
-                <div>
-                    <label for="smoking-years" data-i18n="ui.label_smoking_years">عدد سنوات التدخين</label>
-                    <input id="smoking-years" type="number" min="0" data-i18n-placeholder="ui.placeholder_smoking_years" placeholder="مثال: 20">
-                </div>
-            </div>
-            <div style="margin-top: 1rem;">
-                <label data-i18n="ui.label_pack_years_result">النتيجة (باك-سنة)</label>
-                <div class="pack-years-result-box">
-                    <span id="pack-years-result">--</span>
-                </div>
-                <div class="hint" data-i18n="ui.hint_pack_years">الباك-سنة هو مقياس لتقدير كمية التدخين مدى الحياة.</div>
-            </div>
+        <div style="margin-top:1rem">
+          <label>النتيجة (باك-سنة)</label>
+          <div class="pack-years-result-box"><span id="pack-years-result">--</span></div>
+          <div class="hint">الباك-سنة يقدّر التعرض التراكمي للتدخين.</div>
         </div>
+      </div>
     </div>
 
     <div class="grid">
       <div>
-        <label for="cough-duration" data-i18n="ui.label_cough_duration">مدة السعال (أسابيع)</label>
-        <input id="cough-duration" type="number" data-i18n-placeholder="ui.placeholder_cough_duration" placeholder="مثال: 12">
+        <label for="cough-duration">مدة السعال (أسابيع)</label>
+        <input id="cough-duration" type="number" placeholder="مثال: 12">
       </div>
       <div>
-        <label for="visual-symptoms" data-i18n="ui.label_visual_symptoms">أعراض بصرية؟</label>
+        <label for="visual-symptoms">أعراض بصرية؟</label>
         <select id="visual-symptoms">
-          <option value="" selected disabled data-i18n="ui.option_pregnancy_placeholder">اختر</option>
-          <option value="yes" data-i18n="ui.option_yes">نعم</option>
-          <option value="no" data-i18n="ui.option_no">لا</option>
+          <option value="" selected disabled>اختر</option>
+          <option value="yes">نعم</option>
+          <option value="no">لا</option>
         </select>
       </div>
       <div id="eye-wrap" class="hidden">
-        <label for="last-eye-exam" data-i18n="ui.label_last_eye_exam">تاريخ آخر فحص قاع عين</label>
+        <label for="last-eye-exam">تاريخ آخر فحص قاع عين</label>
         <input id="last-eye-exam" type="date">
-        <label for="visual-acuity" data-i18n="ui.label_visual_acuity">حدة البصر (اختياري)</label>
-        <input id="visual-acuity" type="text" data-i18n-placeholder="ui.placeholder_visual_acuity" placeholder="مثال: 6/12 أو 20/40">
+        <label for="visual-acuity">حدة البصر (اختياري)</label>
+        <input id="visual-acuity" type="text" placeholder="مثال: 6/12 أو 20/40">
       </div>
     </div>
 
     <!-- Medical Details -->
-    <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section3Title">3) تفاصيل الحالة الطبية</span></div>
+    <div class="section-title"><span class="dot"></span> <span>3) تفاصيل الحالة الطبية</span></div>
     <div class="grid">
       <div>
-        <label for="case-description" data-i18n="ui.label_case_description">وصف الحالة</label>
-        <textarea id="case-description" data-i18n-placeholder="ui.placeholder_case_description" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط ودوخة متقطعة..."></textarea>
+        <label for="case-description">وصف الحالة</label>
+        <textarea id="case-description" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط..."></textarea>
       </div>
       <div>
-        <label for="diagnosis" data-i18n="ui.label_diagnosis">التشخيصات المبدئية</label>
-        <textarea id="diagnosis" data-i18n-placeholder="ui.placeholder_diagnosis" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea>
+        <label for="diagnosis">التشخيصات المبدئية</label>
+        <textarea id="diagnosis" placeholder="مثال: T2DM, HTN, COPD?"></textarea>
       </div>
       <div>
-        <label for="lab-results" data-i18n="ui.label_lab_results">التحاليل/الأشعة المتوفرة</label>
-        <textarea id="lab-results" data-i18n-placeholder="ui.placeholder_lab_results" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6, INR غير متاح..."></textarea>
+        <label for="lab-results">التحاليل/الأشعة المتوفرة</label>
+        <textarea id="lab-results" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6..."></textarea>
       </div>
       <div>
-        <label for="medications-procedures" data-i18n="ui.label_medications">الأدوية/الإجراءات المكتوبة</label>
-        <textarea id="medications-procedures" data-i18n-placeholder="ui.placeholder_medications" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid..."></textarea>
+        <label for="medications-procedures">الأدوية/الإجراءات المكتوبة</label>
+        <textarea id="medications-procedures" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid..."></textarea>
       </div>
     </div>
 
     <!-- File Upload -->
-    <div class="section-title"><span class="dot"></span> <span data-i18n="ui.section4Title">4) رفع ملفات (صور/PDF) — اختياري</span></div>
-    <div class="file-upload-area" onclick="document.getElementById('file-upload-input').click()">
-      <span data-i18n="ui.upload_cta">اضغط هنا لرفع ملف واحد أو أكثر</span>
+    <div class="section-title"><span class="dot"></span> <span>4) رفع ملفات (صور/PDF) — اختياري</span></div>
+    <div id="drop-area" class="file-upload-area">
+      <span>اضغط هنا أو اسحب الملفات إلى هنا</span>
       <input id="file-upload-input" type="file" accept="image/*,application/pdf" multiple>
+      <div style="margin-top:10px" class="progress hidden" id="upload-progress"><span></span></div>
     </div>
     <div id="file-preview-container"></div>
 
     <!-- Actions -->
     <div class="actions">
-      <button id="analyzeBtn" class="btn btn-primary" onclick="analyzeCase()" data-i18n="ui.btn_analyze">تحليل الحالة</button>
+      <button id="analyzeBtn" class="btn" data-i18n="ui.btn_analyze">تحليل الحالة</button>
       <div id="export-container" class="hidden">
-        <button id="exportBtn" class="btn btn-primary" data-i18n="export.exportButtonLabel">تصدير التقرير</button>
+        <button id="exportBtn" class="btn">تصدير التقرير</button>
         <div id="export-dropdown" class="export-dropdown">
-            <button class="export-option" onclick="exportPDF('ar')" data-i18n="export.pdf_ar_only">PDF (عربي فقط)</button>
-            <button class="export-option" onclick="exportPDF('en')" data-i18n="export.pdf_en_only">PDF (إنجليزي فقط)</button>
-            <button class="export-option" onclick="exportPDF('bi')" data-i18n="export.pdf_bilingual">PDF (ثنائي اللغة)</button>
+          <button class="export-option" onclick="exportPDF('ar')">PDF (عربي فقط)</button>
+          <button class="export-option" onclick="exportPDF('en')">PDF (إنجليزي فقط)</button>
+          <button class="export-option" onclick="exportPDF('bi')">PDF (ثنائي اللغة)</button>
         </div>
       </div>
     </div>
-    <div class="muted-mini" data-i18n="ui.hint_analyze">بالضغط على "تحليل الحالة" سيتم إرسال المدخلات لتوليد تقرير شامل.</div>
+    <div class="muted-mini">بالضغط على "تحليل الحالة" سيتم إرسال المدخلات لتوليد تقرير شامل.</div>
 
     <div id="notification-area" class="notification info"></div>
     <div id="response-container"></div>
   </div>
 
 <script>
-// =================================================================================
-// CONFIGURATION
-// =================================================================================
-const API_ENDPOINT = '/api/gpt'; // For local/Vercel deployment
+const API_ENDPOINT = '/api/gpt';
 
-
-// =================================================================================
-// I18N - INTERNATIONALIZATION SYSTEM
-// =================================================================================
-const translations = {
-  ar: {
-    ui: {
-      appTitle: "تقييم الحالة الطبية - بوابة الطبيب",
-      pageHeader: "تقييم الحالة الطبية وطلبات التأمين",
-      subHeader: "واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين",
-      homeTooltip: "الشاشة الرئيسية",
-      section1Title: "1) معلومات المريض",
-      label_gender: "الجنس",
-      option_gender_placeholder: "اختر الجنس",
-      option_gender_male: "ذكر",
-      option_gender_female: "أنثى",
-      hint_gender: "لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.",
-      label_age: "العمر",
-      placeholder_age: "مثال: 63",
-      label_pregnancy_status: "هل المريضة حامل؟",
-      option_pregnancy_placeholder: "اختر",
-      option_yes: "نعم",
-      option_no: "لا",
-      label_pregnancy_month: "شهر الحمل",
-      placeholder_pregnancy_month: "مثال: 5",
-      section2Title: "2) نمط الحياة والأعراض",
-      label_smoker: "هل المريض مدخّن؟",
-      label_packs_per_day: "عدد العلب يوميًا",
-      placeholder_packs_per_day: "مثال: 1.5",
-      label_smoking_years: "عدد سنوات التدخين",
-      placeholder_smoking_years: "مثال: 20",
-      label_pack_years_result: "النتيجة (باك-سنة)",
-      hint_pack_years: "الباك-سنة هو مقياس لتقدير كمية التدخين مدى الحياة.",
-      label_cough_duration: "مدة السعال (أسابيع)",
-      placeholder_cough_duration: "مثال: 12",
-      label_visual_symptoms: "أعراض بصرية؟",
-      label_last_eye_exam: "تاريخ آخر فحص قاع عين",
-      label_visual_acuity: "حدة البصر (اختياري)",
-      placeholder_visual_acuity: "مثال: 6/12 أو 20/40",
-      section3Title: "3) تفاصيل الحالة الطبية",
-      label_case_description: "وصف الحالة",
-      placeholder_case_description: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...",
-      label_diagnosis: "التشخيصات المبدئية",
-      placeholder_diagnosis: "مثال: T2DM, HTN, COPD? Dermatitis",
-      label_lab_results: "التحاليل/الأشعة المتوفرة",
-      placeholder_lab_results: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6...",
-      label_medications: "الأدوية/الإجراءات المكتوبة",
-      placeholder_medications: "مثال: Xigduo XR bid, Metformin 1000 tid...",
-      section4Title: "4) رفع ملفات (صور/PDF) — اختياري",
-      upload_cta: "اضغط هنا لرفع ملف واحد أو أكثر",
-      btn_analyze: "تحليل الحالة",
-      hint_analyze: "بالضغط على 'تحليل الحالة' سيتم إرسال المدخلات لتوليد تقرير شامل.",
-      remove_file: "إزالة الملف"
-    },
-    validation: {
-      error_formIncomplete: "الرجاء إدخال تفاصيل الحالة أو رفع ملف.",
-      error_requestFailed: "حدث خطأ أثناء التحليل: ",
-      error_payloadTooLarge: "حجم البيانات كبير جدًا. قلل جودة أو عدد الملفات ثم أعد المحاولة.",
-      error_timeout: "انتهت مهلة الطلب. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
-      error_invalidJson: "تم استلام رد غير صالح من الخادم.",
-      error_missingReport: "لم يتم استلام تقرير HTML من الخادم.",
-      info_analyzing: "جاري تحليل الحالة... قد يستغرق الأمر لحظات.",
-    },
-    export: {
-        exportButtonLabel: "تصدير التقرير",
-        pdf_ar_only: "PDF (عربي فقط)",
-        pdf_en_only: "PDF (إنجليزي فقط)",
-        pdf_bilingual: "PDF (ثنائي اللغة)",
-    }
-  },
-  en: {
-    ui: {
-      appTitle: "Medical Case Assessment - Doctor Portal",
-      pageHeader: "Medical Case & Insurance Claim Assessment",
-      subHeader: "User-friendly clinical interface — automated analysis for insurance needs.",
-      homeTooltip: "Home Screen",
-      section1Title: "1) Patient Information",
-      label_gender: "Gender",
-      option_gender_placeholder: "Select Gender",
-      option_gender_male: "Male",
-      option_gender_female: "Female",
-      hint_gender: "If the patient is female, pregnancy questions will appear automatically.",
-      label_age: "Age",
-      placeholder_age: "Example: 63",
-      label_pregnancy_status: "Is the patient pregnant?",
-      option_pregnancy_placeholder: "Select",
-      option_yes: "Yes",
-      option_no: "No",
-      label_pregnancy_month: "Month of Pregnancy",
-      placeholder_pregnancy_month: "Example: 5",
-      section2Title: "2) Lifestyle & Symptoms",
-      label_smoker: "Is the patient a smoker?",
-      label_packs_per_day: "Packs per day",
-      placeholder_packs_per_day: "Example: 1.5",
-      label_smoking_years: "Number of years smoking",
-      placeholder_smoking_years: "Example: 20",
-      label_pack_years_result: "Result (Pack-Years)",
-      hint_pack_years: "Pack-years estimate lifetime smoking exposure.",
-      label_cough_duration: "Cough Duration (weeks)",
-      placeholder_cough_duration: "Example: 12",
-      label_visual_symptoms: "Visual Symptoms?",
-      label_last_eye_exam: "Last Fundus Exam Date",
-      label_visual_acuity: "Visual Acuity (optional)",
-      placeholder_visual_acuity: "Example: 6/12 or 20/40",
-      section3Title: "3) Medical Case Details",
-      label_case_description: "Case Description",
-      placeholder_case_description: "Example: Chronic cough for 12 weeks with slight weight loss...",
-      label_diagnosis: "Provisional Diagnoses",
-      placeholder_diagnosis: "Example: T2DM, HTN, COPD? Dermatitis",
-      label_lab_results: "Available Labs/Imaging",
-      placeholder_lab_results: "Example: HbA1c 8.7%, eGFR 38→62, K 5.6...",
-      label_medications: "Prescribed Medications/Procedures",
-      placeholder_medications: "Example: Xigduo XR bid, Metformin 1000 tid...",
-      section4Title: "4) Upload Files (Images/PDF) — Optional",
-      upload_cta: "Click here to upload one or more files",
-      btn_analyze: "Analyze Case",
-      hint_analyze: "Clicking 'Analyze Case' sends the inputs to generate a comprehensive report.",
-      remove_file: "Remove file"
-    },
-    validation: {
-      error_formIncomplete: "Please enter case details or upload a file.",
-      error_requestFailed: "An error occurred during analysis: ",
-      error_payloadTooLarge: "Request payload is too large. Reduce image quality or count and try again.",
-      error_timeout: "The request timed out. Please check your internet connection and try again.",
-      error_invalidJson: "Received an invalid response from the server.",
-      error_missingReport: "Did not receive an HTML report from the server.",
-      info_analyzing: "Analyzing case... This may take a moment.",
-    },
-    export: {
-        exportButtonLabel: "Export Report",
-        pdf_ar_only: "PDF (Arabic Only)",
-        pdf_en_only: "PDF (English Only)",
-        pdf_bilingual: "PDF (Bilingual)",
-    }
-  }
-};
-
+// ===== I18N (مختصر) =====
 let currentLang = 'ar';
-
-function setLanguage(lang) {
+function setLanguage(lang){
   currentLang = lang;
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-  
-  const langSwitcher = document.getElementById('lang-switcher');
-  langSwitcher.textContent = lang === 'ar' ? 'English' : 'العربية';
+  document.getElementById('lang-switcher').textContent = lang === 'ar' ? 'English' : 'العربية';
+}
+document.getElementById('lang-switcher').addEventListener('click',()=>setLanguage(currentLang==='ar'?'en':'ar'));
+document.addEventListener('DOMContentLoaded',()=>{ setLanguage('ar'); attachEventListeners(); });
 
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n');
-    const translation = getTranslation(key);
-    if (translation) el.textContent = translation;
+// ===== UI logic =====
+function attachEventListeners(){
+  const genderEl = document.getElementById('gender');
+  const pregStatWrap = document.getElementById('pregnancy-status-wrap');
+  const pregMonthWrap = document.getElementById('pregnancy-month-wrap');
+  const pregStatEl = document.getElementById('pregnancy-status');
+  genderEl.addEventListener('change',()=>{
+    const isFemale = genderEl.value === 'female';
+    pregStatWrap.classList.toggle('hidden',!isFemale);
+    if(!isFemale){ pregMonthWrap.classList.add('hidden'); pregStatEl.value=""; document.getElementById('pregnancy-month').value=""; }
+  });
+  pregStatEl.addEventListener('change',()=>{
+    const showMonth = pregStatEl.value === 'yes';
+    pregMonthWrap.classList.toggle('hidden',!showMonth);
+    if(!showMonth) document.getElementById('pregnancy-month').value="";
   });
 
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-    const key = el.getAttribute('data-i18n-placeholder');
-    const translation = getTranslation(key);
-    if (translation) el.placeholder = translation;
+  const smokerEl = document.getElementById('smoker');
+  const packYearsSection = document.getElementById('pack-years-section');
+  smokerEl.addEventListener('change',()=>{
+    packYearsSection.classList.toggle('hidden', smokerEl.value !== 'yes');
+    if (smokerEl.value !== 'yes'){ document.getElementById('packs-per-day').value=""; document.getElementById('smoking-years').value=""; updatePackYears(); }
   });
-  
-  document.querySelectorAll('[data-i18n-title]').forEach(el => {
-    const key = el.getAttribute('data-i18n-title');
-    const translation = getTranslation(key);
-    if (translation) el.title = translation;
+  document.getElementById('packs-per-day').addEventListener('input', updatePackYears);
+  document.getElementById('smoking-years').addEventListener('input', updatePackYears);
+
+  const visualEl = document.getElementById('visual-symptoms');
+  const eyeWrap = document.getElementById('eye-wrap');
+  visualEl.addEventListener('change',()=>{
+    eyeWrap.classList.toggle('hidden', visualEl.value !== 'yes');
+    if (visualEl.value !== 'yes'){ document.getElementById('last-eye-exam').value=""; document.getElementById('visual-acuity').value=""; }
   });
+
+  // file input click-through
+  const dropArea = document.getElementById('drop-area');
+  const fileInput = document.getElementById('file-upload-input');
+  dropArea.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', handleFilesSelect);
+
+  // drag events
+  ;['dragenter','dragover'].forEach(evt=> dropArea.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropArea.classList.add('drag'); }));
+  ;['dragleave','drop'].forEach(evt=> dropArea.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); dropArea.classList.remove('drag'); }));
+  dropArea.addEventListener('drop', (e)=>{
+    const dt = e.dataTransfer; if(!dt?.files?.length) return;
+    handleFiles(Array.from(dt.files));
+  });
+
+  // analyze click
+  document.getElementById('analyzeBtn').addEventListener('click', analyzeCase);
 }
 
-function getTranslation(key) {
-  return key.split('.').reduce((obj, k) => obj && obj[k], translations[currentLang]);
+function updatePackYears(){
+  const p = parseFloat(document.getElementById('packs-per-day').value) || 0;
+  const y = parseFloat(document.getElementById('smoking-years').value) || 0;
+  document.getElementById('pack-years-result').textContent = (p>0 && y>0) ? (p*y).toFixed(1) : '--';
 }
 
-document.getElementById('lang-switcher').addEventListener('click', () => {
-  const newLang = currentLang === 'ar' ? 'en' : 'ar';
-  setLanguage(newLang);
-});
+// ===== File handling =====
+let uploadedFiles = []; // {id, file, base64}
+const MAX_FILES_UI = 60; // واجهة فقط (السيرفر يقيّد لـ 30؛ نقدر نجزّئ لاحقاً إن احتجت)
 
-document.addEventListener('DOMContentLoaded', () => {
-    setLanguage('ar');
-    attachEventListeners();
-});
-
-// =================================================================================
-// UI LOGIC & FORM HANDLING
-// =================================================================================
-function attachEventListeners() {
-    const genderEl = document.getElementById('gender');
-    const pregStatWrap = document.getElementById('pregnancy-status-wrap');
-    const pregMonthWrap = document.getElementById('pregnancy-month-wrap');
-    const pregStatEl = document.getElementById('pregnancy-status');
-
-    genderEl.addEventListener('change', () => {
-      const isFemale = genderEl.value === 'female';
-      pregStatWrap.classList.toggle('hidden', !isFemale);
-      if (!isFemale) {
-        pregMonthWrap.classList.add('hidden');
-        pregStatEl.value = "";
-        document.getElementById('pregnancy-month').value = "";
-      }
-    });
-    pregStatEl.addEventListener('change', () => {
-      const showMonth = pregStatEl.value === 'yes';
-      pregMonthWrap.classList.toggle('hidden', !showMonth);
-      if (!showMonth) document.getElementById('pregnancy-month').value = "";
-    });
-
-    const smokerEl = document.getElementById('smoker');
-    const packYearsSection = document.getElementById('pack-years-section');
-    smokerEl.addEventListener('change', () => {
-      packYearsSection.classList.toggle('hidden', smokerEl.value !== 'yes');
-      if (smokerEl.value !== 'yes') {
-          document.getElementById('packs-per-day').value = "";
-          document.getElementById('smoking-years').value = "";
-          updatePackYears(); // Reset calculation
-      }
-    });
-
-    const visualEl = document.getElementById('visual-symptoms');
-    const eyeWrap = document.getElementById('eye-wrap');
-    visualEl.addEventListener('change', () => {
-      eyeWrap.classList.toggle('hidden', visualEl.value !== 'yes');
-      if (visualEl.value !== 'yes') {
-        document.getElementById('last-eye-exam').value = "";
-        document.getElementById('visual-acuity').value = "";
-      }
-    });
-
-    // Pack-years calculation listeners
-    document.getElementById('packs-per-day').addEventListener('input', updatePackYears);
-    document.getElementById('smoking-years').addEventListener('input', updatePackYears);
-    
-    // File upload listener
-    document.getElementById('file-upload-input').addEventListener('change', handleFilesSelect);
+function handleFilesSelect(e){
+  if(!e.target.files?.length) return;
+  handleFiles(Array.from(e.target.files));
+  e.target.value = '';
 }
 
-function updatePackYears() {
-    const packsPerDay = parseFloat(document.getElementById('packs-per-day').value) || 0;
-    const smokingYears = parseFloat(document.getElementById('smoking-years').value) || 0;
-    const resultEl = document.getElementById('pack-years-result');
+async function handleFiles(files){
+  const compress = document.getElementById('enable-compress').checked;
+  const previewContainer = document.getElementById('file-preview-container');
 
-    if (packsPerDay > 0 && smokingYears > 0) {
-        const packYears = packsPerDay * smokingYears;
-        resultEl.textContent = packYears.toFixed(1);
+  if (uploadedFiles.length + files.length > MAX_FILES_UI){
+    showNote('error', `عدد الملفات كبير. الحد الأقصى هنا ${MAX_FILES_UI}.`);
+    return;
+  }
+
+  showProgress(0);
+  let processed = 0;
+
+  for (const file of files){
+    const id = Date.now() + '-' + Math.random();
+    let dataUrl;
+
+    if (compress && file.type.startsWith('image/')){
+      dataUrl = await downscaleImage(file); // returns dataURL
     } else {
-        resultEl.textContent = '--';
+      dataUrl = await readAsDataURL(file);
     }
-}
 
-// =================================================================================
-// MULTI-FILE HANDLING
-// =================================================================================
-let uploadedFiles = []; // Array to store file objects { id, file, base64 }
+    const base64 = dataUrl.split(',')[1];
+    uploadedFiles.push({ id, file, base64 });
 
-function handleFilesSelect(event) {
-    const files = event.target.files;
-    for (const file of files) {
-        const fileId = Date.now() + '-' + Math.random();
-        const fileReader = new FileReader();
-
-        fileReader.onload = (e) => {
-            const base64 = e.target.result.split(',')[1];
-            uploadedFiles.push({ id: fileId, file: file, base64: base64 });
-            renderFilePreview(fileId, file, e.target.result);
-        };
-        
-        fileReader.readAsDataURL(file);
-    }
-    // Clear the input so the same file can be selected again if removed
-    event.target.value = '';
-}
-
-function renderFilePreview(fileId, file, dataUrl) {
-    const previewContainer = document.getElementById('file-preview-container');
+    // render preview
     const item = document.createElement('div');
     item.className = 'file-preview-item';
-    item.dataset.fileId = fileId;
-
-    let thumbHtml;
-    if (file.type.startsWith('image/')) {
-        thumbHtml = `<img src="${dataUrl}" alt="${file.name}">`;
-    } else if (file.type === 'application/pdf') {
-        thumbHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
-    } else {
-        thumbHtml = `<span>${file.type.split('/')[1] || 'file'}</span>`;
-    }
+    item.dataset.fileId = id;
+    const thumb = file.type.startsWith('image/') ? `<img src="${dataUrl}" alt="${file.name}">`
+      : (file.type === 'application/pdf'
+          ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`
+          : `<span>${file.type.split('/')[1]||'file'}</span>`);
 
     item.innerHTML = `
-        <div class="thumb">${thumbHtml}</div>
-        <div class="file-name">${file.name}</div>
-        <button class="file-remove-btn" title="${getTranslation('ui.remove_file')}" onclick="removeFile('${fileId}')">&times;</button>
+      <div class="thumb">${thumb}</div>
+      <div class="file-name">${file.name}</div>
+      <button class="file-remove-btn" title="إزالة" onclick="removeFile('${id}')">&times;</button>
     `;
     previewContainer.appendChild(item);
+
+    processed++;
+    showProgress(Math.round((processed / files.length) * 100));
+  }
+
+  showProgress(null); // hide
 }
 
-function removeFile(fileId) {
-    // Remove from array
-    uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
-    // Remove from DOM
-    const itemToRemove = document.querySelector(`.file-preview-item[data-file-id="${fileId}"]`);
-    if (itemToRemove) {
-        itemToRemove.remove();
-    }
+function removeFile(id){
+  uploadedFiles = uploadedFiles.filter(f=>f.id!==id);
+  const el = document.querySelector(\`.file-preview-item[data-file-id="\${id}"]\`);
+  if (el) el.remove();
 }
 
-// =================================================================================
-// API ANALYSIS - FINAL CORRECTED VERSION
-// =================================================================================
-async function analyzeCase() {
+function readAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=> resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
+// Downscale images client-side (max 2000px edge, quality 0.85)
+async function downscaleImage(file, maxDim=2000, quality=0.85){
+  const dataUrl = await readAsDataURL(file);
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      let { width:w, height:h } = img;
+      const scale = Math.min(1, maxDim / Math.max(w,h));
+      if (scale < 1){ w = Math.round(w*scale); h = Math.round(h*scale); }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const out = canvas.toDataURL(file.type || 'image/jpeg', quality);
+      resolve(out);
+    };
+    img.onerror = ()=> resolve(dataUrl); // fallback
+    img.src = dataUrl;
+  });
+}
+
+function showProgress(pct){
+  const wrap = document.getElementById('upload-progress');
+  const bar = wrap.querySelector('span');
+  if (pct==null){ wrap.classList.add('hidden'); bar.style.width='0%'; return; }
+  wrap.classList.remove('hidden');
+  bar.style.width = pct + '%';
+}
+
+// ===== Analyze =====
+async function analyzeCase(){
   const responseContainer = document.getElementById('response-container');
   const btn = document.getElementById('analyzeBtn');
   const exportContainer = document.getElementById('export-container');
-  
   clearNote();
-  responseContainer.style.display = 'none';
-  responseContainer.innerHTML = '';
+  responseContainer.style.display='none';
+  responseContainer.innerHTML='';
   exportContainer.classList.add('hidden');
 
-  // **FINALIZED DATA COLLECTION**
-  // This object now collects data from ALL relevant form fields to ensure deep analysis.
   const caseData = {
-    // Patient Info
     age: document.getElementById('age').value || null,
     gender: document.getElementById('gender').value || null,
     isPregnant: document.getElementById('pregnancy-status').value === 'yes',
     pregnancyMonth: document.getElementById('pregnancy-month').value || null,
-    
-    // Lifestyle & Symptoms
     isSmoker: document.getElementById('smoker').value === 'yes',
     packYears: document.getElementById('pack-years-result').textContent,
     coughDurationWeeks: document.getElementById('cough-duration').value || null,
     visualSymptoms: document.getElementById('visual-symptoms').value || null,
     lastEyeExamDate: document.getElementById('last-eye-exam').value || null,
     visualAcuity: document.getElementById('visual-acuity').value || '',
-
-    // Medical Details
     notes: document.getElementById('case-description').value || '',
     diagnosis: document.getElementById('diagnosis').value || '',
     labResults: document.getElementById('lab-results').value || '',
     medications: document.getElementById('medications-procedures').value || '',
-    
-    // Files
+    analysisMode: document.getElementById('analysis-mode').value,
     files: uploadedFiles.map(f => ({ name: f.file.name, type: f.file.type, data: f.base64 }))
   };
 
-  const hasTextualInput = caseData.notes || caseData.diagnosis || caseData.labResults || caseData.medications;
-  if (!hasTextualInput && caseData.files.length === 0) {
-    showNote('error', getTranslation('validation.error_formIncomplete'));
+  const hasText = caseData.notes || caseData.diagnosis || caseData.labResults || caseData.medications;
+  if (!hasText && caseData.files.length === 0){
+    showNote('error','الرجاء إدخال تفاصيل الحالة أو رفع ملف.');
     return;
   }
 
-  showNote('info', getTranslation('validation.info_analyzing'));
   btn.disabled = true;
+  showNote('info','جاري تحليل الحالة...');
 
-  try {
-    const response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(caseData),
+  try{
+    const res = await fetch(API_ENDPOINT, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(caseData)
     });
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-        throw new Error(`${response.status}: ${errorData.detail || 'Unknown server error'}`);
+    if (!res.ok){
+      const err = await res.json().catch(()=>({detail:res.statusText}));
+      throw new Error(`${res.status}: ${err.detail || 'Unknown error'}`);
     }
 
-    const result = await response.json();
-
-    if (result?.htmlReport) {
+    const result = await res.json();
+    if (result?.htmlReport){
       clearNote();
       responseContainer.innerHTML = result.htmlReport;
       responseContainer.style.display = 'block';
       exportContainer.classList.remove('hidden');
-      responseContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      responseContainer.scrollIntoView({behavior:'smooth', block:'start'});
+      // شارة صغيرة تبين الوضع المستخدم
+      if (result.ensembleUsed || result.ocrUsed){
+        showNote('info', `تم التحليل${result.ocrUsed?' مع OCR':''}${result.ensembleUsed?' + دمج (Ensemble)':''}.`);
+        setTimeout(clearNote, 4000);
+      }
     } else {
-      throw new Error(getTranslation('validation.error_missingReport'));
+      throw new Error('لم يتم استلام تقرير HTML من الخادم.');
     }
-  } catch (err) {
-    console.error(err);
-    showNote('error', getTranslation('validation.error_requestFailed') + err.message);
+  } catch (e){
+    console.error(e);
+    showNote('error','حدث خطأ أثناء التحليل: ' + e.message);
   } finally {
     btn.disabled = false;
   }
 }
 
-
-// =================================================================================
-// PDF EXPORT LOGIC
-// =================================================================================
+// ===== PDF Export =====
 const { jsPDF } = window.jspdf;
-
 const exportBtn = document.getElementById('exportBtn');
 const exportDropdown = document.getElementById('export-dropdown');
-exportBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    exportDropdown.classList.toggle('show');
-});
-window.addEventListener('click', (event) => {
-    if (!exportBtn.contains(event.target) && !exportDropdown.contains(event.target)) {
-        exportDropdown.classList.remove('show');
-    }
-});
+exportBtn?.addEventListener('click',(e)=>{ e.stopPropagation(); exportDropdown.classList.toggle('show'); });
+window.addEventListener('click',(e)=>{ if(!exportBtn?.contains(e.target) && !exportDropdown.contains(e.target)) exportDropdown.classList.remove('show'); });
 
-async function exportPDF(mode) {
-    showNote('info', 'Generating PDF...');
-    exportDropdown.classList.remove('show');
-    
-    const reportContainer = document.getElementById('response-container');
-    if (!reportContainer.innerHTML.trim()) {
-        showNote('error', 'No report content to export.');
-        return;
-    }
-    
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    
-    try {
-        await addContentToPdf(doc, reportContainer, currentLang);
-        doc.save(`Medical-Report-${mode}-${new Date().toISOString().slice(0,10)}.pdf`);
-        clearNote();
-    } catch (error) {
-        console.error("PDF Generation Error:", error);
-        showNote('error', 'Failed to generate PDF. See console for details.');
-    }
+async function exportPDF(mode){
+  showNote('info','Generating PDF...');
+  exportDropdown.classList.remove('show');
+  const reportContainer = document.getElementById('response-container');
+  if (!reportContainer.innerHTML.trim()){ showNote('error','لا يوجد محتوى للتصدير.'); return; }
+  const doc = new jsPDF({orientation:'p', unit:'mm', format:'a4'});
+  try{
+    await addContentToPdf(doc, reportContainer, currentLang);
+    doc.save(`Medical-Report-${mode}-${new Date().toISOString().slice(0,10)}.pdf`);
+    clearNote();
+  }catch(err){ console.error(err); showNote('error','فشل إنشاء PDF.'); }
 }
 
-
-async function addContentToPdf(doc, element, lang) {
-    const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        onclone: (clonedDoc) => {
-            clonedDoc.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-            const container = clonedDoc.querySelector('#response-container');
-            if(container) {
-              container.style.display = 'block';
-              container.style.background = '#ffffff';
-            } 
-        }
-    });
-
-    const imgData = canvas.toDataURL('image/png');
-    const imgProps = doc.getImageProperties(imgData);
-    const pdfWidth = doc.internal.pageSize.getWidth() - 20; // with margin
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    let heightLeft = pdfHeight;
-    let position = 10; // top margin
-
-    doc.addImage(imgData, 'PNG', 10, position, pdfWidth, pdfHeight);
-    heightLeft -= doc.internal.pageSize.getHeight();
-
-    while (heightLeft >= 0) {
-      position = heightLeft - pdfHeight + 10;
-      doc.addPage();
-      doc.addImage(imgData, 'PNG', 10, position, pdfWidth, pdfHeight);
-      heightLeft -= doc.internal.pageSize.getHeight();
-    }
+async function addContentToPdf(doc, element, lang){
+  const canvas = await html2canvas(element, {
+    scale: 2, useCORS: true,
+    onclone: (c)=>{ c.documentElement.dir = lang==='ar'?'rtl':'ltr'; const el=c.querySelector('#response-container'); if(el){ el.style.display='block'; el.style.background='#fff'; } }
+  });
+  const imgData = canvas.toDataURL('image/png');
+  const imgProps = doc.getImageProperties(imgData);
+  const pdfW = doc.internal.pageSize.getWidth() - 20;
+  const pdfH = (imgProps.height * pdfW) / imgProps.width;
+  let heightLeft = pdfH, position = 10;
+  doc.addImage(imgData, 'PNG', 10, position, pdfW, pdfH);
+  heightLeft -= doc.internal.pageSize.getHeight();
+  while (heightLeft >= 0){
+    position = heightLeft - pdfH + 10; doc.addPage(); doc.addImage(imgData,'PNG',10,position,pdfW,pdfH); heightLeft -= doc.internal.pageSize.getHeight();
+  }
 }
 
-// =================================================================================
-// UTILITIES
-// =================================================================================
-function clearNote() {
-  const noteArea = document.getElementById('notification-area');
-  noteArea.style.display = 'none';
-  noteArea.textContent = '';
-}
-function showNote(type, text) {
-  const noteArea = document.getElementById('notification-area');
-  noteArea.className = 'notification ' + (type === 'error' ? 'error' : 'info');
-  noteArea.textContent = text;
-  noteArea.style.display = 'block';
-}
-
+// ===== Notifications =====
+function clearNote(){ const n=document.getElementById('notification-area'); n.style.display='none'; n.textContent=''; }
+function showNote(type,text){ const n=document.getElementById('notification-area'); n.className='notification ' + (type==='error'?'error':'info'); n.textContent=text; n.style.display='block'; }
 </script>
 </body>
 </html>
