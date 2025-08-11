@@ -29,6 +29,16 @@
     .lang-switcher{position:absolute;top:20px;right:20px}
     html[dir="ltr"] .lang-switcher{right:auto;left:20px}
     .lang-switcher a{color:var(--primary-color);text-decoration:none;font-weight:bold;padding:5px 10px;border:1px solid var(--border-color);border-radius:5px}
+    /* New styles for credit display */
+    .credit-display {
+        background-color: #e0eaf5;
+        color: var(--primary-color);
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        margin-top: 2rem;
+        display: inline-block;
+    }
   </style>
 </head>
 <body>
@@ -45,25 +55,29 @@
 
     <div class="portal-grid">
       <!-- بوابة الطبيب -->
-      <a href="insurance-check.html" class="portal-card doctor">
+      <a href="insurance-check.html" class="portal-card doctor" id="doctor-portal-link" style="display: none;">
         <img src="https://img.icons8.com/ios-filled/100/0a4c8b/stethoscope.png" alt="Doctor Icon"/>
         <h2 data-lang-key="doctorPortalTitle">بوابة الطبيب</h2>
         <p data-lang-key="doctorPortalDesc">تحليل عميق للمطالبات الطبية، تقليل الرفض التأميني، وزيادة الإيرادات بشكل مبرر طبياً وعلمياً. الأداة المثلى لكل طبيب.</p>
       </a>
 
       <!-- بوابة المريض -->
-      <a href="patient.html" class="portal-card patient" id="patient-portal-link">
+      <a href="patient.html" class="portal-card patient" id="patient-portal-link" style="display: none;">
         <img src="https://img.icons8.com/ios-filled/100/28a745/like--v1.png" alt="Patient Icon"/>
         <h2 data-lang-key="patientPortalTitle">بوابة المريض</h2>
         <p data-lang-key="patientPortalDesc">أدخل الأعراض التي تشعر بها لتحصل فوراً على نصائح طبية أولية معتمدة علمياً، وإرشادات واضحة لتحديد الوقت الأمثل لزيارة الطبيب.</p>
       </a>
 
       <!-- بوابة الصيدلي -->
-      <a href="pharmacy.html" class="portal-card pharmacist" id="pharmacist-portal-link">
+      <a href="pharmacy.html" class="portal-card pharmacist" id="pharmacist-portal-link" style="display: none;">
         <img src="https://img.icons8.com/ios-filled/100/ffc107/pill.png" alt="Pharmacist Icon"/>
         <h2 data-lang-key="pharmacistPortalTitle">بوابة الصيدلي</h2>
         <p data-lang-key="pharmacistPortalDesc">تحقق من التفاعلات الدوائية المحتملة بناءً على حالة المريض (العمر، الحمل، الرضاعة) لضمان صرف آمن وفعال للأدوية.</p>
       </a>
+    </div>
+
+    <div id="credit-display-container" class="credit-display" style="display: none;">
+        <span data-lang-key="creditsRemaining">الرصيد المتبقي:</span> <span id="credits-count"></span>
     </div>
 
     <div class="user-info">
@@ -74,7 +88,7 @@
 
   <!-- Firebase + لغة -->
   <script type="module">
-    // ==== Firebase Auth (اختياري لو عندك تسجيل دخول) ====
+    // ==== Firebase SDKs ====
     const firebaseConfig = {
       apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
       authDomain: "insurance-check-6cec9.firebaseapp.com",
@@ -86,25 +100,75 @@
     };
 
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getAuth, onAuthStateChanged, signOut } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const { getAuth, onAuthStateChanged, signOut, getIdTokenResult } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const { getFirestore, doc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    const db = getFirestore(app);
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
+        // User is signed in.
         const el = document.getElementById("user-email");
         if (el) el.textContent = user.email;
+
+        // Force refresh to get the latest claims.
+        user.getIdToken(true).then((idToken) => {
+            // Now get the full token result with claims.
+            return getIdTokenResult(user);
+        }).then((idTokenResult) => {
+            const claims = idTokenResult.claims;
+            
+            // Show portals based on user role
+            if (claims.role === 'doctor') {
+                document.getElementById('doctor-portal-link').style.display = 'block';
+                // Listen for credit changes for doctors
+                listenForCredits(user.uid, 'doctor_profiles');
+            } else if (claims.role === 'patient') {
+                document.getElementById('patient-portal-link').style.display = 'block';
+            } else if (claims.role === 'pharmacist') {
+                document.getElementById('pharmacist-portal-link').style.display = 'block';
+            } else {
+                // Handle cases where role is not set
+                console.log("User role not found.");
+            }
+        }).catch((error) => {
+            console.log("Error getting token claims:", error);
+        });
+
       } else {
+        // User is signed out.
         window.location.href = "http://www.m2020m.org/login.html";
       }
     });
+    
+    // Function to listen for real-time updates on credits
+    function listenForCredits(userId, profileCollection) {
+        const creditDisplayContainer = document.getElementById('credit-display-container');
+        const creditsCountEl = document.getElementById('credits-count');
+        
+        const userProfileRef = doc(db, profileCollection, userId);
+        
+        onSnapshot(userProfileRef, (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+                const credits = data.analysis_credits;
+                
+                creditsCountEl.textContent = credits;
+                creditDisplayContainer.style.display = 'inline-block';
+            } else {
+                console.log("No profile document found for this user.");
+                creditDisplayContainer.style.display = 'none';
+            }
+        });
+    }
 
     window.logout = () => {
       signOut(auth).then(() => window.location.href = "http://www.m2020m.org/login.html");
     };
 
-    // ==== الترجمة ====
+    // ==== Translation Logic ====
     const translations = {
       en: {
         pageTitle: "Smart Healthcare Portal",
@@ -118,6 +182,7 @@
         pharmacistPortalDesc: "Check for potential drug interactions based on the patient's condition (age, pregnancy, lactation) to ensure safe dispensing.",
         welcome: "Welcome,",
         logout: "Logout",
+        creditsRemaining: "Credits Remaining:",
         langToggle: "العربية"
       },
       ar: {
@@ -132,6 +197,7 @@
         pharmacistPortalDesc: "تحقق من التفاعلات الدوائية المحتملة بناءً على حالة المريض.",
         welcome: "مرحباً",
         logout: "تسجيل الخروج",
+        creditsRemaining: "الرصيد المتبقي:",
         langToggle: "English"
       }
     };
@@ -145,7 +211,7 @@
 
       document.documentElement.lang = lang;
       document.documentElement.dir  = (lang === 'ar' ? 'rtl' : 'ltr');
-      langToggle.textContent        = translations[lang].langToggle;
+      langToggle.textContent      = translations[lang].langToggle;
 
       document.querySelectorAll('[data-lang-key]').forEach(el=>{
         const key = el.getAttribute('data-lang-key');
@@ -153,13 +219,11 @@
       });
     }
 
-    // مبدّل اللغة
     langToggle.addEventListener('click', (e)=>{
       e.preventDefault();
       setLanguage(currentLang === 'ar' ? 'en' : 'ar');
     });
 
-    // تهيئة أولية
     setLanguage(currentLang);
   </script>
 </body>
