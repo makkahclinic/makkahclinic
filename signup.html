@@ -1,11 +1,160 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>إنشاء حساب جديد</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-lang-key="pageTitle">إنشاء حساب جديد</title>
+  <style>
+    :root {
+      --primary-color: #0a4c8b;
+      --success-color: #28a745;
+      --error-color: #dc3545;
+      --background-color: #f4f7f9;
+      --text-color: #333;
+      --card-bg-color: #ffffff;
+      --border-color: #e0e0e0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1rem 0;
+    }
+    .signup-container {
+      background: var(--card-bg-color);
+      padding: 2rem 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.15);
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      border-top: 6px solid var(--primary-color);
+    }
+    h2 {
+      color: var(--primary-color);
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      font-size: 1.8rem;
+    }
+    input[type="email"], input[type="password"] {
+      margin-bottom: 1rem;
+      padding: 0.9rem 1rem;
+      width: 100%;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    button {
+      padding: 0.9rem 1.2rem;
+      background: linear-gradient(45deg, var(--primary-color), #17a2b8);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      width: 100%;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 1rem;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(10, 76, 139, 0.3);
+    }
+    .link {
+      display: block;
+      margin-top: 1.5rem;
+      font-size: 0.9rem;
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+    .link:hover { text-decoration: underline; }
+    #message {
+      margin-top: 1rem;
+      font-weight: bold;
+      min-height: 24px;
+    }
+    .role-selection {
+      margin: 1.5rem 0;
+      text-align: right;
+    }
+    html[dir="ltr"] .role-selection { text-align: left; }
+    .role-selection p {
+        margin-bottom: 0.8rem;
+        font-weight: bold;
+        color: var(--text-color);
+    }
+    .role-options {
+        display: flex;
+        justify-content: space-around;
+        gap: 10px;
+    }
+    .role-options label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+        flex-grow: 1;
+        justify-content: center;
+    }
+    .role-options input[type="radio"]:checked + label {
+        background-color: #e0eaf5;
+        border-color: var(--primary-color);
+        font-weight: bold;
+    }
+    .role-options input[type="radio"] { display: none; }
+    .lang-switcher {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+    }
+    html[dir="ltr"] .lang-switcher { right: auto; left: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="lang-switcher">
+    <a href="#" id="lang-toggle" class="link">English</a>
+  </div>
+
+  <div class="signup-container">
+    <h2 data-lang-key="createAccount">📝 إنشاء حساب جديد</h2>
+    
+    <input type="email" id="email" placeholder="البريد الإلكتروني" data-lang-placeholder="emailPlaceholder">
+    <input type="password" id="password" placeholder="كلمة المرور" data-lang-placeholder="passwordPlaceholder">
+    <input type="password" id="confirmPassword" placeholder="تأكيد كلمة المرور" data-lang-placeholder="confirmPasswordPlaceholder">
+
+    <div class="role-selection">
+        <p data-lang-key="registerAs">أنا أسجل بصفتي:</p>
+        <div class="role-options">
+            <input type="radio" id="role-doctor" name="role" value="doctor">
+            <label for="role-doctor" data-lang-key="doctor">طبيب</label>
+
+            <input type="radio" id="role-pharmacist" name="role" value="pharmacist">
+            <label for="role-pharmacist" data-lang-key="pharmacist">صيدلي</label>
+
+            <input type="radio" id="role-patient" name="role" value="patient" checked>
+            <label for="role-patient" data-lang-key="individual">فرد / متابع</label>
+        </div>
+    </div>
+
+    <button onclick="signup()" data-lang-key="register">تسجيل</button>
+    <p id="message"></p>
+    <a href="login.html" class="link" data-lang-key="haveAccount">لديك حساب بالفعل؟ تسجيل الدخول</a>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
@@ -19,83 +168,117 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    const db = getFirestore(app); // Initialize Firestore
+
+    const message = document.getElementById("message");
 
     window.signup = async function () {
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
       const confirmPassword = document.getElementById("confirmPassword").value;
-      const agree = document.getElementById("terms").checked;
-      const message = document.getElementById("message");
+      const selectedRole = document.querySelector('input[name="role"]:checked');
 
-      if (!agree) {
-        message.textContent = "❌ يجب الموافقة على الشروط والأحكام.";
-        message.style.color = "red";
+      // Reset message
+      message.textContent = "";
+
+      if (!selectedRole) {
+        message.textContent = "❌ " + (currentLang === 'ar' ? "الرجاء اختيار نوع الحساب." : "Please select an account type.");
+        message.style.color = "var(--error-color)";
         return;
       }
-
       if (password.length < 6) {
-        message.textContent = "❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل.";
-        message.style.color = "red";
+        message.textContent = "❌ " + (currentLang === 'ar' ? "كلمة المرور يجب أن تكون 6 أحرف على الأقل." : "Password must be at least 6 characters.");
+        message.style.color = "var(--error-color)";
         return;
       }
-
       if (password !== confirmPassword) {
-        message.textContent = "❌ تأكيد كلمة المرور غير مطابق.";
-        message.style.color = "red";
+        message.textContent = "❌ " + (currentLang === 'ar' ? "تأكيد كلمة المرور غير مطابق." : "Passwords do not match.");
+        message.style.color = "var(--error-color)";
         return;
       }
 
       try {
+        // 1. Create the user
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await sendEmailVerification(userCredential.user);
-        message.textContent = "✅ تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني (قد يكون في مجلد الرسائل غير المرغوبة).";
-        message.style.color = "green";
+        const user = userCredential.user;
+
+        // 2. Send a request to the backend (via Firestore) to set the role
+        await setDoc(doc(db, "role_requests", user.uid), {
+            role: selectedRole.value
+        });
+        
+        // 3. Send verification email
+        await sendEmailVerification(user);
+
+        message.textContent = "✅ " + (currentLang === 'ar' ? "تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتفعيله." : "Account created! Please check your email to verify it.");
+        message.style.color = "var(--success-color)";
+
       } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
-          message.textContent = "❌ هذا البريد الإلكتروني مستخدم بالفعل.";
+          message.textContent = "❌ " + (currentLang === 'ar' ? "هذا البريد الإلكتروني مستخدم بالفعل." : "This email is already in use.");
         } else if (error.code === 'auth/invalid-email') {
-          message.textContent = "❌ صيغة البريد الإلكتروني غير صحيحة.";
+          message.textContent = "❌ " + (currentLang === 'ar' ? "صيغة البريد الإلكتروني غير صحيحة." : "The email format is invalid.");
         } else {
-          message.textContent = "❌ خطأ: " + error.message;
+          message.textContent = "❌ " + error.message;
         }
-        message.style.color = "red";
+        message.style.color = "var(--error-color)";
       }
     };
 
-    window.resendVerification = async function () {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      const message = document.getElementById("message");
-
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        await sendEmailVerification(userCredential.user);
-        message.textContent = "📧 تم إرسال رابط التحقق مجددًا إلى بريدك الإلكتروني.";
-        message.style.color = "blue";
-      } catch (error) {
-        message.textContent = "❌ لا يمكن إرسال رابط التحقق: " + error.message;
-        message.style.color = "red";
-      }
+    // ==== Translation Logic ====
+    const translations = {
+        en: {
+            pageTitle: "Create a New Account",
+            createAccount: "📝 Create a New Account",
+            emailPlaceholder: "Email Address",
+            passwordPlaceholder: "Password",
+            confirmPasswordPlaceholder: "Confirm Password",
+            registerAs: "I am registering as:",
+            doctor: "Doctor",
+            pharmacist: "Pharmacist",
+            individual: "Individual / Guardian",
+            register: "Register",
+            haveAccount: "Already have an account? Login",
+            langToggle: "العربية"
+        },
+        ar: {
+            pageTitle: "إنشاء حساب جديد",
+            createAccount: "📝 إنشاء حساب جديد",
+            emailPlaceholder: "البريد الإلكتروني",
+            passwordPlaceholder: "كلمة المرور",
+            confirmPasswordPlaceholder: "تأكيد كلمة المرور",
+            registerAs: "أنا أسجل بصفتي:",
+            doctor: "طبيب",
+            pharmacist: "صيدلي",
+            individual: "فرد / متابع",
+            register: "تسجيل",
+            haveAccount: "لديك حساب بالفعل؟ تسجيل الدخول",
+            langToggle: "English"
+        }
     };
+    let currentLang = 'ar';
+    const langToggle = document.getElementById('lang-toggle');
+
+    function setLanguage(lang) {
+        currentLang = lang;
+        document.documentElement.lang = lang;
+        document.documentElement.dir = (lang === 'ar' ? 'rtl' : 'ltr');
+        langToggle.textContent = translations[lang].langToggle;
+
+        document.querySelectorAll('[data-lang-key]').forEach(el => {
+            const key = el.getAttribute('data-lang-key');
+            if (translations[lang][key]) el.textContent = translations[lang][key];
+        });
+        document.querySelectorAll('[data-lang-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-lang-placeholder');
+            if (translations[lang][key]) el.placeholder = translations[lang][key];
+        });
+    }
+    langToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        setLanguage(currentLang === 'ar' ? 'en' : 'ar');
+    });
+    setLanguage('ar'); // Initial language
   </script>
-  <style>
-    body { font-family: Arial; text-align: center; margin-top: 50px; background: #f9f9f9; }
-    input { margin: 10px; padding: 10px; width: 250px; border: 1px solid #ccc; border-radius: 4px; }
-    button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; }
-    button:hover { background: #0056b3; }
-    .link { display: block; margin-top: 15px; font-size: 14px; }
-    label { font-size: 14px; display: block; margin-top: 10px; }
-  </style>
-</head>
-<body>
-  <h2>📝 إنشاء حساب جديد</h2>
-  <input type="email" id="email" placeholder="البريد الإلكتروني"><br>
-  <input type="password" id="password" placeholder="كلمة المرور"><br>
-  <input type="password" id="confirmPassword" placeholder="تأكيد كلمة المرور"><br>
-  <label><input type="checkbox" id="terms"> أوافق على <a href="#" target="_blank">الشروط والأحكام</a></label>
-  <button onclick="signup()">تسجيل</button>
-  <button onclick="resendVerification()">🔁 إعادة إرسال رابط التحقق</button>
-  <p id="message"></p>
-  <a href="login.html" class="link">لديك حساب بالفعل؟ تسجيل الدخول</a>
 </body>
 </html>
