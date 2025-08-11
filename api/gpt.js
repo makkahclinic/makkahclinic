@@ -77,33 +77,41 @@ function buildUserPrompt(d={}){return `
 
 // =============== OpenAI OCR + Analysis (optional) ===============
 async function ocrWithOpenAI(apiKey, files){
-  const IMG = new Set(["image/jpeg","image/png","image/webp"]);
-  const out = [];
-  for(const f of files){
-    if(!IMG.has(f.type)) continue;
-    const res = await fetch("https://api.openai.com/v1/chat/completions",{
-      method:"POST",
-      headers:{ "Authorization":`Bearer ${apiKey}`, "Content-Type":"application/json" },
-      body: JSON.stringify({
-        model:"gpt-4o-mini",
-        messages:[{
-          role:"user",
-          content:[
-            { type:"input_text", text:
-              "استخرج نصاً منظماً من هذه الصورة (عربي/إنجليزي). إن كان تقرير مختبر/وصفة فحوّل الجداول إلى عناصر {test,value,unit,ref_low,ref_high} حيثما أمكن، بدون تفسير."
-            },
-            { type:"input_image", image_url:`data:${f.type};base64,${f.data}` }
-          ]
-        }],
-        temperature:0.1, max_tokens:2000
-      })
+    const IMG = new Set(["image/jpeg","image/png","image/webp"]);
+    const eligibleFiles = files.filter(f => IMG.has(f.type));
+
+    const ocrPromises = eligibleFiles.map(async (f) => {
+        try {
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [{
+                        role: "user",
+                        content: [
+                            { type: "text", text: "استخرج نصاً منظماً من هذه الصورة (عربي/إنجليزي). إن كان تقرير مختبر/وصفة فحوّل الجداول إلى عناصر {test,value,unit,ref_low,ref_high} حيثما أمكن، بدون تفسير." },
+                            { type: "image_url", image_url: { url: `data:${f.type};base64,${f.data}` } }
+                        ]
+                    }],
+                    temperature: 0.1, max_tokens: 2000
+                })
+            });
+            if (!res.ok) {
+                console.warn(`OpenAI OCR fail for ${f.name}:`, await res.text().catch(() => ''));
+                return null;
+            }
+            const j = await res.json();
+            const text = j?.choices?.[0]?.message?.content || "";
+            return text ? { filename: f.name, mime: f.type, text } : null;
+        } catch (e) {
+            console.error(`OCR promise failed for ${f.name}:`, e);
+            return null;
+        }
     });
-    if(!res.ok){ console.warn("OpenAI OCR fail", await res.text().catch(()=>'')); continue; }
-    const j = await res.json();
-    const text = j?.choices?.[0]?.message?.content || "";
-    if(text) out.push({ filename:f.name, mime:f.type, text });
-  }
-  return out; // [{filename,mime,text}]
+
+    const results = await Promise.all(ocrPromises);
+    return results.filter(Boolean); // لإزالة أي نتائج فاشلة (null)
 }
 
 async function analyzeWithOpenAI(apiKey, caseData, ocrTextJoined){
