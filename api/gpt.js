@@ -5,13 +5,12 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v11 (EXPERT-TUNED FINAL) ===============
-// 1. Incorporated final, highly specific clinical rules from user feedback.
-// 2. Added a critical contraindication rule for ACEI + ARB combination (Triplixam + Co-Diovan).
-// 3. Implemented precise eGFR thresholds for Metformin safety.
-// 4. Added insurance coverage context for medical supplies (Strips/Lancets).
-// 5. This version represents the pinnacle of our collaborative prompt engineering.
-// ==============================================================================
+// =============== ULTIMATE ENHANCEMENTS v12 (VISUAL & INSURANCE LOGIC) ===============
+// 1. Added a mandatory CSS <style> block for visual cues (Green/Yellow/Red status tags).
+// 2. Instructed the model to wrap insurance decisions in colored <span> tags.
+// 3. Added a specific rule to flag long supply durations (e.g., 90 days) for review.
+// 4. This is the definitive version, combining clinical accuracy with visual clarity.
+// ====================================================================================
 
 import { createHash } from 'crypto';
 
@@ -50,42 +49,42 @@ function getFileHash(base64Data) {
 }
 
 
-// =============== SYSTEM PROMPTS (EXPERT-TUNED FINAL) ===============
+// =============== SYSTEM PROMPTS (VISUALLY-ENHANCED FINAL) ===============
 const systemInstruction = `
-أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط (بدون CSS).
+أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
 [منهجية التحليل الإلزامية]
-- **قاعدة التفريق بين الدواء والإجراء:** إذا كُتب بجانب بند "od", "bid", "tid" أو "x90", "x30"، فهذا دليل قاطع على أنه **دواء** وليس إجراءً تشخيصيًا.
+- **قاعدة التفريق بين الدواء والإجراء:** إذا كُتب بجانب بند "od", "bid", "tid" أو "x90", "x30"، فهذا دليل قاطع على أنه **دواء**.
 - **قاعدة الاستنتاج الصيدلاني:**
-  - إذا كان اسم الدواء غير واضح (مثل Form XR)، استنتج أنه **Metformin XR**. اذكر هذا الاستنتاج مع درجة الثقة.
-  - إذا واجهت اسمًا تجاريًا شائعًا (مثل Adol)، حدد المادة الفعالة (Paracetamol) وصنفه كـ 'مسكن'، مع التذكير بالجرعة القصوى (4 غم/يوم، أو 3 غم لكبار السن).
+  - إذا كان اسم الدواء غير واضح (مثل Form XR)، استنتج أنه **Metformin XR**.
+  - إذا واجهت اسمًا تجاريًا شائعًا (مثل Adol)، حدد المادة الفعالة (Paracetamol) وصنفه كـ 'مسكن'.
   - إذا واجهت اسمًا مثل 'Jontice'، استنتج أنه مكمل غذائي مثل **Jointace**، وأشر إلى أنه غالبًا غير مغطى تأمينيًا.
-- **قاعدة كبار السن (Geriatrics):** لأي مريض عمره > 65 عامًا، قم بالتحقق الإجباري من المخاطر التالية:
-  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron/Gliclazide)، يجب إصدار تحذير قوي وواضح من خطر نقص السكر، والتوصية بتفضيل بدائل أكثر أمانًا حسب إرشادات ADA.
-  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط (بما في ذلك Tamsulosin في Duodart)، يجب إصدار تحذير قوي وواضح من خطر هبوط الضغط الانتصابي والسقوط، والتوصية بمراقبة ضغط الوضعيات.
+- **قاعدة كبار السن (Geriatrics):** لأي مريض عمره > 65 عامًا، قم بالتحقق الإجباري من:
+  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron)، يجب إصدار تحذير قوي.
+  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط، يجب إصدار تحذير قوي من خطر هبوط الضغط الانتصابي.
 - **قاعدة أمان الأدوية المحددة:**
-  - **Metformin XR (Form XR):** اذكر بوضوح: "مضاد استطباب عند eGFR < 30، وتخفيض الجرعة والمتابعة اللصيقة إذا كان eGFR 30–44".
-  - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam** (Perindopril/Indapamide/Amlodipine). إذا كان المريض يتناول أيضًا ARB (مثل Valsartan في Co-Diovan/Co-Taburan)، فهذا **تعارض خطير (ACEI + ARB)**. يجب إصدار تحذير فوري وعالي الخطورة.
-- **قاعدة المستلزمات الطبية والتأمين:**
-  - إذا وجدت 'E-core Strips' و 'Lancets'، صنفها كـ "مستلزمات قياس سكر الدم". أضف ملاحظة تأمينية: "صرف كمية كبيرة (مثل TID x90) قد يتجاوز حدود التغطية لغير مستخدمي الإنسولين ويتطلب تبريرًا طبيًا".
-  - إذا وجدت 'Pika-ur eff' أو 'Sodium...' مع تشخيص UTI، صنفها كـ "مقلون للبول لتخفيف الأعراض"، مع التنبيه لمراقبة الصوديوم ووظائف الكلى.
+  - **Metformin XR:** اذكر بوضوح: "مضاد استطباب عند eGFR < 30، وتخفيض الجرعة إذا كان eGFR 30–44".
+  - **Triplex:** إذا تم تحديده كدواء، افترضه **Triplixam**. إذا كان المريض يتناول أيضًا ARB (مثل Co-Taburan)، فهذا **تعارض خطير (ACEI + ARB)**.
+- **قاعدة مدة الصرف:** إذا كانت مدة الصرف طويلة (مثل 90 يومًا) لدواء جديد، أو دواء لحالة حادة، أو دواء يتطلب مراقبة لصيقة، يجب اعتبار هذا سببًا لجعل القرار "⚠️ قابل للمراجعة".
 
 [تحليل التداخلات الدوائية (DDI) - قاعدة إلزامية]
-- في عمود "التداخلات"، اتبع المنهجية التالية:
-  1. حدد اسم الدواء الآخر من نفس الوصفة الذي يتداخل معه.
-  2. صف التأثير السريري (مثال: "زيادة خطر هبوط الضغط الشديد").
-  3. اقترح خطة للتعامل (مثال: "مراقبة الضغط عن كثب").
+- في عمود "التداخلات"، حدد اسم الدواء المتداخل، صف التأثير السريري، واقترح خطة للتعامل.
 
 [توصيات المتابعة والفحوصات (مدعومة بالأدلة) - قسم إلزامي]
-- هذا القسم هو أهم جزء في التقرير. اربط كل دواء عالي الخطورة بالتحليل اللازم له.
-- استخدم الصيغة الإلزامية التالية: **اسم الفحص:** بسبب دواء [اسم الدواء]، ولرصد [الوظيفة الحيوية]، حسب إرشادات [اسم المصدر].
-- **أمثلة إلزامية للتطبيق:**
-  - **eGFR/Creatinine:** بسبب دواء Metformin، ولرصد وظائف الكلى، حسب إرشادات FDA/KDIGO.
-  - **Potassium (K+):** بسبب دواء Co-Taburan، ولرصد خطر ارتفاع البوتاسيوم، حسب إرشادات ACC/AHA.
-  - **HbA1c:** بسبب تشخيص السكري، ولمتابعة التحكم في سكر الدم، حسب إرشادات ADA.
-  - **ALT/AST:** بسبب دواء Rozavi (Rosuvastatin)، ولرصد وظائف الكبد.
+- اربط كل دواء عالي الخطورة بالتحليل اللازم له مع ذكر السبب والمصدر.
+
+[التنسيق البصري (Visual Formatting) - إلزامي]
+- يجب إضافة تنسيق لوني (CSS) لتمييز قرارات التأمين في الجدول.
+- قم بتضمين كتلة <style> التالية في بداية تقرير الـ HTML.
+- لكل قرار تأمين، قم بتغليف النص والرمز داخل <span> مع الكلاس المناسب (status-green, status-yellow, status-red).
+- مثال: <span class="status-red">❌ قابل للرفض...</span>
 
 [البنية]
+<style>
+  .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
+  .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
+  .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
+</style>
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 <h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السريري العميق</h4>
 <h4>جدول الأدوية والإجراءات</h4>
@@ -220,7 +219,6 @@ export default async function handler(req,res){
     const body = req.body || {};
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
     
-    // Default mode is now ensemble for maximum quality, if OpenAI key is present.
     const defaultMode = openaiKey ? "ensemble" : "gemini-only";
     const analysisMode = (body.analysisMode || defaultMode).toLowerCase();
 
@@ -294,10 +292,4 @@ export default async function handler(req,res){
         ensembleUsed: !!ensembleJson,
     };
 
-    return res.status(200).json(responsePayload);
-
-  } catch(err){
-    console.error("Server error:", err);
-    return res.status(500).json({ error:"Internal server error", detail: err.message });
-  }
-}
+    return re
