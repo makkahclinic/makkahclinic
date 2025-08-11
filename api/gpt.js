@@ -5,12 +5,13 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v16 (DEFINITIVE EXPERT EDITION) ===============
-// 1. Integrated the final, most critical expert feedback from the user.
-// 2. Hard-coded non-negotiable rules for demographic conflicts, forbidden drug combinations (ACEI+ARB),
-//    and hidden therapeutic duplications (e.g., Amlodipine).
-// 3. Fine-tuned all safety and insurance logic to the highest possible standard.
-// 4. This is the definitive, production-ready version embodying all our collaborative refinements.
+// =============== ULTIMATE ENHANCEMENTS v19 (OPERATIONAL EXCELLENCE) ===============
+// 1. Integrated user's expert-level operational and revenue cycle management feedback.
+// 2. Re-engineered the recommendations section to focus on three core business axes:
+//    - Reducing Waste (e.g., Claim Denials)
+//    - Improving Productivity (e.g., No-show Reduction)
+//    - Adding Reimbursable Services (e.g., Chronic Care Programs)
+// 3. The model is now a true clinical AND operational consultant.
 // ====================================================================================
 
 import { createHash } from 'crypto';
@@ -46,36 +47,40 @@ function detectMimeFromB64(b64=""){ const h=(b64||"").slice(0,16);
   return "image/jpeg";
 }
 function getFileHash(base64Data) {
-    return createHash('sha256').update(base64Data).digest('hex');
+    return createHash('sha266').update(base64Data).digest('hex');
 }
 
 
-// =============== SYSTEM PROMPTS (DEFINITIVE EXPERT EDITION) ===============
+// =============== SYSTEM PROMPTS (OPERATIONAL EXCELLENCE FINAL) ===============
 const systemInstruction = `
-أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
+أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
 [منهجية التحليل الإلزامية]
-- **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**. يجب الإبلاغ عن هذا كـ **تعارض ديموغرافي كبير وخطأ جوهري** وقرار التأمين يكون **"❌ مرفوض ديموغرافيًا"**.
-- **قاعدة التفريق بين الدواء والإجراء:** إذا كُتب بجانب بند "od", "bid", "tid" أو "x90", "x30"، فهذا دليل قاطع على أنه **دواء**.
+- **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**. يجب أن يكون القرار **"❌ مرفوض ديموغرافيًا (دواء للرجال فقط)"**.
 - **قاعدة الاستنتاج الصيدلاني:**
-  - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam** (Perindopril/Indapamide/Amlodipine).
+  - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam**.
   - **Form XR:** استنتج أنه **Metformin XR**.
-  - **Adol:** حدد المادة الفعالة (Paracetamol) وصنفه كـ 'مسكن'، مع التذكير بالجرعة القصوى (≤3 غم/يوم لكبار السن).
-  - **Jontice:** استنتج أنه مكمل غذائي مثل **Jointace**، وأشر إلى أنه غالبًا غير مغطى تأمينيًا.
 - **قاعدة كبار السن (Geriatrics):** لأي مريض عمره > 65 عامًا، قم بالتحقق الإجباري من:
-  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron)، يجب إصدار تحذير قوي والتوصية بتفضيل بدائل أكثر أمانًا حسب إرشادات ADA.
-  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط (بما في ذلك Tamsulosin في Duodart و Amlodipine)، يجب إصدار تحذير قوي من خطر **هبوط الضغط الانتصابي** والتوصية بمراقبة الضغط في وضعيات مختلفة.
+  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron)، يجب إصدار تحذير قوي.
+  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط، يجب إصدار تحذير قوي من خطر **هبوط الضغط الانتصابي**.
 - **قاعدة أمان الأدوية المحددة:**
   - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**، وعدم البدء به إذا كان eGFR 30–45 إلا بحذر شديد".
-  - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**. يجب أن يكون قرار التأمين لكلا الدوائين **"❌ مرفوض (تعارض ACEI+ARB)"**.
-  - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam). إذا وجدتها، أشر إلى هذا التكرار وقرار التأمين للدواء المفرد يكون **"❌ مرفوض (ازدواجية علاجية)"**.
+  - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
+  - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
 - **قاعدة منطق الكمية والتأمين (إلزامية):**
-  - **للأدوية:** دقق في مدة الصرف. إذا كانت المدة طويلة (90 يومًا) لدواء جديد أو يتطلب مراقبة، يجب اعتبار هذا سببًا لجعل القرار **"⚠️ قابل للمراجعة"**.
   - **للمستلزمات (Strips/Lancets):** صنفها كـ **"مستلزمات قياس سكر الدم"**. إذا كانت الكمية كبيرة (مثال: TID x90)، أشر إلى أن "هذه الكمية قد تتجاوز حدود التغطية وتتطلب تبريرًا طبيًا".
 
-[توصيات المتابعة والفحوصات (مدعومة بالأدلة) - قسم إلزامي]
-- اربط كل دواء عالي الخطورة بالتحليل اللازم له مع ذكر السبب والمصدر.
-  - **Statins (Rozavi):** أوصِ بفحص **ALT/AST عند البداية وعند ظهور الأعراض فقط**.
+[توصيات سريرية وتشغيلية لرفع الكفاءة (مدعومة بالأدلة) - قسم إلزامي]
+- بناءً على تحليل الحالة، قدم توصيات قابلة للقياس ضمن المحاور الثلاثة التالية لرفع دخل العيادة بشكل أخلاقي:
+  1.  **تقليل الهدر:**
+      - **خفض الرفضات التأمينية (Denials):** شدّد على أهمية التوثيق الطبي المتكامل والمتوافق مع ICD-10/E/M، وإجراء "claim scrubbing" قبل الإرسال. (المصدر: MGMA, CMS).
+      - **تقليل غياب المرضى (No-shows):** أوصِ بتفعيل رسائل تذكير نصية تلقائية لتحسين الحضور. (المصدر: PubMed).
+  2.  **رفع الإنتاجية:**
+      - **تحسين الوصول والجدولة:** اقترح اعتماد نظام "Advanced/Open Access" لتقديم مواعيد في نفس اليوم أو اليوم التالي لتقليل قوائم الانتظار ونسب الغياب. (المصدر: AHRQ).
+      - **مصالحة الأدوية (Medication Reconciliation):** أكد على أن هذه العملية تقلل الأخطاء الدوائية، مما يوفر التكاليف ويتجنب الزيارات غير الضرورية. (المصدر: AHRQ, PMC).
+  3.  **إضافة خدمات مغطاة:**
+      - **برامج الأمراض المزمنة:** إذا كان المريض يعاني من مرض مزمن (مثل السكري)، اقترح تفعيل برامج ممولة مثل DSMES (Diabetes Self-Management Education and Support)، والتي تحسن نتائج المرضى وغالبًا ما تكون مغطاة تأمينيًا. (المصدر: CDC).
+      - **استخدام الدعم الإكلينيكي داخل النظام (CDS):** أوصِ باستخدام مجموعات الأوامر (Order sets) لرفع التزام الأطباء بالإرشادات وتقليل الطلبات غير الضرورية التي قد تُرفض لـ "عدم الضرورة الطبية". (المصدر: American College of Physicians).
 
 [التنسيق البصري (Visual Formatting) - إلزامي]
 - قم بتضمين كتلة <style> التالية في بداية تقرير الـ HTML.
@@ -93,8 +98,7 @@ const systemInstruction = `
 <table><thead><tr>
 <th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
 </tr></thead><tbody></tbody></table>
-<h4>توصيات المتابعة والفحوصات (مدعومة بالأدلة)</h4><ul></ul>
-<h4>لآلئ سريرية (Clinical Pearls)</h4><ul></ul>
+<h4>توصيات سريرية وتشغيلية لرفع الكفاءة (مدعومة بالأدلة)</h4><ul></ul>
 <h4>خطة العمل</h4><ol></ol>
 <p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
 `;
@@ -227,7 +231,7 @@ export default async function handler(req,res){
     // 1) Optional OCR (Parallel)
     let ocrBlocks = [];
     if (openaiKey && (analysisMode === "ocr+gemini" || analysisMode === "ensemble") && files.length){
-      try { ocrBlocks = await ocrWithOpenAI(openaiKey, files); }
+      try { ocrBlocks = await ocrWithOpenAI(apiKey, files); }
       catch(e){ console.warn("OCR skipped:", e.message); }
     }
     const ocrJoined = ocrBlocks.length ? ocrBlocks.map(b=>`### ${b.filename}\n${b.text}`).join("\n\n") : "";
@@ -277,7 +281,7 @@ export default async function handler(req,res){
     // 4) If ensemble → get OpenAI analysis JSON and add it to allParts
     let ensembleJson = null;
     if (openaiKey && analysisMode === "ensemble"){
-        try { ensembleJson = await analyzeWithOpenAI(openaiKey, body, ocrJoined); }
+        try { ensembleJson = await analyzeWithOpenAI(apiKey, body, ocrJoined); }
         catch(e){ console.warn("Ensemble OpenAI analysis failed:", e.message); }
         if (ensembleJson){
             allParts.push({ text: `[تحليل أولي من نموذج مساعد]\n${JSON.stringify(ensembleJson)}` });
