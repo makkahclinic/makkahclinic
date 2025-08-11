@@ -54,21 +54,21 @@
 
     <div class="portal-grid">
       <!-- بوابة الطبيب -->
-      <a href="insurance-check.html" class="portal-card doctor" id="doctor-portal-link" style="display: none;">
+      <a href="insurance-check.html" class="portal-card doctor" id="doctor-portal-link">
         <img src="https://img.icons8.com/ios-filled/100/0a4c8b/stethoscope.png" alt="Doctor Icon"/>
         <h2 data-lang-key="doctorPortalTitle">بوابة الطبيب</h2>
         <p data-lang-key="doctorPortalDesc">تحليل عميق للمطالبات الطبية، تقليل الرفض التأميني، وزيادة الإيرادات بشكل مبرر طبياً وعلمياً. الأداة المثلى لكل طبيب.</p>
       </a>
 
       <!-- بوابة المريض -->
-      <a href="patient.html" class="portal-card patient" id="patient-portal-link" style="display: none;">
+      <a href="patient.html" class="portal-card patient" id="patient-portal-link">
         <img src="https://img.icons8.com/ios-filled/100/28a745/like--v1.png" alt="Patient Icon"/>
         <h2 data-lang-key="patientPortalTitle">بوابة المريض</h2>
         <p data-lang-key="patientPortalDesc">أدخل الأعراض التي تشعر بها لتحصل فوراً على نصائح طبية أولية معتمدة علمياً، وإرشادات واضحة لتحديد الوقت الأمثل لزيارة الطبيب.</p>
       </a>
 
       <!-- بوابة الصيدلي -->
-      <a href="pharmacy.html" class="portal-card pharmacist" id="pharmacist-portal-link" style="display: none;">
+      <a href="pharmacy.html" class="portal-card pharmacist" id="pharmacist-portal-link">
         <img src="https://img.icons8.com/ios-filled/100/ffc107/pill.png" alt="Pharmacist Icon"/>
         <h2 data-lang-key="pharmacistPortalTitle">بوابة الصيدلي</h2>
         <p data-lang-key="pharmacistPortalDesc">تحقق من التفاعلات الدوائية المحتملة بناءً على حالة المريض (العمر، الحمل، الرضاعة) لضمان صرف آمن وفعال للأدوية.</p>
@@ -104,44 +104,58 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // ==== START: Developer Override ====
-    // Add your developer email here.
+    // =================================================================
+    // ==== مفتاح الوضع التجريبي ====
+    // true  = الفترة التجريبية (الكل يرى كل شيء).
+    // false = الوضع الرسمي (كل مستخدم يرى بوابته فقط).
+    const isTrialPeriod = true; 
+    // =================================================================
+
     const developerEmail = "husseinbabsail@gmail.com";
-    // ==== END: Developer Override ====
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
         const el = document.getElementById("user-email");
         if (el) el.textContent = user.email;
 
-        // ==== START: Developer Check ====
-        if (user.email === developerEmail) {
-          // If user is the developer, show all portals
-          document.getElementById('doctor-portal-link').style.display = 'block';
-          document.getElementById('patient-portal-link').style.display = 'block';
-          document.getElementById('pharmacist-portal-link').style.display = 'block';
-          console.log("Developer access granted. Showing all portals.");
-          return; // Stop further checks
-        }
-        // ==== END: Developer Check ====
+        if (isTrialPeriod) {
+            // -- الوضع التجريبي مفعل --
+            // أظهر كل البوابات للجميع
+            document.getElementById('doctor-portal-link').style.display = 'block';
+            document.getElementById('patient-portal-link').style.display = 'block';
+            document.getElementById('pharmacist-portal-link').style.display = 'block';
+            console.log("Trial Period is ON. Showing all portals.");
 
-        user.getIdToken(true).then(() => getIdTokenResult(user))
-        .then((idTokenResult) => {
-            const claims = idTokenResult.claims;
-            
-            if (claims.role === 'doctor') {
-                document.getElementById('doctor-portal-link').style.display = 'block';
-                listenForCredits(user.uid, 'doctor_profiles');
-            } else if (claims.role === 'patient') {
-                document.getElementById('patient-portal-link').style.display = 'block';
-            } else if (claims.role === 'pharmacist') {
-                document.getElementById('pharmacist-portal-link').style.display = 'block';
-            } else {
-                console.log("User role not found.");
+        } else {
+            // -- الوضع الرسمي الآمن مفعل --
+            if (user.email === developerEmail) {
+              // إذا كان المستخدم هو المطور، أظهر له كل شيء
+              document.getElementById('doctor-portal-link').style.display = 'block';
+              document.getElementById('patient-portal-link').style.display = 'block';
+              document.getElementById('pharmacist-portal-link').style.display = 'block';
+              console.log("Developer access granted. Showing all portals.");
+              return; 
             }
-        }).catch((error) => {
-            console.log("Error getting token claims:", error);
-        });
+            
+            // لباقي المستخدمين، تحقق من دورهم
+            user.getIdToken(true).then(() => getIdTokenResult(user))
+            .then((idTokenResult) => {
+                const claims = idTokenResult.claims;
+                
+                if (claims.role === 'doctor') {
+                    document.getElementById('doctor-portal-link').style.display = 'block';
+                    listenForCredits(user.uid, 'doctor_profiles');
+                } else if (claims.role === 'patient') {
+                    document.getElementById('patient-portal-link').style.display = 'block';
+                } else if (claims.role === 'pharmacist') {
+                    document.getElementById('pharmacist-portal-link').style.display = 'block';
+                } else {
+                    console.log("User role not found.");
+                }
+            }).catch((error) => {
+                console.log("Error getting token claims:", error);
+            });
+        }
 
       } else {
         window.location.href = "http://www.m2020m.org/login.html";
