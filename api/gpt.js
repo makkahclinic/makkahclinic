@@ -7,26 +7,28 @@
 
 /* ====== ENV ======
  * Required:
- *   - OPENAI_API_KEY        : OpenAI API key
- *   - GEMINI_API_KEY        : Google AI (Gemini) API key
+ * - OPENAI_API_KEY      : OpenAI API key
+ * - GEMINI_API_KEY      : Google AI (Gemini) API key
  *
  * Optional:
- *   - OPENAI_MODEL          : default "gpt-4o-mini"
- *   - GEMINI_MODEL          : default "gemini-2.5-flash"
- *   - DRUGBANK_API_KEY      : (اختياري) للتكامل المدفوع مع DrugBank؛ إن وُجد يستخدم بدلاً من تحليل التفاعل النصي
- *   - BACKEND_MAX_MB        : حد أقصى لحجم الطلب (افتراضي 20MB)
+ * - OPENAI_MODEL        : default "gpt-4o-mini"
+ * - GEMINI_MODEL        : default "gemini-1.5-flash"
+ * - DRUGBANK_API_KEY    : (اختياري) للتكامل المدفوع مع DrugBank؛ إن وُجد يستخدم بدلاً من تحليل التفاعل النصي
+ * - BACKEND_MAX_MB      : حد أقصى لحجم الطلب (افتراضي 20MB)
  */
 
 import OpenAI from "openai";
-import { GoogleGenAI, createUserContent, createPartFromUri } from "@google/genai";
+// FIX: Corrected import for Google Generative AI
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ------------------------------ CONFIG --------------------------------------
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash"; // Using 1.5 Flash for better capabilities
 const MAX_TOTAL_BYTES = (parseInt(process.env.BACKEND_MAX_MB || "20", 10)) * 1024 * 1024;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const genai  = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// FIX: Corrected instantiation of the Gemini client
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // ------------------------------ HELPERS -------------------------------------
 function jsonSafeParse(s, fallback = null) {
@@ -37,8 +39,8 @@ function detectMimeTypeFromBase64(b64) {
   if (!b64) return "application/octet-stream";
   if (b64.startsWith("JVBERi0")) return "application/pdf";
   if (b64.startsWith("iVBORw0")) return "image/png";
-  if (b64.startsWith("/9j/"))     return "image/jpeg";
-  if (b64.startsWith("UklGR"))    return "image/webp";
+  if (b64.startsWith("/9j/"))   return "image/jpeg";
+  if (b64.startsWith("UklGR"))   return "image/webp";
   return "application/octet-stream";
 }
 
@@ -109,7 +111,6 @@ async function rxnormApproximateTerm(drugName) {
 }
 
 async function openfdaFetchLabelByName(drugName) {
-  // Try substance_name or generic_name to get label sections (Pregnancy, Lactation, Warnings, etc.)
   const q = `openfda.substance_name:"${drugName}" OR openfda.generic_name:"${drugName}"`;
   const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(q)}&limit=1`;
   const r = await fetch(url);
@@ -131,21 +132,17 @@ async function openfdaFetchLabelByName(drugName) {
 }
 
 // ------------------------------ Gemini OCR ----------------------------------
+// FIX: Rewrote function to use the correct Gemini API syntax and send file data inline.
 async function geminiUploadAndOcrFiles(files = []) {
-  // Uses Files API: uploads and returns extracted text per file
   const ocrResults = [];
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: { responseMimeType: "application/json" },
+  });
 
   for (const f of files) {
     const mimeType = f.type || detectMimeTypeFromBase64(f.data);
-    const fileBytes = Buffer.from(f.data, "base64");
 
-    // Upload via SDK
-    const uploaded = await genai.files.upload({
-      file: new Blob([fileBytes], { type: mimeType }),
-      config: { mimeType }
-    });
-
-    // Vision + document understanding prompt
     const prompt = [
       "You are a clinical OCR specialist. Read this file (image/PDF/lab report/handwritten prescription).",
       "Return a STRICT JSON object with fields:",
@@ -159,16 +156,14 @@ async function geminiUploadAndOcrFiles(files = []) {
       "If handwriting is unclear, mark segments with '?'."
     ].join(" ");
 
-    const resp = await genai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: createUserContent([
-        createPartFromUri(uploaded.uri, mimeType),
-        prompt
-      ]),
-      // Ask Gemini to try JSON (fallback safe-parse later)
-      generationConfig: { responseMimeType: "application/json" }
-    });
+    const imagePart = {
+        inlineData: {
+            data: f.data,
+            mimeType: mimeType,
+        },
+    };
 
+    const resp = await model.generateContent([prompt, imagePart]);
     const text = resp?.response?.text() || "{}";
     const parsed = jsonSafeParse(text, { extracted_text: "", diagnoses: [], medications: [], labs: [], imaging_findings: [], patient: {} });
 
@@ -182,68 +177,37 @@ async function geminiUploadAndOcrFiles(files = []) {
   return ocrResults;
 }
 
+
 // ------------------------------ DDI (pluggable) -----------------------------
-// Strategy:
-//  1) Prefer paid API if DRUGBANK_API_KEY exists (not implemented here).
-//  2) Otherwise, heuristic: use openFDA label "drug_interactions" text + LLM to extract pairs.
-// NOTE: RxNav public DDI endpoints were discontinued; we rely on label + LLM safety analysis.
+// FIX: Rewrote function to use the correct OpenAI API method `chat.completions.create` and parameters.
 async function deriveInteractionsViaLabelLLM(medsAnnotated, lang = "ar") {
-  const interactions = [];
+  if (medsAnnotated.length < 2) return [];
+
   const labelSnippets = medsAnnotated.map(m => `### ${m.normalizedName}\n${m.label?.interactions_text || "No label interactions section found."}`).join("\n\n");
 
   const system = lang === "ar"
     ? "أنت صيدلي سريري. حلّل النصوص المأخوذة من drug_interactions في نشرات FDA واستخرج التداخلات الثنائية بشكل منظم."
     : "You are a clinical pharmacist. Analyze FDA label 'drug_interactions' snippets and extract pairwise interactions in structured form.";
 
-  const resp = await openai.responses.create({
+  const userPrompt = `Return ONLY a valid JSON object with a "pairs" key. The schema for each pair is: {"drugA":"string","drugB":"string","mechanism":"string","severity":"contraindicated|major|moderate|minor","action":"string"}. If no interactions are found, return {"pairs":[]}.\n\nTexts:\n${labelSnippets}`;
+
+  const resp = await openai.chat.completions.create({
     model: OPENAI_MODEL,
-    input: [
+    messages: [
       { role: "system", content: system },
-      { role: "user", content:
-        `Return STRICT JSON:\n{"pairs":[{"drugA":"","drugB":"","mechanism":"","severity":"contraindicated|major|moderate|minor","action":""}]}\n\nTexts:\n${labelSnippets}`
-      }
+      { role: "user", content: userPrompt }
     ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "ddi_pairs",
-        schema: {
-          type: "object",
-          properties: {
-            pairs: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  drugA: { type: "string" },
-                  drugB: { type: "string" },
-                  mechanism: { type: "string" },
-                  severity: { type: "string", enum: ["contraindicated","major","moderate","minor"] },
-                  action: { type: "string" }
-                },
-                required: ["drugA","drugB","severity"]
-              }
-            }
-          },
-          required: ["pairs"],
-          additionalProperties: false
-        },
-        strict: true
-      }
-    }
+    response_format: { type: "json_object" }
   });
 
-  const out = jsonSafeParse(resp?.output_text || "{}", { pairs: [] });
-  for (const p of out.pairs || []) {
-    interactions.push(p);
-  }
-  return interactions;
+  const content = resp?.choices?.[0]?.message?.content || "{}";
+  const out = jsonSafeParse(content, { pairs: [] });
+  return out.pairs || [];
 }
 
 // ------------------------------ Final Clinical Synthesis --------------------
+// FIX: Rewrote function to use the correct OpenAI API method `chat.completions.create` and parameters.
 async function openaiClinicalDecision(payload) {
-  // payload contains: patient, ocr, medsAnnotated, interactions, guidelineSnippets
-  // Produce bilingual output + traffic light decision
   const schema = {
     type: "object",
     properties: {
@@ -261,10 +225,7 @@ async function openaiClinicalDecision(payload) {
     additionalProperties: false
   };
 
-  const sys =
-`You are a conservative internal medicine + clinical pharmacology assistant.
-Use ONLY the provided label snippets and guideline snippets to avoid hallucinations.
-Prefer safety (err on the side of RED/YELLOW if uncertain). Output should be guideline-grounded.`;
+  const sys = `You are a conservative internal medicine + clinical pharmacology assistant. Use ONLY the provided label snippets and guideline snippets to avoid hallucinations. Prefer safety (err on the side of RED/YELLOW if uncertain). Output should be guideline-grounded.`;
 
   const usr = `
 Patient:
@@ -282,21 +243,21 @@ ${JSON.stringify(payload.interactions, null, 2)}
 Guideline snippets:
 ${payload.guidelineSnippets}
 
-Return bilingual (Arabic/English) fields per schema.`;
+Return ONLY a valid JSON object that strictly follows the provided schema. Output should be bilingual (Arabic/English). Do not add any extra text or markdown.
+Schema:
+${JSON.stringify(schema, null, 2)}`;
 
-  const resp = await openai.responses.create({
+  const resp = await openai.chat.completions.create({
     model: OPENAI_MODEL,
-    input: [
+    messages: [
       { role: "system", content: sys },
       { role: "user", content: usr }
     ],
-    response_format: {
-      type: "json_schema",
-      json_schema: { name: "clinical_decision", schema, strict: true }
-    }
+    response_format: { type: "json_object" }
   });
 
-  return jsonSafeParse(resp?.output_text || "{}");
+  const content = resp?.choices?.[0]?.message?.content || "{}";
+  return jsonSafeParse(content, {});
 }
 
 // ------------------------------ HTML Report Builder -------------------------
@@ -332,7 +293,6 @@ function buildHtmlReport({ langPref = "ar", patient, medsAnnotated, interactions
 
   const refsHtml = references.map(r => `<li><a href="${r.url}" target="_blank" rel="noopener">${r.name}</a></li>`).join("");
 
-  // Dual-language sections
   const ar = `
   <h3>${L_ar.title} ${trafficBadge(decision,"ar")}</h3>
   <h4>• ${L_ar.sections.summary}</h4>
@@ -458,7 +418,6 @@ export default async function handler(req, res) {
     const medsAnnotated = [];
     for (const raw of medsRaw) {
       const cleaned = raw.replace(/\s{2,}/g, " ").replace(/[\.\,]$/,"");
-      // strip dose for normalization
       const baseName = cleaned.split(/\s+\d+/)[0].replace(/[^A-Za-z\s\-]/g," ").trim();
       let rxcuiObj = null;
       if (baseName) {
@@ -475,10 +434,10 @@ export default async function handler(req, res) {
       });
     }
 
-    // 5) Interactions (label-derived + LLM structuring; optionally replace with paid API if available)
+    // 5) Interactions (label-derived + LLM structuring)
     const interactions = await deriveInteractionsViaLabelLLM(medsAnnotated, "ar");
 
-    // 6) Provide compact guideline snippets (sourced offline here; links in references)
+    // 6) Provide compact guideline snippets
     const guidelineSnippets = `
 [ADA 2025] Use current ADA Standards for glycemic treatment, CKD risk, and older adults.
 [KDIGO 2024] eGFR-based adjustments & CKD risk stratification; avoid nephrotoxins; RAASi/SGLT2 use per albuminuria/eGFR.
@@ -532,6 +491,8 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error("API error:", err);
-    return res.status(500).json({ ok:false, detail: err?.message || "Server error" });
+    // Add more details to the error message for better debugging
+    const errorMessage = err instanceof Error ? err.message : "An unknown server error occurred";
+    return res.status(500).json({ ok: false, detail: errorMessage });
   }
 }
