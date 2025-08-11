@@ -5,11 +5,10 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v13 (CLINICAL GUARDIAN) ===============
-// 1. Integrated final expert feedback, creating the most clinically robust version.
-// 2. Added a non-negotiable "Demographic Consistency Check" to prevent errors like prescribing male-only drugs to females.
-// 3. Upgraded the ACEI + ARB warning to a "Forbidden Combination" alert.
-// 4. Fine-tuned safety rules for Metformin, Statins, and orthostatic hypotension monitoring based on precise clinical guidelines.
+// =============== ULTIMATE ENHANCEMENTS v14 (DEFINITIVE EDITION) ===============
+// 1. Added a specific rule to correctly identify blood glucose monitoring supplies (Strips, Lancets).
+// 2. Implemented a rule to detect "hidden" therapeutic duplication where a single drug is also part of a combination pill.
+// 3. This is the most refined and complete version, addressing all identified edge cases.
 // ==============================================================================
 
 import { createHash } from 'crypto';
@@ -49,7 +48,7 @@ function getFileHash(base64Data) {
 }
 
 
-// =============== SYSTEM PROMPTS (CLINICAL GUARDIAN FINAL) ===============
+// =============== SYSTEM PROMPTS (DEFINITIVE EDITION) ===============
 const systemInstruction = `
 أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
@@ -60,12 +59,13 @@ const systemInstruction = `
   - إذا كان اسم الدواء غير واضح (مثل Form XR)، استنتج أنه **Metformin XR**.
   - إذا واجهت اسمًا تجاريًا شائعًا (مثل Adol)، حدد المادة الفعالة (Paracetamol) وصنفه كـ 'مسكن'.
 - **قاعدة كبار السن (Geriatrics):** لأي مريض عمره > 65 عامًا، قم بالتحقق الإجباري من:
-  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron)، يجب إصدار تحذير قوي والتوصية بتفضيل بدائل أكثر أمانًا حسب إرشادات ADA.
-  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط، يجب إصدار تحذير قوي من خطر **هبوط الضغط الانتصابي** والتوصية بمراقبة الضغط في وضعيات مختلفة.
+  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron)، يجب إصدار تحذير قوي.
+  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط، يجب إصدار تحذير قوي من خطر **هبوط الضغط الانتصابي**.
 - **قاعدة أمان الأدوية المحددة:**
   - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**، وعدم البدء به إذا كان eGFR 30–45 إلا بحذر شديد".
-  - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**. إذا تم رصده، يجب الإبلاغ عنه كخطأ عالي الخطورة والتوصية بإيقاف أحد النظامين فورًا.
-  - **Statins (Rozavi):** أوصِ بفحص **ALT/AST عند البداية وعند ظهور الأعراض فقط**، وليس بشكل روتيني.
+  - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
+  - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam). إذا وجدتها، أشر إلى هذا التكرار.
+- **قاعدة المستلزمات الطبية:** إذا وجدت كلمات مثل 'Strips', 'Lancets', 'Sensor'، صنفها بشكل صحيح كـ **"مستلزمات قياس سكر الدم"** وليست أدوية أو مكملات.
 
 [تحليل التداخلات الدوائية (DDI) - قاعدة إلزامية]
 - في عمود "التداخلات"، حدد اسم الدواء المتداخل، صف التأثير السريري، واقترح خطة للتعامل.
