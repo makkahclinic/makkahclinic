@@ -182,15 +182,20 @@ export default async function handler(req,res){
     const ocrJoined = ocrBlocks.length ? ocrBlocks.map(b=>`### ${b.filename}\n${b.text}`).join("\n\n") : "";
 
     // 2) Upload ALL files to Gemini
-    const fileUris = [];
-    for(const f of files){
-      try{
-        const type = f.type || detectMimeFromB64(f.data||"");
-        const uri = await geminiUpload(geminiKey, f.data, type);
-        fileUris.push({ name: f.name || "file", type, uri });
-      }catch(e){ console.warn("Upload fail:", e.message); }
-    }
+const uploadPromises = files.map(f => {
+    const type = f.type || detectMimeFromB64(f.data || "");
+    return geminiUpload(geminiKey, f.data, type)
+        .then(uri => ({ name: f.name || "file", type, uri, status: 'success' }))
+        .catch(e => {
+            console.warn(`Upload fail for ${f.name}:`, e.message);
+            return { name: f.name || "file", status: 'error', reason: e.message };
+        });
+});
 
+const uploadResults = await Promise.all(uploadPromises);
+const fileUris = uploadResults.filter(r => r.status === 'success');
+// يمكنك استخدام هذا المتغير لإعلام المستخدم بالملفات التي فشل رفعها
+const uploadErrors = uploadResults.filter(r => r.status === 'error');
     // 3) Build common parts for Gemini
     const parts = [{ text: systemInstruction }, { text: buildUserPrompt(body) }];
     if (ocrJoined) parts.push({ text: `نصوص OCR المستخرجة:\n\n${ocrJoined}` });
