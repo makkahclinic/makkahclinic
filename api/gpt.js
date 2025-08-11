@@ -182,7 +182,11 @@ export default async function handler(req,res){
 
     const body = req.body || {};
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
-    const analysisMode = (body.analysisMode || "gemini-only").toLowerCase();
+    
+    // ================== التعديل هنا ==================
+    // تم تغيير الوضع الافتراضي ليستخدم قراءة النصوص (OCR) دائماً
+    const analysisMode = (body.analysisMode || "ocr+gemini").toLowerCase();
+    // ===============================================
 
     // 1) Optional OCR (Parallel)
     let ocrBlocks = [];
