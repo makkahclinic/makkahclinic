@@ -33,7 +33,6 @@ function detectMimeFromB64(b64=""){ const h=(b64||"").slice(0,16);
 }
 
 // =============== SYSTEM PROMPTS ===============
-// تم تحسين التعليمات لتوجيه النموذج للقراءة أولاً
 const systemInstruction = `
 أنت استشاري "تدقيق طبي ومطالبات تأمينية". أخرج كتلة HTML واحدة فقط (بدون CSS).
 
@@ -113,7 +112,7 @@ async function ocrWithOpenAI(apiKey, files){
     });
 
     const results = await Promise.all(ocrPromises);
-    return results.filter(Boolean); // لإزالة أي نتائج فاشلة (null)
+    return results.filter(Boolean);
 }
 
 async function analyzeWithOpenAI(apiKey, caseData, ocrTextJoined){
@@ -171,7 +170,11 @@ async function geminiAnalyze(apiKey, userParts, systemInstructionText){
 
 // =============== API Handler ===============
 export default async function handler(req,res){
-  res.setHeader("Access-Control-Allow-Origin","*"); // For development. Change to your domain in production.
+  // ================== سطر التصحيح هنا ==================
+  console.log("Request body received:", JSON.stringify(req.body).slice(0, 500) + "...");
+  // ====================================================
+
+  res.setHeader("Access-Control-Allow-Origin","*");
   res.setHeader("Access-Control-Allow-Methods","POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization");
   if(req.method==="OPTIONS") return res.status(200).end();
@@ -185,10 +188,7 @@ export default async function handler(req,res){
     const body = req.body || {};
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
     
-    // ================== التعديل هنا ==================
-    // تم إرجاع الوضع الافتراضي إلى الاعتماد على Gemini فقط
     const analysisMode = (body.analysisMode || "gemini-only").toLowerCase();
-    // ===============================================
 
     // 1) Optional OCR (Parallel)
     let ocrBlocks = [];
