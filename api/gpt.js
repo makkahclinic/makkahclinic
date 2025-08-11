@@ -38,7 +38,7 @@ const systemInstruction = `
 
 [منهجية]
 - اربط الأعراض بالأسباب (Differential) مع تبرير سريري.
-- راقب أمان الأدوية (eGFR/K/Cr/INR/UA…)، ازدواجية، XR/MR، كبار السن.
+- راقب أمان الأدوية (eGFR/K/Cr/INR/UA…), ازدواجية, XR/MR, كبار السن.
 - طبّق الإرشادات (اذكر المرجع والرابط في قسم الأدلة).
 - بيّن فجوات البيانات وما يلزم لسدها.
 [الجدول]
@@ -78,7 +78,7 @@ function buildUserPrompt(d={}){return `
 // =============== OpenAI OCR + Analysis (optional) ===============
 async function ocrWithOpenAI(apiKey, files){
     const IMG = new Set(["image/jpeg","image/png","image/webp"]);
-    const eligibleFiles = files.filter(f => IMG.has(f.type));
+    const eligibleFiles = files.filter(f => IMG.has(f.type || detectMimeFromB64(f.data)));
 
     const ocrPromises = eligibleFiles.map(async (f) => {
         try {
@@ -91,7 +91,7 @@ async function ocrWithOpenAI(apiKey, files){
                         role: "user",
                         content: [
                             { type: "text", text: "استخرج نصاً منظماً من هذه الصورة (عربي/إنجليزي). إن كان تقرير مختبر/وصفة فحوّل الجداول إلى عناصر {test,value,unit,ref_low,ref_high} حيثما أمكن، بدون تفسير." },
-                            { type: "image_url", image_url: { url: `data:${f.type};base64,${f.data}` } }
+                            { type: "image_url", image_url: { url: `data:${f.type || detectMimeFromB64(f.data)};base64,${f.data}` } }
                         ]
                     }],
                     temperature: 0.1, max_tokens: 2000
@@ -148,12 +148,11 @@ async function geminiUpload(apiKey, base64, mime){
   const j = await r.json();
   return j?.file?.uri;
 }
+
 async function geminiAnalyze(apiKey, userParts, systemInstructionText){
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
     const payload = {
-        // هنا نرسل بيانات المستخدم فقط
         contents: [{ role:"user", parts: userParts }],
-        // وهنا نضيف الحقل المخصص لتعليمات النظام
         system_instruction: {
             parts: [{ text: systemInstructionText }]
         },
@@ -167,9 +166,10 @@ async function geminiAnalyze(apiKey, userParts, systemInstructionText){
         return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```html|```/g,"").trim();
     } catch { return raw; }
 }
+
 // =============== API Handler ===============
 export default async function handler(req,res){
-  res.setHeader("Access-Control-Allow-Origin","*");
+  res.setHeader("Access-Control-Allow-Origin","*"); // For development. Change to your domain in production.
   res.setHeader("Access-Control-Allow-Methods","POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization");
   if(req.method==="OPTIONS") return res.status(200).end();
@@ -184,7 +184,7 @@ export default async function handler(req,res){
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
     const analysisMode = (body.analysisMode || "gemini-only").toLowerCase();
 
-    // 1) Optional OCR
+    // 1) Optional OCR (Parallel)
     let ocrBlocks = [];
     if (openaiKey && (analysisMode === "ocr+gemini" || analysisMode === "ensemble") && files.length){
       try { ocrBlocks = await ocrWithOpenAI(openaiKey, files); }
@@ -192,41 +192,50 @@ export default async function handler(req,res){
     }
     const ocrJoined = ocrBlocks.length ? ocrBlocks.map(b=>`### ${b.filename}\n${b.text}`).join("\n\n") : "";
 
-    // 2) Upload ALL files to Gemini
-const uploadPromises = files.map(f => {
-    const type = f.type || detectMimeFromB64(f.data || "");
-    return geminiUpload(geminiKey, f.data, type)
-        .then(uri => ({ name: f.name || "file", type, uri, status: 'success' }))
-        .catch(e => {
-            console.warn(`Upload fail for ${f.name}:`, e.message);
-            return { name: f.name || "file", status: 'error', reason: e.message };
-        });
-});
+    // 2) Upload ALL files to Gemini (Parallel)
+    const uploadPromises = files.map(f => {
+        const type = f.type || detectMimeFromB64(f.data || "");
+        return geminiUpload(geminiKey, f.data, type)
+            .then(uri => ({ name: f.name || "file", type, uri, status: 'success' }))
+            .catch(e => {
+                console.warn(`Upload fail for ${f.name}:`, e.message);
+                return { name: f.name || "file", status: 'error', reason: e.message };
+            });
+    });
 
-const uploadResults = await Promise.all(uploadPromises);
-const fileUris = uploadResults.filter(r => r.status === 'success');
-// يمكنك استخدام هذا المتغير لإعلام المستخدم بالملفات التي فشل رفعها
-const uploadErrors = uploadResults.filter(r => r.status === 'error');
-    // 3) Build common parts for Gemini
-    const parts = [{ text: systemInstruction }, { text: buildUserPrompt(body) }];
-    if (ocrJoined) parts.push({ text: `نصوص OCR المستخرجة:\n\n${ocrJoined}` });
-    fileUris.forEach(u => parts.push({ file_data: { mime_type: u.type, file_uri: u.uri } }));
+    const uploadResults = await Promise.all(uploadPromises);
+    const fileUris = uploadResults.filter(r => r.status === 'success');
+    const uploadErrors = uploadResults.filter(r => r.status === 'error');
+
+    // 3) Build user-facing parts for Gemini
+    const userParts = [{ text: buildUserPrompt(body) }];
+    if (ocrJoined) userParts.push({ text: `نصوص OCR المستخرجة:\n\n${ocrJoined}` });
+    fileUris.forEach(u => userParts.push({ file_data: { mime_type: u.type, file_uri: u.uri } }));
 
     // 4) If ensemble → get OpenAI analysis JSON too
     let ensembleJson = null;
     if (openaiKey && analysisMode === "ensemble"){
-      try { ensembleJson = await analyzeWithOpenAI(openaiKey, body, ocrJoined); }
-      catch(e){ console.warn("Ensemble OpenAI analysis failed:", e.message); }
-      if (ensembleJson){
-        parts.push({ text: `تحليل موازٍ (OpenAI) بصيغة JSON — للإستئناس والدمج:\n${JSON.stringify(ensembleJson)}` });
-      }
+        try { ensembleJson = await analyzeWithOpenAI(openaiKey, body, ocrJoined); }
+        catch(e){ console.warn("Ensemble OpenAI analysis failed:", e.message); }
+        if (ensembleJson){
+            userParts.push({ text: `تحليل موازٍ (OpenAI) بصيغة JSON — للإستئناس والدمج:\n${JSON.stringify(ensembleJson)}` });
+        }
     }
 
     // 5) Final Gemini analysis → HTML
-    const html = await geminiAnalyze(geminiKey, parts);
-    return res.status(200).json({ htmlReport: html, ocrUsed: !!ocrBlocks.length, ensembleUsed: !!ensembleJson });
+    const html = await geminiAnalyze(geminiKey, userParts, systemInstruction);
+    
+    // 6) Final JSON Response
+    const responsePayload = {
+        htmlReport: html,
+        ocrUsed: !!ocrBlocks.length,
+        ensembleUsed: !!ensembleJson,
+        uploadErrors: uploadErrors.length > 0 ? uploadErrors : undefined
+    };
 
-  }catch(err){
+    return res.status(200).json(responsePayload);
+
+  } catch(err){
     console.error("Server error:", err);
     return res.status(500).json({ error:"Internal server error", detail: err.message });
   }
