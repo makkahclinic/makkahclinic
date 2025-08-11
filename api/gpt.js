@@ -5,13 +5,24 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
+// =============== CREATIVE ENHANCEMENTS v5 ===============
+// 1. Added "Confidence Score" to the table for handwritten OCR.
+// 2. Added a new "Clinical Pearls" section for high-value insights.
+// 3. Implemented a file cache to avoid re-uploading the same file, saving time and cost.
+// 4. Enhanced prompt engineering for higher clinical accuracy.
+// ==========================================================
+
+import { createHash } from 'crypto';
+
 // =============== CONFIG ===============
 const GEMINI_MODEL = "gemini-1.5-pro-latest";
 const DEFAULT_TIMEOUT_MS = 180_000;
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const MAX_FILES_PER_REQUEST = 30;
-// Restored the file size check logic from the original working code
 const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
+
+// =============== CACHE ===============
+const fileCache = new Map();
 
 // =============== UTILS ===============
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
@@ -33,20 +44,27 @@ function detectMimeFromB64(b64=""){ const h=(b64||"").slice(0,16);
   if(h.includes("UklGR")) return "image/webp";
   return "image/jpeg";
 }
+function getFileHash(base64Data) {
+    return createHash('sha256').update(base64Data).digest('hex');
+}
+
 
 // =============== SYSTEM PROMPTS ===============
 const systemInstruction = `
-أنت استشاري "تدقيق طبي ومطالبات تأمينية". أخرج كتلة HTML واحدة فقط (بدون CSS).
+أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير. هدفك هو الدقة السريرية الفائقة. أخرج كتلة HTML واحدة فقط (بدون CSS).
 
 [منهجية]
-- الخطوة الأولى والأهم: قم بقراءة واستخراج كل النصوص والمعلومات من الملفات المرفقة بدقة شديدة، خاصة الوصفات الطبية المكتوبة بخط اليد وتقارير المختبر.
-- بعد استخراج البيانات، اربط الأعراض بالأسباب (Differential) مع تبرير سريري.
+- الخطوة الأولى والأهم: قم بقراءة واستخراج كل النصوص والمعلومات من الملفات المرفقة بدقة شديدة.
+- عند قراءة دواء من وصفة مكتوبة بخط اليد، أضف "درجة ثقة" بجانب اسمه (مثال: "Amlodipine - ثقة 95%").
+- اربط الأعراض بالأسباب (Differential) مع تبرير سريري.
 - راقب أمان الأدوية (eGFR/K/Cr/INR/UA…), ازدواجية, XR/MR, كبار السن.
 - طبّق الإرشادات (اذكر المرجع والرابط في قسم الأدلة).
 - بيّن فجوات البيانات وما يلزم لسدها.
+
 [الجدول]
 - صف لكل بند دون حذف. درجة الخطورة (%) مع كلاس: risk-low / risk-medium / risk-high.
 - قرار التأمين: ✅ مقبول | ⚠️ قابل للمراجعة | ❌ قابل للرفض (+سبب وما يلزم + تخصص).
+
 [البنية]
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 <h4>ملخص الحالة</h4><p>…</p>
@@ -54,9 +72,10 @@ const systemInstruction = `
 <h4>التحليل السريري العميق</h4><p>…</p>
 <h4>جدول الأدوية والإجراءات</h4>
 <table><thead><tr>
-<th>الدواء/الإجراء</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
+<th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
 </tr></thead><tbody></tbody></table>
 <h4>فرص تحسين الخدمة (مدعومة بالأدلة)</h4><ul></ul>
+<h4>لآلئ سريرية (Clinical Pearls)</h4><ul><li>نصيحة سريرية موجزة وعالية القيمة مرتبطة بالحالة.</li></ul>
 <h4>خطة العمل</h4><ol></ol>
 <p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
 `;
@@ -193,31 +212,43 @@ export default async function handler(req,res){
     }
     const ocrJoined = ocrBlocks.length ? ocrBlocks.map(b=>`### ${b.filename}\n${b.text}`).join("\n\n") : "";
 
-    // ================== تم تعديل هذا الجزء بالكامل ==================
-    // 2) Process ALL files for Gemini (Parallel, with size check)
+    // 2) Process ALL files for Gemini (Parallel, with size check and Caching)
     const fileProcessingPromises = files.map(f => {
         return new Promise(async (resolve) => {
             try {
                 const mimeType = f.type || detectMimeFromB64(f.data || "");
                 const fileBuffer = Buffer.from(f.data, 'base64');
+                const hash = getFileHash(f.data);
 
+                // Check cache first
+                if (fileCache.has(hash)) {
+                    console.log(`Cache HIT for file ${f.name}`);
+                    resolve(fileCache.get(hash));
+                    return;
+                }
+                console.log(`Cache MISS for file ${f.name}`);
+
+                let part;
                 if (fileBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
                     // Large file -> Use Files API
                     const uri = await geminiUpload(geminiKey, f.data, mimeType);
-                    resolve({ file_data: { mime_type: mimeType, file_uri: uri } });
+                    part = { file_data: { mime_type: mimeType, file_uri: uri } };
                 } else {
                     // Small file -> Use inline data
-                    resolve({ inline_data: { mime_type: mimeType, data: f.data } });
+                    part = { inline_data: { mime_type: mimeType, data: f.data } };
                 }
+                
+                fileCache.set(hash, part); // Store result in cache
+                resolve(part);
+
             } catch (e) {
                 console.warn(`File processing failed for ${f.name}:`, e.message);
-                // Resolve with null so Promise.all doesn't fail the entire request
                 resolve(null);
             }
         });
     });
 
-    const processedFileParts = (await Promise.all(fileProcessingPromises)).filter(p => p); // Filter out nulls from failed promises
+    const processedFileParts = (await Promise.all(fileProcessingPromises)).filter(p => p);
 
     // 3) Build all parts together for Gemini
     const allParts = [
