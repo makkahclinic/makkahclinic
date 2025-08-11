@@ -59,12 +59,19 @@
       font-size: 1.1rem;
       font-weight: bold;
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
       margin-top: 1rem;
     }
     button:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(10, 76, 139, 0.3);
+    }
+    /* Style for the button when it's disabled */
+    button:disabled {
+        background: #aaa;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
     }
     .link {
       display: block;
@@ -146,10 +153,9 @@
         </div>
     </div>
 
-    <button onclick="signup()" data-lang-key="register">تسجيل</button>
+    <button id="signup-button" onclick="signup()" data-lang-key="register">تسجيل</button>
     <p id="message"></p>
     
-    <!-- This link will be shown on success -->
     <a href="login.html" id="go-to-login-link" class="link" style="display: none; background-color: var(--success-color); color: white; padding: 12px; border-radius: 8px; font-weight: bold;" data-lang-key="goToLogin">اذهب إلى صفحة الدخول</a>
     
     <a href="login.html" id="have-account-link" class="link" data-lang-key="haveAccount">لديك حساب بالفعل؟ تسجيل الدخول</a>
@@ -172,31 +178,42 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app); // Initialize Firestore
+    const db = getFirestore(app);
 
     const message = document.getElementById("message");
+    const signupButton = document.getElementById("signup-button");
 
     window.signup = async function () {
+      // --- START: Re-enable button and reset state ---
+      signupButton.disabled = true;
+      signupButton.textContent = currentLang === 'ar' ? 'جاري التسجيل...' : 'Registering...';
+      message.textContent = "";
+      // --- END: Re-enable button and reset state ---
+
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
       const confirmPassword = document.getElementById("confirmPassword").value;
       const selectedRole = document.querySelector('input[name="role"]:checked');
 
-      message.textContent = "";
-
       if (!selectedRole) {
         message.textContent = "❌ " + (currentLang === 'ar' ? "الرجاء اختيار نوع الحساب." : "Please select an account type.");
         message.style.color = "var(--error-color)";
+        signupButton.disabled = false; // Re-enable button on error
+        signupButton.textContent = translations[currentLang].register;
         return;
       }
       if (password.length < 6) {
         message.textContent = "❌ " + (currentLang === 'ar' ? "كلمة المرور يجب أن تكون 6 أحرف على الأقل." : "Password must be at least 6 characters.");
         message.style.color = "var(--error-color)";
+        signupButton.disabled = false; // Re-enable button on error
+        signupButton.textContent = translations[currentLang].register;
         return;
       }
       if (password !== confirmPassword) {
         message.textContent = "❌ " + (currentLang === 'ar' ? "تأكيد كلمة المرور غير مطابق." : "Passwords do not match.");
         message.style.color = "var(--error-color)";
+        signupButton.disabled = false; // Re-enable button on error
+        signupButton.textContent = translations[currentLang].register;
         return;
       }
 
@@ -213,15 +230,13 @@
         message.textContent = "✅ " + (currentLang === 'ar' ? "تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتفعيله." : "Account created! Please check your email to verify it.");
         message.style.color = "var(--success-color)";
         
-        // --- NEW: Update UI after success ---
         document.getElementById('email').disabled = true;
         document.getElementById('password').disabled = true;
         document.getElementById('confirmPassword').disabled = true;
         document.querySelectorAll('input[name="role"]').forEach(radio => radio.disabled = true);
-        document.querySelector('button[onclick="signup()"]').style.display = 'none';
+        signupButton.style.display = 'none'; // Hide the original button
         document.getElementById('have-account-link').style.display = 'none';
         document.getElementById('go-to-login-link').style.display = 'block';
-        // --- END: NEW ---
 
       } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
@@ -232,6 +247,8 @@
           message.textContent = "❌ " + error.message;
         }
         message.style.color = "var(--error-color)";
+        signupButton.disabled = false; // Re-enable button on error
+        signupButton.textContent = translations[currentLang].register;
       }
     };
 
@@ -249,7 +266,7 @@
             individual: "Individual / Guardian",
             register: "Register",
             haveAccount: "Already have an account? Login",
-            goToLogin: "Proceed to Login", // New translation
+            goToLogin: "Proceed to Login",
             langToggle: "العربية"
         },
         ar: {
@@ -264,7 +281,7 @@
             individual: "فرد / متابع",
             register: "تسجيل",
             haveAccount: "لديك حساب بالفعل؟ تسجيل الدخول",
-            goToLogin: "اذهب إلى صفحة الدخول", // New translation
+            goToLogin: "اذهب إلى صفحة الدخول",
             langToggle: "English"
         }
     };
@@ -285,12 +302,16 @@
             const key = el.getAttribute('data-lang-placeholder');
             if (translations[lang][key]) el.placeholder = translations[lang][key];
         });
+        // Also update the button text if it's not disabled
+        if (!signupButton.disabled) {
+            signupButton.textContent = translations[currentLang].register;
+        }
     }
     langToggle.addEventListener('click', (e) => {
         e.preventDefault();
         setLanguage(currentLang === 'ar' ? 'en' : 'ar');
     });
-    setLanguage('ar'); // Initial language
+    setLanguage('ar');
   </script>
 </body>
 </html>
