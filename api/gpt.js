@@ -33,11 +33,13 @@ function detectMimeFromB64(b64=""){ const h=(b64||"").slice(0,16);
 }
 
 // =============== SYSTEM PROMPTS ===============
+// تم تحسين التعليمات لتوجيه النموذج للقراءة أولاً
 const systemInstruction = `
 أنت استشاري "تدقيق طبي ومطالبات تأمينية". أخرج كتلة HTML واحدة فقط (بدون CSS).
 
 [منهجية]
-- اربط الأعراض بالأسباب (Differential) مع تبرير سريري.
+- الخطوة الأولى والأهم: قم بقراءة واستخراج كل النصوص والمعلومات من الملفات المرفقة بدقة شديدة، خاصة الوصفات الطبية المكتوبة بخط اليد وتقارير المختبر.
+- بعد استخراج البيانات، اربط الأعراض بالأسباب (Differential) مع تبرير سريري.
 - راقب أمان الأدوية (eGFR/K/Cr/INR/UA…), ازدواجية, XR/MR, كبار السن.
 - طبّق الإرشادات (اذكر المرجع والرابط في قسم الأدلة).
 - بيّن فجوات البيانات وما يلزم لسدها.
@@ -184,8 +186,8 @@ export default async function handler(req,res){
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
     
     // ================== التعديل هنا ==================
-    // تم تغيير الوضع الافتراضي ليستخدم قراءة النصوص (OCR) دائماً
-    const analysisMode = (body.analysisMode || "ocr+gemini").toLowerCase();
+    // تم إرجاع الوضع الافتراضي إلى الاعتماد على Gemini فقط
+    const analysisMode = (body.analysisMode || "gemini-only").toLowerCase();
     // ===============================================
 
     // 1) Optional OCR (Parallel)
