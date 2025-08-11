@@ -5,11 +5,11 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v20 (DEFINITIVE EXPERT FINAL) ===============
-// 1. Integrated the user's final, expert-level phrasing for insurance decisions.
-// 2. The model is now mandated to use precise conditional logic (e.g., "Cancel if Triplixam is used").
-// 3. Fine-tuned all safety, dosing, and operational recommendations to the highest standard.
-// 4. This is the definitive, production-ready version embodying all our collaborative refinements.
+// =============== ULTIMATE ENHANCEMENTS v21 (DEFINITIVE FINAL) ===============
+// 1. Final restructuring of the prompt to prevent "focus drift".
+// 2. Created a separate, high-priority, mandatory section for "Insurance & Quantity Logic"
+//    to ensure these rules are never overlooked.
+// 3. This is the definitive, production-ready version, balanced for both clinical and administrative accuracy.
 // =====================================================================================
 
 import { createHash } from 'crypto';
@@ -49,11 +49,11 @@ function getFileHash(base64Data) {
 }
 
 
-// =============== SYSTEM PROMPTS (DEFINITIVE EXPERT FINAL) ===============
+// =============== SYSTEM PROMPTS (DEFINITIVE FINAL) ===============
 const systemInstruction = `
 أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
-[منهجية التحليل الإلزامية]
+[منهجية التحليل السريري الإلزامية]
 - **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**.
 - **قاعدة الاستنتاج الصيدلاني:**
   - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam**.
@@ -65,11 +65,11 @@ const systemInstruction = `
   - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**".
   - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
   - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
-- **قاعدة منطق الكمية والتأمين (إلزامية):**
-  - **للمستلزمات (Strips/Lancets):** صنفها كـ **"مستلزمات قياس سكر الدم"**. إذا كانت الكمية كبيرة (مثال: TID x90)، أشر إلى أن "هذه الكمية قد تتجاوز حدود التغطية وتتطلب تبريرًا طبيًا".
 
-[صياغة قرارات التأمين (إلزامية)]
-- استخدم الصيغ الدقيقة التالية عند كتابة قرار التأمين:
+[قواعد التدقيق التأميني والكميات - إلزامية]
+- **للأدوية:** دقق في مدة الصرف. إذا كانت المدة طويلة (90 يومًا) لدواء جديد أو يتطلب مراقبة، يجب اعتبار هذا سببًا لجعل القرار **"⚠️ قابل للمراجعة"**.
+- **للمستلزمات (Strips/Lancets):** صنفها كـ **"مستلزمات قياس سكر الدم"**. إذا كانت الكمية كبيرة (مثال: TID x90 = 270 شريط)، أشر إلى أن "هذه الكمية قد تتجاوز حدود التغطية وتتطلب تبريرًا طبيًا".
+- **صياغة قرارات التأمين (إلزامية):** استخدم الصيغ الدقيقة التالية:
   - **Amlodipine:** "⚠️ قابل للمراجعة: يُلغى إذا استُخدم Triplixam (ازدواجية CCB)."
   - **Co-Taburan:** "❌ مرفوض إذا وُجد Triplixam (ACEI+ARB ممنوع)."
   - **Triplixam:** "⚠️ مشروط: يُعتمد فقط بعد إلغاء Co-Taburan وAmlodipine المنفصل."
@@ -82,7 +82,7 @@ const systemInstruction = `
 - بناءً على تحليل الحالة، قدم توصيات قابلة للقياس ضمن المحاور الثلاثة التالية:
   1.  **تقليل الهدر:** (خفض الرفضات التأمينية، تقليل غياب المرضى).
   2.  **رفع الإنتاجية:** (تحسين الوصول والجدولة، مصالحة الأدوية).
-  3.  **إضافة خدمات مغطاة:** (برامج الأمراض المزمنة، استخدام الدعم الإكلينيكي داخل النظام).
+  3.  **إضافة خدمات مغطاة:** (برامج الأمراض المزمنة).
 
 [التنسيق البصري (Visual Formatting) - إلزامي]
 - قم بتضمين كتلة <style> التالية في بداية تقرير الـ HTML.
