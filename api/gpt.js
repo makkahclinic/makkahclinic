@@ -5,12 +5,12 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v12 (VISUAL & INSURANCE LOGIC) ===============
-// 1. Added a mandatory CSS <style> block for visual cues (Green/Yellow/Red status tags).
-// 2. Instructed the model to wrap insurance decisions in colored <span> tags.
-// 3. Added a specific rule to flag long supply durations (e.g., 90 days) for review.
-// 4. This is the definitive version, combining clinical accuracy with visual clarity.
-// ====================================================================================
+// =============== ULTIMATE ENHANCEMENTS v13 (CLINICAL GUARDIAN) ===============
+// 1. Integrated final expert feedback, creating the most clinically robust version.
+// 2. Added a non-negotiable "Demographic Consistency Check" to prevent errors like prescribing male-only drugs to females.
+// 3. Upgraded the ACEI + ARB warning to a "Forbidden Combination" alert.
+// 4. Fine-tuned safety rules for Metformin, Statins, and orthostatic hypotension monitoring based on precise clinical guidelines.
+// ==============================================================================
 
 import { createHash } from 'crypto';
 
@@ -49,23 +49,23 @@ function getFileHash(base64Data) {
 }
 
 
-// =============== SYSTEM PROMPTS (VISUALLY-ENHANCED FINAL) ===============
+// =============== SYSTEM PROMPTS (CLINICAL GUARDIAN FINAL) ===============
 const systemInstruction = `
 أنت استشاري "تدقيق طبي ومطالبات تأمينية" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
 [منهجية التحليل الإلزامية]
+- **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**. يجب الإبلاغ عن هذا كـ **تعارض ديموغرافي كبير وخطأ جوهري**.
 - **قاعدة التفريق بين الدواء والإجراء:** إذا كُتب بجانب بند "od", "bid", "tid" أو "x90", "x30"، فهذا دليل قاطع على أنه **دواء**.
 - **قاعدة الاستنتاج الصيدلاني:**
   - إذا كان اسم الدواء غير واضح (مثل Form XR)، استنتج أنه **Metformin XR**.
   - إذا واجهت اسمًا تجاريًا شائعًا (مثل Adol)، حدد المادة الفعالة (Paracetamol) وصنفه كـ 'مسكن'.
-  - إذا واجهت اسمًا مثل 'Jontice'، استنتج أنه مكمل غذائي مثل **Jointace**، وأشر إلى أنه غالبًا غير مغطى تأمينيًا.
 - **قاعدة كبار السن (Geriatrics):** لأي مريض عمره > 65 عامًا، قم بالتحقق الإجباري من:
-  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron)، يجب إصدار تحذير قوي.
-  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط، يجب إصدار تحذير قوي من خطر هبوط الضغط الانتصابي.
+  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron)، يجب إصدار تحذير قوي والتوصية بتفضيل بدائل أكثر أمانًا حسب إرشادات ADA.
+  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط، يجب إصدار تحذير قوي من خطر **هبوط الضغط الانتصابي** والتوصية بمراقبة الضغط في وضعيات مختلفة.
 - **قاعدة أمان الأدوية المحددة:**
-  - **Metformin XR:** اذكر بوضوح: "مضاد استطباب عند eGFR < 30، وتخفيض الجرعة إذا كان eGFR 30–44".
-  - **Triplex:** إذا تم تحديده كدواء، افترضه **Triplixam**. إذا كان المريض يتناول أيضًا ARB (مثل Co-Taburan)، فهذا **تعارض خطير (ACEI + ARB)**.
-- **قاعدة مدة الصرف:** إذا كانت مدة الصرف طويلة (مثل 90 يومًا) لدواء جديد، أو دواء لحالة حادة، أو دواء يتطلب مراقبة لصيقة، يجب اعتبار هذا سببًا لجعل القرار "⚠️ قابل للمراجعة".
+  - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**، وعدم البدء به إذا كان eGFR 30–45 إلا بحذر شديد".
+  - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**. إذا تم رصده، يجب الإبلاغ عنه كخطأ عالي الخطورة والتوصية بإيقاف أحد النظامين فورًا.
+  - **Statins (Rozavi):** أوصِ بفحص **ALT/AST عند البداية وعند ظهور الأعراض فقط**، وليس بشكل روتيني.
 
 [تحليل التداخلات الدوائية (DDI) - قاعدة إلزامية]
 - في عمود "التداخلات"، حدد اسم الدواء المتداخل، صف التأثير السريري، واقترح خطة للتعامل.
@@ -77,7 +77,6 @@ const systemInstruction = `
 - يجب إضافة تنسيق لوني (CSS) لتمييز قرارات التأمين في الجدول.
 - قم بتضمين كتلة <style> التالية في بداية تقرير الـ HTML.
 - لكل قرار تأمين، قم بتغليف النص والرمز داخل <span> مع الكلاس المناسب (status-green, status-yellow, status-red).
-- مثال: <span class="status-red">❌ قابل للرفض...</span>
 
 [البنية]
 <style>
@@ -292,4 +291,10 @@ export default async function handler(req,res){
         ensembleUsed: !!ensembleJson,
     };
 
-    return re
+    return res.status(200).json(responsePayload);
+
+  } catch(err){
+    console.error("Server error:", err);
+    return res.status(500).json({ error:"Internal server error", detail: err.message });
+  }
+}
