@@ -148,22 +148,25 @@ async function geminiUpload(apiKey, base64, mime){
   const j = await r.json();
   return j?.file?.uri;
 }
-
-async function geminiAnalyze(apiKey, parts){
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const payload = {
-    contents: [{ role:"user", parts }],
-    generationConfig: { temperature:0.2, topP:0.9, topK:40, maxOutputTokens:8192 }
-  };
-  const r = await fetchWithRetry(url, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
-  const raw = await r.text();
-  if(!r.ok) throw new Error(`Gemini error ${r.status}: ${raw.slice(0,500)}`);
-  try {
-    const j = JSON.parse(raw);
-    return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```html|```/g,"").trim();
-  } catch { return raw; }
+async function geminiAnalyze(apiKey, userParts, systemInstructionText){
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+    const payload = {
+        // هنا نرسل بيانات المستخدم فقط
+        contents: [{ role:"user", parts: userParts }],
+        // وهنا نضيف الحقل المخصص لتعليمات النظام
+        system_instruction: {
+            parts: [{ text: systemInstructionText }]
+        },
+        generationConfig: { temperature:0.2, topP:0.9, topK:40, maxOutputTokens:8192 }
+    };
+    const r = await fetchWithRetry(url, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+    const raw = await r.text();
+    if(!r.ok) throw new Error(`Gemini error ${r.status}: ${raw.slice(0,500)}`);
+    try {
+        const j = JSON.parse(raw);
+        return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```html|```/g,"").trim();
+    } catch { return raw; }
 }
-
 // =============== API Handler ===============
 export default async function handler(req,res){
   res.setHeader("Access-Control-Allow-Origin","*");
