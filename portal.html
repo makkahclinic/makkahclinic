@@ -29,7 +29,6 @@
     .lang-switcher{position:absolute;top:20px;right:20px}
     html[dir="ltr"] .lang-switcher{right:auto;left:20px}
     .lang-switcher a{color:var(--primary-color);text-decoration:none;font-weight:bold;padding:5px 10px;border:1px solid var(--border-color);border-radius:5px}
-    /* New styles for credit display */
     .credit-display {
         background-color: #e0eaf5;
         color: var(--primary-color);
@@ -86,9 +85,7 @@
     </div>
   </div>
 
-  <!-- Firebase + لغة -->
   <script type="module">
-    // ==== Firebase SDKs ====
     const firebaseConfig = {
       apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
       authDomain: "insurance-check-6cec9.firebaseapp.com",
@@ -107,30 +104,39 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
+    // ==== START: Developer Override ====
+    // Add your developer email here.
+    const developerEmail = "husseinbabsail@gmail.com";
+    // ==== END: Developer Override ====
+
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        // User is signed in.
         const el = document.getElementById("user-email");
         if (el) el.textContent = user.email;
 
-        // Force refresh to get the latest claims.
-        user.getIdToken(true).then((idToken) => {
-            // Now get the full token result with claims.
-            return getIdTokenResult(user);
-        }).then((idTokenResult) => {
+        // ==== START: Developer Check ====
+        if (user.email === developerEmail) {
+          // If user is the developer, show all portals
+          document.getElementById('doctor-portal-link').style.display = 'block';
+          document.getElementById('patient-portal-link').style.display = 'block';
+          document.getElementById('pharmacist-portal-link').style.display = 'block';
+          console.log("Developer access granted. Showing all portals.");
+          return; // Stop further checks
+        }
+        // ==== END: Developer Check ====
+
+        user.getIdToken(true).then(() => getIdTokenResult(user))
+        .then((idTokenResult) => {
             const claims = idTokenResult.claims;
             
-            // Show portals based on user role
             if (claims.role === 'doctor') {
                 document.getElementById('doctor-portal-link').style.display = 'block';
-                // Listen for credit changes for doctors
                 listenForCredits(user.uid, 'doctor_profiles');
             } else if (claims.role === 'patient') {
                 document.getElementById('patient-portal-link').style.display = 'block';
             } else if (claims.role === 'pharmacist') {
                 document.getElementById('pharmacist-portal-link').style.display = 'block';
             } else {
-                // Handle cases where role is not set
                 console.log("User role not found.");
             }
         }).catch((error) => {
@@ -138,27 +144,21 @@
         });
 
       } else {
-        // User is signed out.
         window.location.href = "http://www.m2020m.org/login.html";
       }
     });
     
-    // Function to listen for real-time updates on credits
     function listenForCredits(userId, profileCollection) {
         const creditDisplayContainer = document.getElementById('credit-display-container');
         const creditsCountEl = document.getElementById('credits-count');
-        
         const userProfileRef = doc(db, profileCollection, userId);
         
         onSnapshot(userProfileRef, (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
-                const credits = data.analysis_credits;
-                
-                creditsCountEl.textContent = credits;
+                creditsCountEl.textContent = data.analysis_credits;
                 creditDisplayContainer.style.display = 'inline-block';
             } else {
-                console.log("No profile document found for this user.");
                 creditDisplayContainer.style.display = 'none';
             }
         });
@@ -168,7 +168,6 @@
       signOut(auth).then(() => window.location.href = "http://www.m2020m.org/login.html");
     };
 
-    // ==== Translation Logic ====
     const translations = {
       en: {
         pageTitle: "Smart Healthcare Portal",
@@ -208,11 +207,9 @@
     function setLanguage(lang){
       currentLang = lang;
       localStorage.setItem('lang', lang);
-
       document.documentElement.lang = lang;
       document.documentElement.dir  = (lang === 'ar' ? 'rtl' : 'ltr');
       langToggle.textContent      = translations[lang].langToggle;
-
       document.querySelectorAll('[data-lang-key]').forEach(el=>{
         const key = el.getAttribute('data-lang-key');
         if (translations[lang][key]) el.textContent = translations[lang][key];
