@@ -46,8 +46,9 @@ function detectMimeFromB64(b64=""){ const h=(b64||"").slice(0,16);
   if(h.includes("UklGR")) return "image/webp";
   return "image/jpeg";
 }
+// FIX: Corrected typo from sha266 to sha256
 function getFileHash(base64Data) {
-    return createHash('sha266').update(base64Data).digest('hex');
+    return createHash('sha256').update(base64Data).digest('hex');
 }
 
 
@@ -231,7 +232,7 @@ export default async function handler(req,res){
     // 1) Optional OCR (Parallel)
     let ocrBlocks = [];
     if (openaiKey && (analysisMode === "ocr+gemini" || analysisMode === "ensemble") && files.length){
-      try { ocrBlocks = await ocrWithOpenAI(apiKey, files); }
+      try { ocrBlocks = await ocrWithOpenAI(openaiKey, files); }
       catch(e){ console.warn("OCR skipped:", e.message); }
     }
     const ocrJoined = ocrBlocks.length ? ocrBlocks.map(b=>`### ${b.filename}\n${b.text}`).join("\n\n") : "";
@@ -281,7 +282,7 @@ export default async function handler(req,res){
     // 4) If ensemble → get OpenAI analysis JSON and add it to allParts
     let ensembleJson = null;
     if (openaiKey && analysisMode === "ensemble"){
-        try { ensembleJson = await analyzeWithOpenAI(apiKey, body, ocrJoined); }
+        try { ensembleJson = await analyzeWithOpenAI(openaiKey, body, ocrJoined); }
         catch(e){ console.warn("Ensemble OpenAI analysis failed:", e.message); }
         if (ensembleJson){
             allParts.push({ text: `[تحليل أولي من نموذج مساعد]\n${JSON.stringify(ensembleJson)}` });
