@@ -148,7 +148,11 @@
 
     <button onclick="signup()" data-lang-key="register">تسجيل</button>
     <p id="message"></p>
-    <a href="login.html" class="link" data-lang-key="haveAccount">لديك حساب بالفعل؟ تسجيل الدخول</a>
+    
+    <!-- This link will be shown on success -->
+    <a href="login.html" id="go-to-login-link" class="link" style="display: none; background-color: var(--success-color); color: white; padding: 12px; border-radius: 8px; font-weight: bold;" data-lang-key="goToLogin">اذهب إلى صفحة الدخول</a>
+    
+    <a href="login.html" id="have-account-link" class="link" data-lang-key="haveAccount">لديك حساب بالفعل؟ تسجيل الدخول</a>
   </div>
 
   <script type="module">
@@ -178,7 +182,6 @@
       const confirmPassword = document.getElementById("confirmPassword").value;
       const selectedRole = document.querySelector('input[name="role"]:checked');
 
-      // Reset message
       message.textContent = "";
 
       if (!selectedRole) {
@@ -198,20 +201,27 @@
       }
 
       try {
-        // 1. Create the user
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // 2. Send a request to the backend (via Firestore) to set the role
         await setDoc(doc(db, "role_requests", user.uid), {
             role: selectedRole.value
         });
         
-        // 3. Send verification email
         await sendEmailVerification(user);
 
         message.textContent = "✅ " + (currentLang === 'ar' ? "تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتفعيله." : "Account created! Please check your email to verify it.");
         message.style.color = "var(--success-color)";
+        
+        // --- NEW: Update UI after success ---
+        document.getElementById('email').disabled = true;
+        document.getElementById('password').disabled = true;
+        document.getElementById('confirmPassword').disabled = true;
+        document.querySelectorAll('input[name="role"]').forEach(radio => radio.disabled = true);
+        document.querySelector('button[onclick="signup()"]').style.display = 'none';
+        document.getElementById('have-account-link').style.display = 'none';
+        document.getElementById('go-to-login-link').style.display = 'block';
+        // --- END: NEW ---
 
       } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
@@ -239,6 +249,7 @@
             individual: "Individual / Guardian",
             register: "Register",
             haveAccount: "Already have an account? Login",
+            goToLogin: "Proceed to Login", // New translation
             langToggle: "العربية"
         },
         ar: {
@@ -253,6 +264,7 @@
             individual: "فرد / متابع",
             register: "تسجيل",
             haveAccount: "لديك حساب بالفعل؟ تسجيل الدخول",
+            goToLogin: "اذهب إلى صفحة الدخول", // New translation
             langToggle: "English"
         }
     };
