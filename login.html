@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -127,12 +126,19 @@
     <input type="password" id="password" placeholder="كلمة المرور" required><br>
     <button onclick="login()">دخول</button>
     <p id="message"></p>
+    
+    <!-- ==== START: Added Code ==== -->
+    <a href="#" id="forgot-password-link" class="link">هل نسيت كلمة المرور؟</a>
+    <!-- ==== END: Added Code ==== -->
+    
     <a href="signup.html" class="link">ليس لديك حساب؟ سجل الآن</a>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    // ==== START: Import sendPasswordResetEmail ====
+    import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    // ==== END: Import sendPasswordResetEmail ====
 
     const firebaseConfig = {
       apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
@@ -146,12 +152,13 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    const message = document.getElementById("message");
 
+    // Your existing login function
     window.login = async function () {
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
-      const message = document.getElementById("message");
-
+      
       message.textContent = "";
 
       try {
@@ -176,6 +183,31 @@
         message.style.color = "var(--error-color)";
       }
     };
+
+    // ==== START: New code for password reset ====
+    const forgotPasswordLink = document.getElementById('forgot-password-link');
+
+    forgotPasswordLink.addEventListener('click', (e) => {
+        e.preventDefault(); // Prevent page refresh
+        const email = document.getElementById("email").value;
+
+        if (!email) {
+            message.textContent = "الرجاء إدخال بريدك الإلكتروني في الحقل أعلاه أولاً.";
+            message.style.color = "var(--error-color)";
+            return;
+        }
+
+        sendPasswordResetEmail(auth, email)
+            .then(() => {
+                message.textContent = "✅ تم إرسال رابط إعادة التعيين إلى بريدك الإلكتروني.";
+                message.style.color = "var(--success-color)";
+            })
+            .catch((error) => {
+                message.textContent = "❌ لم نتمكن من إرسال الرابط. تأكد من صحة البريد الإلكتروني.";
+                message.style.color = "var(--error-color)";
+            });
+    });
+    // ==== END: New code for password reset ====
   </script>
 </body>
 </html>
