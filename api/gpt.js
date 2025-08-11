@@ -10,6 +10,8 @@ const GEMINI_MODEL = "gemini-1.5-pro-latest";
 const DEFAULT_TIMEOUT_MS = 180_000;
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const MAX_FILES_PER_REQUEST = 30;
+// Restored the file size check logic from the original working code
+const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 
 // =============== UTILS ===============
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
@@ -141,19 +143,17 @@ async function analyzeWithOpenAI(apiKey, caseData, ocrTextJoined){
 }
 
 // =============== Gemini Files ===============
-async function geminiUpload(apiKey, base64, mime){
+async function geminiUpload(apiKey, base64Data, mime){
   const url = `https://generativelanguage.googleapis.com/v1beta/files?key=${apiKey}`;
-  const buf = Buffer.from(base64, "base64");
+  const buf = Buffer.from(base64Data, "base64");
   const r = await fetchWithRetry(url, { method:"POST", headers:{ "Content-Type": mime }, body: buf });
   if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error(`Gemini file upload failed (${r.status}): ${t.slice(0,200)}`); }
   const j = await r.json();
   return j?.file?.uri;
 }
 
-// ================== تم تعديل هذه الدالة ==================
 async function geminiAnalyze(apiKey, allParts){
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-    // تم دمج كل شيء في رسالة مستخدم واحدة، كما في الكود القديم الناجح
     const payload = {
         contents: [{ role:"user", parts: allParts }],
         generationConfig: { temperature:0.2, topP:0.9, topK:40, maxOutputTokens:8192 }
@@ -193,29 +193,38 @@ export default async function handler(req,res){
     }
     const ocrJoined = ocrBlocks.length ? ocrBlocks.map(b=>`### ${b.filename}\n${b.text}`).join("\n\n") : "";
 
-    // 2) Upload ALL files to Gemini (Parallel)
-    const uploadPromises = files.map(f => {
-        const type = f.type || detectMimeFromB64(f.data || "");
-        return geminiUpload(geminiKey, f.data, type)
-            .then(uri => ({ name: f.name || "file", type, uri, status: 'success' }))
-            .catch(e => {
-                console.warn(`Upload fail for ${f.name}:`, e.message);
-                return { name: f.name || "file", status: 'error', reason: e.message };
-            });
+    // ================== تم تعديل هذا الجزء بالكامل ==================
+    // 2) Process ALL files for Gemini (Parallel, with size check)
+    const fileProcessingPromises = files.map(f => {
+        return new Promise(async (resolve) => {
+            try {
+                const mimeType = f.type || detectMimeFromB64(f.data || "");
+                const fileBuffer = Buffer.from(f.data, 'base64');
+
+                if (fileBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
+                    // Large file -> Use Files API
+                    const uri = await geminiUpload(geminiKey, f.data, mimeType);
+                    resolve({ file_data: { mime_type: mimeType, file_uri: uri } });
+                } else {
+                    // Small file -> Use inline data
+                    resolve({ inline_data: { mime_type: mimeType, data: f.data } });
+                }
+            } catch (e) {
+                console.warn(`File processing failed for ${f.name}:`, e.message);
+                // Resolve with null so Promise.all doesn't fail the entire request
+                resolve(null);
+            }
+        });
     });
 
-    const uploadResults = await Promise.all(uploadPromises);
-    const fileUris = uploadResults.filter(r => r.status === 'success');
-    const uploadErrors = uploadResults.filter(r => r.status === 'error');
+    const processedFileParts = (await Promise.all(fileProcessingPromises)).filter(p => p); // Filter out nulls from failed promises
 
-    // ================== تم تعديل هذا الجزء ==================
     // 3) Build all parts together for Gemini
     const allParts = [
         { text: systemInstruction },
         { text: buildUserPrompt(body) }
     ];
-    if (ocrJoined) allParts.push({ text: `نصوص OCR المستخرجة:\n\n${ocrJoined}` });
-    fileUris.forEach(u => allParts.push({ file_data: { mime_type: u.type, file_uri: u.uri } }));
+    allParts.push(...processedFileParts);
 
     // 4) If ensemble → get OpenAI analysis JSON and add it to allParts
     let ensembleJson = null;
@@ -235,7 +244,6 @@ export default async function handler(req,res){
         htmlReport: html,
         ocrUsed: !!ocrBlocks.length,
         ensembleUsed: !!ensembleJson,
-        uploadErrors: uploadErrors.length > 0 ? uploadErrors : undefined
     };
 
     return res.status(200).json(responsePayload);
