@@ -5,11 +5,12 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v22 (DEFINITIVE EXPERT FINAL) ===============
-// 1. Replaced the generic recommendations section with the user's highly specific, evidence-based clinical and insurance roadmap.
-// 2. The model is now structured to think in terms of "Necessary & Justified Services" vs. "Services to Avoid/Review".
-// 3. This represents the final evolution of the prompt, embodying the pinnacle of expert-driven AI tuning.
-// =====================================================================================
+// =============== ULTIMATE ENHANCEMENTS v23 (EXPERT CONSULTANT BRAIN) ===============
+// 1. Replaced the entire recommendation engine with the user's expert-level, evidence-based roadmap.
+// 2. The model is now mandated to structure its advice into "Necessary & Justified Services" vs. "Services to Avoid/Review".
+// 3. All specific clinical scenarios (Metformin/eGFR, ACEI+ARB, Geriatric safety, etc.) are now hard-coded as core logic.
+// 4. This is the definitive version, designed to perform as a true clinical and insurance expert consultant.
+// =======================================================================================
 
 import { createHash } from 'crypto';
 
@@ -48,7 +49,7 @@ function getFileHash(base64Data) {
 }
 
 
-// =============== SYSTEM PROMPTS (DEFINITIVE EXPERT FINAL) ===============
+// =============== SYSTEM PROMPTS (EXPERT CONSULTANT FINAL) ===============
 const systemInstruction = `
 أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
