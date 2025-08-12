@@ -66,7 +66,7 @@ const systemInstruction = `
   - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
 
 [قاعدة بيانات التحاليل المخبرية الإلزامية]
-- يجب أن تدمج التوصيات التالية مباشرة في قسم "خطة العمل".
+- يجب أن تدمج التوصيات التالية مباشرة في قسم "خدمات طبية ضرورية ومقبولة تأمينياً".
 - **Metformin XR:** توصية بفحص **eGFR/Creatinine** قبل البدء ثم دوريًا.
 - **Metformin XR (استخدام طويل الأمد):** توصية بفحص **فيتامين B12**.
 - **Co-Taburan أو Triplixam:** توصية بفحص **Potassium (K+)** و **Creatinine** بعد 1-2 أسبوع من بدء العلاج أو تعديل الجرعة.
@@ -88,6 +88,8 @@ const systemInstruction = `
   .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
   .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
   .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
+  .section-title { color: #1e40af; font-weight: bold; }
+  .critical { color: #991b1b; font-weight: bold; }
 </style>
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 <h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السريري العميق</h4>
@@ -95,7 +97,13 @@ const systemInstruction = `
 <table><thead><tr>
 <th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
 </tr></thead><tbody></tbody></table>
-<h4>خطة العمل</h4><ol></ol>
+<h4 class="section-title">خدمات طبية ضرورية ومقبولة تأمينياً (مدعومة بالأدلة العلمية)</h4>
+<h5 class="critical">تعديلات دوائية حرجة (Urgent Medication Adjustments)</h5>
+<ul></ul>
+<h5>تحاليل مخبرية ضرورية (Essential Lab Tests)</h5>
+<ul></ul>
+<h5>متابعة وفحوصات دورية (Routine Monitoring & Tests)</h5>
+<ul></ul>
 <p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
 `;
 
@@ -168,7 +176,7 @@ async function geminiAnalyze(apiKey, allParts) {
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type", "Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
