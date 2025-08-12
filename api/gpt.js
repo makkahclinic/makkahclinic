@@ -48,7 +48,47 @@ function getFileHash(base64Data) {
   return createHash("sha256").update(base64Data).digest("hex");
 }
 
-// =============== SYSTEM PROMPTS (DEFINITIVE EXPERT FINAL) ===============
+// =============== CITATIONS (links appear in the final HTML) ===============
+const CITATIONS = {
+  esc_esh_htn: {
+    title: "ESC/ESH Guidelines for the management of arterial hypertension",
+    url: "https://www.escardio.org/Guidelines/Clinical-Practice-Guidelines/Arterial-Hypertension-Management"
+  },
+  ada_soc: {
+    title: "ADA Standards of Care (Metformin & CKD considerations)",
+    url: "https://diabetesjournals.org/care"
+  },
+  fda_metformin: {
+    title: "FDA — Metformin: renal impairment (eGFR) recommendations",
+    url: "https://www.fda.gov/drugs/drug-safety-and-availability/fda-drug-safety-communication"
+  },
+  ada_older: {
+    title: "ADA — Older Adults: hypoglycemia risk & therapy selection",
+    url: "https://diabetesjournals.org/care"
+  },
+  acc_aha_chol: {
+    title: "AHA/ACC Cholesterol Guideline — baseline liver enzymes",
+    url: "https://www.acc.org/latest-in-cardiology/ten-points-to-remember"
+  },
+  medicare_smbg: {
+    title: "Medicare Part B — Blood sugar monitors & test strips coverage",
+    url: "https://www.medicare.gov/coverage/blood-sugar-monitors-test-strips"
+  },
+  duodart_label: {
+    title: "Dutasteride/Tamsulosin (Duodart) — product information",
+    url: "https://www.medicines.org.uk/emc/product/2512/smpc"
+  },
+  ada_b12: {
+    title: "ADA — Vitamin B12 screening on long-term metformin",
+    url: "https://diabetesjournals.org/care"
+  },
+  endo_vitd: {
+    title: "Endocrine Society — Vitamin D guideline",
+    url: "https://www.endocrine.org/clinical-practice-guidelines/vitamin-d"
+  }
+};
+
+// =============== SYSTEM PROMPT FOR GEMINI ===============
 const systemInstruction = `
 أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
@@ -64,8 +104,6 @@ const systemInstruction = `
   - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**".
   - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
   - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
-- **قاعدة منطق الكمية والتأمين (إلزامية):**
-  - **للمستلزمات (Strips/Lancets):** صنفها كـ **"مستلزمات قياس سكر الدم"**. إذا كانت الكمية كبيرة (مثال: TID x90)، أشر إلى أن "هذه الكمية قد تتجاوز حدود التغطية وتتطلب تبريرًا طبيًا".
 
 [صياغة قرارات التأمين (إلزامية)]
 - استخدم الصيغ الدقيقة التالية:
@@ -86,6 +124,12 @@ const systemInstruction = `
   .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
   .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
   .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: right; }
+  thead th { background: #f9fafb; font-weight: 700; }
+  h3,h4 { margin: 10px 0 6px; }
+  ul { margin: 0 0 8px 0; padding: 0 16px; }
+  .refs small a { color: #2563eb; text-decoration: none; }
 </style>
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 <h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السريري العميق</h4>
@@ -95,10 +139,13 @@ const systemInstruction = `
 </tr></thead><tbody></tbody></table>
 <h4>خدمات طبية ضرورية ومبرَّرة للتأمين الطبي</h4><ul></ul>
 <h4>خدمات يجب تجنُّبها/مراجعتها لتقليل رفض المطالبات</h4><ul></ul>
+<h4>تحاليل مبرَّرة بالتأمين</h4><ul></ul>
 <h4>خطة العمل</h4><ol></ol>
+<div class="refs"><h4>المراجع</h4><small></small></div>
 <p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
 `;
 
+// =============== User Prompt Pack ===============
 function buildUserPrompt(d = {}) {
   return `
 **بيانات المريض:**
@@ -227,6 +274,227 @@ async function geminiAnalyze(apiKey, allParts) {
   }
 }
 
+// =============== LIGHTWEIGHT RULES ENGINE ===============
+function normName(s = "") { return (s || "").toLowerCase().replace(/[^\w]+/g, " ").trim(); }
+
+function detectEntitiesFromText(text = "") {
+  const n = normName(text);
+  const found = new Set();
+
+  const hits = [
+    ["duodart", /duodart|tamsulosin|dutasteride/],
+    ["triplixam", /triplixam|triplex\b|perindopril/],
+    ["co_taburan", /co[ -]?tabu[rv]an|co[ -]?diovan|valsartan/],
+    ["amlodipine", /\bamlodipine\b|amlopin|amlo/],
+    ["metformin_xr", /metformin\s*(xr|er)|form\s*xr/],
+    ["diamicron_mr", /diamicron|gliclazide/],
+    ["pantomax", /pantomax|pantoprazole/],
+    ["e_core_strips", /e[- ]?core.*strip|test\s*strip/],
+    ["lancets", /lancet/],
+    // Corrected rule for Intrasite
+    ["intrasite", /\bintrasite\b|intrasitab\b|intra[-\s]?site/],
+    ["rozavi", /\brozavi\b|rosuvastatin/],
+    // Added rule to detect BPH diagnosis textually
+    ["bph_note", /\bBPH\b|prostat/i],
+    ["sudocrem", /sudocrem|suden\s*cream/],
+    ["jointace", /jointace|jontice/],
+    ["pikaur", /pika[- ]?ur|ur\s*eff/],
+    ["omnipaque", /omnipaque|iohexol/],
+  ];
+
+  for (const [key, rx] of hits) if (rx.test(n)) found.add(key);
+  return found;
+}
+
+function parseEGFR(labsText = "") {
+  const m = labsText.match(/eGFR\s*[:=]?\s*(\d+(\.\d+)?)/i);
+  if (!m) return null;
+  return Number(m[1]);
+}
+
+function buildDecisions(caseData = {}) {
+  const medsText = [caseData.medications || "", caseData.notes || "", caseData.labResults || ""].join("\n");
+  const set = detectEntitiesFromText(medsText);
+  const isFemale = (caseData.gender || "").toLowerCase().startsWith("f") || (caseData.gender || "").includes("أنث");
+  const age = Number(caseData.age || 0) || null;
+  const eGFR = parseEGFR(caseData.labResults || "");
+
+  const necessary = [];
+  const avoid = [];
+  const labs = [];
+
+  // --- Core rules ---
+  if (isFemale && (set.has("duodart") || set.has("bph_note"))) {
+    avoid.push("إيقاف Duodart وتصحيح تشخيص BPH: كلاهما لا ينطبق على الأنثى.");
+  }
+
+  const hasACEI = set.has("triplixam");
+  const hasARB = set.has("co_taburan");
+  if (hasACEI && hasARB) {
+    avoid.push("منع الجمع ACEI + ARB (Triplixam مع Co-Taburan): خطر فرط بوتاسيوم/قصور كلوي.");
+  }
+
+  if (hasACEI && set.has("amlodipine")) {
+    avoid.push("إزالة Amlodipine المنفصل إذا استُخدم Triplixam (ازدواجية CCB).");
+  }
+
+  if (set.has("metformin_xr")) {
+    if (eGFR !== null && eGFR < 30) {
+      avoid.push("إيقاف/عدم بدء Metformin XR: مضاد استطباب عند eGFR < 30.");
+    } else {
+      necessary.push("توثيق eGFR ≥30 قبل البدء/الاستمرار في Metformin XR، ومعايرة تدريجية.");
+    }
+  }
+  
+  // Corrected Intrasite logic
+  if (set.has("intrasite")) {
+    necessary.push("توضيح INTRASITE كجل/ضماد موضعي للجروح (Topical)، مع تحديد الموضع والاستخدام.");
+  }
+
+  if (age && age >= 65 && set.has("diamicron_mr")) {
+    avoid.push("Sulfonylurea (Diamicron MR) لدى كبار السن: خطر نقص سكر—فكّر ببديل أقل خطورة.");
+  }
+
+  if (set.has("e_core_strips") || set.has("lancets")) {
+    necessary.push("شرائط/لانست SMBG: الالتزام بحدود الدافع أو إرفاق مبرر طبي عند تجاوزها.");
+  }
+
+  if (hasACEI || hasARB || set.has("amlodipine")) {
+    labs.push("قياس ضغط وضعي (استلقاء/وقوف) بعد ضبط أدوية الضغط لتقليل خطر السقوط.");
+  }
+
+  if (set.has("rozavi")) {
+    labs.push("ALT/AST أساسًا قبل الستاتين، وتُعاد فقط عند ظهور أعراض.");
+  }
+
+  if (set.has("metformin_xr")) {
+    labs.push("Creatinine/eGFR قبل البدء ثم دوريًا.");
+    labs.push("فيتامين B12 على الاستعمال الطويل للميتفورمين.");
+  }
+
+  if (/هشاشة|osteoporosis|fragility/i.test(medsText)) {
+    labs.push("فيتامين D (25-OH) عند هشاشة/عوامل خطورة عظمية.");
+  }
+
+  return { set, necessary, avoid, labs };
+}
+
+function buildRefsHTML() {
+  const items = Object.values(CITATIONS)
+    .map((c) => `<div>• <a href="${c.url}" target="_blank" rel="noopener">${escapeHtml(c.title)}</a></div>`)
+    .join("");
+  return items || "";
+}
+
+function escapeHtml(s = "") {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderDeterministicHTML(caseData = {}, rulesOut = {}) {
+  const { necessary = [], avoid = [], labs = [] } = rulesOut;
+
+  const decisions = [];
+
+  const addDecision = (decisionText, status) => {
+    const cls = status === "red" ? "status-red" : status === "yellow" ? "status-yellow" : "status-green";
+    return `<span class="${cls}">${escapeHtml(decisionText)}</span>`;
+  };
+
+  const medsText = (caseData.medications || "") + "\n" + (caseData.notes || "");
+  const found = detectEntitiesFromText(medsText);
+
+  if (found.has("amlodipine")) {
+    decisions.push(["Amlodipine", addDecision("⚠️ قابل للمراجعة: يُلغى إذا استُخدم Triplixam (ازدواجية CCB).", "yellow")]);
+  }
+  if (found.has("co_taburan")) {
+    decisions.push(["Co-Taburan", addDecision("❌ مرفوض إذا وُجد Triplixam (ACEI+ARB ممنوع).", "red")]);
+  }
+  if (found.has("triplixam")) {
+    decisions.push(["Triplixam", addDecision("⚠️ مشروط: يُعتمد فقط بعد إلغاء Co-Taburan وAmlodipine المنفصل.", "yellow")]);
+  }
+  if (found.has("metformin_xr")) {
+    decisions.push(["Metformin XR", addDecision("⚠️ موافقة مشروطة: ابدأ بعد تأكيد eGFR ≥30؛ إن لزم فابدأ 500 mg وتدرّج.", "yellow")]);
+  }
+  if (found.has("diamicron_mr")) {
+    decisions.push(["Diamicron MR", addDecision("⚠️ موافقة بحذر: فكّر ببديل أقل إحداثًا لنقص السكر لدى كبار السن.", "yellow")]);
+  }
+  const isFemale = (caseData.gender || "").toLowerCase().startsWith("f") || (caseData.gender || "").includes("أنث");
+  if (isFemale && found.has("duodart")) {
+    decisions.push(["Duodart", addDecision("❌ مرفوض ديموغرافيًا (دواء للرجال فقط).", "red")]);
+  }
+  if (found.has("e_core_strips") || found.has("lancets")) {
+    decisions.push(["E-core Strips / Lancets", addDecision("⚠️ مقبول مع تبرير طبي للحاجة للقياس المتكرر.", "yellow")]);
+  }
+  
+  const rows = decisions.map(r => `<tr><td>${escapeHtml(r[0])}</td><td>${r[1]}</td></tr>`).join("");
+
+  const necList = necessary.map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>—</li>";
+  const avoidList = avoid.map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>—</li>";
+  const labsList = labs.map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>—</li>";
+
+  const refsHTML = buildRefsHTML();
+
+  return `
+<style>
+  .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
+  .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
+  .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: right; }
+  thead th { background: #f9fafb; font-weight: 700; }
+  h3,h4 { margin: 10px 0 6px; }
+  ul { margin: 0 0 8px 0; padding: 0 16px; }
+  .refs small a { color: #2563eb; text-decoration: none; }
+</style>
+<h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
+<h4>ملخص الحالة</h4>
+<p>${escapeHtml(caseData.notes || "—")}</p>
+<h4>جدول الأدوية والإجراءات</h4>
+<table>
+  <thead><tr><th>الدواء/الإجراء</th><th>قرار التأمين</th></tr></thead>
+  <tbody>${rows || ""}</tbody>
+</table>
+<h4>خدمات طبية ضرورية ومبرَّرة للتأمين الطبي</h4>
+<ul>${necList}</ul>
+<h4>خدمات يجب تجنُّبها/مراجعتها لتقليل رفض المطالبات</h4>
+<ul>${avoidList}</ul>
+<h4>تحاليل مبرَّرة بالتأمين</h4>
+<ul>${labsList}</ul>
+<div class="refs"><h4>المراجع</h4><small>${refsHTML}</small></div>
+<p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
+  `.trim();
+}
+
+// =============== MERGE LOGIC ===============
+function mergeReports(geminiHtml, detHtml) {
+  if (!geminiHtml || geminiHtml.trim().length < 100) return detHtml;
+
+  const pick = (label) => {
+    const rx = new RegExp(`<h4>${label}</h4>[\\s\\S]*?(?=<h4>|<div class="refs"|</p>\\s*$)`, "i");
+    return detHtml.match(rx)?.[0] || "";
+  };
+  const secNecessary = pick("خدمات طبية ضرورية ومبرَّرة للتأمين الطبي");
+  const secAvoid     = pick("خدمات يجب تجنُّبها/مراجعتها لتقليل رفض المطالبات");
+  const secLabs      = pick("تحاليل مبرَّرة بالتأمين");
+
+  const replaceOrAppend = (html, label, block) => {
+    const rx = new RegExp(`<h4>${label}</h4>[\\s\\S]*?(?=<h4>|<div class="refs"|</p>\\s*$)`, "i");
+    return rx.test(html) ? html.replace(rx, block) : html + "\n" + block;
+  };
+
+  let out = geminiHtml;
+  if (secNecessary) out = replaceOrAppend(out, "خدمات طبية ضرورية ومبرَّرة للتأمين الطبي", secNecessary);
+  if (secAvoid)     out = replaceOrAppend(out, "خدمات يجب تجنُّبها/مراجعتها لتقليل رفض المطالبات", secAvoid);
+  if (secLabs)      out = replaceOrAppend(out, "تحاليل مبرَّرة بالتأمين", secLabs);
+
+  return out;
+}
+
 // =============== API Handler ===============
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -246,7 +514,6 @@ export default async function handler(req, res) {
     const defaultMode = openaiKey ? "ensemble" : "gemini-only";
     const analysisMode = (body.analysisMode || defaultMode).toLowerCase();
 
-    // 1) Optional OCR (Parallel)
     let ocrBlocks = [];
     if (openaiKey && (analysisMode === "ocr+gemini" || analysisMode === "ensemble") && files.length) {
       try {
@@ -257,7 +524,6 @@ export default async function handler(req, res) {
     }
     const ocrJoined = ocrBlocks.length ? ocrBlocks.map((b) => `### ${b.filename}\n${b.text}`).join("\n\n") : "";
 
-    // 2) Process ALL files for Gemini (Parallel, with size check and Caching)
     const fileProcessingPromises = files.map((f) => {
       return new Promise(async (resolve) => {
         try {
@@ -289,12 +555,10 @@ export default async function handler(req, res) {
 
     const processedFileParts = (await Promise.all(fileProcessingPromises)).filter((p) => p);
 
-    // 3) Build all parts together for Gemini
     const allParts = [{ text: systemInstruction }, { text: buildUserPrompt(body) }];
     if (processedFileParts.length) allParts.push(...processedFileParts);
     if (ocrJoined) allParts.push({ text: `### OCR Extracted Texts\n${ocrJoined}` });
 
-    // 4) Optional ensemble JSON from OpenAI to aid Gemini (context only)
     let ensembleJson = null;
     if (openaiKey && analysisMode === "ensemble") {
       try {
@@ -307,12 +571,21 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5) Final Gemini analysis → HTML
-    const html = await geminiAnalyze(geminiKey, allParts);
+    const rulesOut = buildDecisions(body);
+    const deterministicHTML = renderDeterministicHTML(body, rulesOut);
+
+    let html = "";
+    try {
+      html = await geminiAnalyze(geminiKey, allParts);
+    } catch (e) {
+      console.warn("Gemini narrative failed, falling back to deterministic HTML only:", e.message);
+    }
     
-    // 6) Final JSON Response
+    const finalHTML = mergeReports(html, deterministicHTML);
+
     const responsePayload = {
-      htmlReport: html,
+      htmlReport: finalHTML,
+      deterministic: /خدمات طبية ضرورية/.test(finalHTML) && !/التحليل السريري العميق/.test(finalHTML),
       ocrUsed: !!ocrBlocks.length,
       ensembleUsed: !!ensembleJson
     };
@@ -324,7 +597,6 @@ export default async function handler(req, res) {
   }
 }
 
-// Increase body size limit for Base64 files
 export const config = {
   api: { bodyParser: { sizeLimit: "12mb" } }
 };
