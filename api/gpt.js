@@ -1,9 +1,9 @@
-// /api/gpt.js — Hybrid Rules Engine Doctor Analyzer
+// /api/gpt.js — Unified Expert Analyzer (Gemini + optional OpenAI OCR)
 // Runtime: Vercel / Next.js API Route (Node 18+)
 
 // ========================= ENV (Vercel → Settings → Environment Variables) =========================
 // GEMINI_API_KEY = sk-...   (required)
-// OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
+// OPENAI_API_KEY = sk-...   (optional → enables OCR)
 // ==================================================================================================
 
 import { createHash } from "crypto";
@@ -48,12 +48,55 @@ function getFileHash(base64Data) {
   return createHash("sha256").update(base64Data).digest("hex");
 }
 
-// =============== SYSTEM PROMPT FOR GEMINI (Narrative Only) ===============
+// =============== SYSTEM PROMPTS (UNIFIED EXPERT FINAL) ===============
 const systemInstruction = `
-أنت استشاري "تدقيق طبي وتشغيلي" خبير. مهمتك هي كتابة الأجزاء السردية من التقرير (الملخص، تحليل الملفات، التحليل السريري العميق، وخطة العمل) بأسلوب احترافي وموجز. سيتم تزويدك بالقرارات والقواعد المحددة مسبقًا من محرك قواعد خارجي، فلا تكررها. ركز على تقديم رؤى إضافية وسياق للحالة.
+أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
+
+[منهجية التحليل الإلزامية]
+- **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**.
+- **قاعدة الاستنتاج الصيدلاني:**
+  - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam**.
+  - **Form XR:** استنتج أنه **Metformin XR**.
+- **قاعدة كبار السن (Geriatrics):** لأي مريض عمره > 65 عامًا، قم بالتحقق الإجباري من:
+  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron).
+  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط.
+- **قاعدة أمان الأدوية المحددة:**
+  - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**".
+  - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
+  - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
+
+[صياغة قرارات التأمين (إلزامية)]
+- استخدم الصيغ الدقيقة التالية:
+  - **Amlodipine:** "⚠️ قابل للمراجعة: يُلغى إذا استُخدم Triplixam (ازدواجية CCB)."
+  - **Co-Taburan:** "❌ مرفوض إذا وُجد Triplixam (ACEI+ARB ممنوع)."
+  - **Triplixam:** "⚠️ مشروط: يُعتمد فقط بعد إلغاء Co-Taburan وAmlodipine المنفصل."
+  - **Metformin XR:** "⚠️ موافقة مشروطة: ابدأ بعد تأكيد eGFR ≥30؛ إن لزم فابدأ 500 mg وتدرّج."
+  - **Diamicron MR:** "⚠️ موافقة بحذر: فكّر ببديل أقل إحداثًا لنقص السكر لدى كبار السن."
+  - **E-core Strips/Lancets:** "⚠️ مقبول مع تبرير طبي للحاجة للقياس المتكرر."
+  - **Duodart (لأنثى):** "❌ مرفوض ديموغرافيًا (دواء للرجال فقط)."
+
+[التنسيق البصري (Visual Formatting) - إلزامي]
+- قم بتضمين كتلة <style> التالية في بداية تقرير الـ HTML.
+- لكل قرار تأمين، قم بتغليف النص والرمز داخل <span> مع الكلاس المناسب.
+
+[البنية]
+<style>
+  .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
+  .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
+  .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
+</style>
+<h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
+<h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السريري العميق</h4>
+<h4>جدول الأدوية والإجراءات</h4>
+<table><thead><tr>
+<th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
+</tr></thead><tbody></tbody></table>
+<h4>خدمات طبية ضرورية ومبرَّرة للتأمين الطبي</h4><ul></ul>
+<h4>خدمات يجب تجنُّبها/مراجعتها لتقليل رفض المطالبات</h4><ul></ul>
+<h4>خطة العمل</h4><ol></ol>
+<p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
 `;
 
-// =============== User Prompt Pack ===============
 function buildUserPrompt(d = {}) {
   return `
 **بيانات المريض:**
@@ -119,138 +162,6 @@ async function geminiAnalyze(apiKey, allParts) {
   } catch { return raw; }
 }
 
-// =============== HYBRID RULES ENGINE ===============
-function normName(s = "") { return (s || "").toLowerCase().replace(/[^\w]+/g, " ").trim(); }
-
-function detectEntitiesFromText(text = "") {
-  const n = normName(text);
-  const found = new Set();
-  const hits = [
-    ["duodart", /duodart|tamsulosin|dutasteride/],
-    ["triplixam", /triplixam|triplex\b|perindopril/],
-    ["co_taburan", /co[ -]?tabu[rv]an|co[ -]?diovan|valsartan/],
-    ["amlodipine", /\bamlodipine\b|amlopin|amlo/],
-    ["metformin_xr", /metformin\s*(xr|er)|form\s*xr/],
-    ["diamicron_mr", /diamicron|gliclazide/],
-    ["rozavi", /\brozavi\b|rosuvastatin/],
-    ["pantomax", /pantomax|pantoprazole/],
-    ["e_core_strips", /e[- ]?core.*strip|test\s*strip/],
-    ["lancets", /lancet/],
-    ["bph_note", /\bBPH\b|prostat/i],
-  ];
-  for (const [key, rx] of hits) if (rx.test(n)) found.add(key);
-  return found;
-}
-
-function parseEGFR(labsText = "") {
-  const m = labsText.match(/eGFR\s*[:=]?\s*(\d+(\.\d+)?)/i);
-  if (!m) return null;
-  return Number(m[1]);
-}
-
-function buildDecisions(caseData = {}, ocrText = "") {
-  const combinedText = [caseData.medications, caseData.notes, caseData.labResults, ocrText].join("\n");
-  const set = detectEntitiesFromText(combinedText);
-  const isFemale = (caseData.gender || "").toLowerCase().startsWith("f") || (caseData.gender || "").includes("أنث");
-  const age = Number(caseData.age || 0) || null;
-  const eGFR = parseEGFR(caseData.labResults || ocrText);
-
-  const necessary = [];
-  const avoid = [];
-  const labs = [];
-
-  const hasACEI = set.has("triplixam");
-  const hasARB = set.has("co_taburan");
-
-  if (isFemale && (set.has("duodart") || set.has("bph_note"))) {
-    avoid.push("Duodart (تامسولوسين/دوتاستيريد): يُرفَض ديموغرافيًا: دواء موجّه للرجال (BPH) ومضاد استطباب للنساء.");
-  }
-
-  if (hasACEI && hasARB) {
-    avoid.push("تحالف محظور: ACEI + ARB: لا تجمع Triplixam مع Co-Taburan. المخاطر: فرط بوتاسيوم/قصور كلوي/هبوط ضغط.");
-  }
-
-  if (hasACEI && set.has("amlodipine")) {
-    avoid.push("ازدواجية Amlodipine: إذا اعتُمد Triplixam، ألغِ Amlodipine المنفصل (الدواء مكرر داخل التركيبة).");
-  }
-
-  if (set.has("metformin_xr")) {
-    if (eGFR !== null && eGFR < 30) {
-      avoid.push("Metformin XR بجرعة بدء عالية دون eGFR: تجنّب صرف 750 mg كجرعة بدء أو صرف طويل (×90) من دون توثيق eGFR وخطة معايرة تدريجية.");
-    } else {
-      necessary.push("Metformin XR (Form XR): الاستمرار أو البدء مشروط بتوثيق eGFR ≥30. البدء بين 30–45 غير موصى به. إن لزم البدء: 500 mg مساءً مع الطعام ثم زيادة تدريجية.");
-    }
-  }
-
-  if (age && age >= 65 && set.has("diamicron_mr")) {
-    avoid.push("Diamicron MR لدى كبار السن دون خطة أمان: قلّل الجرعة أو اختر بديلًا أقل إحداثًا لنقص السكر، وأرفق خطة رصد.");
-  }
-
-  if (set.has("e_core_strips") || set.has("lancets")) {
-    necessary.push("مستلزمات قياس السكر (E-core Strips / Lancets): التزم بحدود Medicare Part B مرجعًا: حتى 300 شريط/لانست/90 يوم لمستخدمي الإنسولين، و100/90 يوم لغير المستخدمين، ويمكن صرف كميات أعلى إذا وُثِّقت ضرورة طبية.");
-  }
-
-  if(hasACEI || hasARB) {
-    labs.push("اختيار نظام ضغطٍ واحد ومتابعة مخبرية: بعد تثبيت النظام، اطلب كرياتينين/eGFR + بوتاسيوم بعد 1–2 أسبوع.");
-  }
-  if(set.has("rozavi")) {
-    labs.push("Rosuvastatin (Rozavi 10 mg): أجرِ ALT/AST قبل البدء، وأعد الفحص فقط عند وجود أعراض/اشتباه.");
-  }
-  if(set.has("amlodipine") || set.has("duodart")) {
-    labs.push("قياس ضغط وضعي (Orthostatic BP): يُنصح بقياس الضغط بالوضعيات بعد ضبط أدوية الضغط للحد من هبوط الضغط والسقوط لدى الكبار.");
-  }
-
-  return { set, necessary, avoid, labs };
-}
-
-function renderHTML(geminiNarrative, rulesOut) {
-  const { necessary = [], avoid = [], labs = [] } = rulesOut;
-
-  const necList = necessary.map((x) => `<li>${x}</li>`).join("") || "<li>لا توجد توصيات محددة.</li>";
-  const avoidList = avoid.map((x) => `<li>${x}</li>`).join("") || "<li>لا توجد تحذيرات محددة.</li>";
-  const labsList = labs.map((x) => `<li>${x}</li>`).join("") || "<li>لا توجد توصيات محددة.</li>";
-
-  // Extract narrative parts from Gemini's output
-  const summaryMatch = geminiNarrative.match(/<h4>ملخص الحالة<\/h4>([\s\S]*?)(?=<h4>)/i);
-  const deepAnalysisMatch = geminiNarrative.match(/<h4>التحليل السريري العميق<\/h4>([\s\S]*?)(?=<h4>)/i);
-  const tableMatch = geminiNarrative.match(/<h4>جدول الأدوية والإجراءات<\/h4>([\s\S]*?)(?=<h4>)/i);
-  const actionPlanMatch = geminiNarrative.match(/<h4>خطة العمل<\/h4>([\s\S]*?)(?=<\/p>)/i);
-  
-  const summary = summaryMatch ? summaryMatch[1] : "<p>لم يتمكن النموذج من توليد ملخص.</p>";
-  const deepAnalysis = deepAnalysisMatch ? deepAnalysisMatch[1] : "<p>لم يتمكن النموذج من توليد تحليل.</p>";
-  const table = tableMatch ? tableMatch[1] : "<table></table>";
-  const actionPlan = actionPlanMatch ? actionPlanMatch[1] : "<ol><li>مراجعة الطبيب المعالج.</li></ol>";
-
-  return `
-<style>
-  .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
-  .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
-  .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: right; }
-  thead th { background: #f9fafb; font-weight: 700; }
-  h3,h4 { margin: 10px 0 6px; }
-  ul, ol { margin: 0 0 8px 0; padding: 0 16px; }
-</style>
-<h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-<h4>ملخص الحالة</h4>
-${summary}
-<h4>التحليل السريري العميق</h4>
-${deepAnalysis}
-<h4>جدول الأدوية والإجراءات</h4>
-${table}
-<h4>خدمات طبية ضرورية ومبرَّرة للتأمين الطبي</h4>
-<ul>${necList}</ul>
-<h4>خدمات يجب تجنُّبها/مراجعتها لتقليل رفض المطالبات</h4>
-<ul>${avoidList}</ul>
-<h4>تحاليل مبرَّرة بالتأمين</h4>
-<ul>${labsList}</ul>
-<h4>خطة العمل</h4>
-${actionPlan}
-<p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
-  `.trim();
-}
-
 // =============== API Handler ===============
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -275,9 +186,6 @@ export default async function handler(req, res) {
         console.warn("OCR skipped:", e.message);
       }
     }
-    
-    // Always run the rules engine first
-    const rulesOut = buildDecisions(body, ocrText);
 
     const fileProcessingPromises = files.map((f) => {
       return new Promise(async (resolve) => {
@@ -314,17 +222,10 @@ export default async function handler(req, res) {
     if (processedFileParts.length) allParts.push(...processedFileParts);
     if (ocrText) allParts.push({ text: `### OCR Extracted Texts\n${ocrText}` });
 
-    let geminiNarrative = "";
-    try {
-      geminiNarrative = await geminiAnalyze(geminiKey, allParts);
-    } catch (e) {
-      console.warn("Gemini narrative generation failed:", e.message);
-    }
+    const html = await geminiAnalyze(geminiKey, allParts);
     
-    const finalHTML = renderHTML(geminiNarrative, rulesOut);
-
     const responsePayload = {
-      htmlReport: finalHTML,
+      htmlReport: html,
     };
 
     return res.status(200).json(responsePayload);
