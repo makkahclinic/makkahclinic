@@ -1,293 +1,261 @@
-// /api/unified-expert-analyzer.js — Advanced Medical-Operational Analyzer Prototype
+// /api/gpt.js — Unified Expert Analyzer (Gemini + optional OpenAI OCR)
 // Runtime: Vercel / Next.js API Route (Node 18+)
-// WARNING: For Educational & Prototyping Purposes ONLY. Not for clinical use.
 
 // ========================= ENV (Vercel → Settings → Environment Variables) =========================
-// GEMINI_API_KEY=your_gemini_api_key_here
+// GEMINI_API_KEY = sk-...   (required)
+// OPENAI_API_KEY = sk-...   (optional → enables OCR)
 // ==================================================================================================
 
 import { createHash } from "crypto";
 
-// =============== CONFIGURATION ===============
+// =============== CONFIG ===============
 const GEMINI_MODEL = "gemini-1.5-pro-latest";
 const DEFAULT_TIMEOUT_MS = 180_000;
+const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+const MAX_FILES_PER_REQUEST = 30;
+const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 
-// =============== MOCK DRUG DATABASE & CLINICAL KNOWLEDGE BASE ===============
-// In a real system, this would be a dedicated API or a large, validated database.
-const CLINICAL_KNOWLEDGE_BASE = {
-    // Drug Families & Classes
-    'triplixam': { family: 'ACEI_COMBO', classes: ['ace_inhibitor', 'ccb', 'diuretic'], components: ['perindopril', 'amlodipine', 'indapamide'] },
-    'co-taburan': { family: 'ARB_COMBO', classes: ['arb', 'diuretic'], components: ['valsartan', 'hydrochlorothiazide'] },
-    'amlodipine': { family: 'CCB', classes: ['ccb'] },
-    'metformin': { family: 'Biguanide', classes: ['antidiabetic'] },
-    'diamicron': { family: 'Sulfonylurea', classes: ['antidiabetic'] },
-    'duodart': { family: 'BPH_MED', classes: ['5-alpha_reductase_inhibitor'], forGender: 'male' },
-    'rozavi': { family: 'Statin', classes: ['statin'] },
-    // A mapping of common names/typos to the canonical name
-    'canonicalNames': {
-        'triplex': 'triplixam',
-        'metformin xr': 'metformin',
-        'form xr': 'metformin',
-        'co taburan': 'co-taburan',
-        'diamicron mr': 'diamicron'
-    }
-};
+// =============== CACHE ===============
+const fileCache = new Map();
 
-// =============== CORE ALGORITHMS & HELPERS ===============
-
+// =============== UTILS ===============
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function fetchWithRetry(url, options, { retries = 3, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...options, signal: c.signal });
+    if (!r.ok && retries > 0 && RETRY_STATUS.has(r.status)) {
+      await sleep((4 - retries) * 1000);
+      return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
+    }
+    return r;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function detectMimeFromB64(b64 = "") {
+  const h = (b64 || "").slice(0, 16);
+  if (h.includes("JVBERi0")) return "application/pdf";
+  if (h.includes("iVBORw0")) return "image/png";
+  if (h.includes("/9j/")) return "image/jpeg";
+  if (h.includes("UklGR")) return "image/webp";
+  return "image/jpeg";
+}
+function getFileHash(base64Data) {
+  return createHash("sha256").update(base64Data).digest("hex");
+}
+
+// =============== SYSTEM PROMPTS (DEFINITIVE EXPERT FINAL) ===============
+const systemInstruction = `
+أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
+
+[قواعد التحليل الأساسية (غير قابلة للتفاوض)]
+- **قاعدة الأولوية المطلقة (مصدر الحقيقة):** البيانات التي يقدمها المستخدم يدويًا في قسم "بيانات المريض" هي **مصدر الحقيقة المطلق وغير القابل للنقاش**. إذا وجدت معلومة متضاربة في ملف مرفق، يجب عليك الإشارة إلى هذا التضارب في قسم "تحليل الملفات المرفوعة"، ولكن **يجب أن تبني تحليلك النهائي وقراراتك بالكامل على بيانات المستخدم اليدوية**.
+- **قاعدة الأعراض الخطيرة (Red Flags):** إذا كان المريض **مدخنًا** ويعاني من **سعال** (خاصة مع دم أو لمدة طويلة)، فمن **الإلزامي** التوصية بإجراء **أشعة سينية على الصدر (Chest X-ray)** في قسم "خدمات طبية ضرورية".
+- **قاعدة التوافق الديموغرافي المطلق:** بناءً على جنس المريض من بيانات المستخدم، تحقق من تطابق التشخيصات والأدوية. إذا كان المريض **ذكرًا**، فإن تشخيص BPH ووصف Duodart يكونان منطقيين. إذا كانت **أنثى**، فهما خطأ جوهري.
+
+[منهجية التحليل التفصيلية]
+- **قاعدة الاستنتاج الصيدلاني:**
+  - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam**.
+  - **Form XR:** استنتج أنه **Metformin XR**.
+- **قاعدة كبار السن (Geriatrics):** لأي مريض عمره > 65 عامًا، قم بالتحقق الإجباري من:
+  1.  **خطر نقص السكر:** عند وجود أدوية Sulfonylurea (مثل Diamicron).
+  2.  **خطر السقوط:** عند وجود دوائين أو أكثر يخفضان الضغط.
+- **قاعدة أمان الأدوية المحددة:**
+  - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**".
+  - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
+  - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
+
+[قاعدة بيانات التحاليل المخبرية الإلزامية]
+- يجب أن تدمج التوصيات التالية مباشرة في قسم "خطة العمل".
+- **Metformin XR:** توصية بفحص **eGFR/Creatinine** قبل البدء ثم دوريًا.
+- **Metformin XR (استخدام طويل الأمد):** توصية بفحص **فيتامين B12**.
+- **Co-Taburan أو Triplixam:** توصية بفحص **Potassium (K+)** و **Creatinine** بعد 1-2 أسبوع من بدء العلاج أو تعديل الجرعة.
+- **Rozavi (Statin):** توصية بفحص **ALT/AST** عند البداية وعند ظهور أعراض فقط.
+- **هشاشة العظام (Osteoporosis):** توصية بفحص **فيتامين D (25-OH)**.
+
+[صياغة قرارات التأمين (إلزامية)]
+- استخدم الصيغ الدقيقة التالية وقم بتغليفها في الـ span اللوني المناسب:
+  - **Amlodipine:** "⚠️ قابل للمراجعة: يُلغى إذا استُخدم Triplixam (ازدواجية CCB)."
+  - **Co-Taburan:** "❌ مرفوض إذا وُجد Triplixam (ACEI+ARB ممنوع)."
+  - **Triplixam:** "⚠️ مشروط: يُعتمد فقط بعد إلغاء Co-Taburan وAmlodipine المنفصل."
+  - **Metformin XR:** "⚠️ موافقة مشروطة: ابدأ بعد تأكيد eGFR ≥30؛ إن لزم فابدأ 500 mg وتدرّج."
+  - **Diamicron MR:** "⚠️ موافقة بحذر: فكّر ببديل أقل إحداثًا لنقص السكر لدى كبار السن."
+  - **E-core Strips/Lancets:** "⚠️ مقبول مع تبرير طبي للحاجة للقياس المتكرر."
+  - **Duodart (لأنثى):** "❌ مرفوض ديموغرافيًا (دواء للرجال فقط)."
+  - **للأدوية غير الواضحة:** لأي دواء لم يتم التعرف عليه بوضوح، يجب أن يكون القرار **"<span class="status-yellow">⚠️ قابل للمراجعة: يحتاج لتوضيح</span>"**.
+  - **للأدوية السليمة:** لأي دواء لا تنطبق عليه أي من القواعد السابقة، يجب أن يكون القرار **"<span class="status-green">✅ مقبول</span>"**.
+
+[البنية]
+<style>
+  .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
+  .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
+  .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
+  .section-title { color: #1e40af; font-weight: bold; }
+  .critical { color: #991b1b; font-weight: bold; }
+</style>
+<h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
+<h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السريري العميق</h4>
+<h4>جدول الأدوية والإجراءات</h4>
+<table><thead><tr>
+<th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
+</tr></thead><tbody></tbody></table>
+<h4 class="section-title">خدمات طبية ضرورية ومقبولة تأمينياً (مدعومة بالأدلة العلمية)</h4>
+<h5 class="critical">تعديلات دوائية حرجة (Urgent Medication Adjustments)</h5>
+<ul></ul>
+<h5>تحاليل مخبرية ضرورية (Essential Lab Tests)</h5>
+<ul></ul>
+<h5>متابعة وفحوصات دورية (Routine Monitoring & Tests)</h5>
+<ul></ul>
+<p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
+`;
+
+// Corrected buildUserPrompt to include all relevant fields
+function buildUserPrompt(d = {}) {
+  return `
+**بيانات المريض:**
+العمر: ${d.age ?? "غير محدد"}
+الجنس: ${d.gender ?? "غير محدد"}
+هل المريض مدخن؟: ${d.isSmoker ? 'نعم' : 'لا'}
+باك-سنة: ${d.packYears ?? "غير محدد"}
+وصف الحالة (بما في ذلك الأعراض مثل السعال): ${d.notes || "—"}
+أمراض مُدرجة: ${Array.isArray(d.problems) ? d.problems.join(", ") : "—"}
+**أدوية/إجراءات مكتوبة:** ${d.medications || "—"}
+**عدد الملفات المرفوعة:** ${Array.isArray(d.files) ? d.files.length : 0}
+`;
+}
+
+// =============== OpenAI OCR ===============
+async function ocrWithOpenAI(openaiKey, files) {
+  const IMG = new Set(["image/jpeg", "image/png", "image/webp"]);
+  const eligibleFiles = files.filter((f) => IMG.has(f.type || detectMimeFromB64(f.data)));
+
+  const ocrPromises = eligibleFiles.map(async (f) => {
     try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        if (!response.ok && retries > 0 && [429, 500, 503].includes(response.status)) {
-            await sleep((4 - retries) * 1000);
-            return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: `data:${f.type || detectMimeFromB64(f.data)};base64,${f.data}` } }] }],
+          temperature: 0.1, max_tokens: 2000
+        })
+      });
+      if (!res.ok) return null;
+      const j = await res.json();
+      return j?.choices?.[0]?.message?.content || "";
+    } catch (e) { return null; }
+  });
+
+  const results = await Promise.all(ocrPromises);
+  return results.filter(Boolean).join("\n\n");
+}
+
+
+// =============== Gemini Files & Analysis ===============
+async function geminiUpload(apiKey, base64Data, mime) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/files?key=${apiKey}`;
+  const buf = Buffer.from(base64Data, "base64");
+  const r = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": mime }, body: buf });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Gemini file upload failed (${r.status}): ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  return j?.file?.uri;
+}
+
+async function geminiAnalyze(apiKey, allParts) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const payload = {
+    contents: [{ role: "user", parts: allParts }],
+    generationConfig: { temperature: 0.2, topP: 0.9, topK: 40, maxOutputTokens: 8192 }
+  };
+  const r = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const raw = await r.text();
+  if (!r.ok) throw new Error(`Gemini error ${r.status}: ${raw.slice(0, 500)}`);
+  try {
+    const j = JSON.parse(raw);
+    return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```html|```/g, "").trim();
+  } catch { return raw; }
+}
+
+// =============== API Handler ===============
+export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+  try {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("GEMINI_API_KEY missing.");
+    const openaiKey = process.env.OPENAI_API_KEY || null;
+
+    const body = req.body || {};
+    const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
+
+    let ocrText = "";
+    if (openaiKey && files.length) {
+      try {
+        ocrText = await ocrWithOpenAI(openaiKey, files);
+      } catch (e) {
+        console.warn("OCR skipped:", e.message);
+      }
+    }
+
+    const fileProcessingPromises = files.map((f) => {
+      return new Promise(async (resolve) => {
+        try {
+          const mimeType = f.type || detectMimeFromB64(f.data || "");
+          const fileBuffer = Buffer.from(f.data || "", "base64");
+          const hash = getFileHash(f.data || "");
+
+          if (fileCache.has(hash)) {
+            resolve(fileCache.get(hash));
+            return;
+          }
+
+          let part;
+          if (fileBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
+            const uri = await geminiUpload(geminiKey, f.data, mimeType);
+            part = { file_data: { mime_type: mimeType, file_uri: uri } };
+          } else {
+            part = { inline_data: { mime_type: mimeType, data: f.data } };
+          }
+
+          fileCache.set(hash, part);
+          resolve(part);
+        } catch (e) {
+          console.warn(`File processing failed for ${f.name || "file"}:`, e.message);
+          resolve(null);
         }
-        return response;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
+      });
+    });
 
-/**
- * Normalizes a drug name using the knowledge base.
- * @param {string} name - The raw drug name.
- * @returns {string} The canonical drug name in lowercase.
- */
-function getCanonicalDrugName(name) {
-    if (!name) return "";
-    const lowerName = name.trim().toLowerCase();
-    return CLINICAL_KNOWLEDGE_BASE.canonicalNames[lowerName] || lowerName;
-}
+    const processedFileParts = (await Promise.all(fileProcessingPromises)).filter((p) => p);
 
-/**
- * Enriches a list of drug names with structured data from the knowledge base.
- * @param {string[]} medicationNames - An array of raw drug names.
- * @returns {object[]} An array of structured drug objects.
- */
-function enrichMedicationData(medicationNames) {
-    const uniqueNames = [...new Set(medicationNames.map(getCanonicalDrugName).filter(Boolean))];
-    return uniqueNames.map(name => ({
-        name: name,
-        ...CLINICAL_KNOWLEDGE_BASE[name]
-    }));
-}
+    const allParts = [{ text: systemInstruction }, { text: buildUserPrompt(body) }];
+    if (processedFileParts.length) allParts.push(...processedFileParts);
+    if (ocrText) allParts.push({ text: `### OCR Extracted Texts\n${ocrText}` });
 
-// =============== LAYER 2: KNOWLEDGE EXTRACTION (NER) ===============
-async function extractMedicalEntities(text, apiKey) {
-    if (!text || !text.trim()) {
-        return { medications: [], diagnoses: [], symptoms: [] };
-    }
-    const NER_PROMPT = `Analyze the following medical text. Extract key entities.
-Format the output as a single, clean JSON object: {"medications": ["drug name"], "diagnoses": ["condition"], "symptoms": ["symptom"]}.
-If you find nothing for a category, return an empty array.
-TEXT: "${text}"`;
+    const html = await geminiAnalyze(geminiKey, allParts);
     
-    try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-        const payload = {
-            contents: [{ role: "user", parts: [{ text: NER_PROMPT }] }],
-            generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
-        };
-        const res = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-        if (!res.ok) return { medications: [], diagnoses: [], symptoms: [] };
-        const raw = await res.text();
-        // Clean the response from markdown backticks
-        const cleanedJsonString = raw.replace(/```json|```/g, "").trim();
-        const j = JSON.parse(cleanedJsonString);
-        return j?.candidates?.[0]?.content?.parts?.[0]?.text ? JSON.parse(j.candidates[0].content.parts[0].text) : { medications: [], diagnoses: [], symptoms: [] };
-    } catch (e) {
-        console.error("NER Extraction Failed:", e);
-        return { medications: [], diagnoses: [], symptoms: [] }; // Fallback on error
-    }
-}
-
-
-// =============== LAYER 3: CLINICAL RULES ENGINE ===============
-function clinicalRulesEngine(patientData, enrichedMeds) {
-    const alerts = [];
-    const recommendations = [];
-    const insuranceDecisions = {};
-
-    const context = {
-        ...patientData,
-        meds: enrichedMeds,
-        hasMedClass: (cls) => enrichedMeds.some(m => m.classes?.includes(cls)),
-        hasMedFamily: (fam) => enrichedMeds.some(m => m.family === fam),
-        getMed: (name) => enrichedMeds.find(m => m.name === name)
+    const responsePayload = {
+      htmlReport: html,
     };
 
-    // --- RULE SET ---
-
-    // 1. Critical Interaction: ACEI + ARB
-    if (context.hasMedFamily('ACEI_COMBO') && context.hasMedFamily('ARB_COMBO')) {
-        alerts.push({ level: 'critical', text: 'تعارض خطير وممنوع: الجمع بين دواء يحتوي على ACEI (مثل Triplixam) وآخر يحتوي على ARB (مثل Co-Taburan).' });
-        insuranceDecisions['co-taburan'] = `<span class="status-red">❌ مرفوض قطعًا (تعارض ACEI+ARB)</span>`;
-    }
-
-    // 2. Therapeutic Duplication: Redundant CCB
-    if (context.getMed('amlodipine') && context.hasMedClass('ccb')) {
-         if (context.getMed('triplixam')?.components?.includes('amlodipine')) {
-            alerts.push({ level: 'high', text: 'ازدواجية علاجية: وصف Amlodipine بشكل منفصل مع Triplixam الذي يحتوي عليه بالفعل.' });
-            insuranceDecisions['amlodipine'] = `<span class="status-yellow">⚠️ قابل للمراجعة: يُلغى لوجوده في Triplixam</span>`;
-         }
-    }
-
-    // 3. Geriatric Risk: Hypoglycemia
-    if (context.age > 65 && context.hasMedFamily('Sulfonylurea')) {
-        alerts.push({ level: 'medium', text: 'خطر نقص السكر في الدم لدى كبار السن مرتفع مع استخدام Sulfonylurea (مثل Diamicron).' });
-        insuranceDecisions['diamicron'] = `<span class="status-yellow">⚠️ موافقة بحذر: خطر نقص السكر لدى كبار السن</span>`;
-    }
-    
-    // 4. Geriatric Risk: Falls
-    const antiHypertensives = enrichedMeds.filter(m => m.classes?.includes('ace_inhibitor') || m.classes?.includes('arb') || m.classes?.includes('ccb') || m.classes?.includes('diuretic'));
-    if (context.age > 65 && antiHypertensives.length >= 2) {
-        alerts.push({ level: 'medium', text: 'خطر السقوط مرتفع بسبب وجود دوائين أو أكثر لخفض ضغط الدم.'});
-    }
-
-    // 5. Contraindication/Safety Check: Metformin & eGFR
-    if (context.hasMedFamily('Biguanide')) {
-        recommendations.push('**إلزامي قبل البدء:** فحص وظائف الكلى (eGFR/Creatinine). Metformin هو مضاد استطباب إذا كان eGFR < 30.');
-        insuranceDecisions['metformin'] = `<span class="status-yellow">⚠️ موافقة مشروطة: بعد تأكيد eGFR ≥ 30</span>`;
-    }
-    
-    // 6. Long-term Use Check: Metformin & B12
-    if (context.hasMedFamily('Biguanide')) {
-        recommendations.push('**للاستخدام طويل الأمد:** مراقبة مستوى فيتامين B12 بشكل دوري.');
-    }
-
-    // 7. Safety Monitoring: Statins & ACEI/ARB
-    if (context.hasMedFamily('Statin')) recommendations.push('فحص إنزيمات الكبد (ALT/AST) عند البدء أو عند ظهور أعراض.');
-    if (context.hasMedFamily('ACEI_COMBO') || context.hasMedFamily('ARB_COMBO')) {
-        recommendations.push('فحص البوتاسيوم (K+) ووظائف الكلى بعد 1-2 أسبوع من بدء العلاج.');
-    }
-
-    // 8. Demographic Mismatch
-    if (context.gender === 'female' && context.hasMedFamily('BPH_MED')) {
-        alerts.push({ level: 'critical', text: 'خطأ جوهري: وصف دواء Duodart (لعلاج البروستاتا) لمريضة أنثى.' });
-        insuranceDecisions['duodart'] = `<span class="status-red">❌ مرفوض ديموغرافيًا (دواء للرجال)</span>`;
-    }
-    
-    // 9. Red Flag Rule: Smoker with Cough
-    if (context.isSmoker && context.symptoms?.some(s => s.toLowerCase().includes('cough') || s.toLowerCase().includes('سعال'))) {
-         recommendations.push('**تنبيه (Red Flag):** المريض مدخن ولديه سعال. **إجراء أشعة سينية على الصدر (Chest X-ray) ضروري** لاستبعاد أسباب خطيرة.');
-    }
-
-    return { alerts, recommendations, insuranceDecisions };
-}
-
-
-// =============== LAYER 5: SYNTHESIS & REPORT GENERATION ===============
-function buildFinalReport(context) {
-    const { patientData, alerts, recommendations, insuranceDecisions, allMeds } = context;
-
-    const medicationRows = allMeds.map(med => {
-        const canonicalName = getCanonicalDrugName(med);
-        const decision = insuranceDecisions[canonicalName] || `<span class="status-green">✅ مقبول</span>`;
-        return `<tr>
-            <td>${med}</td>
-            <td>${decision}</td>
-        </tr>`;
-    }).join('');
-
-    const alertList = alerts.map(a => `<li class="alert-${a.level}">${a.text}</li>`).join('');
-    const recList = recommendations.map(r => `<li>${r}</li>`).join('');
-
-    return `
-    <style>
-      .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
-      .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
-      .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
-      .section-title { color: #1e40af; font-weight: bold; border-bottom: 2px solid #1e40af; padding-bottom: 5px; margin-top: 20px; }
-      .alert-critical { color: #721c24; font-weight: bold; }
-      .alert-high { color: #856404; }
-      .alert-medium { color: #0c5460; }
-    </style>
-    <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-    
-    <h4 class="section-title">ملخص بيانات المريض</h4>
-    <p>
-        <strong>العمر:</strong> ${patientData.age || 'N/A'} | 
-        <strong>الجنس:</strong> ${patientData.gender || 'N/A'} | 
-        <strong>مدخن:</strong> ${patientData.isSmoker ? 'نعم' : 'لا'} | 
-        <strong>ملاحظات:</strong> ${patientData.notes || 'لا يوجد'}
-    </p>
-
-    <h4 class="section-title">التحليل السريري العميق والتنبيهات</h4>
-    ${alerts.length > 0 ? `<ul>${alertList}</ul>` : '<p>لم يتم رصد تنبيهات سريرية حرجة.</p>'}
-
-    <h4 class="section-title">جدول قرارات التأمين للأدوية</h4>
-    <table>
-        <thead><tr><th>الدواء/الإجراء</th><th>قرار التأمين المبدئي</th></tr></thead>
-        <tbody>${medicationRows}</tbody>
-    </table>
-
-    <h4 class="section-title">خطة العمل الإلزامية والخدمات الضرورية</h4>
-    ${recommendations.length > 0 ? `<ul>${recList}</ul>` : '<p>لا توجد توصيات إلزامية بناءً على البيانات الحالية.</p>'}
-
-    <hr>
-    <p><strong>إخلاء مسؤولية:</strong> هذا التقرير تم إنشاؤه بواسطة نظام ذكاء اصطناعي وهو لأغراض توضيحية فقط ولا يغني عن الحكم السريري للطبيب المختص.</p>
-    `;
-}
-
-// =============== API HANDLER (ORCHESTRATOR) ===============
-export default async function handler(req, res) {
-    if (req.method !== "POST") {
-        return res.status(405).json({ error: "Method Not Allowed" });
-    }
-
-    try {
-        const geminiKey = process.env.GEMINI_API_KEY;
-        if (!geminiKey) throw new Error("GEMINI_API_KEY is not configured.");
-
-        const body = req.body || {};
-        const patientData = {
-            age: body.age,
-            gender: body.gender,
-            isSmoker: body.isSmoker,
-            notes: body.notes || "",
-            problems: body.problems || [],
-            medications: body.medications || []
-        };
-
-        // For this example, we'll use OCR on the `notes` field if it's long.
-        // In a real app, this would process file uploads.
-        const textForExtraction = patientData.notes;
-        
-        // --- Orchestration ---
-        // 1. Extract entities from free text
-        const extractedEntities = await extractMedicalEntities(textForExtraction, geminiKey);
-        
-        // 2. Combine and enrich medication data
-        const allMedicationNames = [...new Set([...patientData.medications, ...extractedEntities.medications])];
-        const enrichedMeds = enrichMedicationData(allMedicationNames);
-
-        // 3. Add extracted symptoms to patient context
-        patientData.symptoms = extractedEntities.symptoms;
-
-        // 4. Run the rules engine
-        const { alerts, recommendations, insuranceDecisions } = clinicalRulesEngine(patientData, enrichedMeds);
-        
-        // 5. Synthesize and generate the final report
-        const htmlReport = buildFinalReport({
-            patientData,
-            alerts,
-            recommendations,
-            insuranceDecisions,
-            allMeds: allMedicationNames
-        });
-
-        return res.status(200).json({ htmlReport });
-
-    } catch (err) {
-        console.error("Handler Error:", err);
-        return res.status(500).json({ error: "Internal Server Error", detail: err.message });
-    }
+    return res.status(200).json(responsePayload);
+  } catch (err) {
+    console.error("Server error:", err);
+    return res.status(500).json({ error: "Internal server error", detail: err.message });
+  }
 }
 
 export const config = {
-    api: { bodyParser: { sizeLimit: "2mb" } }
+  api: { bodyParser: { sizeLimit: "12mb" } }
 };
