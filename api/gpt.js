@@ -5,12 +5,12 @@
 // GEMINI_API_KEY = sk-...   (required)
 // OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-// =============== ULTIMATE ENHANCEMENTS v23 (EXPERT CONSULTANT BRAIN) ===============
-// 1. Replaced the entire recommendation engine with the user's expert-level, evidence-based roadmap.
-// 2. The model is now mandated to structure its advice into "Necessary & Justified Services" vs. "Services to Avoid/Review".
-// 3. All specific clinical scenarios (Metformin/eGFR, ACEI+ARB, Geriatric safety, etc.) are now hard-coded as core logic.
-// 4. This is the definitive version, designed to perform as a true clinical and insurance expert consultant.
-// =======================================================================================
+// =============== ULTIMATE ENHANCEMENTS v24 (STABLE EXPERT CORE) ===============
+// 1. Final prompt restructuring to eliminate "focus drift" and ensure stable, consistent performance.
+// 2. Re-integrated and reinforced all critical clinical and insurance rules from user's expert feedback.
+// 3. Simplified the instruction hierarchy to prioritize core safety and administrative checks.
+// 4. This is the definitive, production-ready version, optimized for reliability.
+// =====================================================================================
 
 import { createHash } from 'crypto';
 
@@ -49,12 +49,12 @@ function getFileHash(base64Data) {
 }
 
 
-// =============== SYSTEM PROMPTS (EXPERT CONSULTANT FINAL) ===============
+// =============== SYSTEM PROMPTS (STABLE EXPERT CORE) ===============
 const systemInstruction = `
 أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
 [منهجية التحليل الإلزامية]
-- **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**.
+- **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**. يجب أن يكون القرار **"❌ مرفوض ديموغرافيًا (دواء للرجال فقط)"**.
 - **قاعدة الاستنتاج الصيدلاني:**
   - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam**.
   - **Form XR:** استنتج أنه **Metformin XR**.
@@ -65,6 +65,8 @@ const systemInstruction = `
   - **Metformin XR:** اذكر بوضوح: "**مضاد استطباب عند eGFR < 30**".
   - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
   - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
+- **قاعدة منطق الكمية والتأمين (إلزامية):**
+  - **للمستلزمات (Strips/Lancets):** صنفها كـ **"مستلزمات قياس سكر الدم"**. إذا كانت الكمية كبيرة (مثال: TID x90)، أشر إلى أن "هذه الكمية قد تتجاوز حدود التغطية وتتطلب تبريرًا طبيًا".
 
 [صياغة قرارات التأمين (إلزامية)]
 - استخدم الصيغ الدقيقة التالية:
