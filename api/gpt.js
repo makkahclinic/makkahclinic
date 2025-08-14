@@ -89,8 +89,9 @@ function hardHtmlEnforce(s = "") {
   </style>`;
   return `${skin}<pre style="white-space:pre-wrap">${escapeHtml(t)}</pre>`;
 }
+function stripTags(s = "") { return s.replace(/<[^>]*>/g, " "); }
 
-// ------------ SYSTEM PROMPT (مع قاعدة Dengue داخل البرومبت أيضاً) ------------
+// ------------ SYSTEM PROMPT ------------
 const systemInstruction = `
 أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك: دقة 10/10. أخرج **كتلة HTML واحدة فقط** وفق القالب.
 
@@ -132,7 +133,7 @@ const systemInstruction = `
   thead th{background:#f3f4f6}
 </style>
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-<h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السريري العميق</h4>
+<h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السيريري العميق</h4>
 <h4>جدول الأدوية والإجراءات</h4>
 <table><thead><tr>
 <th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
@@ -167,7 +168,7 @@ function buildUserPrompt(d = {}) {
 `;
 }
 
-// ------------ OPENAI OCR (اختياري) ------------
+// ------------ OPENAI OCR (اختياري للصور) ------------
 async function ocrWithOpenAI(openaiKey, files) {
   const IMG = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
   const candidates = files
@@ -274,4 +275,164 @@ async function geminiAnalyze(apiKey, parts) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
   const payload = {
     contents: [{ role: "user", parts }],
-    generationConfig: { t
+    generationConfig: { temperature: 0.2, topP: 0.9, topK: 40, maxOutputTokens: 8192 },
+  };
+  const res = await fetchWithRetry(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${raw.slice(0, 600)}`);
+  try {
+    const j = JSON.parse(raw);
+    const text = (j?.candidates?.[0]?.content?.parts || [])
+      .map((p) => p?.text || "")
+      .filter(Boolean)
+      .join("\n");
+    return hardHtmlEnforce(text);
+  } catch { return hardHtmlEnforce(raw); }
+}
+
+// ------------ Dengue Context & Post-Processing Override ------------
+const DENGUE_TRIGGERS = [
+  "حمى", "سخونة", "ارتفاع الحرارة", "fever",
+  "سفر إلى", "travel to",
+  "منطقة موبوءة", "endemic area",
+  // أمثلة مناطق/دول موبوءة (يمكن توسيعها)
+  "إندونيسيا","الفلبين","تايلاند","ماليزيا","الهند","بنغلاديش",
+  "البرازيل","المكسيك","بيرو","كولومبيا","فيتنام","سريلانكا","سنغافورة"
+];
+
+function hasAcuteDengueContext(body = {}, ocrText = "", modelHtml = "") {
+  const bag = [
+    body.notes || "",
+    Array.isArray(body.problems) ? body.problems.join(" ") : "",
+    ocrText || "",
+    stripTags(modelHtml || "")
+  ].join(" ").toLowerCase();
+  return DENGUE_TRIGGERS.some(w => bag.includes(w.toLowerCase()));
+}
+
+function forceDengueRule(html = "", body = {}, ocrText = "") {
+  // لو فيه سياق حاد (حمّى/سفر لمنطقة موبوءة) اترك تقرير النموذج كما هو
+  if (hasAcuteDengueContext(body, ocrText, html)) return html;
+
+  // امسح أي شارة قرار سابقة داخل الصف المختار
+  const removeBadges = (row) =>
+    row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
+
+  const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد.</span>`;
+
+  // مرّ على كل الصفوف وابحث عن صف يحتوي Dengue + IgG حتى لو مفصولين بعناصر HTML
+  return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
+    const plain = stripTags(row).toLowerCase();
+    const hasDengue = /(dengue|الضنك|حمى الضنك)/i.test(plain);
+    const hasIgG = /\bigg\b/i.test(plain);
+    if (!hasDengue || !hasIgG) return row;
+
+    let cleaned = removeBadges(row);
+    // استبدل محتوى آخر خلية <td> (إن وجدت) بالقرار الأصفر، وإلا أضِف خلية قرار
+    const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
+    if (tds && tds.length) {
+      const lastTd = tds[tds.length - 1];
+      const replacedLast = lastTd.replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`);
+      cleaned = cleaned.replace(lastTd, replacedLast);
+    } else {
+      cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
+    }
+    return cleaned;
+  });
+}
+
+// ------------ API HANDLER ------------
+export default async function handler(req, res) {
+  // CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+  const startedAt = Date.now();
+
+  try {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("GEMINI_API_KEY missing");
+    const openaiKey = process.env.OPENAI_API_KEY || null;
+
+    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
+
+    // 1) OCR (اختياري للصور فقط)
+    let ocrText = "";
+    if (openaiKey && files.length) {
+      try { ocrText = await ocrWithOpenAI(openaiKey, files); }
+      catch (e) { console.warn("OCR skipped:", e.message); }
+    }
+
+    // 2) تجهيز ملفات Gemini (inline أو رفع عبر Files API)
+    const filePartsPromises = files.map(async (f) => {
+      try {
+        const base64 = f?.data || "";
+        if (!base64) return null;
+        const mime = f.type || detectMimeFromB64(base64);
+        const hash = getFileHash(base64);
+        if (fileCache.has(hash)) return fileCache.get(hash);
+
+        const buf = Buffer.from(base64, "base64");
+        let part;
+        if (buf.byteLength > MAX_INLINE_FILE_BYTES) {
+          const uri = await geminiUpload(geminiKey, base64, mime);
+          part = { file_data: { mime_type: mime, file_uri: uri } };
+        } else {
+          part = { inline_data: { mime_type: mime, data: base64 } };
+        }
+        if (fileCache.size > 256) fileCache.clear();
+        fileCache.set(hash, part);
+        return part;
+      } catch (e) {
+        console.warn(`File processing failed (${f?.name || "file"}):`, e.message);
+        return null;
+      }
+    });
+    const processedFileParts = (await Promise.all(filePartsPromises)).filter(Boolean);
+
+    // 3) بناء أجزاء الطلب
+    const parts = [{ text: systemInstruction }, { text: buildUserPrompt(body) }];
+    if (processedFileParts.length) parts.push(...processedFileParts);
+    if (ocrText) parts.push({ text: `### OCR Extracted Texts\n${ocrText}` });
+
+    // 4) استدعاء Gemini
+    const htmlReportRaw = await geminiAnalyze(geminiKey, parts);
+
+    // 5) تطبيق قاعدة Dengue IgG القسرية (robust)
+    const htmlReport = forceDengueRule(htmlReportRaw, body, ocrText);
+
+    const elapsedMs = Date.now() - startedAt;
+    return res.status(200).json({
+      ok: true,
+      at: nowIso(),
+      htmlReport,
+      meta: {
+        model: GEMINI_MODEL,
+        filesReceived: files.length,
+        filesAttachedToModel: processedFileParts.length,
+        usedOCR: Boolean(ocrText),
+        elapsedMs,
+      },
+    });
+  } catch (err) {
+    console.error("Server error:", err);
+    return res.status(500).json({
+      ok: false,
+      at: nowIso(),
+      error: "Internal server error",
+      detail: err?.message || String(err),
+    });
+  }
+}
+
+export const config = {
+  api: { bodyParser: { sizeLimit: "12mb" } },
+};
