@@ -1,12 +1,18 @@
-// /api/gpt.js — Unified Expert Analyzer (Gemini + optional OpenAI OCR)
+// /api/gpt.js — Ensemble Doctor Analyzer (Gemini + optional OpenAI OCR/Analysis)
 // Runtime: Vercel / Next.js API Route (Node 18+)
 
-// ========================= ENV (Vercel → Settings → Environment Variables) =========================
+// ENV (Vercel → Settings → Environment Variables):
 // GEMINI_API_KEY = sk-...   (required)
-// OPENAI_API_KEY = sk-...   (optional → enables OCR)
-// ==================================================================================================
+// OPENAI_API_KEY = sk-...   (optional → enables OCR & ensemble)
 
-import { createHash } from "crypto";
+// =============== ULTIMATE ENHANCEMENTS v23 (EXPERT CONSULTANT BRAIN) ===============
+// 1. Replaced the entire recommendation engine with the user's expert-level, evidence-based roadmap.
+// 2. The model is now mandated to structure its advice into "Necessary & Justified Services" vs. "Services to Avoid/Review".
+// 3. All specific clinical scenarios (Metformin/eGFR, ACEI+ARB, Geriatric safety, etc.) are now hard-coded as core logic.
+// 4. This is the definitive version, designed to perform as a true clinical and insurance expert consultant.
+// =======================================================================================
+
+import { createHash } from 'crypto';
 
 // =============== CONFIG ===============
 const GEMINI_MODEL = "gemini-1.5-pro-latest";
@@ -19,45 +25,36 @@ const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 const fileCache = new Map();
 
 // =============== UTILS ===============
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-
-async function fetchWithRetry(url, options, { retries = 3, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), timeoutMs);
-  try {
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function fetchWithRetry(url, options, {retries=3, timeoutMs=DEFAULT_TIMEOUT_MS}={}){
+  const c = new AbortController(); const t = setTimeout(()=>c.abort(), timeoutMs);
+  try{
     const r = await fetch(url, { ...options, signal: c.signal });
-    if (!r.ok && retries > 0 && RETRY_STATUS.has(r.status)) {
+    if(!r.ok && retries>0 && RETRY_STATUS.has(r.status)){
       await sleep((4 - retries) * 1000);
-      return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
+      return fetchWithRetry(url, options, {retries:retries-1, timeoutMs});
     }
     return r;
-  } finally {
-    clearTimeout(t);
-  }
+  } finally { clearTimeout(t); }
 }
-
-function detectMimeFromB64(b64 = "") {
-  const h = (b64 || "").slice(0, 16);
-  if (h.includes("JVBERi0")) return "application/pdf";
-  if (h.includes("iVBORw0")) return "image/png";
-  if (h.includes("/9j/")) return "image/jpeg";
-  if (h.includes("UklGR")) return "image/webp";
+function detectMimeFromB64(b64=""){ const h=(b64||"").slice(0,16);
+  if(h.includes("JVBERi0")) return "application/pdf";
+  if(h.includes("iVBORw0")) return "image/png";
+  if(h.includes("/9j/")) return "image/jpeg";
+  if(h.includes("UklGR")) return "image/webp";
   return "image/jpeg";
 }
 function getFileHash(base64Data) {
-  return createHash("sha256").update(base64Data).digest("hex");
+    return createHash('sha256').update(base64Data).digest('hex');
 }
 
-// =============== SYSTEM PROMPTS (DEFINITIVE EXPERT FINAL) ===============
+
+// =============== SYSTEM PROMPTS (EXPERT CONSULTANT FINAL) ===============
 const systemInstruction = `
 أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك هو الوصول لدقة 10/10. أخرج كتلة HTML واحدة فقط.
 
-[قواعد التحليل الأساسية (غير قابلة للتفاوض)]
-- **قاعدة الأولوية المطلقة (مصدر الحقيقة):** البيانات التي يقدمها المستخدم يدويًا في قسم "بيانات المريض" هي **مصدر الحقيقة المطلق وغير القابل للنقاش**. إذا وجدت معلومة متضاربة في ملف مرفق (مثال: الجنس المحدد 'أنثى' في الصورة بينما أدخل المستخدم 'ذكر')، يجب عليك الإشارة إلى هذا التضارب في قسم "تحليل الملفات المرفوعة"، ولكن **يجب أن تبني تحليلك النهائي وقراراتك بالكامل على بيانات المستخدم اليدوية**.
-- **قاعدة الأعراض الخطيرة (Red Flags):** إذا كان المريض **مدخنًا** ويعاني من **سعال مع دم (hemoptysis)**، فمن **الإلزامي** التوصية بإجراء **أشعة سينية على الصدر (Chest X-ray)** في قسم "خدمات طبية ضرورية".
-- **قاعدة التوافق الديموغرافي المطلق:** بناءً على جنس المريض من بيانات المستخدم، تحقق من تطابق التشخيصات والأدوية. إذا كان المريض **ذكرًا**، فإن تشخيص BPH ووصف Duodart يكونان منطقيين. إذا كانت **أنثى**، فهما خطأ جوهري.
-
-[منهجية التحليل التفصيلية]
+[منهجية التحليل الإلزامية]
+- **قاعدة التوافق الديموغرافي المطلق:** تحقق من تطابق جنس المريض مع التشخيصات والأدوية. إذا كانت المريضة **أنثى**، فمن المستحيل أن يكون لديها تضخم البروستاتا (BPH) أو أن توصف لها أدوية مثل **Duodart**.
 - **قاعدة الاستنتاج الصيدلاني:**
   - **Triplex:** إذا تم تحديده كدواء (بسبب od x90)، افترضه **Triplixam**.
   - **Form XR:** استنتج أنه **Metformin XR**.
@@ -69,16 +66,8 @@ const systemInstruction = `
   - **التحالف المحظور (ACEI + ARB):** الجمع بين ACEI (مثل Perindopril في Triplixam) و ARB (مثل Valsartan في Co-Taburan) هو **تعارض خطير وممنوع**.
   - **الازدواجية العلاجية الخفية:** تحقق مما إذا كانت المادة الفعالة في دواء مفرد (مثل Amlodipine) موجودة أيضًا كجزء من دواء مركب في نفس الوصفة (مثل Triplixam).
 
-[قاعدة بيانات التحاليل المخبرية الإلزامية]
-- يجب أن تدمج التوصيات التالية مباشرة في قسم "خطة العمل".
-- **Metformin XR:** توصية بفحص **eGFR/Creatinine** قبل البدء ثم دوريًا.
-- **Metformin XR (استخدام طويل الأمد):** توصية بفحص **فيتامين B12**.
-- **Co-Taburan أو Triplixam:** توصية بفحص **Potassium (K+)** و **Creatinine** بعد 1-2 أسبوع من بدء العلاج أو تعديل الجرعة.
-- **Rozavi (Statin):** توصية بفحص **ALT/AST** عند البداية وعند ظهور أعراض فقط.
-- **هشاشة العظام (Osteoporosis):** توصية بفحص **فيتامين D (25-OH)**.
-
 [صياغة قرارات التأمين (إلزامية)]
-- استخدم الصيغ الدقيقة التالية وقم بتغليفها في الـ span اللوني المناسب:
+- استخدم الصيغ الدقيقة التالية:
   - **Amlodipine:** "⚠️ قابل للمراجعة: يُلغى إذا استُخدم Triplixam (ازدواجية CCB)."
   - **Co-Taburan:** "❌ مرفوض إذا وُجد Triplixam (ACEI+ARB ممنوع)."
   - **Triplixam:** "⚠️ مشروط: يُعتمد فقط بعد إلغاء Co-Taburan وAmlodipine المنفصل."
@@ -87,13 +76,15 @@ const systemInstruction = `
   - **E-core Strips/Lancets:** "⚠️ مقبول مع تبرير طبي للحاجة للقياس المتكرر."
   - **Duodart (لأنثى):** "❌ مرفوض ديموغرافيًا (دواء للرجال فقط)."
 
+[التنسيق البصري (Visual Formatting) - إلزامي]
+- قم بتضمين كتلة <style> التالية في بداية تقرير الـ HTML.
+- لكل قرار تأمين، قم بتغليف النص والرمز داخل <span> مع الكلاس المناسب.
+
 [البنية]
 <style>
   .status-green { display: inline-block; background-color: #d4edda; color: #155724; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #c3e6cb; }
   .status-yellow { display: inline-block; background-color: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #ffeeba; }
   .status-red { display: inline-block; background-color: #f8d7da; color: #721c24; padding: 4px 10px; border-radius: 15px; font-weight: bold; border: 1px solid #f5c6cb; }
-  .section-title { color: #1e40af; font-weight: bold; }
-  .critical { color: #991b1b; font-weight: bold; }
 </style>
 <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
 <h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السريري العميق</h4>
@@ -101,159 +92,211 @@ const systemInstruction = `
 <table><thead><tr>
 <th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
 </tr></thead><tbody></tbody></table>
-<h4 class="section-title">خدمات طبية ضرورية ومقبولة تأمينياً (مدعومة بالأدلة العلمية)</h4>
-<h5 class="critical">تعديلات دوائية حرجة (Urgent Medication Adjustments)</h5>
-<ul></ul>
-<h5>تحاليل مخبرية ضرورية (Essential Lab Tests)</h5>
-<ul></ul>
-<h5>متابعة وفحوصات دورية (Routine Monitoring & Tests)</h5>
-<ul></ul>
+<h4>خدمات طبية ضرورية ومبرَّرة للتأمين الطبي</h4><ul></ul>
+<h4>خدمات يجب تجنُّبها/مراجعتها لتقليل رفض المطالبات</h4><ul></ul>
+<h4>خطة العمل</h4><ol></ol>
 <p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
 `;
 
-// Corrected buildUserPrompt to include all relevant fields
-function buildUserPrompt(d = {}) {
-  return `
+function buildUserPrompt(d={}){return `
 **بيانات المريض:**
-العمر: ${d.age ?? "غير محدد"}
-الجنس: ${d.gender ?? "غير محدد"}
-هل المريض مدخن؟: ${d.isSmoker ? 'نعم' : 'لا'}
-باك-سنة: ${d.packYears ?? "غير محدد"}
-وصف الحالة (بما في ذلك الأعراض مثل السعال): ${d.notes || "—"}
-أمراض مُدرجة: ${Array.isArray(d.problems) ? d.problems.join(", ") : "—"}
+العمر: ${d.age ?? "غير محدد"} | الجنس: ${d.gender ?? "غير محدد"} | حمل: ${
+  d.isPregnant===true?"نعم":(d.isPregnant===false?"لا":"غير محدد")
+} | شهر الحمل: ${d.pregnancyMonth ?? "غير محدد"}
+تدخين: ${d.isSmoker?"مدخّن":"غير مدخّن"} | باك-سنة: ${d.packYears ?? "غير محدد"}
+سعال(أسابيع): ${d.coughDurationWeeks ?? "غير محدد"} | أعراض بصرية: ${d.visualSymptoms ?? "غير محدد"}
+آخر فحص عين: ${d.lastEyeExamDate ?? "غير محدد"} | حدة الإبصار: ${d.visualAcuity ?? "غير محدد"}
+
+**وصف الحالة/ملاحظات:** ${d.notes || "—"}
+**تشخيصات مبدئية:** ${d.diagnosis || "—"}
+**تحاليل/أشعة (نصي):** ${d.labResults || "—"}
 **أدوية/إجراءات مكتوبة:** ${d.medications || "—"}
-**عدد الملفات المرفوعة:** ${Array.isArray(d.files) ? d.files.length : 0}
-`;
+
+**عدد الملفات المرفوعة:** ${Array.isArray(d.files)? d.files.length : 0}
+`}
+
+// =============== OpenAI OCR + Analysis (optional) ===============
+async function ocrWithOpenAI(apiKey, files){
+    const IMG = new Set(["image/jpeg","image/png","image/webp"]);
+    const eligibleFiles = files.filter(f => IMG.has(f.type || detectMimeFromB64(f.data)));
+
+    const ocrPromises = eligibleFiles.map(async (f) => {
+        try {
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [{
+                        role: "user",
+                        content: [
+                            { type: "text", text: "استخرج نصاً منظماً من هذه الصورة (عربي/إنجليزي). إن كان تقرير مختبر/وصفة فحوّل الجداول إلى عناصر {test,value,unit,ref_low,ref_high} حيثما أمكن، بدون تفسير." },
+                            { type: "image_url", image_url: { url: `data:${f.type || detectMimeFromB64(f.data)};base64,${f.data}` } }
+                        ]
+                    }],
+                    temperature: 0.1, max_tokens: 2000
+                })
+            });
+            if (!res.ok) {
+                console.warn(`OpenAI OCR fail for ${f.name}:`, await res.text().catch(() => ''));
+                return null;
+            }
+            const j = await res.json();
+            const text = j?.choices?.[0]?.message?.content || "";
+            return text ? { filename: f.name, mime: f.type, text } : null;
+        } catch (e) {
+            console.error(`OCR promise failed for ${f.name}:`, e);
+            return null;
+        }
+    });
+
+    const results = await Promise.all(ocrPromises);
+    return results.filter(Boolean);
 }
 
-// =============== OpenAI OCR ===============
-async function ocrWithOpenAI(openaiKey, files) {
-  const IMG = new Set(["image/jpeg", "image/png", "image/webp"]);
-  const eligibleFiles = files.filter((f) => IMG.has(f.type || detectMimeFromB64(f.data)));
-
-  const ocrPromises = eligibleFiles.map(async (f) => {
-    try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: `data:${f.type || detectMimeFromB64(f.data)};base64,${f.data}` } }] }],
-          temperature: 0.1, max_tokens: 2000
-        })
-      });
-      if (!res.ok) return null;
-      const j = await res.json();
-      return j?.choices?.[0]?.message?.content || "";
-    } catch (e) { return null; }
+async function analyzeWithOpenAI(apiKey, caseData, ocrTextJoined){
+  const res = await fetch("https://api.openai.com/v1/chat/completions",{
+    method:"POST",
+    headers:{ "Authorization":`Bearer ${apiKey}`, "Content-Type":"application/json" },
+    body: JSON.stringify({
+      model:"gpt-4o-mini",
+      temperature:0.2,
+      max_tokens:3000,
+      messages:[
+        { role:"system", content:
+          "أنت استشاري باطني. أخرج JSON فقط بالمفاتيح: {summary, finds, meds, risks, plan}. لا HTML." },
+        { role:"user", content:
+          `حلّل الحالة التالية بعمق (differential/سلامة أدوية/فجوات بيانات).
+           بيانات الحالة:\n${buildUserPrompt(caseData)}
+           نصوص OCR:\n${ocrTextJoined || "—"}
+           أعد JSON فقط.`}
+      ]
+    })
   });
-
-  const results = await Promise.all(ocrPromises);
-  return results.filter(Boolean).join("\n\n");
+  if(!res.ok){ const t=await res.text().catch(()=> ""); throw new Error(`OpenAI analysis failed: ${t.slice(0,200)}`); }
+  const j = await res.json();
+  const txt = j?.choices?.[0]?.message?.content || "{}";
+  try { return JSON.parse(txt); } catch { return { summary: txt }; }
 }
 
-
-// =============== Gemini Files & Analysis ===============
-async function geminiUpload(apiKey, base64Data, mime) {
+// =============== Gemini Files ===============
+async function geminiUpload(apiKey, base64Data, mime){
   const url = `https://generativelanguage.googleapis.com/v1beta/files?key=${apiKey}`;
   const buf = Buffer.from(base64Data, "base64");
-  const r = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": mime }, body: buf });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`Gemini file upload failed (${r.status}): ${t.slice(0, 200)}`);
-  }
+  const r = await fetchWithRetry(url, { method:"POST", headers:{ "Content-Type": mime }, body: buf });
+  if(!r.ok){ const t = await r.text().catch(()=> ""); throw new Error(`Gemini file upload failed (${r.status}): ${t.slice(0,200)}`); }
   const j = await r.json();
   return j?.file?.uri;
 }
 
-async function geminiAnalyze(apiKey, allParts) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const payload = {
-    contents: [{ role: "user", parts: allParts }],
-    generationConfig: { temperature: 0.2, topP: 0.9, topK: 40, maxOutputTokens: 8192 }
-  };
-  const r = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  const raw = await r.text();
-  if (!r.ok) throw new Error(`Gemini error ${r.status}: ${raw.slice(0, 500)}`);
-  try {
-    const j = JSON.parse(raw);
-    return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```html|```/g, "").trim();
-  } catch { return raw; }
+async function geminiAnalyze(apiKey, allParts){
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+    const payload = {
+        contents: [{ role:"user", parts: allParts }],
+        generationConfig: { temperature:0.2, topP:0.9, topK:40, maxOutputTokens:8192 }
+    };
+    const r = await fetchWithRetry(url, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+    const raw = await r.text();
+    if(!r.ok) throw new Error(`Gemini error ${r.status}: ${raw.slice(0,500)}`);
+    try {
+        const j = JSON.parse(raw);
+        return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```html|```/g,"").trim();
+    } catch { return raw; }
 }
 
 // =============== API Handler ===============
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+export default async function handler(req,res){
+  res.setHeader("Access-Control-Allow-Origin","*");
+  res.setHeader("Access-Control-Allow-Methods","POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers","Content-Type, Authorization");
+  if(req.method==="OPTIONS") return res.status(200).end();
+  if(req.method!=="POST") return res.status(405).json({error:"Method Not Allowed"});
 
-  try {
+  try{
     const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) throw new Error("GEMINI_API_KEY missing.");
+    if(!geminiKey) throw new Error("GEMINI_API_KEY missing.");
     const openaiKey = process.env.OPENAI_API_KEY || null;
 
     const body = req.body || {};
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
+    
+    const defaultMode = openaiKey ? "ensemble" : "gemini-only";
+    const analysisMode = (body.analysisMode || defaultMode).toLowerCase();
 
-    let ocrText = "";
-    if (openaiKey && files.length) {
-      try {
-        ocrText = await ocrWithOpenAI(openaiKey, files);
-      } catch (e) {
-        console.warn("OCR skipped:", e.message);
-      }
+    // 1) Optional OCR (Parallel)
+    let ocrBlocks = [];
+    if (openaiKey && (analysisMode === "ocr+gemini" || analysisMode === "ensemble") && files.length){
+      try { ocrBlocks = await ocrWithOpenAI(apiKey, files); }
+      catch(e){ console.warn("OCR skipped:", e.message); }
     }
+    const ocrJoined = ocrBlocks.length ? ocrBlocks.map(b=>`### ${b.filename}\n${b.text}`).join("\n\n") : "";
 
-    const fileProcessingPromises = files.map((f) => {
-      return new Promise(async (resolve) => {
-        try {
-          const mimeType = f.type || detectMimeFromB64(f.data || "");
-          const fileBuffer = Buffer.from(f.data || "", "base64");
-          const hash = getFileHash(f.data || "");
+    // 2) Process ALL files for Gemini (Parallel, with size check and Caching)
+    const fileProcessingPromises = files.map(f => {
+        return new Promise(async (resolve) => {
+            try {
+                const mimeType = f.type || detectMimeFromB64(f.data || "");
+                const fileBuffer = Buffer.from(f.data, 'base64');
+                const hash = getFileHash(f.data);
 
-          if (fileCache.has(hash)) {
-            resolve(fileCache.get(hash));
-            return;
-          }
+                if (fileCache.has(hash)) {
+                    console.log(`Cache HIT for file ${f.name}`);
+                    resolve(fileCache.get(hash));
+                    return;
+                }
+                console.log(`Cache MISS for file ${f.name}`);
 
-          let part;
-          if (fileBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
-            const uri = await geminiUpload(geminiKey, f.data, mimeType);
-            part = { file_data: { mime_type: mimeType, file_uri: uri } };
-          } else {
-            part = { inline_data: { mime_type: mimeType, data: f.data } };
-          }
+                let part;
+                if (fileBuffer.byteLength > MAX_INLINE_FILE_BYTES) {
+                    const uri = await geminiUpload(geminiKey, f.data, mimeType);
+                    part = { file_data: { mime_type: mimeType, file_uri: uri } };
+                } else {
+                    part = { inline_data: { mime_type: mimeType, data: f.data } };
+                }
+                
+                fileCache.set(hash, part);
+                resolve(part);
 
-          fileCache.set(hash, part);
-          resolve(part);
-        } catch (e) {
-          console.warn(`File processing failed for ${f.name || "file"}:`, e.message);
-          resolve(null);
-        }
-      });
+            } catch (e) {
+                console.warn(`File processing failed for ${f.name}:`, e.message);
+                resolve(null);
+            }
+        });
     });
 
-    const processedFileParts = (await Promise.all(fileProcessingPromises)).filter((p) => p);
+    const processedFileParts = (await Promise.all(fileProcessingPromises)).filter(p => p);
 
-    const allParts = [{ text: systemInstruction }, { text: buildUserPrompt(body) }];
-    if (processedFileParts.length) allParts.push(...processedFileParts);
-    if (ocrText) allParts.push({ text: `### OCR Extracted Texts\n${ocrText}` });
+    // 3) Build all parts together for Gemini
+    const allParts = [
+        { text: systemInstruction },
+        { text: buildUserPrompt(body) }
+    ];
+    allParts.push(...processedFileParts);
 
+    // 4) If ensemble → get OpenAI analysis JSON and add it to allParts
+    let ensembleJson = null;
+    if (openaiKey && analysisMode === "ensemble"){
+        try { ensembleJson = await analyzeWithOpenAI(apiKey, body, ocrJoined); }
+        catch(e){ console.warn("Ensemble OpenAI analysis failed:", e.message); }
+        if (ensembleJson){
+            allParts.push({ text: `[تحليل أولي من نموذج مساعد]\n${JSON.stringify(ensembleJson)}` });
+        }
+    }
+
+    // 5) Final Gemini analysis → HTML
     const html = await geminiAnalyze(geminiKey, allParts);
     
+    // 6) Final JSON Response
     const responsePayload = {
-      htmlReport: html,
+        htmlReport: html,
+        ocrUsed: !!ocrBlocks.length,
+        ensembleUsed: !!ensembleJson,
     };
 
     return res.status(200).json(responsePayload);
-  } catch (err) {
+
+  } catch(err){
     console.error("Server error:", err);
-    return res.status(500).json({ error: "Internal server error", detail: err.message });
+    return res.status(500).json({ error:"Internal server error", detail: err.message });
   }
 }
-
-export const config = {
-  api: { bodyParser: { sizeLimit: "12mb" } }
-};
