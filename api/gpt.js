@@ -15,7 +15,7 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const RETRY_STATUS = new Set([408, 409, 413, 429, 500, 502, 503, 504]);
 
 const MAX_FILES_PER_REQUEST = 30;
-the const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
+const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB  ← (تم إصلاح الغلطة هنا)
 const MAX_OCR_IMAGES = 20;
 const OCR_MODEL = "gpt-4o-mini";
 
@@ -382,14 +382,14 @@ const SYN_MAP = new Map([
 
 function canonicalServiceKey(raw = "") {
   let s = (raw || "").toLowerCase();
-  s = s.replace(/\b\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|units?)\b/gi, " "); // أزل الجرعات/الأحجام
+  s = s.replace(/\b\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|units?)\b/gi, " "); // تجاهل الجرعات/الأحجام
   s = s.replace(/\b\d+\s*(x|×|ml|amp|vial|bag)\b/gi, " ");
   s = s.replace(/[\(\)\[\]\.,\-_/]+/g, " ").replace(/\s+/g, " ").trim();
   for (const [re, canon] of SYN_MAP) if (re.test(s)) return canon;
   return s;
 }
 
-// يحاول تقدير الجرعة بالـ mg من نص السطر نفسه
+// حاول تقدير الجرعة بالـ mg من نص السطر نفسه
 function extractDoseMgFromText(raw = "") {
   const s = String(raw);
   const mgOnly = s.match(/(\d+(?:\.\d+)?)\s*mg\b/i);
@@ -410,7 +410,7 @@ const DOSE_RULES = {
   "metoclopramide-iv": { typicalSingleMg: 10, maxDailyMg: 40, renalReduce: true }
 };
 
-// =============== ثوابت للكشف عن صفوف رأس/عناوين ===============
+// =============== عناوين الأعمدة للكشف عن صفوف الرأس ===============
 const COLUMN_TITLES_SET = new Set([
   "الدواء/الإجراء (مع درجة الثقة)",
   "الجرعة الموصوفة",
@@ -427,7 +427,7 @@ const HEADER_TOKENS = [
   "dose","classification","purpose","interactions","risk","insurance"
 ];
 
-// =============== POLICY OVERRIDES (antes/post report) ===============
+// =============== POLICY OVERRIDES ===============
 const DENGUE_TRIGGERS = [
   "حمى","سخونة","ارتفاع الحرارة","fever",
   "سفر إلى","travel to",
@@ -739,7 +739,7 @@ export default async function handler(req, res) {
     // 5) استدعاء Gemini للتقرير
     const htmlReportRaw = await geminiGenerate(geminiKey, parts);
 
-    // 6) تطبيق القواعد القسرية + فحص الجرعات + وسم التكرار
+    // 6) تطبيق القواعد + فحص الجرعات + وسم التكرار
     const htmlReport = applyPolicyOverrides(htmlReportRaw, { body, ocrText, facts, modelHtml: htmlReportRaw });
 
     const elapsedMs = Date.now() - startedAt;
