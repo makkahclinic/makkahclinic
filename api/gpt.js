@@ -7,15 +7,19 @@
 // OPENAI_API_KEY   = "sk-..."   (optional → OCR for images)
 // =======================================================
 //
-// Evidence links embedded in HTML items:
-// - ADA SoC 2024: https://diabetesjournals.org/care/issue/47/Supplement_1
-// - NICE NG136 HTN: https://www.nice.org.uk/guidance/ng136
-// - NICE CG174 IV fluids: https://www.nice.org.uk/guidance/cg174
-// - CDC Dengue testing: https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html
-// - GINA: https://ginasthma.org/gina-reports/
-// - ACR Appropriateness: https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria
+// Duplicate-denial policy references (why we reject duplicates):
+// - CMS: "Repeat or Duplicate Services on the Same Day" → https://www.cms.gov/medicare-coverage-database/view/article.aspx?articleId=53482
+// - CMS: NCCI Policy Manual (general rationale for denials/edits) → https://www.cms.gov/medicare/coding-billing/national-correct-coding-initiative-ncci-edits/medicare-ncci-policy-manual
+//
+// Clinical references used in guidance sections (unchanged):
+// - ADA SoC 2024 (Diabetes): https://diabetesjournals.org/care/issue/47/Supplement_1
+// - NICE NG136 (Hypertension): https://www.nice.org.uk/guidance/ng136
+// - NICE CG174 (IV Fluids): https://www.nice.org.uk/guidance/cg174
+// - CDC (Dengue testing): https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html
+// - GINA (Asthma): https://ginasthma.org/gina-reports/
+// - ACR Appropriateness Criteria: https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria
 // - ACG H. pylori 2022: https://gi.org/guideline/management-of-helicobacter-pylori-infection/
-// - AGS Beers: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7109450/
+// - AGS Beers Criteria: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7109450/
 
 import { createHash } from "crypto";
 
@@ -362,7 +366,7 @@ async function geminiGenerate(apiKey, parts, cfg = {}) {
   } catch { return hardHtmlEnforce(raw); }
 }
 
-// =============== POLICY OVERRIDES (Post-processing) ===============
+// =============== POLICY OVERRIDES & TABLE OPS ===============
 const DENGUE_TRIGGERS = [
   "حمى","سخونة","ارتفاع الحرارة","fever",
   "سفر إلى","travel to","سافر","سفر",
@@ -377,7 +381,7 @@ const US_TRIGGERS = ["ألم بطني","epigastric pain","ruq pain","gallbladder
 const ACEI_WORDS = ["perindopril","enalapril","lisinopril","ramipril","acei"];
 const ARB_WORDS  = ["valsartan","losartan","candesartan","irbesartan","arb","co-taburan"];
 const SULF_WORDS = ["gliclazide","diamicron","glibenclamide","glyburide","glimepiride"];
-const CCB_WORDS  = ["amlodipine","ccB"];
+const CCB_WORDS  = ["amlodipine","ccb"];
 const TRIPLIXAM_WORDS = ["triplixam"];
 
 function bagOfText({ body = {}, ocrText = "", facts = {}, modelHtml = "" } = {}) {
@@ -391,12 +395,12 @@ function bagOfText({ body = {}, ocrText = "", facts = {}, modelHtml = "" } = {})
 function hasAny(text, arr) { const s = text.toLowerCase(); return arr.some(w => s.includes(w.toLowerCase())); }
 function anyIn(text, words){ return hasAny(text, words); }
 
-// ---- Row helpers ----
+// ---- HTML helpers ----
 function getRows(html) { return html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || []; }
 function replaceRows(html, rows) {
   return html.replace(/(<tbody\b[^>]*>)[\s\S]*?(<\/tbody>)/i, `$1${rows.join("\n")}$2`);
 }
-function firstTdText(row){ const m = row.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i); return m ? stripTags(m[1]).trim().toLowerCase() : ""; }
+function firstTdText(row){ const m = row.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i); return m ? stripTags(m[1]).trim() : ""; }
 function replaceLastTd(row, contentHtml){
   const tds = row.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
   if (!tds || !tds.length) return row.replace(/<\/tr>/i, `<td>${contentHtml}</td></tr>`);
@@ -406,7 +410,46 @@ function replaceLastTd(row, contentHtml){
   return row.replace(/<td\b[^>]*>[\s\S]*?<\/td>/gi, (m)=> (idx++===tds.length-1?repl:m));
 }
 
-// ---- Enforcement rules already present ----
+// ---- Canonicalization for duplicate detection ----
+const CANON_RULES = [
+  { re: /(paracetamol|acetaminophen)/i, key: "paracetamol-iv" },
+  { re: /(pantozol|pantoprazole)/i, key: "pantoprazole-iv" },
+  { re: /(primperan|metoclopramide)/i, key: "metoclopramide-iv" },
+  { re: /normal\s*saline/i, key: "normal-saline" },
+  { re: /(cbc|complete.*blood.*count)/i, key: "cbc" },
+  { re: /(c[-\s]?reactive.*protein|crp)/i, key: "crp" },
+  { re: /(glycosylated.*(hae|hemo)globin|hb.?a1c)/i, key: "hba1c" },
+  { re: /\bldl\b.*(cholest|cholestrol)?/i, key: "ldl" },
+  { re: /\btriglycerides?\b/i, key: "triglycerides" },
+  { re: /\bcholest(?:erol|rol)\b/i, key: "cholesterol" },
+  { re: /(liver.*(sgpt|alt)|\bsgpt\b|\balt\b)/i, key: "alt" },
+  { re: /uric\s*acid/i, key: "uric-acid" },
+  { re: /\bcreatinine\b/i, key: "creatinine" },
+  { re: /\burea\b/i, key: "urea" },
+  { re: /(ultra\s*sound|ultrasound|سونار|ألتراساوند)/i, key: "ultrasound" },
+  { re: /(nebulizer|inhaler|نيبول|استنشاق)/i, key: "nebulizer-inhaler" },
+  { re: /dengue.*igg/i, key: "dengue-igg" },
+  { re: /(referral|إحالة)/i, key: "referral" },
+];
+
+function canonicalServiceKey(sRaw = "") {
+  let s = (sRaw || "").toLowerCase();
+  // strip dosage/units/packaging/brands
+  s = s
+    .replace(/\b\d+([.,]\d+)?\s*(mg|ml|mcg|g|iu|%|mmol\/l)\b/gi, " ")
+    .replace(/\b\d+([.,]\d+)?\s*(mg|ml)\/\s*\d+([.,]\d+)?\s*(mg|ml)\b/gi, " ")
+    .replace(/\b(b\.?braun|bbraun|amp(?:oule)?|vial|solution|powder|for|injection|infus(?:ion)?|i\.?v\.?)\b/gi, " ")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  for (const { re, key } of CANON_RULES) {
+    if (re.test(sRaw) || re.test(s)) return key;
+  }
+  return s; // fallback
+}
+
+// ---- Enforcement rules ----
 function forceDengueRule(html = "", ctx = {}) {
   const txt = bagOfText(ctx);
   const hasAcute = ctx?.facts?.hasDengueAcuteContext || hasAny(txt, DENGUE_TRIGGERS);
@@ -463,28 +506,40 @@ function forceUSRule(html = "", ctx = {}) {
   });
 }
 
-// ---- NEW: mark duplicate services in table ----
-function markDuplicateServices(html = "") {
+// ---- NEW: Duplicate detection → RED denial for every additional duplicate
+const DUPLICATE_REF_LINK = `<a href="https://www.cms.gov/medicare-coverage-database/view/article.aspx?articleId=53482" target="_blank">[CMS Duplicate]</a>`;
+function rejectDuplicateServices(html = "") {
   const rows = getRows(html);
   if (!rows.length) return html;
-  const map = new Map();
-  rows.forEach((r, i) => {
-    const key = firstTdText(r).replace(/\s+/g," ").trim();
-    if (!key) return;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(i);
+
+  // Build normalized keys per row (by first <td>)
+  const keys = rows.map((r) => canonicalServiceKey(firstTdText(r)));
+
+  // Track first index of each key; all subsequent indices are duplicates
+  const firstIndexMap = new Map();
+  const duplicateIndices = [];
+  keys.forEach((k, i) => {
+    if (!k) return;
+    if (!firstIndexMap.has(k)) firstIndexMap.set(k, i);
+    else duplicateIndices.push(i);
   });
-  const dupIdx = [...map.values()].filter(arr => arr.length>1).flat();
-  if (!dupIdx.length) return html;
+
+  if (!duplicateIndices.length) return html;
+
   const updated = rows.map((r, idx) => {
-    if (!dupIdx.includes(idx)) return r;
-    const tag = `<span class="status-yellow">⚠️ مكرر في الطلب</span>`;
-    return replaceLastTd(r, `${tag}`);
+    if (!duplicateIndices.includes(idx)) return r;
+    // Overwrite last cell with RED denial + reason
+    const red = `<span class="status-red">❌ مرفوض: مكرر في الطلب ${DUPLICATE_REF_LINK}</span>`;
+    // Remove any previous status chips before replacing
+    let cleaned = r.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "");
+    cleaned = cleaned.replace(/✅|⚠️|❌/g, ""); // strip emojis if present in last cell
+    return replaceLastTd(cleaned, red);
   });
+
   return replaceRows(html, updated);
 }
 
-// ---- NEW: synthesize action guidance lists (ALWAYS FILL) ----
+// ---- Guidance lists (unchanged with small safety) ----
 function synthesizeActionLists(body = {}, facts = {}, bag = "") {
   const out = { urgent: [], labs: [], routine: [] };
 
@@ -505,7 +560,6 @@ function synthesizeActionLists(body = {}, facts = {}, bag = "") {
   const hasTriplixam = anyIn(txt, TRIPLIXAM_WORDS);
   const hasAmlodipine = anyIn(txt, CCB_WORDS) || txt.includes("amlodipine");
 
-  // Urgent adjustments
   if (smoker && cough) {
     out.urgent.push(`أشعة سينية للصدر (Chest X-ray) لتقييم السعال/النفث الدموي <a href="https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria" target="_blank">[ACR]</a>.`);
   }
@@ -516,10 +570,9 @@ function synthesizeActionLists(body = {}, facts = {}, bag = "") {
     out.urgent.push(`منع الجمع بين ACEI وARB (خطر فرط بوتاسيوم/قصور كلوي) <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
   }
   if (hasTriplixam && hasAmlodipine) {
-    out.urgent.push(`إلغاء Amlodipine المفرد عند استخدام Triplixam (تجنب ازدواجية CCB).`);
+    out.urgent.push(`إلغاء Amlodipine المفرد عند استخدام Triplixam (تجنّب ازدواجية CCB).`);
   }
 
-  // Essential labs
   if (hasDM) {
     out.labs.push(`HbA1c للمتابعة الدورية <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
     out.labs.push(`Creatinine/eGFR قبل وأثناء العلاج بالمتفورمين، وB12 طويل الأمد <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
@@ -530,7 +583,6 @@ function synthesizeActionLists(body = {}, facts = {}, bag = "") {
     out.labs.push(`Potassium وCreatinine قبل وبعد بدء/رفع جرعة ACEI/ARB خلال 1–2 أسبوع <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
     out.labs.push(`Urinalysis + Creatinine/eGFR ضمن تقييم ضغط الدم <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
   }
-  // Dengue logic already enforced; نضع تذكير تحليلي
   if (/dengue/i.test(txt) && !hasAny(txt, DENGUE_TRIGGERS)) {
     out.labs.push(`تجنّب طلب IgG وحده دون حُمّى/تعرض؛ استخدم NS1/NAAT أو IgM في الأيام الأولى <a href="https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html" target="_blank">[CDC]</a>.`);
   }
@@ -538,7 +590,6 @@ function synthesizeActionLists(body = {}, facts = {}, bag = "") {
     out.labs.push(`اختبار غير غازي لـ H. pylori (Urea breath أو Stool Ag) قبل الاستمرار في العلاج <a href="https://gi.org/guideline/management-of-helicobacter-pylori-infection/" target="_blank">[ACG]</a>.`);
   }
 
-  // Routine monitoring
   if (hasDM) {
     out.routine.push(`فحص قاع العين لاعتلال الشبكية السكري (سنويًا/حسب الخطورة) <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
     out.routine.push(`فحص القدمين واختبار الإحساس للاعتلال العصبي الطرفي <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
@@ -549,15 +600,12 @@ function synthesizeActionLists(body = {}, facts = {}, bag = "") {
   if (hasEpigastric) {
     out.routine.push(`تجربة PPI قصيرة المدى مع مراجعة محرضات عسر الهضم وتجنب NSAIDs <a href="https://gi.org/guideline/management-of-helicobacter-pylori-infection/" target="_blank">[ACG]</a>.`);
   }
-
-  // ضمان حد أدنى من العناصر حتى لا تبقى القوائم فارغة
   if (out.labs.length < 3) {
     out.labs.push(`CBC, CRP حسب السياق السريري لتقييم التهاب/عدوى.`);
   }
   return out;
 }
 
-// ---- NEW: inject synthesized lists into the three <ul> blocks ----
 function injectActionListsIntoHtml(html = "", lists = { urgent:[], labs:[], routine:[] }) {
   function injectAfterHeading(headingRegex, items) {
     const m = html.match(headingRegex);
@@ -567,7 +615,6 @@ function injectActionListsIntoHtml(html = "", lists = { urgent:[], labs:[], rout
     const ulMatch = tail.match(/<ul\b[^>]*>[\s\S]*?<\/ul>/i);
     const newUl = `<ul>${[...new Set(items)].map(x => `<li>${x}</li>`).join("")}</ul>`;
     if (ulMatch) {
-      // دمج وعدم التكرار
       const existingLis = (ulMatch[0].match(/<li\b[^>]*>[\s\S]*?<\/li>/gi) || []).map(li => stripTags(li).trim());
       const merged = [...existingLis, ...items].filter(Boolean);
       const unique = [...new Set(merged.map(t => t.trim()))];
@@ -593,7 +640,8 @@ function applyPolicyOverrides(htmlReport, ctx) {
   out = forceNebulizerRule(out, ctx);
   out = forceIVRule(out, ctx);
   out = forceUSRule(out, ctx);
-  out = markDuplicateServices(out);
+  // NEW: Reject duplicates in RED
+  out = rejectDuplicateServices(out);
   // synthesize and inject action guidance
   const bag = bagOfText(ctx);
   const lists = synthesizeActionLists(ctx.body, ctx.facts, bag);
@@ -675,7 +723,7 @@ export default async function handler(req, res) {
     // 5) استدعاء Gemini لإنتاج التقرير HTML
     const htmlReportRaw = await geminiGenerate(geminiKey, parts);
 
-    // 6) تطبيق القواعد القسرية + ملء قوائم التوجيه
+    // 6) تطبيق القواعد القسرية + رفض التكرارات + ملء القوائم
     const htmlReport = applyPolicyOverrides(htmlReportRaw, { body, ocrText, facts, modelHtml: htmlReportRaw });
 
     const elapsedMs = Date.now() - startedAt;
