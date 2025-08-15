@@ -15,7 +15,7 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const RETRY_STATUS = new Set([408, 409, 413, 429, 500, 502, 503, 504]);
 
 const MAX_FILES_PER_REQUEST = 30;
-const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
+the const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
 const MAX_OCR_IMAGES = 20;
 const OCR_MODEL = "gpt-4o-mini";
 
@@ -382,8 +382,7 @@ const SYN_MAP = new Map([
 
 function canonicalServiceKey(raw = "") {
   let s = (raw || "").toLowerCase();
-  // أزل الجرعات/الأحجام حتى لا تمنع كشف التكرار
-  s = s.replace(/\b\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|units?)\b/gi, " ");
+  s = s.replace(/\b\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|units?)\b/gi, " "); // أزل الجرعات/الأحجام
   s = s.replace(/\b\d+\s*(x|×|ml|amp|vial|bag)\b/gi, " ");
   s = s.replace(/[\(\)\[\]\.,\-_/]+/g, " ").replace(/\s+/g, " ").trim();
   for (const [re, canon] of SYN_MAP) if (re.test(s)) return canon;
@@ -406,9 +405,9 @@ function extractDoseMgFromText(raw = "") {
 
 // قواعد دوائية أساسية للفحص
 const DOSE_RULES = {
-  "paracetamol-iv": { maxSingleMg: 1000, maxDailyMg: 4000, maxDailyHepaticMg: 2000 }, // FDA Ofirmev
-  "pantoprazole-iv": { typicalSingleMg: 40, maxDailyMg: 40 },                          // Protonix IV
-  "metoclopramide-iv": { typicalSingleMg: 10, maxDailyMg: 40, renalReduce: true }      // StatPearls
+  "paracetamol-iv": { maxSingleMg: 1000, maxDailyMg: 4000, maxDailyHepaticMg: 2000 },
+  "pantoprazole-iv": { typicalSingleMg: 40, maxDailyMg: 40 },
+  "metoclopramide-iv": { typicalSingleMg: 10, maxDailyMg: 40, renalReduce: true }
 };
 
 // =============== ثوابت للكشف عن صفوف رأس/عناوين ===============
@@ -549,8 +548,8 @@ function forceUSRule(html = "", ctx = {}) {
 // =============== جرعات/سلامة (تحليل بعدي) ===============
 function doseSafetyGuard(html = "", ctx = {}) {
   const { facts = {} } = ctx;
-  const hepatic = Boolean(facts.hasLiverDisease) || (facts.ALT > 3 || facts.AST > 3);
-  const renal = Boolean(facts.hasRenalImpairment) || (facts.eGFR && facts.eGFR < 60);
+  const hepatic = Boolean(facts.hasLiverDisease) || (typeof facts.ALT === "number" && facts.ALT > 3) || (typeof facts.AST === "number" && facts.AST > 3);
+  const renal = Boolean(facts.hasRenalImpairment) || (typeof facts.eGFR === "number" && facts.eGFR < 60);
 
   return mutateRows(html, (row, cells) => {
     const nameCell = stripTags(cells[0] || "");
@@ -564,7 +563,7 @@ function doseSafetyGuard(html = "", ctx = {}) {
 
     if (key === "paracetamol-iv") {
       if (mg && mg > DOSE_RULES[key].maxSingleMg) {
-        cells[cells.length - 1] = `<span class="status-red">❌ مرفوض: جرعة فردية ${mg}mg تتجاوز الحد الأقصى ${DOSE_RULES[key].maxSingleMg}mg (OFIRMEV).</span>`;
+        cells[cells.length - 1] = `<span class="status-red">❌ مرفوض: جرعة فردية ${mg}mg تتجاوز الحد الأقصى ${DOSE_RULES[key].maxSingleMg}mg.</span>`;
         return { keep: true, newCells: cells };
       }
       if (hepatic) {
@@ -576,7 +575,7 @@ function doseSafetyGuard(html = "", ctx = {}) {
 
     if (key === "pantoprazole-iv") {
       if (mg && mg !== DOSE_RULES[key].maxDailyMg) {
-        notes.push(`⚠️ الجرعة المعتادة 40mg IV مرة يوميًا لمدة 7–10 أيام.`);
+        notes.push(`⚠️ الجرعة المعتادة 40mg IV مرة يوميًا.`);
       }
     }
 
@@ -598,10 +597,19 @@ function doseSafetyGuard(html = "", ctx = {}) {
   });
 }
 
-// =============== إزالة العناوين/الفراغات ثم إزالة المكررات ===============
+// --- حقن آمن بعد أول جدول ---
+function safeInsertAfterFirstTable(html, fragment) {
+  if (!html) return html;
+  const lower = html.toLowerCase();
+  const endIdx = lower.indexOf("</table>");
+  if (endIdx === -1) return html;
+  return html.slice(0, endIdx + 8) + fragment + html.slice(endIdx + 8);
+}
+
+// =============== إزالة العناوين/الفراغات + وسم التكرار باللون الأحمر ===============
 function dedupeAndPrune(html = "") {
+  let dupCount = 0;
   const seen = new Set();
-  const removed = [];
 
   // 1) احذف الصفوف الفارغة وصفوف العناوين الشبيهة بالرأس داخل tbody
   let cleaned = mutateRows(html, (rowHtml, cells) => {
@@ -610,24 +618,38 @@ function dedupeAndPrune(html = "") {
     return { keep: true };
   });
 
-  // 2) إزالة التكرار بالاعتماد على المفتاح الموحّد للخدمة
+  // 2) وسم الصفوف المكررة (لا نحذفها؛ نضع قرار أحمر "مرفوض: تكرار")
   cleaned = mutateRows(cleaned, (rowHtml, cells) => {
     const firstCell = stripTags(cells[0] || "");
     if (!firstCell) return { keep: false };
+
     const key = canonicalServiceKey(firstCell);
     if (seen.has(key)) {
-      removed.push(firstCell);
-      return { keep: false };
+      dupCount++;
+      const rej = `<span class="status-red">❌ مرفوض: تكرار الخدمة في نفس الزيارة.</span>`;
+      cells[cells.length - 1] = rej;
+      return { keep: true, newCells: cells };
     }
     seen.add(key);
     return { keep: true };
   });
 
-  // 3) أضف ملخصًا أسفل الجدول عند وجود إزالة
-  if (removed.length) {
-    cleaned = cleaned.replace(/<\/table>\s*<h4\b/i,
-      `</table><div style="margin:8px 0"><span class="status-red">❌ تمت إزالة ${removed.length} صف(وف) مكررة/غير صالحة من الجدول.</span></div><h4`);
+  // 3) ملخص تشغيلي بعد أول جدول + سد أي وسوم ناقصة
+  if (dupCount > 0) {
+    const summaryBox = `
+      <div style="background:#fff3cd;border:1px solid #ffeeba;border-radius:10px;padding:10px;margin:12px 0">
+        <strong>ملاحظة تشغيلية:</strong> تم اكتشاف ووسم <b>${dupCount}</b> صف(وف) كمكررة باللون الأحمر لتجنّب الازدواجية في المطالبة.
+        إذا كان التكرار مقصودًا (خدمتان منفصلتان بزمن/سبب مختلف)، برجاء إضافة التبرير في النموذج.
+      </div>
+    `;
+    cleaned = safeInsertAfterFirstTable(cleaned, summaryBox);
   }
+
+  cleaned = cleaned
+    .replace(/(<tr[^>]*>(?:(?!<\/tr>)[\s\S])*)$/i, '$1</tr>')
+    .replace(/(<tbody[^>]*>(?:(?!<\/tbody>)[\s\S])*)$/i, '$1</tbody>')
+    .replace(/(<table[^>]*>(?:(?!<\/table>)[\s\S])*)$/i, '$1</table>');
+
   return cleaned;
 }
 
@@ -717,7 +739,7 @@ export default async function handler(req, res) {
     // 5) استدعاء Gemini للتقرير
     const htmlReportRaw = await geminiGenerate(geminiKey, parts);
 
-    // 6) تطبيق القواعد القسرية + إزالة المكررات + فحص الجرعات
+    // 6) تطبيق القواعد القسرية + فحص الجرعات + وسم التكرار
     const htmlReport = applyPolicyOverrides(htmlReportRaw, { body, ocrText, facts, modelHtml: htmlReportRaw });
 
     const elapsedMs = Date.now() - startedAt;
@@ -748,77 +770,3 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: "12mb" } },
 };
-// --- أدخِل هذه الدالّة: حقن آمن بعد أول جدول بدون لمس بقية الصفحة ---
-function safeInsertAfterFirstTable(html, fragment) {
-  if (!html) return html;
-  const lower = html.toLowerCase();
-  const endIdx = lower.indexOf('</table>');
-  if (endIdx === -1) return html; // لا يوجد جدول
-  return html.slice(0, endIdx + 8) + fragment + html.slice(endIdx + 8);
-}
-
-// --- استبدِل دالة dedupeAndPrune بهذه النسخة الآمنة ---
-function dedupeAndPrune(html) {
-  if (!html) return html;
-
-  // 1) نظّف صفوف العناوين المكررة داخل tbody (أحيانًا النموذج يولّد "رأس" كصف بيانات)
-  const HEADER_PAT = /(الدواء\/?الإجراء|الجرعة الموصوفة|الجرعة الصحيحة المقترحة|التصنيف|الغرض الطبي|التداخلات|درجة الخطورة|قرار التأمين)/i;
-  html = html.replace(/<tbody[^>]*>([\s\S]*?)<\/tbody>/gi, (m, body) => {
-    // افصل الصفوف ثم أعد بناء tbody مع إسقاط الصفوف الرأسية أو الفارغة
-    const rows = body.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-    const cleanedRows = [];
-    const seenKeys = new Set();
-
-    for (const row of rows) {
-      // استخرج أول خلية كاسم خدمة
-      const cells = row.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [];
-      const plain = cells.map(c => c.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
-      if (!plain.length) continue;
-
-      // أسقط الصف إذا كان رؤوس جدول متنكرة كبيانات
-      const looksHeader = plain.some(txt => HEADER_PAT.test(txt));
-      if (looksHeader) continue;
-
-      // طبّع الاسم لتقليل التكرار (تجاهل الجرعات والعلامات التجارية)
-      const k = (plain[0] || '')
-        .toLowerCase()
-        .replace(/[()،,.-]/g, ' ')
-        .replace(/\b(\d+(\.\d+)?)\s*(mg|g|ml|mcg|iu)\b/gi, '') // تجاهل الجرعات
-        .replace(/\b(b\.?braun|pfizer|abbvie|gsk|novartis|roche|sanofi)\b/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      if (k && seenKeys.has(k)) {
-        // صف مكرر: حوّل قرار التأمين إلى "❌ مرفوض (تكرار)"
-        const rej = `<span class="status-red">❌ مرفوض: تكرار الخدمة في نفس الزيارة.</span>`;
-        const rebuilt = row.replace(/<td[^>]*>[\s\S]*?<\/td>\s*<\/tr>\s*$/i, (lastCell) =>
-          lastCell.replace(/(<td[^>]*>)[\s\S]*?(<\/td>)/i, `$1${rej}$2`)
-        );
-        cleanedRows.push(rebuilt);
-        continue;
-      }
-
-      seenKeys.add(k);
-      cleanedRows.push(row);
-    }
-
-    return `<tbody>${cleanedRows.join('')}</tbody>`;
-  });
-
-  // 2) احقن ملخص “التكرارات المكتشفة” بعد أول جدول بشكل آمن بدون المساس ببقية الصفحة
-  const summaryBox = `
-    <div style="background:#fff3cd;border:1px solid #ffeeba;border-radius:10px;padding:10px;margin:12px 0">
-      <strong>ملاحظة تشغيلية:</strong> تمت إزالة/وسم الصفوف المكررة آليًا لتجنّب الازدواجية في المطالبة.
-      إذا كان التكرار مقصودًا (خدمتان منفصلتان بزمن/سبب مختلف)، أضِف التبرير في النموذج.
-    </div>
-  `;
-  html = safeInsertAfterFirstTable(html, summaryBox);
-
-  // 3) سدّ أي وسوم جدول مفتوحة قد تكسر ما بعدها (حماية خفيفة)
-  html = html
-    .replace(/(<tr[^>]*>(?:(?!<\/tr>)[\s\S])*)$/i, '$1</tr>')
-    .replace(/(<tbody[^>]*>(?:(?!<\/tbody>)[\s\S])*)$/i, '$1</tbody>')
-    .replace(/(<table[^>]*>(?:(?!<\/table>)[\s\S])*)$/i, '$1</table>');
-
-  return html;
-}
