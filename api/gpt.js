@@ -47,6 +47,7 @@ async function fetchWithRetry(url, options, { retries = 3, timeoutMs = DEFAULT_T
     throw err;
   }
 }
+
 function detectMimeFromB64(b64 = "") {
   const h = (b64 || "").slice(0, 24);
   if (h.includes("JVBERi0")) return "application/pdf";
@@ -392,14 +393,11 @@ function canonicalServiceKey(raw = "") {
 // يحاول تقدير الجرعة بالـ mg من نص السطر نفسه
 function extractDoseMgFromText(raw = "") {
   const s = String(raw);
-  // نمط 40MG → 40 mg
   const mgOnly = s.match(/(\d+(?:\.\d+)?)\s*mg\b/i);
-  // نمط 10 MG/ML + 100 ML → 1000 mg
   const conc = s.match(/(\d+(?:\.\d+)?)\s*mg\/\s*ml/i);
   const vol = s.match(/(\d+(?:\.\d+)?)\s*ml\b/i);
   if (conc && vol) { return parseFloat(conc[1]) * parseFloat(vol[1]); }
   if (mgOnly) return parseFloat(mgOnly[1]);
-  // نمط 5MG-ML 2ML
   const mgPerMl = s.match(/(\d+(?:\.\d+)?)\s*mg[\-\/]?\s*ml/i);
   const vol2 = s.match(/(\d+(?:\.\d+)?)\s*ml\b/i);
   if (mgPerMl && vol2) return parseFloat(mgPerMl[1]) * parseFloat(vol2[1]);
@@ -409,9 +407,26 @@ function extractDoseMgFromText(raw = "") {
 // قواعد دوائية أساسية للفحص
 const DOSE_RULES = {
   "paracetamol-iv": { maxSingleMg: 1000, maxDailyMg: 4000, maxDailyHepaticMg: 2000 }, // FDA Ofirmev
-  "pantoprazole-iv": { typicalSingleMg: 40, maxDailyMg: 40 }, // Protonix IV
-  "metoclopramide-iv": { typicalSingleMg: 10, maxDailyMg: 40, renalReduce: true } // StatPearls
+  "pantoprazole-iv": { typicalSingleMg: 40, maxDailyMg: 40 },                          // Protonix IV
+  "metoclopramide-iv": { typicalSingleMg: 10, maxDailyMg: 40, renalReduce: true }      // StatPearls
 };
+
+// =============== ثوابت للكشف عن صفوف رأس/عناوين ===============
+const COLUMN_TITLES_SET = new Set([
+  "الدواء/الإجراء (مع درجة الثقة)",
+  "الجرعة الموصوفة",
+  "الجرعة الصحيحة المقترحة",
+  "التصنيف",
+  "الغرض الطبي",
+  "التداخلات",
+  "درجة الخطورة (%)",
+  "قرار التأمين"
+]);
+const HEADER_TOKENS = [
+  "الدواء","الإجراء","الجرعة","التصنيف",
+  "الغرض","التداخلات","الخطورة","قرار","التأمين",
+  "dose","classification","purpose","interactions","risk","insurance"
+];
 
 // =============== POLICY OVERRIDES (antes/post report) ===============
 const DENGUE_TRIGGERS = [
@@ -435,7 +450,47 @@ function bagOfText({ body = {}, ocrText = "", facts = {}, modelHtml = "" } = {})
 }
 function hasAny(text, arr) { const s = text.toLowerCase(); return arr.some(w => s.includes(w.toLowerCase())); }
 
-// === قواعد إلزامية خاصة بالخدمات ===
+// ====== Helpers: صف فارغ/رأس يشبه العناوين ======
+function isEmptyRow(cells = []) {
+  const plain = cells.map(c => stripTags(c || "").trim());
+  if (!plain.length) return true;
+  return plain.every(t => !t || /^[-–—\s]+$/.test(t));
+}
+function isHeaderLikeRow(rowHtml = "", cells = []) {
+  const hasTh = /<th\b/i.test(rowHtml);
+  const plain = cells.map(c => stripTags(c || "").trim());
+  const joined = plain.join(" ").toLowerCase();
+  const headerHits = HEADER_TOKENS.reduce((n, tok) => n + (joined.includes(tok) ? 1 : 0), 0);
+  const allFromColumnSet = plain.length > 0 && plain.every(t => COLUMN_TITLES_SET.has(t));
+  const looksLikeRealData = /\b(cbc|creatinine|pantoprazole|pantozol|paracetamol|metoclopramide|primperan|dengue|hba1c|cholest|ldl|triglycerid|uric|urea|crp|urinalysis|ultra\s*sound|nebulizer|inhaler|referral)\b/i.test(joined);
+  return hasTh || allFromColumnSet || (!looksLikeRealData && headerHits >= 3);
+}
+
+// ====== محرّك تعديل الصفوف (يمرّ على <tbody> فقط) ======
+function mutateRows(html = "", fn) {
+  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+  if (!tbodyMatch) return html;
+  const tbody = tbodyMatch[1];
+  const rows = [...tbody.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+  const newRows = [];
+  for (const m of rows) {
+    const rowHtml = m[0];
+    const cells = [...rowHtml.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(x => x[1]);
+    const res = fn(rowHtml, cells) || {};
+    const keep = res.keep !== false;
+    if (!keep) continue;
+    if (res.newCells && Array.isArray(res.newCells)) {
+      const tds = res.newCells.map(c => `<td>${c}</td>`).join("");
+      newRows.push(`<tr>${tds}</tr>`);
+    } else {
+      newRows.push(rowHtml);
+    }
+  }
+  const newTbody = newRows.join("");
+  return html.replace(tbodyMatch[0], `<tbody>${newTbody}</tbody>`);
+}
+
+// ====== قواعد إلزامية خاصة بالخدمات ======
 function forceDengueRule(html = "", ctx = {}) {
   const txt = bagOfText(ctx);
   const hasAcute = ctx?.facts?.hasDengueAcuteContext || hasAny(txt, DENGUE_TRIGGERS);
@@ -494,19 +549,17 @@ function forceUSRule(html = "", ctx = {}) {
 // =============== جرعات/سلامة (تحليل بعدي) ===============
 function doseSafetyGuard(html = "", ctx = {}) {
   const { facts = {} } = ctx;
-  const hepatic = Boolean(facts.hasLiverDisease) || (facts.ALT > 3 || facts.AST > 3); // تقريب بسيط
+  const hepatic = Boolean(facts.hasLiverDisease) || (facts.ALT > 3 || facts.AST > 3);
   const renal = Boolean(facts.hasRenalImpairment) || (facts.eGFR && facts.eGFR < 60);
 
   return mutateRows(html, (row, cells) => {
     const nameCell = stripTags(cells[0] || "");
     const key = canonicalServiceKey(nameCell);
-    const doseCellText = [cells[1], cells[0]].map(c => stripTags(c || "")).join(" "); // حاول من الجرعة أولاً ثم الاسم
+    const doseCellText = [cells[1], cells[0]].map(c => stripTags(c || "")).join(" ");
     const mg = extractDoseMgFromText(doseCellText);
 
-    // لا قواعد معروفة
     if (!DOSE_RULES[key]) return { keep: true };
 
-    let decision = stripTags(cells[cells.length - 1] || "");
     let notes = [];
 
     if (key === "paracetamol-iv") {
@@ -530,72 +583,52 @@ function doseSafetyGuard(html = "", ctx = {}) {
     if (key === "metoclopramide-iv") {
       const typical = DOSE_RULES[key].typicalSingleMg;
       if (mg && mg > typical) {
-        notes.push(`⚠️ الجرعة المعتادة 10mg للبالغين؛ تحقق من السبب لتجاوزها.`);
+        notes.push(`⚠️ الجرعة المعتادة 10mg للبالغين؛ تحقّق من سبب التجاوز.`);
       }
       if (renal) {
-        notes.push(`⚠️ قصور كلوي: فكر بتقليل الجرعة (قد تصل 5mg مرتين/يوم في الديال).`);
+        notes.push(`⚠️ قصور كلوي: فكّر بتقليل الجرعة (قد تصل 5mg مرتين/يوم في الديال).`);
       }
     }
 
     if (notes.length) {
-      const merged = notes.join(" ");
-      cells[cells.length - 1] = `<span class="status-yellow">${merged}</span>`;
+      cells[cells.length - 1] = `<span class="status-yellow">${notes.join(" ")}</span>`;
       return { keep: true, newCells: cells };
     }
     return { keep: true };
   });
 }
 
-// =============== إزالة التكرار + تنظيف الجدول ===============
+// =============== إزالة العناوين/الفراغات ثم إزالة المكررات ===============
 function dedupeAndPrune(html = "") {
   const seen = new Set();
   const removed = [];
 
-  const next = mutateRows(html, (row, cells) => {
-    const name = stripTags(cells[0] || "");
-    if (!name || /الدواء\/الإجراء/.test(name)) return { keep: false }; // احذف أي سطر رأس مكرر داخل tbody
-    const key = canonicalServiceKey(name);
+  // 1) احذف الصفوف الفارغة وصفوف العناوين الشبيهة بالرأس داخل tbody
+  let cleaned = mutateRows(html, (rowHtml, cells) => {
+    if (isEmptyRow(cells)) return { keep: false };
+    if (isHeaderLikeRow(rowHtml, cells)) return { keep: false };
+    return { keep: true };
+  });
+
+  // 2) إزالة التكرار بالاعتماد على المفتاح الموحّد للخدمة
+  cleaned = mutateRows(cleaned, (rowHtml, cells) => {
+    const firstCell = stripTags(cells[0] || "");
+    if (!firstCell) return { keep: false };
+    const key = canonicalServiceKey(firstCell);
     if (seen.has(key)) {
-      removed.push(name);
-      return { keep: false }; // احذف الصف المكرر نهائيًا
+      removed.push(firstCell);
+      return { keep: false };
     }
     seen.add(key);
     return { keep: true };
   });
 
-  // أضف ملخصًا لما حُذف
+  // 3) أضف ملخصًا أسفل الجدول عند وجود إزالة
   if (removed.length) {
-    return next.replace(/<\/table>\s*<h4\b/i,
-      `</table><div style="margin:8px 0"><span class="status-red">❌ تمت إزالة ${removed.length} صف(وف) مكررة من الجدول.</span></div><h4`);
+    cleaned = cleaned.replace(/<\/table>\s*<h4\b/i,
+      `</table><div style="margin:8px 0"><span class="status-red">❌ تمت إزالة ${removed.length} صف(وف) مكررة/غير صالحة من الجدول.</span></div><h4`);
   }
-  return next;
-}
-
-// أداة عامة لتعديل صفوف الجدول (tbody فقط)
-function mutateRows(html = "", fn) {
-  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
-  if (!tbodyMatch) return html;
-  const tbody = tbodyMatch[1];
-  const rows = [...tbody.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
-  const newRows = [];
-  for (const m of rows) {
-    const rowHtml = m[0];
-    const cells = [...rowHtml.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(x => x[1]);
-    const { keep = true, newCells } = fn(rowHtml, cells) || {};
-    if (!keep) continue;
-    if (newCells && Array.isArray(newCells)) {
-      const rebuilt = rebuildRow(newCells);
-      newRows.push(rebuilt);
-    } else {
-      newRows.push(rowHtml);
-    }
-  }
-  const newTbody = newRows.join("");
-  return html.replace(tbodyMatch[0], `<tbody>${newTbody}</tbody>`);
-}
-function rebuildRow(cells = []) {
-  const tds = cells.map(c => `<td>${c}</td>`).join("");
-  return `<tr>${tds}</tr>`;
+  return cleaned;
 }
 
 // =============== APPLY ALL OVERRIDES ===============
@@ -607,7 +640,7 @@ function applyPolicyOverrides(htmlReport, ctx) {
   out = forceIVRule(out, ctx);
   out = forceUSRule(out, ctx);
   out = doseSafetyGuard(out, ctx);
-  out = dedupeAndPrune(out); // أخيرًا: إزالة المكررات فعليًا + ملخص
+  out = dedupeAndPrune(out);
   return out;
 }
 
