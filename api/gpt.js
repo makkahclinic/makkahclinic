@@ -748,3 +748,77 @@ export default async function handler(req, res) {
 export const config = {
   api: { bodyParser: { sizeLimit: "12mb" } },
 };
+// --- أدخِل هذه الدالّة: حقن آمن بعد أول جدول بدون لمس بقية الصفحة ---
+function safeInsertAfterFirstTable(html, fragment) {
+  if (!html) return html;
+  const lower = html.toLowerCase();
+  const endIdx = lower.indexOf('</table>');
+  if (endIdx === -1) return html; // لا يوجد جدول
+  return html.slice(0, endIdx + 8) + fragment + html.slice(endIdx + 8);
+}
+
+// --- استبدِل دالة dedupeAndPrune بهذه النسخة الآمنة ---
+function dedupeAndPrune(html) {
+  if (!html) return html;
+
+  // 1) نظّف صفوف العناوين المكررة داخل tbody (أحيانًا النموذج يولّد "رأس" كصف بيانات)
+  const HEADER_PAT = /(الدواء\/?الإجراء|الجرعة الموصوفة|الجرعة الصحيحة المقترحة|التصنيف|الغرض الطبي|التداخلات|درجة الخطورة|قرار التأمين)/i;
+  html = html.replace(/<tbody[^>]*>([\s\S]*?)<\/tbody>/gi, (m, body) => {
+    // افصل الصفوف ثم أعد بناء tbody مع إسقاط الصفوف الرأسية أو الفارغة
+    const rows = body.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+    const cleanedRows = [];
+    const seenKeys = new Set();
+
+    for (const row of rows) {
+      // استخرج أول خلية كاسم خدمة
+      const cells = row.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [];
+      const plain = cells.map(c => c.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+      if (!plain.length) continue;
+
+      // أسقط الصف إذا كان رؤوس جدول متنكرة كبيانات
+      const looksHeader = plain.some(txt => HEADER_PAT.test(txt));
+      if (looksHeader) continue;
+
+      // طبّع الاسم لتقليل التكرار (تجاهل الجرعات والعلامات التجارية)
+      const k = (plain[0] || '')
+        .toLowerCase()
+        .replace(/[()،,.-]/g, ' ')
+        .replace(/\b(\d+(\.\d+)?)\s*(mg|g|ml|mcg|iu)\b/gi, '') // تجاهل الجرعات
+        .replace(/\b(b\.?braun|pfizer|abbvie|gsk|novartis|roche|sanofi)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (k && seenKeys.has(k)) {
+        // صف مكرر: حوّل قرار التأمين إلى "❌ مرفوض (تكرار)"
+        const rej = `<span class="status-red">❌ مرفوض: تكرار الخدمة في نفس الزيارة.</span>`;
+        const rebuilt = row.replace(/<td[^>]*>[\s\S]*?<\/td>\s*<\/tr>\s*$/i, (lastCell) =>
+          lastCell.replace(/(<td[^>]*>)[\s\S]*?(<\/td>)/i, `$1${rej}$2`)
+        );
+        cleanedRows.push(rebuilt);
+        continue;
+      }
+
+      seenKeys.add(k);
+      cleanedRows.push(row);
+    }
+
+    return `<tbody>${cleanedRows.join('')}</tbody>`;
+  });
+
+  // 2) احقن ملخص “التكرارات المكتشفة” بعد أول جدول بشكل آمن بدون المساس ببقية الصفحة
+  const summaryBox = `
+    <div style="background:#fff3cd;border:1px solid #ffeeba;border-radius:10px;padding:10px;margin:12px 0">
+      <strong>ملاحظة تشغيلية:</strong> تمت إزالة/وسم الصفوف المكررة آليًا لتجنّب الازدواجية في المطالبة.
+      إذا كان التكرار مقصودًا (خدمتان منفصلتان بزمن/سبب مختلف)، أضِف التبرير في النموذج.
+    </div>
+  `;
+  html = safeInsertAfterFirstTable(html, summaryBox);
+
+  // 3) سدّ أي وسوم جدول مفتوحة قد تكسر ما بعدها (حماية خفيفة)
+  html = html
+    .replace(/(<tr[^>]*>(?:(?!<\/tr>)[\s\S])*)$/i, '$1</tr>')
+    .replace(/(<tbody[^>]*>(?:(?!<\/tbody>)[\s\S])*)$/i, '$1</tbody>')
+    .replace(/(<table[^>]*>(?:(?!<\/table>)[\s\S])*)$/i, '$1</table>');
+
+  return html;
+}
