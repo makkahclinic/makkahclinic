@@ -1,25 +1,11 @@
 // pages/api/gpt.js
-// Medical Audit Orchestrator — Gemini primary + (optional) GPT OCR
+// Unified Expert Analyzer — Gemini + (optional) OpenAI OCR
 // Next.js Pages Router / Vercel (Node 18+)
-//
+
 // ========================= ENV =========================
 // GEMINI_API_KEY   = "sk-..."   (required)
 // OPENAI_API_KEY   = "sk-..."   (optional → OCR for images)
 // =======================================================
-//
-// Duplicate-denial policy references (why we reject duplicates):
-// - CMS: "Repeat or Duplicate Services on the Same Day" → https://www.cms.gov/medicare-coverage-database/view/article.aspx?articleId=53482
-// - CMS: NCCI Policy Manual (general rationale for denials/edits) → https://www.cms.gov/medicare/coding-billing/national-correct-coding-initiative-ncci-edits/medicare-ncci-policy-manual
-//
-// Clinical references used in guidance sections (unchanged):
-// - ADA SoC 2024 (Diabetes): https://diabetesjournals.org/care/issue/47/Supplement_1
-// - NICE NG136 (Hypertension): https://www.nice.org.uk/guidance/ng136
-// - NICE CG174 (IV Fluids): https://www.nice.org.uk/guidance/cg174
-// - CDC (Dengue testing): https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html
-// - GINA (Asthma): https://ginasthma.org/gina-reports/
-// - ACR Appropriateness Criteria: https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria
-// - ACG H. pylori 2022: https://gi.org/guideline/management-of-helicobacter-pylori-infection/
-// - AGS Beers Criteria: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7109450/
 
 import { createHash } from "crypto";
 
@@ -77,7 +63,6 @@ function getFileHash(base64Data = "") {
 function asDataUrl(mime, b64) { return `data:${mime};base64,${b64}`; }
 function stripFences(s = "") { return s.replace(/```html/gi, "").replace(/```/g, "").trim(); }
 function escapeHtml(s = "") { return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }
-function stripTags(s = "") { return s.replace(/<[^>]*>/g, " "); }
 function hardHtmlEnforce(s = "") {
   const t = stripFences(s);
   const looksHtml = /<\/?(html|body|table|tr|td|th|ul|ol|li|h\d|p|span|div|style)\b/i.test(t);
@@ -96,6 +81,7 @@ function hardHtmlEnforce(s = "") {
   </style>`;
   return `${skin}<pre style="white-space:pre-wrap">${escapeHtml(t)}</pre>`;
 }
+function stripTags(s = "") { return s.replace(/<[^>]*>/g, " "); }
 
 // ---- Date helpers ----
 function normalizeDate(input) {
@@ -130,7 +116,7 @@ const systemInstruction = `
 أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك: دقة 10/10. أخرج **كتلة HTML واحدة فقط** وفق القالب.
 
 [قواعد أساسية (ملزمة)]
-- **مصدر الحقيقة**: "بيانات المريض" المرسلة يدويًا هي المرجع النهائي. إذا خالفتها الملفات، اذكر التعارض في "تحليل الملفات" لكن ابنِ القرار النهائي على بيانات المريض.
+- **مصدر الحقيقة**: "بيانات المريض" المرسلة يدويًا هي المرجع النهائي. إذا خالفتها الملفات، اذكر التعارض في "تحليل الملفات" لكن اتّبع "بيانات المريض" في الاستنتاج النهائي.
 - **Red Flags**: مدخن + سعال (خصوصًا مع دم) ⇒ أوصِ بـ **Chest X-ray** ضمن "خدمات ضرورية".
 - **توافق ديموغرافي**: راقب أخطاء الجنس/التشخيص/الدواء.
 
@@ -196,7 +182,15 @@ async function geminiExtractFacts(apiKey, fileParts) {
   "hasRespContext": boolean,
   "hasIVIndication": boolean,
   "hasUSIndication": boolean,
-  "hasDengueAcuteContext": boolean
+  "hasDengueAcuteContext": boolean,
+  "egfr": number|null,               // mL/min/1.73m2
+  "creatinine_mg_dl": number|null,
+  "alt_u_l": number|null,
+  "ast_u_l": number|null,
+  "potassium_mmol_l": number|null,
+  "hba1c_percent": number|null,
+  "renalSevere": boolean|null,       // Dialysis/CKD4-5/eGFR<30
+  "hepaticSevere": boolean|null      // Severe hepatic impairment or active liver disease
 }
 - إذا تعذر الاستخراج ضع null/false.
 - لا تضف أي شرح خارج JSON.`;
@@ -212,6 +206,14 @@ async function geminiExtractFacts(apiKey, fileParts) {
       hasIVIndication: { type: "boolean" },
       hasUSIndication: { type: "boolean" },
       hasDengueAcuteContext: { type: "boolean" },
+      egfr: { type: "number" },
+      creatinine_mg_dl: { type: "number" },
+      alt_u_l: { type: "number" },
+      ast_u_l: { type: "number" },
+      potassium_mmol_l: { type: "number" },
+      hba1c_percent: { type: "number" },
+      renalSevere: { type: "boolean" },
+      hepaticSevere: { type: "boolean" }
     },
     additionalProperties: false,
   };
@@ -276,6 +278,9 @@ function buildUserPrompt(user = {}, facts = {}) {
 مؤشرات سوائل وريدية؟ ${facts.hasIVIndication ? "نعم" : "لا"}
 مبرر Ultrasound؟ ${facts.hasUSIndication ? "نعم" : "لا"}
 سياق ضنك حاد (حمّى/سفر لمنطقة موبوءة)؟ ${facts.hasDengueAcuteContext ? "نعم" : "لا"}
+
+**مؤشرات مختبرية ملتقطة:**
+eGFR: ${facts.egfr ?? "—"} | Creatinine: ${facts.creatinine_mg_dl ?? "—"} mg/dL | ALT: ${facts.alt_u_l ?? "—"} U/L | AST: ${facts.ast_u_l ?? "—"} U/L | K⁺: ${facts.potassium_mmol_l ?? "—"} mmol/L | HbA1c: ${facts.hba1c_percent ?? "—"} %
 
 **نص الأدوية/الإجراءات من المستخدم:** ${user.medications || "—"}
 **عدد الملفات المرفوعة:** ${Array.isArray(user.files) ? user.files.length : 0}
@@ -366,110 +371,104 @@ async function geminiGenerate(apiKey, parts, cfg = {}) {
   } catch { return hardHtmlEnforce(raw); }
 }
 
-// =============== POLICY OVERRIDES & TABLE OPS ===============
+// =============== TEXT BAG + TRIGGERS ===============
 const DENGUE_TRIGGERS = [
   "حمى","سخونة","ارتفاع الحرارة","fever",
-  "سفر إلى","travel to","سافر","سفر",
-  "منطقة موبوءة","endemic area",
-  "إندونيسيا","الفلبين","تايلاند","ماليزيا","الهند","بنغلاديش",
-  "البرازيل","المكسيك","بيرو","كولومبيا","فيتنام","سريلانكا","سنغافورة"
+  "سفر","travel","منطقة موبوءة","endemic","إندونيسيا","الفلبين","تايلاند","ماليزيا","الهند","بنغلاديش","البرازيل","المكسيك","بيرو","كولومبيا","فيتنام","سريلانكا","سنغافورة"
 ];
 const RESP_TRIGGERS = ["سعال","صفير","ضيق تنفس","asthma","copd","wheeze","shortness of breath","dyspnea"];
 const IV_TRIGGERS = ["جفاف","dehydration","قيء شديد","severe vomiting","تعذر فموي","npo","نزف","bleeding","هبوط ضغط","hypotension"];
-const US_TRIGGERS = ["ألم بطني","epigastric pain","ruq pain","gallbladder","كبد","حوض","pelvic","umbilical","periumbilical","انتفاخ البطن","abdominal distension"];
-
-const ACEI_WORDS = ["perindopril","enalapril","lisinopril","ramipril","acei"];
-const ARB_WORDS  = ["valsartan","losartan","candesartan","irbesartan","arb","co-taburan"];
-const SULF_WORDS = ["gliclazide","diamicron","glibenclamide","glyburide","glimepiride"];
-const CCB_WORDS  = ["amlodipine","ccb"];
-const TRIPLIXAM_WORDS = ["triplixam"];
+const US_TRIGGERS = ["ألم بطني","epigastric","ruq pain","gallbladder","كبد","حوض","pelvic","umbilical","periumbilical"];
 
 function bagOfText({ body = {}, ocrText = "", facts = {}, modelHtml = "" } = {}) {
   return [
     body.notes || "",
     Array.isArray(body.problems) ? body.problems.join(" ") : "",
+    body.medications || "",
     ocrText || "",
     stripTags(modelHtml || ""),
   ].join(" ").toLowerCase();
 }
 function hasAny(text, arr) { const s = text.toLowerCase(); return arr.some(w => s.includes(w.toLowerCase())); }
-function anyIn(text, words){ return hasAny(text, words); }
+const toNum = (s) => s ? parseFloat(String(s).replace(",", ".").match(/-?\d+(\.\d+)?/)?.[0] ?? NaN) : NaN;
 
-// ---- HTML helpers ----
-function getRows(html) { return html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || []; }
-function replaceRows(html, rows) {
-  return html.replace(/(<tbody\b[^>]*>)[\s\S]*?(<\/tbody>)/i, `$1${rows.join("\n")}$2`);
+// =============== LAB PARSER (fallback إذا ما استخرجها Gemini) ===============
+function parseLabsFromText(raw) {
+  const t = (raw || "").toLowerCase();
+  const pick = (re) => {
+    const m = t.match(re);
+    return m ? toNum(m[1]) : null;
+  };
+  const egfr = pick(/egfr[^0-9]{0,10}(\d+(?:[.,]\d+)?)/i);
+  const crea = pick(/(?:creatinine|creat\s*:?|cr\s*:?)\s*([0-9]+(?:[.,]\d+)?)/i);
+  const alt  = pick(/(?:alt|sgpt)\s*[:=]?\s*([0-9]+(?:[.,]\d+)?)/i);
+  const ast  = pick(/(?:ast|sgot)\s*[:=]?\s*([0-9]+(?:[.,]\d+)?)/i);
+  const k    = pick(/(?:potassium|k\+?)\s*[:=]?\s*([0-9]+(?:[.,]\d+)?)/i);
+  const a1c  = pick(/(?:hba1c|gly[co]s?ylated\s*ha?emoglobin)\s*[:=]?\s*([0-9]+(?:[.,]\d+)?)/i);
+  return { egfr, creatinine_mg_dl: crea, alt_u_l: alt, ast_u_l: ast, potassium_mmol_l: k, hba1c_percent: a1c };
 }
-function firstTdText(row){ const m = row.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i); return m ? stripTags(m[1]).trim() : ""; }
-function replaceLastTd(row, contentHtml){
-  const tds = row.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
-  if (!tds || !tds.length) return row.replace(/<\/tr>/i, `<td>${contentHtml}</td></tr>`);
-  const last = tds[tds.length-1];
-  const repl = last.replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${contentHtml}$2`);
-  let idx = 0;
-  return row.replace(/<td\b[^>]*>[\s\S]*?<\/td>/gi, (m)=> (idx++===tds.length-1?repl:m));
+
+// =============== CANONICAL SERVICE KEY (لتجميع المكرر) ===============
+// يطبع الاسم إلى مفتاح قياسي: يحذف الجرعات/الأحجام/العلامات التجارية والنِسب — الهدف كشف الازدواج وليس تصحيح الجرعة.
+function canonicalKey(raw = "") {
+  let s = (raw || "").toLowerCase();
+  s = s.replace(/\b(b\.?braun|bbraun|pfizer|gsk|abbvie|teva|mylan|sandoz|hospira)\b/g, ""); // brands
+  s = s.replace(/\b(\d+(\.\d+)?\s*(mg|ml|mcg|g|units|iu)\/?\s*(ml|amp|vial)?)\b/g, "");    // doses/units
+  s = s.replace(/\b(\d+\s*(mg|ml)|\d+%|\d+(?:\/\d+)?\s*(mmol|u\/l))\b/g, "");              // numbers
+  s = s.replace(/[\s\-_,.]+/g, " ").trim();
+
+  // synonyms
+  const map = [
+    [/automated complete blood cell count|complete blood cell count|cbc/gi, "cbc"],
+    [/complete urine analysis|urinalysis|urine analysis|urine test/gi, "urinalysis"],
+    [/c[\- ]?reactive prot?i?ne?|crp/gi, "crp"],
+    [/liver enzyme.*sgpt|alt/gi, "alt"],
+    [/ldl.*chol/i, "ldl"],
+    [/chol(e)?st(e)?rol/i, "cholesterol"],
+    [/triglycerides|trigs?|tg/gi, "triglycerides"],
+    [/nebulizer.*inhaler|nebulizer|inhaler|نيبولايزر|استنشاق/gi, "nebulizer-inhaler"],
+    [/pantozol|pantoprazole|protonix/gi, "pantoprazole-iv"],
+    [/paracetamol.*infus|acetaminophen.*iv|ofirmev/gi, "paracetamol-iv"],
+    [/primperan|metoclopramide/gi, "metoclopramide-iv"],
+    [/normal saline.*i\.?v\.?/gi, "normal-saline-iv"],
+    [/i\.?v\.?\s*infusion\s*only/gi, "iv-infusion-only"],
+    [/ultra\s*sound|ultrasound|سونار|التراسوند/gi, "ultrasound"],
+    [/dengue.*igg/gi, "dengue-igg"],
+    [/glycosylated he?amoglobin|hba1c/gi, "hba1c"],
+  ];
+  for (const [re, val] of map) s = s.replace(re, val);
+  return s || raw.toLowerCase();
 }
 
-// ---- Canonicalization for duplicate detection ----
-const CANON_RULES = [
-  { re: /(paracetamol|acetaminophen)/i, key: "paracetamol-iv" },
-  { re: /(pantozol|pantoprazole)/i, key: "pantoprazole-iv" },
-  { re: /(primperan|metoclopramide)/i, key: "metoclopramide-iv" },
-  { re: /normal\s*saline/i, key: "normal-saline" },
-  { re: /(cbc|complete.*blood.*count)/i, key: "cbc" },
-  { re: /(c[-\s]?reactive.*protein|crp)/i, key: "crp" },
-  { re: /(glycosylated.*(hae|hemo)globin|hb.?a1c)/i, key: "hba1c" },
-  { re: /\bldl\b.*(cholest|cholestrol)?/i, key: "ldl" },
-  { re: /\btriglycerides?\b/i, key: "triglycerides" },
-  { re: /\bcholest(?:erol|rol)\b/i, key: "cholesterol" },
-  { re: /(liver.*(sgpt|alt)|\bsgpt\b|\balt\b)/i, key: "alt" },
-  { re: /uric\s*acid/i, key: "uric-acid" },
-  { re: /\bcreatinine\b/i, key: "creatinine" },
-  { re: /\burea\b/i, key: "urea" },
-  { re: /(ultra\s*sound|ultrasound|سونار|ألتراساوند)/i, key: "ultrasound" },
-  { re: /(nebulizer|inhaler|نيبول|استنشاق)/i, key: "nebulizer-inhaler" },
-  { re: /dengue.*igg/i, key: "dengue-igg" },
-  { re: /(referral|إحالة)/i, key: "referral" },
-];
-
-function canonicalServiceKey(sRaw = "") {
-  let s = (sRaw || "").toLowerCase();
-  // strip dosage/units/packaging/brands
-  s = s
-    .replace(/\b\d+([.,]\d+)?\s*(mg|ml|mcg|g|iu|%|mmol\/l)\b/gi, " ")
-    .replace(/\b\d+([.,]\d+)?\s*(mg|ml)\/\s*\d+([.,]\d+)?\s*(mg|ml)\b/gi, " ")
-    .replace(/\b(b\.?braun|bbraun|amp(?:oule)?|vial|solution|powder|for|injection|infus(?:ion)?|i\.?v\.?)\b/gi, " ")
-    .replace(/\(.*?\)/g, " ")
-    .replace(/[^\p{L}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  for (const { re, key } of CANON_RULES) {
-    if (re.test(sRaw) || re.test(s)) return key;
+// =============== POST HTML MANIPULATION HELPERS ===============
+function replaceLastTd(rowHtml, newContent) {
+  const tds = rowHtml.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
+  if (tds && tds.length) {
+    return rowHtml.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${newContent}$2`));
   }
-  return s; // fallback
+  return rowHtml.replace(/<\/tr>/i, `<td>${newContent}</td></tr>`);
 }
+function stripBadges(s) { return s.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, ""); }
 
-// ---- Enforcement rules ----
+// =============== POLICY OVERRIDES (Row-level) ===============
 function forceDengueRule(html = "", ctx = {}) {
   const txt = bagOfText(ctx);
   const hasAcute = ctx?.facts?.hasDengueAcuteContext || hasAny(txt, DENGUE_TRIGGERS);
   if (hasAcute) return html;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
-    if (!/(dengue|الضنك|حمى الضنك)/i.test(plain) || !/\bigg\b/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يوصى باختبار NS1/NAAT أو IgM للتشخيص الحاد، وIgG يدل على عدوى سابقة <a href="https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html" target="_blank">[CDC]</a>.</span>`;
-    let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    return replaceLastTd(cleaned, caution);
+    if (!/(dengue|الضنك)/i.test(plain)) return row;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد.</span>`;
+    return replaceLastTd(stripBadges(row), caution);
   });
 }
 function forceReferralRule(html = "", ctx = {}) {
-  const hasReason = !!ctx?.facts?.hasReferralReason || hasAny(bagOfText(ctx), ["إحالة","referral for","refer to","تحويل إلى","سبب الإحالة"]);
+  const hasReason = !!ctx?.facts?.hasReferralReason || hasAny(bagOfText(ctx), ["إحالة","referral for","تحويل إلى","سبب الإحالة"]);
   if (hasReason) return html;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!/referral/i.test(stripTags(row))) return row;
     const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب ذكر سبب إحالة واضح في النموذج.</span>`;
-    let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    return replaceLastTd(cleaned, caution);
+    return replaceLastTd(stripBadges(row), caution);
   });
 }
 function forceNebulizerRule(html = "", ctx = {}) {
@@ -478,20 +477,18 @@ function forceNebulizerRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(nebulizer|inhaler|نيبولايزر|استنشاق)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: لزوم أعراض/تشخيص تنفسي موثق <a href="https://ginasthma.org/gina-reports/" target="_blank">[GINA]</a>.</span>`;
-    let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    return replaceLastTd(cleaned, caution);
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: لزوم أعراض/تشخيص تنفسي موثق.</span>`;
+    return replaceLastTd(stripBadges(row), caution);
   });
 }
 function forceIVRule(html = "", ctx = {}) {
   const hasIV = !!ctx?.facts?.hasIVIndication || hasAny(bagOfText(ctx), IV_TRIGGERS);
   if (hasIV) return html;
-  const IV_KEYS = /(normal\s*saline|i\.?v\.?\s*infusion\s*only|primperan|metoclopramide|paracetamol\s+.*infus|pantoprazole|pantozol)/i;
+  const IV_KEYS = /(normal\s*saline|i\.?v\.?\s*infusion\s*only|primperan|metoclopramide|paracetamol\s+.*infus|acetaminophen\s+.*iv|pantoprazole|pantozol)/i;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!IV_KEYS.test(stripTags(row))) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: استعمال وريدي يحتاج مؤشرات واضحة (جفاف/تعذر فموي/نزف...) <a href="https://www.nice.org.uk/guidance/cg174" target="_blank">[NICE CG174]</a>.</span>`;
-    let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    return replaceLastTd(cleaned, caution);
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: الاستعمال الوريدي يحتاج مؤشرات واضحة (جفاف/قيء شديد/تعذّر فموي...).</span>`;
+    return replaceLastTd(stripBadges(row), caution);
   });
 }
 function forceUSRule(html = "", ctx = {}) {
@@ -500,139 +497,116 @@ function forceUSRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(ultrasound|ultra\s*sound|سونار|ألتراساوند)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب مبرر تصوير واضح (مثلاً ألم موضَّع ربع علوي أيمن) <a href="https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria" target="_blank">[ACR]</a>.</span>`;
-    let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    return replaceLastTd(cleaned, caution);
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب مبرر تصوير واضح (مثلاً ألم بطني موضع).</span>`;
+    return replaceLastTd(stripBadges(row), caution);
   });
 }
 
-// ---- NEW: Duplicate detection → RED denial for every additional duplicate
-const DUPLICATE_REF_LINK = `<a href="https://www.cms.gov/medicare-coverage-database/view/article.aspx?articleId=53482" target="_blank">[CMS Duplicate]</a>`;
-function rejectDuplicateServices(html = "") {
-  const rows = getRows(html);
-  if (!rows.length) return html;
+// =============== DUPLICATES (رفض أحمر) ===============
+function markDuplicatesAsDenied(html = "") {
+  const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+  if (!rows) return html;
 
-  // Build normalized keys per row (by first <td>)
-  const keys = rows.map((r) => canonicalServiceKey(firstTdText(r)));
+  const seen = new Map();
+  const outRows = [];
+  for (const row of rows) {
+    const plain = stripTags(row);
+    // نحاول أخذ اسم الخدمة من أول خلية
+    const firstCell = row.match(/<td\b[^>]*>[\s\S]*?<\/td>/i)?.[0] || plain;
+    const key = canonicalKey(firstCell);
+    if (!key) { outRows.push(row); continue; }
 
-  // Track first index of each key; all subsequent indices are duplicates
-  const firstIndexMap = new Map();
-  const duplicateIndices = [];
-  keys.forEach((k, i) => {
-    if (!k) return;
-    if (!firstIndexMap.has(k)) firstIndexMap.set(k, i);
-    else duplicateIndices.push(i);
-  });
+    if (seen.has(key)) {
+      const denied = `<span class="status-red">❌ مرفوض: تكرار نفس الخدمة ضمن نفس المطالبة.</span>`;
+      outRows.push(replaceLastTd(stripBadges(row), denied));
+    } else {
+      seen.set(key, true);
+      outRows.push(row);
+    }
+  }
 
-  if (!duplicateIndices.length) return html;
-
-  const updated = rows.map((r, idx) => {
-    if (!duplicateIndices.includes(idx)) return r;
-    // Overwrite last cell with RED denial + reason
-    const red = `<span class="status-red">❌ مرفوض: مكرر في الطلب ${DUPLICATE_REF_LINK}</span>`;
-    // Remove any previous status chips before replacing
-    let cleaned = r.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "");
-    cleaned = cleaned.replace(/✅|⚠️|❌/g, ""); // strip emojis if present in last cell
-    return replaceLastTd(cleaned, red);
-  });
-
-  return replaceRows(html, updated);
+  // أعِد تركيب الجدول
+  let i = 0;
+  return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, () => outRows[i++]);
 }
 
-// ---- Guidance lists (unchanged with small safety) ----
-function synthesizeActionLists(body = {}, facts = {}, bag = "") {
-  const out = { urgent: [], labs: [], routine: [] };
+// =============== DOSE INTERVAL GUARD (نَفَس خفيف) ===============
+// رصد احتمالية تكدّس جرعات أسيتامينوفين IV في نفس المطالبة (تنبيه فقط)
+function applyDoseIntervalHints(html = "") {
+  return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
+    const key = canonicalKey(stripTags(row));
+    if (key.includes("paracetamol-iv")) {
+      const note = `<span class="status-yellow">⚠️ تذكير: حد أقصى 1000mg/جرعة، فاصل ≥4 ساعات، و≤4000mg/24h (يشمل جميع المستحضرات المحتوية على أسيتامينوفين).</span>`;
+      return replaceLastTd(stripBadges(row), note); // مبني على OFIRMEV label (FDA)
+    }
+    if (key.includes("pantoprazole-iv")) {
+      const note = `<span class="status-yellow">⚠️ تذكير: الجرعة الشائعة 40mg IV مرة يومياً لمدة 7–10 أيام إذا كانت هناك ضرورة حقيقية للحقن.</span>`;
+      return replaceLastTd(stripBadges(row), note);
+    }
+    if (key.includes("metoclopramide-iv")) {
+      const note = `<span class="status-yellow">⚠️ جرعات نموذجية 10mg حتى 4 مرات/يوم للبالغين؛ لدى كبار السن يُفضَّل 5mg لتقليل الأعراض خارج الهرمية.</span>`;
+      return replaceLastTd(stripBadges(row), note);
+    }
+    return row;
+  });
+}
 
-  const dob = body.dob ?? facts.dob ?? null;
-  const age = body.age ?? (dob ? computeAgeFromDob(dob) : undefined);
-  const isOlder = typeof age === "number" ? age >= 65 : false;
+// =============== LAB-AWARE GUARDS (كلوي/كبدي) ===============
+function applyRenalHepaticGuards(html = "", ctx = {}) {
+  const { facts = {} } = ctx;
+  const bag = bagOfText(ctx);
 
-  const txt = bag.toLowerCase();
-  const hasDM = hasAny(txt, ["diabetes","hyperglycemia","e11","type 2","t2dm","hbA1c","سكر","السكري"]);
-  const hasHTN = hasAny(txt, ["hypertension","i10","elevated blood pressure","high blood pressure","ضغط الدم","bp "]);
-  const hasNeuro = hasAny(txt, ["neuropathy","اعتلال الأعصاب","polyneuropathy"]);
-  const hasEpigastric = hasAny(txt, ["epigastric","periumbilical","dyspepsia","gastritis","ألم شرسوفي","حول السرة","انتفاخ البطن","عسر الهضم"]);
-  const smoker = body.isSmoker === true;
-  const cough = hasAny(txt, ["cough","سعال","hemoptysis","نفث دم"]);
-  const hasACEI = anyIn(txt, ACEI_WORDS);
-  const hasARB  = anyIn(txt, ARB_WORDS);
-  const hasSU   = anyIn(txt, SULF_WORDS);
-  const hasTriplixam = anyIn(txt, TRIPLIXAM_WORDS);
-  const hasAmlodipine = anyIn(txt, CCB_WORDS) || txt.includes("amlodipine");
+  const egfr = facts.egfr ?? parseLabsFromText(bag).egfr;
+  const alt = facts.alt_u_l ?? parseLabsFromText(bag).alt_u_l;
+  const ast = facts.ast_u_l ?? parseLabsFromText(bag).ast_u_l;
+  const hepaticSevereFlag = facts.hepaticSevere || (alt > 120 || ast > 120); // تقريب: >3x ULN
 
-  if (smoker && cough) {
-    out.urgent.push(`أشعة سينية للصدر (Chest X-ray) لتقييم السعال/النفث الدموي <a href="https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria" target="_blank">[ACR]</a>.`);
-  }
-  if (isOlder && hasSU) {
-    out.urgent.push(`تقليل/إيقاف السلفونيل يوريا لدى كبار السن لتقليل نقص السكر؛ فكر ببدائل أقل خطورة <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7109450/" target="_blank">[AGS Beers]</a>.`);
-  }
-  if (hasACEI && hasARB) {
-    out.urgent.push(`منع الجمع بين ACEI وARB (خطر فرط بوتاسيوم/قصور كلوي) <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
-  }
-  if (hasTriplixam && hasAmlodipine) {
-    out.urgent.push(`إلغاء Amlodipine المفرد عند استخدام Triplixam (تجنّب ازدواجية CCB).`);
-  }
+  // صفوف الجدول (لتعديل الخلية الأخيرة إن لزم)
+  let out = html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
+    const key = canonicalKey(stripTags(row));
 
-  if (hasDM) {
-    out.labs.push(`HbA1c للمتابعة الدورية <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
-    out.labs.push(`Creatinine/eGFR قبل وأثناء العلاج بالمتفورمين، وB12 طويل الأمد <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
-    out.labs.push(`Albumin-to-Creatinine Ratio (UACR) سنويًا لاعتلال الكلى السكري <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
-    out.labs.push(`Lipid profile لتقييم المخاطر القلبية الوعائية <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
-  }
-  if (hasHTN) {
-    out.labs.push(`Potassium وCreatinine قبل وبعد بدء/رفع جرعة ACEI/ARB خلال 1–2 أسبوع <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
-    out.labs.push(`Urinalysis + Creatinine/eGFR ضمن تقييم ضغط الدم <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
-  }
-  if (/dengue/i.test(txt) && !hasAny(txt, DENGUE_TRIGGERS)) {
-    out.labs.push(`تجنّب طلب IgG وحده دون حُمّى/تعرض؛ استخدم NS1/NAAT أو IgM في الأيام الأولى <a href="https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html" target="_blank">[CDC]</a>.`);
-  }
-  if (hasEpigastric) {
-    out.labs.push(`اختبار غير غازي لـ H. pylori (Urea breath أو Stool Ag) قبل الاستمرار في العلاج <a href="https://gi.org/guideline/management-of-helicobacter-pylori-infection/" target="_blank">[ACG]</a>.`);
+    // حارس كبدي لأسيتامينوفين IV
+    if (key.includes("paracetamol-iv") && hepaticSevereFlag) {
+      const msg = `<span class="status-yellow">⚠️ حذر كبدي: ارتفاع ALT/AST أو مرض كبدي فعّال → راقب الجرعة الإجمالية وخفّض/تجنّب حسب الحالة (خطر سمّية كبدية).</span>`;
+      return replaceLastTd(stripBadges(row), msg);
+    }
+
+    return row;
+  });
+
+  // تعديلات دوائية حرجة (قائمة أعلى التقرير)
+  const urgent = [];
+
+  // متفورمين: مضاد استطباب EGFR<30 — نضيف بند توجيهي حتى لو لم يظهر كصف
+  const hasMetformin = /\bmetformin|glucophage|form\s*xr\b/i.test(bag);
+  if (hasMetformin && egfr !== null && !Number.isNaN(egfr)) {
+    if (egfr < 30) urgent.push("إيقاف <strong>Metformin</strong> فورًا: eGFR &lt; 30 mL/min/1.73m² (مضاد استطباب).");
+    else if (egfr >= 30 && egfr < 45) urgent.push("خفض جرعة <strong>Metformin</strong> وتقييم الاستمرار: eGFR 30–45 (لا يُبدأ عادة، ويُراجع الاستمرار).");
   }
 
-  if (hasDM) {
-    out.routine.push(`فحص قاع العين لاعتلال الشبكية السكري (سنويًا/حسب الخطورة) <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
-    out.routine.push(`فحص القدمين واختبار الإحساس للاعتلال العصبي الطرفي <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
+  // فرط بوتاسيوم مع ACEI/ARB (لو ذُكر دواء وK+ مرتفع)
+  const hasRAAS = /(perindopril|lisinopril|enalapril|ramipril|valsartan|losartan|irbesartan|olmesartan|candesartan|sacubitril)/i.test(bag);
+  const kVal = facts.potassium_mmol_l ?? parseLabsFromText(bag).potassium_mmol_l;
+  if (hasRAAS && kVal && kVal >= 5.5) {
+    urgent.push(`فرط بوتاسيوم (K⁺=${kVal} mmol/L) مع ACEI/ARB → راجع الأدوية وكرّر K⁺/Creatinine خلال 1–2 أسبوع.`);
   }
-  if (hasHTN) {
-    out.routine.push(`قياس ضغط الدم المنزلي والمتابعة على هدف علاجي مناسب سريريًا <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
-  }
-  if (hasEpigastric) {
-    out.routine.push(`تجربة PPI قصيرة المدى مع مراجعة محرضات عسر الهضم وتجنب NSAIDs <a href="https://gi.org/guideline/management-of-helicobacter-pylori-infection/" target="_blank">[ACG]</a>.`);
-  }
-  if (out.labs.length < 3) {
-    out.labs.push(`CBC, CRP حسب السياق السريري لتقييم التهاب/عدوى.`);
+
+  // حقن وريدية خارجية بدون مؤشرات → تنبيه عام (لو لم يلتقطه الحارس الآخر)
+  const ivMentioned = /(pantoprazole|metoclopramide|paracetamol).*iv|normal\s*saline/i.test(bag);
+  const hasIVContext = ctx?.facts?.hasIVIndication || hasAny(bag, IV_TRIGGERS);
+  if (ivMentioned && !hasIVContext) urgent.push("استخدام وريدي خارج الإقامة يحتاج مبررات واضحة (جفاف/تعذّر فموي…)، خلاف ذلك عرضة للرفض.");
+
+  if (urgent.length) {
+    // أدخل العناصر داخل أول <h5 class="critical">…</h5><ul>…</ul>
+    out = out.replace(
+      /(<h5 class="critical">[\s\S]*?<\/h5>\s*<ul>)([\s\S]*?)(<\/ul>)/i,
+      (_, a, _mid, c) => `${a}${urgent.map(x => `<li>${x}</li>`).join("")}${c}`
+    );
   }
   return out;
 }
 
-function injectActionListsIntoHtml(html = "", lists = { urgent:[], labs:[], routine:[] }) {
-  function injectAfterHeading(headingRegex, items) {
-    const m = html.match(headingRegex);
-    if (!m) return html;
-    const startIdx = m.index + m[0].length;
-    const tail = html.slice(startIdx);
-    const ulMatch = tail.match(/<ul\b[^>]*>[\s\S]*?<\/ul>/i);
-    const newUl = `<ul>${[...new Set(items)].map(x => `<li>${x}</li>`).join("")}</ul>`;
-    if (ulMatch) {
-      const existingLis = (ulMatch[0].match(/<li\b[^>]*>[\s\S]*?<\/li>/gi) || []).map(li => stripTags(li).trim());
-      const merged = [...existingLis, ...items].filter(Boolean);
-      const unique = [...new Set(merged.map(t => t.trim()))];
-      const mergedUl = `<ul>${unique.map(t => `<li>${t}</li>`).join("")}</ul>`;
-      const replacedTail = tail.replace(ulMatch[0], mergedUl);
-      html = html.slice(0, startIdx) + replacedTail;
-    } else {
-      html = html.slice(0, startIdx) + newUl + html.slice(startIdx);
-    }
-    return html;
-  }
-
-  html = injectAfterHeading(/<h5[^>]*class="[^"]*\bcritical\b[^"]*"[^>]*>[\s\S]*?Urgent[^<]*<\/h5>/i, lists.urgent);
-  html = injectAfterHeading(/<h5[^>]*>\s*تحاليل مخبرية ضرورية[\s\S]*?<\/h5>/i, lists.labs);
-  html = injectAfterHeading(/<h5[^>]*>\s*متابعة وفحوصات دورية[\s\S]*?<\/h5>/i, lists.routine);
-  return html;
-}
-
+// =============== Dengue/Referral/Neb/IV/US + Duplicates + Dose hints + Guards ===============
 function applyPolicyOverrides(htmlReport, ctx) {
   let out = htmlReport;
   out = forceDengueRule(out, ctx);
@@ -640,12 +614,9 @@ function applyPolicyOverrides(htmlReport, ctx) {
   out = forceNebulizerRule(out, ctx);
   out = forceIVRule(out, ctx);
   out = forceUSRule(out, ctx);
-  // NEW: Reject duplicates in RED
-  out = rejectDuplicateServices(out);
-  // synthesize and inject action guidance
-  const bag = bagOfText(ctx);
-  const lists = synthesizeActionLists(ctx.body, ctx.facts, bag);
-  out = injectActionListsIntoHtml(out, lists);
+  out = markDuplicatesAsDenied(out);      // ❌ مرفوض عند التكرار
+  out = applyDoseIntervalHints(out);      // تنبيهات فواصل الجرعات
+  out = applyRenalHepaticGuards(out, ctx);// قواعد الكُلى/الكبد
   return out;
 }
 
@@ -675,7 +646,7 @@ export default async function handler(req, res) {
       catch (e) { console.warn("OCR skipped:", e.message); }
     }
 
-    // 2) تجهيز ملفات Gemini
+    // 2) تجهيز ملفات Gemini (inline أو upload عبر Files API)
     const filePartsPromises = files.map(async (f) => {
       try {
         const base64 = f?.data || "";
@@ -702,7 +673,7 @@ export default async function handler(req, res) {
     });
     const processedFileParts = (await Promise.all(filePartsPromises)).filter(Boolean);
 
-    // 3) استخراج حقائق منظّمة
+    // 3) استخراج حقائق منظّمة من الملف
     let facts = {};
     if (processedFileParts.length) {
       try {
@@ -715,7 +686,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4) بناء الطلب النهائي والتحليل
+    // 4) بناء الطلب النهائي للتحليل
     const parts = [{ text: systemInstruction }, { text: buildUserPrompt(body, facts) }];
     if (processedFileParts.length) parts.push(...processedFileParts);
     if (ocrText) parts.push({ text: `### OCR Extracted Texts\n${ocrText}` });
@@ -723,7 +694,12 @@ export default async function handler(req, res) {
     // 5) استدعاء Gemini لإنتاج التقرير HTML
     const htmlReportRaw = await geminiGenerate(geminiKey, parts);
 
-    // 6) تطبيق القواعد القسرية + رفض التكرارات + ملء القوائم
+    // 6) تطبيق القواعد القسرية بعد-المخرجات (بما فيها: Dengue/IV/Neb/US + التكرار + جرعات + كلوي/كبدي)
+    const textBag = bagOfText({ body, ocrText, facts, modelHtml: htmlReportRaw });
+    // إذا ما طلّع المختبر، نحاول نسحب يدويًا
+    const labsFallback = parseLabsFromText(textBag);
+    facts = { ...labsFallback, ...facts };
+
     const htmlReport = applyPolicyOverrides(htmlReportRaw, { body, ocrText, facts, modelHtml: htmlReportRaw });
 
     const elapsedMs = Date.now() - startedAt;
@@ -738,6 +714,15 @@ export default async function handler(req, res) {
         usedOCR: Boolean(ocrText),
         facts,
         elapsedMs,
+        // مراجع مختصرة داخل الاستجابة (للتتبع)
+        refs: {
+          ofirmev: "FDA label (max 1g q6h or 650mg q4h; max 4g/24h)",
+          protonix: "FDA label (pantoprazole IV 40mg daily 7–10 days)",
+          metoclopramide: "Dosing ranges (StatPearls)",
+          metforminEgfr: "FDA/ADA: contraindicated if eGFR<30; caution 30–45",
+          dengue: "CDC acute testing: NAAT/NS1 + IgM",
+          ivFluids: "NICE CG174 principles"
+        }
       },
     });
   } catch (err) {
