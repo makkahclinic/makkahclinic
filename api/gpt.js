@@ -1,11 +1,16 @@
 // pages/api/gpt.js
-// Unified Expert Analyzer — Gemini + (optional) OpenAI OCR
+// Medical Audit Orchestrator — Gemini primary + (optional) GPT OCR
 // Next.js Pages Router / Vercel (Node 18+)
-
+//
 // ========================= ENV =========================
 // GEMINI_API_KEY   = "sk-..."   (required)
 // OPENAI_API_KEY   = "sk-..."   (optional → OCR for images)
 // =======================================================
+//
+// Docs (for reference):
+// - Gemini generateContent & Files API: https://ai.google.dev/api/rest/v1beta/models/generateContent
+// - Gemini File Upload: https://ai.google.dev/gemini-api/docs/prompting_with_media
+// - OpenAI Chat Completions (vision): https://platform.openai.com/docs/guides/vision
 
 import { createHash } from "crypto";
 
@@ -55,7 +60,6 @@ function detectMimeFromB64(b64 = "") {
   if (h.includes("/9j/")) return "image/jpeg";
   if (h.includes("UklGR")) return "image/webp";
   if (h.includes("R0lGOD")) return "image/gif";
-  if (h.includes("AAAAIG")) return "video/mp4";
   return "application/octet-stream";
 }
 function getFileHash(base64Data = "") {
@@ -96,7 +100,6 @@ function normalizeDate(input) {
   if (m[1].length === 4) { Y = a; M = b; D = c; }       // YYYY-MM-DD
   else if (m[3].length === 4) {                         // DD/MM/YYYY or MM/DD/YYYY
     Y = c;
-    // إذا اليوم > 12 فالتفسير DD/MM
     if (a > 12) { D = a; M = b; } else if (b > 12) { D = b; M = a; } else { D = a; M = b; }
   } else { return null; }
   const pad = (n) => String(n).padStart(2, "0");
@@ -229,14 +232,11 @@ async function geminiExtractFacts(apiKey, fileParts) {
   // Parse strict JSON
   try {
     const obj = JSON.parse(raw);
-    // بعض إصدارات API تُرجع النص داخل candidates->content->parts
     const text = obj?.candidates?.[0]?.content?.parts?.map(p => p?.text || "").join("") || raw;
     const parsed = JSON.parse(text);
-    // تطبيع تاريخ الميلاد
     if (parsed?.dob) parsed.dob = normalizeDate(parsed.dob) || parsed.dob;
     return parsed;
   } catch {
-    // محاولة أخيرة لالتقاط JSON من النص
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return {};
     try {
@@ -430,7 +430,7 @@ function forceIVRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!IV_KEYS.test(stripTags(row))) return row;
     const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: استعمال وريدي يحتاج مؤشرات واضحة (جفاف/قيء شديد/تعذّر فموي...).</span>`;
-    let cleaned = row = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
+    let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
     else cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
@@ -520,7 +520,6 @@ export default async function handler(req, res) {
       try {
         const rawFacts = await geminiExtractFacts(geminiKey, processedFileParts);
         facts = { ...rawFacts };
-        // تمرير DOB المحسّن للجسم حتى يُحتسب العمر تلقائيًا في التقرير
         if (facts?.dob && !body.age && !body.dob) body.dob = facts.dob;
         if (facts?.gender && !body.gender) body.gender = facts.gender;
       } catch (e) {
