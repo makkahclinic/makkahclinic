@@ -7,10 +7,15 @@
 // OPENAI_API_KEY   = "sk-..."   (optional → OCR for images)
 // =======================================================
 //
-// Docs (for reference):
-// - Gemini generateContent & Files API: https://ai.google.dev/api/rest/v1beta/models/generateContent
-// - Gemini File Upload: https://ai.google.dev/gemini-api/docs/prompting_with_media
-// - OpenAI Chat Completions (vision): https://platform.openai.com/docs/guides/vision
+// Evidence links embedded in HTML items:
+// - ADA SoC 2024: https://diabetesjournals.org/care/issue/47/Supplement_1
+// - NICE NG136 HTN: https://www.nice.org.uk/guidance/ng136
+// - NICE CG174 IV fluids: https://www.nice.org.uk/guidance/cg174
+// - CDC Dengue testing: https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html
+// - GINA: https://ginasthma.org/gina-reports/
+// - ACR Appropriateness: https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria
+// - ACG H. pylori 2022: https://gi.org/guideline/management-of-helicobacter-pylori-infection/
+// - AGS Beers: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7109450/
 
 import { createHash } from "crypto";
 
@@ -68,6 +73,7 @@ function getFileHash(base64Data = "") {
 function asDataUrl(mime, b64) { return `data:${mime};base64,${b64}`; }
 function stripFences(s = "") { return s.replace(/```html/gi, "").replace(/```/g, "").trim(); }
 function escapeHtml(s = "") { return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }
+function stripTags(s = "") { return s.replace(/<[^>]*>/g, " "); }
 function hardHtmlEnforce(s = "") {
   const t = stripFences(s);
   const looksHtml = /<\/?(html|body|table|tr|td|th|ul|ol|li|h\d|p|span|div|style)\b/i.test(t);
@@ -86,19 +92,17 @@ function hardHtmlEnforce(s = "") {
   </style>`;
   return `${skin}<pre style="white-space:pre-wrap">${escapeHtml(t)}</pre>`;
 }
-function stripTags(s = "") { return s.replace(/<[^>]*>/g, " "); }
 
 // ---- Date helpers ----
 function normalizeDate(input) {
   if (!input) return null;
   const s = String(input).trim();
-  // match: YYYY-MM-DD or DD/MM/YYYY or MM/DD/YYYY or 07-07-1965
   const m = s.match(/(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (!m) return null;
   let a = parseInt(m[1], 10), b = parseInt(m[2], 10), c = parseInt(m[3], 10);
   let Y, M, D;
-  if (m[1].length === 4) { Y = a; M = b; D = c; }       // YYYY-MM-DD
-  else if (m[3].length === 4) {                         // DD/MM/YYYY or MM/DD/YYYY
+  if (m[1].length === 4) { Y = a; M = b; D = c; }
+  else if (m[3].length === 4) {
     Y = c;
     if (a > 12) { D = a; M = b; } else if (b > 12) { D = b; M = a; } else { D = a; M = b; }
   } else { return null; }
@@ -182,13 +186,13 @@ async function geminiExtractFacts(apiKey, fileParts) {
 أخرج JSON فقط بالمفاتيح التالية:
 {
   "patientName": string|null,
-  "dob": "YYYY-MM-DD"|null,             // استخرج D.O.B بأي تنسيق وحوّله لتاريخ
+  "dob": "YYYY-MM-DD"|null,
   "gender": "ذكر"|"أنثى"|null,
   "hasReferralReason": boolean,
-  "hasRespContext": boolean,            // سعال/صفير/ضيق تنفس/تشخيص رئوي
-  "hasIVIndication": boolean,           // جفاف/قيء شديد/تعذّر فموي/NPO/نزف/هبوط ضغط
-  "hasUSIndication": boolean,           // ألم بطني موضّع/مرارة/كبد/حوض...
-  "hasDengueAcuteContext": boolean      // حُمّى/سفر إلى منطقة موبوءة/endemic
+  "hasRespContext": boolean,
+  "hasIVIndication": boolean,
+  "hasUSIndication": boolean,
+  "hasDengueAcuteContext": boolean
 }
 - إذا تعذر الاستخراج ضع null/false.
 - لا تضف أي شرح خارج JSON.`;
@@ -229,7 +233,6 @@ async function geminiExtractFacts(apiKey, fileParts) {
   const raw = await res.text();
   if (!res.ok) throw new Error(`Gemini extractor error ${res.status}: ${raw.slice(0, 500)}`);
 
-  // Parse strict JSON
   try {
     const obj = JSON.parse(raw);
     const text = obj?.candidates?.[0]?.content?.parts?.map(p => p?.text || "").join("") || raw;
@@ -362,14 +365,20 @@ async function geminiGenerate(apiKey, parts, cfg = {}) {
 // =============== POLICY OVERRIDES (Post-processing) ===============
 const DENGUE_TRIGGERS = [
   "حمى","سخونة","ارتفاع الحرارة","fever",
-  "سفر إلى","travel to",
+  "سفر إلى","travel to","سافر","سفر",
   "منطقة موبوءة","endemic area",
   "إندونيسيا","الفلبين","تايلاند","ماليزيا","الهند","بنغلاديش",
   "البرازيل","المكسيك","بيرو","كولومبيا","فيتنام","سريلانكا","سنغافورة"
 ];
 const RESP_TRIGGERS = ["سعال","صفير","ضيق تنفس","asthma","copd","wheeze","shortness of breath","dyspnea"];
 const IV_TRIGGERS = ["جفاف","dehydration","قيء شديد","severe vomiting","تعذر فموي","npo","نزف","bleeding","هبوط ضغط","hypotension"];
-const US_TRIGGERS = ["ألم بطني","epigastric pain","ruq pain","gallbladder","كبد","حوض","pelvic","umbilical","periumbilical"];
+const US_TRIGGERS = ["ألم بطني","epigastric pain","ruq pain","gallbladder","كبد","حوض","pelvic","umbilical","periumbilical","انتفاخ البطن","abdominal distension"];
+
+const ACEI_WORDS = ["perindopril","enalapril","lisinopril","ramipril","acei"];
+const ARB_WORDS  = ["valsartan","losartan","candesartan","irbesartan","arb","co-taburan"];
+const SULF_WORDS = ["gliclazide","diamicron","glibenclamide","glyburide","glimepiride"];
+const CCB_WORDS  = ["amlodipine","ccB"];
+const TRIPLIXAM_WORDS = ["triplixam"];
 
 function bagOfText({ body = {}, ocrText = "", facts = {}, modelHtml = "" } = {}) {
   return [
@@ -380,7 +389,24 @@ function bagOfText({ body = {}, ocrText = "", facts = {}, modelHtml = "" } = {})
   ].join(" ").toLowerCase();
 }
 function hasAny(text, arr) { const s = text.toLowerCase(); return arr.some(w => s.includes(w.toLowerCase())); }
+function anyIn(text, words){ return hasAny(text, words); }
 
+// ---- Row helpers ----
+function getRows(html) { return html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || []; }
+function replaceRows(html, rows) {
+  return html.replace(/(<tbody\b[^>]*>)[\s\S]*?(<\/tbody>)/i, `$1${rows.join("\n")}$2`);
+}
+function firstTdText(row){ const m = row.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i); return m ? stripTags(m[1]).trim().toLowerCase() : ""; }
+function replaceLastTd(row, contentHtml){
+  const tds = row.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
+  if (!tds || !tds.length) return row.replace(/<\/tr>/i, `<td>${contentHtml}</td></tr>`);
+  const last = tds[tds.length-1];
+  const repl = last.replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${contentHtml}$2`);
+  let idx = 0;
+  return row.replace(/<td\b[^>]*>[\s\S]*?<\/td>/gi, (m)=> (idx++===tds.length-1?repl:m));
+}
+
+// ---- Enforcement rules already present ----
 function forceDengueRule(html = "", ctx = {}) {
   const txt = bagOfText(ctx);
   const hasAcute = ctx?.facts?.hasDengueAcuteContext || hasAny(txt, DENGUE_TRIGGERS);
@@ -388,12 +414,9 @@ function forceDengueRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(dengue|الضنك|حمى الضنك)/i.test(plain) || !/\bigg\b/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد.</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يوصى باختبار NS1/NAAT أو IgM للتشخيص الحاد، وIgG يدل على عدوى سابقة <a href="https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html" target="_blank">[CDC]</a>.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
-    if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
-    else cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
-    return cleaned;
+    return replaceLastTd(cleaned, caution);
   });
 }
 function forceReferralRule(html = "", ctx = {}) {
@@ -403,10 +426,7 @@ function forceReferralRule(html = "", ctx = {}) {
     if (!/referral/i.test(stripTags(row))) return row;
     const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب ذكر سبب إحالة واضح في النموذج.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
-    if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
-    else cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
-    return cleaned;
+    return replaceLastTd(cleaned, caution);
   });
 }
 function forceNebulizerRule(html = "", ctx = {}) {
@@ -415,12 +435,9 @@ function forceNebulizerRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(nebulizer|inhaler|نيبولايزر|استنشاق)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: لزوم أعراض/تشخيص تنفسي موثق.</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: لزوم أعراض/تشخيص تنفسي موثق <a href="https://ginasthma.org/gina-reports/" target="_blank">[GINA]</a>.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
-    if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
-    else cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
-    return cleaned;
+    return replaceLastTd(cleaned, caution);
   });
 }
 function forceIVRule(html = "", ctx = {}) {
@@ -429,12 +446,9 @@ function forceIVRule(html = "", ctx = {}) {
   const IV_KEYS = /(normal\s*saline|i\.?v\.?\s*infusion\s*only|primperan|metoclopramide|paracetamol\s+.*infus|pantoprazole|pantozol)/i;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!IV_KEYS.test(stripTags(row))) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: استعمال وريدي يحتاج مؤشرات واضحة (جفاف/قيء شديد/تعذّر فموي...).</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: استعمال وريدي يحتاج مؤشرات واضحة (جفاف/تعذر فموي/نزف...) <a href="https://www.nice.org.uk/guidance/cg174" target="_blank">[NICE CG174]</a>.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
-    if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
-    else cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
-    return cleaned;
+    return replaceLastTd(cleaned, caution);
   });
 }
 function forceUSRule(html = "", ctx = {}) {
@@ -443,14 +457,135 @@ function forceUSRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(ultrasound|ultra\s*sound|سونار|ألتراساوند)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب مبرر تصوير واضح (مثلاً ألم بطني موضع).</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب مبرر تصوير واضح (مثلاً ألم موضَّع ربع علوي أيمن) <a href="https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria" target="_blank">[ACR]</a>.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-    const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
-    if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
-    else cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
-    return cleaned;
+    return replaceLastTd(cleaned, caution);
   });
 }
+
+// ---- NEW: mark duplicate services in table ----
+function markDuplicateServices(html = "") {
+  const rows = getRows(html);
+  if (!rows.length) return html;
+  const map = new Map();
+  rows.forEach((r, i) => {
+    const key = firstTdText(r).replace(/\s+/g," ").trim();
+    if (!key) return;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(i);
+  });
+  const dupIdx = [...map.values()].filter(arr => arr.length>1).flat();
+  if (!dupIdx.length) return html;
+  const updated = rows.map((r, idx) => {
+    if (!dupIdx.includes(idx)) return r;
+    const tag = `<span class="status-yellow">⚠️ مكرر في الطلب</span>`;
+    return replaceLastTd(r, `${tag}`);
+  });
+  return replaceRows(html, updated);
+}
+
+// ---- NEW: synthesize action guidance lists (ALWAYS FILL) ----
+function synthesizeActionLists(body = {}, facts = {}, bag = "") {
+  const out = { urgent: [], labs: [], routine: [] };
+
+  const dob = body.dob ?? facts.dob ?? null;
+  const age = body.age ?? (dob ? computeAgeFromDob(dob) : undefined);
+  const isOlder = typeof age === "number" ? age >= 65 : false;
+
+  const txt = bag.toLowerCase();
+  const hasDM = hasAny(txt, ["diabetes","hyperglycemia","e11","type 2","t2dm","hbA1c","سكر","السكري"]);
+  const hasHTN = hasAny(txt, ["hypertension","i10","elevated blood pressure","high blood pressure","ضغط الدم","bp "]);
+  const hasNeuro = hasAny(txt, ["neuropathy","اعتلال الأعصاب","polyneuropathy"]);
+  const hasEpigastric = hasAny(txt, ["epigastric","periumbilical","dyspepsia","gastritis","ألم شرسوفي","حول السرة","انتفاخ البطن","عسر الهضم"]);
+  const smoker = body.isSmoker === true;
+  const cough = hasAny(txt, ["cough","سعال","hemoptysis","نفث دم"]);
+  const hasACEI = anyIn(txt, ACEI_WORDS);
+  const hasARB  = anyIn(txt, ARB_WORDS);
+  const hasSU   = anyIn(txt, SULF_WORDS);
+  const hasTriplixam = anyIn(txt, TRIPLIXAM_WORDS);
+  const hasAmlodipine = anyIn(txt, CCB_WORDS) || txt.includes("amlodipine");
+
+  // Urgent adjustments
+  if (smoker && cough) {
+    out.urgent.push(`أشعة سينية للصدر (Chest X-ray) لتقييم السعال/النفث الدموي <a href="https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria" target="_blank">[ACR]</a>.`);
+  }
+  if (isOlder && hasSU) {
+    out.urgent.push(`تقليل/إيقاف السلفونيل يوريا لدى كبار السن لتقليل نقص السكر؛ فكر ببدائل أقل خطورة <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7109450/" target="_blank">[AGS Beers]</a>.`);
+  }
+  if (hasACEI && hasARB) {
+    out.urgent.push(`منع الجمع بين ACEI وARB (خطر فرط بوتاسيوم/قصور كلوي) <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
+  }
+  if (hasTriplixam && hasAmlodipine) {
+    out.urgent.push(`إلغاء Amlodipine المفرد عند استخدام Triplixam (تجنب ازدواجية CCB).`);
+  }
+
+  // Essential labs
+  if (hasDM) {
+    out.labs.push(`HbA1c للمتابعة الدورية <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
+    out.labs.push(`Creatinine/eGFR قبل وأثناء العلاج بالمتفورمين، وB12 طويل الأمد <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
+    out.labs.push(`Albumin-to-Creatinine Ratio (UACR) سنويًا لاعتلال الكلى السكري <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
+    out.labs.push(`Lipid profile لتقييم المخاطر القلبية الوعائية <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
+  }
+  if (hasHTN) {
+    out.labs.push(`Potassium وCreatinine قبل وبعد بدء/رفع جرعة ACEI/ARB خلال 1–2 أسبوع <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
+    out.labs.push(`Urinalysis + Creatinine/eGFR ضمن تقييم ضغط الدم <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
+  }
+  // Dengue logic already enforced; نضع تذكير تحليلي
+  if (/dengue/i.test(txt) && !hasAny(txt, DENGUE_TRIGGERS)) {
+    out.labs.push(`تجنّب طلب IgG وحده دون حُمّى/تعرض؛ استخدم NS1/NAAT أو IgM في الأيام الأولى <a href="https://www.cdc.gov/dengue/healthcare-providers/testing/diagnostic.html" target="_blank">[CDC]</a>.`);
+  }
+  if (hasEpigastric) {
+    out.labs.push(`اختبار غير غازي لـ H. pylori (Urea breath أو Stool Ag) قبل الاستمرار في العلاج <a href="https://gi.org/guideline/management-of-helicobacter-pylori-infection/" target="_blank">[ACG]</a>.`);
+  }
+
+  // Routine monitoring
+  if (hasDM) {
+    out.routine.push(`فحص قاع العين لاعتلال الشبكية السكري (سنويًا/حسب الخطورة) <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
+    out.routine.push(`فحص القدمين واختبار الإحساس للاعتلال العصبي الطرفي <a href="https://diabetesjournals.org/care/issue/47/Supplement_1" target="_blank">[ADA]</a>.`);
+  }
+  if (hasHTN) {
+    out.routine.push(`قياس ضغط الدم المنزلي والمتابعة على هدف علاجي مناسب سريريًا <a href="https://www.nice.org.uk/guidance/ng136" target="_blank">[NICE NG136]</a>.`);
+  }
+  if (hasEpigastric) {
+    out.routine.push(`تجربة PPI قصيرة المدى مع مراجعة محرضات عسر الهضم وتجنب NSAIDs <a href="https://gi.org/guideline/management-of-helicobacter-pylori-infection/" target="_blank">[ACG]</a>.`);
+  }
+
+  // ضمان حد أدنى من العناصر حتى لا تبقى القوائم فارغة
+  if (out.labs.length < 3) {
+    out.labs.push(`CBC, CRP حسب السياق السريري لتقييم التهاب/عدوى.`);
+  }
+  return out;
+}
+
+// ---- NEW: inject synthesized lists into the three <ul> blocks ----
+function injectActionListsIntoHtml(html = "", lists = { urgent:[], labs:[], routine:[] }) {
+  function injectAfterHeading(headingRegex, items) {
+    const m = html.match(headingRegex);
+    if (!m) return html;
+    const startIdx = m.index + m[0].length;
+    const tail = html.slice(startIdx);
+    const ulMatch = tail.match(/<ul\b[^>]*>[\s\S]*?<\/ul>/i);
+    const newUl = `<ul>${[...new Set(items)].map(x => `<li>${x}</li>`).join("")}</ul>`;
+    if (ulMatch) {
+      // دمج وعدم التكرار
+      const existingLis = (ulMatch[0].match(/<li\b[^>]*>[\s\S]*?<\/li>/gi) || []).map(li => stripTags(li).trim());
+      const merged = [...existingLis, ...items].filter(Boolean);
+      const unique = [...new Set(merged.map(t => t.trim()))];
+      const mergedUl = `<ul>${unique.map(t => `<li>${t}</li>`).join("")}</ul>`;
+      const replacedTail = tail.replace(ulMatch[0], mergedUl);
+      html = html.slice(0, startIdx) + replacedTail;
+    } else {
+      html = html.slice(0, startIdx) + newUl + html.slice(startIdx);
+    }
+    return html;
+  }
+
+  html = injectAfterHeading(/<h5[^>]*class="[^"]*\bcritical\b[^"]*"[^>]*>[\s\S]*?Urgent[^<]*<\/h5>/i, lists.urgent);
+  html = injectAfterHeading(/<h5[^>]*>\s*تحاليل مخبرية ضرورية[\s\S]*?<\/h5>/i, lists.labs);
+  html = injectAfterHeading(/<h5[^>]*>\s*متابعة وفحوصات دورية[\s\S]*?<\/h5>/i, lists.routine);
+  return html;
+}
+
 function applyPolicyOverrides(htmlReport, ctx) {
   let out = htmlReport;
   out = forceDengueRule(out, ctx);
@@ -458,6 +593,11 @@ function applyPolicyOverrides(htmlReport, ctx) {
   out = forceNebulizerRule(out, ctx);
   out = forceIVRule(out, ctx);
   out = forceUSRule(out, ctx);
+  out = markDuplicateServices(out);
+  // synthesize and inject action guidance
+  const bag = bagOfText(ctx);
+  const lists = synthesizeActionLists(ctx.body, ctx.facts, bag);
+  out = injectActionListsIntoHtml(out, lists);
   return out;
 }
 
@@ -487,7 +627,7 @@ export default async function handler(req, res) {
       catch (e) { console.warn("OCR skipped:", e.message); }
     }
 
-    // 2) تجهيز ملفات Gemini (inline أو رفع عبر Files API)
+    // 2) تجهيز ملفات Gemini
     const filePartsPromises = files.map(async (f) => {
       try {
         const base64 = f?.data || "";
@@ -514,7 +654,7 @@ export default async function handler(req, res) {
     });
     const processedFileParts = (await Promise.all(filePartsPromises)).filter(Boolean);
 
-    // 3) استخراج حقائق منظّمة من الملف (يُحسّن العمر/الجنس/السياقات)
+    // 3) استخراج حقائق منظّمة
     let facts = {};
     if (processedFileParts.length) {
       try {
@@ -527,7 +667,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4) بناء الطلب النهائي للتحليل
+    // 4) بناء الطلب النهائي والتحليل
     const parts = [{ text: systemInstruction }, { text: buildUserPrompt(body, facts) }];
     if (processedFileParts.length) parts.push(...processedFileParts);
     if (ocrText) parts.push({ text: `### OCR Extracted Texts\n${ocrText}` });
@@ -535,7 +675,7 @@ export default async function handler(req, res) {
     // 5) استدعاء Gemini لإنتاج التقرير HTML
     const htmlReportRaw = await geminiGenerate(geminiKey, parts);
 
-    // 6) تطبيق القواعد القسرية بعد-المخرجات
+    // 6) تطبيق القواعد القسرية + ملء قوائم التوجيه
     const htmlReport = applyPolicyOverrides(htmlReportRaw, { body, ocrText, facts, modelHtml: htmlReportRaw });
 
     const elapsedMs = Date.now() - startedAt;
