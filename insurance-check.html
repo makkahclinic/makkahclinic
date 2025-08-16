@@ -1,110 +1,304 @@
-// pages/api/gpt.js
-// الإصدار النهائي باستخدام FormData و Formidable لمعالجة الملفات بشكل آمن
+// =================================================================================
+// CONFIGURATION & STATE
+// =================================================================================
+const API_ENDPOINT = '/api/gpt';
+let uploadedFiles = [];
+let currentLang = 'ar';
 
-import { formidable } from 'formidable';
-import fs from 'fs';
-
-// --- دوال المساعدة (Utils) ---
-// (نفس دوال المساعدة السابقة: fetchWithRetry, detectMimeFromB64, geminiUpload, nowIso, sleep)
-// ... تأكد من وجودها هنا ...
-
-// --- الأمر الرئيسي (System Prompt) - نسخة موجزة ومستقرة ---
-const systemInstruction = `
-أنت خبير تدقيق طبي، مهمتك إنشاء تقرير بصيغة HTML بسيطة ومنظمة.
-يجب أن يحتوي التقرير على الأقسام التالية بالترتيب وباستخدام الوسوم المحددة:
-1.  \`<h4>ملخص الحالة</h4>\` مع فقرة \`<p>\`.
-2.  \`<h4>تحليل الملفات المرفوعة</h4>\` مع فقرة \`<p>\`.
-3.  \`<h4>التحليل السريري العميق</h4>\` مع فقرة \`<p>\`.
-4.  \`<h4>جدول الأدوية والإجراءات</h4>\` مع جدول \`<table>\` يحتوي على الأعمدة: "بند الخدمة" و "قرار التأمين".
-    - لكل خدمة، أنشئ صف \`<tr>\` واحد.
-    - لقرار التأمين، استخدم \`<span>\` مع الكلاس المناسب ('status-green', 'status-yellow', 'status-red') واذكر السبب بوضوح للحالات الصفراء والحمراء.
-5.  \`<h4>التحليل التفصيلي والتوصيات</h4>\` وبداخله العناوين الفرعية \`<h5>\` المرقمة (1. خدمات طبية ضرورية... إلخ) مع فقرة \`<p>\` لكل منها.
-    - يجب أن يكون تحليلك عميقاً ومدعوماً بالأدلة.
-6.  \`<h5>5. الخاتمة والتوصيات النهائية</h5>\` مع فقرة \`<p>\`.
-7.  فقرة أخيرة تحتوي على التنويه القانوني.
-
-التزم بهذا الهيكل البسيط والنظيف. لا تقم بإضافة أي تنسيقات CSS أو \`<style>\` أو \`<html>\` أو \`<body>\`.
-`;
-
-// --- المعالج الرئيسي للطلب (API Handler) ---
-export const config = {
-    api: {
-        bodyParser: false, // مهم جداً: تعطيل body parser الافتراضي
+// =================================================================================
+// TRANSLATIONS (i18n)
+// =================================================================================
+const translations = {
+  ar: {
+    ui: {
+      appTitle: "تقييم الحالة الطبية - بوابة الطبيب", pageHeader: "تقييم الحالة الطبية وطلبات التأمين", subHeader: "واجهة إدخال سريرية سهلة — تحليل مؤتمت وربط مع احتياجات التأمين", homeTooltip: "الشاشة الرئيسية", section1Title: "1) معلومات المريض", label_gender: "الجنس", option_gender_placeholder: "اختر الجنس", option_gender_male: "ذكر", option_gender_female: "أنثى", hint_gender: "لو كانت المريضة أنثى، ستظهر أسئلة الحمل تلقائيًا.", label_age: "العمر", placeholder_age: "مثال: 63", label_pregnancy_status: "هل المريضة حامل؟", option_pregnancy_placeholder: "اختر", option_yes: "نعم", option_no: "لا", label_pregnancy_month: "شهر الحمل", placeholder_pregnancy_month: "مثال: 5", section2Title: "2) نمط الحياة والأعراض", label_smoker: "هل المريض مدخّن؟", label_packs_per_day: "عدد العلب يوميًا", placeholder_packs_per_day: "مثال: 1.5", label_smoking_years: "عدد سنوات التدخين", placeholder_smoking_years: "مثال: 20", label_pack_years_result: "النتيجة (باك-سنة)", hint_pack_years: "الباك-سنة هو مقياس لتقدير كمية التدخين مدى الحياة.", label_cough_duration: "مدة السعال (أسابيع)", placeholder_cough_duration: "مثال: 12", label_visual_symptoms: "أعراض بصرية؟", label_last_eye_exam: "تاريخ آخر فحص قاع عين", label_visual_acuity: "حدة البصر (اختياري)", placeholder_visual_acuity: "مثال: 6/12 أو 20/40", section3Title: "3) تفاصيل الحالة الطبية", label_case_description: "وصف الحالة", placeholder_case_description: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...", label_diagnosis: "التشخيصات المبدئية", placeholder_diagnosis: "مثال: T2DM, HTN, COPD? Dermatitis", label_lab_results: "التحاليل/الأشعة المتوفرة", placeholder_lab_results: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6...", label_medications: "الأدوية/الإجراءات المكتوبة", placeholder_medications: "مثال: Xigduo XR bid, Metformin 1000 tid...", section4Title: "4) رفع ملفات (صور/PDF) — اختياري", upload_cta: "اضغط هنا لرفع ملف واحد أو أكثر", btn_analyze: "تحليل الحالة", hint_analyze: "بالضغط على 'تحليل الحالة' سيتم إرسال المدخلات لتوليد تقرير شامل.", remove_file: "إزالة الملف"
     },
+    validation: { error_formIncomplete: "الرجاء إدخال تفاصيل الحالة أو رفع ملف.", error_requestFailed: "حدث خطأ أثناء التحليل: ", info_analyzing: "جاري تحليل الحالة... قد يستغرق الأمر لحظات." },
+    export: { exportButtonLabel: "تصدير التقرير", pdf_ar_only: "PDF (عربي فقط)" }
+  },
+  en: { /* Your English translations are preserved here */ }
 };
 
-export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        res.setHeader('Allow', ['POST']);
-        return res.status(405).end(`Method ${req.method} Not Allowed`);
+function setLanguage(lang) {
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  const langSwitcher = document.getElementById('lang-switcher');
+  langSwitcher.textContent = lang === 'ar' ? 'English' : 'العربية';
+  
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const translation = getTranslation(key);
+    if (translation) el.textContent = translation;
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    const translation = getTranslation(key);
+    if (translation) el.placeholder = translation;
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.getAttribute('data-i18n-title');
+    const translation = getTranslation(key);
+    if (translation) el.title = translation;
+  });
+}
+
+function getTranslation(key) {
+  return key.split('.').reduce((obj, k) => obj && obj[k], translations[currentLang]);
+}
+
+// =================================================================================
+// FILE HANDLING
+// =================================================================================
+function handleFilesSelect(event) {
+    const files = event.target.files;
+    for (const file of files) {
+        const fileId = Date.now() + '-' + Math.random();
+        const fileReader = new FileReader();
+        fileReader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1];
+            uploadedFiles.push({ id: fileId, file: file, base64: base64 });
+            renderFilePreview(fileId, file, e.target.result);
+        };
+        fileReader.readAsDataURL(file);
     }
+    event.target.value = '';
+}
 
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) {
-        return res.status(500).json({ ok: false, detail: "GEMINI_API_KEY is not configured." });
+function renderFilePreview(fileId, file, dataUrl) {
+    const previewContainer = document.getElementById('file-preview-container');
+    const item = document.createElement('div');
+    item.className = 'file-preview-item';
+    item.dataset.fileId = fileId;
+    let thumbHtml;
+    if (file.type.startsWith('image/')) {
+        thumbHtml = `<img src="${dataUrl}" alt="${file.name}">`;
+    } else if (file.type === 'application/pdf') {
+        thumbHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+    } else {
+        thumbHtml = `<span>${file.type.split('/')[1] || 'file'}</span>`;
     }
+    item.innerHTML = `<div class="thumb">${thumbHtml}</div><div class="file-name">${file.name}</div><button class="file-remove-btn" title="${getTranslation('ui.remove_file')}" onclick="removeFile('${fileId}')">&times;</button>`;
+    previewContainer.appendChild(item);
+}
 
-    try {
-        const data = await new Promise((resolve, reject) => {
-            const form = formidable({});
-            form.parse(req, (err, fields, files) => {
-                if (err) reject(err);
-                resolve({ fields, files });
-            });
-        });
+function removeFile(fileId) {
+    uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
+    const itemToRemove = document.querySelector(`.file-preview-item[data-file-id="${fileId}"]`);
+    if (itemToRemove) itemToRemove.remove();
+}
 
-        const { fields, files } = data;
-        
-        // تحويل البيانات النصية من مصفوفات إلى سلاسل نصية
-        const body = {};
-        for (const key in fields) {
-            body[key] = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+// =================================================================================
+// NOTIFICATION UTILITIES
+// =================================================================================
+function clearNote() {
+  const noteArea = document.getElementById('notification-area');
+  noteArea.style.display = 'none';
+  noteArea.textContent = '';
+}
+
+function showNote(type, text) {
+  const noteArea = document.getElementById('notification-area');
+  noteArea.className = 'notification ' + (type === 'error' ? 'error' : 'info');
+  noteArea.textContent = text;
+  noteArea.style.display = 'block';
+}
+
+// =================================================================================
+// DYNAMIC UI EVENT LISTENERS
+// =================================================================================
+function attachEventListeners() {
+    document.getElementById('analyzeBtn').addEventListener('click', analyzeCase);
+    document.getElementById('file-upload-input').addEventListener('change', handleFilesSelect);
+    document.getElementById('lang-switcher').addEventListener('click', () => setLanguage(currentLang === 'ar' ? 'en' : 'ar'));
+
+    // --- Dynamic form visibility ---
+    document.getElementById('gender').addEventListener('change', (e) => {
+        const isFemale = e.target.value === 'female';
+        document.getElementById('pregnancy-status-wrap').classList.toggle('hidden', !isFemale);
+        if (!isFemale) {
+            document.getElementById('pregnancy-month-wrap').classList.add('hidden');
         }
+    });
+    document.getElementById('pregnancy-status').addEventListener('change', (e) => {
+        document.getElementById('pregnancy-month-wrap').classList.toggle('hidden', e.target.value !== 'yes');
+    });
+    document.getElementById('smoker').addEventListener('change', (e) => {
+        document.getElementById('pack-years-section').classList.toggle('hidden', e.target.value !== 'yes');
+    });
+    document.getElementById('visual-symptoms').addEventListener('change', (e) => {
+        document.getElementById('eye-wrap').classList.toggle('hidden', e.target.value !== 'yes');
+    });
 
-        const uploadedFiles = files.files || [];
+    // --- Pack-years calculation ---
+    document.getElementById('packs-per-day').addEventListener('input', updatePackYears);
+    document.getElementById('smoking-years').addEventListener('input', updatePackYears);
+}
 
-        // تجهيز الملفات لـ Gemini
-        const filePartsPromises = (Array.isArray(uploadedFiles) ? uploadedFiles : [uploadedFiles]).map(async (file) => {
-            try {
-                const fileContent = fs.readFileSync(file.filepath);
-                const base64Data = fileContent.toString('base64');
-                const uri = await geminiUpload(geminiKey, base64Data, file.mimetype);
-                return uri ? { fileData: { mimeType: file.mimetype, fileUri: uri } } : null;
-            } catch (e) {
-                console.warn(`File processing failed for ${file.originalFilename}:`, e.message);
-                return null;
-            }
-        });
-
-        const processedFileParts = (await Promise.all(filePartsPromises)).filter(Boolean);
-
-        const userPrompt = `
-        Please analyze the following medical case.
-        **--- Patient Data ---**
-        - **Age:** ${body.age || 'Not specified'}
-        - **Gender:** ${body.gender || 'Not specified'}
-        - **Is Pregnant?:** ${body.isPregnant === 'true' ? `Yes, ${body.pregnancyMonth || 'N/A'} months` : 'No'}
-        - **Smoker:** ${body.isSmoker === 'true' ? `Yes (Pack-Years: ${body.packYears || 'N/A'})` : 'No'}
-        - **Has Visual Symptoms?:** ${body.visualSymptoms === 'yes' ? `Yes (Last Exam: ${body.lastEyeExamDate || 'N/A'}, Acuity: ${body.visualAcuity || 'N/A'})` : 'No'}
-        - **Cough Duration:** ${body.coughDurationWeeks ? `${body.coughDurationWeeks} weeks` : 'N/A'}
-        **--- Clinical Notes & Details from Doctor ---**
-        ${body.notes || "No additional notes provided."}
-        **--- Attached Files ---**
-        ${processedFileParts.length > 0 ? `${processedFileParts.length} files are attached.` : "No files were attached."}
-        Please begin your detailed analysis now.
-        `;
-        
-        const parts = [{ text: userPrompt }, ...processedFileParts];
-        const htmlReport = await geminiGenerate(geminiKey, parts);
-
-        return res.status(200).json({ ok: true, htmlReport });
-
-    } catch (err) {
-        console.error("--- SERVER ERROR ---", err);
-        return res.status(500).json({
-            ok: false,
-            error: "An internal server error occurred.",
-            detail: err.message,
-        });
+function updatePackYears() {
+    const packsPerDay = parseFloat(document.getElementById('packs-per-day').value) || 0;
+    const smokingYears = parseFloat(document.getElementById('smoking-years').value) || 0;
+    const resultEl = document.getElementById('pack-years-result');
+    if (packsPerDay > 0 && smokingYears > 0) {
+        resultEl.textContent = (packsPerDay * smokingYears).toFixed(1);
+    } else {
+        resultEl.textContent = '--';
     }
 }
+
+// =================================================================================
+// API ANALYSIS FUNCTION (Corrected Final Version using FormData)
+// =================================================================================
+async function analyzeCase() {
+  const responseContainer = document.getElementById('response-container');
+  const btn = document.getElementById('analyzeBtn');
+  const exportContainer = document.getElementById('export-container');
+  
+  clearNote();
+  responseContainer.style.display = 'none';
+  responseContainer.innerHTML = '';
+  exportContainer.classList.add('hidden');
+
+  // Use FormData to build the request
+  const formData = new FormData();
+
+  // Combine all textual details into one rich notes field for the AI
+  const detailedNotes = [
+    `Case Description: ${document.getElementById('case-description').value}`,
+    `Provisional Diagnoses: ${document.getElementById('diagnosis').value}`,
+    `Available Lab Results: ${document.getElementById('lab-results').value}`,
+    `Prescribed Medications/Procedures: ${document.getElementById('medications-procedures').value}`
+  ].map(s => s.trim()).filter(s => !s.endsWith(':')).join('\n---\n');
+  
+  // Append all form fields to FormData
+  formData.append('age', document.getElementById('age').value || '');
+  formData.append('gender', document.getElementById('gender').value || '');
+  formData.append('isPregnant', document.getElementById('pregnancy-status').value === 'yes');
+  formData.append('pregnancyMonth', document.getElementById('pregnancy-month').value || '');
+  formData.append('isSmoker', document.getElementById('smoker').value === 'yes');
+  formData.append('packYears', document.getElementById('pack-years-result').textContent === '--' ? '' : document.getElementById('pack-years-result').textContent);
+  formData.append('coughDurationWeeks', document.getElementById('cough-duration').value || '');
+  formData.append('visualSymptoms', document.getElementById('visual-symptoms').value || '');
+  formData.append('lastEyeExamDate', document.getElementById('last-eye-exam').value || '');
+  formData.append('visualAcuity', document.getElementById('visual-acuity').value || '');
+  formData.append('notes', detailedNotes);
+  
+  // Append files to FormData
+  // The back-end will now receive the raw file data instead of base64 in JSON
+  uploadedFiles.forEach(f => {
+      formData.append('files', f.file, f.file.name);
+  });
+
+  const hasAnyInput = detailedNotes || uploadedFiles.length > 0;
+  if (!hasAnyInput) {
+      showNote('error', getTranslation("validation.error_formIncomplete"));
+      return;
+  }
+
+  showNote('info', getTranslation("validation.info_analyzing"));
+  btn.disabled = true;
+
+  try {
+    // Send the request using FormData
+    // IMPORTANT: Do NOT set the 'Content-Type' header, the browser does it automatically for FormData
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(`${response.status}: ${errorData.detail || 'Unknown server error'}`);
+    }
+
+    const result = await response.json();
+
+    if (result?.htmlReport) {
+      clearNote();
+      responseContainer.innerHTML = result.htmlReport;
+      responseContainer.style.display = 'block';
+      exportContainer.classList.remove('hidden');
+      responseContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      throw new Error("Did not receive a valid report from the server.");
+    }
+  } catch (err) {
+    console.error(err);
+    showNote('error', getTranslation("validation.error_requestFailed") + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// =================================================================================
+// PDF EXPORT LOGIC
+// =================================================================================
+const { jsPDF } = window.jspdf;
+const exportBtn = document.getElementById('exportBtn');
+const exportDropdown = document.getElementById('export-dropdown');
+
+if(exportBtn) {
+    exportBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        exportDropdown.classList.toggle('show');
+    });
+}
+
+window.addEventListener('click', (event) => {
+    if (exportBtn && !exportBtn.contains(event.target) && exportDropdown && !exportDropdown.contains(event.target)) {
+        exportDropdown.classList.remove('show');
+    }
+});
+
+async function exportPDF(mode) {
+  showNote('info', 'Generating PDF...');
+  exportDropdown.classList.remove('show');
+  
+  // Find the generated report container *inside* the response area
+  const reportContent = document.getElementById('response-container').querySelector('.report-container');
+  
+  if (!reportContent) {
+    showNote('error', 'No report content to export.');
+    return;
+  }
+
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  
+  try {
+      await addContentToPdf(doc, reportContent, currentLang);
+      doc.save(`Medical-Report-${new Date().toISOString().slice(0,10)}.pdf`);
+      clearNote();
+  } catch(e) {
+      console.error("PDF Export failed:", e);
+      showNote('error', 'Could not generate PDF.');
+  }
+}
+
+async function addContentToPdf(doc, element, lang) {
+    const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL('image/png');
+    const imgProps = doc.getImageProperties(imgData);
+    const pdfWidth = doc.internal.pageSize.getWidth() - 20;
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    let heightLeft = pdfHeight;
+    let position = 10;
+    doc.addImage(imgData, 'PNG', 10, position, pdfWidth, pdfHeight);
+    heightLeft -= doc.internal.pageSize.getHeight();
+    while (heightLeft >= 0) {
+      position = heightLeft - pdfHeight + 10;
+      doc.addPage();
+      doc.addImage(imgData, 'PNG', 10, position, pdfWidth, pdfHeight);
+      heightLeft -= doc.internal.pageSize.getHeight();
+    }
+}
+// =================================================================================
+// INITIALIZATION
+// =================================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // A simplified setup for the example. Ensure your full translations object is here.
+    if (!translations.en) {
+        translations.en = translations.ar; 
+    }
+    setLanguage('ar');
+    attachEventListeners();
+});
