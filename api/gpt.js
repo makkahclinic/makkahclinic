@@ -1,5 +1,5 @@
 // pages/api/gpt.js
-// الإصدار النهائي المستقر - يعتمد على إرسال JSON ويتضمن أمراً ذكياً وموجزاً
+// الإصدار النهائي المصحح - مع حل مشكلة قراءة الرد المزدوج
 
 import { createHash } from "crypto";
 
@@ -61,7 +61,7 @@ const systemInstruction = `
 - كن موجزاً: لا تقم بإضافة أي وسوم HTML غير المذكورة (لا \`<style>\`, \`<html>\`, \`<body>\`).
 `;
 
-// --- دالة توليد المحتوى من Gemini ---
+// --- دالة توليد المحتوى من Gemini (النسخة المصححة) ---
 async function geminiGenerate(apiKey, parts) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
     const payload = {
@@ -70,11 +70,17 @@ async function geminiGenerate(apiKey, parts) {
         generationConfig: { temperature: 0.2, topP: 0.95, maxOutputTokens: 8192 }
     };
     const res = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    
+    // **الحل هنا: نقرأ الرد مرة واحدة فقط كنص**
     const raw = await res.text();
+
     if (!res.ok) {
+        // نستخدم النص الذي قرأناه بالفعل في رسالة الخطأ
         throw new Error(`Gemini API Error (${res.status}): ${raw}`);
     }
-    const j = await res.json();
+
+    // **ثم نقوم بتحليل النص الذي لدينا، بدلاً من قراءة الرد مرة أخرى**
+    const j = JSON.parse(raw);
     return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```(html|json)?/gi, "").trim();
 }
 
