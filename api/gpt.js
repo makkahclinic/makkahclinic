@@ -114,9 +114,12 @@ export default async function handler(req, res) {
         **--- Patient Data ---**
         - **Age:** ${body.age || 'Not specified'}
         - **Gender:** ${body.gender || 'Not specified'}
+        - **Is Pregnant?:** ${body.isPregnant ? `Yes, ${body.pregnancyMonth || 'N/A'} months` : 'No'}
         - **Smoker:** ${body.isSmoker ? `Yes (Pack-Years: ${body.packYears || 'N/A'})` : 'No'}
+        - **Has Visual Symptoms?:** ${body.visualSymptoms === 'yes' ? `Yes (Last Exam: ${body.lastEyeExamDate || 'N/A'}, Acuity: ${body.visualAcuity || 'N/A'})` : 'No'}
+        - **Cough Duration:** ${body.coughDurationWeeks ? `${body.coughDurationWeeks} weeks` : 'N/A'}
         
-        **--- Clinical Notes & Details ---**
+        **--- Clinical Notes & Details from Doctor ---**
         ${body.notes || "No additional notes provided."}
 
         **--- Attached Files ---**
