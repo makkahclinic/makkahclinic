@@ -131,9 +131,9 @@ const systemInstruction = `
 
 [قواعد الفحوص/الإجراءات (تأمينية)]
 - أدخل كل عنصر يظهر من مستخلص OCR/الملف كصف في الجدول.
-- **Dengue Ab IgG**: إن **لم تُذكر** حُمّى أو **سفر إلى منطقة موبوءة** في بيانات المريض/الأعراض، فالقرار **إلزاميًا**: <span class='status-yellow'>⚠️ الطلب مُعرّض للرفض: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد. ويجب مراجعته.</span>
-- **Nebulizer/Inhaler (خارجي)**: <span class='status-yellow'>⚠️ الطلب مُعرّض للرفض: يلزم أعراض/تشخيص تنفّسي موثق، ويجب مراجعته.</span>
-- **Pantoprazole IV / Normal Saline IV / I.V infusion only / Primperan IV / Paracetamol IV** (حالات خارجية) ⇒ <span class='status-yellow'>⚠️ الطلب مُعرّض للرفض: يتطلب مؤشرات واضحة فقط (جفاف/تعذّر فموي/نزف..)، ويجب مراجعته.</span>
+- **Dengue Ab IgG**: إن **لم تُذكر** حُمّى أو **سفر إلى منطقة موبوءة** في بيانات المريض/الأعراض، فالقرار **إلزاميًا**: <span class='status-yellow'>⚠️ قابل للمراجعة: يحتاج NS1/NAAT أو IgM للتشخيص الحاد.</span>
+- **Nebulizer/Inhaler (خارجي)**: <span class='status-yellow'>⚠️ قابل للمراجعة: لزوم أعراض تنفسية موثقة.</span>
+- **Pantoprazole IV / Normal Saline IV / I.V infusion only / Primperan IV / Paracetamol IV** (حالات خارجية) ⇒ <span class='status-yellow'>⚠️ قابل للمراجعة: مؤشرات واضحة فقط.</span>
 - فحوص السكري/الضغط الروتينية ⇒ <span class='status-green'>✅ مقبول</span>.
 
 [قائمة تحاليل إلزامية عند تواجد الأدوية]
@@ -443,7 +443,8 @@ function dedupeServiceRows(html="") {
   const out = [];
   for (const r of rows) {
     const plain = stripTags(r);
-    if (/الدواء\/الإجراء\s*\(مع درجة الثقة\)/.test(plain)) continue; // header clone
+    // Skip if it's a header-row clone
+    if (/الدواء\/الإجراء\s*\(مع درجة الثقة\)/.test(plain)) continue;
     const key = canonicalServiceKey(plain);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -510,7 +511,7 @@ function extractEGFR(text="") {
   return isFinite(v) ? v : null;
 }
 
-// ---------- Policy Overrides with new phrasing ----------
+// Force rules on Dengue/Referral/Nebulizer/IV/US
 function forceDengueRule(html = "", ctx = {}) {
   const txt = bagOfText(ctx);
   const hasAcute = ctx?.facts?.hasDengueAcuteContext || hasAny(txt, DENGUE_TRIGGERS);
@@ -518,7 +519,7 @@ function forceDengueRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(dengue|الضنك|حمى الضنك)/i.test(plain) || !/\bigg\b/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد. ويجب مراجعته.</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -531,7 +532,7 @@ function forceReferralRule(html = "", ctx = {}) {
   if (hasReason) return html;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!/referral/i.test(stripTags(row))) return row;
-    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يتطلب ذكر سبب إحالة واضح. ويجب مراجعته.</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب ذكر سبب إحالة واضح في النموذج.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -545,7 +546,7 @@ function forceNebulizerRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(nebulizer|inhaler|نيبولايزر|استنشاق)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يلزم أعراض/تشخيص تنفّسي موثق. ويجب مراجعته.</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: لزوم أعراض/تشخيص تنفسي موثق.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -559,7 +560,7 @@ function forceIVRule(html = "", ctx = {}) {
   const IV_KEYS = /(normal\s*saline|i\.?v\.?\s*infusion\s*only|primperan|metoclopramide|paracetamol\s+.*infus|pantoprazole|pantozol)/i;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!IV_KEYS.test(stripTags(row))) return row;
-    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: الاستعمال الوريدي يتطلب مؤشرات واضحة (جفاف/قيء شديد/تعذّر فموي...). ويجب مراجعته.</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: استعمال وريدي يحتاج مؤشرات واضحة (جفاف/قيء شديد/تعذّر فموي...).</span>`;
     let cleaned = row = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -573,7 +574,7 @@ function forceUSRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(ultrasound|ultra\s*sound|سونار|ألتراساوند)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يتطلب مبرر تصوير واضح (مثلاً ألم بطني موضع). ويجب مراجعته.</span>`;
+    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب مبرر تصوير واضح (مثلاً ألم بطني موضع).</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -614,6 +615,7 @@ function applyPolicyOverrides(htmlReport, ctx) {
   out = pruneRepeatedHeaderRows(out);
   out = dedupeServiceRows(out);
   out = ensureGuidelineSection(out, ctx);
+  // ensure conclusion exists
   if (!/الخاتمة/.test(out)) {
     out += `<p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>`;
   }
@@ -723,5 +725,5 @@ export default async function handler(req, res) {
 }
 
 export const config = {
-  api: { bodyParser: { sizeLimit: "12mb" } },
+  api: { bodyParser: { sizeLimit: "12mb" } }, // يمكن رفعها عند الحاجة مع مراعاة حد 4MB لرد Next.js
 };
