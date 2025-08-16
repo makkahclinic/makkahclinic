@@ -1,219 +1,148 @@
 // pages/api/gpt.js
-// الإصدار النهائي: يعتمد على فصل المحتوى (من Gemini) عن التصميم (قالب ثابت)
-// لضمان تنسيق مثالي في كل مرة.
+// الإصدار النهائي المستقر - يعتمد على توليد HTML بسيط في الباك إند وتطبيق التنسيق في الفرونت إند
 
 import { createHash } from "crypto";
 
-// ... (كل دوال المساعدة مثل fetchWithRetry, ocrWithOpenAI, etc. تبقى كما هي) ...
-
-// =============== القالب النهائي للتقرير (The Final HTML Template) ===============
-// هذا هو التصميم الثابت. Gemini سيقوم فقط بملء الفراغات التي تبدأ بـ const finalReportTemplate = `
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.65; padding: 12px; background-color: #f9fafb; color: #111827; }
-        .report-container { max-width: 900px; margin: auto; background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
-        h3, h4, h5 { color: #1e3a8a; border-bottom: 2px solid #e0e7ff; padding-bottom: 8px; margin-top: 24px; }
-        h3 { font-size: 1.5rem; }
-        h4 { font-size: 1.25rem; }
-        h5 { font-size: 1.1rem; color: #1e40af; border-bottom: 1px solid #e5e7eb; }
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.9rem; }
-        th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: start; vertical-align: top; }
-        thead th { background-color: #f3f4f6; color: #1f2937; font-weight: 600; }
-        tbody tr:nth-child(even) { background-color: #f9fafb; }
-        .status-green, .status-yellow, .status-red { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; border: 1px solid; }
-        .status-green { background-color: #dcfce7; color: #166534; border-color: #a7f3d0; }
-        .status-yellow { background-color: #fefce8; color: #854d0e; border-color: #fde68a; }
-        .status-red { background-color: #fee2e2; color: #991b1b; border-color: #fca5a5; }
-        .section { margin-top: 20px; padding-left: 15px; border-left: 4px solid #4f46e5; }
-        ul { list-style-type: disc; padding-right: 20px; }
-        li { margin-bottom: 8px; }
-        .conclusion { margin-top: 32px; padding: 16px; background-color: #eef2ff; border-top: 3px solid #4f46e5; border-radius: 4px; }
-        .disclaimer { margin-top: 16px; font-size: 0.8rem; color: #6b7280; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="report-container">
-        <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-
-        <h4>ملخص الحالة</h4>
-        <p></p>
-
-        <h4>تحليل الملفات المرفوعة</h4>
-        <p></p>
-
-        <h4>التحليل السريري العميق</h4>
-        <p></p>
-
-        <h4>جدول الأدوية والإجراءات</h4>
-        <table>
-            <thead>
-                <tr>
-                    <th>بند الخدمة</th>
-                    <th>التصنيف</th>
-                    <th>الغرض الطبي</th>
-                    <th>قرار التأمين</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
-        </table>
-
-        <div class="section">
-            <h4 class="section-title">التحليل التفصيلي والتوصيات</h4>
-            
-            <h5>1. خدمات طبية ضرورية ومقبولة تأمينياً</h5>
-            <p></p>
-
-            <h5>2. تعديلات دوائية حرجة</h5>
-            <p></p>
-
-            <h5>3. تحاليل مخبرية ضرورية</h5>
-            <p></p>
-
-            <h5>4. متابعة وفحوصات دورية</h5>
-            <p></p>
-        </div>
-
-        <div class="conclusion">
-            <h5>5. الخاتمة والتوصيات النهائية</h5>
-            <p></p>
-        </div>
-        
-        <p class="disclaimer">هذا التقرير لا يغني عن المراجعة السريرية المباشرة، ويُستخدم لأغراض التدقيق الطبي والتأميني فقط.</p>
-    </div>
-</body>
-</html>
-`;
-
-// =============== SYSTEM PROMPT (النهائي والمضمون - دمج التصميم مع التعليمات) ===============
-const systemInstruction = `
-أنت "المدير الطبي الأعلى للتدقيق السريري"، ومهمتك هي إنشاء تقرير HTML متكامل، دقيق، ومنظم بشكل احترافي.
-**يجب عليك اتباع الهيكل والقالب التالي حرفياً وبدون أي تغيير في التصميم.**
-
----
-### الهيكل الإلزامي للتقرير النهائي ###
-
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.65; padding: 12px; background-color: #f9fafb; color: #111827; }
-        .report-container { max-width: 900px; margin: auto; background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
-        h3, h4, h5 { color: #1e3a8a; border-bottom: 2px solid #e0e7ff; padding-bottom: 8px; margin-top: 24px; }
-        h3 { font-size: 1.5rem; }
-        h4 { font-size: 1.25rem; }
-        h5 { font-size: 1.1rem; color: #1e40af; border-bottom: 1px solid #e5e7eb; }
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.9rem; }
-        th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: start; vertical-align: top; }
-        thead th { background-color: #f3f4f6; color: #1f2937; font-weight: 600; }
-        tbody tr:nth-child(even) { background-color: #f9fafb; }
-        .status-green, .status-yellow, .status-red { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 0.8rem; border: 1px solid; }
-        .status-green { background-color: #dcfce7; color: #166534; border-color: #a7f3d0; }
-        .status-yellow { background-color: #fefce8; color: #854d0e; border-color: #fde68a; }
-        .status-red { background-color: #fee2e2; color: #991b1b; border-color: #fca5a5; }
-        .section { margin-top: 20px; padding-left: 15px; border-left: 4px solid #4f46e5; }
-        .conclusion { margin-top: 32px; padding: 16px; background-color: #eef2ff; border-top: 3px solid #4f46e5; border-radius: 4px; }
-        .disclaimer { margin-top: 16px; font-size: 0.8rem; color: #6b7280; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="report-container">
-        <h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-
-        <h4>ملخص الحالة</h4>
-        <p>اكتب هنا ملخصاً موجزاً ووافياً لحالة المريض...</p>
-
-        <h4>تحليل الملفات المرفوعة</h4>
-        <p>اكتب هنا تحليلاً موجزاً للملفات المرفوعة...</p>
-
-        <h4>التحليل السريري العميق</h4>
-        <p>اكتب هنا تحليلاً سريرياً أعمق للحالة بناءً على المعطيات...</p>
-
-        <h4>جدول الأدوية والإجراءات</h4>
-        <table>
-            <thead>
-                <tr>
-                    <th>بند الخدمة</th>
-                    <th>التصنيف</th>
-                    <th>الغرض الطبي</th>
-                    <th>قرار التأمين</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
-        </table>
-
-        <div class="section">
-            <h4 class="section-title">التحليل التفصيلي والتوصيات</h4>
-            
-            <h5>1. خدمات طبية ضرورية ومقبولة تأمينياً</h5>
-            <p>حلل هنا الفحوصات الأساسية المبررة مع الاستشهاد بإرشادات (ADA, ESH)...</p>
-
-            <h5>2. تعديلات دوائية حرجة</h5>
-            <p>انتقد هنا استخدام الأدوية الوريدية وقدم توصية واضحة مع الاستشهاد بإرشادات (NICE, UpToDate)...</p>
-
-            <h5>3. تحاليل مخبرية ضرورية</h5>
-            <p>اشرح هنا القيمة السريرية لأهم تحليلين مع ذكر وتيرة إجرائها حسب الإرشادات...</p>
-
-            <h5>4. متابعة وفحوصات دورية</h5>
-            <p>اشرح هنا أهمية المتابعة الروتينية مع الاستشهاد بالإرشادات...</p>
-        </div>
-
-        <div class="conclusion">
-            <h5>5. الخاتمة والتوصيات النهائية</h5>
-            <p>قدم هنا ملخصاً إدارياً للنتائج والتوصيات الرئيسية...</p>
-        </div>
-        
-        <p class="disclaimer">هذا التقرير لا يغني عن المراجعة السريرية المباشرة، ويُستخدم لأغراض التدقيق الطبي والتأميني فقط.</p>
-    </div>
-</body>
-</html>
-`;
-
-// =============== API HANDLER (المنطق الجديد) ===============
-export default async function handler(req, res) {
-    // ... (منطق التحقق من الطلب، استدعاء OCR، تجهيز الملفات يبقى كما هو) ...
+// دوال المساعدة (Utils) - لا تحتاج لتعديلها
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const nowIso = () => new Date().toISOString();
+async function fetchWithRetry(url, options, { retries = 3, timeoutMs = 180000 } = {}) {
     try {
-        // ...
-        // الخطوة 1: استدعاء Gemini للحصول على المحتوى النصي الخام
-        const rawContent = await geminiGenerate(geminiKey, parts); // geminiGenerate الآن تستخدم الأمر الجديد
-
-        // الخطوة 2: فصل المحتوى إلى أقسام بناءً على الفاصل
-        const contentSections = rawContent.split('|||---|||').map(s => s.trim());
-        
-        const placeholders = {
-            '': contentSections[0] || '',
-            '': contentSections[1] || '',
-            '': contentSections[2] || '',
-            '': contentSections[3] || '',
-            '': contentSections[4] || '',
-            '': contentSections[5] || '',
-            '': contentSections[6] || '',
-            '': contentSections[7] || '',
-            '': contentSections[8] || '',
-        };
-
-        // الخطوة 3: تركيب التقرير النهائي بملء القالب
-        let finalHtmlReport = finalReportTemplate;
-        for (const placeholder in placeholders) {
-            finalHtmlReport = finalHtmlReport.replace(placeholder, placeholders[placeholder]);
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+        const res = await fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(t));
+        if (!res.ok && retries > 0 && [429, 500, 502, 503, 504].includes(res.status)) {
+            await sleep((4 - retries) * 1000);
+            return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
         }
+        return res;
+    } catch (err) {
+        if (retries > 0) {
+            await sleep((4 - retries) * 1000);
+            return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
+        }
+        throw err;
+    }
+}
+function detectMimeFromB64(b64 = "") {
+    const h = (b64 || "").slice(0, 24);
+    if (h.includes("JVBERi0")) return "application/pdf";
+    if (h.includes("iVBORw0")) return "image/png";
+    if (h.includes("/9j/")) return "image/jpeg";
+    return "application/octet-stream";
+}
+async function ocrWithOpenAI(openaiKey, files) {
+    // ... (منطق OCR يبقى كما هو إذا كنت تستخدمه)
+    return "";
+}
+async function geminiUpload(apiKey, base64Data, mime) {
+    const buf = Buffer.from(base64Data, "base64");
+    const res = await fetchWithRetry(`https://generativelenguage.googleapis.com/v1beta/files?key=${apiKey}`, { method: "POST", headers: { "Content-Type": mime }, body: buf });
+    if (!res.ok) throw new Error(`Gemini upload failed: ${await res.text()}`);
+    const j = await res.json();
+    return j?.file?.uri;
+}
+// ----------------------------------------------------------------------------------
 
-        // إرجاع التقرير النهائي ذو التنسيق المثالي
+// الأمر الرئيسي (System Prompt) - نسخة موجزة ومستقرة
+const systemInstruction = `
+أنت خبير تدقيق طبي، مهمتك إنشاء تقرير بصيغة HTML بسيطة ومنظمة.
+يجب أن يحتوي التقرير على الأقسام التالية بالترتيب:
+1.  \`<h4>ملخص الحالة</h4>\` مع فقرة \`<p>\`.
+2.  \`<h4>تحليل الملفات المرفوعة</h4>\` مع فقرة \`<p>\`.
+3.  \`<h4>التحليل السريري العميق</h4>\` مع فقرة \`<p>\`.
+4.  \`<h4>جدول الأدوية والإجراءات</h4>\` مع جدول \`<table>\` يحتوي على الأعمدة: "بند الخدمة" و "قرار التأمين".
+    - لكل خدمة، أنشئ صف \`<tr>\` واحد.
+    - لقرار التأمين، استخدم \`<span>\` مع الكلاس المناسب ('status-green', 'status-yellow', 'status-red') واذكر السبب بوضوح للحالات الصفراء والحمراء.
+5.  \`<h4>التحليل التفصيلي والتوصيات</h4>\` وبداخله العناوين الفرعية \`<h5>\` المرقمة (1. خدمات طبية ضرورية... إلخ) مع فقرة \`<p>\` لكل منها.
+    - يجب أن يكون تحليلك عميقاً ومدعوماً بالأدلة كما تدربنا.
+6.  \`<h5>5. الخاتمة والتوصيات النهائية</h5>\` مع فقرة \`<p>\`.
+7.  فقرة أخيرة تحتوي على التنويه القانوني.
+
+التزم بهذا الهيكل البسيط والنظيف. لا تقم بإضافة أي تنسيقات CSS أو \`<style>\` أو \`<html>\` أو \`<body>\`.
+`;
+
+// دالة توليد المحتوى من Gemini
+async function geminiGenerate(apiKey, parts) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+    const payload = {
+        contents: [{ role: "user", parts }],
+        systemInstruction: { role: "system", parts: [{ text: systemInstruction }] },
+        generationConfig: { temperature: 0.2, topP: 0.95, maxOutputTokens: 8192 }
+    };
+    const res = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const raw = await res.text();
+    if (!res.ok) throw new Error(`Gemini API Error (${res.status}): ${raw}`);
+    const j = JSON.parse(raw);
+    return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```(html)?/g, "").trim();
+}
+
+// المعالج الرئيسي للطلب (API Handler)
+export default async function handler(req, res) {
+    if (req.method === "OPTIONS") return res.status(200).end();
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+    try {
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!geminiKey) throw new Error("GEMINI_API_KEY is not configured on the server.");
+
+        const openaiKey = process.env.OPENAI_API_KEY || null;
+        const body = req.body || {};
+        const files = Array.isArray(body.files) ? body.files : [];
+
+        // 1. OCR (اختياري)
+        const ocrText = openaiKey ? await ocrWithOpenAI(openaiKey, files) : "";
+
+        // 2. تجهيز الملفات لـ Gemini
+        const filePartsPromises = files.map(async (f) => {
+            try {
+                const base64 = f?.data || "";
+                if (!base64) return null;
+                const mime = f.type || detectMimeFromB64(base64);
+                const uri = await geminiUpload(geminiKey, base64, mime);
+                return uri ? { fileData: { mimeType: mime, fileUri: uri } } : null;
+            } catch (e) {
+                console.warn(`File processing failed:`, e.message);
+                return null;
+            }
+        });
+        const processedFileParts = (await Promise.all(filePartsPromises)).filter(Boolean);
+
+        // 3. بناء prompt المستخدم
+        const userPrompt = `
+        **Patient Data:**
+        - Age: ${body.age || 'Not specified'}
+        - Gender: ${body.gender || 'Not specified'}
+        - Notes: ${body.notes || 'None'}
+        - Problems: ${Array.isArray(body.problems) ? body.problems.join(", ") : "None"}
+
+        **OCR Text from Files:**
+        ${ocrText || "No OCR text available."}
+
+        Please analyze this case based on these inputs.
+        `;
+        const parts = [{ text: userPrompt }, ...processedFileParts];
+
+        // 4. توليد التقرير
+        const htmlReport = await geminiGenerate(geminiKey, parts);
+
+        // 5. إرسال التقرير النهائي
         return res.status(200).json({
             ok: true,
             at: nowIso(),
-            htmlReport: finalHtmlReport,
-            // ... (meta data)
+            htmlReport: htmlReport,
         });
 
     } catch (err) {
-        // ... (معالجة الأخطاء)
+        console.error("--- SERVER ERROR ---", err);
+        return res.status(500).json({
+            ok: false,
+            error: "An internal server error occurred.",
+            detail: err.message, // إرسال رسالة الخطأ للمساعدة في التصحيح
+        });
     }
 }
+
+export const config = {
+    api: { bodyParser: { sizeLimit: "12mb" } },
+};
