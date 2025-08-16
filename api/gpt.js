@@ -77,7 +77,7 @@ function hardHtmlEnforce(s = "") {
     .critical     { color:#991b1b;font-weight:bold }
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.65;padding:6px}
     table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #e5e7eb;padding:8px;font-size:14px}
+    th,td{border:1px solid #e5e7eb;padding:8px;font-size:14px;vertical-align:top}
     thead th{background:#f3f4f6}
   </style>`;
   return `${skin}<pre style="white-space:pre-wrap">${escapeHtml(t)}</pre>`;
@@ -131,9 +131,9 @@ const systemInstruction = `
 
 [قواعد الفحوص/الإجراءات (تأمينية)]
 - أدخل كل عنصر يظهر من مستخلص OCR/الملف كصف في الجدول.
-- **Dengue Ab IgG**: إن **لم تُذكر** حُمّى أو **سفر إلى منطقة موبوءة** في بيانات المريض/الأعراض، فالقرار **إلزاميًا**: <span class='status-yellow'>⚠️ قابل للمراجعة: يحتاج NS1/NAAT أو IgM للتشخيص الحاد.</span>
-- **Nebulizer/Inhaler (خارجي)**: <span class='status-yellow'>⚠️ قابل للمراجعة: لزوم أعراض تنفسية موثقة.</span>
-- **Pantoprazole IV / Normal Saline IV / I.V infusion only / Primperan IV / Paracetamol IV** (حالات خارجية) ⇒ <span class='status-yellow'>⚠️ قابل للمراجعة: مؤشرات واضحة فقط.</span>
+- **Dengue Ab IgG**: إن **لم تُذكر** حُمّى أو **سفر إلى منطقة موبوءة** في بيانات المريض/الأعراض، فالقرار **إلزاميًا**: <span class='status-yellow'>⚠️ الطلب مُعرّض للرفض: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد. ويجب مراجعته.</span>
+- **Nebulizer/Inhaler (خارجي)**: <span class='status-yellow'>⚠️ الطلب مُعرّض للرفض: يلزم أعراض/تشخيص تنفّسي موثق. ويجب مراجعته.</span>
+- **Pantoprazole IV / Normal Saline IV / I.V infusion only / Primperan IV / Paracetamol IV** (حالات خارجية) ⇒ <span class='status-yellow'>⚠️ الطلب مُعرّض للرفض: يتطلب مؤشرات واضحة فقط (جفاف/تعذّر فموي/نزف..). ويجب مراجعته.</span>
 - فحوص السكري/الضغط الروتينية ⇒ <span class='status-green'>✅ مقبول</span>.
 
 [قائمة تحاليل إلزامية عند تواجد الأدوية]
@@ -342,10 +342,7 @@ async function geminiUpload(apiKey, base64Data, mime) {
 // =============== GEMINI CALL ===============
 async function geminiGenerate(apiKey, parts, cfg = {}) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const payload = {
-    contents: [{ role: "user", parts }],
-    generationConfig: { temperature: 0.0, topP: 0.9, topK: 40, maxOutputTokens: 8192, ...cfg },
-  };
+  const payload = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.0, topP: 0.9, topK: 40, maxOutputTokens: 8192, ...cfg } };
   const res = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   const raw = await res.text();
   if (!res.ok) throw new Error(`Gemini error ${res.status}: ${raw.slice(0, 600)}`);
@@ -356,7 +353,7 @@ async function geminiGenerate(apiKey, parts, cfg = {}) {
   } catch { return hardHtmlEnforce(raw); }
 }
 
-// =============== TEXT UTILS FOR POLICY OVERRIDES ===============
+// =============== TEXT UTILS & POLICY OVERRIDES ===============
 const DENGUE_TRIGGERS = [
   "حمى","سخونة","ارتفاع الحرارة","fever",
   "سفر إلى","travel to","منطقة موبوءة","endemic area",
@@ -378,7 +375,7 @@ function bagOfText({ body = {}, ocrText = "", facts = {}, modelHtml = "" } = {})
 }
 function hasAny(text, arr) { const s = text.toLowerCase(); return arr.some(w => s.includes(w.toLowerCase())); }
 
-// ---- Service key normalizer (ignores dose/brand so we detect duplicates) ----
+// تطبيع الاسم إلى مفتاح قياسي (للكشف عن التكرار بغض النظر عن الجرعات/الماركات)
 function canonicalServiceKey(s = "") {
   const x = s.toLowerCase()
     .replace(/\d+(\.\d+)?\s*(mg|ml|mcg|g|iu|u|٪|%|mmol|l|amp|vial|tab|caps?)\b/gi, "")
@@ -388,7 +385,6 @@ function canonicalServiceKey(s = "") {
     .replace(/\s+/g, " ")
     .trim();
 
-  // synonyms
   if (/(cbc|complete blood.*count|صورة دم)/i.test(x)) return "cbc";
   if (/(creatinine|كرياتينين)/i.test(x)) return "creatinine";
   if (/(urea|يوريا)/i.test(x)) return "urea";
@@ -410,7 +406,6 @@ function canonicalServiceKey(s = "") {
   if (/(paracetamol|acetaminophen).*infus/i.test(x)) return "paracetamol iv";
   if (/(pantozol|pantoprazole)/i.test(x)) return "pantoprazole iv";
 
-  // meds from free text:
   if (/(metformin|glucophage|xigduo)/i.test(x)) return "metformin";
   if (/(triplixam|perindopril|amlodipine)/i.test(x)) return "acei/ccb mix";
   if (/(losartan|valsartan|irbesartan|candesartan)/i.test(x)) return "arb";
@@ -419,7 +414,7 @@ function canonicalServiceKey(s = "") {
   return x || "unknown";
 }
 
-// ---- HTML helpers ----
+// --- HTML helpers ---
 function getFirstTableCloseIndex(html="") {
   const m = html.match(/<\/table>/i);
   return m ? m.index + m[0].length : -1;
@@ -430,34 +425,71 @@ function safeInsertAfterFirstTable(html="", snippet="") {
   return html.slice(0, idx) + "\n" + snippet + "\n" + html.slice(idx);
 }
 
-// Remove duplicate header rows accidentally generated inside <tbody>
-function pruneRepeatedHeaderRows(html="") {
-  return html.replace(/<tr[^>]*>[\s\S]{0,400}?الدواء\/الإجراء\s*\(مع درجة الثقة\)[\s\S]{0,400}?<\/tr>/gi, "");
+// أعد كتابة أي عبارة "قابل للمراجعة" أينما وُجدت (داخل/خارج span)
+function rewriteCautionPhrases(html="") {
+  let out = html;
+  // داخل span
+  out = out.replace(
+    /<span class="status-yellow">([\s\S]*?)قابل\s*للمراج(?:ع|ه)ة([\s\S]*?)<\/span>/gi,
+    (_m, pre, post) => `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض${pre ? "" : ""}${pre || ""}${post || ""}${/ويجب مراجعته/.test(post) ? "" : " ويجب مراجعته."}</span>`
+  );
+  // نص عادي
+  out = out.replace(/⚠️\s*قابل\s*للمراج(?:ع|ه)ة/gi, "⚠️ الطلب مُعرّض للرفض");
+  // لو ظهرت العبارة الجديدة بدون الخاتمة، أضفها
+  out = out.replace(/(<span class="status-yellow">[\s\S]*?الطلب مُعرّض للرفض)(?![\s\S]{0,60}ويجب مراجعته)([\s\S]*?<\/span>)/gi, "$1 ويجب مراجعته.$2");
+  return out;
 }
 
-// Dedupe rows by canonical key
+// احذف صفوف رأس مكررة داخل tbody فقط
+function pruneRepeatedHeaderRows(html="") {
+  return html.replace(/<tbody>[\s\S]*?<\/tbody>/gi, (tbody) => {
+    return tbody.replace(/<tr[^>]*>[\s\S]{0,400}?الدواء\/الإجراء\s*\(مع درجة الثقة\)[\s\S]{0,400}?<\/tr>/gi, "");
+  });
+}
+
+// أعد بناء tbody بدون تكرار الخدمات (حسب المفتاح القياسي)
 function dedupeServiceRows(html="") {
-  const rowRegex = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
-  const rows = html.match(rowRegex) || [];
+  const tbMatch = html.match(/<tbody>([\s\S]*?)<\/tbody>/i);
+  if (!tbMatch) return html;
+  const tbody = tbMatch[1];
+  const rows = tbody.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
   const seen = new Set();
-  const out = [];
+  const outRows = [];
   for (const r of rows) {
     const plain = stripTags(r);
-    // Skip if it's a header-row clone
     if (/الدواء\/الإجراء\s*\(مع درجة الثقة\)/.test(plain)) continue;
     const key = canonicalServiceKey(plain);
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(r);
+    outRows.push(r);
   }
-  return html.replace(/<tbody>[\s\S]*?<\/tbody>/i, (tbody) => {
-    const head = tbody.match(/<tbody>/i)?.[0] || "<tbody>";
-    const tail = "</tbody>";
-    return head + out.join("\n") + tail;
+  const rebuilt = "<tbody>" + outRows.join("\n") + "</tbody>";
+  return html.replace(/<tbody>[\s\S]*?<\/tbody>/i, rebuilt);
+}
+
+// تأكد من وجود thead برؤوس الأعمدة
+function ensureTableHeader(html="") {
+  return html.replace(/<table[^>]*>([\s\S]*?)(<tbody>)/i, (m, beforeTbody, tbodyTag) => {
+    if (/<thead>/i.test(beforeTbody)) return m;
+    const thead = `<thead><tr>
+<th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
+</tr></thead>`;
+    return `<table>${thead}${tbodyTag}`;
   });
 }
 
-// Build guideline block (constant, with conditionals)
+// أضف تعريف الرموز فوق الجدول إن لم يكن موجودًا
+function ensureLegendAboveTable(html="") {
+  if (/الرموز:\s*✅|⚠️|❌/.test(html)) return html;
+  const legend = `<div style="margin:8px 0 12px 0;font-size:13px;color:#374151">
+<strong>الرموز:</strong> <span class="status-green">✅ مقبول</span> |
+<span class="status-yellow">⚠️ الطلب مُعرّض للرفض (ويجب مراجعته)</span> |
+<span class="status-red">❌ مرفوض</span>
+</div>`;
+  return html.replace(/(<h4>\s*جدول الأدوية والإجراءات\s*<\/h4>)/i, `$1\n${legend}`);
+}
+
+// كتل الإرشاد/الأدلة
 function buildGuidelineBlock({ detectedKeys = new Set(), eGFR = null } = {}) {
   const hasMetformin = detectedKeys.has("metformin");
   const hasACE_ARB = detectedKeys.has("acei/ccb mix") || detectedKeys.has("arb");
@@ -503,7 +535,6 @@ function buildGuidelineBlock({ detectedKeys = new Set(), eGFR = null } = {}) {
 <ul>${li(routine)}</ul>`;
 }
 
-// Extract eGFR number from free text (if any)
 function extractEGFR(text="") {
   const m = text.match(/egfr[^0-9]{0,6}(\d{1,3}(?:\.\d+)?)/i);
   if (!m) return null;
@@ -511,7 +542,7 @@ function extractEGFR(text="") {
   return isFinite(v) ? v : null;
 }
 
-// Force rules on Dengue/Referral/Nebulizer/IV/US
+// ---------- Policy Overrides ----------
 function forceDengueRule(html = "", ctx = {}) {
   const txt = bagOfText(ctx);
   const hasAcute = ctx?.facts?.hasDengueAcuteContext || hasAny(txt, DENGUE_TRIGGERS);
@@ -519,7 +550,7 @@ function forceDengueRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(dengue|الضنك|حمى الضنك)/i.test(plain) || !/\bigg\b/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد.</span>`;
+    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد. ويجب مراجعته.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -532,7 +563,7 @@ function forceReferralRule(html = "", ctx = {}) {
   if (hasReason) return html;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!/referral/i.test(stripTags(row))) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب ذكر سبب إحالة واضح في النموذج.</span>`;
+    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يتطلب ذكر سبب إحالة واضح. ويجب مراجعته.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -546,7 +577,7 @@ function forceNebulizerRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(nebulizer|inhaler|نيبولايزر|استنشاق)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: لزوم أعراض/تشخيص تنفسي موثق.</span>`;
+    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يلزم أعراض/تشخيص تنفّسي موثق. ويجب مراجعته.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -560,7 +591,7 @@ function forceIVRule(html = "", ctx = {}) {
   const IV_KEYS = /(normal\s*saline|i\.?v\.?\s*infusion\s*only|primperan|metoclopramide|paracetamol\s+.*infus|pantoprazole|pantozol)/i;
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     if (!IV_KEYS.test(stripTags(row))) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: استعمال وريدي يحتاج مؤشرات واضحة (جفاف/قيء شديد/تعذّر فموي...).</span>`;
+    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: الاستعمال الوريدي يتطلب مؤشرات واضحة (جفاف/قيء شديد/تعذّر فموي...). ويجب مراجعته.</span>`;
     let cleaned = row = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -574,7 +605,7 @@ function forceUSRule(html = "", ctx = {}) {
   return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
     const plain = stripTags(row).toLowerCase();
     if (!/(ultrasound|ultra\s*sound|سونار|ألتراساوند)/i.test(plain)) return row;
-    const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يتطلب مبرر تصوير واضح (مثلاً ألم بطني موضع).</span>`;
+    const caution = `<span class="status-yellow">⚠️ الطلب مُعرّض للرفض: يتطلب مبرر تصوير واضح (مثلاً ألم بطني موضع). ويجب مراجعته.</span>`;
     let cleaned = row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
     const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
     if (tds && tds.length) cleaned = cleaned.replace(tds[tds.length - 1], tds[tds.length - 1].replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`));
@@ -583,28 +614,34 @@ function forceUSRule(html = "", ctx = {}) {
   });
 }
 
-// Ensure/replace guideline section with a canonical block
-function ensureGuidelineSection(html="", ctx={}) {
-  // Remove any existing "خدمات طبية ضرورية..." block to avoid duplicates
+// إبقاء/تثبيت قسم الإرشادات داخل التقرير
+function buildGuidelineSection(html="", ctx={}) {
   const cleaned = html.replace(
     /<h4[^>]*>\s*خدمات طبية ضرورية[\s\S]*?(?=<p><strong>الخاتمة|<\/body|<\/html|$)/i,
     ""
   );
-
-  // Detect keys from current table rows and user text
   const allText = [stripTags(cleaned), bagOfText(ctx)].join(" ");
   const keys = new Set();
   ["cbc","creatinine","urea","uric acid","alt/sgpt","hba1c","ldl","cholesterol","triglycerides","crp",
    "dengue igg","ultrasound","nebulizer","normal saline iv","iv infusion only","primperan iv","paracetamol iv","pantoprazole iv",
    "metformin","acei/ccb mix","arb","statin"
   ].forEach(k => { if (allText.toLowerCase().includes(k)) keys.add(k); });
-
   const egfr = extractEGFR(allText);
   const snippet = buildGuidelineBlock({ detectedKeys: keys, eGFR: egfr });
-
   return safeInsertAfterFirstTable(cleaned, snippet);
 }
 
+function ensureTableHeader(html) { // already defined earlier but hoist for TS linters
+  return html.replace(/<table[^>]*>([\s\S]*?)(<tbody>)/i, (m, beforeTbody, tbodyTag) => {
+    if (/<thead>/i.test(beforeTbody)) return m;
+    const thead = `<thead><tr>
+<th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
+</tr></thead>`;
+    return `<table>${thead}${tbodyTag}`;
+  });
+}
+
+// خط أنابيب ما بعد المخرجات
 function applyPolicyOverrides(htmlReport, ctx) {
   let out = htmlReport;
   out = forceDengueRule(out, ctx);
@@ -612,10 +649,12 @@ function applyPolicyOverrides(htmlReport, ctx) {
   out = forceNebulizerRule(out, ctx);
   out = forceIVRule(out, ctx);
   out = forceUSRule(out, ctx);
+  out = rewriteCautionPhrases(out);
   out = pruneRepeatedHeaderRows(out);
   out = dedupeServiceRows(out);
-  out = ensureGuidelineSection(out, ctx);
-  // ensure conclusion exists
+  out = ensureTableHeader(out);
+  out = ensureLegendAboveTable(out);
+  out = buildGuidelineSection(out, ctx);
   if (!/الخاتمة/.test(out)) {
     out += `<p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>`;
   }
@@ -641,7 +680,7 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
 
-    // 1) OCR (اختياري للصور)
+    // 1) OCR (للصور)
     let ocrText = "";
     if (openaiKey && files.length) {
       try { ocrText = await ocrWithOpenAI(openaiKey, files); }
@@ -725,5 +764,5 @@ export default async function handler(req, res) {
 }
 
 export const config = {
-  api: { bodyParser: { sizeLimit: "12mb" } }, // يمكن رفعها عند الحاجة مع مراعاة حد 4MB لرد Next.js
+  api: { bodyParser: { sizeLimit: "12mb" } },
 };
