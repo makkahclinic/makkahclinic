@@ -1,9 +1,9 @@
 // pages/api/gpt.js
-// Final Stable Version - Correctly uses all data from the front-end.
+// الإصدار النهائي المستقر - يقرأ كل البيانات من الفرونت إند ويولد HTML بسيط
 
 import { createHash } from "crypto";
 
-// --- Helper Functions (No changes needed) ---
+// --- دوال المساعدة (Utils) ---
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const nowIso = () => new Date().toISOString();
 async function fetchWithRetry(url, options, { retries = 3, timeoutMs = 180000 } = {}) {
@@ -25,7 +25,8 @@ async function fetchWithRetry(url, options, { retries = 3, timeoutMs = 180000 } 
     }
 }
 function detectMimeFromB64(b64 = "") {
-    const h = (b64 || "").slice(0, 24);
+    if (!b64) return "application/octet-stream";
+    const h = b64.slice(0, 24);
     if (h.includes("JVBERi0")) return "application/pdf";
     if (h.includes("iVBORw0")) return "image/png";
     if (h.includes("/9j/")) return "image/jpeg";
@@ -42,25 +43,25 @@ async function geminiUpload(apiKey, base64Data, mime) {
 }
 // ----------------------------------------------------
 
-// --- System Prompt (Stable & Concise) ---
+// --- الأمر الرئيسي (System Prompt) - نسخة موجزة ومستقرة ---
 const systemInstruction = `
-You are an expert medical auditor. Your task is to generate a report in simple, clean HTML.
-The report must have the following sections in order:
-1.  \`<h4>Case Summary</h4>\` with a \`<p>\` paragraph.
-2.  \`<h4>Analysis of Uploaded Files</h4>\` with a \`<p>\` paragraph.
-3.  \`<h4>Deep Clinical Analysis</h4>\` with a \`<p>\` paragraph.
-4.  \`<h4>Table of Medications and Procedures</h4>\` with a \`<table>\` containing the columns: "Service Item" and "Insurance Decision".
-    - For each service, create one \`<tr>\` row.
-    - For the insurance decision, use a \`<span>\` with the appropriate class ('status-green', 'status-yellow', 'status-red') and clearly state the reason for yellow and red cases.
-5.  \`<h4>Detailed Analysis and Recommendations</h4>\` containing numbered \`<h5>\` subheadings (1. Essential Medical Services..., etc.) with a \`<p>\` for each.
-    - Your analysis must be deep and evidence-based as trained.
-6.  \`<h5>5. Conclusion and Final Recommendations</h5>\` with a \`<p>\` paragraph.
-7.  A final paragraph with the legal disclaimer.
+أنت خبير تدقيق طبي، مهمتك إنشاء تقرير بصيغة HTML بسيطة ومنظمة.
+يجب أن يحتوي التقرير على الأقسام التالية بالترتيب وباستخدام الوسوم المحددة:
+1.  \`<h4>ملخص الحالة</h4>\` مع فقرة \`<p>\`.
+2.  \`<h4>تحليل الملفات المرفوعة</h4>\` مع فقرة \`<p>\`.
+3.  \`<h4>التحليل السريري العميق</h4>\` مع فقرة \`<p>\`.
+4.  \`<h4>جدول الأدوية والإجراءات</h4>\` مع جدول \`<table>\` يحتوي على الأعمدة: "بند الخدمة" و "قرار التأمين".
+    - لكل خدمة، أنشئ صف \`<tr>\` واحد.
+    - لقرار التأمين، استخدم \`<span>\` مع الكلاس المناسب ('status-green', 'status-yellow', 'status-red') واذكر السبب بوضوح للحالات الصفراء والحمراء.
+5.  \`<h4>التحليل التفصيلي والتوصيات</h4>\` وبداخله العناوين الفرعية \`<h5>\` المرقمة (1. خدمات طبية ضرورية... إلخ) مع فقرة \`<p>\` لكل منها.
+    - يجب أن يكون تحليلك عميقاً ومدعوماً بالأدلة.
+6.  \`<h5>5. الخاتمة والتوصيات النهائية</h5>\` مع فقرة \`<p>\`.
+7.  فقرة أخيرة تحتوي على التنويه القانوني.
 
-Stick to this simple, clean structure. Do NOT add any CSS, \`<style>\`, \`<html>\`, or \`<body>\` tags.
+التزم بهذا الهيكل البسيط والنظيف. لا تقم بإضافة أي تنسيقات CSS أو \`<style>\` أو \`<html>\` أو \`<body>\`.
 `;
 
-// --- Gemini Content Generation ---
+// --- دالة توليد المحتوى من Gemini ---
 async function geminiGenerate(apiKey, parts) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
     const payload = {
@@ -74,11 +75,10 @@ async function geminiGenerate(apiKey, parts) {
         throw new Error(`Gemini API Error (${res.status}): ${raw}`);
     }
     const j = await res.json();
-    const text = (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```(html|json)?/gi, "").trim();
-    return text;
+    return (j?.candidates?.[0]?.content?.parts?.[0]?.text || "").replace(/```(html|json)?/gi, "").trim();
 }
 
-// --- Main API Handler ---
+// --- المعالج الرئيسي للطلب (API Handler) ---
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST']);
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
         const body = req.body || {};
         const files = Array.isArray(body.files) ? body.files : [];
 
-        // Prepare file parts for Gemini
+        // تجهيز الملفات لـ Gemini
         const filePartsPromises = files.map(async (f) => {
             try {
                 if (!f.data) return null;
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
         });
         const processedFileParts = (await Promise.all(filePartsPromises)).filter(Boolean);
 
-        // **CORRECTED: Build a rich user prompt with ALL data from the front-end**
+        // بناء prompt المستخدم بكل البيانات من الفرونت إند
         const userPrompt = `
         Please analyze the following medical case.
 
@@ -127,10 +127,10 @@ export default async function handler(req, res) {
         
         const parts = [{ text: userPrompt }, ...processedFileParts];
 
-        // Generate the report
+        // توليد التقرير
         const htmlReport = await geminiGenerate(geminiKey, parts);
 
-        // Send the final report
+        // إرسال التقرير النهائي
         return res.status(200).json({
             ok: true,
             at: nowIso(),
