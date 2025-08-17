@@ -1,438 +1,510 @@
-// pages/api/gpt.js
-// Unified Expert Analyzer (Gemini + optional OpenAI OCR)
-// Next.js Pages Router / Vercel (Node 18+)
+// /pages/api/gpt.js
+// Backend: Medical Deep Audit (Gemini OCR/vision → ChatGPT clinical audit) + HTML report
+// Runtime: Next.js API Route (Vercel, Node 18+)
 
-// ========================= ENV =========================
-// GEMINI_API_KEY   = "sk-..."   (required)
-// OPENAI_API_KEY   = "sk-..."   (optional → enables OCR for images)
-// =======================================================
+// ---------- CONFIG ----------
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini"; // fast, strong reasoning
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro"; // robust vision/long-context
+const GEMINI_GENERATE_URL = (model) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-import { createHash } from "crypto";
-
-// ------------ CONFIG ------------
-const GEMINI_MODEL = "gemini-1.5-pro-latest";
-const DEFAULT_TIMEOUT_MS = 180_000;
+const MAX_FILES_PER_REQUEST = 10;            // يدعم 10 ملفات
+const BODY_SIZE_LIMIT_MB = 25;               // يتوافق مع config أدناه
+const INLINE_LIMIT_BYTES = 18 * 1024 * 1024; // <20MB نمرر inlineData، أكبر من كذا نرفع عبر Files API
+const REQUEST_TIMEOUT_MS = 180_000;          // 3 دقائق
 const RETRY_STATUS = new Set([408, 409, 413, 429, 500, 502, 503, 504]);
 
-const MAX_FILES_PER_REQUEST = 30;
-const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024; // 4 MB
-const MAX_OCR_IMAGES = 20;
-const OCR_MODEL = "gpt-4o-mini";
-
-// ------------ IN-MEM CACHE ------------
-const fileCache = new Map();
-
-// ------------ UTILS ------------
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const nowIso = () => new Date().toISOString();
-
-function abortableFetch(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(t));
-}
-
-async function fetchWithRetry(url, options, { retries = 3, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  try {
-    const res = await abortableFetch(url, options, timeoutMs);
-    if (!res.ok && retries > 0 && RETRY_STATUS.has(res.status)) {
-      await sleep((4 - retries) * 1000);
-      return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
-    }
-    return res;
-  } catch (err) {
-    if (retries > 0) {
-      await sleep((4 - retries) * 1000);
-      return fetchWithRetry(url, options, { retries: retries - 1, timeoutMs });
-    }
-    throw err;
-  }
-}
-
-function detectMimeFromB64(b64 = "") {
-  const h = (b64 || "").slice(0, 24);
-  if (h.includes("JVBERi0")) return "application/pdf";
-  if (h.includes("iVBORw0")) return "image/png";
-  if (h.includes("/9j/")) return "image/jpeg";
-  if (h.includes("UklGR")) return "image/webp";
-  if (h.includes("R0lGOD")) return "image/gif";
-  if (h.includes("AAAAIG")) return "video/mp4";
-  return "application/octet-stream";
-}
-function getFileHash(base64Data = "") {
-  return createHash("sha256").update(base64Data).digest("hex");
-}
-function asDataUrl(mime, b64) {
-  return `data:${mime};base64,${b64}`;
-}
-function stripFences(s = "") {
-  return s.replace(/```html/gi, "").replace(/```/g, "").trim();
-}
-function escapeHtml(s = "") {
-  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-function hardHtmlEnforce(s = "") {
-  const t = stripFences(s);
-  const looksHtml = /<\/?(html|body|table|tr|td|th|ul|ol|li|h\d|p|span|div|style)\b/i.test(t);
-  if (looksHtml) return t;
-  const skin = `
-  <style>
-    .status-green { display:inline-block;background:#d4edda;color:#155724;padding:4px 10px;border-radius:15px;font-weight:bold;border:1px solid #c3e6cb }
-    .status-yellow{ display:inline-block;background:#fff3cd;color:#856404;padding:4px 10px;border-radius:15px;font-weight:bold;border:1px solid #ffeeba }
-    .status-red   { display:inline-block;background:#f8d7da;color:#721c24;padding:4px 10px;border-radius:15px;font-weight:bold;border:1px solid #f5c6cb }
-    .section-title{ color:#1e40af;font-weight:bold }
-    .critical     { color:#991b1b;font-weight:bold }
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.65;padding:6px}
-    table{width:100%;border-collapse:collapse}
-    th,td{border:1px solid #e5e7eb;padding:8px;font-size:14px}
-    thead th{background:#f3f4f6}
-  </style>`;
-  return `${skin}<pre style="white-space:pre-wrap">${escapeHtml(t)}</pre>`;
-}
-function stripTags(s = "") { return s.replace(/<[^>]*>/g, " "); }
-
-// ------------ SYSTEM PROMPT ------------
-const systemInstruction = `
-أنت استشاري "تدقيق طبي وتشغيلي" خبير عالمي. هدفك: دقة 10/10. أخرج **كتلة HTML واحدة فقط** وفق القالب.
-
-[قواعد أساسية (ملزمة)]
-- **مصدر الحقيقة**: "بيانات المريض" المرسلة يدويًا هي المرجع النهائي. إذا خالفتها الملفات، اذكر التعارض في "تحليل الملفات" لكن ابنِ القرار النهائي على بيانات المريض.
-- **Red Flags**: مدخن + سعال (خصوصًا مع دم) ⇒ أوصِ بـ **Chest X-ray** ضمن "خدمات ضرورية".
-- **توافق ديموغرافي**: راقب أخطاء الجنس/التشخيص/الدواء (مثل Duodart لأنثى ⇒ خطأ جوهري).
-
-[منهجية الدواء]
-- **Triplex ⇒ Triplixam** عند الاشتباه؛ **Form XR ⇒ Metformin XR**.
-- **كبار السن (>65)**: راقب نقص السكر مع Sulfonylurea (مثل Diamicron) وخطر السقوط مع ≥2 خافضات ضغط.
-- **أمان محدد**:
-  - **Metformin XR**: "مضاد استطباب إذا eGFR < 30".
-  - **ACEI + ARB معًا** (Perindopril في Triplixam + Valsartan في Co-Taburan): **ممنوع**.
-  - **ازدواجية المواد**: إذا وُجد Amlodipine منفصلًا ومع Triplixam ⇒ ازدواجية.
-
-[قواعد الفحوص/الإجراءات (تأمينية)]
-- أدخل كل عنصر يظهر من مستخلص OCR كصف في الجدول.
-- **Dengue Ab IgG**: إن **لم تُذكر** حُمّى أو **سفر إلى منطقة موبوءة** في بيانات المريض/الأعراض، فالقرار **إلزاميًا**: <span class='status-yellow'>⚠️ قابل للمراجعة: يحتاج NS1/NAAT أو IgM للتشخيص الحاد.</span>
-- **Nebulizer/Inhaler (خارجية)**: <span class='status-yellow'>⚠️ قابل للمراجعة: لزوم أعراض تنفسية موثقة.</span>
-- **Pantoprazole IV / Normal Saline IV / I.V infusion only / Primperan IV / Paracetamol IV** (حالات خارجية) ⇒ <span class='status-yellow'>⚠️ قابل للمراجعة: استخدم فقط مع مؤشرات واضحة.</span>
-- تحاليل روتينية للسكري/الضغط (CBC, Creatinine/eGFR, Urea, ALT/SGPT, HbA1c, Lipids, CRP, Urine) ⇒ <span class='status-green'>✅ مقبول</span>.
-
-[قائمة تحاليل إلزامية عند تواجد الأدوية المعيّنة]
-- **Metformin XR**: eGFR/Creatinine قبل البدء ودوريًا + **B12** للاستخدام الطويل.
-- **Co-Taburan/Triplixam**: **K+** و **Creatinine** بعد 1–2 أسبوع من البدء/تعديل الجرعة.
-- **Statin (Rozavi)**: **ALT/AST** بدايةً وعند الأعراض.
-- **هشاشة العظام**: **25-OH Vitamin D**.
-
-[البنية]
-<style>
-  .status-green { display:inline-block;background:#d4edda;color:#155724;padding:4px 10px;border-radius:15px;font-weight:bold;border:1px solid #c3e6cb }
-  .status-yellow{ display:inline-block;background:#fff3cd;color:#856404;padding:4px 10px;border-radius:15px;font-weight:bold;border:1px solid #ffeeba }
-  .status-red   { display:inline-block;background:#f8d7da;color:#721c24;padding:4px 10px;border-radius:15px;font-weight:bold;border:1px solid #f5c6cb }
-  .section-title{ color:#1e40af;font-weight:bold }
-  .critical     { color:#991b1b;font-weight:bold }
-  table{width:100%;border-collapse:collapse}
-  th,td{border:1px solid #e5e7eb;padding:8px}
-  thead th{background:#f3f4f6}
-</style>
-<h3>تقرير التدقيق الطبي والمطالبات التأمينية</h3>
-<h4>ملخص الحالة</h4><h4>تحليل الملفات المرفوعة</h4><h4>التحليل السيريري العميق</h4>
-<h4>جدول الأدوية والإجراءات</h4>
-<table><thead><tr>
-<th>الدواء/الإجراء (مع درجة الثقة)</th><th>الجرعة الموصوفة</th><th>الجرعة الصحيحة المقترحة</th><th>التصنيف</th><th>الغرض الطبي</th><th>التداخلات</th><th>درجة الخطورة (%)</th><th>قرار التأمين</th>
-</tr></thead><tbody></tbody></table>
-<h4 class="section-title">خدمات طبية ضرورية ومقبولة تأمينياً (مدعومة بالأدلة العلمية)</h4>
-<h5 class="critical">تعديلات دوائية حرجة (Urgent Medication Adjustments)</h5>
-<ul></ul>
-<h5>تحاليل مخبرية ضرورية (Essential Lab Tests)</h5>
-<ul></ul>
-<h5>متابعة وفحوصات دورية (Routine Monitoring & Tests)</h5>
-<ul></ul>
-<p><strong>الخاتمة:</strong> هذا التقرير لا يغني عن المراجعة السريرية.</p>
-`;
-
-// ------------ USER PROMPT BUILDER ------------
-function buildUserPrompt(d = {}) {
-  return `
-**بيانات المريض (مرجِع التحليل):**
-العمر: ${d.age ?? "غير محدد"}
-الجنس: ${d.gender ?? "غير محدد"}
-هل المريض مدخن؟: ${d.isSmoker ? "نعم" : (d.isSmoker === false ? "لا" : "غير محدد")}
-باك-سنة: ${d.packYears ?? "غير محدد"}
-وصف الحالة/الأعراض: ${d.notes || "—"}
-أمراض مُدرجة: ${Array.isArray(d.problems) ? d.problems.join(", ") : "—"}
-
-**نص الأدوية/الإجراءات من المستخدم:** ${d.medications || "—"}
-**عدد الملفات المرفوعة:** ${Array.isArray(d.files) ? d.files.length : 0}
-
-[تعليمات المخرجات]
-- أخرج HTML واحد فقط، دون كتل كود.
-- إذا تعارضت بيانات الملفات مع "بيانات المريض" أعلاه فاذكر التعارض لكن اتّبع "بيانات المريض" في الاستنتاج النهائي.
-`;
-}
-
-// ------------ OPENAI OCR (اختياري للصور) ------------
-async function ocrWithOpenAI(openaiKey, files) {
-  const IMG = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-  const candidates = files
-    .filter((f) => IMG.has(f.type || detectMimeFromB64(f.data)))
-    .slice(0, MAX_OCR_IMAGES);
-
-  if (!candidates.length) return "";
-
-  const images = candidates.map((f) => ({
-    type: "image_url",
-    image_url: { url: asDataUrl(f.type || detectMimeFromB64(f.data), f.data) },
-  }));
-
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OCR_MODEL,
-        temperature: 0.1,
-        max_tokens: 2000,
-        messages: [
-          { role: "system", content: "استخرج نصًا واضحًا سطرًا بسطر من صور طلبات/فواتير/وصفات طبية (الخدمات، التحاليل، الأدوية والجرعات). اكتب بالعربية قدر الإمكان وأبقِ الكلمات الإنجليزية كما هي." },
-          { role: "user", content: images },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      console.warn("OpenAI OCR error:", res.status, t.slice(0, 200));
-      return "";
-    }
-    const j = await res.json();
-    return (j?.choices?.[0]?.message?.content || "").trim();
-  } catch (e) {
-    console.warn("OpenAI OCR exception:", e.message);
-    return "";
-  }
-}
-
-// ------------ GEMINI FILES (simple + resumable) ------------
-async function geminiUploadSimple(apiKey, base64Data, mime) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/files?key=${apiKey}`;
-  const buf = Buffer.from(base64Data, "base64");
-  const res = await fetchWithRetry(url, { method: "POST", headers: { "Content-Type": mime }, body: buf });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Gemini simple upload failed (${res.status}): ${t.slice(0, 300)}`);
-  }
-  const j = await res.json();
-  return j?.file?.uri || j?.uri || null;
-}
-
-async function geminiUploadResumable(apiKey, base64Data, mime) {
-  const buf = Buffer.from(base64Data, "base64");
-  // Start session
-  const start = await fetchWithRetry(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
-    method: "POST",
-    headers: {
-      "X-Goog-Upload-Protocol": "resumable",
-      "X-Goog-Upload-Command": "start",
-      "X-Goog-Upload-Header-Content-Length": String(buf.byteLength),
-      "X-Goog-Upload-Header-Content-Type": mime,
-      "Content-Type": "application/json; charset=UTF-8",
+// ---------- NEXT CONFIG ----------
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: `${BODY_SIZE_LIMIT_MB}mb`,
     },
-    body: JSON.stringify({ file: { mimeType: mime, displayName: "upload" } }),
-  });
-  if (!start.ok) {
-    const t = await start.text().catch(() => "");
-    throw new Error(`Gemini resumable start failed (${start.status}): ${t.slice(0, 300)}`);
-  }
-  const uploadUrl = start.headers.get("X-Goog-Upload-URL");
-  if (!uploadUrl) throw new Error("Missing X-Goog-Upload-URL");
+  },
+};
 
-  // Upload bytes + finalize
-  const up = await fetchWithRetry(uploadUrl, {
+// ---------- UTILITIES ----------
+const withTimeout = (p, ms = REQUEST_TIMEOUT_MS) =>
+  Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+  ]);
+
+const isDataUrl = (s = "") => s.startsWith("data:");
+const normalizeBase64 = (s = "") =>
+  isDataUrl(s) ? s.substring(s.indexOf("base64,") + 7) : s;
+const bytesFromBase64 = (b64) => Buffer.from(b64, "base64");
+const safeJson = (s) => {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+};
+
+const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+// ---------- GEMINI FILES API (RESUMABLE UPLOAD) ----------
+async function geminiUploadFile({ buffer, mimeType, displayName }) {
+  // REST resumable upload (see Google Gemini Files API docs)
+  const startRes = await fetch(
+    "https://generativelanguage.googleapis.com/upload/v1beta/files",
+    {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": GEMINI_API_KEY,
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": String(buffer.byteLength),
+        "X-Goog-Upload-Header-Content-Type": mimeType,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ file: { display_name: displayName || "FILE" } }),
+    }
+  );
+
+  if (!startRes.ok) {
+    const t = await startRes.text();
+    throw new Error(`Gemini upload start failed: ${startRes.status} ${t}`);
+  }
+
+  const uploadUrl = startRes.headers.get("x-goog-upload-url");
+  if (!uploadUrl) throw new Error("Gemini upload url missing");
+
+  const finalizeRes = await fetch(uploadUrl, {
     method: "POST",
     headers: {
-      "Content-Type": mime,
+      "Content-Length": String(buffer.byteLength),
       "X-Goog-Upload-Offset": "0",
       "X-Goog-Upload-Command": "upload, finalize",
     },
-    body: buf,
+    body: buffer,
   });
-  if (!up.ok) {
-    const t = await up.text().catch(() => "");
-    throw new Error(`Gemini resumable upload failed (${up.status}): ${t.slice(0, 300)}`);
+
+  if (!finalizeRes.ok) {
+    const t = await finalizeRes.text();
+    throw new Error(`Gemini upload finalize failed: ${finalizeRes.status} ${t}`);
   }
-  const j = await up.json();
-  return j?.file?.uri || j?.uri || null;
+
+  const info = await finalizeRes.json(); // { file: { name, uri, mimeType, ... } }
+  const file = info.file || info; // some SDK/REST variants
+  return { fileUri: file.uri, mimeType: file.mimeType || mimeType, name: file.name };
 }
 
-async function geminiUpload(apiKey, base64Data, mime) {
-  try {
-    return await geminiUploadSimple(apiKey, base64Data, mime);
-  } catch (e1) {
-    console.warn("Simple upload failed, trying resumable…", e1.message);
-    return await geminiUploadResumable(apiKey, base64Data, mime);
-  }
-}
+// ---------- GEMINI OCR / VISION EXTRACTION ----------
+async function geminiExtractBundle({ userText, files, patientInfo }) {
+  // Build parts: prefer inlineData for <20MB, else upload and use file_data
+  const parts = [];
 
-// ------------ GEMINI ANALYZE ------------
-async function geminiAnalyze(apiKey, parts) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const payload = {
-    contents: [{ role: "user", parts }],
-    generationConfig: { temperature: 0.2, topP: 0.9, topK: 40, maxOutputTokens: 8192 },
-  };
-  const res = await fetchWithRetry(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const raw = await res.text();
-  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${raw.slice(0, 600)}`);
-  try {
-    const j = JSON.parse(raw);
-    const text = (j?.candidates?.[0]?.content?.parts || [])
-      .map((p) => p?.text || "")
-      .filter(Boolean)
-      .join("\n");
-    return hardHtmlEnforce(text);
-  } catch { return hardHtmlEnforce(raw); }
-}
+  // Add files (images/pdf/ct/xray). Each item: { mimeType, data (base64) , name? }
+  for (let i = 0; i < Math.min(files.length, MAX_FILES_PER_REQUEST); i++) {
+    const f = files[i];
+    const mimeType = f?.mimeType || "application/octet-stream";
+    const base64 = normalizeBase64(f?.data || "");
+    const buf = bytesFromBase64(base64);
 
-// ------------ Dengue Context & Post-Processing Override ------------
-const DENGUE_TRIGGERS = [
-  "حمى", "سخونة", "ارتفاع الحرارة", "fever",
-  "سفر إلى", "travel to",
-  "منطقة موبوءة", "endemic area",
-  // أمثلة مناطق/دول موبوءة (يمكن توسيعها)
-  "إندونيسيا","الفلبين","تايلاند","ماليزيا","الهند","بنغلاديش",
-  "البرازيل","المكسيك","بيرو","كولومبيا","فيتنام","سريلانكا","سنغافورة"
-];
+    if (!base64 || !buf?.length) continue;
 
-function hasAcuteDengueContext(body = {}, ocrText = "", modelHtml = "") {
-  const bag = [
-    body.notes || "",
-    Array.isArray(body.problems) ? body.problems.join(" ") : "",
-    ocrText || "",
-    stripTags(modelHtml || "")
-  ].join(" ").toLowerCase();
-  return DENGUE_TRIGGERS.some(w => bag.includes(w.toLowerCase()));
-}
-
-function forceDengueRule(html = "", body = {}, ocrText = "") {
-  // لو فيه سياق حاد (حمّى/سفر لمنطقة موبوءة) اترك تقرير النموذج كما هو
-  if (hasAcuteDengueContext(body, ocrText, html)) return html;
-
-  // امسح أي شارة قرار سابقة داخل الصف المختار
-  const removeBadges = (row) =>
-    row.replace(/<span class="status-[^"]+">[\s\S]*?<\/span>/gi, "").replace(/✅|❌/g, "");
-
-  const caution = `<span class="status-yellow">⚠️ قابل للمراجعة: يحتاج مبرر سريري (حمّى/تعرض) ويفضّل NS1/NAAT أو IgM للتشخيص الحاد.</span>`;
-
-  // مرّ على كل الصفوف وابحث عن صف يحتوي Dengue + IgG حتى لو مفصولين بعناصر HTML
-  return html.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
-    const plain = stripTags(row).toLowerCase();
-    const hasDengue = /(dengue|الضنك|حمى الضنك)/i.test(plain);
-    const hasIgG = /\bigg\b/i.test(plain);
-    if (!hasDengue || !hasIgG) return row;
-
-    let cleaned = removeBadges(row);
-    // استبدل محتوى آخر خلية <td> (إن وجدت) بالقرار الأصفر، وإلا أضِف خلية قرار
-    const tds = cleaned.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi);
-    if (tds && tds.length) {
-      const lastTd = tds[tds.length - 1];
-      const replacedLast = lastTd.replace(/(<td\b[^>]*>)[\s\S]*?(<\/td>)/i, `$1${caution}$2`);
-      cleaned = cleaned.replace(lastTd, replacedLast);
+    const useInline = buf.byteLength <= INLINE_LIMIT_BYTES && mimeType !== "application/pdf";
+    if (useInline) {
+      parts.push({
+        inline_data: { data: base64, mime_type: mimeType },
+      });
     } else {
-      cleaned = cleaned.replace(/<\/tr>/i, `<td>${caution}</td></tr>`);
+      // large or PDF → Files API
+      const uploaded = await geminiUploadFile({
+        buffer: buf,
+        mimeType,
+        displayName: f?.name || `doc_${i + 1}`,
+      });
+      parts.push({
+        file_data: {
+          file_uri: uploaded.fileUri,
+          mime_type: uploaded.mimeType,
+        },
+      });
     }
-    return cleaned;
-  });
+  }
+
+  // Include a clear extraction instruction (Arabic-first, fallback English).
+  const systemInstruction =
+    "أنت نظام OCR/رؤية طبية احترافي. استخرج بدقة عالية كل النصوص الطبية، الأدوية بجرعاتها ومددها، الإجراءات، الفحوصات، التشخيصات، العلامات الحيوية، وتعليقات الأشعة من جميع الملفات المرفوعة (صور/‏PDF/‏أشعّة). لا تُحلّل ولا تبدي رأيًا سريريًا هنا؛ فقط أعِد نصًا قابلًا للبحث + نقاط موجزة لنتائج الأشعة إذا وُجدت. إذا تعارضت ورقة مع أخرى، اذكر كلا السطرين كما هو دون ترجيح.";
+
+  const extractionPrompt =
+    [
+      "Extract ALL textual/clinical content from the attached files.",
+      "Return as clean plain text (Arabic if source is Arabic, else English).",
+      "If medical imaging is present (X-ray/CT/MRI), include a short bullet list of key visual findings.",
+      "Do NOT hallucinate. If unreadable handwriting, mark as [UNREADABLE SEGMENT].",
+      "",
+      "Also echo back the original user free-text below to allow later contradiction checks:",
+      "---- USER_FREE_TEXT_START ----",
+      userText || "(none)",
+      "---- USER_FREE_TEXT_END ----",
+      "",
+      "Patient context (may help with abbreviated terms):",
+      JSON.stringify(patientInfo || {}, null, 2),
+    ].join("\n");
+
+  const body = {
+    systemInstruction: { role: "system", parts: [{ text: systemInstruction }] },
+    contents: [
+      {
+        role: "user",
+        parts: [
+          // files first (per Gemini best-practice)
+          ...parts,
+          { text: extractionPrompt },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.2,
+    },
+  };
+
+  const url = `${GEMINI_GENERATE_URL(GEMINI_MODEL)}?key=${encodeURIComponent(
+    GEMINI_API_KEY
+  )}`;
+
+  // Retry wrapper
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const resp = await withTimeout(fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })).catch((e) => ({ ok: false, status: 599, _err: e }));
+
+    if (resp.ok) {
+      const json = await resp.json();
+      const text =
+        json?.candidates?.[0]?.content?.parts
+          ?.map((p) => p?.text)
+          ?.filter(Boolean)
+          ?.join("\n") || "";
+      return text.trim();
+    }
+    if (!RETRY_STATUS.has(resp.status)) {
+      const t = resp._err ? String(resp._err) : await resp.text().catch(() => "");
+      throw new Error(`Gemini extraction failed: ${resp.status} ${t}`);
+    }
+  }
+  throw new Error("Gemini extraction failed after retries");
 }
 
-// ------------ API HANDLER ------------
+// ---------- OPENAI DEEP AUDIT (STRUCTURED JSON) ----------
+function buildOpenAIInstructions(mode = "clinical_audit") {
+  // Arabic-first instruction; ensure strict JSON-only with keys we expect.
+  const goal =
+    mode === "patient_consult"
+      ? "قدّم مراجعة مبسّطة للمريض مع تحذيرات واضحة."
+      : "أجرِ تدقيقًا طبيًا تأمينيًا مهنيًا بدقّة عالية.";
+
+  return `
+أنت استشاري تدقيق طبي وتأمين صحي Senior. ${goal}
+حلّل: معلومات المريض، النص الحرّ، ونصوص الملفات المستخرجة (OCR) بما فيها النتائج/الأدوية/الإجراءات/الأشعّة.
+إيجابيات: التزم بالدليل، لا تُدخل افتراضات.
+أنتج JSON واحد فقط بالمفاتيح أدناه، بلا أي نص خارج JSON:
+
+{
+  "patientSummary": {
+    "ageYears": number|null,
+    "gender": "ذكر"|"أنثى"|null,
+    "pregnant": { "isPregnant": boolean, "gestationalWeeks": number|null }|null,
+    "smoking": { "status": "مدخن"|"غير مدخن"|"سابق", "packYears": number|null }|null,
+    "diabetes": { "has": boolean, "type": "1"|"2"|null, "durationYears": number|null }|null,
+    "chronicConditions": string[] // كلى/كبد/قلب/ربو/الخ...
+  },
+  "diagnosis": string[],
+  "symptoms": string[],
+  "contradictions": string[], // أي تعارضات بين النصوص والملفات أو بين الحالة والعلاج/الإجراء
+  "table": [
+    {
+      "name": string,                // اسم الدواء/الإجراء
+      "doseRegimen": string|null,    // الجرعة/المدّة/التكرار إن وُجد
+      "conflicts": string[],         // تعارضات (دواء-دواء/دواء-حالة/إجراء غير مبرر)
+      "riskPercent": number,         // 0-100
+      "insuranceDecision": {
+        "label": "مقبول"|"قابل للرفض"|"مرفوض",
+        "justification": string      // تبرير مهني قوي محدّد
+      }
+    }
+  ],
+  "missingActions": string[],        // ما كان ينبغي فعله ولم يتم (تحاليل/إحالات/متابعة)
+  "referrals": [                     // الإحالات وما سيقوم به التخصص
+    {
+      "specialty": string,           // مثال: "عيون"
+      "whatToDo": string[]           // مثل: OCT, fundoscopy, ... مع السبب
+    }
+  ],
+  "financialInsights": string[],     // فرص رفع الدخل بتقليل الرفض (إجراءات ضرورية مفقودة)
+  "conclusion": string               // خاتمة تُذكّر بأن التقرير لا يغني عن الفحص الإكلينيكي
+}
+التزم بالتالي:
+- لا تُنشئ بيانات غير واردة ضمن النص/الملفات، وإن لزم ضع null أو حقل خالٍ.
+- املأ "justification" بتعليل سريري/تأميني محدد (ليس عاماً).
+- "riskPercent": رقم صحيح 0-100 (≥75=خطر عالٍ/مرفوض، 60-74=قابل للرفض، <60=مقبول).
+- إذا وُجد تصوير أشعّة مخالف للوصف السريري، أضف ذلك في "contradictions".
+ONLY JSON.`;
+}
+
+async function openaiAuditToJSON({ bundle, mode = "clinical_audit" }) {
+  const system = buildOpenAIInstructions(mode);
+  const messages = [
+    { role: "system", content: system },
+    {
+      role: "user",
+      content:
+        "المعطيات الموحدة لتحليلك:\n" +
+        JSON.stringify(bundle, null, 2),
+    },
+  ];
+
+  // Structured (json_object) guarantees valid JSON string
+  const resp = await withTimeout(
+    fetch(OPENAI_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        response_format: { type: "json_object" },
+        messages,
+        temperature: 0.2,
+      }),
+    })
+  );
+  if (!resp.ok) {
+    const t = await resp.text();
+    throw new Error(`OpenAI audit failed: ${resp.status} ${t}`);
+  }
+  const data = await resp.json();
+  const content =
+    data?.choices?.[0]?.message?.content ||
+    data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ||
+    "";
+  const json = safeJson(content);
+  if (!json) {
+    throw new Error("OpenAI returned non-JSON content");
+  }
+  return json;
+}
+
+// ---------- HTML RENDERING ----------
+function styleTag() {
+  return `
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Tahoma, Arial; line-height: 1.6; color: #111; }
+  h1,h2 { margin: 0.6rem 0; }
+  .muted { color:#555; }
+  .section { margin: 1.2rem 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+  th { background:#f5f5f5; }
+  tr.risk-red { background: #fadde1; }     /* ≥75% */
+  tr.risk-yellow { background: #fff2b3; }  /* 60-74% */
+  tr.risk-green { background: #d9f2e3; }   /* <60% */
+  .badge { display:inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+  .b-red { background:#e53935; color:#fff; }
+  .b-yellow { background:#f9a825; color:#000; }
+  .b-green { background:#2e7d32; color:#fff; }
+  .disclaimer { font-size: 12px; color:#666; margin-top: 8px; }
+  .kvs { display:flex; flex-wrap:wrap; gap:8px; }
+  .kv { background:#fafafa; border:1px solid #eee; border-radius:8px; padding:6px 10px; }
+</style>`;
+}
+
+function riskClass(r) {
+  if (r >= 75) return "risk-red";
+  if (r >= 60) return "risk-yellow";
+  return "risk-green";
+}
+function riskBadge(r) {
+  if (r >= 75) return `<span class="badge b-red">${r}%</span>`;
+  if (r >= 60) return `<span class="badge b-yellow">${r}%</span>`;
+  return `<span class="badge b-green">${r}%</span>`;
+}
+
+function renderPatientSummary(ps = {}) {
+  const rows = [];
+  const sex = ps.gender ?? "غير محدد";
+  const preg =
+    ps?.pregnant?.isPregnant
+      ? `حامل (${ps.pregnant.gestationalWeeks ?? "?"} أسابيع)`
+      : "غير حامل/غير منطبق";
+  const smoking = ps?.smoking
+    ? `${ps.smoking.status}${ps.smoking.packYears ? `، ${ps.smoking.packYears} pack-years` : ""}`
+    : "غير محدد";
+  const diabetes = ps?.diabetes
+    ? ps.diabetes.has
+      ? `نعم (نوع ${ps.diabetes.type || "?"}، منذ ${ps.diabetes.durationYears ?? "?"} سنة)`
+      : "لا"
+    : "غير محدد";
+  const chronic = (ps.chronicConditions || []).join("، ") || "لا يوجد/غير مذكور";
+
+  rows.push(`<div class="kv"><b>العمر:</b> ${ps.ageYears ?? "غير محدد"}</div>`);
+  rows.push(`<div class="kv"><b>الجنس:</b> ${sex}</div>`);
+  rows.push(`<div class="kv"><b>الحمل:</b> ${preg}</div>`);
+  rows.push(`<div class="kv"><b>التدخين:</b> ${smoking}</div>`);
+  rows.push(`<div class="kv"><b>السكري:</b> ${diabetes}</div>`);
+  rows.push(`<div class="kv"><b>أمراض مزمنة:</b> ${chronic}</div>`);
+
+  return `<div class="kvs">${rows.join("")}</div>`;
+}
+
+function renderHtmlReport(json) {
+  const diag = (json.diagnosis || []).map((d) => `<li>${d}</li>`).join("") || "<li>—</li>";
+  const sx = (json.symptoms || []).map((d) => `<li>${d}</li>`).join("") || "<li>—</li>";
+  const ctr = (json.contradictions || []).map((d) => `<li>${d}</li>`).join("") || "<li>لا توجد تعارضات صريحة مذكورة.</li>";
+
+  const rows =
+    (json.table || [])
+      .map((r) => {
+        const rp = clamp(parseInt(r.riskPercent ?? 0, 10), 0, 100);
+        const klass = riskClass(rp);
+        const conflicts =
+          (r.conflicts || []).length ? r.conflicts.join("؛ ") : "لا يوجد";
+        const decision = r?.insuranceDecision?.label || "—";
+        const why = r?.insuranceDecision?.justification || "—";
+        return `<tr class="${klass}">
+          <td>${r.name || "—"}</td>
+          <td>${r.doseRegimen || "—"}</td>
+          <td>${conflicts}</td>
+          <td>${riskBadge(rp)}</td>
+          <td><b>${decision}</b><br/><span class="muted">${why}</span></td>
+        </tr>`;
+      })
+      .join("") || `<tr><td colspan="5">لا بيانات</td></tr>`;
+
+  const miss = (json.missingActions || []).map((x) => `<li>${x}</li>`).join("") || "<li>—</li>";
+  const refs =
+    (json.referrals || [])
+      .map(
+        (r) =>
+          `<li><b>${r.specialty}:</b> ${(r.whatToDo || []).join("، ") || "—"}</li>`
+      )
+      .join("") || "<li>—</li>";
+  const fins = (json.financialInsights || []).map((x) => `<li>${x}</li>`).join("") || "<li>—</li>";
+
+  return `
+${styleTag()}
+<h1>تقرير التدقيق الطبي</h1>
+<div class="muted">HTML جاهز للعرض والتصدير PDF</div>
+
+<div class="section">
+  <h2>ملخص الحالة</h2>
+  ${renderPatientSummary(json.patientSummary || {})}
+  <h3>التشخيص</h3>
+  <ul>${diag}</ul>
+  <h3>الأعراض</h3>
+  <ul>${sx}</ul>
+</div>
+
+<div class="section">
+  <h2>التناقضات الطبية</h2>
+  <ul>${ctr}</ul>
+</div>
+
+<div class="section">
+  <h2>الجدول الطبي (أدوية/إجراءات)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>الدواء/الإجراء</th>
+        <th>الجرعة/المدة</th>
+        <th>التعارضات</th>
+        <th>الخطورة (%)</th>
+        <th>قرار التأمين (مع التبرير)</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>الإجراءات المفقودة</h2>
+  <ul>${miss}</ul>
+</div>
+
+<div class="section">
+  <h2>الإحالات الطبية</h2>
+  <ul>${refs}</ul>
+</div>
+
+<div class="section">
+  <h2>التحليل المالي</h2>
+  <ul>${fins}</ul>
+</div>
+
+<div class="section">
+  <h2>الخاتمة</h2>
+  <p>${json.conclusion || "هذا التقرير آلي ولا يغني عن الفحص الإكلينيكي المباشر ومطابقة الحالة."}</p>
+  <p class="disclaimer">⚠️ هذا التقرير لا يغني عن الفحص الإكلينيكي ومطابقة الحالة مع السجل الطبي.</p>
+</div>
+`;
+}
+
+// ---------- API HANDLER ----------
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-
-  const startedAt = Date.now();
-
   try {
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) throw new Error("GEMINI_API_KEY missing");
-    const openaiKey = process.env.OPENAI_API_KEY || null;
-
-    const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES_PER_REQUEST) : [];
-
-    // 1) OCR (اختياري للصور فقط)
-    let ocrText = "";
-    if (openaiKey && files.length) {
-      try { ocrText = await ocrWithOpenAI(openaiKey, files); }
-      catch (e) { console.warn("OCR skipped:", e.message); }
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      return res.status(200).end();
     }
 
-    // 2) تجهيز ملفات Gemini (inline أو رفع عبر Files API)
-    const filePartsPromises = files.map(async (f) => {
-      try {
-        const base64 = f?.data || "";
-        if (!base64) return null;
-        const mime = f.type || detectMimeFromB64(base64);
-        const hash = getFileHash(base64);
-        if (fileCache.has(hash)) return fileCache.get(hash);
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
 
-        const buf = Buffer.from(base64, "base64");
-        let part;
-        if (buf.byteLength > MAX_INLINE_FILE_BYTES) {
-          const uri = await geminiUpload(geminiKey, base64, mime);
-          part = { file_data: { mime_type: mime, file_uri: uri } };
-        } else {
-          part = { inline_data: { mime_type: mime, data: base64 } };
-        }
-        if (fileCache.size > 256) fileCache.clear();
-        fileCache.set(hash, part);
-        return part;
-      } catch (e) {
-        console.warn(`File processing failed (${f?.name || "file"}):`, e.message);
-        return null;
-      }
-    });
-    const processedFileParts = (await Promise.all(filePartsPromises)).filter(Boolean);
+    const { text, files = [], patientInfo = {}, mode = "clinical_audit", returnJson = true } =
+      req.body || {};
 
-    // 3) بناء أجزاء الطلب
-    const parts = [{ text: systemInstruction }, { text: buildUserPrompt(body) }];
-    if (processedFileParts.length) parts.push(...processedFileParts);
-    if (ocrText) parts.push({ text: `### OCR Extracted Texts\n${ocrText}` });
+    if (!process.env.OPENAI_API_KEY || !GEMINI_API_KEY) {
+      return res.status(500).json({
+        error:
+          "Missing API keys. Set OPENAI_API_KEY and GEMINI_API_KEY as environment variables.",
+      });
+    }
 
-    // 4) استدعاء Gemini
-    const htmlReportRaw = await geminiAnalyze(geminiKey, parts);
+    // Validate files
+    if (!Array.isArray(files) || files.length > MAX_FILES_PER_REQUEST) {
+      return res
+        .status(400)
+        .json({ error: `Attach 0–${MAX_FILES_PER_REQUEST} files.` });
+    }
 
-    // 5) تطبيق قاعدة Dengue IgG القسرية (robust)
-    const htmlReport = forceDengueRule(htmlReportRaw, body, ocrText);
+    // 1) OCR/Vision extraction (Gemini)
+    const extractedText = files.length
+      ? await geminiExtractBundle({ userText: text || "", files, patientInfo })
+      : (text || "");
 
-    const elapsedMs = Date.now() - startedAt;
+    // 2) Build unified bundle → OpenAI deep audit → JSON
+    const bundle = {
+      patientInfo,
+      userFreeText: text || "",
+      filesExtractedText: extractedText || "",
+    };
+
+    const structured = await openaiAuditToJSON({ bundle, mode });
+
+    // 3) Render HTML with strong color coding & explicit justification
+    const html = renderHtmlReport(structured);
+
+    // Response: HTML + (optional) structured JSON for research/analytics
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
     return res.status(200).json({
       ok: true,
-      at: nowIso(),
-      htmlReport,
-      meta: {
-        model: GEMINI_MODEL,
-        filesReceived: files.length,
-        filesAttachedToModel: processedFileParts.length,
-        usedOCR: Boolean(ocrText),
-        elapsedMs,
-      },
+      html,
+      ...(returnJson ? { structured } : {}),
     });
   } catch (err) {
-    console.error("Server error:", err);
-    return res.status(500).json({
-      ok: false,
-      at: nowIso(),
-      error: "Internal server error",
-      detail: err?.message || String(err),
-    });
+    console.error("API error:", err);
+    return res.status(500).json({ error: String(err?.message || err) });
   }
 }
-
-export const config = {
-  api: { bodyParser: { sizeLimit: "12mb" } },
-};
