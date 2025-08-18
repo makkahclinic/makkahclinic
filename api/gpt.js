@@ -2,7 +2,6 @@
 // Backend: Gemini OCR/Vision → ChatGPT clinical audit (JSON) → HTML report
 // Runtime: Next.js API Route (Vercel, Node 18+)
 
-// ===== Route config =====
 export const config = {
   api: { bodyParser: { sizeLimit: "50mb" } },
 };
@@ -94,29 +93,40 @@ async function geminiSummarize({ text, files }) {
   return out;
 }
 
-// ===== Audit instructions (all rules inside AI) =====
+// ===== Audit instructions =====
 function auditInstructions(){ return `
 أنت استشاري تدقيق طبي وتأميني. حلّل معطيات المريض + النص الحر + الخلاصة من OCR.
-اعتمد على المصادر العلمية (WHO / CDC / Medscape). 
-أخرج JSON فقط وفق المخطط:
+
+استند إلى المراجع الطبية العالمية الحديثة عند الحكم، بما في ذلك:
+- WHO, CDC, NIH, NHS, SFDA, FDA, EMA
+- PubMed, Cochrane Library, UpToDate, Mayo Clinic
+- NEJM, The Lancet, JAMA, BMJ, Nature, Science
+- Harrison’s Internal Medicine, Gray’s Anatomy
+- Micromedex, Lexicomp, BNF, DailyMed, USP
+- IDSA, ADA, AHA/ACC, NCCN, KDIGO, GOLD, GINA, EULAR, ACS, ACP
+- WHO Essential Medicines List, ICD-11, SNOMED CT
+- النشرات الدوائية الرسمية (Package Inserts)
+
+مطلوب منك:
+- تبرير كل قرار (مقبول / قابل للرفض / مرفوض) بجملة سريرية قوية تستند إلى هذه المراجع.
+- وضع riskPercent واقعي (0–100) بالألوان:
+  ✅ أخضر (<60)  ⚠️ أصفر (60–74)  ❌ أحمر (≥75)
+- إبراز التعارضات والتكرارات بوضوح.
+- ذكر الإجراءات/التحاليل الناقصة التي كان يجب طلبها.
+- تقديم استنتاج نهائي (الخاتمة) يوضح ما يلزم لتحسين الخدمة الطبية وزيادة دخل العيادة.
+
+أخرج JSON فقط وبدون أي نص خارجه وفق المخطط التالي:
 {
- "patientSummary": {...},
- "diagnosis": [...],
- "symptoms": [...],
- "contradictions": [...],
- "table": [
-   {"name":string,"itemType":"lab"|"medication"|"procedure"|"device"|"imaging","doseRegimen":string|null,"intendedIndication":string|null,"isIndicationDocumented":boolean,"conflicts":string[],"riskPercent":number,"insuranceDecision":{"label":"مقبول"|"قابل للرفض"|"مرفوض","justification":string}}
- ],
- "missingActions": [...],
- "referrals": [...],
- "financialInsights": [...],
- "conclusion": string
+  "patientSummary": {...},
+  "diagnosis": [...],
+  "symptoms": [...],
+  "contradictions": [...],
+  "table": [...],
+  "missingActions": [...],
+  "referrals": [...],
+  "financialInsights": [...],
+  "conclusion": string
 }
-IMPORTANT rules:
-- إذا كان طلب Dengue IgG فقط → ضع القرار "قابل للرفض" مع التبرير:
-"تحليل Dengue IgG لوحده لا يثبت عدوى حالية. يحتاج IgM أو NS1."
-- إذا كان IgM أو NS1 موجود → القرار "مقبول" لتشخيص عدوى حادة.
-- التبريرات يجب أن تكون سريرية قوية وليست عامة.
 `; }
 
 // ===== ChatGPT call =====
@@ -141,24 +151,52 @@ async function chatgptJSON(bundle, extra=[]) {
 }
 
 // ===== HTML rendering =====
-function colorCell(p){ if(p>=75) return 'style="background:#fee2e2;border:1px solid #fecaca"'; if(p>=60) return 'style="background:#fff7ed;border:1px solid #ffedd5"'; return 'style="background:#ecfdf5;border:1px solid #d1fae5"'; }
+function colorCell(p){ 
+  if(p>=75) return 'style="background:#fee2e2;border:1px solid #fecaca"'; // أحمر
+  if(p>=60) return 'style="background:#fff7ed;border:1px solid #ffedd5"'; // أصفر
+  return 'style="background:#ecfdf5;border:1px solid #d1fae5"';           // أخضر
+}
+
 function toHtml(s){
   const rows = (s.table||[]).map(r=>
-    `<tr><td>${r.name||"-"}</td><td>${r.itemType||"-"}</td><td>${r.doseRegimen||"-"}</td>
-    <td>${r.intendedIndication||"-"}</td><td>${r.isIndicationDocumented?"نعم":"لا"}</td>
-    <td>${(r.conflicts||[]).join('<br>')||"-"}</td>
-    <td ${colorCell(r.riskPercent||0)}><b>${Math.round(r.riskPercent||0)}%</b></td>
-    <td>${r.insuranceDecision?.label||"-"}</td>
-    <td>${r.insuranceDecision?.justification||"-"}</td></tr>`
+    `<tr>
+      <td>${r.name||"-"}</td>
+      <td>${r.itemType||"-"}</td>
+      <td>${r.doseRegimen||"-"}</td>
+      <td>${r.intendedIndication||"-"}</td>
+      <td>${r.isIndicationDocumented?"نعم":"لا"}</td>
+      <td>${(r.conflicts||[]).join('<br>')||"-"}</td>
+      <td ${colorCell(r.riskPercent||0)}><b>${Math.round(r.riskPercent||0)}%</b></td>
+      <td>${r.insuranceDecision?.label||"-"}</td>
+      <td>${r.insuranceDecision?.justification||"-"}</td>
+    </tr>`
   ).join("");
-  return `<h2>ملخص الحالة</h2><div><p>${(s.conclusion||"").replace(/\n/g,'<br>')}</p></div>
-  <h2>التناقضات</h2><ul>${(s.contradictions||[]).map(c=>`<li>${c}</li>`).join("")||"<li>لا شيء بارز</li>"}</ul>
-  <h2>جدول الأدوية والإجراءات</h2>
-  <table dir="rtl" style="width:100%;border-collapse:collapse">
-    <thead><tr><th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر</th>
-    <th>موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th><th>قرار التأمين</th><th>التبرير</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+
+  return `
+    <h2>📋 ملخص الحالة</h2>
+    <div><p>${(s.conclusion||"").replace(/\n/g,'<br>')}</p></div>
+
+    <h2>⚠️ التناقضات والأخطاء</h2>
+    <ul>${(s.contradictions||[]).map(c=>`<li>${c}</li>`).join("")||"<li>لا يوجد تناقضات واضحة</li>"}</ul>
+
+    <h2>💊 جدول الأدوية والإجراءات</h2>
+    <table dir="rtl" style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr>
+          <th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر</th>
+          <th>موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th>
+          <th>قرار التأمين</th><th>التبرير</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <h2>🩺 ما كان يجب القيام به</h2>
+    <ul>${(s.missingActions||[]).map(m=>`<li>${m}</li>`).join("")||"<li>لم يتم رصد نواقص واضحة</li>"}</ul>
+
+    <h2>📈 فرص تحسين الدخل والخدمة</h2>
+    <ul>${(s.financialInsights||[]).map(f=>`<li>${f}</li>`).join("")||"<li>لا توجد فرص إضافية بارزة</li>"}</ul>
+  `;
 }
 
 // ===== API handler =====
