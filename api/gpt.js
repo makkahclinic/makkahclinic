@@ -511,8 +511,8 @@ export default async function handler(req, res) {
       html,
       ...(returnJson ? { structured } : {}),
     });
-  } catch (err) {
-    console.error("API error:", err);
-    return res.status(500).json({ error: String(err?.message || err) });
-  }
+} catch (err) {
+  console.error("API /api/gpt error:", err);
+  const message = (err && err.message) ? err.message : String(err);
+  return res.status(500).json({ ok: false, error: message });
 }
