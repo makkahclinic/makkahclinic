@@ -1,190 +1,364 @@
-// /pages/api/gpt.js
-// Backend: Gemini Files (OCR/vision) → ChatGPT clinical audit (JSON) → HTML report
-// Runtime: Next.js API Route (Vercel, Node 18+)
-
-// ===== Route config (must be static literal) =====
-export const config = {
-  api: { bodyParser: { sizeLimit: "50mb" } },
-};
-
-// ===== Keys & endpoints =====
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o-mini";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL   = process.env.GEMINI_MODEL || "gemini-2.5-pro";
-const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
-const GEMINI_GEN_URL   = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
-// ===== Helpers =====
-const ok  = (res, json) => res.status(200).json({ ok: true, ...json });
-const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
-const parseJsonSafe = async (r) => (r.headers.get("content-type")||"").includes("application/json") ? r.json() : { raw: await r.text() };
-
-// ===== Gemini: resumable upload (Files API) =====
-async function geminiUploadBase64({ name, mimeType, base64 }) {
-  const bin = Buffer.from(base64, \"base64\");
-
-  // 1) start resumable session (must include: Protocol=resumable + Command=start)
-  const initRes = await fetch(
-    `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(GEMINI_API_KEY)}`,
-    {
-      method: \"POST\",
-      headers: {
-        \"X-Goog-Upload-Protocol\": \"resumable\",
-        \"X-Goog-Upload-Command\": \"start\",              // 👈 المطلوب
-        \"X-Goog-Upload-Header-Content-Length\": String(bin.byteLength),
-        \"X-Goog-Upload-Header-Content-Type\": mimeType,
-        \"Content-Type\": \"application/json\",
-      },
-      body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تقييم الحالة الطبية وطلبات التأمين</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root{
+      --sea-50:#eef7ff; --sea-100:#d9efff; --sea-200:#b6dfff; --sea-300:#87c7ff; --sea-400:#4aa6ff; --sea-500:#1e90ff; --sea-600:#1677d3; --sea-700:#105ca5; --sea-800:#0b4479; --sea-900:#082f55;
+      --ok:#2e7d32; --warn:#f9a825; --bad:#e53935; --muted:#6b7280; --card:#ffffff; --ring:#d1e8ff;
     }
-  );
+    *{box-sizing:border-box}
+    body{font-family:"Tajawal",system-ui; background:linear-gradient(180deg,var(--sea-50),#fff); color:#0f172a; margin:0}
+    .container{max-width:1050px; margin:32px auto; padding:24px; background:var(--card); border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 10px 35px rgba(3,102,214,.07)}
+    .title{display:flex; align-items:center; justify-content:center; gap:10px; color:var(--sea-800)}
+    h1{font-size:28px; margin:8px 0 2px}
+    .subtitle{color:var(--muted); font-size:14px; text-align:center; margin-bottom:14px}
+    .topbar{display:flex; gap:10px; align-items:center; justify-content:flex-start; margin-bottom:12px}
+    .chip{border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px; font-size:14px; background:#fff}
+    .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid var(--sea-600)}
+    .home svg{width:18px; height:18px; fill:#fff}
 
-  if (!initRes.ok) {
-    throw new Error(
-      \"Gemini init failed: \" + JSON.stringify(await parseJsonSafe(initRes))
-    );
-  }
+    .section{margin-top:18px}
+    .section h2{font-size:18px; color:var(--sea-700); display:flex; align-items:center; gap:8px; margin:0 0 10px}
+    .dot{width:8px; height:8px; background:var(--sea-500); border-radius:50%}
+    .card{border:1px dashed #dbeafe; background:#f8fbff; border-radius:14px; padding:14px}
 
-  const sessionUrl = initRes.headers.get(\"X-Goog-Upload-URL\");
-  if (!sessionUrl) throw new Error(\"Gemini upload URL missing\");
+    .grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
+    .col-6{grid-column:span 6}
+    .col-4{grid-column:span 4}
+    .col-3{grid-column:span 3}
+    .col-8{grid-column:span 8}
+    .col-12{grid-column:span 12}
 
-  // 2) upload + finalize in one shot (PUT)
-  const upRes = await fetch(sessionUrl, {
-    method: \"PUT\",
-    headers: {
-      \"Content-Type\": mimeType,
-      \"X-Goog-Upload-Command\": \"upload, finalize\",    // 👈 الرفع ثم الإنهاء
-      \"X-Goog-Upload-Offset\": \"0\",
-      \"Content-Length\": String(bin.byteLength),
-    },
-    body: bin,
-  });
+    label{display:block; font-size:14px; color:#0f172a; margin-bottom:6px}
+    input, select, textarea{width:100%; padding:12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; outline:none}
+    input:focus, select:focus, textarea:focus{border-color:var(--sea-400); box-shadow:0 0 0 4px var(--ring)}
+    textarea{min-height:90px; resize:vertical}
 
-  const meta = await parseJsonSafe(upRes);
-  if (!upRes.ok) {
-    throw new Error(\"Gemini finalize failed: \" + JSON.stringify(meta));
-  }
+    /* رافع الملفات */
+    .uploader{border:2px dashed #cfe6ff; border-radius:16px; padding:26px; text-align:center; color:#64748b; background:#f5faff}
+    .uploader.drag{background:#eef6ff}
+    .uploader input{display:none}
+    .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:12px}
+    .fileCard{position:relative; background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 8px 22px rgba(2,6,23,.05)}
+    .thumb{width:100%; height:150px; object-fit:cover; display:block; background:#f1f5f9}
+    .meta{padding:10px 12px; font-size:13px; color:#334155}
+    .remove{position:absolute; top:10px; right:10px; left:auto; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700}
 
-  return { uri: meta?.file?.uri, mime: meta?.file?.mime_type || mimeType };
-}
-}
+    .btn{appearance:none; border:none; cursor:pointer; padding:14px 18px; border-radius:14px; background:var(--sea-600); color:#fff; font-weight:700}
+    .btn:disabled{opacity:.6; cursor:not-allowed}
+    .btn-secondary{background:#0b4479}
+    .btn-outline{background:#fff; color:var(--sea-700); border:1px solid #cbd5e1}
 
-// ===== Gemini: extract text from files + merge with user text =====
-async function geminiSummarize({ text, files }) {
-  // 1) جهّز أجزاء الملفات
-  const fileParts = [];
-  for (const f of files || []) {
-    const mime = f?.mimeType || "application/octet-stream";
-    const b64  = (f?.data || "").split("base64,").pop();
-    if (!b64) continue;
-    const { uri, mime: mm } = await geminiUploadBase64({
-      name: f?.name || "file",
-      mimeType: mime,
-      base64: b64,
+    #reportWrap{margin-top:24px}
+    .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
+    .muted{color:var(--muted)}
+    @media print{ .no-print{display:none} body{background:#fff} .container{box-shadow:none; border:none} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <a class="home" href="https://www.m2020m.org/portal.html" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        <span>الصفحة الرئيسية</span>
+      </a>
+      <span class="chip">English</span>
+    </div>
+
+    <div class="title">
+      <h1>تقييم الحالة الطبية وطلبات التأمين</h1>
+    </div>
+    <p class="subtitle">واجهة إدخال سريرية سهلة — تحليل مؤقت وعميق متناغم مع احتياجات التأمين</p>
+
+    <!-- (1) معلومات المريض) -->
+    <div class="section">
+      <h2><span class="dot"></span> 1) معلومات المريض</h2>
+      <div class="card">
+        <div class="grid">
+          <div class="col-4">
+            <label>الاسم (اختياري)</label>
+            <input id="name" placeholder="مثال: أحمد خالد" />
+          </div>
+          <div class="col-4">
+            <label>الجنس</label>
+            <select id="gender">
+              <option value="">اختر</option>
+              <option value="ذكر">ذكر</option>
+              <option value="أنثى">أنثى</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label>العمر (بالسنوات)</label>
+            <input id="age" type="number" min="0" placeholder="مثال: 63" />
+          </div>
+
+          <div class="col-4">
+            <label>هل المريضة حامل؟</label>
+            <select id="pregnant">
+              <option value="no">لا</option>
+              <option value="yes">نعم</option>
+              <option value="na">غير منطبق</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label>شهر الحمل (إن وُجد)</label>
+            <input id="pregnancyMonths" type="number" min="1" max="10" placeholder="مثال: 5" />
+          </div>
+          <div class="col-4">
+            <label>هل المريض مدخّن؟</label>
+            <select id="smoking">
+              <option value="">اختر</option>
+              <option value="مدخن">مدخن</option>
+              <option value="غير مدخن">غير مدخن</option>
+              <option value="سابق">سابق</option>
+            </select>
+          </div>
+
+          <div class="col-4">
+            <label>Pack-Years (إن وُجد)</label>
+            <input id="packYears" type="number" min="0" step="0.5" placeholder="مثال: 15" />
+          </div>
+          <div class="col-4">
+            <label>الوزن (كجم)</label>
+            <input id="weight" type="number" min="0" step="0.1" placeholder="مثال: 78" />
+          </div>
+          <div class="col-4">
+            <label>الطول (سم)</label>
+            <input id="height" type="number" min="0" step="0.5" placeholder="مثال: 172" />
+          </div>
+
+          <div class="col-4">
+            <label>درجة الحرارة (°م)</label>
+            <input id="temp" type="number" step="0.1" placeholder="مثال: 37.4" />
+          </div>
+          <div class="col-4">
+            <label>هل يوجد سُعال؟</label>
+            <select id="hasCough">
+              <option value="">اختر</option>
+              <option value="نعم">نعم</option>
+              <option value="لا">لا</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label>مدة السعال (أسابيع)</label>
+            <input id="coughWeeks" type="number" min="0" placeholder="مثال: 12" />
+          </div>
+          <div class="col-4">
+            <label>نوع السعال</label>
+            <select id="coughType">
+              <option value="">اختر</option>
+              <option value="جاف">جاف</option>
+              <option value="ببلغم">ببلغم</option>
+              <option value="بدم">بدم</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (2) خطّ الحياة والأعراض -->
+    <div class="section">
+      <h2><span class="dot"></span> 2) خطّ الحياة والأعراض</h2>
+      <div class="card">
+        <div class="grid">
+          <div class="col-12">
+            <label>وصف الحالة (نص حر)</label>
+            <textarea id="freeText" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط..."></textarea>
+          </div>
+          <div class="col-6">
+            <label>التشخيصات المبدئية (نص)</label>
+            <textarea id="initialDx" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea>
+          </div>
+          <div class="col-6">
+            <label>تحاليل/الأشعة المذكورة (نص)</label>
+            <textarea id="labsImaging" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ..."></textarea>
+          </div>
+          <div class="col-12">
+            <label>الأدوية/الإجراءات المقرّرة (إن وُجدت)</label>
+            <textarea id="orders" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid ..."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (3) رفع ملفات (صور/PDF) -->
+    <div class="section">
+      <h2><span class="dot"></span> 3) رفع ملفات (صور/PDF) — اختياري</h2>
+      <label class="uploader no-print" for="fileInput" id="dropZone">اضغط هنا لرفع ملف واحد أو أكثر
+        <input id="fileInput" type="file" multiple accept="image/*,application/pdf" />
+      </label>
+      <div id="cards" class="cards" aria-live="polite"></div>
+      <div id="fileList" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section no-print" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <button class="btn" id="analyzeBtn">تحليل الحالة</button>
+      <span id="busy" class="muted" style="display:none">جاري التحليل…</span>
+    </div>
+
+    <!-- تقرير -->
+    <div id="reportWrap" class="section" style="display:none">
+      <div class="report-toolbar no-print">
+        <button class="btn-secondary btn" id="exportAll">تصدير PDF (كامل)</button>
+        <button class="btn-outline btn" id="exportSummary">PDF الملخص</button>
+        <button class="btn-outline btn" id="exportTable">PDF الجدول</button>
+      </div>
+      <div id="reportHTML" class="card"></div>
+      <details style="margin-top:10px" class="no-print">
+        <summary>إظهار JSON (للبحث/الإحصاءات)</summary>
+        <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    // ===== مزامنة الحامل مع الجنس =====
+    const genderEl = document.getElementById('gender');
+    const pregSel = document.getElementById('pregnant');
+    const pregMonths = document.getElementById('pregnancyMonths');
+    function syncPregnancyControls(){
+      const g = genderEl.value;
+      if(g !== 'أنثى'){
+        pregSel.value = 'na'; pregSel.disabled = true; pregMonths.value = ''; pregMonths.disabled = true;
+      }else{ pregSel.disabled = false; pregMonths.disabled = pregSel.value !== 'yes'; }
+    }
+    genderEl.addEventListener('change', syncPregnancyControls);
+    pregSel.addEventListener('change', ()=>{ pregMonths.disabled = pregSel.value !== 'yes'; });
+    syncPregnancyControls();
+
+    // ===== رافع الملفات مع بطاقات ومعاينة وحذف =====
+    const fileInput = document.getElementById('fileInput');
+    const dropZone  = document.getElementById('dropZone');
+    const cardsBox  = document.getElementById('cards');
+    const fileList  = document.getElementById('fileList');
+
+    const filesState = []; // { name, mimeType, data }
+
+    dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
+    dropZone.addEventListener('dragover',  e=>{ e.preventDefault(); });
+    dropZone.addEventListener('dragleave', e=>{ e.preventDefault(); dropZone.classList.remove('drag'); });
+    dropZone.addEventListener('drop', async e=>{
+      e.preventDefault(); dropZone.classList.remove('drag');
+      await handleFiles(Array.from(e.dataTransfer.files));
     });
-    fileParts.push({ file_data: { file_uri: uri, mime_type: mm } });
-  }
 
-  // 2) تعليمات النظام موجّهة لاستخلاص سريري صِرف
-  const systemPrompt =
-    "أنت مساعد لاستخلاص سريري من مستندات طبية (OCR). " +
-    "استخرج نصًا واضحًا يحتوي على: التشخيصات المذكورة، العلامات/الأعراض، " +
-    "التحاليل/الإجراءات/الأدوية المطلوبة بالتفصيل، وأي تكرار أو غموض. " +
-    "لا تُنشئ قرارات علاجية؛ فقط صف المحتوى الموجود بالنص/الصور بدقة.";
+    fileInput.addEventListener('change', async ()=>{
+      await handleFiles(Array.from(fileInput.files));
+      fileInput.value = '';
+    });
 
-  // 3) اجمع النص + الملفات في رسالة واحدة (أفضل نمط لنجاح الـ OCR)
-  const userText = (text && text.trim().length) ? text.trim() : "لا يوجد نص حر.";
-  const contents = [ { role: "user", parts: [ { text: userText }, ...fileParts ] } ];
-
-  // 4) أرسل الطلب
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents,
-    generationConfig: { maxOutputTokens: 2048 },
-  };
-
-  const resp = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const data = await parseJsonSafe(resp);
-  if (!resp.ok) throw new Error("Gemini generateContent error: " + JSON.stringify(data));
-
-  const out = data?.candidates?.[0]?.content?.parts?.map((p) => p.text)?.join("
-") || "";
-  return (out.trim() || "لم أستخرج نصًا واضحًا من الملفات.");
-}
-
-// ===== Audit instructions for ChatGPT =====
-function auditInstructions(){ return `
-أنت استشاري تدقيق طبي وتأميني. حلّل معطيات المريض + النص الحر + الخلاصة من OCR.
-أخرج JSON فقط وفق المخطط التالي، بلا أي نص خارجه.
-- itemType: lab | medication | procedure | device | imaging
-- riskPercent thresholds: <60 مقبول، 60–74 قابل للرفض، ≥75 مرفوض
-- املأ insuranceDecision.justification بتعليل سريري محدّد؛ واسم التكرارات والتعارضات.
-{
-  "patientSummary": {"ageYears": number|null, "gender": "ذكر"|"أنثى"|null, "pregnant": {"isPregnant": boolean, "gestationalWeeks": number|null}|null, "smoking": {"status": "مدخن"|"غير مدخن"|"سابق", "packYears": number|null}|null, "chronicConditions": string[]},
-  "diagnosis": string[],
-  "symptoms": string[],
-  "contradictions": string[],
-  "table": [
-    {"name": string, "itemType": "lab"|"medication"|"procedure"|"device"|"imaging", "doseRegimen": string|null, "intendedIndication": string|null, "isIndicationDocumented": boolean, "conflicts": string[], "riskPercent": number, "insuranceDecision": {"label": "مقبول"|"قابل للرفض"|"مرفوض", "justification": string}}
-  ],
-  "missingActions": string[],
-  "referrals": [{"specialty": string, "whatToDo": string[]}],
-  "financialInsights": string[],
-  "conclusion": string
-}
-ONLY JSON.`; }
-
-function needsRefine(s){
-  const rows = Array.isArray(s?.table)? s.table:[]; if(!rows.length) return true;
-  const zero = rows.filter(r=>!Number.isFinite(r?.riskPercent)||r.riskPercent===0).length;
-  const weak = rows.filter(r=>!r?.insuranceDecision?.justification||r.insuranceDecision.justification.trim().length<20).length;
-  return (zero/rows.length>0.4)||(weak/rows.length>0.4);
-}
-
-async function chatgptJSON(bundle, extra=[]) {
-  const resp = await fetch(OPENAI_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify({ model: OPENAI_MODEL, messages: [ { role:"system", content: auditInstructions() }, { role:"user", content: "المعطيات:\n"+JSON.stringify(bundle,null,2) }, ...extra ], response_format:{ type:"json_object" } })
-  });
-  const data = await resp.json();
-  if(!resp.ok) throw new Error("OpenAI error: "+JSON.stringify(data));
-  const txt = data?.choices?.[0]?.message?.content||"{}"; return JSON.parse(txt);
-}
-
-function colorCell(p){ if(p>=75) return 'style="background:#fee2e2;border:1px solid #fecaca"'; if(p>=60) return 'style="background:#fff7ed;border:1px solid #ffedd5"'; return 'style="background:#ecfdf5;border:1px solid #d1fae5"'; }
-function toHtml(s){
-  const rows = (s.table||[]).map(r=>`<tr><td>${r.name||"-"}</td><td>${r.itemType||"-"}</td><td>${r.doseRegimen||"-"}</td><td>${r.intendedIndication||"-"}</td><td>${r.isIndicationDocumented?"نعم":"لا"}</td><td>${(r.conflicts||[]).join('<br>')||"-"}</td><td ${colorCell(r.riskPercent||0)}><b>${Math.round(r.riskPercent||0)}%</b></td><td>${r.insuranceDecision?.label||"-"}</td><td>${r.insuranceDecision?.justification||"-"}</td></tr>`).join("");
-  return `<h2>ملخص الحالة</h2><div class="kvs"><p>${(s.conclusion||"").replace(/\n/g,'<br>')}</p></div><h2>التناقضات</h2><ul>${(s.contradictions||[]).map(c=>`<li>${c}</li>`).join("")||"<li>لا شيء بارز</li>"}</ul><h2>جدول الأدوية والإجراءات</h2><table dir="rtl" style="width:100%;border-collapse:collapse"><thead><tr><th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر</th><th>موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th><th>قرار التأمين</th><th>التبرير</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-
-export default async function handler(req,res){
-  try{
-    if(req.method!=="POST") return bad(res,405,"POST only");
-    if(!OPENAI_API_KEY) return bad(res,500,"Missing OPENAI_API_KEY");
-    if(!GEMINI_API_KEY) return bad(res,500,"Missing GEMINI_API_KEY");
-
-    const { text = "", files = [], patientInfo = null } = req.body||{};
-    const extracted = await geminiSummarize({ text, files });
-    const bundle = { patientInfo, extractedSummary: extracted, userText: text };
-
-    let structured = await chatgptJSON(bundle);
-    if(needsRefine(structured)){
-      structured = await chatgptJSON(bundle, [{ role:"user", content:"أعد التدقيق مع ملء النِّسَب والتبريرات لكل صف وأبرز التكرارات والتعارضات." }]);
+    async function handleFiles(files){
+      for(const f of files){
+        const base64Url = await fileToDataURL(f); // data:<mime>;base64,...
+        filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64Url });
+      }
+      renderCards();
+      fileList.textContent = filesState.map((f)=>`• ${f.name}`).join('
+');
     }
 
-    const html = toHtml(structured);
-    return ok(res, { html, structured });
-  }catch(err){
-    console.error("/api/gpt error:", err);
-    return bad(res,500, err?.message || String(err));
-  }
-}
+    function renderCards(){
+      cardsBox.innerHTML = '';
+      filesState.forEach((f, i)=>{
+        const isImg = (f.mimeType||'').startsWith('image/');
+        const thumb = isImg ? f.data : 'data:image/svg+xml;utf8,'+encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`);
+        const el = document.createElement('div');
+        el.className = 'fileCard';
+        el.innerHTML = `
+          <button class="remove" data-i="${i}" title="إزالة">×</button>
+          <img class="thumb" src="${thumb}" alt="${f.name}">
+          <div class="meta">
+            <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="${f.name}">${f.name}</div>
+            <div class="muted">${f.mimeType||'—'}</div>
+          </div>`;
+        cardsBox.appendChild(el);
+      });
+      cardsBox.querySelectorAll('.remove').forEach(btn=>btn.addEventListener('click', (e)=>{
+        const i = +e.currentTarget.dataset.i; filesState.splice(i,1); renderCards(); fileList.textContent = filesState.map(f=>`• ${f.name}`).join('\n');
+      }));
+    }
+
+    function fileToDataURL(file){
+      return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onerror=()=>reject(new Error('failed to read file')); r.onload=()=>resolve(r.result); r.readAsDataURL(file); });
+    }
+
+    // ===== تجميع patientInfo =====
+    function buildPatientInfo(){
+      const ageYears = Number(document.getElementById('age').value || NaN);
+      const gender = document.getElementById('gender').value || null;
+      const smokingStatus = document.getElementById('smoking').value || null;
+      const packYears = document.getElementById('packYears').value ? Number(document.getElementById('packYears').value) : null;
+      const temp = document.getElementById('temp').value ? Number(document.getElementById('temp').value) : null;
+      const weight = document.getElementById('weight').value ? Number(document.getElementById('weight').value) : null;
+      const height = document.getElementById('height').value ? Number(document.getElementById('height').value) : null;
+      const hasCough = document.getElementById('hasCough').value || null;
+      const coughWeeks = document.getElementById('coughWeeks').value ? Number(document.getElementById('coughWeeks').value) : null;
+      const coughType = document.getElementById('coughType').value || null;
+      const pVal = pregSel.value;
+      const pregnant = (gender === 'أنثى') ? {
+        isPregnant: pVal === 'yes',
+        gestationalWeeks: (pVal === 'yes' && document.getElementById('pregnancyMonths').value)
+          ? Number(document.getElementById('pregnancyMonths').value) * 4
+          : null
+      } : null;
+      return {
+        name: document.getElementById('name').value || null,
+        ageYears: isNaN(ageYears) ? null : ageYears,
+        gender,
+        pregnant,
+        smoking: smokingStatus ? { status: smokingStatus, packYears } : null,
+        temperatureC: temp,
+        weightKg: weight,
+        heightCm: height,
+        cough: { has: hasCough, weeks: coughWeeks, type: coughType }
+      };
+    }
+
+    // ===== استدعاء الباك-إند =====
+    async function analyze(){
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const busy = document.getElementById('busy');
+      analyzeBtn.disabled = true; busy.style.display = 'inline';
+      try{
+        const textParts = [];
+        const ft = document.getElementById('freeText').value.trim(); if(ft) textParts.push(`وصف الحالة: ${ft}`);
+        const dx = document.getElementById('initialDx').value.trim(); if(dx) textParts.push(`التشخيصات المبدئية: ${dx}`);
+        const labs = document.getElementById('labsImaging').value.trim(); if(labs) textParts.push(`تحاليل/أشعة: ${labs}`);
+        const orders = document.getElementById('orders').value.trim(); if(orders) textParts.push(`الأدوية/الإجراءات: ${orders}`);
+        const mergedText = textParts.join('\n');
+
+        const filesPayload = filesState.map(f=>({ name:f.name, mimeType:f.mimeType, data: f.data.split('base64,').pop() }));
+
+        const payload = { text: mergedText, patientInfo: buildPatientInfo(), files: filesPayload, mode:'clinical_audit', returnJson:true };
+        const resp = await fetch('/api/gpt',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await resp.json().catch(()=>({}));
+        if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
+        document.getElementById('reportWrap').style.display = 'block';
+        document.getElementById('reportHTML').innerHTML = `<div id="report">${data.html}</div>`;
+        document.getElementById('jsonOut').textContent = JSON.stringify(data.structured||{}, null, 2);
+      }catch(err){ alert('خطأ: '+err.message); }
+      finally{ analyzeBtn.disabled = false; busy.style.display = 'none'; }
+    }
+    document.getElementById('analyzeBtn').addEventListener('click', analyze);
+
+    // تصدير PDF
+    function exportPDF(selector, filename){
+      const el = document.querySelector(selector);
+      if(!el){ alert('التقرير غير جاهز'); return; }
+      const opt = { filename, margin: 10, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+      html2pdf().from(el).set(opt).save();
+    }
+    document.getElementById('exportAll').addEventListener('click', ()=> exportPDF('#report', 'Medical_Audit_Report.pdf'));
+    document.getElementById('exportSummary').addEventListener('click', ()=> exportPDF('#report h2:nth-of-type(1), #report .kvs', 'Summary.pdf'));
+    document.getElementById('exportTable').addEventListener('click', ()=> exportPDF('#report table', 'Audit_Table.pdf'));
+  </script>
+</body>
+</html>
