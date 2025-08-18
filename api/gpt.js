@@ -196,58 +196,48 @@ async function geminiExtractBundle({ userText, files, patientInfo }) {
 
 // ---------- OPENAI DEEP AUDIT (STRUCTURED JSON) ----------
 function buildOpenAIInstructions(mode = "clinical_audit") {
-  // Arabic-first instruction; ensure strict JSON-only with keys we expect.
-  const goal =
-    mode === "patient_consult"
-      ? "قدّم مراجعة مبسّطة للمريض مع تحذيرات واضحة."
-      : "أجرِ تدقيقًا طبيًا تأمينيًا مهنيًا بدقّة عالية.";
-
   return `
-أنت استشاري تدقيق طبي وتأمين صحي Senior. ${goal}
-حلّل: معلومات المريض، النص الحرّ، ونصوص الملفات المستخرجة (OCR) بما فيها النتائج/الأدوية/الإجراءات/الأشعّة.
-إيجابيات: التزم بالدليل، لا تُدخل افتراضات.
-أنتج JSON واحد فقط بالمفاتيح أدناه، بلا أي نص خارج JSON:
+أنت استشاري تدقيق طبي وتأميني. حلّل معطيات المريض + نصوص OCR (من الملفات) + النص الحر.
+أخرج JSON فقط وفق المفاتيح أدناه. لا تضف أي نص خارج JSON.
 
+قواعد صارمة:
+- عرّف لكل بند: النوع (lab/medication/procedure/device/imaging)، والمؤشّر السريري المطلوب، وهل هذا المؤشّر مُوثَّق في المعطيات.
+- احسب riskPercent حسب هذه العتبات:
+  * <60 = "مقبول" (أخضر) — المؤشّر واضح/لا تعارضات مهمة.
+  * 60–74 = "قابل للرفض – يحتاج تبرير" (أصفر) — المؤشّر غير مكتمل أو بديل أقل تدخّلًا.
+  * ≥75 = "مرفوض" (أحمر) — لا مؤشّر أو هناك تعارض/خطر واضح أو تكرار غير مبرَّر.
+- املأ insuranceDecision.justification بتعليل سريري محدّد (جملة أو جملتان)، واذكر إن لزم "ما المطلوب لتقبّله".
+- إذا تكرّر بند نفسه أكثر من مرة، اعتبره تعارضًا وارفع الخطورة (≥75).
+- املأ contradictions بكل اختلاف بين النص الحر وOCR (مثال: لا وجود لقيء لكن طُلب مضاد قيء).
+
+أخرج هذا القالب:
 {
-  "patientSummary": {
-    "ageYears": number|null,
-    "gender": "ذكر"|"أنثى"|null,
-    "pregnant": { "isPregnant": boolean, "gestationalWeeks": number|null }|null,
-    "smoking": { "status": "مدخن"|"غير مدخن"|"سابق", "packYears": number|null }|null,
-    "diabetes": { "has": boolean, "type": "1"|"2"|null, "durationYears": number|null }|null,
-    "chronicConditions": string[] // كلى/كبد/قلب/ربو/الخ...
-  },
-  "diagnosis": string[],
-  "symptoms": string[],
-  "contradictions": string[], // أي تعارضات بين النصوص والملفات أو بين الحالة والعلاج/الإجراء
-  "table": [
-    {
-      "name": string,                // اسم الدواء/الإجراء
-      "doseRegimen": string|null,    // الجرعة/المدّة/التكرار إن وُجد
-      "conflicts": string[],         // تعارضات (دواء-دواء/دواء-حالة/إجراء غير مبرر)
-      "riskPercent": number,         // 0-100
-      "insuranceDecision": {
-        "label": "مقبول"|"قابل للرفض"|"مرفوض",
-        "justification": string      // تبرير مهني قوي محدّد
-      }
-    }
-  ],
-  "missingActions": string[],        // ما كان ينبغي فعله ولم يتم (تحاليل/إحالات/متابعة)
-  "referrals": [                     // الإحالات وما سيقوم به التخصص
-    {
-      "specialty": string,           // مثال: "عيون"
-      "whatToDo": string[]           // مثل: OCT, fundoscopy, ... مع السبب
-    }
-  ],
-  "financialInsights": string[],     // فرص رفع الدخل بتقليل الرفض (إجراءات ضرورية مفقودة)
-  "conclusion": string               // خاتمة تُذكّر بأن التقرير لا يغني عن الفحص الإكلينيكي
+ "patientSummary": { ... كما قبل ... },
+ "diagnosis": string[],
+ "symptoms": string[],
+ "contradictions": string[],
+ "table": [
+   {
+     "name": string,
+     "itemType": "lab"|"medication"|"procedure"|"device"|"imaging",
+     "doseRegimen": string|null,
+     "intendedIndication": string|null,         // المؤشّر السريري المتوقع (مثال: N/V للـ Metoclopramide)
+     "isIndicationDocumented": boolean,         // هل المؤشر موجود فعلاً في البيانات
+     "conflicts": string[],
+     "riskPercent": number,                     // 0–100 وفق العتبات أعلاه (لا تضع 0 افتراضيًا)
+     "insuranceDecision": {
+       "label": "مقبول"|"قابل للرفض"|"مرفوض",
+       "justification": string                  // تعليل قوي محدّد
+     }
+   }
+ ],
+ "missingActions": string[],
+ "referrals": [{"specialty": string, "whatToDo": string[]}],
+ "financialInsights": string[],
+ "conclusion": string
 }
-التزم بالتالي:
-- لا تُنشئ بيانات غير واردة ضمن النص/الملفات، وإن لزم ضع null أو حقل خالٍ.
-- املأ "justification" بتعليل سريري/تأميني محدد (ليس عاماً).
-- "riskPercent": رقم صحيح 0-100 (≥75=خطر عالٍ/مرفوض، 60-74=قابل للرفض، <60=مقبول).
-- إذا وُجد تصوير أشعّة مخالف للوصف السريري، أضف ذلك في "contradictions".
-ONLY JSON.`;
+ONLY JSON.
+`;
 }
 
 async function openaiAuditToJSON({ bundle, mode = "clinical_audit" }) {
