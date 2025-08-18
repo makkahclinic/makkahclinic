@@ -24,19 +24,19 @@ const parseJsonSafe = async (r) => (r.headers.get("content-type")||"").includes(
 
 // ===== Gemini: resumable upload (Files API) =====
 async function geminiUploadBase64({ name, mimeType, base64 }) {
-  const bin = Buffer.from(base64, "base64");
+  const bin = Buffer.from(base64, \"base64\");
 
   // 1) start resumable session (must include: Protocol=resumable + Command=start)
   const initRes = await fetch(
     `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${encodeURIComponent(GEMINI_API_KEY)}`,
     {
-      method: "POST",
+      method: \"POST\",
       headers: {
-        "X-Goog-Upload-Protocol": "resumable",
-        "X-Goog-Upload-Command": "start",              // 👈 المطلوب
-        "X-Goog-Upload-Header-Content-Length": String(bin.byteLength),
-        "X-Goog-Upload-Header-Content-Type": mimeType,
-        "Content-Type": "application/json",
+        \"X-Goog-Upload-Protocol\": \"resumable\",
+        \"X-Goog-Upload-Command\": \"start\",              // 👈 المطلوب
+        \"X-Goog-Upload-Header-Content-Length\": String(bin.byteLength),
+        \"X-Goog-Upload-Header-Content-Type\": mimeType,
+        \"Content-Type\": \"application/json\",
       },
       body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
     }
@@ -44,31 +44,32 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
 
   if (!initRes.ok) {
     throw new Error(
-      "Gemini init failed: " + JSON.stringify(await parseJsonSafe(initRes))
+      \"Gemini init failed: \" + JSON.stringify(await parseJsonSafe(initRes))
     );
   }
 
-  const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
-  if (!sessionUrl) throw new Error("Gemini upload URL missing");
+  const sessionUrl = initRes.headers.get(\"X-Goog-Upload-URL\");
+  if (!sessionUrl) throw new Error(\"Gemini upload URL missing\");
 
   // 2) upload + finalize in one shot (PUT)
   const upRes = await fetch(sessionUrl, {
-    method: "PUT",
+    method: \"PUT\",
     headers: {
-      "Content-Type": mimeType,
-      "X-Goog-Upload-Command": "upload, finalize",    // 👈 الرفع ثم الإنهاء
-      "X-Goog-Upload-Offset": "0",
-      "Content-Length": String(bin.byteLength),
+      \"Content-Type\": mimeType,
+      \"X-Goog-Upload-Command\": \"upload, finalize\",    // 👈 الرفع ثم الإنهاء
+      \"X-Goog-Upload-Offset\": \"0\",
+      \"Content-Length\": String(bin.byteLength),
     },
     body: bin,
   });
 
   const meta = await parseJsonSafe(upRes);
   if (!upRes.ok) {
-    throw new Error("Gemini finalize failed: " + JSON.stringify(meta));
+    throw new Error(\"Gemini finalize failed: \" + JSON.stringify(meta));
   }
 
   return { uri: meta?.file?.uri, mime: meta?.file?.mime_type || mimeType };
+}
 }
 
 // ===== Gemini: extract text from files + merge with user text =====
@@ -96,12 +97,7 @@ async function geminiSummarize({ text, files }) {
 
   // 3) اجمع النص + الملفات في رسالة واحدة (أفضل نمط لنجاح الـ OCR)
   const userText = (text && text.trim().length) ? text.trim() : "لا يوجد نص حر.";
-  const contents = [
-    {
-      role: "user",
-      parts: [{ text: userText }, ...fileParts],
-    },
-  ];
+  const contents = [ { role: "user", parts: [ { text: userText }, ...fileParts ] } ];
 
   // 4) أرسل الطلب
   const body = {
@@ -119,14 +115,10 @@ async function geminiSummarize({ text, files }) {
   const data = await parseJsonSafe(resp);
   if (!resp.ok) throw new Error("Gemini generateContent error: " + JSON.stringify(data));
 
-  const out = data?.candidates?.[0]?.content?.parts
-    ?.map((p) => p.text)
-    ?.join("\n") || "";
-
-  // 5) رجّع نصًا ولو بسيط لتغذية ChatGPT بدل لا شيء
-  return out.trim() || "لم أستخرج نصًا واضحًا من الملفات.";
+  const out = data?.candidates?.[0]?.content?.parts?.map((p) => p.text)?.join("
+") || "";
+  return (out.trim() || "لم أستخرج نصًا واضحًا من الملفات.");
 }
-
 
 // ===== Audit instructions for ChatGPT =====
 function auditInstructions(){ return `
