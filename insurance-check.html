@@ -4,145 +4,366 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تقييم الحالة الطبية وطلبات التأمين</title>
+  <!-- خط بسيط -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- html2pdf للتصدير إلى PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     :root{
-      --sea:#0ea5e9; --ink:#0f172a; --muted:#64748b; --card:#ffffff; --soft:#f1f5f9; --dash:#cbd5e1;
-      --ok:#10b981; --warn:#f59e0b; --bad:#ef4444;
+      --sea-50:#eef7ff; --sea-100:#d9efff; --sea-200:#b6dfff; --sea-300:#87c7ff; --sea-400:#4aa6ff; --sea-500:#1e90ff; --sea-600:#1677d3; --sea-700:#105ca5; --sea-800:#0b4479; --sea-900:#082f55;
+      --ok:#2e7d32; --warn:#f9a825; --bad:#e53935; --muted:#6b7280; --card:#ffffff; --ring:#d1e8ff;
     }
     *{box-sizing:border-box}
-    body{font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans Arabic", sans-serif; background:#f8fafc; color:var(--ink); margin:0}
-    .wrap{max-width:1100px; margin:28px auto; padding:0 16px}
-    h1{font-size:28px; color:#075985; margin:0 0 18px}
+    body{font-family:"Tajawal",system-ui; background:linear-gradient(180deg,var(--sea-50),#fff); color:#0f172a; margin:0}
+    .container{max-width:1050px; margin:32px auto; padding:24px; background:var(--card); border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 10px 35px rgba(3,102,214,.07)}
+    .title{display:flex; align-items:center; justify-content:center; gap:10px; color:var(--sea-800)}
+    h1{font-size:28px; margin:8px 0 2px}
+    .subtitle{color:var(--muted); font-size:14px; text-align:center; margin-bottom:14px}
+    .topbar{display:flex; gap:10px; align-items:center; justify-content:flex-start; margin-bottom:12px}
+    .chip{border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px; font-size:14px; background:#fff}
+    .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid var(--sea-600)}
+    .home svg{width:18px; height:18px; fill:#fff}
 
-    /* Uploader */
-    .upload-zone{border:2px dashed var(--dash); border-radius:16px; padding:22px; text-align:center; background:#f8fbff; color:var(--muted)}
-    .upload-zone.drag{background:#eef6ff}
-    .btn{appearance:none; border:0; border-radius:12px; padding:10px 16px; background:var(--sea); color:#fff; cursor:pointer; font-weight:700}
-    .btn:disabled{opacity:.6; cursor:not-allowed}
-    .btn-ghost{appearance:none; border:0; background:transparent; color:#075985; cursor:pointer}
+    .section{margin-top:18px}
+    .section h2{font-size:18px; color:var(--sea-700); display:flex; align-items:center; gap:8px; margin:0 0 10px}
+    .dot{width:8px; height:8px; background:var(--sea-500); border-radius:50%}
+    .card{border:1px dashed #dbeafe; background:#f8fbff; border-radius:14px; padding:14px}
 
-    .grid{display:grid; gap:16px}
-    .cards{display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:16px; margin-top:16px}
-    .card{position:relative; background:var(--card); border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; box-shadow:0 8px 20px rgba(2,6,23,.06)}
+    .grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
+    .col-6{grid-column:span 6}
+    .col-4{grid-column:span 4}
+    .col-3{grid-column:span 3}
+    .col-8{grid-column:span 8}
+    .col-12{grid-column:span 12}
+
+    label{display:block; font-size:14px; color:#0f172a; margin-bottom:6px}
+    input, select, textarea{width:100%; padding:12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; outline:none}
+    input:focus, select:focus, textarea:focus{border-color:var(--sea-400); box-shadow:0 0 0 4px var(--ring)}
+    textarea{min-height:90px; resize:vertical}
+
+    /* رافع الملفات (زر + سحب/إفلات) */
+    .uploader{border:2px dashed #cfe6ff; border-radius:16px; padding:26px; text-align:center; color:#64748b; background:#f5faff}
+    .uploader.drag{background:#eef6ff}
+    .uploader input{display:none}
+    .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:12px}
+    .fileCard{position:relative; background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 8px 22px rgba(2,6,23,.05)}
     .thumb{width:100%; height:150px; object-fit:cover; display:block; background:#f1f5f9}
-    .meta{padding:10px 12px; font-size:13px; color:#334155; line-height:1.4}
-    .remove{position:absolute; top:10px; left:10px; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700; display:flex; align-items:center; justify-content:center}
-    .remove:hover{background:#dc2626}
+    .meta{padding:10px 12px; font-size:13px; color:#334155}
+    .remove{position:absolute; top:10px; left:10px; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700}
 
-    .panel{background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:14px 16px}
-    textarea,input,select{width:100%; border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; background:#fff}
+    .btn{appearance:none; border:none; cursor:pointer; padding:14px 18px; border-radius:14px; background:var(--sea-600); color:#fff; font-weight:700}
+    .btn:disabled{opacity:.6; cursor:not-allowed}
+    .btn-secondary{background:#0b4479}
+    .btn-outline{background:#fff; color:var(--sea-700); border:1px solid #cbd5e1}
 
-    .result{margin-top:22px}
-    .result .panel{overflow:auto}
+    #reportWrap{margin-top:24px}
+    .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
     .muted{color:var(--muted)}
-    .row{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
-    @media (max-width:720px){ .row{grid-template-columns:1fr} }
+    @media print{ .no-print{display:none} body{background:#fff} .container{box-shadow:none; border:none} }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>تقييم الحالة الطبية وطلبات التأمين</h1>
+  <div class="container">
+    <div class="topbar">
+      <a class="home" href="https://www.m2020m.org/portal.html" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        <span>الصفحة الرئيسية</span>
+      </a>
+      <span class="chip">English</span>
+    </div>
 
-    <div class="grid" style="margin-bottom:16px">
-      <div class="panel">
-        <label for="freeText" class="muted">وصف الحالة / ملاحظات إضافية (اختياري)</label>
-        <textarea id="freeText" rows="4" placeholder="اكتب ملخص الحالة أو الصياغة السريرية هنا..."></textarea>
+    <div class="title">
+      <h1>تقييم الحالة الطبية وطلبات التأمين</h1>
+    </div>
+    <p class="subtitle">واجهة إدخال سريرية سهلة — تحليل مؤقت وعميق متناغم مع احتياجات التأمين</p>
+
+    <!-- (1) معلومات المريض) -->
+    <div class="section">
+      <h2><span class="dot"></span> 1) معلومات المريض</h2>
+      <div class="card">
+        <div class="grid">
+          <div class="col-4">
+            <label>الاسم (اختياري)</label>
+            <input id="name" placeholder="مثال: أحمد خالد" />
+          </div>
+          <div class="col-4">
+            <label>الجنس</label>
+            <select id="gender">
+              <option value="">اختر</option>
+              <option value="ذكر">ذكر</option>
+              <option value="أنثى">أنثى</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label>العمر (بالسنوات)</label>
+            <input id="age" type="number" min="0" placeholder="مثال: 63" />
+          </div>
+
+          <div class="col-4">
+            <label>هل المريضة حامل؟</label>
+            <select id="pregnant">
+              <option value="no">لا</option>
+              <option value="yes">نعم</option>
+              <option value="na">غير منطبق</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label>شهر الحمل (إن وُجد)</label>
+            <input id="pregnancyMonths" type="number" min="1" max="10" placeholder="مثال: 5" />
+          </div>
+          <div class="col-4">
+            <label>هل المريض مدخّن؟</label>
+            <select id="smoking">
+              <option value="">اختر</option>
+              <option value="مدخن">مدخن</option>
+              <option value="غير مدخن">غير مدخن</option>
+              <option value="سابق">سابق</option>
+            </select>
+          </div>
+
+          <div class="col-4">
+            <label>Pack-Years (إن وُجد)</label>
+            <input id="packYears" type="number" min="0" step="0.5" placeholder="مثال: 15" />
+          </div>
+          <div class="col-4">
+            <label>الوزن (كجم)</label>
+            <input id="weight" type="number" min="0" step="0.1" placeholder="مثال: 78" />
+          </div>
+          <div class="col-4">
+            <label>الطول (سم)</label>
+            <input id="height" type="number" min="0" step="0.5" placeholder="مثال: 172" />
+          </div>
+
+          <div class="col-4">
+            <label>درجة الحرارة (°م)</label>
+            <input id="temp" type="number" step="0.1" placeholder="مثال: 37.4" />
+          </div>
+          <div class="col-4">
+            <label>هل يوجد سُعال؟</label>
+            <select id="hasCough">
+              <option value="">اختر</option>
+              <option value="نعم">نعم</option>
+              <option value="لا">لا</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label>مدة السعال (أسابيع)</label>
+            <input id="coughWeeks" type="number" min="0" placeholder="مثال: 12" />
+          </div>
+          <div class="col-4">
+            <label>نوع السعال</label>
+            <select id="coughType">
+              <option value="">اختر</option>
+              <option value="جاف">جاف</option>
+              <option value="ببلغم">ببلغم</option>
+              <option value="بدم">بدم</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="panel">
-      <div class="upload-zone" id="uploadZone">
-        <input id="fileInput" type="file" multiple accept=".pdf,image/*" hidden>
-        <button type="button" class="btn-ghost" id="pickFilesBtn">اضغط هنا لرفع ملف واحد أو أكثر</button>
-      </div>
-      <div class="cards" id="uploadsList" aria-live="polite"></div>
-      <div style="margin-top:14px; display:flex; gap:10px; justify-content:flex-start">
-        <button class="btn" id="analyzeBtn">تحليل الحالة</button>
-        <span id="hint" class="muted"></span>
+    <!-- (2) خطّ الحياة والأعراض -->
+    <div class="section">
+      <h2><span class="dot"></span> 2) خطّ الحياة والأعراض</h2>
+      <div class="card">
+        <div class="grid">
+          <div class="col-12">
+            <label>وصف الحالة (نص حر)</label>
+            <textarea id="freeText" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط..."></textarea>
+          </div>
+          <div class="col-6">
+            <label>التشخيصات المبدئية (نص)</label>
+            <textarea id="initialDx" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea>
+          </div>
+          <div class="col-6">
+            <label>تحاليل/الأشعة المذكورة (نص)</label>
+            <textarea id="labsImaging" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ..."></textarea>
+          </div>
+          <div class="col-12">
+            <label>الأدوية/الإجراءات المقرّرة (إن وُجدت)</label>
+            <textarea id="orders" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid ..."></textarea>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="result" id="result">
-      <div class="panel muted">لم يتم التحليل بعد.</div>
+    <!-- (3) رفع ملفات (صور/PDF) -->
+    <div class="section">
+      <h2><span class="dot"></span> 3) رفع ملفات (صور/PDF) — اختياري</h2>
+      <label class="uploader no-print" for="fileInput" id="dropZone">اضغط هنا لرفع ملف واحد أو أكثر
+        <input id="fileInput" type="file" multiple accept="image/*,application/pdf" />
+      </label>
+      <div id="cards" class="cards" aria-live="polite"></div>
+      <div id="fileList" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section no-print" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <button class="btn" id="analyzeBtn">تحليل الحالة</button>
+      <span id="busy" class="muted" style="display:none">جاري التحليل…</span>
+    </div>
+
+    <!-- تقرير -->
+    <div id="reportWrap" class="section" style="display:none">
+      <div class="report-toolbar no-print">
+        <button class="btn-secondary btn" id="exportAll">تصدير PDF (كامل)</button>
+        <button class="btn-outline btn" id="exportSummary">PDF الملخص</button>
+        <button class="btn-outline btn" id="exportTable">PDF الجدول</button>
+      </div>
+      <div id="reportHTML" class="card"></div>
+      <details style="margin-top:10px" class="no-print">
+        <summary>إظهار JSON (للبحث/الإحصاءات)</summary>
+        <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
+      </details>
     </div>
   </div>
 
   <script>
-    // ===== الحالة المشتركة =====
-    const filesState = []; // عناصر: { name, mimeType, data }
+    // ===== مزامنة الحامل مع الجنس =====
+    const genderEl = document.getElementById('gender');
+    const pregSel = document.getElementById('pregnant');
+    const pregMonths = document.getElementById('pregnancyMonths');
+    function syncPregnancyControls(){
+      const g = genderEl.value;
+      if(g !== 'أنثى'){
+        pregSel.value = 'na'; pregSel.disabled = true; pregMonths.value = ''; pregMonths.disabled = true;
+      }else{ pregSel.disabled = false; pregMonths.disabled = pregSel.value !== 'yes'; }
+    }
+    genderEl.addEventListener('change', syncPregnancyControls);
+    pregSel.addEventListener('change', ()=>{ pregMonths.disabled = pregSel.value !== 'yes'; });
+    syncPregnancyControls();
 
-    // عناصر DOM
-    const fileInput   = document.getElementById('fileInput');
-    const pickBtn     = document.getElementById('pickFilesBtn');
-    const uploadsList = document.getElementById('uploadsList');
-    const uploadZone  = document.getElementById('uploadZone');
-    const analyzeBtn  = document.getElementById('analyzeBtn');
-    const resultBox   = document.getElementById('result');
-    const hint        = document.getElementById('hint');
+    // ===== رافع الملفات مع بطاقات ومعاينة وحذف =====
+    const fileInput = document.getElementById('fileInput');
+    const dropZone  = document.getElementById('dropZone');
+    const cardsBox  = document.getElementById('cards');
+    const fileList  = document.getElementById('fileList');
 
-    // فتح المنتقي
-    pickBtn.addEventListener('click', () => fileInput.click());
+    const filesState = []; // { name, mimeType, data }
 
-    // سحب وإفلات
-    ['dragenter','dragover'].forEach(evt => uploadZone.addEventListener(evt, (e)=>{ e.preventDefault(); uploadZone.classList.add('drag'); }));
-    ;['dragleave','drop'].forEach(evt => uploadZone.addEventListener(evt, (e)=>{ e.preventDefault(); uploadZone.classList.remove('drag'); }));
-    uploadZone.addEventListener('drop', (e)=> handleFiles(Array.from(e.dataTransfer.files)));
+    dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
+    dropZone.addEventListener('dragover',  e=>{ e.preventDefault(); });
+    dropZone.addEventListener('dragleave', e=>{ e.preventDefault(); dropZone.classList.remove('drag'); });
+    dropZone.addEventListener('drop', async e=>{
+      e.preventDefault(); dropZone.classList.remove('drag');
+      await handleFiles(Array.from(e.dataTransfer.files));
+    });
 
-    // اختيار ملفات
-    fileInput.addEventListener('change', (e)=>{ handleFiles(Array.from(e.target.files)); fileInput.value=''; });
+    fileInput.addEventListener('change', async ()=>{
+      await handleFiles(Array.from(fileInput.files));
+      fileInput.value = '';
+    });
 
     async function handleFiles(files){
-      for (const f of files){
-        const base64 = await fileToDataURL(f); // data:<mime>;base64,....
+      for(const f of files){
+        const base64 = await fileToDataURL(f); // data:<mime>;base64,...
         filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64 });
       }
-      renderUploads();
+      renderCards();
+      fileList.textContent = filesState.map((f)=>`• ${f.name}`).join('
+');
     }
 
-    function renderUploads(){
-      uploadsList.innerHTML = '';
+    function renderCards(){
+      cardsBox.innerHTML = '';
       filesState.forEach((f, i)=>{
-        const card = document.createElement('div');
-        card.className = 'card';
-        const isImage = (f.mimeType||'').startsWith('image/');
-        const thumbSrc = isImage ? f.data : 'data:image/svg+xml;utf8,'+encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
-             <rect width="100%" height="100%" fill="#f1f5f9"/>
-             <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text>
-           </svg>`);
-        card.innerHTML = `
-          <button class="remove" title="حذف" aria-label="حذف" data-i="${i}">×</button>
-          <img class="thumb" src="${thumbSrc}" alt="${f.name}">
+        const isImg = (f.mimeType||'').startsWith('image/');
+        const thumb = isImg ? f.data : 'data:image/svg+xml;utf8,'+encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`);
+        const el = document.createElement('div');
+        el.className = 'fileCard';
+        el.innerHTML = `
+          <button class="remove" data-i="${i}" title="إزالة">×</button>
+          <img class="thumb" src="${thumb}" alt="${f.name}">
           <div class="meta">
-            <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${f.name}">${f.name}</div>
-            <div class="muted">${(f.mimeType||'—')}</div>
+            <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="${f.name}">${f.name}</div>
+            <div class="muted">${f.mimeType||'—'}</div>
           </div>`;
-        uploadsList.appendChild(card);
+        cardsBox.appendChild(el);
       });
-      uploadsList.querySelectorAll('.remove').forEach(btn=>btn.addEventListener('click', (e)=>{ const i = +e.currentTarget.dataset.i; filesState.splice(i,1); renderUploads(); }));
+      cardsBox.querySelectorAll('.remove').forEach(btn=>btn.addEventListener('click', (e)=>{
+        const i = +e.currentTarget.dataset.i; filesState.splice(i,1); renderCards(); fileList.textContent = filesState.map(f=>`• ${f.name}`).join('
+');
+      }));
     }
 
     function fileToDataURL(file){
       return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onerror=()=>reject(new Error('failed to read file')); r.onload=()=>resolve(r.result); r.readAsDataURL(file); });
     }
 
+    // ===== تجميع patientInfo =====
+    function buildPatientInfo(){
+      const ageYears = Number(document.getElementById('age').value || NaN);
+      const gender = document.getElementById('gender').value || null;
+      const smokingStatus = document.getElementById('smoking').value || null;
+      const packYears = document.getElementById('packYears').value ? Number(document.getElementById('packYears').value) : null;
+      const temp = document.getElementById('temp').value ? Number(document.getElementById('temp').value) : null;
+      const weight = document.getElementById('weight').value ? Number(document.getElementById('weight').value) : null;
+      const height = document.getElementById('height').value ? Number(document.getElementById('height').value) : null;
+      const hasCough = document.getElementById('hasCough').value || null;
+      const coughWeeks = document.getElementById('coughWeeks').value ? Number(document.getElementById('coughWeeks').value) : null;
+      const coughType = document.getElementById('coughType').value || null;
+      const pVal = pregSel.value;
+      const pregnant = (gender === 'أنثى') ? {
+        isPregnant: pVal === 'yes',
+        gestationalWeeks: (pVal === 'yes' && document.getElementById('pregnancyMonths').value)
+          ? Number(document.getElementById('pregnancyMonths').value) * 4
+          : null
+      } : null;
+      return {
+        name: document.getElementById('name').value || null,
+        ageYears: isNaN(ageYears) ? null : ageYears,
+        gender,
+        pregnant,
+        smoking: smokingStatus ? { status: smokingStatus, packYears } : null,
+        temperatureC: temp,
+        weightKg: weight,
+        heightCm: height,
+        cough: { has: hasCough, weeks: coughWeeks, type: coughType }
+      };
+    }
+
     // ===== استدعاء الباك-إند =====
-    analyzeBtn.addEventListener('click', async () => {
-      const text = document.getElementById('freeText').value || '';
-      const payload = { text, files: filesState, patientInfo: null };
-      hint.textContent = 'جاري التحليل...'; analyzeBtn.disabled = true;
+    async function analyze(){
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const busy = document.getElementById('busy');
+      analyzeBtn.disabled = true; busy.style.display = 'inline';
       try{
-        const resp = await fetch('/api/gpt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const textParts = [];
+        const ft = document.getElementById('freeText').value.trim(); if(ft) textParts.push(`وصف الحالة: ${ft}`);
+        const dx = document.getElementById('initialDx').value.trim(); if(dx) textParts.push(`التشخيصات المبدئية: ${dx}`);
+        const labs = document.getElementById('labsImaging').value.trim(); if(labs) textParts.push(`تحاليل/أشعة: ${labs}`);
+        const orders = document.getElementById('orders').value.trim(); if(orders) textParts.push(`الأدوية/الإجراءات: ${orders}`);
+        const mergedText = textParts.join('
+');
+
+        // الملفات من الحالة المحلية
+        const filesPayload = filesState.map(f=>({ name:f.name, mimeType:f.mimeType, data: f.data.split('base64,').pop() }));
+
+        const payload = { text: mergedText, patientInfo: buildPatientInfo(), files: filesPayload, mode:'clinical_audit', returnJson:true };
+        const resp = await fetch('/api/gpt',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const data = await resp.json().catch(()=>({}));
-        if(!resp.ok || data.ok===false){ throw new Error(data?.error || ('HTTP '+resp.status)); }
-        const html = data.html || '<div class="muted">لا توجد نتيجة.</div>';
-        resultBox.innerHTML = `<div class="panel">${html}</div>`;
-      }catch(err){
-        console.error(err); resultBox.innerHTML = `<div class="panel" style="border-color:#fecaca; background:#fff1f2; color:#991b1b">خطأ: ${err.message}</div>`;
-      }finally{
-        analyzeBtn.disabled = false; hint.textContent = '';
-      }
-    });
+        if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
+        document.getElementById('reportWrap').style.display = 'block';
+        document.getElementById('reportHTML').innerHTML = `<div id="report">${data.html}</div>`;
+        document.getElementById('jsonOut').textContent = JSON.stringify(data.structured||{}, null, 2);
+      }catch(err){ alert('خطأ: '+err.message); }
+      finally{ analyzeBtn.disabled = false; busy.style.display = 'none'; }
+    }
+    document.getElementById('analyzeBtn').addEventListener('click', analyze);
+
+    // تصدير PDF (كامل/أقسام)
+    function exportPDF(selector, filename){
+      const el = document.querySelector(selector);
+      if(!el){ alert('التقرير غير جاهز'); return; }
+      const opt = { filename, margin: 10, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+      html2pdf().from(el).set(opt).save();
+    }
+    document.getElementById('exportAll').addEventListener('click', ()=> exportPDF('#report', 'Medical_Audit_Report.pdf'));
+    document.getElementById('exportSummary').addEventListener('click', ()=> exportPDF('#report h2:nth-of-type(1), #report .kvs', 'Summary.pdf'));
+    document.getElementById('exportTable').addEventListener('click', ()=> exportPDF('#report table', 'Audit_Table.pdf'));
   </script>
 </body>
 </html>
