@@ -42,7 +42,7 @@
     textarea{min-height:90px; resize:vertical}
 
     /* رافع الملفات */
-    .uploader{border:2px dashed #cfe6ff; border-radius:16px; padding:26px; text-align:center; color:#64748b; background:#f5faff; cursor:pointer}
+    .uploader{border:2px dashed #cfe6ff; border-radius:16px; padding:26px; text-align:center; color:#64748b; background:#f5faff}
     .uploader.drag{background:#eef6ff}
     .uploader input{display:none}
     .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:12px}
@@ -239,22 +239,6 @@
     const cardsBox  = document.getElementById('cards');
     const fileList  = document.getElementById('fileList');
 
-    // افتح منتقي الملفات عند النقر/Enter/Space (حل لمتصفحات الجوال)
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.setAttribute('role','button');
-    dropZone.setAttribute('tabindex','0');
-    dropZone.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        fileInput.click();
-      }
-    });
-
-    // لا تسمح بإفلات الملف خارج المنطقة أن يبدّل الصفحة
-    ['dragenter','dragover','dragleave','drop'].forEach(ev => {
-      window.addEventListener(ev, e => e.preventDefault());
-    });
-
     const filesState = []; // { name, mimeType, data }
 
     dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
@@ -302,16 +286,7 @@
     }
 
     function fileToDataURL(file){
-      return new Promise((resolve,reject)=>{
-        const r = new FileReader();
-        r.onerror = () => {
-          console.error('Failed to read file', file?.name);
-          alert('تعذّر قراءة الملف: ' + (file?.name || ''));
-          reject(new Error('failed to read file'));
-        };
-        r.onload = () => resolve(r.result);
-        r.readAsDataURL(file);
-      });
+      return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onerror=()=>reject(new Error('failed to read file')); r.onload=()=>resolve(r.result); r.readAsDataURL(file); });
     }
 
     // ===== تجميع patientInfo =====
