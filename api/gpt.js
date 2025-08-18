@@ -198,47 +198,56 @@ async function geminiExtractBundle({ userText, files, patientInfo }) {
 function buildOpenAIInstructions(mode = "clinical_audit") {
   return `
 أنت استشاري تدقيق طبي وتأميني. حلّل معطيات المريض + نصوص OCR (من الملفات) + النص الحر.
-أخرج JSON فقط وفق المفاتيح أدناه. لا تضف أي نص خارج JSON.
+أخرج JSON فقط، بلا أي نص خارجه.
 
-قواعد صارمة:
-- عرّف لكل بند: النوع (lab/medication/procedure/device/imaging)، والمؤشّر السريري المطلوب، وهل هذا المؤشّر مُوثَّق في المعطيات.
-- احسب riskPercent حسب هذه العتبات:
-  * <60 = "مقبول" (أخضر) — المؤشّر واضح/لا تعارضات مهمة.
-  * 60–74 = "قابل للرفض – يحتاج تبرير" (أصفر) — المؤشّر غير مكتمل أو بديل أقل تدخّلًا.
-  * ≥75 = "مرفوض" (أحمر) — لا مؤشّر أو هناك تعارض/خطر واضح أو تكرار غير مبرَّر.
-- املأ insuranceDecision.justification بتعليل سريري محدّد (جملة أو جملتان)، واذكر إن لزم "ما المطلوب لتقبّله".
-- إذا تكرّر بند نفسه أكثر من مرة، اعتبره تعارضًا وارفع الخطورة (≥75).
-- املأ contradictions بكل اختلاف بين النص الحر وOCR (مثال: لا وجود لقيء لكن طُلب مضاد قيء).
+قواعد صارمة للتقييم:
+- صنّف كل بند: itemType = lab | medication | procedure | device | imaging.
+- intendedIndication = المؤشّر السريري المتوقع. isIndicationDocumented = هل المؤشّر مذكور فعليًا في المعطيات.
+- احسب riskPercent وفق العتبات:
+  <60 = "مقبول" (أخضر) — المؤشّر واضح ولا تعارض مهم.
+  60–74 = "قابل للرفض – يحتاج تبرير" (أصفر) — المؤشّر غير مكتمل أو يوجد بديل أقل تدخّلًا.
+  ≥75 = "مرفوض" (أحمر) — لا مؤشّر/تعارض واضح/تكرار غير مبرَّر.
+- املأ insuranceDecision.justification بتعليل سريري محدّد (ليس عامًا) يذكر لماذا القبول/الرفض وما المطلوب لقبول البند.
+- إذا تكرّر نفس البند في الملفات، اعتبره تعارضًا وارفع الخطورة (≥75).
+- املأ contradictions بأي اختلاف بين النص الحر وOCR (مثال: لا قيء مذكور ومع ذلك طُلب metoclopramide).
 
-أخرج هذا القالب:
+أخرج JSON بالهيكل التالي فقط:
 {
- "patientSummary": { ... كما قبل ... },
- "diagnosis": string[],
- "symptoms": string[],
- "contradictions": string[],
- "table": [
-   {
-     "name": string,
-     "itemType": "lab"|"medication"|"procedure"|"device"|"imaging",
-     "doseRegimen": string|null,
-     "intendedIndication": string|null,         // المؤشّر السريري المتوقع (مثال: N/V للـ Metoclopramide)
-     "isIndicationDocumented": boolean,         // هل المؤشر موجود فعلاً في البيانات
-     "conflicts": string[],
-     "riskPercent": number,                     // 0–100 وفق العتبات أعلاه (لا تضع 0 افتراضيًا)
-     "insuranceDecision": {
-       "label": "مقبول"|"قابل للرفض"|"مرفوض",
-       "justification": string                  // تعليل قوي محدّد
-     }
-   }
- ],
- "missingActions": string[],
- "referrals": [{"specialty": string, "whatToDo": string[]}],
- "financialInsights": string[],
- "conclusion": string
+  "patientSummary": {
+    "ageYears": number|null,
+    "gender": "ذكر"|"أنثى"|null,
+    "pregnant": { "isPregnant": boolean, "gestationalWeeks": number|null }|null,
+    "smoking": { "status": "مدخن"|"غير مدخن"|"سابق", "packYears": number|null }|null,
+    "diabetes": { "has": boolean, "type": "1"|"2"|null, "durationYears": number|null }|null,
+    "chronicConditions": string[]
+  },
+  "diagnosis": string[],
+  "symptoms": string[],
+  "contradictions": string[],
+  "table": [
+    {
+      "name": string,
+      "itemType": "lab"|"medication"|"procedure"|"device"|"imaging",
+      "doseRegimen": string|null,
+      "intendedIndication": string|null,
+      "isIndicationDocumented": boolean,
+      "conflicts": string[],
+      "riskPercent": number,  // 0–100 ولا تضع 0 تلقائيًا
+      "insuranceDecision": {
+        "label": "مقبول"|"قابل للرفض"|"مرفوض",
+        "justification": string // تعليل قوي محدّد لماهو مطلوب للقبول أو سبب الرفض
+      }
+    }
+  ],
+  "missingActions": string[],
+  "referrals": [{"specialty": string, "whatToDo": string[]}],
+  "financialInsights": string[],
+  "conclusion": string
 }
 ONLY JSON.
 `;
 }
+
 
 async function openaiAuditToJSON({ bundle, mode = "clinical_audit" }) {
   const system = buildOpenAIInstructions(mode);
