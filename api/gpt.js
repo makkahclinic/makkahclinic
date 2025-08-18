@@ -73,28 +73,60 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
 
 // ===== Gemini: extract text from files + merge with user text =====
 async function geminiSummarize({ text, files }) {
-  const parts = [];
+  // 1) جهّز أجزاء الملفات
+  const fileParts = [];
   for (const f of files || []) {
     const mime = f?.mimeType || "application/octet-stream";
-    const b64  = (f?.data||"").split("base64,").pop();
+    const b64  = (f?.data || "").split("base64,").pop();
     if (!b64) continue;
-    const { uri, mime: mm } = await geminiUploadBase64({ name: f?.name || "file", mimeType: mime, base64: b64 });
-    parts.push({ file_data: { file_uri: uri, mime_type: mm } });
+    const { uri, mime: mm } = await geminiUploadBase64({
+      name: f?.name || "file",
+      mimeType: mime,
+      base64: b64,
+    });
+    fileParts.push({ file_data: { file_uri: uri, mime_type: mm } });
   }
-  const systemPrompt = "أنت مساعد لاستخلاص سريري: لخص ما في الملفات (OCR) بدقة واذكر تشخيصات/طلبات/تكرارات فقط دون استنتاجات علاجية.";
+
+  // 2) تعليمات النظام موجّهة لاستخلاص سريري صِرف
+  const systemPrompt =
+    "أنت مساعد لاستخلاص سريري من مستندات طبية (OCR). " +
+    "استخرج نصًا واضحًا يحتوي على: التشخيصات المذكورة، العلامات/الأعراض، " +
+    "التحاليل/الإجراءات/الأدوية المطلوبة بالتفصيل، وأي تكرار أو غموض. " +
+    "لا تُنشئ قرارات علاجية؛ فقط صف المحتوى الموجود بالنص/الصور بدقة.";
+
+  // 3) اجمع النص + الملفات في رسالة واحدة (أفضل نمط لنجاح الـ OCR)
+  const userText = (text && text.trim().length) ? text.trim() : "لا يوجد نص حر.";
+  const contents = [
+    {
+      role: "user",
+      parts: [{ text: userText }, ...fileParts],
+    },
+  ];
+
+  // 4) أرسل الطلب
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [
-      { role: "user", parts: [{ text: (text||"لا يوجد نص حر.") }] },
-      ...(parts.length ? [{ role: "user", parts }] : [])
-    ]
+    contents,
+    generationConfig: { maxOutputTokens: 2048 },
   };
-  const resp = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+  const resp = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
   const data = await parseJsonSafe(resp);
-  if (!resp.ok) throw new Error("Gemini generateContent error: "+JSON.stringify(data));
-  const out = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("\n") || "";
-  return out;
+  if (!resp.ok) throw new Error("Gemini generateContent error: " + JSON.stringify(data));
+
+  const out = data?.candidates?.[0]?.content?.parts
+    ?.map((p) => p.text)
+    ?.join("\n") || "";
+
+  // 5) رجّع نصًا ولو بسيط لتغذية ChatGPT بدل لا شيء
+  return out.trim() || "لم أستخرج نصًا واضحًا من الملفات.";
 }
+
 
 // ===== Audit instructions for ChatGPT =====
 function auditInstructions(){ return `
