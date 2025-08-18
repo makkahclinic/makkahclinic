@@ -2,7 +2,6 @@
 // Backend: Gemini Files (OCR/vision) → ChatGPT clinical audit (JSON) → HTML report
 // Runtime: Next.js API Route (Vercel, Node 18+)
 
-// ===== Route config (static literal to avoid Vercel TemplateExpression bug) =====
 export const config = { api: { bodyParser: { sizeLimit: "50mb" } } };
 
 // ===== Keys & endpoints =====
@@ -29,7 +28,6 @@ async function parseJsonSafe(r) {
 async function geminiUploadBase64({ name, mimeType, base64 }) {
   const bin = Buffer.from(base64, "base64");
 
-  // 1) start session
   const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
     method: "POST",
     headers: {
@@ -46,7 +44,6 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
   if (!sessionUrl) throw new Error("Gemini upload URL missing");
 
-  // 2) upload + finalize
   const upRes = await fetch(sessionUrl, {
     method: "PUT",
     headers: {
@@ -68,7 +65,7 @@ async function geminiSummarize({ text, files }) {
   const fileParts = [];
   for (const f of files || []) {
     const mime = f?.mimeType || "application/octet-stream";
-    const base64 = (f?.data || "").split("base64,").pop(); // يدعم dataURL أو base64 صِرف
+    const base64 = (f?.data || "").split("base64,").pop();
     if (!base64) continue;
     const { uri, mime: mm } = await geminiUploadBase64({
       name: f?.name || "file",
@@ -78,9 +75,8 @@ async function geminiSummarize({ text, files }) {
     fileParts.push({ file_data: { file_uri: uri, mime_type: mm } });
   }
 
-  // prompt بسيط لاستخلاص المحتويات المذكورة فقط
   const systemPrompt =
-    "أنت مساعد استخراج طبي. اكتب ملخصًا مُنظّمًا للعناصر المذكورة فقط في المستندات (تشخيصات/تحاليل/أدوية/إجراءات/تكرارات)، دون إضافة عناصر جديدة من عندك. لا توصيات علاجية.";
+    "أنت مساعد استخراج طبي. لخّص العناصر المذكورة فعلاً في المستندات (تشخيصات/تحاليل/أدوية/إجراءات/تكرارات)، دون إضافة عناصر من عندك. لا توصيات علاجية.";
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: [
@@ -96,27 +92,32 @@ async function geminiSummarize({ text, files }) {
   });
   const data = await parseJsonSafe(resp);
   if (!resp.ok) throw new Error("Gemini generateContent error: " + JSON.stringify(data));
-  const out = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n") || "";
-  return out;
+  return data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n") || "";
 }
 
-// ===== Build audit instructions (no hard-coded decisions; evidence-driven) =====
+// ===== Prompt: evidence-driven with few-shot style =====
+function fewShotRow() {
+  return `
+مثال صف (أسلوب الكتابة فقط، لا تُنشئ هذا إن لم يكن مذكوراً):
+{"name":"Dengue Ab IgG","itemType":"lab","doseRegimen":null,"intendedIndication":"التحرّي عن تعرض سابق أو عدوى باردة","isIndicationDocumented":false,"conflicts":[],"riskPercent":15,"insuranceDecision":{"label":"قابل للرفض","justification":"IgG وحده لا يؤكّد عدوى حادة؛ التشخيص الحاد يحتاج IgM أو NS1 وفق WHO/CDC."}}
+`;
+}
+
 function auditInstructions() {
   return `
-أنت استشاري تدقيق طبي وتأميني. المطلوب: تحويل المدخلات إلى تقييم سريري تأميني دقيق يعتمد على الأدلة الحديثة من:
+أنت استشاري تدقيق طبي وتأميني. حوّل المدخلات إلى تقييم سريري تأميني دقيق يعتمد على الأدلة الحديثة من:
 WHO, CDC, ECDC, NIH, NHS, UpToDate, Cochrane, NEJM, Lancet, JAMA, BMJ, Nature/Science,
-والمرجعيات الدوائية: FDA, EMA, SFDA, BNF, Micromedex, Lexicomp, DailyMed, USP, Mayo Clinic.
+والمراجع الدوائية: FDA, EMA, SFDA, BNF, Micromedex, Lexicomp, DailyMed, USP, Mayo Clinic.
 
-القواعد المهمة:
-- اعمل فقط على العناصر المذكورة فعلاً في مدخلات المستخدم (نص/OCR). لا تضف عناصر غير مذكورة.
-- لكل عنصر في الجدول: اذكر "الاسم"، "itemType" (lab|medication|procedure|device|imaging)،
-  "doseRegimen" إن وُجد، "intendedIndication"، "isIndicationDocumented" (صحيح/خطأ بحسب النص/الملفات)،
-  "conflicts" (تكرار/تعارضات محددة)، "riskPercent" (0-100)، و "insuranceDecision" مع
-  {"label": "مقبول"|"قابل للرفض"|"مرفوض", "justification": سبب علمي دقيق ومختصر يعتمد على دلائل}.
-- لا تفترض أعراض أو تشخيصات غير موثّقة. إذا نقص السياق قل "غير موثّق".
-- استخدم لغة عربية طبية واضحة، وابتعد عن التعميمات.
+المبادئ:
+- اعمل حصراً على العناصر المذكورة فعلاً في مدخلات المستخدم (النص/الملفات). لا تضف عناصر غير موجودة.
+- لكل عنصر: "name","itemType"(lab|medication|procedure|device|imaging),"doseRegimen","intendedIndication",
+  "isIndicationDocumented"(true/false),"conflicts" (تكرارات/تعارضات محددة)،
+  "riskPercent"(0-100)، "insuranceDecision" = {"label":"مقبول"|"قابل للرفض"|"مرفوض","justification": سبب سريري مختصر دقيق مع إحالة عامة للمصدر مثل WHO/CDC/BNF… بدون روابط}.
+- التبريرات يجب أن تكون مُحدَّدة (≥ 40 حرفاً) وتتجنب العبارات العامة مثل "مفيد/شائع" بلا سبب سريري.
+- لا توصيات علاجية مفصّلة؛ فقط قرارات تأمينية وتأصيل سريري موجز.
+- أخرج JSON فقط بالمخطط التالي دون أي نص آخر:
 
-أخرج JSON فقط بالمخطط التالي دون أي نص آخر:
 {
   "patientSummary": {"ageYears": number|null, "gender": "ذكر"|"أنثى"|null, "pregnant": {"isPregnant": boolean, "gestationalWeeks": number|null}|null, "smoking": {"status": "مدخن"|"غير مدخن"|"سابق"|null, "packYears": number|null}|null, "chronicConditions": string[]},
   "diagnosis": string[],
@@ -130,29 +131,37 @@ WHO, CDC, ECDC, NIH, NHS, UpToDate, Cochrane, NEJM, Lancet, JAMA, BMJ, Nature/Sc
   "financialInsights": string[],
   "conclusion": string
 }
+
+${fewShotRow()}
 ONLY JSON.`;
 }
 
-// ===== Deterministic ChatGPT call (temperature 0) =====
+// ===== Refine rubric (تحسين الجودة) =====
+function refineRubric(bundle) {
+  return `
+أنت مُحكِّم جودة. لديك "مسودة" JSON من نموذج آخر. حسّنها وفقاً للمعايير:
+- لا تبريرات عامة؛ يجب ذكر سبب سريري محدّد أو شرط إرشادي (مثال: اشتراط IgM/NS1 للعدوى الحادة للضنك).
+- عبّر عن التوثيق: إذا لم يوجد سياق/أعراض/مستند يؤيّد المؤشّر اكتب isIndicationDocumented=false وفسّر.
+- riskPercent يجب أن يكون معبّراً (لا تضع 0% للجميع) وبسُلَّم واقعي (مثلاً 5/10/25/50/75/90).
+- املأ missingActions بما ينقص فعلاً في الحالة (مثل طلب IgM/NS1، سكر تراكمي، وظائف كلوية… حسب المدخلات).
+- لا تُنشئ عناصر غير مذكورة في المدخلات.
+أعد JSON النهائي فقط. هذه هي المدخلات المرجعية:
+- userText + OCR: ${JSON.stringify({ text: bundle.userText, extractedSummary: bundle.extractedSummary }).slice(0, 2000)}
+`;
+}
+
+// ===== Deterministic ChatGPT =====
 async function chatgptJSON(bundle, extra = []) {
   const resp = await fetch(OPENAI_API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: JSON.stringify({
       model: OPENAI_MODEL,
       temperature: 0,
       top_p: 0,
       messages: [
         { role: "system", content: auditInstructions() },
-        {
-          role: "user",
-          content:
-            "المعطيات (نص حر + OCR مختصر + حقول بنيوية):\n" +
-            JSON.stringify(bundle, null, 2),
-        },
+        { role: "user", content: "المعطيات:\n" + JSON.stringify(bundle, null, 2) },
         ...extra,
       ],
       response_format: { type: "json_object" },
@@ -160,115 +169,77 @@ async function chatgptJSON(bundle, extra = []) {
   });
   const data = await resp.json();
   if (!resp.ok) throw new Error("OpenAI error: " + JSON.stringify(data));
-  const txt = data?.choices?.[0]?.message?.content || "{}";
-  return JSON.parse(txt);
+  return JSON.parse(data?.choices?.[0]?.message?.content || "{}");
 }
 
-// ===== Simple fuzzy helpers to restrict output to mentioned items only =====
-function tokenize(s) {
-  return (s || "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-}
-function scoreLike(a, b) {
-  // نسبة تشارك كلمات بسيطة
-  const A = new Set(tokenize(a));
-  const B = new Set(tokenize(b));
-  if (!A.size || !B.size) return 0;
-  let inter = 0;
-  A.forEach((w) => { if (B.has(w)) inter++; });
-  return inter / Math.min(A.size, B.size);
-}
+// ===== Light fuzzy restriction to mentioned items =====
+function tokenize(s){ return (s||"").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu," ").split(/\s+/).filter(Boolean); }
+function scoreLike(a,b){ const A=new Set(tokenize(a)),B=new Set(tokenize(b)); if(!A.size||!B.size) return 0; let inter=0; A.forEach(w=>{ if(B.has(w)) inter++; }); return inter/Math.min(A.size,B.size); }
 
-// استخرج “العناصر المذكورة” من النص الحر + ملخص OCR (قائمة أسماء خام)
 function harvestMentionedItems({ userText, extractedSummary }) {
-  const text = [userText || "", extractedSummary || ""].join("\n").toLowerCase();
-  // ابحث عن سطور شبيهة بطلبات labs/meds
-  const rough = new Set();
-  text.split(/\n+/).forEach((ln) => {
-    const s = ln.trim();
-    if (!s) return;
-    if (s.length < 3) return;
-    // أمثلة: Dengue, CBC, Creatinine, Pantozol, Normal Saline, Ultrasound...
-    if (/[a-z\u0600-\u06FF]/i.test(s)) {
-      // التقط عبارات مفيدة قصيرة
-      const m = s.match(/([a-z0-9\.\-\+\s\/\(\)]{3,40})/gi);
-      (m || []).forEach((frag) => {
-        const f = frag.trim();
-        if (f.length >= 3 && f.split(" ").length <= 8) rough.add(f);
-      });
-    }
+  const text = [userText||"", extractedSummary||""].join("\n").toLowerCase();
+  const out = new Set();
+  text.split(/\n+/).forEach(ln=>{
+    const s = ln.trim(); if(!s) return;
+    const m = s.match(/([a-z0-9\.\-\+\s\/\(\)]{3,40})/gi) || [];
+    m.forEach(f => { const k = f.trim(); if(k.length>=3 && k.split(" ").length<=8) out.add(k); });
   });
-  return Array.from(rough);
+  return Array.from(out);
 }
-
-// فلترة جدول AI للإبقاء على المذكور فقط
-function restrictToMentioned(aiTable, mentionedList) {
+function restrictToMentioned(aiTable, mentioned) {
   if (!Array.isArray(aiTable)) return [];
-  if (!mentionedList.length) return aiTable; // لو ما قدرنا نستخرج، لا نمنع
-  return aiTable.filter((row) => {
+  if (!mentioned.length) return aiTable;
+  return aiTable.filter(row => {
     const nm = row?.name || "";
-    const maxSim = Math.max(
-      0,
-      ...mentionedList.map((raw) => scoreLike(nm, raw))
-    );
-    return maxSim >= 0.45; // حد بسيط للتماثل
+    const sim = Math.max(0, ...mentioned.map(raw => scoreLike(nm, raw)));
+    return sim >= 0.30; // تخفيف القيود قليلاً
   });
 }
 
-// ===== HTML rendering (الواجهة الأمامية تلوّن حسب النسبة؛ هنا نُنشئ جدولاً نظيفاً) =====
-function colorCellStyle(p) {
-  if (p >= 75) return 'style="background:#fee2e2;border:1px solid #fecaca"';
-  if (p >= 60) return 'style="background:#fff7ed;border:1px solid #ffedd5"';
-  return 'style="background:#ecfdf5;border:1px solid #d1fae5"';
-}
-function toHtml(s) {
-  const rows = (s.table || [])
-    .map((r) => {
-      const risk = Math.round(r?.riskPercent || 0);
-      return `<tr>
-<td>${r?.name || "-"}</td>
-<td>${r?.itemType || "-"}</td>
-<td>${r?.doseRegimen || "-"}</td>
-<td>${r?.intendedIndication || "-"}</td>
-<td>${r?.isIndicationDocumented ? "نعم" : "لا"}</td>
-<td>${(r?.conflicts || []).join("<br>") || "-"}</td>
+// ===== HTML rendering =====
+function colorCellStyle(p){ if(p>=75) return 'style="background:#fee2e2;border:1px solid #fecaca"'; if(p>=60) return 'style="background:#fff7ed;border:1px solid #ffedd5"'; return 'style="background:#ecfdf5;border:1px solid #d1fae5"'; }
+
+function toHtml(s){
+  const rows = (Array.isArray(s.table)?s.table:[]).map(r=>{
+    const risk = Math.round(r?.riskPercent||0);
+    return `<tr>
+<td>${r?.name||"-"}</td>
+<td>${r?.itemType||"-"}</td>
+<td>${r?.doseRegimen||"-"}</td>
+<td>${r?.intendedIndication||"-"}</td>
+<td>${r?.isIndicationDocumented?"نعم":"لا"}</td>
+<td>${(r?.conflicts||[]).join("<br>")||"-"}</td>
 <td ${colorCellStyle(risk)}><b>${risk}%</b></td>
-<td>${r?.insuranceDecision?.label || "-"}</td>
-<td>${r?.insuranceDecision?.justification || "-"}</td>
+<td>${r?.insuranceDecision?.label||"-"}</td>
+<td>${r?.insuranceDecision?.justification||"-"}</td>
 </tr>`;
-    })
-    .join("");
+  }).join("");
 
-  const contradictions =
-    (s.contradictions || []).map((c) => `<li>${c}</li>`).join("") ||
-    "<li>لا يوجد تناقضات واضحة</li>";
+  const contradictions = (Array.isArray(s.contradictions)?s.contradictions:[]).length
+    ? s.contradictions.map(c=>`<li>${c}</li>`).join("")
+    : "<li>لا يوجد تناقضات واضحة</li>";
 
-  const missing =
-    (s.missingActions || []).map((c) => `<li>${c}</li>`).join("") ||
-    "<li>—</li>";
+  const missing = (Array.isArray(s.missingActions)?s.missingActions:[]).length
+    ? s.missingActions.map(c=>`<li>${c}</li>`).join("")
+    : "<li>—</li>";
 
-  const fin =
-    (s.financialInsights || []).map((c) => `<li>${c}</li>`).join("") ||
-    "<li>—</li>";
+  const fin = (Array.isArray(s.financialInsights)?s.financialInsights:[]).length
+    ? s.financialInsights.map(c=>`<li>${c}</li>`).join("")
+    : "<li>—</li>";
 
   return `
 <h2>📋 ملخص الحالة</h2>
-<div class="kvs"><p>${(s.conclusion || "—").replace(/\n/g, "<br>")}</p></div>
+<div class="kvs"><p>${(s.conclusion||"—").replace(/\n/g,"<br>")}</p></div>
 
 <h2>⚠️ التناقضات والأخطاء</h2>
 <ul>${contradictions}</ul>
 
 <h2>💊 جدول الأدوية والإجراءات</h2>
 <table dir="rtl" style="width:100%;border-collapse:collapse">
-<thead>
-<tr>
-  <th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر</th>
-  <th>موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th><th>قرار التأمين</th><th>التبرير</th>
-</tr>
-</thead>
+<thead><tr>
+<th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر</th>
+<th>موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th><th>قرار التأمين</th><th>التبرير</th>
+</tr></thead>
 <tbody>${rows}</tbody>
 </table>
 
@@ -276,44 +247,40 @@ function toHtml(s) {
 <ul>${missing}</ul>
 
 <h2>📈 فرص تحسين الدخل والخدمة</h2>
-<ul>${fin}</ul>
-`;
+<ul>${fin}</ul>`;
 }
 
 // ===== API handler =====
-export default async function handler(req, res) {
-  try {
-    if (req.method !== "POST") return bad(res, 405, "POST only");
-    if (!OPENAI_API_KEY) return bad(res, 500, "Missing OPENAI_API_KEY");
-    if (!GEMINI_API_KEY) return bad(res, 500, "Missing GEMINI_API_KEY");
+export default async function handler(req, res){
+  try{
+    if(req.method!=="POST") return bad(res,405,"POST only");
+    if(!OPENAI_API_KEY) return bad(res,500,"Missing OPENAI_API_KEY");
+    if(!GEMINI_API_KEY) return bad(res,500,"Missing GEMINI_API_KEY");
 
-    const { text = "", files = [], patientInfo = null } = req.body || {};
+    const { text = "", files = [], patientInfo = null } = req.body||{};
 
-    // 1) OCR/vision summary from Gemini
+    // (1) OCR/vision summary
     const extracted = await geminiSummarize({ text, files });
 
-    // 2) Build bundle to ChatGPT
-    const bundle = {
-      patientInfo,
-      userText: text,
-      extractedSummary: extracted,
-    };
+    // (2) Draft
+    const bundle = { patientInfo, userText: text, extractedSummary: extracted };
+    const draft = await chatgptJSON(bundle);
 
-    // 3) Ask ChatGPT (deterministic)
-    let structured = await chatgptJSON(bundle);
+    // (3) Refine / improve quality
+    const refined = await chatgptJSON(bundle, [
+      { role: "system", content: refineRubric(bundle) },
+      { role: "user", content: "المسودة:\n" + JSON.stringify(draft, null, 2) }
+    ]);
 
-    // 4) Post-filter: keep only items that were mentioned in inputs
-    const mentioned = harvestMentionedItems({
-      userText: text,
-      extractedSummary: extracted,
-    });
-    structured.table = restrictToMentioned(structured.table, mentioned);
+    // (4) Keep only mentioned items (no hallucinations)
+    const mentioned = harvestMentionedItems({ userText: text, extractedSummary: extracted });
+    refined.table = restrictToMentioned(refined.table, mentioned);
 
-    // 5) Render HTML
-    const html = toHtml(structured);
-    return ok(res, { html, structured });
-  } catch (err) {
+    // (5) HTML
+    const html = toHtml(refined);
+    return ok(res, { html, structured: refined });
+  }catch(err){
     console.error("/api/gpt error:", err);
-    return bad(res, 500, err?.message || String(err));
+    return bad(res,500, err?.message || String(err));
   }
 }
