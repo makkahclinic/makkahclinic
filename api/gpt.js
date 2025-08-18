@@ -1,20 +1,12 @@
 // /pages/api/gpt.js
 // Backend: Medical Deep Audit (Gemini OCR/vision → ChatGPT clinical audit) + HTML report
 // Runtime: Next.js API Route (Vercel, Node 18+)
-// ✅ مرن وآمن: نقرأ الحد من Environment Variable مع قيمة افتراضية
-const BODY_SIZE_LIMIT_MB =
-  Number.parseInt(process.env.BODY_SIZE_LIMIT_MB || "25", 10);
 
-// تأكيد رقم صحيح ومعقول
-const _SIZE_MB = Number.isFinite(BODY_SIZE_LIMIT_MB) && BODY_SIZE_LIMIT_MB > 0
-  ? BODY_SIZE_LIMIT_MB
-  : 25;
-
-// مهم: لا نستخدم Template Literal داخل config لتفادي TemplateExpression
+// ✅ تحديد حجم البودي للطلبات إلى 50 ميغابايت (قيمة ثابتة)
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: _SIZE_MB + "mb", // 👈 نص عادي، ليس `${...}`
+      sizeLimit: "50mb",   // الحد الجديد للطلبات الكبيرة
     },
   },
 };
