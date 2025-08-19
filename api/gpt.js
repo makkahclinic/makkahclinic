@@ -92,20 +92,21 @@ function auditInstructions(lang = 'ar'){
 * **Heart Failure:** AHA/ACC/HFSA 2022 Guidelines, ESC 2021 Guidelines.
 * **Diabetes in CKD:** KDIGO 2022 Clinical Practice Guideline.
 * **General Diabetes:** ADA Standards of Care 2024/2025.
+* **Hypertension:** ESC 2023 & ACC 2024 Guidelines.
 * **Acute Decompensated Heart Failure (ADHF):** Medscape, emDocs, PMC articles on Noninvasive Ventilation.
+* **Specific Drugs & Risks:** StatPearls (Thiazides), FDA/PMC reviews (long-term PPI risks), official SmPC for drugs like Triplixam, Rosuvastatin, Duodart.
 
 **Mandatory Analysis Rules:**
 1.  **Complete Coverage:** You must analyze **every single item** listed in the "Full List of Orders" without exception.
-2.  **Evidence-Based Reasoning:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs". Your reasoning must align with the guidelines mentioned above. The scores for clinicalValidity, documentationStrength, and financialImpact MUST be a number between 0 and 100, reflecting a realistic assessment (e.g., 85, not 8 or 9).
+2.  **Evidence-Based Reasoning:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs". Your reasoning must align with the guidelines mentioned above. The scores for clinicalValidity, documentationStrength, and financialImpact MUST be a number between 0 and 100, reflecting a realistic assessment.
 3.  **Apply A-priori Clinical Knowledge (Strict Rules derived from guidelines):**
     * **IV Fluids in ADHF:** Strongly contraindicated unless there is documented evidence of hypotension or hypoperfusion (AHA/ACC/HFSA). Flag as a major error.
     * **NSAIDs (e.g., Ibuprofen) in HF & CKD:** To be avoided as they can worsen renal function and fluid retention (AHA/ACC/HFSA, KDIGO). Flag as a major clinical risk.
-    * **Metformin in CKD:** Must be stopped or dose-adjusted based on eGFR. Specifically, it's contraindicated if eGFR is < 30 and requires caution/dose reduction if eGFR is 30-45 (KDIGO 2022). The decision should be nuanced, like "Temporary Stop / Re-evaluate". Flag this as a major clinical risk if ordered inappropriately.
+    * **Metformin in CKD:** Must be stopped or dose-adjusted based on eGFR. Specifically, it's contraindicated if eGFR is < 30 and requires caution/dose reduction if eGFR is 30-45 (KDIGO 2022). The decision should be nuanced, like "Temporary Stop / Re-evaluate".
 4.  **Proactive Standard of Care Analysis (Think about what's MISSING based on guidelines):**
     * **ADHF Diagnosis:** A BNP or NT-proBNP lab test is a Class 1 recommendation for diagnosis and prognosis (AHA/ACC/HFSA). If it's missing, recommend it urgently.
-    * **Hypertension Management:** If vital signs show high blood pressure, recommend a review of antihypertensive therapy according to guidelines.
+    * **Long-term PPI Use:** If a PPI is prescribed, check for a clear indication. If it seems to be for long-term use without re-evaluation, add a "Best Practice" recommendation to review the need for it due to long-term risks (FDA).
     * **Diabetes Care:** For a patient with diabetes, check for standard of care items like referral for a fundus exam (ADA).
-    * **Noninvasive Ventilation (NIV):** For a patient with ADHF and respiratory distress, consider if NIV (CPAP/BiPAP) should have been ordered (ESC/PMC).
 
 ${langRule}
 
