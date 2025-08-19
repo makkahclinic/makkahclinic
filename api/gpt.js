@@ -60,12 +60,12 @@ async function geminiSummarize({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات لتحليلها." });
 
-  const systemPrompt = `You are an expert in medical data extraction. Your task is to read all inputs (text and files) and extract the clinical information with high accuracy. **Crucially, create a de-duplicated, unique list of all orders.** Organize the information under the following headings:
+  const systemPrompt = `You are an expert in medical data extraction. Your task is to read all inputs (text and files) and extract the clinical information with high accuracy. **Crucially, create a de-duplicated, unique list of all orders, including dose, frequency, and duration for medications.** Organize the information under the following headings:
 - Chief Complaint & Symptoms
 - Diagnoses
 - Chronic Conditions
 - Vital Signs
-- Full List of Orders (Unique Items Only): medications, labs, imaging, procedures`;
+- Full List of Orders (Unique Items Only): medications (with dose/duration), labs, imaging, procedures`;
   
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -86,27 +86,29 @@ function auditInstructions(lang = 'ar'){
     ? "**Language Rule: All outputs, texts, and justifications MUST be in clear, professional English.**"
     : "**قاعدة اللغة: يجب أن تكون جميع المخرجات والنصوص والتبريرات باللغة العربية الفصحى.**";
 
-  return `You are an expert, evidence-based medical auditor and consultant. Your mission is to deeply analyze the following case, applying strict clinical rules and proactive thinking based on the highest standards of medical evidence.
+  return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case, applying strict clinical and pharmaceutical rules.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
 * **Heart Failure:** AHA/ACC/HFSA 2022 Guidelines, ESC 2021 Guidelines.
 * **Diabetes in CKD:** KDIGO 2022 Clinical Practice Guideline.
 * **General Diabetes:** ADA Standards of Care 2024/2025.
 * **Hypertension:** ESC 2023 & ACC 2024 Guidelines.
-* **Acute Decompensated Heart Failure (ADHF):** Medscape, emDocs, PMC articles on Noninvasive Ventilation.
-* **Specific Drugs & Risks:** StatPearls (Thiazides), FDA/PMC reviews (long-term PPI risks), official SmPC for drugs like Triplixam, Rosuvastatin, Duodart.
+* **Specific Drugs & Risks:** StatPearls, FDA/PMC reviews, official SmPC for drugs.
 
 **Mandatory Analysis Rules:**
-1.  **Complete Coverage:** You must analyze **every single item** listed in the "Full List of Orders" without exception.
-2.  **Evidence-Based Reasoning:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs". Your reasoning must align with the guidelines mentioned above. The scores for clinicalValidity, documentationStrength, and financialImpact MUST be a number between 0 and 100, reflecting a realistic assessment.
-3.  **Apply A-priori Clinical Knowledge (Strict Rules derived from guidelines):**
-    * **IV Fluids in ADHF:** Strongly contraindicated unless there is documented evidence of hypotension or hypoperfusion (AHA/ACC/HFSA). Flag as a major error.
-    * **NSAIDs (e.g., Ibuprofen) in HF & CKD:** To be avoided as they can worsen renal function and fluid retention (AHA/ACC/HFSA, KDIGO). Flag as a major clinical risk.
-    * **Metformin in CKD:** Must be stopped or dose-adjusted based on eGFR. Specifically, it's contraindicated if eGFR is < 30 and requires caution/dose reduction if eGFR is 30-45 (KDIGO 2022). The decision should be nuanced, like "Temporary Stop / Re-evaluate".
-4.  **Proactive Standard of Care Analysis (Think about what's MISSING based on guidelines):**
-    * **ADHF Diagnosis:** A BNP or NT-proBNP lab test is a Class 1 recommendation for diagnosis and prognosis (AHA/ACC/HFSA). If it's missing, recommend it urgently.
-    * **Long-term PPI Use:** If a PPI is prescribed, check for a clear indication. If it seems to be for long-term use without re-evaluation, add a "Best Practice" recommendation to review the need for it due to long-term risks (FDA).
-    * **Diabetes Care:** For a patient with diabetes, check for standard of care items like referral for a fundus exam (ADA).
+1.  **Pharmaceutical Analysis (Dose, Duration, Monitoring):**
+    * For each medication, analyze its **dose, frequency, and duration**.
+    * **Excessive Duration:** Flag any chronic medication prescribed for more than 30 days in an initial or acute visit as "Reviewable". Justification: "Long duration requires re-evaluation after initial stabilization."
+    * **Incorrect Dosing:** Check if the dose is appropriate for the patient's condition (e.g., age, kidney function). Flag incorrect doses as "Rejected".
+    * **Missing Monitoring Labs:** For drugs requiring monitoring (e.g., statins need LFTs; ACEi/ARBs need Creatinine/K+), check if these labs were ordered. If not, add an **Urgent** recommendation to order them.
+2.  **Apply A-priori Clinical Knowledge (Strict Rules):**
+    * **IV Fluids in ADHF:** Strongly contraindicated unless there is documented hypotension or hypoperfusion. Flag as a major error.
+    * **NSAIDs (e.g., Ibuprofen) in HF & CKD:** To be avoided. Flag as a major clinical risk.
+    * **Metformin in CKD:** Must be stopped or dose-adjusted based on eGFR (contraindicated if eGFR < 30, caution if 30-45).
+3.  **Proactive Standard of Care Analysis (Think about what's MISSING):**
+    * **ADHF Diagnosis:** A BNP or NT-proBNP lab test is a Class 1 recommendation. If missing, recommend it urgently.
+    * **Diabetes Care:** Check for standard of care items like referral for a fundus exam (ADA).
+    * **Polypharmacy:** Identify and recommend stopping any unnecessary or duplicative medications.
 
 ${langRule}
 
@@ -118,6 +120,8 @@ ${langRule}
     {
       "name": "string",
       "itemType": "lab"|"medication"|"procedure"|"device"|"imaging",
+      "doseRegimen": "string|null",
+      "durationDays": "number|null",
       "intendedIndication": "string|null",
       "riskAnalysis": {
         "clinicalValidity": {"score": "number", "reasoning": "string"},
@@ -187,6 +191,11 @@ function toHtml(s){
     const fi = ra.financialImpact || {};
     const decisionColor = getDecisionColor(r.insuranceDecision?.label);
 
+    let doseInfo = '';
+    if (r.itemType === 'medication' && (r.doseRegimen || r.durationDays)) {
+        doseInfo = `<div class="dose-info"><strong>الجرعة والمدة:</strong> ${r.doseRegimen || ''} ${r.durationDays ? `(لمدة ${r.durationDays} يوم)` : ''}</div>`;
+    }
+
     return `
     <div class="audit-row">
         <div class="row-header">
@@ -200,6 +209,7 @@ function toHtml(s){
                 <strong>المؤشر السريري المستنتج:</strong>
                 <p>${r.intendedIndication || '<em>لم يتمكن النظام من استنتاج مؤشر واضح.</em>'}</p>
             </div>
+            ${doseInfo}
             <div class="risk-grid">
                 <div class="risk-cell">
                     <div class="risk-title">
@@ -258,6 +268,7 @@ function toHtml(s){
     .row-body { padding: 16px; }
     .indication { margin-bottom: 16px; }
     .indication p { margin: 4px 0 0; color: #475569; }
+    .dose-info { background: #f1f5f9; padding: 8px 12px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; color: #475569;}
     
     .risk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
     .risk-cell { background: #f8fbff; border: 1px dashed #dbeafe; border-radius: 10px; padding: 12px; }
