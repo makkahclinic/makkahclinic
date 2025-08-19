@@ -165,7 +165,7 @@
         <button class="btn-outline btn" id="exportSummary">PDF الملخص</button>
         <button class="btn-outline btn" id="exportTable">PDF الجدول</button>
       </div>
-      <div id="reportHTML" class="card"></div>
+      <div id="reportHTML"></div>
       <details style="margin-top:10px" class="no-print">
         <summary>إظهار JSON (للبحث/الإحصاءات)</summary>
         <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
@@ -320,7 +320,7 @@
         if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
 
         document.getElementById('reportWrap').style.display = 'block';
-        document.getElementById('reportHTML').innerHTML = `<div id="report">${data.html}</div>`;
+        document.getElementById('reportHTML').innerHTML = `<div id="reportContent">${data.html}</div>`;
         document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
       }catch(err){
         alert('خطأ: ' + err.message);
@@ -330,16 +330,24 @@
     }
     document.getElementById('analyzeBtn').addEventListener('click', analyze);
 
-    // تصدير PDF
+    // ===== تصدير PDF (تم تحديثه) =====
     function exportPDF(selector, filename){
       const el = document.querySelector(selector);
-      if(!el){ alert('التقرير غير جاهز'); return; }
-      const opt = { filename, margin: 10, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+      if(!el){ alert('التقرير غير جاهز أو القسم المحدد غير موجود'); return; }
+      const opt = { 
+        filename, 
+        margin: 10, 
+        image: { type: 'jpeg', quality: 0.98 }, 
+        html2canvas: { scale: 2, useCORS: true }, 
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+      };
       html2pdf().from(el).set(opt).save();
     }
-    document.getElementById('exportAll').addEventListener('click', ()=> exportPDF('#report', 'Medical_Audit_Report.pdf'));
-    document.getElementById('exportSummary').addEventListener('click', ()=> exportPDF('#report h2:nth-of-type(1), #report .kvs', 'Summary.pdf'));
-    document.getElementById('exportTable').addEventListener('click', ()=> exportPDF('#report table', 'Audit_Table.pdf'));
+    
+    // ربط الأزرار بالمعرفات الصحيحة في التقرير الجديد
+    document.getElementById('exportAll').addEventListener('click', ()=> exportPDF('#reportContent', 'Medical_Audit_Report.pdf'));
+    document.getElementById('exportSummary').addEventListener('click', ()=> exportPDF('#reportContent .report-section:first-child', 'Summary.pdf'));
+    document.getElementById('exportTable').addEventListener('click', ()=> exportPDF('#reportContent .report-section:nth-child(2)', 'Audit_Table.pdf'));
   </script>
 </body>
 </html>
