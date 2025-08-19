@@ -93,11 +93,14 @@ function auditInstructions(lang = 'ar'){
 2.  **Link and Infer:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs". Provide specific, non-repetitive reasoning.
 3.  **Apply A-priori Clinical Knowledge (Strict Rules):**
     * **Dengue:** An IgG test alone for an acute infection is a **clear clinical error**. Clinical validity must be very low (<20%), the decision "Rejected", and an urgent recommendation to order IgM and NS1 is required.
-    * **IV Fluids:** Only acceptable with clear documentation of: hypotension, dehydration (due to vomiting/diarrhea), or inability to take oral fluids.
+    * **IV Fluids:** Only acceptable with clear documentation of: hypotension, dehydration (due to vomiting/diarrhea), or inability to take oral fluids. In a patient with Heart Failure, it is almost always contraindicated.
     * **Antiemetics:** Only acceptable with clear documentation of "nausea" or "vomiting".
     * **Nebulizers:** Only acceptable with clear documentation of respiratory symptoms.
     * **Imaging (e.g., Ultrasound):** To be acceptable, it must be justified by symptoms (like abdominal pain). If the target area is not specified (e.g., just 'Ultrasound'), "Documentation Strength" must be marked as low, the decision should be "Reviewable", and a recommendation to specify the target organ should be added.
+    * **NSAIDs (e.g., Ibuprofen):** These are high-risk in patients with Heart Failure or Chronic Kidney Disease (CKD). Their use should be flagged as a major clinical risk.
+    * **Metformin:** This drug must be used with caution or stopped in patients with poor kidney function (e.g., eGFR < 60, and especially < 45). Flag this as a major clinical risk if ordered for a patient with CKD.
 4.  **Proactive Standard of Care Analysis (Think about what's MISSING):**
+    * **Heart Failure:** In an acute exacerbation, a BNP or NT-proBNP lab test is standard of care. If it's missing, recommend it.
     * **Hypertension Management:** If vital signs show high blood pressure (e.g., > 140/90), you must check if there is a clear plan to manage it. If not, add a recommendation to review antihypertensive medication.
     * **Diabetes & Neuropathy:** For a patient with diabetes and neuropathy, you must check if Vitamin B12 and TSH levels have been ordered. If not, add a recommendation. Also, check for a referral to an ophthalmologist for a fundus exam; if missing, add it as an urgent recommendation.
     * **Abdominal Pain Differentials:** For a diabetic patient with epigastric pain, you must consider pancreatitis. Check if Amylase and Lipase tests are ordered. If not, add a recommendation.
