@@ -47,7 +47,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: meta?.file?.uri, mime: meta?.file?.mime_type || mimeType };
 }
 
-// --- Gemini Clinical Data Extraction ---
+// --- Gemini Clinical Data Extraction (Robust Version) ---
 async function geminiSummarize({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -60,12 +60,10 @@ async function geminiSummarize({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات لتحليلها." });
 
-  const systemPrompt = `You are an expert in medical data extraction. Your task is to read all inputs (text and files) and extract the clinical information with high accuracy. **Crucially, create a de-duplicated, unique list of all orders, including dose, frequency, and duration for medications.** Organize the information under the following headings:
-- Chief Complaint & Symptoms
-- Diagnoses
-- Chronic Conditions
-- Vital Signs
-- Full List of Orders (Unique Items Only): medications (with dose/duration), labs, imaging, procedures`;
+  // ** SIMPLIFIED & MORE ROBUST PROMPT **
+  // This prompt's only job is to extract EVERYTHING it sees from all sources.
+  // The more powerful model in the next step will handle parsing and analysis.
+  const systemPrompt = `You are an expert in medical data extraction. Your task is to read all inputs (text and files) and extract and combine ALL clinical information into a single, comprehensive text block. Ensure you extract every single medication, lab, procedure, diagnosis, and symptom mentioned across all sources. Do not summarize or omit any details.`;
   
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
