@@ -1,22 +1,21 @@
 export const config = { api: { bodyParser: { sizeLimit: "50mb" } } };
 
-// --- مفاتيح و إعدادات ---
+// --- Configuration ---
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o"; 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL   = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest"; 
-const GEMINI_FILES_URL = "https://generativelenanguage.googleapis.com/upload/v1beta/files";
+const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
 const GEMINI_GEN_URL   = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
-// --- أدوات مساعدة ---
+// --- Helper Utilities ---
 const ok  = (res, json) => res.status(200).json({ ok: true, ...json });
 const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
-const has = (pat, text)=> new RegExp(pat,'i').test(String(text||""));
 const parseJsonSafe = async (r) => (r.headers.get("content-type")||"").includes("application/json") ? r.json() : { raw: await r.text() };
 
-// --- رفع الملفات إلى Gemini ---
+// --- Gemini File Uploader ---
 async function geminiUploadBase64({ name, mimeType, base64 }) {
   const bin = Buffer.from(base64, "base64");
   const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`,{
@@ -30,7 +29,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
     },
     body: JSON.stringify({ file:{ display_name:name, mime_type:mimeType } })
   });
-  if(!initRes.ok) throw new Error("Gemini init failed: "+JSON.stringify(await parseJsonSafe(initRes)));
+  if(!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
   const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
   if(!sessionUrl) throw new Error("Gemini upload URL missing");
   const upRes = await fetch(sessionUrl,{
@@ -44,11 +43,11 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
     body: bin
   });
   const meta = await parseJsonSafe(upRes);
-  if(!upRes.ok) throw new Error("Gemini finalize failed: "+JSON.stringify(meta));
+  if(!upRes.ok) throw new Error(`Gemini finalize failed: ${JSON.stringify(meta)}`);
   return { uri: meta?.file?.uri, mime: meta?.file?.mime_type || mimeType };
 }
 
-// --- تلخيص Gemini (باستخدام التلقين المحسّن) ---
+// --- Gemini Clinical Data Extraction ---
 async function geminiSummarize({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -61,16 +60,12 @@ async function geminiSummarize({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات لتحليلها." });
 
-  const systemPrompt = `أنت خبير في تحليل التقارير الطبية. مهمتك هي قراءة النصوص والملفات المرفقة واستخلاص كافة المعلومات السريرية بدقة.
-نظم المعلومات المستخرجة تحت العناوين التالية:
-- الشكوى الرئيسية والأعراض
-- التاريخ المرضي والحالات المزمنة
-- العلامات الحيوية (Vitals)
-- نتائج الفحوصات المخبرية (Labs)
-- نتائج الأشعة (Imaging)
-- الأدوية والجرعات
-- التشخيصات المذكورة
-- الطلبات والإجراءات المقترحة`;
+  const systemPrompt = `أنت خبير في استخلاص البيانات الطبية. مهمتك هي قراءة كل المدخلات (نصوص وملفات) واستخراج المعلومات السريرية بدقة فائقة وتنظيمها تحت العناوين التالية:
+- الشكوى الرئيسية والأعراض (Chief Complaint & Symptoms)
+- التشخيصات (Diagnoses)
+- الحالات المزمنة (Chronic Conditions)
+- العلامات الحيوية (Vital Signs)
+- قائمة الطلبات الكاملة (Full List of Orders: medications, labs, imaging, procedures)`;
   
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -81,47 +76,52 @@ async function geminiSummarize({ text, files }) {
     method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body)
   });
   const data = await parseJsonSafe(resp);
-  if(!resp.ok) throw new Error("Gemini generateContent error: "+JSON.stringify(data));
+  if(!resp.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
   return data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("\n") || "";
 }
 
-
 // ##############################################################################
-// ############## التعديل الجوهري والمميز هنا في هذه الدالة ######################
+// ############## The "Special" Core: Advanced Audit Instructions ###############
 // ##############################################################################
 function auditInstructions(){ 
-  return `أنت مدقق طبي خبير لدى شركة تأمين. مهمتك هي تحليل البيانات السريرية التالية وإصدار حكم تأميني بناءً على المنطق الطبي والمبررات الموثقة.
-مهمتك الأساسية هي **الاستنتاج والربط** بين شكوى المريض وتشخيصه وبين كل إجراء أو دواء مطلوب.
+  return `أنت رئيس لجنة التدقيق الطبي والتأميني. مهمتك هي إجراء تحليل ثلاثي الأبعاد (سريري، توثيقي، مالي) للبيانات المقدمة. يجب أن تفكر بعمق وتربط بين كل معلومة متاحة.
 
-**خطوات التحليل المطلوبة منك:**
-1.  اقرأ ملخص الحالة جيداً (الشكوى، التشخيص، العلامات الحيوية).
-2.  لكل دواء أو فحص أو إجراء في القائمة، ابحث عن مبرر له في ملخص الحالة.
-3.  **املأ حقل "intendedIndication"** بالمبرر السريري الذي استنتجته. مثال: إذا كانت الشكوى "ألم شرسوفي" والدواء هو "Pantozol"، اكتب في الحقل "علاج الألم الشرسوفي الموثق". إذا لم تجد أي مبرر، اترك الحقل فارغاً (null).
-4.  **حدد "isIndicationDocumented"** بـ \`true\` إذا وجدت مبرراً واضحاً، وبـ \`false\` إذا لم تجد.
-5.  **اكتب قرار التأمين "insuranceDecision"** مع تبرير واضح ومختصر. مثال: "مقبول لوجود أعراض موثقة" أو "قابل للرفض لعدم توثيق أي أعراض تنفسية".
-6.  **استنتج "contradictions"** وهي التناقضات الواضحة (مثل طلب فحص خاطئ أو دواء لا يناسب الحالة).
-7.  **استنتج "missingActions"** وهي الإجراءات التي كان يجب القيام بها (مثل توثيق عرض معين أو طلب فحص أدق).
+**خطوات التحليل الفكري المطلوبة منك:**
+1.  **الفهم الشامل:** استوعب حالة المريض بالكامل (الأعراض، التشخيصات، الحالات المزمنة).
+2.  **التحليل لكل بند:** لكل طلب (دواء، فحص، إجراء)، قم بتقييمه من ثلاث زوايا:
+    a.  **الصلاحية السريرية (Clinical Validity):** هل هذا الطلب منطقي طبياً بناءً على حالة المريض؟ هل هو أفضل إجراء متاح؟ (0-100).
+    b.  **قوة التوثيق (Documentation Strength):** هل المبرر السريري موثق بشكل واضح وصريح في الملف؟ (0-100).
+    c.  **الأثر المالي (Financial Impact):** هل هذا الطلب فعال من حيث التكلفة أم أنه مكلف ويمكن استبداله بخيار أرخص بنفس الفعالية؟ (0-100).
+3.  **حساب المخاطرة الإجمالية:** احسب متوسط الدرجات الثلاث لتحديد نسبة المخاطرة الإجمالية.
+4.  **إصدار القرار والتبرير:** بناءً على التحليل، أصدر قراراً تأمينياً (مقبول، قابل للمراجعة، قابل للرفض) مع تبرير دقيق وموجز يوضح السبب الرئيسي.
+5.  **استنتاج التوصيات:** بناءً على نقاط الضعف التي وجدتها، قم بصياغة توصيات عملية وقابلة للتنفيذ، وصنفها حسب الأولوية.
 
-أخرج JSON فقط بالمخطط التالي ولا شيء غيره:
+**أخرج JSON فقط بالمخطط الدقيق التالي:**
 {
-  "patientSummary":{"ageYears":number|null,"gender":"ذكر"|"أنثى"|null,"chronicConditions":string[]},
-  "diagnosis":string[], "symptoms":string[], "contradictions":string[],
-  "table":[
-    {"name":string,"itemType":"lab"|"medication"|"procedure"|"device"|"imaging",
-     "doseRegimen":string|null,
-     "intendedIndication":string|null,
-     "isIndicationDocumented":boolean,
-     "conflicts":string[],
-     "riskPercent":number,
-     "insuranceDecision":{"label":"مقبول"|"قابل للمراجعة"|"قابل للرفض","justification":string}}
+  "patientSummary": {"text": "string"},
+  "overallAssessment": {"text": "string"},
+  "table": [
+    {
+      "name": "string",
+      "itemType": "lab"|"medication"|"procedure"|"device"|"imaging",
+      "intendedIndication": "string|null",
+      "riskAnalysis": {
+        "clinicalValidity": {"score": "number", "reasoning": "string"},
+        "documentationStrength": {"score": "number", "reasoning": "string"},
+        "financialImpact": {"score": "number", "reasoning": "string"}
+      },
+      "overallRiskPercent": "number",
+      "insuranceDecision": {"label": "مقبول"|"قابل للمراجعة"|"قابل للرفض", "justification": "string"}
+    }
   ],
-  "missingActions":string[], "referrals":[{"specialty":string,"whatToDo":string[]}],
-  "financialInsights":string[], "conclusion":string
+  "recommendations": [
+    {"priority": "عاجلة"|"أفضل ممارسة", "description": "string", "relatedItems": ["string"]}
+  ]
 }
 ONLY JSON.`;
 }
 
-async function chatgptJSON(bundle, extra=[]){
+async function chatgptJSON(bundle){
   const resp = await fetch(OPENAI_API_URL,{
     method:"POST",
     headers:{ "Content-Type":"application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
@@ -130,96 +130,143 @@ async function chatgptJSON(bundle, extra=[]){
       messages: [
         { role:"system", content:auditInstructions() },
         { role:"user", content: "البيانات السريرية للتدقيق:\n"+JSON.stringify(bundle,null,2) },
-        ...extra
       ],
       response_format:{ type:"json_object" }
     })
   });
   const data = await resp.json();
-  if(!resp.ok) throw new Error("OpenAI error: "+JSON.stringify(data));
+  if(!resp.ok) throw new Error(`OpenAI error: ${JSON.stringify(data)}`);
   return JSON.parse(data?.choices?.[0]?.message?.content||"{}");
 }
 
-// --- قواعد التحقق النهائية (تبقى كما هي كشبكة أمان) ---
-function applyGuardrails(structured, ctx){
-  const s = structured || {};
-  const ctxText = [ctx?.userText, ctx?.extractedSummary].filter(Boolean).join(" ");
-  s.table = Array.isArray(s.table)? s.table : [];
-  s.contradictions = Array.isArray(s.contradictions)? s.contradictions : [];
-  s.missingActions = Array.isArray(s.missingActions)? s.missingActions : [];
-  s.financialInsights = Array.isArray(s.financialInsights)? s.financialInsights : [];
 
-  const pushContra=(m)=>{ if(!s.contradictions.includes(m)) s.contradictions.push(m); };
-
-  s.table = s.table.map((r)=>{
-    const name=String(r?.name||"").trim();
-    const lower=name.toLowerCase();
-    
-    // إذا قام الذكاء الاصطناعي بعمله بشكل صحيح، يجب ألا نحتاج لتعديل كبير هنا
-    // لكن هذه القواعد تضمن عدم حدوث أخطاء واضحة
-    if (/dengue/i.test(lower) && /igg/i.test(lower) && !has("\\b(igm|ns\\s*-?1)\\b", ctxText)){
-      r.riskPercent=Math.max(r.riskPercent||0, 80);
-      r.insuranceDecision = {label:"قابل للرفض", justification:"فحص IgG لوحده لا يشخص عدوى حادة. يجب طلب IgM/NS1."};
-      pushContra("طلب Dengue IgG منفردًا دون IgM/NS1 لتشخيص حالة حادة.");
-    }
-    const isIVFluid = /\b(normal\s*saline|\bi\.?v\.?\s*infusion\b)/i.test(lower);
-    const hasDehydration = has("جفاف|dehydrat|vomit|diarrhea", ctxText);
-    const hasHypotension = has("هبوط\\s*ضغط|hypotens", ctxText);
-    if (isIVFluid && !(hasDehydration||hasHypotension)){
-      r.riskPercent=Math.max(r.riskPercent||0, 80);
-      r.insuranceDecision = {label:"قابل للرفض", justification:"لا يوجد دليل على جفاف أو هبوط ضغط يبرر استخدام المحلول الوريدي."};
-      pushContra("وصف محلول وريدي دون دليل على الجفاف أو هبوط الضغط.");
-    }
-    return r;
-  });
-
-  if (s.financialInsights.length===0){
-    s.financialInsights.push(
-      "توثيق المبررات السريرية لكل طلب بشكل واضح يقلل من نسبة الرفض ويسرّع دورة التحصيل المالي.",
-      "تطبيق بروتوكولات واضحة للحالات الشائعة (مثل آلام البطن) يضمن طلب الفحوصات الضرورية فقط."
-    );
-  }
-  return s;
+// ##############################################################################
+// ############## The "Special" Core Part 2: Advanced HTML Renderer #############
+// ##############################################################################
+function getRiskColor(p) {
+    if (p >= 70) return '#e53935'; // bad
+    if (p >= 50) return '#f9a825'; // warn
+    return '#2e7d32'; // ok
 }
 
-// --- تحويل المخرجات إلى HTML (بدون تغيير) ---
-function badge(p){ if(p>=75) return 'badge badge-bad'; if(p>=60) return 'badge badge-warn'; return 'badge badge-ok'; }
 function toHtml(s){
-  const rows = (s.table||[]).map(r=>`<tr>
-      <td>${r.name||"-"}</td>
-      <td>${r.itemType||"-"}</td>
-      <td>${r.doseRegimen||"-"}</td>
-      <td>${r.intendedIndication||"-"}</td>
-      <td>${r.isIndicationDocumented?"نعم":"لا"}</td>
-      <td>${(r.conflicts||[]).join('<br>')||"-"}</td>
-      <td><span class="${badge(r.riskPercent||0)}"><b>${Math.round(r.riskPercent||0)}%</b></span></td>
-      <td>${r.insuranceDecision?.label||"-"}</td>
-      <td>${r.insuranceDecision?.justification||"-"}</td>
-    </tr>`
-  ).join("");
-  const contra = (s.contradictions||[]).map(x=>`<li>• ${x}</li>`).join("") || "<li>لا توجد تناقضات بارزة.</li>";
-  const missing = (s.missingActions||[]).map(x=>`<li>• ${x}</li>`).join("") || "<li>لا توجد إجراءات ناقصة مقترحة.</li>";
-  const fin = (s.financialInsights||[]).map(x=>`<li>• ${x}</li>`).join("") || "<li>—</li>";
+  const tableRows = (s.table||[]).map(r => {
+    const ra = r.riskAnalysis || {};
+    const cv = ra.clinicalValidity || {};
+    const ds = ra.documentationStrength || {};
+    const fi = ra.financialImpact || {};
+    const decisionColor = getRiskColor(100 - (r.overallRiskPercent || 0));
 
-  return `<h2>📋 ملخص الحالة</h2>
-  <div class="kvs"><p>${(s.conclusion||"").replace(/\n/g,'<br>')}</p></div>
-  <h2>⚠️ التناقضات والفجوات</h2>
-  <ul>${contra}</ul>
-  <h2>💊 جدول الأدوية والإجراءات</h2>
-  <table class="table" dir="rtl">
-    <thead><tr>
-      <th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر المستنتج</th>
-      <th>المؤشر موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th><th>قرار التأمين</th><th>التبرير</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <h2>🩺 الإجراءات المقترحة</h2>
-  <ul>${missing}</ul>
-  <h2>📈 رؤى مالية وتشغيلية</h2>
-  <ul>${fin}</ul>`;
+    return `
+    <div class="audit-row">
+        <div class="row-header">
+            <div class="item-name">${r.name || '-'} <span class="item-type">${r.itemType || ''}</span></div>
+            <div class="decision" style="background-color:${decisionColor};">
+                ${r.insuranceDecision?.label || '-'}
+            </div>
+        </div>
+        <div class="row-body">
+            <div class="indication">
+                <strong>المؤشر السريري المستنتج:</strong>
+                <p>${r.intendedIndication || '<em>لم يتمكن النظام من استنتاج مؤشر واضح.</em>'}</p>
+            </div>
+            <div class="risk-grid">
+                <div class="risk-cell">
+                    <div class="risk-title">
+                        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        الصلاحية السريرية
+                    </div>
+                    <div class="risk-score" style="color:${getRiskColor(cv.score || 0)}">${cv.score || 0}%</div>
+                    <div class="risk-reasoning">${cv.reasoning || '-'}</div>
+                </div>
+                <div class="risk-cell">
+                    <div class="risk-title">
+                        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                        قوة التوثيق
+                    </div>
+                    <div class="risk-score" style="color:${getRiskColor(ds.score || 0)}">${ds.score || 0}%</div>
+                    <div class="risk-reasoning">${ds.reasoning || '-'}</div>
+                </div>
+                <div class="risk-cell">
+                    <div class="risk-title">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-12h2v4h-2zm0 6h2v2h-2z"/></svg>
+                        الأثر المالي
+                    </div>
+                    <div class="risk-score" style="color:${getRiskColor(fi.score || 0)}">${fi.score || 0}%</div>
+                    <div class="risk-reasoning">${fi.reasoning || '-'}</div>
+                </div>
+            </div>
+            <div class="justification">
+                <strong>الخلاصة والتبرير:</strong>
+                <p>${r.insuranceDecision?.justification || '-'}</p>
+            </div>
+        </div>
+    </div>
+    `;
+  }).join("");
+
+  const recommendationsList = (s.recommendations||[]).map(rec => `
+    <div class="rec-item">
+        <span class="rec-priority ${rec.priority === 'عاجلة' ? 'urgent' : 'best-practice'}">${rec.priority}</span>
+        <div class="rec-desc">${rec.description}</div>
+        ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">مرتبط بـ: ${rec.relatedItems.join(', ')}</div>` : ''}
+    </div>
+  `).join("");
+
+  return `
+  <style>
+    .report-section { border: 1px solid #e5e7eb; border-radius: 16px; margin-bottom: 20px; padding: 18px; background: #fff; }
+    .report-section h2 { font-size: 20px; color: #105ca5; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+    .report-section h2 svg { width: 24px; height: 24px; fill: #105ca5; }
+    .summary-text { font-size: 15px; line-height: 1.7; color: #334155; }
+    
+    .audit-row { border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+    .row-header { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
+    .item-name { font-size: 18px; font-weight: 700; color: #0b4479; }
+    .item-type { font-size: 12px; font-weight: 500; color: #64748b; margin-right: 8px; background: #eef7ff; padding: 2px 6px; border-radius: 6px;}
+    .decision { color: #fff; font-weight: 700; padding: 6px 12px; border-radius: 8px; font-size: 14px; }
+    .row-body { padding: 16px; }
+    .indication { margin-bottom: 16px; }
+    .indication p { margin: 4px 0 0; color: #475569; }
+    
+    .risk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .risk-cell { background: #f8fbff; border: 1px dashed #dbeafe; border-radius: 10px; padding: 12px; }
+    .risk-title { display: flex; align-items: center; gap: 6px; font-weight: 500; color: #105ca5; margin-bottom: 8px; font-size: 14px; }
+    .risk-title svg { width: 18px; height: 18px; fill: #87c7ff; }
+    .risk-score { font-size: 24px; font-weight: 700; margin-bottom: 4px; text-align: center; }
+    .risk-reasoning { font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; }
+    
+    .justification { margin-top: 12px; background: #eef7ff; padding: 12px; border-radius: 8px; border-left: 4px solid #1e90ff; }
+    .justification p { margin: 4px 0 0; color: #0b4479; }
+    
+    .rec-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+    .rec-priority { flex-shrink: 0; font-weight: 700; padding: 4px 10px; border-radius: 8px; font-size: 12px; color: #fff; }
+    .rec-priority.urgent { background: #e53935; }
+    .rec-priority.best-practice { background: #2e7d32; }
+    .rec-desc { color: #334155; }
+    .rec-related { font-size: 11px; color: #64748b; margin-top: 2px; }
+  </style>
+
+  <div class="report-section">
+    <h2><svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>ملخص الحالة والتقييم العام</h2>
+    <p class="summary-text">${s.patientSummary?.text || 'غير متوفر.'}</p>
+    <p class="summary-text">${s.overallAssessment?.text || 'غير متوفر.'}</p>
+  </div>
+  
+  <div class="report-section">
+    <h2><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 16H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h12c.55 0 1 .45 1 1v12c0 .55-.45 1-1 1zM8 11h8v2H8zm0-4h8v2H8z"/></svg>التحليل التفصيلي للطلبات</h2>
+    ${tableRows}
+  </div>
+
+  <div class="report-section">
+    <h2><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-2h2v2h-2zm2-4h-2V7h2v6z"/></svg>التوصيات والإجراءات المقترحة</h2>
+    ${recommendationsList}
+  </div>
+  `;
 }
 
-// --- المتحكم الرئيسي في الطلب ---
+
+// --- Main Request Handler ---
 export default async function handler(req,res){
   try{
     if(req.method!=="POST") return bad(res,405,"POST only");
@@ -227,15 +274,17 @@ export default async function handler(req,res){
     if(!GEMINI_API_KEY)  return bad(res,500,"Missing GEMINI_API_KEY");
 
     const { text="", files=[], patientInfo=null } = req.body||{};
-    const extracted = await geminiSummarize({ text, files });
-    const bundle = { patientInfo, extractedSummary: extracted, userText: text };
-
-    let structured = await chatgptJSON(bundle);
-
-    // تطبيق القواعد النهائية كخطوة تحقق أخيرة
-    structured = applyGuardrails(structured, { userText:text, extractedSummary:extracted });
     
+    // Step 1: Extract clinical data with Gemini
+    const extractedSummary = await geminiSummarize({ text, files });
+    const bundle = { patientInfo, extractedSummary, userText: text };
+
+    // Step 2: Perform advanced audit with OpenAI
+    const structured = await chatgptJSON(bundle);
+    
+    // Step 3: Convert the rich JSON into a beautiful HTML report
     const html = toHtml(structured);
+    
     return ok(res,{ html, structured });
   }catch(err){
     console.error("/api/gpt error:", err);
