@@ -2,7 +2,6 @@
 // Backend: Gemini Files (OCR/vision) → ChatGPT clinical audit (JSON) → HTML report
 // Runtime: Next.js API Route (Vercel, Node 18+)
 
-// ===== Route config (must be a static literal; no template expressions) =====
 export const config = {
   api: { bodyParser: { sizeLimit: "50mb" } },
 };
@@ -25,14 +24,11 @@ const parseJsonSafe = async (r) =>
   (r.headers.get("content-type")||"").includes("application/json")
     ? r.json()
     : { raw: await r.text() };
+const A = (x) => Array.isArray(x) ? x : (x ? [x] : []);
 
-const A = (x) => Array.isArray(x) ? x : (x ? [x] : []); // coerce to array
-
-// ===== Gemini: resumable upload (Files API) =====
+// ===== Gemini upload (resumable) =====
 async function geminiUploadBase64({ name, mimeType, base64 }) {
   const bin = Buffer.from(base64, "base64");
-
-  // 1) start resumable session
   const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
     method: "POST",
     headers: {
@@ -44,15 +40,10 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
     },
     body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
   });
-
-  if (!initRes.ok) {
-    throw new Error("Gemini init failed: " + JSON.stringify(await parseJsonSafe(initRes)));
-  }
-
+  if (!initRes.ok) throw new Error("Gemini init failed: " + JSON.stringify(await parseJsonSafe(initRes)));
   const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
   if (!sessionUrl) throw new Error("Gemini upload URL missing");
 
-  // 2) upload + finalize
   const upRes = await fetch(sessionUrl, {
     method: "PUT",
     headers: {
@@ -63,16 +54,12 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
     },
     body: bin,
   });
-
   const meta = await parseJsonSafe(upRes);
-  if (!upRes.ok) {
-    throw new Error("Gemini finalize failed: " + JSON.stringify(meta));
-  }
-
+  if (!upRes.ok) throw new Error("Gemini finalize failed: " + JSON.stringify(meta));
   return { uri: meta?.file?.uri, mime: meta?.file?.mime_type || mimeType };
 }
 
-// ===== Gemini: extract text from files + merge with user text =====
+// ===== Gemini summarize =====
 async function geminiSummarize({ text, files }) {
   const parts = [];
   for (const f of files || []) {
@@ -94,7 +81,7 @@ async function geminiSummarize({ text, files }) {
 
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: { maxOutputTokens: 2048 }, // مساحة كافية
+    generationConfig: { maxOutputTokens: 2048 },
     contents: [
       { role: "user", parts: [{ text: (text || "لا يوجد نص حر.") }] },
       ...(parts.length ? [{ role: "user", parts }] : [])
@@ -109,12 +96,11 @@ async function geminiSummarize({ text, files }) {
 
   const data = await parseJsonSafe(resp);
   if (!resp.ok) throw new Error("Gemini generateContent error: " + JSON.stringify(data));
-
   const out = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("\n") || "";
   return out;
 }
 
-// ===== Clinical rulebook + JSON schema for ChatGPT =====
+// ===== Rulebook prompt =====
 function auditInstructions() {
   return `
 أنت استشاري تدقيق طبي وتأميني.
@@ -136,11 +122,10 @@ IMPORTANT clinical insurance rules (لا تُهملها):
 - تحاليل HTN/DM المقبولة: HbA1c، وظائف كلوية (Creatinine/Urea/eGFR)، دهون؛ وCRP فقط عند الاشتباه بالالتهاب.
 
 Scoring guide:
-- riskPercent: تقدير عدم الملاءمة/المخاطر (0–100). <60 مقبول (أخضر)، 60–74 قابل للمراجعة (أصفر/عنبر)، ≥75 مرفوض (أحمر).
-- لكل صف: insuranceDecision.justification يجب أن يحتوي ≥ جملتين: (1) تعليل سريري محدّد، (2) تعليل تأميني/إرشادي واضح.
+- riskPercent: تقدير عدم الملاءمة/المخاطر (0–100). <60 مقبول (أخضر)، 60–74 قابل للمراجعة (عنبر)، ≥75 مرفوض (أحمر).
+- لكل صف: insuranceDecision.justification ≥ جملتين (تعليل سريري + تعليل تأميني).
 
-Output:
-أخرج JSON فقط وفق هذا المخطط، بلا أي نص خارجه:
+Output: ONLY JSON with this shape (no extra text):
 {
   "patientSummary": {
     "ageYears": number|null,
@@ -161,47 +146,36 @@ Output:
       "isIndicationDocumented": boolean,
       "conflicts": string[],
       "riskPercent": number,
-      "insuranceDecision": {
-        "label": "مقبول"|"قابل للرفض"|"مرفوض",
-        "justification": string
-      }
+      "insuranceDecision": { "label": "مقبول"|"قابل للرفض"|"مرفوض", "justification": string }
     }
   ],
-  "missingActions": string[],      // ضعه دائمًا وفيه 2–3 اقتراحات دقيقة على الأقل
+  "missingActions": string[],
   "referrals": [{"specialty": string, "whatToDo": string[]}],
-  "financialInsights": string[],   // ضعه دائمًا وفيه 2–3 نقاط عملية على الأقل
-  "conclusion": string             // ابدأ بذكر الأمراض المزمنة والأعراض الرئيسية
+  "financialInsights": string[],
+  "conclusion": string
 }
-ONLY JSON.
 `;
 }
 
+// ===== Weakness checks =====
 function needsRefine(s){
-  const rows = Array.isArray(s?.table)? s.table:[]; if(!rows.length) return true;
+  const rows = Array.isArray(s?.table)? s.table:[]; 
   const badRisk = rows.some(r => !Number.isFinite(r?.riskPercent));
   const weakJust = rows.filter(r=>{
     const j = r?.insuranceDecision?.justification||"";
-    return j.trim().split(/[.؟!]\s*/).filter(Boolean).length < 2; // أقل من جملتين
+    return j.trim().split(/[.؟!]\s*/).filter(Boolean).length < 2;
   }).length;
   const missMissing = !Array.isArray(s?.missingActions) || s.missingActions.length < 2;
   const missFinance = !Array.isArray(s?.financialInsights) || s.financialInsights.length < 2;
-  return badRisk || (weakJust/Math.max(rows.length,1) > 0.25) || missMissing || missFinance;
+  return (!rows.length) || badRisk || (weakJust/Math.max(rows.length,1) > 0.25) || missMissing || missFinance;
 }
 
-// ===== OpenAI: produce structured JSON =====
-async function chatgptJSON(bundle, extra=[]) {
+// ===== OpenAI helpers =====
+async function openaiChatJSON(messages, response_format={ type:"json_object" }){
   const resp = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: [
-        { role:"system", content: auditInstructions() },
-        { role:"user", content: "المعطيات:\n"+JSON.stringify(bundle,null,2) },
-        ...extra
-      ],
-      response_format:{ type:"json_object" },
-    })
+    body: JSON.stringify({ model: OPENAI_MODEL, messages, response_format })
   });
   const data = await resp.json();
   if(!resp.ok) throw new Error("OpenAI error: "+JSON.stringify(data));
@@ -209,15 +183,37 @@ async function chatgptJSON(bundle, extra=[]) {
   return JSON.parse(txt);
 }
 
-// ===== HTML rendering (defensive) =====
+async function chatgptJSON(bundle, extra=[]) {
+  return openaiChatJSON([
+    { role:"system", content: auditInstructions() },
+    { role:"user", content: "المعطيات:\n"+JSON.stringify(bundle,null,2) },
+    ...extra
+  ]);
+}
+
+// ===== NEW: إذا الجدول فاضي، اطلب استخراج العناصر المذكورة ثم أعد التدقيق =====
+async function extractCandidateItems(bundle){
+  const sys = `
+أنت مساعد استخراج عناصر فقط.
+اقرأ نصوص OCR والنص الحر، ثم أخرج JSON فيه مصفوفة items تحتوي أسماء العناصر المذكورة حرفيًا تقريبًا
+(تحاليل، أدوية، إجراءات، أجهزة، تصوير)، بدون أحكام أو نسب.
+ONLY JSON: {"items": string[]}`;
+  const j = await openaiChatJSON([
+    { role:"system", content: sys },
+    { role:"user", content: JSON.stringify(bundle,null,2) }
+  ]);
+  const items = A(j?.items).map(x=>String(x).trim()).filter(Boolean);
+  return [...new Set(items)].slice(0, 40); // حد أعلى معقول
+}
+
+// ===== HTML rendering =====
 function cellColor(p){
   if(!Number.isFinite(p)) return 'style="background:#f1f5f9;border:1px solid #e5e7eb"';
-  if(p>=75) return 'style="background:#fee2e2;border:1px solid #fecaca"';     // red
-  if(p>=60) return 'style="background:#fff7ed;border:1px solid #ffedd5"';     // amber
-  return 'style="background:#ecfdf5;border:1px solid #d1fae5"';               // green
+  if(p>=75) return 'style="background:#fee2e2;border:1px solid #fecaca"';
+  if(p>=60) return 'style="background:#fff7ed;border:1px solid #ffedd5"';
+  return 'style="background:#ecfdf5;border:1px solid #d1fae5"';
 }
 function esc(x){ return String(x??"").replace(/[&<>]/g, s=>({ "&":"&amp;","<":"&lt;",">":"&gt;" }[s])); }
-
 function toHtml(s){
   const contradictions = A(s?.contradictions);
   const rows = A(s?.table).map(r=>`
@@ -271,28 +267,32 @@ export default async function handler(req,res){
 
     const { text = "", files = [], patientInfo = null } = req.body||{};
 
-    // 1) OCR/vision summary from Gemini
+    // 1) OCR from Gemini
     const extracted = await geminiSummarize({ text, files });
 
-    // 2) Bundle to the auditor (ChatGPT)
+    // 2) Bundle
     const bundle = { patientInfo, extractedSummary: extracted, userText: text };
 
     // 3) First pass
     let structured = await chatgptJSON(bundle);
 
-    // 4) If weak → refine with explicit nudge
-    if(needsRefine(structured)){
-      structured = await chatgptJSON(bundle, [
-        { role:"user", content:
-          "أعد التدقيق بدقّة. ابدأ الخلاصة بذكر الأمراض المزمنة والأعراض الرئيسية. " +
+    // 4) If weak/empty table → extract candidates then refine with a hard requirement
+    if (needsRefine(structured)) {
+      const candidates = await extractCandidateItems(bundle);
+      const forceMsg = {
+        role: "user",
+        content:
+          "هذه قائمة عناصر مذكورة في الوثائق: \n" +
+          JSON.stringify({ candidateItems: candidates }, null, 2) +
+          "\nسجّل صفًا لكل عنصر تم ذكره (إن كان ذا صلة سريرية) ولا ترجع جدولًا فارغًا. " +
+          "ابدأ الخلاصة بذكر الأمراض المزمنة والأعراض الرئيسية. " +
           "املأ حقول 'ما كان يجب القيام به' و'فرص تحسين الدخل' (٢–٣ نقاط على الأقل لكل منهما). " +
-          "لكل صف: اجعل التبرير ≥ جملتين (سريرية + تأمينية). لا تنس قاعدة Normal Saline (HTN/DM بدون جفاف/هبوط = قابل للرفض) " +
-          "وقاعدة Dengue IgG (لا تشخيص حاد دون IgM/NS1)."
-        }
-      ]);
+          "لكل صف: اجعل التبرير ≥ جملتين (سريرية + تأمينية). لا تنسِ قاعدة Normal Saline وDengue IgG."
+      };
+      structured = await chatgptJSON({ ...bundle, candidateItems: candidates }, [forceMsg]);
     }
 
-    // 5) Render HTML
+    // 5) HTML
     const html = toHtml(structured);
     return ok(res, { html, structured });
   }catch(err){
