@@ -96,11 +96,11 @@ function auditInstructions(lang = 'ar'){
 
 **Mandatory Analysis Rules:**
 1.  **Complete Coverage:** You must analyze **every single item** listed in the "Full List of Orders" without exception.
-2.  **Evidence-Based Reasoning:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs". Your reasoning must align with the guidelines mentioned above.
+2.  **Evidence-Based Reasoning:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs". Your reasoning must align with the guidelines mentioned above. The scores for clinicalValidity, documentationStrength, and financialImpact MUST be a number between 0 and 100, reflecting a realistic assessment (e.g., 85, not 8 or 9).
 3.  **Apply A-priori Clinical Knowledge (Strict Rules derived from guidelines):**
     * **IV Fluids in ADHF:** Strongly contraindicated unless there is documented evidence of hypotension or hypoperfusion (AHA/ACC/HFSA). Flag as a major error.
     * **NSAIDs (e.g., Ibuprofen) in HF & CKD:** To be avoided as they can worsen renal function and fluid retention (AHA/ACC/HFSA, KDIGO). Flag as a major clinical risk.
-    * **Metformin in CKD:** Must be stopped or dose-adjusted based on eGFR. Specifically, it's contraindicated if eGFR is < 30 and requires caution/dose reduction if eGFR is 30-45 (KDIGO 2022). Flag this as a major clinical risk if ordered inappropriately.
+    * **Metformin in CKD:** Must be stopped or dose-adjusted based on eGFR. Specifically, it's contraindicated if eGFR is < 30 and requires caution/dose reduction if eGFR is 30-45 (KDIGO 2022). The decision should be nuanced, like "Temporary Stop / Re-evaluate". Flag this as a major clinical risk if ordered inappropriately.
 4.  **Proactive Standard of Care Analysis (Think about what's MISSING based on guidelines):**
     * **ADHF Diagnosis:** A BNP or NT-proBNP lab test is a Class 1 recommendation for diagnosis and prognosis (AHA/ACC/HFSA). If it's missing, recommend it urgently.
     * **Hypertension Management:** If vital signs show high blood pressure, recommend a review of antihypertensive therapy according to guidelines.
@@ -124,7 +124,7 @@ ${langRule}
         "financialImpact": {"score": "number", "reasoning": "string"}
       },
       "overallRiskPercent": "number",
-      "insuranceDecision": {"label": "مقبول"|"قابل للمراجعة"|"قابل للرفض"|"Accepted"|"Reviewable"|"Rejected", "justification": "string"}
+      "insuranceDecision": {"label": "مقبول"|"قابل للمراجعة"|"قابل للرفض"|"إيقاف مؤقت / إعادة تقييم"|"Accepted"|"Reviewable"|"Rejected"|"Temporary Stop / Re-evaluate", "justification": "string"}
     }
   ],
   "recommendations": [
@@ -167,6 +167,8 @@ function getDecisionColor(label) {
             return '#2e7d32'; // ok green
         case 'قابل للمراجعة':
         case 'Reviewable':
+        case 'إيقاف مؤقت / إعادة تقييم':
+        case 'Temporary Stop / Re-evaluate':
             return '#f9a825'; // warn yellow
         case 'قابل للرفض':
         case 'Rejected':
