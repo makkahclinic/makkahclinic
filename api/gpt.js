@@ -2,7 +2,7 @@
 // Backend: Gemini Files (OCR/vision) → ChatGPT clinical audit (JSON) → HTML report
 // Runtime: Next.js API Route (Vercel, Node 18+)
 
-// ===== Route config (static literal) =====
+// ===== Route config (must be static literal) =====
 export const config = { api: { bodyParser: { sizeLimit: "50mb" } } };
 
 // ===== Keys & endpoints =====
@@ -10,32 +10,27 @@ const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-const GEMINI_API_KEY   = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL     = process.env.GEMINI_MODEL || "gemini-2.5-pro";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL   = process.env.GEMINI_MODEL || "gemini-2.5-pro";
 const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
-const GEMINI_GEN_URL   = (m) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+const GEMINI_GEN_URL   = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
 // ===== Helpers =====
 const ok  = (res, json) => res.status(200).json({ ok: true, ...json });
 const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
+const parseJsonSafe = async (r) =>
+  (r.headers.get("content-type") || "").includes("application/json")
+    ? r.json()
+    : { raw: await r.text() };
 
-async function parseJsonSafe(r) {
-  try {
-    const ct = (r.headers.get("content-type") || "").toLowerCase();
-    if (ct.includes("application/json")) return await r.json();
-  } catch { /* ignore */ }
-  try { return { raw: await r.text() }; }
-  catch { return { raw: "" }; }
-}
-const safeArr = (v) => (Array.isArray(v) ? v : []);
-const uniq    = (a) => Array.from(new Set(a));
+function arr(x){ return Array.isArray(x) ? x : (x ? [x] : []); }
+function asNum(n){ const v = Number(n); return Number.isFinite(v) ? v : null; }
 
 // ===== Gemini: resumable upload (Files API) =====
 async function geminiUploadBase64({ name, mimeType, base64 }) {
   const bin = Buffer.from(base64, "base64");
 
-  // 1) start resumable session
+  // 1) init resumable
   const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
     method: "POST",
     headers: {
@@ -48,7 +43,6 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
     body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
   });
   if (!initRes.ok) throw new Error("Gemini init failed: " + JSON.stringify(await parseJsonSafe(initRes)));
-
   const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
   if (!sessionUrl) throw new Error("Gemini upload URL missing");
 
@@ -69,284 +63,375 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: meta?.file?.uri, mime: meta?.file?.mime_type || mimeType };
 }
 
-// ===== Gemini: OCR/vision extract =====
-async function geminiSummarize({ text, files }) {
+// ===== 1) Gemini → extraction JSON (أقوى وفرض مخطط) =====
+function geminiSchemaPrompt(userText){
+  return {
+    system_instruction: {
+      parts: [{
+        text:
+`أنت أداة استخراج حقائق طبية (OCR → JSON فقط). التزم بالمخطط حرفيًا وأعد JSON صالح دون أي تعليق.
+
+استعن بالدلائل العالمية عند تسمية العناصر (WHO/CDC/NIH/NHS) ولكن لا تضع آراء علاجية؛ فقط حقائق من المستند/النص.
+
+SCHEMA (return exactly this shape):
+{
+  "patient": {"ageYears": number|null, "gender": "ذكر"|"أنثى"|null, "pregnant": boolean|null},
+  "vitals": {"bpSystolic": number|null, "bpDiastolic": number|null, "tempC": number|null},
+  "symptoms": string[],
+  "diagnoses": string[],
+  "orders": [
+    {"name": string, "type": "lab"|"medication"|"procedure"|"device"|"imaging", "dose": string|null, "indication": string|null}
+  ],
+  "flags": {
+    "dehydrationLikely": boolean|null,
+    "hypotension": boolean|null,
+    "respiratorySymptoms": boolean|null,
+    "abdominalPain": boolean|null
+  },
+  "rawLines": string[]   // أسطر/بنود مأخوذة كما ظهرت (اختياري)
+}
+
+مهم: إذا رأيت عناصر مثل:
+- CBC, Creatinine, Urea, Uric Acid, SGPT/ALT, HbA1c, Cholesterol, LDL, Triglycerides, CRP
+- Dengue Ab (IgG/IgM/NS1)
+- Ultrasound/Ultra Sound
+- Normal Saline I.V. infusion
+- Nebulizer/Inhaler
+- Primperan/Metoclopramide, Paracetamol, Pantozol/Pantoprazole
+أدرجها في orders مع النوع المناسب. استخرج ضغط الدم مثل "BP: 140/100".
+`
+      }]
+    },
+    contents: [
+      { role: "user", parts: [{ text: "النص الحر للمريض:\n" + (userText || "لا يوجد") }] }
+    ]
+  };
+}
+
+async function geminiExtract({ text, files }){
   const parts = [];
-  for (const f of files || []) {
+  for(const f of files || []){
     const mime = f?.mimeType || "application/octet-stream";
-    const b64  = (f?.data || "").split("base64,").pop();
-    if (!b64) continue;
-    const { uri, mime: mm } = await geminiUploadBase64({
-      name: f?.name || "file", mimeType: mime, base64: b64
-    });
+    const b64  = (f?.data || "").split("base64,").pop() || f?.data;
+    if(!b64) continue;
+    const { uri, mime: mm } = await geminiUploadBase64({ name: f?.name || "file", mimeType: mime, base64: b64 });
     parts.push({ file_data: { file_uri: uri, mime_type: mm } });
   }
 
-  const systemPrompt =
-    "أنت مساعد لاستخلاص سريري: لخص النصوص في الصور/الملفات بدقة (OCR). " +
-    "اذكر التشخيصات والطلبات الموثقة فقط، وميّز بين المذكور فعلاً والتخمين. لا تضف استنتاجات علاجية.";
-
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [
-      { role: "user", parts: [{ text: text || "" }] },
-      ...(parts.length ? [{ role: "user", parts }] : []),
-    ],
-    generationConfig: {
-      temperature: 0,   // ثبات أعلى
-      topP: 0,
-      candidateCount: 1,
-      maxOutputTokens: 2048,
-    },
-  };
+  const body = geminiSchemaPrompt(text);
+  if (parts.length) body.contents.push({ role: "user", parts });
 
   const resp = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   });
   const data = await parseJsonSafe(resp);
   if (!resp.ok) throw new Error("Gemini generateContent error: " + JSON.stringify(data));
-  const out = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n") || "";
-  return out;
+
+  // Gemini رد غالبًا كنص JSON داخل part.text
+  const raw = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "{}";
+  let extracted = {};
+  try { extracted = JSON.parse(raw); } catch { extracted = {}; }
+
+  // fallback: التقط ضغط الدم من النص إن وُجد
+  const allText = [text, ...(arr(extracted?.rawLines))].join("\n");
+  const mBP = allText.match(/BP[:\s]*([0-9]{2,3})\s*\/\s*([0-9]{2,3})/i);
+  if (mBP) {
+    extracted.vitals = extracted.vitals || {};
+    extracted.vitals.bpSystolic = asNum(mBP[1]);
+    extracted.vitals.bpDiastolic = asNum(mBP[2]);
+  }
+
+  // تأكيد الحقول
+  extracted.patient  = extracted.patient  || { ageYears:null, gender:null, pregnant:null };
+  extracted.vitals   = extracted.vitals   || { bpSystolic:null, bpDiastolic:null, tempC:null };
+  extracted.symptoms = arr(extracted.symptoms);
+  extracted.diagnoses= arr(extracted.diagnoses);
+  extracted.orders   = arr(extracted.orders);
+  extracted.flags    = extracted.flags || { dehydrationLikely:null, hypotension:null, respiratorySymptoms:null, abdominalPain:null };
+  extracted.rawLines = arr(extracted.rawLines);
+
+  // إذا لم يجد أوامر، حاول التقاط أسماء شائعة من النص الخام
+  if (!extracted.orders.length) {
+    const catalog = [
+      ["AUTOMATED COMPLETE BLOOD CELL COUNT", "CBC", "lab"],
+      ["Creatinine","Creatinine","lab"],
+      ["COMPLETE URINE ANALYSIS","Complete Urine Analysis","lab"],
+      ["Urea","Urea","lab"],
+      ["Uric Acid","Uric Acid","lab"],
+      ["SGPT","Liver enzyme (SGPT)","lab"],
+      ["Glycosylated","HbA1c","lab"],
+      ["cholesterol","Cholesterol","lab"],
+      ["L.D.L","LDL","lab"],
+      ["Triglycerides","Triglycerides","lab"],
+      ["C-REACTIVE","CRP","lab"],
+      ["DENGUE AB IGG","Dengue IgG","lab"],
+      ["ULTRA SOUND","Ultrasound","imaging"],
+      ["NEBULIZER","Nebulizer + Inhaler","procedure"],
+      ["NORMAL SALINE","Normal Saline I.V infusion","medication"],
+      ["PRIMPERAN","Primperan","medication"],
+      ["PARACETAMOL","Paracetamol (IV)","medication"],
+      ["PANTOZOL","Pantozol 40mg IV","medication"]
+    ];
+    const hay = allText.toUpperCase();
+    for (const [needle, label, type] of catalog) {
+      if (hay.includes(needle)) extracted.orders.push({ name: label, type, dose:null, indication:null });
+    }
+  }
+
+  // أعلام إضافية من الكلمات
+  const hay2 = (text||"") + "\n" + extracted.rawLines.join("\n");
+  const hasResp = /cough|shortness of breath|wheeze|dyspnea|ضيق|سعال/i.test(hay2);
+  const hasAbd  = /abdomen|epigastric|periumbilical|بطن|شرسوفي/i.test(hay2);
+  extracted.flags.respiratorySymptoms ??= (hasResp ? true : null);
+  extracted.flags.abdominalPain ??= (hasAbd ? true : null);
+
+  return extracted;
 }
 
-// ===== System prompt (anchored to evidence sources) =====
-function auditInstructions() {
+// ===== 2) Rule engine (بدون فرض آراء علاجية؛ فقط قرار تأميني قابل للتفسير) =====
+function decideForRow(row, facts){
+  const bpSys = facts?.vitals?.bpSystolic;
+  const bpDia = facts?.vitals?.bpDiastolic;
+  const htN   = (asNum(bpSys) && asNum(bpDia)) ? (bpSys >= 140 || bpDia >= 90) : false;
+
+  const S = (txt)=>txt; // for Arabic output directly below
+
+  // defaults
+  let risk = 30, label = "مقبول", why = "فحص/إجراء منخفض المخاطر ومفيد سريريًا حسب السياق العام.";
+  const ind = (row.indication || "").toLowerCase();
+
+  // Labs — آمنة إفتراضيًا
+  if (row.type === "lab") {
+    risk = 20;
+    if (/dengue.*igg/i.test(row.name)) {
+      risk  = 85;
+      label = "قابل للرفض";
+      why   = S("تحليل Dengue IgG لوحده لا يثبت عدوى حالية؛ يُطلب IgM أو NS1 لتشخيص عدوى حادة.");
+    }
+    if (/crp/i.test(row.name)) { risk = 25; }
+    if (/uric|urate/i.test(row.name)) { risk = 45; why = S("قد يفيد حسب السياق، يُفضَّل تبرير سريري واضح."); }
+  }
+
+  // Meds / Procedures / Devices
+  if (/normal saline/i.test(row.name)) {
+    const dehydr = facts?.flags?.dehydrationLikely === true;
+    const hypot  = facts?.flags?.hypotension === true;
+    if (dehydr || hypot) {
+      risk = 30; label = "مقبول";
+      why  = S("مبرر بوجود جفاف/هبوط ضغط.");
+    } else if (htN) {
+      risk = 90; label = "قابل للرفض";
+      why  = S("محلول وريدي غير مبرر في وجود ارتفاع ضغط الدم وغياب علامات الجفاف/الهبوط.");
+    } else {
+      risk = 70; label = "قابل للمراجعة";
+      why  = S("يحتاج توثيقًا لعلامات جفاف/هبوط ضغط.");
+    }
+  }
+
+  if (/nebulizer|inhaler/i.test(row.name)) {
+    if (facts?.flags?.respiratorySymptoms) {
+      risk = 35; label = "مقبول"; why = S("موثق بأعراض تنفسية.");
+    } else {
+      risk = 70; label = "قابل للمراجعة"; why = S("غياب أعراض تنفسية موثقة.");
+    }
+  }
+
+  if (/ultra\s*sound|ultrasound/i.test(row.name) && !facts?.flags?.abdominalPain){
+    risk = 60; label = "قابل للمراجعة"; why = S("يوثَّق سبب واضح (مثلاً ألم بطني محدد).");
+  }
+
+  if (/primperan|metoclopramide/i.test(row.name)) {
+    risk = 40; label = "مقبول"; why = S("لعلاج الغثيان/الإقياء عند اللزوم.");
+  }
+  if (/paracetamol/i.test(row.name)) {
+    risk = 30; label = "مقبول"; why = S("مسكن/خافض حرارة منخفض المخاطر.");
+  }
+  if (/pantozol|pantoprazole/i.test(row.name)) {
+    risk = 45; label = "قابل للمراجعة"; why = S("يوثَّق وجود أعراض هضمية/نزف/وقاية دوائية.");
+  }
+
+  return { riskPercent: Math.max(0, Math.min(100, Math.round(risk))), insuranceDecision: { label, justification: why } };
+}
+
+function buildTable(facts){
+  const rows = [];
+  for (const o of arr(facts.orders)) {
+    const base = {
+      name: o?.name || "-",
+      itemType: (o?.type || "procedure").toLowerCase(),
+      doseRegimen: o?.dose || null,
+      intendedIndication: o?.indication || null,
+      isIndicationDocumented: Boolean(o?.indication && o.indication.trim().length>0),
+      conflicts: []
+    };
+    const dec = decideForRow(base, facts);
+    rows.push({ ...base, ...dec });
+  }
+  return rows;
+}
+
+function deriveContradictions(facts, table){
+  const list = [];
+  const bpSys = facts?.vitals?.bpSystolic, bpDia = facts?.vitals?.bpDiastolic;
+  const htN = (asNum(bpSys) && asNum(bpDia)) ? (bpSys >= 140 || bpDia >= 90) : false;
+
+  const hasNS = table.some(r => /normal saline/i.test(r.name));
+  if (hasNS && htN && facts?.flags?.dehydrationLikely !== true && facts?.flags?.hypotension !== true) {
+    list.push("طلب محلول وريدي رغم ارتفاع الضغط وغياب دليل جفاف/هبوط.");
+  }
+
+  const igg = table.find(r => /dengue.*igg/i.test(r.name));
+  if (igg) list.push("دِنغي IgG وحده لا يثبت عدوى حادة — يلزم IgM/NS1 مع سياق وبائي/أعراض.");
+
+  return list;
+}
+
+// ===== 3) ChatGPT تحويل النتائج إلى JSON مُحسّن (تبريرات لغوية) =====
+function auditSystemPrompt(){
   return `
-أنت استشاري تدقيق طبي/تأميني. انتج **JSON فقط** (المخطط أدناه) بلا أي نص خارج JSON.
+أنت استشاري تدقيق طبي/تأميني. لديك حقائق مُستخرَجة (facts) + جدول أولي (table).
+حرّر تبريرات مهنية موجزة ومحددة (References-aware) دون نسخ مصادر، وارجع JSON بنفس المخطط.
 
-مرساة المعرفة (لا تضع روابط): WHO, CDC, NIH, NHS, Cochrane, UpToDate, NEJM, The Lancet,
-JAMA, BMJ, Nature/Science (الطب الحيوي)، وإرشادات الأدوية والتنظيم: FDA, EMA, SFDA,
-Micromedex, Lexicomp, BNF, DailyMed, USP. التزم بالأدلة الحديثة وتجنّب العموميات.
-
-سياسات تأمينية مهمة (تُطبّق بعد فهم السياق):
-- Dengue: وجود IgG فقط لا يثبت عدوى حادة ⇒ القرار "قابل للرفض" ما لم توجد أعراض وبائية قوية،
-  وجود IgM أو NS1 مع أعراض متسقة ⇒ "مقبول".
-- Normal Saline I.V: مقبول فقط مع دليل جفاف/هبوط ضغط/فقد سوائل. في ارتفاع ضغط الدم دون جفاف ⇒ "قابل للرفض".
-- دوّن justification سريري محدّد لكل عنصر (لماذا مقبول/مرفوض/قابل للمراجعة).
-
-المخرجات (ONLY JSON):
-{
-  "patientSummary": {"ageYears": number|null, "gender": "ذكر"|"أنثى"|null,
-    "pregnant": {"isPregnant": boolean, "gestationalWeeks": number|null}|null,
-    "smoking": {"status":"مدخن"|"غير مدخن"|"سابق", "packYears": number|null}|null,
-    "chronicConditions": string[]},
-  "diagnosis": string[],
-  "symptoms": string[],
-  "contradictions": string[],
-  "table": [
-    {"name": string, "itemType": "lab"|"medication"|"procedure"|"device"|"imaging",
-     "doseRegimen": string|null,
-     "intendedIndication": string|null,
-     "isIndicationDocumented": boolean,
-     "conflicts": string[],
-     "riskPercent": number,
-     "insuranceDecision": {"label":"مقبول"|"قابل للرفض"|"قابل للمراجعة","justification": string}}
-  ],
-  "missingActions": string[],
-  "referrals": [{"specialty": string, "whatToDo": string[]}],
-  "financialInsights": string[],
-  "conclusion": string
-}
-ONLY JSON.
-`;
+المعايير (WHO/CDC/NIH/NHS ودوائية FDA/EMA/SFDA, Micromedex, Lexicomp, BNF, DailyMed).
+IMPORTANT clinical insurance rules:
+- Dengue IgG فقط ⇒ "قابل للرفض" مع تبرير يذكر الحاجة لـ IgM أو NS1.
+- Normal Saline I.V ⇒ مقبول فقط مع جفاف/هبوط ضغط موثق؛ وإلا قابل للرفض/المراجعة.
+- Nebulizer ⇒ يتطلّب أعراض تنفسية موثقة.
+أعد JSON فقط.`;
 }
 
-function needsRefine(s) {
-  const rows = Array.isArray(s?.table) ? s.table : [];
-  if (!rows.length) return true;
-  const zero = rows.filter((r) => !Number.isFinite(r?.riskPercent)).length;
-  const weak = rows.filter((r) => !r?.insuranceDecision?.justification || r.insuranceDecision.justification.trim().length < 18).length;
-  return zero > 0 || (weak / rows.length > 0.4);
-}
-
-// ===== Deterministic OpenAI call (JSON only) =====
-async function chatgptJSON(bundle, extra = []) {
-  const payload = {
-    model: OPENAI_MODEL,
-    temperature: 0,
-    top_p: 0,
-    presence_penalty: 0,
-    frequency_penalty: 0,
-    // seed: 42, // فعّل إن كان الموديل يدعم
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: auditInstructions() },
-      { role: "user", content: "المعطيات:\n" + JSON.stringify(bundle, null, 2) },
-      ...extra,
-    ],
-  };
-
+async function chatgptPolish(bundle){
   const resp = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [
+        { role:"system", content: auditSystemPrompt() },
+        { role:"user",   content: JSON.stringify(bundle) }
+      ],
+      response_format: { type:"json_object" }
+    })
   });
   const data = await resp.json();
   if (!resp.ok) throw new Error("OpenAI error: " + JSON.stringify(data));
   const txt = data?.choices?.[0]?.message?.content || "{}";
-  return JSON.parse(txt);
+  try { return JSON.parse(txt); } catch { return bundle; }
 }
 
-// ===== Policy enforcer (post-processing) =====
-function enforceInsurancePolicies(struct) {
-  if (!struct || !Array.isArray(struct.table)) return struct;
-  const textBlob = JSON.stringify(struct);
-
-  const hasHypotensionOrDehydration =
-    /\b(hypotens|dehydrat|هبوط|جفاف|shock|orthostat)\b/i.test(textBlob);
-
-  struct.table = struct.table.map((row) => {
-    const item = { ...row };
-    const name = (item.name || "").toString();
-
-    // Dengue IgG وحده
-    if (/dengue.*igg/i.test(name)) {
-      const igmOrNs1 = /igm|ns1/i.test(textBlob);
-      if (!igmOrNs1) {
-        item.insuranceDecision = {
-          label: "قابل للرفض",
-          justification: "تحليل Dengue IgG وحده لا يثبت عدوى حادة؛ يلزم IgM أو NS1 مع سياق وبائي/أعراضي."
-        };
-        item.riskPercent = Math.max(item.riskPercent || 0, 75);
-        item.isIndicationDocumented = false;
-        item.conflicts = uniq([...(item.conflicts || []), "لا يوجد IgM/NS1 لتأكيد العدوى الحادة"]);
-      }
-    }
-
-    // Normal Saline I.V بدون دليل جفاف/هبوط
-    if (/normal\s*saline|محلول\s*ملحي|i\.v\.*\s*infusion/i.test(name)) {
-      if (!hasHypotensionOrDehydration) {
-        item.insuranceDecision = {
-          label: "قابل للرفض",
-          justification: "محلول وريدي غير مبرر بدون دلائل جفاف/فقد سوائل أو هبوط ضغط، خاصة مع ارتفاع ضغط الدم."
-        };
-        item.riskPercent = Math.max(item.riskPercent || 0, 80);
-        item.isIndicationDocumented = false;
-        item.conflicts = uniq([...(item.conflicts || []), "لا توجد دلائل جفاف/هبوط"]);
-      }
-    }
-
-    // تقوية التبرير إن كان عامًا
-    if (!item.insuranceDecision?.justification || item.insuranceDecision.justification.trim().length < 18) {
-      item.insuranceDecision = item.insuranceDecision || {};
-      item.insuranceDecision.label = item.insuranceDecision.label || "قابل للمراجعة";
-      item.insuranceDecision.justification = item.insuranceDecision.justification || "التبرير غير كافٍ؛ يلزم ذكر سبب سريري محدّد أو دليل موثق.";
-      item.riskPercent = Math.max(item.riskPercent || 0, 60);
-    }
-
-    return item;
-  });
-
-  // إن لم يملأ النموذج financialInsights، قدّم اقتراحات ذكية افتراضية
-  if (!Array.isArray(struct.financialInsights) || !struct.financialInsights.length) {
-    struct.financialInsights = [
-      "تقليل الاختبارات غير المبررة لخفض الرفض التأميني وزيادة نسبة الموافقات.",
-      "توحيد قوالب توثيق المؤشرات السريرية (Indication) لضمان قبول المطالبات.",
-      "طلب فحوص مثبتة الدلالة (HbA1c, eGFR) لمتابعة السكري/الكلى حسب الإرشادات."
-    ];
-  }
-
-  return struct;
+// ===== HTML =====
+function colorCell(p){
+  if (p>=75) return 'style="background:#fee2e2;border:1px solid #fecaca"';
+  if (p>=60) return 'style="background:#fff7ed;border:1px solid #ffedd5"';
+  return 'style="background:#ecfdf5;border:1px solid #d1fae5"';
 }
 
-// ===== HTML rendering =====
-function colorCell(p) {
-  const n = Math.round(Number(p || 0));
-  if (n >= 75) return 'style="background:#fee2e2;border:1px solid #fecaca"'; // أحمر
-  if (n >= 60) return 'style="background:#fff7ed;border:1px solid #ffedd5"'; // برتقالي
-  return 'style="background:#ecfdf5;border:1px solid #d1fae5"';              // أخضر
-}
+function toHtml(s){
+  const rows = (s.table||[]).map(r=>`
+<tr>
+  <td>${r.name||"-"}</td>
+  <td>${r.itemType||"-"}</td>
+  <td>${r.doseRegimen||"-"}</td>
+  <td>${r.intendedIndication||"-"}</td>
+  <td>${r.isIndicationDocumented?"نعم":"لا"}</td>
+  <td>${(r.conflicts||[]).join('<br>')||"-"}</td>
+  <td ${colorCell(r.riskPercent||0)}><b>${Math.round(r.riskPercent||0)}%</b></td>
+  <td>${r.insuranceDecision?.label||"-"}</td>
+  <td>${r.insuranceDecision?.justification||"-"}</td>
+</tr>`).join("");
 
-function esc(x){ return (x==null ? "" : String(x)).replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }
-
-function toHtml(s) {
-  const rows = safeArr(s?.table).map(r => `
-    <tr>
-      <td>${esc(r.name||"-")}</td>
-      <td>${esc(r.itemType||"-")}</td>
-      <td>${esc(r.doseRegimen||"-")}</td>
-      <td>${esc(r.intendedIndication||"-")}</td>
-      <td>${r.isIndicationDocumented ? "نعم" : "لا"}</td>
-      <td>${safeArr(r.conflicts).join("<br>") || "-"}</td>
-      <td ${colorCell(r.riskPercent)}><b>${Math.round(r.riskPercent||0)}%</b></td>
-      <td>${esc(r?.insuranceDecision?.label || "-")}</td>
-      <td>${esc(r?.insuranceDecision?.justification || "-")}</td>
-    </tr>
-  `).join("");
-
-  const contradictions = safeArr(s?.contradictions);
-  const missing = safeArr(s?.missingActions);
-  const fin = safeArr(s?.financialInsights);
+  const contradictions = (s.contradictions||[]).map(c=>`<li>${c}</li>`).join("") || "<li>لا شيء بارز</li>";
+  const mustDo = (s.missingActions||[]).map(c=>`<li>${c}</li>`).join("") || "<li>—</li>";
+  const finance = (s.financialInsights||[]).map(c=>`<li>${c}</li>`).join("") || "<li>—</li>";
 
   return `
-  <div style="font-size:12px;color:#64748b;margin-bottom:8px">
-    التحليل موجّه بإرشادات WHO/CDC/NIH/NHS ومرجعيات الأدوية (FDA/EMA/SFDA, Micromedex, Lexicomp, BNF, DailyMed).
-  </div>
+<div class="kvs" style="padding:8px 10px; background:#f8fbff; border:1px solid #e5e7eb; border-radius:10px">
+  <h3>📋 ملخص الحالة</h3>
+  <p>${(s.conclusion||"").replace(/\n/g,'<br>')}</p>
+</div>
 
-  <h2>📋 ملخص الحالة</h2>
-  <div class="kvs" style="padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fbff">
-    <p>${esc(s?.conclusion || "يلزم استكمال البيانات السريرية للتشخيص والتغطية التأمينية.")}</p>
-  </div>
+<h3>⚠️ التناقضات والأخطاء</h3>
+<ul>${contradictions}</ul>
 
-  <h2>⚠️ التناقضات والأخطاء</h2>
-  <ul>
-    ${contradictions.length ? contradictions.map(c=>`<li>${esc(c)}</li>`).join("") : "<li>لا يوجد تناقضات واضحة</li>"}
-  </ul>
+<h3>💊 جدول الأدوية والإجراءات</h3>
+<table dir="rtl" style="width:100%;border-collapse:collapse">
+  <thead>
+    <tr>
+      <th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر</th><th>موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th><th>قرار التأمين</th><th>التبرير</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
 
-  <h2>💊 جدول الأدوية والإجراءات</h2>
-  <table dir="rtl" style="width:100%;border-collapse:collapse">
-    <thead>
-      <tr>
-        <th>الاسم</th><th>التصنيف</th><th>الجرعة</th><th>المؤشّر</th>
-        <th>موثّق؟</th><th>تعارضات</th><th>درجة الخطورة</th><th>قرار التأمين</th><th>التبرير</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>
+<h3>🩺 ما كان يجب القيام به</h3>
+<ul>${mustDo}</ul>
 
-  <h2>🩺 ما كان يجب القيام به</h2>
-  <ul>
-    ${missing.length ? missing.map(x=>`<li>${esc(x)}</li>`).join("") : "<li>—</li>"}
-  </ul>
+<h3>📈 فرص تحسين الدخل والخدمة</h3>
+<ul>${finance}</ul>
 
-  <h2>📈 فرص تحسين الدخل والخدمة</h2>
-  <ul>
-    ${fin.length ? fin.map(x=>`<li>${esc(x)}</li>`).join("") : "<li>—</li>"}
-  </ul>
-  `;
+<p style="margin-top:8px;color:#64748b">
+  التحليل موجّه بإرشادات WHO/CDC/NIH/NHS ومرجعيات الدواء (FDA/EMA/SFDA, Micromedex, Lexicomp, BNF, DailyMed).
+</p>`;
 }
 
 // ===== Handler =====
-export default async function handler(req, res) {
-  try {
-    if (req.method !== "POST") return bad(res, 405, "POST only");
-    if (!OPENAI_API_KEY) return bad(res, 500, "Missing OPENAI_API_KEY");
-    if (!GEMINI_API_KEY) return bad(res, 500, "Missing GEMINI_API_KEY");
+export default async function handler(req,res){
+  try{
+    if(req.method!=="POST") return bad(res,405,"POST only");
+    if(!OPENAI_API_KEY) return bad(res,500,"Missing OPENAI_API_KEY");
+    if(!GEMINI_API_KEY) return bad(res,500,"Missing GEMINI_API_KEY");
 
-    const { text = "", files = [], patientInfo = null } = req.body || {};
+    const { text = "", files = [], patientInfo = null } = req.body||{};
 
-    // 1) OCR/vision + merge text
-    const extracted = await geminiSummarize({ text, files });
-    const bundle = { patientInfo, extractedSummary: extracted, userText: text };
+    // 1) OCR → facts
+    const facts = await geminiExtract({ text, files });
 
-    // 2) Structure via ChatGPT (deterministic)
-    let structured = await chatgptJSON(bundle);
-    if (needsRefine(structured)) {
-      structured = await chatgptJSON(bundle, [
-        { role: "user", content: "أعد التدقيق بصرامة: علّل كل صف علمياً وامنع العموميات، واملأ riskPercent وjustification." }
-      ]);
-    }
+    // دمج بعض معطيات الواجهة (إن وُجدت)
+    if (patientInfo?.gender) facts.patient.gender = patientInfo.gender;
+    if (typeof patientInfo?.ageYears === "number") facts.patient.ageYears = patientInfo.ageYears;
 
-    // 3) Enforce critical insurance policies
-    structured = enforceInsurancePolicies(structured);
+    // 2) جدول + تناقضات + توصيات
+    const table = buildTable(facts);
+    const contradictions = deriveContradictions(facts, table);
 
-    // 4) Render HTML
-    const html = toHtml(structured);
-    return ok(res, { html, structured });
-  } catch (err) {
+    const missing = [];
+    if (table.some(r => /dengue.*igg/i.test(r.name))) missing.push("طلب IgM/NS1 لتأكيد عدوى الضنك الحادة.");
+    if (table.some(r => /normal saline/i.test(r.name)) &&
+        !(facts?.flags?.dehydrationLikely || facts?.flags?.hypotension))
+      missing.push("توثيق دليل جفاف/هبوط ضغط إذا لزم السوائل الوريدية.");
+    if (table.find(r => /nebulizer|inhaler/i.test(r.name)) && !facts?.flags?.respiratorySymptoms)
+      missing.push("توثيق أعراض/علامات تنفسية قبل النيبولايزر.");
+
+    const finance = [
+      "تقليل الطلبات غير المبررة (مثل IgG وحده/سوائل بلا جفاف) لخفض الرفض التأميني.",
+      "استخدام قوالب توثيق المؤشّر السريري (Indication) يرفع نسب الموافقة.",
+    ];
+
+    const bundle = {
+      facts,
+      table,
+      contradictions,
+      missingActions: missing,
+      financialInsights: finance,
+      conclusion:
+        "تحليل آلي أولي مع إبراز التناقضات وقابلية الرفض. يُنصح باستكمال التوثيق وفق الإرشادات."
+    };
+
+    // 3) صياغة لغوية منظمة عبر GPT (نفس الـ schema)
+    const polished = await chatgptPolish(bundle);
+
+    // تأكيد الحقول لمنع أخطاء الواجهة
+    polished.table = arr(polished.table);
+    polished.contradictions = arr(polished.contradictions);
+    polished.missingActions = arr(polished.missingActions);
+    polished.financialInsights = arr(polished.financialInsights);
+
+    const html = toHtml(polished);
+    return ok(res, { html, structured: polished });
+  }catch(err){
     console.error("/api/gpt error:", err);
-    return bad(res, 500, err?.message || String(err));
+    return bad(res,500, err?.message || String(err));
   }
 }
