@@ -60,12 +60,12 @@ async function geminiSummarize({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات لتحليلها." });
 
-  const systemPrompt = `أنت خبير في استخلاص البيانات الطبية. مهمتك هي قراءة كل المدخلات (نصوص وملفات) واستخراج المعلومات السريرية بدقة فائقة وتنظيمها تحت العناوين التالية:
-- الشكوى الرئيسية والأعراض (Chief Complaint & Symptoms)
-- التشخيصات (Diagnoses)
-- الحالات المزمنة (Chronic Conditions)
-- العلامات الحيوية (Vital Signs)
-- قائمة الطلبات الكاملة (Full List of Orders: medications, labs, imaging, procedures)`;
+  const systemPrompt = `You are an expert in medical data extraction. Your task is to read all inputs (text and files) and extract the clinical information with high accuracy, organizing it under the following headings:
+- Chief Complaint & Symptoms
+- Diagnoses
+- Chronic Conditions
+- Vital Signs
+- Full List of Orders: medications, labs, imaging, procedures`;
   
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -81,25 +81,28 @@ async function geminiSummarize({ text, files }) {
 }
 
 // --- Proactive Expert Auditor Instructions ---
-function auditInstructions(){ 
-  return `أنت استشاري تدقيق طبي خبير ومسؤول عن ضمان الجودة السريرية والمالية. مهمتك هي تحليل الحالة التالية بعمق، وتطبيق قواعد سريرية صارمة.
+function auditInstructions(lang = 'ar'){ 
+  const langRule = lang === 'en' 
+    ? "**Language Rule: All outputs, texts, and justifications MUST be in clear, professional English.**"
+    : "**قاعدة اللغة: يجب أن تكون جميع المخرجات والنصوص والتبريرات باللغة العربية الفصحى.**";
 
-**القواعد الإلزامية للتحليل:**
-1.  **الشمولية الكاملة:** يجب عليك تحليل **كل طلب** مذكور في "Full List of Orders" بدون أي استثناء.
-2.  **الربط والاستنتاج:** لكل طلب، ابحث عن مبرر مباشر له في "Chief Complaint", "Diagnoses", "Vital Signs".
-3.  **تطبيق المعرفة السريرية المسبقة (قواعد صارمة):**
-    * **حمى الضنك (Dengue):** طلب فحص IgG وحده لتشخيص عدوى حادة هو **خطأ سريري واضح**. يجب أن تكون الصلاحية السريرية منخفضة جداً (أقل من 20%)، والقرار "قابل للرفض"، والتوصية العاجلة هي طلب IgM و NS1.
-    * **المحاليل الوريدية (IV Fluids):** لا يمكن قبولها إلا بوجود توثيق واضح لـ: هبوط ضغط، جفاف (بسبب قيء أو إسهال)، أو عدم قدرة المريض على الشرب.
-    * **مضادات الغثيان (Antiemetics):** لا يمكن قبولها إلا بوجود توثيق واضح لشكوى "غثيان" أو "قيء".
-    * **أجهزة الاستنشاق (Nebulizers):** لا يمكن قبولها إلا بوجود توثيق واضح لأعراض تنفسية.
-    * **الأشعة (Imaging like Ultrasound):** لكي تكون مقبولة، يجب أن تكون مبررة بالأعراض (مثل ألم البطن). ولكن إذا لم يتم تحديد المنطقة المستهدفة (مثلاً: "أشعة على البطن")، يجب اعتبار "قوة التوثيق" متوسطة إلى ضعيفة، والقرار "قابل للمراجعة" مع توصية بتحديد المنطقة.
-    * **معايير الرعاية للأمراض المزمنة (Standard of Care):** فكر فيما هو أبعد من الطلبات الحالية. لمريض مشخص بـ "داء السكري مع مضاعفات عصبية"، فإن فحص قاع العين (Fundus exam) يعتبر من معايير الرعاية الأساسية. إذا لم تكن هناك إحالة لطبيب عيون، يجب عليك إضافة توصية **عاجلة** بذلك ضمن "recommendations".
-    * **أي طلب آخر بدون مبرر واضح** من الأعراض أو التشخيص يعتبر "ضعيف التوثيق".
+  return `You are an expert medical auditor and consultant responsible for ensuring clinical and financial quality. Your mission is to deeply analyze the following case, applying strict clinical rules.
 
-**قاعدة اللغة:**
-**يجب أن تكون جميع المخرجات والنصوص والتبريرات باللغة العربية الفصحى.**
+**Mandatory Analysis Rules:**
+1.  **Complete Coverage:** You must analyze **every single item** listed in the "Full List of Orders" without exception.
+2.  **Link and Infer:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs".
+3.  **Apply A-priori Clinical Knowledge (Strict Rules):**
+    * **Dengue:** An IgG test alone for an acute infection is a **clear clinical error**. Clinical validity must be very low (<20%), the decision "Rejected", and an urgent recommendation to order IgM and NS1 is required.
+    * **IV Fluids:** Only acceptable with clear documentation of: hypotension, dehydration (due to vomiting/diarrhea), or inability to take oral fluids.
+    * **Antiemetics:** Only acceptable with clear documentation of "nausea" or "vomiting".
+    * **Nebulizers:** Only acceptable with clear documentation of respiratory symptoms.
+    * **Imaging (e.g., Ultrasound):** To be acceptable, it must be justified by symptoms (like abdominal pain). If the target area is not specified, "Documentation Strength" should be medium-to-low, and the decision "Reviewable" with a recommendation to specify the area.
+    * **Standard of Care for Chronic Diseases:** Think beyond the current orders. For a patient diagnosed with "Diabetes with neurological complications," a fundus exam is a core standard of care. If no referral to an ophthalmologist is present, you must add an **urgent** recommendation for it.
+    * Any other order without a clear justification from symptoms or diagnosis is considered "poorly documented."
 
-**أخرج JSON فقط بالمخطط الدقيق التالي:**
+${langRule}
+
+**Output ONLY JSON with the following exact schema:**
 {
   "patientSummary": {"text": "string"},
   "overallAssessment": {"text": "string"},
@@ -114,25 +117,25 @@ function auditInstructions(){
         "financialImpact": {"score": "number", "reasoning": "string"}
       },
       "overallRiskPercent": "number",
-      "insuranceDecision": {"label": "مقبول"|"قابل للمراجعة"|"قابل للرفض", "justification": "string"}
+      "insuranceDecision": {"label": "مقبول"|"قابل للمراجعة"|"قابل للرفض"|"Accepted"|"Reviewable"|"Rejected", "justification": "string"}
     }
   ],
   "recommendations": [
-    {"priority": "عاجلة"|"أفضل ممارسة", "description": "string", "relatedItems": ["string"]}
+    {"priority": "عاجلة"|"أفضل ممارسة"|"Urgent"|"Best Practice", "description": "string", "relatedItems": ["string"]}
   ]
 }
 ONLY JSON.`;
 }
 
-async function chatgptJSON(bundle){
+async function chatgptJSON(bundle, lang){
   const resp = await fetch(OPENAI_API_URL,{
     method:"POST",
     headers:{ "Content-Type":"application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: JSON.stringify({
       model: OPENAI_MODEL,
       messages: [
-        { role:"system", content:auditInstructions() },
-        { role:"user", content: "البيانات السريرية للتدقيق:\n"+JSON.stringify(bundle,null,2) },
+        { role:"system", content:auditInstructions(lang) },
+        { role:"user", content: "Clinical Data for Audit:\n"+JSON.stringify(bundle,null,2) },
       ],
       response_format:{ type:"json_object" }
     })
@@ -153,10 +156,13 @@ function getRiskColor(score) {
 function getDecisionColor(label) {
     switch (label) {
         case 'مقبول':
+        case 'Accepted':
             return '#2e7d32'; // ok green
         case 'قابل للمراجعة':
+        case 'Reviewable':
             return '#f9a825'; // warn yellow
         case 'قابل للرفض':
+        case 'Rejected':
             return '#e53935'; // bad red
         default:
             return '#64748b'; // muted gray
@@ -221,7 +227,7 @@ function toHtml(s){
 
   const recommendationsList = (s.recommendations||[]).map(rec => `
     <div class="rec-item">
-        <span class="rec-priority ${rec.priority === 'عاجلة' ? 'urgent' : 'best-practice'}">${rec.priority}</span>
+        <span class="rec-priority ${rec.priority === 'عاجلة' || rec.priority === 'Urgent' ? 'urgent' : 'best-practice'}">${rec.priority}</span>
         <div class="rec-desc">${rec.description}</div>
         ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">مرتبط بـ: ${rec.relatedItems.join(', ')}</div>` : ''}
     </div>
@@ -287,14 +293,14 @@ export default async function handler(req,res){
     if(!OPENAI_API_KEY) return bad(res,500,"Missing OPENAI_API_KEY");
     if(!GEMINI_API_KEY)  return bad(res,500,"Missing GEMINI_API_KEY");
 
-    const { text="", files=[], patientInfo=null } = req.body||{};
+    const { text="", files=[], patientInfo=null, lang = 'ar' } = req.body||{};
     
     // Step 1: Extract clinical data with Gemini
     const extractedSummary = await geminiSummarize({ text, files });
     const bundle = { patientInfo, extractedSummary, userText: text };
 
-    // Step 2: Perform advanced audit with OpenAI
-    const structured = await chatgptJSON(bundle);
+    // Step 2: Perform advanced audit with OpenAI, passing the language
+    const structured = await chatgptJSON(bundle, lang);
     
     // Step 3: Convert the rich JSON into a beautiful HTML report
     const html = toHtml(structured);
