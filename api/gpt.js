@@ -97,8 +97,10 @@ function auditInstructions(lang = 'ar'){
     * **Antiemetics:** Only acceptable with clear documentation of "nausea" or "vomiting".
     * **Nebulizers:** Only acceptable with clear documentation of respiratory symptoms.
     * **Imaging (e.g., Ultrasound):** To be acceptable, it must be justified by symptoms (like abdominal pain). If the target area is not specified (e.g., just 'Ultrasound'), "Documentation Strength" must be marked as low, the decision should be "Reviewable", and a recommendation to specify the target organ should be added.
-    * **Standard of Care for Chronic Diseases:** Think beyond the current orders. For a patient diagnosed with "Diabetes with neurological complications," a fundus exam is a core standard of care. If no referral to an ophthalmologist is present, you must add an **urgent** recommendation for it.
-    * Any other order without a clear justification from symptoms or diagnosis is considered "poorly documented."
+4.  **Proactive Standard of Care Analysis (Think about what's MISSING):**
+    * **Hypertension Management:** If vital signs show high blood pressure (e.g., > 140/90), you must check if there is a clear plan to manage it. If not, add a recommendation to review antihypertensive medication.
+    * **Diabetes & Neuropathy:** For a patient with diabetes and neuropathy, you must check if Vitamin B12 and TSH levels have been ordered. If not, add a recommendation. Also, check for a referral to an ophthalmologist for a fundus exam; if missing, add it as an urgent recommendation.
+    * **Abdominal Pain Differentials:** For a diabetic patient with epigastric pain, you must consider pancreatitis. Check if Amylase and Lipase tests are ordered. If not, add a recommendation.
 
 ${langRule}
 
