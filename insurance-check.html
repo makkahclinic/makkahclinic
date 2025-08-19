@@ -163,7 +163,7 @@
       <div class="report-toolbar no-print">
         <button class="btn-secondary btn" id="exportAll">تصدير PDF (كامل)</button>
         <button class="btn-outline btn" id="exportSummary">PDF الملخص</button>
-        <button class="btn-outline btn" id="exportTable">PDF الجدول</button>
+        <button class="btn-outline btn" id="exportTable">PDF التحليل التفصيلي</button>
       </div>
       <div id="reportHTML"></div>
       <details style="margin-top:10px" class="no-print">
@@ -226,7 +226,7 @@
       filesState.forEach((f, i)=>{
         const isImg = (f.mimeType||'').startsWith('image/');
         const thumb = isImg ? f.data : 'data:image/svg+xml;utf8,'+encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`);
+          `<svg xmlns="http://www.w.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`);
         const el = document.createElement('div');
         el.className = 'fileCard';
         el.innerHTML = `
@@ -302,15 +302,13 @@
         const filesPayload = filesState.map(f=>({
           name: f.name,
           mimeType: f.mimeType,
-          data: f.data.split('base64,').pop() // نرسل base64 فقط
+          data: f.data.split('base64,').pop()
         }));
 
         const payload = {
           text: mergedText,
           patientInfo: buildPatientInfo(),
           files: filesPayload,
-          mode: 'clinical_audit',
-          returnJson: true
         };
 
         const resp = await fetch('/api/gpt', {
@@ -330,10 +328,12 @@
     }
     document.getElementById('analyzeBtn').addEventListener('click', analyze);
 
-    // ===== تصدير PDF (تم تحديثه) =====
-    function exportPDF(selector, filename){
-      const el = document.querySelector(selector);
-      if(!el){ alert('التقرير غير جاهز أو القسم المحدد غير موجود'); return; }
+    // ===== تصدير PDF (تم تحديثه بالكامل) =====
+    function exportPDF(element, filename){
+      if(!element){ 
+        alert('التقرير غير جاهز أو القسم المحدد غير موجود في الصفحة.'); 
+        return; 
+      }
       const opt = { 
         filename, 
         margin: 10, 
@@ -341,13 +341,24 @@
         html2canvas: { scale: 2, useCORS: true }, 
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } 
       };
-      html2pdf().from(el).set(opt).save();
+      html2pdf().from(element).set(opt).save();
     }
     
-    // ربط الأزرار بالمعرفات الصحيحة في التقرير الجديد
-    document.getElementById('exportAll').addEventListener('click', ()=> exportPDF('#reportContent', 'Medical_Audit_Report.pdf'));
-    document.getElementById('exportSummary').addEventListener('click', ()=> exportPDF('#reportContent .report-section:first-child', 'Summary.pdf'));
-    document.getElementById('exportTable').addEventListener('click', ()=> exportPDF('#reportContent .report-section:nth-child(2)', 'Audit_Table.pdf'));
+    // ربط الأزرار بالعناصر الفعلية في الصفحة
+    document.getElementById('exportAll').addEventListener('click', ()=> {
+      const reportElement = document.getElementById('reportContent');
+      exportPDF(reportElement, 'Medical_Audit_Report_Full.pdf');
+    });
+
+    document.getElementById('exportSummary').addEventListener('click', ()=> {
+      const summaryElement = document.querySelector('#reportContent .report-section:first-child');
+      exportPDF(summaryElement, 'Medical_Audit_Summary.pdf');
+    });
+
+    document.getElementById('exportTable').addEventListener('click', ()=> {
+      const tableElement = document.querySelector('#reportContent .report-section:nth-child(2)');
+      exportPDF(tableElement, 'Medical_Audit_Detailed_Analysis.pdf');
+    });
   </script>
 </body>
 </html>
