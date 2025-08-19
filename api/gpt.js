@@ -60,12 +60,12 @@ async function geminiSummarize({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات لتحليلها." });
 
-  const systemPrompt = `You are an expert in medical data extraction. Your task is to read all inputs (text and files) and extract the clinical information with high accuracy, organizing it under the following headings:
+  const systemPrompt = `You are an expert in medical data extraction. Your task is to read all inputs (text and files) and extract the clinical information with high accuracy. **Crucially, create a de-duplicated, unique list of all orders.** Organize the information under the following headings:
 - Chief Complaint & Symptoms
 - Diagnoses
 - Chronic Conditions
 - Vital Signs
-- Full List of Orders: medications, labs, imaging, procedures`;
+- Full List of Orders (Unique Items Only): medications, labs, imaging, procedures`;
   
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -86,17 +86,17 @@ function auditInstructions(lang = 'ar'){
     ? "**Language Rule: All outputs, texts, and justifications MUST be in clear, professional English.**"
     : "**قاعدة اللغة: يجب أن تكون جميع المخرجات والنصوص والتبريرات باللغة العربية الفصحى.**";
 
-  return `You are an expert medical auditor and consultant responsible for ensuring clinical and financial quality. Your mission is to deeply analyze the following case, applying strict clinical rules.
+  return `You are an expert medical auditor and consultant responsible for ensuring clinical and financial quality. Your mission is to deeply analyze the following case, applying strict clinical rules and proactive thinking.
 
 **Mandatory Analysis Rules:**
 1.  **Complete Coverage:** You must analyze **every single item** listed in the "Full List of Orders" without exception.
-2.  **Link and Infer:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs".
+2.  **Link and Infer:** For each item, find a direct justification in the "Chief Complaint", "Diagnoses", or "Vital Signs". Provide specific, non-repetitive reasoning.
 3.  **Apply A-priori Clinical Knowledge (Strict Rules):**
     * **Dengue:** An IgG test alone for an acute infection is a **clear clinical error**. Clinical validity must be very low (<20%), the decision "Rejected", and an urgent recommendation to order IgM and NS1 is required.
     * **IV Fluids:** Only acceptable with clear documentation of: hypotension, dehydration (due to vomiting/diarrhea), or inability to take oral fluids.
     * **Antiemetics:** Only acceptable with clear documentation of "nausea" or "vomiting".
     * **Nebulizers:** Only acceptable with clear documentation of respiratory symptoms.
-    * **Imaging (e.g., Ultrasound):** To be acceptable, it must be justified by symptoms (like abdominal pain). If the target area is not specified, "Documentation Strength" should be medium-to-low, and the decision "Reviewable" with a recommendation to specify the area.
+    * **Imaging (e.g., Ultrasound):** To be acceptable, it must be justified by symptoms (like abdominal pain). If the target area is not specified (e.g., just 'Ultrasound'), "Documentation Strength" must be marked as low, the decision should be "Reviewable", and a recommendation to specify the target organ should be added.
     * **Standard of Care for Chronic Diseases:** Think beyond the current orders. For a patient diagnosed with "Diabetes with neurological complications," a fundus exam is a core standard of care. If no referral to an ophthalmologist is present, you must add an **urgent** recommendation for it.
     * Any other order without a clear justification from symptoms or diagnosis is considered "poorly documented."
 
