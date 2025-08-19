@@ -80,9 +80,7 @@ async function geminiSummarize({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("\n") || "";
 }
 
-// ##############################################################################
-// ############## Final Version: The Proactive Expert Auditor ###################
-// ##############################################################################
+// --- Proactive Expert Auditor Instructions ---
 function auditInstructions(){ 
   return `أنت استشاري تدقيق طبي خبير ومسؤول عن ضمان الجودة السريرية والمالية. مهمتك هي تحليل الحالة التالية بعمق، وتطبيق قواعد سريرية صارمة.
 
@@ -97,6 +95,9 @@ function auditInstructions(){
     * **الأشعة (Imaging like Ultrasound):** لكي تكون مقبولة، يجب أن تكون مبررة بالأعراض (مثل ألم البطن). ولكن إذا لم يتم تحديد المنطقة المستهدفة (مثلاً: "أشعة على البطن")، يجب اعتبار "قوة التوثيق" متوسطة إلى ضعيفة، والقرار "قابل للمراجعة" مع توصية بتحديد المنطقة.
     * **معايير الرعاية للأمراض المزمنة (Standard of Care):** فكر فيما هو أبعد من الطلبات الحالية. لمريض مشخص بـ "داء السكري مع مضاعفات عصبية"، فإن فحص قاع العين (Fundus exam) يعتبر من معايير الرعاية الأساسية. إذا لم تكن هناك إحالة لطبيب عيون، يجب عليك إضافة توصية **عاجلة** بذلك ضمن "recommendations".
     * **أي طلب آخر بدون مبرر واضح** من الأعراض أو التشخيص يعتبر "ضعيف التوثيق".
+
+**قاعدة اللغة:**
+**يجب أن تكون جميع المخرجات والنصوص والتبريرات باللغة العربية الفصحى.**
 
 **أخرج JSON فقط بالمخطط الدقيق التالي:**
 {
@@ -168,7 +169,6 @@ function toHtml(s){
     const cv = ra.clinicalValidity || {};
     const ds = ra.documentationStrength || {};
     const fi = ra.financialImpact || {};
-    // ** FINAL FIX FOR COLOR LOGIC **
     const decisionColor = getDecisionColor(r.insuranceDecision?.label);
 
     return `
@@ -261,18 +261,18 @@ function toHtml(s){
     .rec-related { font-size: 11px; color: #64748b; margin-top: 2px; }
   </style>
 
-  <div class="report-section">
+  <div class="report-section" id="summary-section">
     <h2><svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>ملخص الحالة والتقييم العام</h2>
     <p class="summary-text">${s.patientSummary?.text || 'غير متوفر.'}</p>
     <p class="summary-text">${s.overallAssessment?.text || 'غير متوفر.'}</p>
   </div>
   
-  <div class="report-section">
+  <div class="report-section" id="details-section">
     <h2><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 16H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h12c.55 0 1 .45 1 1v12c0 .55-.45 1-1 1zM8 11h8v2H8zm0-4h8v2H8z"/></svg>التحليل التفصيلي للطلبات</h2>
     ${tableRows}
   </div>
 
-  <div class="report-section">
+  <div class="report-section" id="recommendations-section">
     <h2><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-2h2v2h-2zm2-4h-2V7h2v6z"/></svg>التوصيات والإجراءات المقترحة</h2>
     ${recommendationsList}
   </div>
