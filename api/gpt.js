@@ -1,13 +1,13 @@
 // /pages/api/gpt.js
 // =========================================================
 // Medical Insurance Audit API (Gemini JSON extraction + GPT-4o analysis)
-// Requirements (ENV):
+// ENV required:
 //   OPENAI_API_KEY = "sk-..."
-//   GEMINI_API_KEY = "..." (Google AI Studio / Gemini API)
+//   GEMINI_API_KEY = "..."   (Google AI Studio / Gemini API)
 // Optional ENV:
-//   OPENAI_MODEL   = "gpt-4o" (default below)
-//   GEMINI_MODEL   = "gemini-1.5-pro" (stable default)
-//   REQUEST_TIMEOUT_MS = "180000"   // 180s
+//   OPENAI_MODEL   = "gpt-4o"           (default below)
+//   GEMINI_MODEL   = "gemini-1.5-pro"   (stable default)
+//   REQUEST_TIMEOUT_MS = "180000"
 //   MAX_FILES = "10"
 //   MAX_INLINE_FILE_MB = "50"
 // =========================================================
@@ -48,7 +48,6 @@ const parseJsonSafe = async (r) => {
 const tryParseObject = (s) => {
   if (!s) return null;
   try { return JSON.parse(s); } catch {}
-  // fallback: استخرج أول JSON من النص
   const m = String(s).match(/\{[\s\S]*\}$/);
   if (m) { try { return JSON.parse(m[0]); } catch {} }
   return null;
@@ -65,7 +64,7 @@ async function fetchWithTimeout(url, opts={}){
   }
 }
 
-// Retry with exponential backoff + jitter for transient errors
+// Retry with exponential backoff + jitter
 async function withRetry(fn, {tries=4, baseMs=600} = {}){
   let lastErr;
   for (let i=0; i<tries; i++){
@@ -124,13 +123,8 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
 }
 
 // ---------- GEMINI: Structured JSON extraction ----------
-/**
- * يدمج نص المستخدم + الملفات في رسالة واحدة (parts[])
- * ويجبر Gemini على إخراج JSON منضبط وفق schema ثابت.
- * الخرج: كائن JS جاهز للاستخدام.
- */
 async function geminiSummarize({ text, files }) {
-  // 1) Upload files then pass as file_data parts
+  // Upload files then pass as file_data parts
   const fileParts = [];
   for (const f of files || []) {
     const mime = f?.mimeType || "application/octet-stream";
@@ -194,9 +188,14 @@ async function geminiSummarize({ text, files }) {
           diagnoses: { type: "array", items: { type: "string" } },
           orders: {
             type: "array",
-            items: { type: "object", properties: {
-              name: { type:"string" }, type: { enum:["lab","imaging","procedure","device","medication"] }
-            } }
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                // ✅ إصلاح الخطأ: enum مع type:"string"
+                type: { type: "string", enum: ["lab","imaging","procedure","device","medication"] }
+              }
+            }
           }
         }
       }
@@ -288,7 +287,7 @@ async function chatgptJSON(bundle, extra=[]){
   return tryParseObject(txt) || {};
 }
 
-// ---------- Local guardrails (insurance consistency) ----------
+// ---------- Local guardrails ----------
 function applyGuardrails(structured, ctx){
   const s = structured || {};
   const ctxText = [ctx?.userText, JSON.stringify(ctx?.extracted||{}), ctx?.extractedSummary].filter(Boolean).join(" ");
@@ -300,7 +299,6 @@ function applyGuardrails(structured, ctx){
 
   const pushContra=(m)=>{ if(m && !s.contradictions.includes(m)) s.contradictions.push(m); };
 
-  // قواعد محددة
   s.table = s.table.map((r)=>{
     const name=String(r?.name||"").trim();
     const lower=name.toLowerCase();
@@ -308,14 +306,12 @@ function applyGuardrails(structured, ctx){
     let label = r?.insuranceDecision?.label || "قابل للمراجعة";
     let just  = String(r?.insuranceDecision?.justification||"").trim();
 
-    // غياب توثيق المؤشر
     if(!r?.isIndicationDocumented){
       risk = Math.max(risk,60);
       if(label==="مقبول") label="قابل للمراجعة";
       if(!just) just="غياب توثيق المؤشّر السريري؛ يلزم توثيق واضح للقبول التأميني.";
     }
 
-    // Dengue IgG منفردًا
     if (/dengue/i.test(lower) && /igg/i.test(lower) && !has("\\b(igm|ns\\s*-?1)\\b", ctxText)){
       risk=Math.max(risk,80); label="قابل للرفض";
       if(!just) just="Dengue IgG منفرد لا يثبت عدوى حادة؛ المطلوب IgM/NS1 مع سياق سريري/وبائي.";
@@ -323,7 +319,6 @@ function applyGuardrails(structured, ctx){
       if(!s.missingActions.includes("طلب IgM/NS1 لتأكيد حمى الضنك عند الاشتباه.")) s.missingActions.push("طلب IgM/NS1 لتأكيد حمى الضنك عند الاشتباه.");
     }
 
-    // Normal Saline I.V بدون جفاف/هبوط
     const isIVFluid = /\b(normal\s*saline|\bi\.?v\.?\s*infusion\b)/i.test(lower);
     const hasDehydration = has("جفاف|dehydrat", ctxText);
     const hasHypotension = has("هبوط\\s*ضغط|hypotens", ctxText);
@@ -333,7 +328,6 @@ function applyGuardrails(structured, ctx){
       pushContra("وصف محلول وريدي دون دليل على الجفاف/هبوط ضغط.");
     }
 
-    // مضادات القيء بلا توثيق قيء/غثيان
     const isAntiemetic = /\b(metoclopramide|primperan|ondansetron|domperidone|prochlorperazine|granisetron)\b/i.test(lower);
     const hasNauseaVom = has("قي[ءئ]|تقي[ؤء]|غثيان|nausea|vomit|emesis", ctxText);
     if (isAntiemetic && !hasNauseaVom){
@@ -343,7 +337,6 @@ function applyGuardrails(structured, ctx){
       if(!s.missingActions.includes("توثيق قيء/غثيان (الشدة/التواتر) لتبرير مضاد القيء.")) s.missingActions.push("توثيق قيء/غثيان (الشدة/التواتر) لتبرير مضاد القيء.");
     }
 
-    // Nebulizer/Inhaler بلا أعراض تنفسية
     if (/nebulizer|inhal/i.test(lower) && !has("ضيق\\s*نفس|أزيز|wheez|o2|sat", ctxText)){
       risk=Math.max(risk,65); if(label==="مقبول") label="قابل للمراجعة";
       if(!just) just="يتطلب توثيق أعراض تنفسية (ضيق نفس/أزيز/تشبع O₂) لتبرير الإجراء.";
@@ -363,7 +356,7 @@ function applyGuardrails(structured, ctx){
   return s;
 }
 
-// ---------- HTML builder (يُستخدم من الواجهة) ----------
+// ---------- HTML builder (frontend uses this HTML string) ----------
 function badge(p){ if(p>=75) return 'badge badge-bad'; if(p>=60) return 'badge badge-warn'; return 'badge badge-ok'; }
 function toHtml(s){
   const rows = (s.table||[]).map(r=>`
@@ -422,27 +415,27 @@ export default async function handler(req,res){
     if (files.length > MAX_FILES) return bad(res,400,`Too many files (max ${MAX_FILES}).`);
     for (const f of files){
       if (!f?.name || !f?.data) continue;
-      if ((f.data||"").length > MAX_INLINE_FILE_BYTES*1.37) { // base64 expansion ~1.37
+      if ((f.data||"").length > MAX_INLINE_FILE_BYTES*1.37) {
         return bad(res,400,`File too large: ${f.name}`);
       }
     }
 
-    // 1) Gemini structured extraction (object)
+    // 1) Gemini structured extraction
     const extractedObj = await geminiSummarize({ text, files });
 
-    // 2) Build a seed table to help GPT-4o focus
+    // 2) Seed table
     const seed = seedTableFromExtraction(extractedObj);
 
-    // 3) Compose bundle for analysis
+    // 3) Compose bundle
     const bundle = { patientInfo, extracted: extractedObj, userText: text, seedTable: seed };
 
-    // 4) Main analysis (JSON guaranteed by OpenAI JSON mode)
+    // 4) Main analysis
     let structured = await chatgptJSON(bundle);
 
-    // 5) Guardrails + strengthen
+    // 5) Guardrails
     structured = applyGuardrails(structured, { userText:text, extracted:extractedObj });
 
-    // 6) If weak table, ask model to refine with explicit instruction
+    // 6) Refinement if weak
     const weak = !Array.isArray(structured?.table) || structured.table.length===0 ||
                  structured.table.filter(r=>Number(r?.riskPercent||0)===0).length/Math.max(structured.table.length||1,1) > 0.4;
 
