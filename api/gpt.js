@@ -2,7 +2,7 @@
 // Backend: Gemini Files (OCR/vision) → ChatGPT clinical audit (JSON) → HTML report
 // Runtime: Next.js API Route (Vercel, Node 18+)
 
-// ===== Route config (must be static literal; avoid TemplateExpression) =====
+// ===== Route config (must be a static literal; no template expressions) =====
 export const config = {
   api: { bodyParser: { sizeLimit: "50mb" } },
 };
@@ -15,7 +15,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL   = process.env.GEMINI_MODEL || "gemini-2.5-pro";
 const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
-const GEMINI_GEN_URL   = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+const GEMINI_GEN_URL   = (m) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
 // ===== Helpers =====
 const ok  = (res, json) => res.status(200).json({ ok: true, ...json });
@@ -32,25 +33,20 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   const bin = Buffer.from(base64, "base64");
 
   // 1) start resumable session
-  const initRes = await fetch(
-    `${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`,
-    {
-      method: "POST",
-      headers: {
-        "X-Goog-Upload-Protocol": "resumable",
-        "X-Goog-Upload-Command": "start",
-        "X-Goog-Upload-Header-Content-Length": String(bin.byteLength),
-        "X-Goog-Upload-Header-Content-Type": mimeType,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
-    }
-  );
+  const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+    method: "POST",
+    headers: {
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(bin.byteLength),
+      "X-Goog-Upload-Header-Content-Type": mimeType,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
+  });
 
   if (!initRes.ok) {
-    throw new Error(
-      "Gemini init failed: " + JSON.stringify(await parseJsonSafe(initRes))
-    );
+    throw new Error("Gemini init failed: " + JSON.stringify(await parseJsonSafe(initRes)));
   }
 
   const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
@@ -92,12 +88,13 @@ async function geminiSummarize({ text, files }) {
   }
 
   const systemPrompt =
-`أنت مساعد لاستخلاص سريري من ملفات وصور PDF/صور وصفية. 
-استخرج النقاط الطبية بدقّة (تشخيصات، أعراض، تحاليل، أدوية، إجراءات، تكرارات)، 
+`أنت مساعد لاستخلاص سريري من ملفات وصور PDF/صور فوتوغرافية.
+استخرج النقاط الطبية بدقّة (تشخيصات، أعراض، تحاليل، أدوية، إجراءات، تكرارات)،
 ثم لخّص دون وضع توصيات علاجية نهائية. لا تفترض حقائق غير مذكورة.`;
 
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
+    generationConfig: { maxOutputTokens: 2048 }, // مساحة كافية
     contents: [
       { role: "user", parts: [{ text: (text || "لا يوجد نص حر.") }] },
       ...(parts.length ? [{ role: "user", parts }] : [])
@@ -120,25 +117,29 @@ async function geminiSummarize({ text, files }) {
 // ===== Clinical rulebook + JSON schema for ChatGPT =====
 function auditInstructions() {
   return `
-أنت استشاري تدقيق طبي وتأميني. ادرس الحالة بعمق (العمر/الجنس/الحمل/الكلى/الكبد/علامات الجفاف والهبوط/وجود أعراض تنفسية/حمّى/ألم بطني…)، 
-وطابق كل اختبار/دواء/إجراء مع الدواعي السريرية الموثقة. 
-اكتب بالعربية الفصحى، وارجع لروح الأدلة الحديثة (WHO, CDC, NIH, NHS, UpToDate, BNF, Micromedex, Lexicomp, DailyMed, Mayo Clinic, Cochrane, NEJM/Lancet/JAMA/BMJ/Nature/Science) دون اختلاق مراجع محددة.
+أنت استشاري تدقيق طبي وتأميني.
+ادرس الحالة بعمق (العمر/الجنس/الحمل/الكلى/الكبد/ضغط الدم/السكري/الأعراض/علامات الجفاف أو الهبوط/الأعراض التنفسية/الحمّى/ألم البطن…)،
+وطابق كل فحص/دواء/إجراء مع الدواعي السريرية الموثقة.
 
-IMPORTANT clinical insurance rules:
-- Normal Saline I.V infusion مقبول فقط إذا وُجد دليل واضح على جفاف/فقدان سوائل/هبوط ضغط. 
-  إذا لا يوجد مبرر سريري (مثل وجود ارتفاع ضغط الدم أو اعتلال كلوي بدون جفاف/هبوط) → القرار "قابل للرفض".
+استند إلى روح الأدلة الحديثة (WHO, CDC, NIH, NHS, UpToDate, BNF, Micromedex, Lexicomp, DailyMed, Mayo Clinic, Cochrane, NEJM, Lancet, JAMA, BMJ, Nature, Science)
+دون اختلاق مراجع محددة أو أرقام DOI. التبرير يكون سريريًا وتأمينيًا معًا.
+
+IMPORTANT clinical insurance rules (لا تُهملها):
+- Normal Saline I.V infusion مقبول فقط إذا وُجد دليل واضح على جفاف/فقدان سوائل/هبوط ضغط.
+  إذا لم يوجد مبرر سريري (مثل وجود ارتفاع ضغط الدم أو السكري أو اعتلال الكلى بدون جفاف/هبوط) → القرار "قابل للرفض".
   اكتب التبرير: "استخدام محلول وريدي غير مبرر في حالة ارتفاع ضغط الدم/السكري بدون علامات جفاف أو هبوط ضغط".
-- Dengue IgG فقط لا يثبت عدوى حادة → "قابل للرفض" ما لم توجد أعراض وبائية قوية. التشخيص الحاد يحتاج IgM أو NS1.
-- Nebulizer/Inhaler يتطلب أعراض/تشخيص تنفسي موثق (صفير/ضيق نفس/تشخيص ربو/COPD) وإلا "قابل للرفض".
-- Pantoprazole I.V يُفضّل بمؤشرات واضحة (نزف علوي، قرحة معقّدة، قيء شديد مع تعذر الفموي) وإلا راجع الضرورة.
-- Ultrasound يجب تحديد الجهة/المنطقة وسبب الطلب. الغموض يقلل القبول.
-- راجع التكرارات (مثلاً تكرار نفس الدواء/الفحص في نفس الزيارة) واعتبرها "قابل للرفض" أو "قابل للمراجعة" مع تعليل.
-- التحاليل الروتينية المقبولة في HTN/DM: HbA1c, وظائف كلوية (Creatinine/Urea/eGFR), دهون، CRP عند الاشتباه بالالتهاب… مع تعليل.
+- Dengue IgG فقط لا يثبت عدوى حادة → "قابل للرفض" ما لم توجد أعراض/سياق وبائي قوي؛ التشخيص الحاد يحتاج IgM أو NS1.
+- Nebulizer/Inhaler يتطلب أعراض/تشخيص تنفسي موثق (صفير/ضيق نفس/ربو/COPD)، وإلا "قابل للرفض".
+- Pantoprazole I.V مقبول بمؤشرات قوية (نزف علوي، قرحة معقّدة، قيء شديد مع تعذر الفموي)، وإلا قابل للمراجعة.
+- Ultrasound يجب تحديد المنطقة وسبب الفحص. الغموض يقلل القبول.
+- راجع التكرارات (تكرار نفس الدواء/الفحص في نفس الزيارة) وقيّمها كقابل للرفض/المراجعة مع تعليل.
+- تحاليل HTN/DM المقبولة: HbA1c، وظائف كلوية (Creatinine/Urea/eGFR)، دهون؛ وCRP فقط عند الاشتباه بالالتهاب.
 
 Scoring guide:
-- riskPercent: تقدير خطورة/عدم ملاءمة الإجراء (0–100). <60 مقبول، 60–74 قابل للمراجعة، ≥75 مرفوض.
-- املأ insuranceDecision.justification بتعليل سريري قوي محدد غير عام.
+- riskPercent: تقدير عدم الملاءمة/المخاطر (0–100). <60 مقبول (أخضر)، 60–74 قابل للمراجعة (أصفر/عنبر)، ≥75 مرفوض (أحمر).
+- لكل صف: insuranceDecision.justification يجب أن يحتوي ≥ جملتين: (1) تعليل سريري محدّد، (2) تعليل تأميني/إرشادي واضح.
 
+Output:
 أخرج JSON فقط وفق هذا المخطط، بلا أي نص خارجه:
 {
   "patientSummary": {
@@ -160,13 +161,16 @@ Scoring guide:
       "isIndicationDocumented": boolean,
       "conflicts": string[],
       "riskPercent": number,
-      "insuranceDecision": {"label": "مقبول"|"قابل للرفض"|"مرفوض", "justification": string}
+      "insuranceDecision": {
+        "label": "مقبول"|"قابل للرفض"|"مرفوض",
+        "justification": string
+      }
     }
   ],
-  "missingActions": string[],
+  "missingActions": string[],      // ضعه دائمًا وفيه 2–3 اقتراحات دقيقة على الأقل
   "referrals": [{"specialty": string, "whatToDo": string[]}],
-  "financialInsights": string[],
-  "conclusion": string
+  "financialInsights": string[],   // ضعه دائمًا وفيه 2–3 نقاط عملية على الأقل
+  "conclusion": string             // ابدأ بذكر الأمراض المزمنة والأعراض الرئيسية
 }
 ONLY JSON.
 `;
@@ -174,12 +178,17 @@ ONLY JSON.
 
 function needsRefine(s){
   const rows = Array.isArray(s?.table)? s.table:[]; if(!rows.length) return true;
-  const zero = rows.filter(r=>!Number.isFinite(r?.riskPercent)).length;
-  const weak = rows.filter(r=>!r?.insuranceDecision?.justification || (r.insuranceDecision.justification||"").trim().length<20).length;
-  return (zero>0) || (weak/rows.length>0.25);
+  const badRisk = rows.some(r => !Number.isFinite(r?.riskPercent));
+  const weakJust = rows.filter(r=>{
+    const j = r?.insuranceDecision?.justification||"";
+    return j.trim().split(/[.؟!]\s*/).filter(Boolean).length < 2; // أقل من جملتين
+  }).length;
+  const missMissing = !Array.isArray(s?.missingActions) || s.missingActions.length < 2;
+  const missFinance = !Array.isArray(s?.financialInsights) || s.financialInsights.length < 2;
+  return badRisk || (weakJust/Math.max(rows.length,1) > 0.25) || missMissing || missFinance;
 }
 
-// ===== Call OpenAI for structured JSON =====
+// ===== OpenAI: produce structured JSON =====
 async function chatgptJSON(bundle, extra=[]) {
   const resp = await fetch(OPENAI_API_URL, {
     method: "POST",
@@ -191,7 +200,7 @@ async function chatgptJSON(bundle, extra=[]) {
         { role:"user", content: "المعطيات:\n"+JSON.stringify(bundle,null,2) },
         ...extra
       ],
-      response_format:{ type:"json_object" }
+      response_format:{ type:"json_object" },
     })
   });
   const data = await resp.json();
@@ -260,18 +269,13 @@ export default async function handler(req,res){
     if(!OPENAI_API_KEY) return bad(res,500,"Missing OPENAI_API_KEY");
     if(!GEMINI_API_KEY) return bad(res,500,"Missing GEMINI_API_KEY");
 
-    // payload from frontend
     const { text = "", files = [], patientInfo = null } = req.body||{};
 
     // 1) OCR/vision summary from Gemini
     const extracted = await geminiSummarize({ text, files });
 
     // 2) Bundle to the auditor (ChatGPT)
-    const bundle = {
-      patientInfo,
-      extractedSummary: extracted,
-      userText: text
-    };
+    const bundle = { patientInfo, extractedSummary: extracted, userText: text };
 
     // 3) First pass
     let structured = await chatgptJSON(bundle);
@@ -280,13 +284,15 @@ export default async function handler(req,res){
     if(needsRefine(structured)){
       structured = await chatgptJSON(bundle, [
         { role:"user", content:
-          "أعد التدقيق بدقّة. ركّز على: قاعدة Normal Saline (لا يُقبل مع HTN/DM دون جفاف/هبوط)، " +
-          "وقاعدة Dengue IgG (لا تشخيص حاد دون IgM/NS1)، وحدّد التناقضات بوضوح والتبريرات قوية سريريًا."
+          "أعد التدقيق بدقّة. ابدأ الخلاصة بذكر الأمراض المزمنة والأعراض الرئيسية. " +
+          "املأ حقول 'ما كان يجب القيام به' و'فرص تحسين الدخل' (٢–٣ نقاط على الأقل لكل منهما). " +
+          "لكل صف: اجعل التبرير ≥ جملتين (سريرية + تأمينية). لا تنس قاعدة Normal Saline (HTN/DM بدون جفاف/هبوط = قابل للرفض) " +
+          "وقاعدة Dengue IgG (لا تشخيص حاد دون IgM/NS1)."
         }
       ]);
     }
 
-    // 5) Render HTML safely
+    // 5) Render HTML
     const html = toHtml(structured);
     return ok(res, { html, structured });
   }catch(err){
