@@ -87,14 +87,14 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V10) ---
+// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V11) ---
 function getExpertAuditorInstructions(lang = 'ar') {
   const langConfig = {
     ar: {
       rule: "**قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.**",
       schema: {
-        patientSummary: {"text": "ملخص تفصيلي لحالة المريض الحالية، العلامات الحيوية، والتشخيصات على مدار الفترة الزمنية الكاملة."},
-        overallAssessment: {"text": "رأيك الخبير الشامل حول جودة الرعاية، مع تسليط الضوء على القرارات الصحيحة الرئيسية، والإغفالات الخطيرة، وأنماط الرعاية مثل تكرار الفحوصات والتفاعلات الدوائية."},
+        patientSummary: {"text": "ملخص تفصيلي لحالة المريض الحالية، العلامات الحيوية، والتشخيصات."},
+        overallAssessment: {"text": "رأيك الخبير الشامل حول جودة الرعاية، مع تسليط الضوء على القرارات الصحيحة، الإغفالات الخطيرة، والإجراءات الخاطئة."},
         table: [
           {
             "name": "string", "itemType": "lab|medication|procedure", "status": "تم إجراؤه|مفقود ولكنه ضروري",
@@ -108,8 +108,8 @@ function getExpertAuditorInstructions(lang = 'ar') {
     en: {
       rule: "**Language Rule: All outputs MUST be in clear, professional English.**",
       schema: {
-        patientSummary: {"text": "A detailed summary of the patient's presentation, vitals, and diagnoses over the entire period."},
-        overallAssessment: {"text": "Your expert overall opinion on the quality of care, highlighting major correct decisions, critical omissions, and patterns of care like test repetition and drug-disease interactions."},
+        patientSummary: {"text": "A detailed summary of the patient's presentation, vitals, and diagnoses."},
+        overallAssessment: {"text": "Your expert overall opinion on the quality of care, highlighting major correct decisions, critical omissions, and incorrect procedures."},
         table: [
           {
             "name": "string", "itemType": "lab|medication|procedure", "status": "Performed|Missing but Necessary",
@@ -123,7 +123,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
   };
   const selectedLang = langConfig[lang] || langConfig['ar'];
 
-  // **تحسين جوهري V10**: تصحيح منطق الإجراءات المفقودة.
+  // **تحسين جوهري V11**: استعادة التحليل العميق مع المنطق الجديد.
   return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case and respond with a valid JSON object.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
@@ -132,14 +132,18 @@ function getExpertAuditorInstructions(lang = 'ar') {
 * **Reimbursement & Utilization:** Focus on **Medical Necessity**, Duplication, and Contraindications.
 
 **Mandatory Analysis Rules & Reasoning Logic (Multi-Layered Analysis):**
-1.  **List EVERY SINGLE ITEM:** List each item as it appears in the source, even if it's a duplicate.
+1.  **List EVERY SINGLE ITEM:** List each item as it appears in the source, including all correct procedures and all duplicates. If "Dengue AB IGG" appears twice, it must have two separate entries in the final table.
 2.  **For each listed item, perform a two-layer analysis:**
     * **Layer 1: Core Clinical Validity:** Is this procedure/medication appropriate for the patient's diagnoses and symptoms?
-    * **Layer 2: Duplication:** After analyzing its core validity, check if the item is repeated.
-3.  **Combine Findings:** The final justification must reflect ALL findings. Prioritize the most severe clinical error.
+        * **Contraindication:** (e.g., Normal Saline in HTN without hypotension). Justification must be clinical: "إجراء يتعارض مع التشخيص (ارتفاع ضغط الدم) لعدم وجود جفاف أو قيء."
+        * **Medical Unnecessity:** (e.g., Dengue test without relevant symptoms). Justification must be clinical and educational: "غير مبرر طبياً لعدم وجود أعراض داعمة (مثل الحمى، الطفح الجلدي) أو سجل سفر. بالإضافة إلى أن فحص IgG يكشف العدوى السابقة وليس الحادة."
+    * **Layer 2: Duplication:** Is this the second (or third, etc.) time this exact item has been listed for this visit?
+3.  **Combine Findings for the Final Justification:**
+    * **For the FIRST instance of a flawed item:** The justification must focus on the Layer 1 clinical error. The \`analysisCategory\` should reflect this primary error (e.g., "إجراء يتعارض مع التشخيص").
+    * **For the SECOND (and subsequent) instances:** The justification should be concise: "إجراء مكرر للطلب السابق." The \`analysisCategory\` should be "إجراء مكرر".
 4.  **Proactive Standard of Care Analysis (Identify what is MISSING):**
     * Identify **Critical Omissions** (like missing ECG/Troponin) and **Best Practice Omissions** (like missing referrals) and list them in the table.
-    * **CRITICAL LOGIC:** For any item with a status of "Missing but Necessary" (مفقود ولكنه ضروري), the \`insuranceDecision.label\` MUST be "Not Applicable" (لا ينطبق). There is nothing to reject if it was never requested.
+    * **CRITICAL LOGIC:** For any item with a status of "Missing but Necessary" (مفقود ولكنه ضروري), the \`insuranceDecision.label\` MUST be "Not Applicable" (لا ينطبق).
 5.  **Generate DEEPLY DETAILED Recommendations:** Recommendations must be specific, actionable, and educational.
 
 ${selectedLang.rule}
