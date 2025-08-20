@@ -54,7 +54,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini (V12) ---
+// --- المرحلة الأولى: تجميع البيانات السريرية (مع التركيز على خط اليد) ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -67,23 +67,16 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
 
-  // **تحسين جوهري V12**: تعليمات متخصصة لقراءة الروشتات الصعبة.
-  const systemPrompt = `You are an expert AI-powered OCR and transcription service specializing in deciphering difficult handwritten medical prescriptions. Your task is to analyze the provided image(s) with extreme precision and transcribe ALL written information.
+  const systemPrompt = `You are an expert AI-powered OCR and transcription service specializing in deciphering difficult handwritten medical prescriptions and typed reports. Your task is to analyze the provided image(s) or text with extreme precision and transcribe ALL written information.
   **CRITICAL RULES:**
-  1.  **Full Transcription:** Transcribe everything you can read: patient information, diagnoses (Dx), and every single medication (Rx).
+  1.  **Full Transcription:** Transcribe everything you can read: patient information, diagnoses (Dx), and every single medication (Rx), lab, or procedure.
   2.  **Decipher Handwriting:** The handwriting may be difficult. Do your best to interpret drug names, even if they are not perfectly spelled.
   3.  **Extract All Details for Each Medication:** For every single drug, you MUST extract:
       * **Drug Name:** (e.g., Amlopine, Duodart, Rozavi)
       * **Dosage:** (e.g., 10, 0.5, 100/12.5)
       * **Frequency/Sig:** (e.g., 1x1, 1x2, tid)
       * **Duration:** (e.g., x90, x7)
-  4.  **Format as a List:** Present the final transcription as a clear, structured list. For example:
-      * Diagnosis: [List of diagnoses]
-      * Medications:
-          * Amlopine 10mg - 1x1 x90
-          * Duodart 0.5mg - 1x1 x90
-          * ...and so on for every drug.
-  This detailed transcription is critical for the next step of the analysis. Do not summarize or omit anything.`;
+  4.  **Format as a List:** Present the final transcription as a clear, structured list. This detailed transcription is critical for the next step of the analysis. Do not summarize or omit anything.`;
   
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -99,19 +92,19 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V11 Logic) ---
+// --- المرحلة الثانية: تعليمات المدقق الخبير (V15) ---
 function getExpertAuditorInstructions(lang = 'ar') {
   const langConfig = {
     ar: {
       rule: "**قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.**",
       schema: {
-        patientSummary: {"text": "ملخص تفصيلي لحالة المريض الحالية، العلامات الحيوية، والتشخيصات."},
-        overallAssessment: {"text": "رأيك الخبير الشامل حول جودة الرعاية، مع تسليط الضوء على القرارات الصحيحة، الإغفالات الخطيرة، والإجراءات الخاطئة."},
+        patientSummary: {"text": "ملخص تفصيلي لحالة المريض الحالية، التشخيصات، وقائمة الأدوية الكاملة."},
+        overallAssessment: {"text": "رأيك الخبير الشامل حول جودة الرعاية، مع التركيز على تعدد الأدوية، التفاعلات الدوائية، الإغفالات الخطيرة، والأخطاء المحتملة."},
         table: [
           {
-            "name": "string", "itemType": "lab|medication|procedure", "status": "تم إجراؤه|مفقود ولكنه ضروري",
-            "analysisCategory": "صحيح ومبرر|إجراء مكرر|غير مبرر طبياً|إجراء يتعارض مع التشخيص|إغفال خطير",
-            "insuranceDecision": {"label": "مقبول|مرفوض|لا ينطبق", "justification": "string"}
+            "name": "string", "itemType": "medication|procedure|lab", "status": "موصوف|تم إجراؤه|مفقود ولكنه ضروري",
+            "analysisCategory": "صحيح ومبرر|إجراء مكرر|غير مبرر طبياً|إجراء يتعارض مع التشخيص|تضارب دوائي|كمية عالية|إغفال خطير",
+            "insuranceDecision": {"label": "مقبول|مرفوض|للمراجعة|لا ينطبق", "justification": "string"}
           }
         ],
         recommendations: [ { "priority": "عاجلة|أفضل ممارسة", "description": "string", "relatedItems": ["string"] } ]
@@ -120,13 +113,13 @@ function getExpertAuditorInstructions(lang = 'ar') {
     en: {
       rule: "**Language Rule: All outputs MUST be in clear, professional English.**",
       schema: {
-        patientSummary: {"text": "A detailed summary of the patient's presentation, vitals, and diagnoses."},
-        overallAssessment: {"text": "Your expert overall opinion on the quality of care, highlighting major correct decisions, critical omissions, and incorrect procedures."},
+        patientSummary: {"text": "A detailed summary of the patient's presentation, diagnoses, and full medication list."},
+        overallAssessment: {"text": "Your expert overall opinion on the quality of care, focusing on polypharmacy, drug interactions, critical omissions, and potential errors."},
         table: [
           {
-            "name": "string", "itemType": "lab|medication|procedure", "status": "Performed|Missing but Necessary",
-            "analysisCategory": "Correct and Justified|Duplicate Procedure|Not Medically Justified|Procedure Contradicts Diagnosis|Critical Omission",
-            "insuranceDecision": {"label": "Accepted|Rejected|Not Applicable", "justification": "string"}
+            "name": "string", "itemType": "medication|procedure|lab", "status": "Prescribed|Performed|Missing but Necessary",
+            "analysisCategory": "Correct and Justified|Duplicate Procedure|Not Medically Justified|Procedure Contradicts Diagnosis|Drug Interaction|High Quantity|Critical Omission",
+            "insuranceDecision": {"label": "Accepted|Rejected|For Review|Not Applicable", "justification": "string"}
           }
         ],
         recommendations: [ { "priority": "Urgent|Best Practice", "description": "string", "relatedItems": ["string"] } ]
@@ -135,27 +128,27 @@ function getExpertAuditorInstructions(lang = 'ar') {
   };
   const selectedLang = langConfig[lang] || langConfig['ar'];
 
+  // **تحسين جوهري V15**: إضافة منطق صيدلاني سريري متقدم.
   return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case and respond with a valid JSON object.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
-* **Cardiology:** AHA/ACC/ESC Guidelines. For a patient with risk factors (Age > 50, DM, HTN) presenting with epigastric pain, an ECG and Troponin are **Class 1 (Mandatory)**.
-* **Endocrinology:** ADA Standards of Care. Annual fundus exam is mandatory for all Type 2 diabetics.
-* **Reimbursement & Utilization:** Focus on **Medical Necessity**, Duplication, and Contraindications.
+* **Pharmacology:** Use official drug monographs and interaction databases (e.g., Lexicomp, Micromedex).
+* **Geriatrics:** Use Beers Criteria and STOPP/START criteria.
+* **Cardiology, Endocrinology, Nephrology:** AHA/ACC/ADA/KDIGO Guidelines are mandatory.
 
-**Mandatory Analysis Rules & Reasoning Logic (Multi-Layered Analysis):**
-1.  **List EVERY SINGLE ITEM:** List each item as it appears in the source, including all correct procedures and all duplicates. If "Dengue AB IGG" appears twice, it must have two separate entries in the final table.
-2.  **For each listed item, perform a two-layer analysis:**
-    * **Layer 1: Core Clinical Validity:** Is this procedure/medication appropriate for the patient's diagnoses and symptoms?
-        * **Contraindication:** (e.g., Normal Saline in HTN without hypotension). Justification must be clinical: "إجراء يتعارض مع التشخيص (ارتفاع ضغط الدم) لعدم وجود جفاف أو قيء."
-        * **Medical Unnecessity:** (e.g., Dengue test without relevant symptoms). Justification must be clinical and educational: "غير مبرر طبياً لعدم وجود أعراض داعمة (مثل الحمى، الطفح الجلدي) أو سجل سفر. بالإضافة إلى أن فحص IgG يكشف العدوى السابقة وليس الحادة."
-    * **Layer 2: Duplication:** Is this the second (or third, etc.) time this exact item has been listed for this visit?
-3.  **Combine Findings for the Final Justification:**
-    * **For the FIRST instance of a flawed item:** The justification must focus on the Layer 1 clinical error. The \`analysisCategory\` should reflect this primary error (e.g., "إجراء يتعارض مع التشخيص").
-    * **For the SECOND (and subsequent) instances:** The justification should be concise: "إجراء مكرر للطلب السابق." The \`analysisCategory\` should be "إجراء مكرر".
-4.  **Proactive Standard of Care Analysis (Identify what is MISSING):**
-    * Identify **Critical Omissions** (like missing ECG/Troponin) and **Best Practice Omissions** (like missing referrals) and list them in the table.
-    * **CRITICAL LOGIC:** For any item with a status of "Missing but Necessary" (مفقود ولكنه ضروري), the \`insuranceDecision.label\` MUST be "Not Applicable" (لا ينطبق).
-5.  **Generate DEEPLY DETAILED Recommendations:** Recommendations must be specific, actionable, and educational.
+**Mandatory Analysis Rules & Reasoning Logic (Pharmaceutical Focus):**
+1.  **List EVERY SINGLE ITEM:** List each medication, lab, and procedure as transcribed.
+2.  **Deep Pharmaceutical Review for EACH medication:**
+    * **Appropriateness:** Is the drug appropriate for the given diagnosis?
+    * **Dose & Frequency:** Is the dose within the standard therapeutic range for the patient's age and condition?
+    * **Duration/Quantity:** **Any prescription for a duration longer than 30 days for a chronic medication in an initial or non-follow-up visit is considered "High Quantity" (كمية عالية).** The justification must be: "وصف الدواء لمدة 90 يومًا يتطلب تقييمًا للاستقرار والمتابعة قبل صرف هذه الكمية الكبيرة."
+    * **Drug-Disease Interactions:** Cross-reference the drug with all patient diagnoses for contraindications (e.g., NSAIDs in renal failure).
+    * **Drug-Drug Interactions:** Analyze the entire medication list for significant interactions (e.g., risk of bleeding, serotonin syndrome).
+    * **Lab-Dependent Dosing:** For drugs requiring renal or hepatic dose adjustment (e.g., Metformin, certain antibiotics), check if relevant labs (Creatinine, LFTs) were ordered. If not, flag the missing lab as a **"Critical Omission"**.
+3.  **Proactive Standard of Care Analysis (Identify what is MISSING):**
+    * Identify **Critical Omissions** (like missing ECG/Troponin) and **Best Practice Omissions** (like missing referrals).
+    * For missing items, the \`status\` is "مفقود ولكنه ضروري" and the \`insuranceDecision.label\` MUST be "لا ينطبق".
+4.  **Generate DEEPLY DETAILED Recommendations:** Recommendations must be specific, actionable, and educational.
 
 ${selectedLang.rule}
 
@@ -204,14 +197,15 @@ function renderHtmlReport(structuredData, lang = 'ar') {
         const normalizedLabel = (label || '').toLowerCase();
         if (normalizedLabel.includes('مقبول') || normalizedLabel.includes('accepted')) return 'background-color: #e6f4ea; color: #1e8e3e;';
         if (normalizedLabel.includes('مرفوض') || normalizedLabel.includes('rejected')) return 'background-color: #fce8e6; color: #d93025;';
+        if (normalizedLabel.includes('للمراجعة') || normalizedLabel.includes('for review')) return 'background-color: #fff0e1; color: #e8710a;';
         if (normalizedLabel.includes('لا ينطبق') || normalizedLabel.includes('not applicable')) return 'background-color: #e8eaed; color: #5f6368;';
         return 'background-color: #e8eaed; color: #3c4043;';
     };
     
     const getRiskClass = (category) => {
         const normalizedCategory = (category || '').toLowerCase();
-        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts')) return 'risk-critical';
-        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate') || normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified')) return 'risk-warning';
+        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts') || normalizedCategory.includes('تضارب') || normalizedCategory.includes('interaction')) return 'risk-critical';
+        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate') || normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified') || normalizedCategory.includes('كمية') || normalizedCategory.includes('quantity')) return 'risk-warning';
         if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) return 'risk-ok';
         return '';
     };
