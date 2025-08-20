@@ -1,21 +1,20 @@
 // /pages/api/gpt.js
-
 export const config = { api: { bodyParser: { sizeLimit: "50mb" } } };
 
 /* =========================
    الإعدادات العامة
 ========================= */
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o"; 
+const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL   = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest"; 
+const GEMINI_MODEL   = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
 const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
 const GEMINI_GEN_URL   = (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
 // حدود تشغيلية
-const MAX_TOKENS_GEMINI = 2048; // تحكم بحجم مخرج Gemini
+const MAX_TOKENS_GEMINI = 2048;
 const MAX_RETRIES       = 3;
 
 /* =========================
@@ -31,7 +30,6 @@ const parseJsonSafe = async (r) => {
   return { raw: await r.text() };
 };
 
-// backoff بسيط
 async function withRetry(fn, label="op"){
   let attempt = 0, lastErr;
   const base = 400;
@@ -99,23 +97,23 @@ const EXTRACTION_SCHEMA = {
     }},
     diagnoses: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"}, status:{type:["string","null"]}, certainty:{type:["string","null"]}, source:{type:["string","null"]}
+        name:{type:"string"]}, status:{type:["string","null"]}, certainty:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }},
     symptoms: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"}, status:{type:["string","null"]}, severity:{type:["string","null"]},
+        name:{type:"string"]}, status:{type:["string","null"]}, severity:{type:["string","null"]},
         onsetDate:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }},
     procedures: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"}, date:{type:["string","null"]}, source:{type:["string","null"]}
+        name:{type:"string"]}, date:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }},
     imaging: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"}, findings:{type:["string","null"]}, date:{type:["string","null"]}, source:{type:["string","null"]}
+        name:{type:"string"]}, findings:{type:["string","null"]}, date:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }}
   },
@@ -123,9 +121,8 @@ const EXTRACTION_SCHEMA = {
   additionalProperties:false
 };
 
-// متحقق JSON بسيط (minified)
+// متحقق JSON بسيط
 function simpleValidate(schema, obj){
-  // تحقّق وجود الحقول الرئيسية
   for(const req of schema.required||[]){
     if(!(req in obj)) return { ok:false, error:`Missing key: ${req}` };
   }
@@ -142,65 +139,22 @@ ${JSON.stringify(EXTRACTION_SCHEMA, null, 2)}
 عند وجود أسماء أدوية/جرعات مختلفة لنفس الدواء، احتفظ بها كما وردت مع الإشارة إلى المصدر.
 `;
 
+// ✅ القيم الصحيحة فقط (Developer API)
 const GEMINI_SAFETY = [
-  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-  { category: "HARM_CATEGORY_HATE_SPEECH",        threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT",  threshold: "BLOCK_NONE" },
   { category: "HARM_CATEGORY_HARASSMENT",         threshold: "BLOCK_NONE" },
-  { category: "HARM_CATEGORY_SEXUAL",             threshold: "BLOCK_NONE" },
-  { category: "HARM_CATEGORY_SELF_HARM",          threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_HATE_SPEECH",        threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",  threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_CIVIC_INTEGRITY",    threshold: "BLOCK_NONE" },
 ];
 
-async function geminiExtractChunked({ textParts = [], fileParts = [] }){
-  // نبني محتوى المستخدم
-  const userParts = [];
-  for (const t of textParts) { if(t?.trim()) userParts.push({ text: t }); }
-  for (const f of fileParts) { userParts.push({ file_data: { file_uri: f.uri, mime_type: f.mime } }); }
-  if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات." });
-
-  const body = {
-    system_instruction: { role:"system", parts: [{ text: GEMINI_SYSTEM_EXTRACTION }] },
-    contents: [{ role: "user", parts: userParts }],
-    safetySettings: GEMINI_SAFETY,
-    generationConfig: {
-      response_mime_type: "application/json",
-      max_output_tokens: MAX_TOKENS_GEMINI
-    }
-  };
-
-  const resp = await withRetry(async()=> {
-    const r = await fetch(GEMINI_GEN_URL(GEMINI_MODEL),{
-      method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body)
-    });
-    const data = await parseJsonSafe(r);
-    if(!r.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
-    const raw = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("\n") || "{}";
-    return JSON.parse(raw);
-  }, "geminiExtract");
-
-  const v = simpleValidate(EXTRACTION_SCHEMA, resp);
-  if(!v.ok){
-    // حراسة: في حال أرسل النموذج نصًا غير مطابق
-    return {
-      medications: resp.medications || [],
-      labs: resp.labs || [],
-      diagnoses: resp.diagnoses || [],
-      symptoms: resp.symptoms || [],
-      procedures: resp.procedures || [],
-      imaging: resp.imaging || []
-    };
-  }
-  return resp;
-}
-
-// تقسيم نص طويل إلى أجزاء منطقية
-function splitTextSmart(s, maxLen=4000){
+function splitTextSmart(s, maxLen=6000){
   if(!s) return [];
   if(s.length <= maxLen) return [s];
   const parts = [];
   let start = 0;
   while(start < s.length){
     let end = Math.min(start + maxLen, s.length);
-    // حاول القطع على فاصل سطر
     const cut = s.lastIndexOf("\n", end);
     if(cut > start + 1000) end = cut;
     parts.push(s.slice(start, end));
@@ -214,16 +168,11 @@ function mergeExtractionBlocks(blocks){
   for(const b of blocks){
     for(const k of Object.keys(out)) if(Array.isArray(b[k])) out[k] = out[k].concat(b[k]);
   }
-  // إزالة تكرارات بسيطة حسب الاسم + المصدر إن وجد
-  function dedup(arr, keyFn){
+  const dedup = (arr, keyFn)=>{
     const seen = new Set(); const res=[];
-    for(const it of arr){
-      const key = keyFn(it);
-      if(seen.has(key)) continue;
-      seen.add(key); res.push(it);
-    }
+    for(const it of arr){ const key=keyFn(it); if(seen.has(key)) continue; seen.add(key); res.push(it); }
     return res;
-  }
+  };
   out.medications = dedup(out.medications, (m)=> `${(m.name||"").toLowerCase()}|${m.dose||""}|${m.source||""}`);
   out.labs        = dedup(out.labs,        (l)=> `${(l.name||"").toLowerCase()}|${l.date||""}|${l.source||""}`);
   out.diagnoses   = dedup(out.diagnoses,   (d)=> `${(d.name||"").toLowerCase()}|${d.status||""}|${d.source||""}`);
@@ -233,11 +182,51 @@ function mergeExtractionBlocks(blocks){
   return out;
 }
 
+async function geminiExtractChunked({ textParts = [], fileParts = [] }){
+  const userParts = [];
+  for (const t of textParts) { if(t?.trim()) userParts.push({ text: t }); }
+  for (const f of fileParts) { userParts.push({ file_data: { file_uri: f.uri, mime_type: f.mime } }); }
+  if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات." });
+
+  const body = {
+    system_instruction: { role:"system", parts: [{ text: GEMINI_SYSTEM_EXTRACTION }] },
+    contents: [{ role: "user", parts: userParts }],
+    safetySettings: GEMINI_SAFETY,
+    generationConfig: {
+      response_mime_type: "application/json",
+      max_output_tokens: MAX_TOKENS_GEMINI
+      // ملاحظة: يمكن إضافة response_schema حين الانتقال لنسخ تدعمها بالكامل
+    }
+  };
+
+  const data = await withRetry(async()=> {
+    const r = await fetch(GEMINI_GEN_URL(GEMINI_MODEL),{
+      method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body)
+    });
+    const d = await parseJsonSafe(r);
+    if(!r.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(d)}`);
+    const raw = d?.candidates?.[0]?.content?.parts?.map(p=>p.text).join("\n") || "{}";
+    return JSON.parse(raw);
+  }, "geminiExtract");
+
+  const v = simpleValidate(EXTRACTION_SCHEMA, data);
+  if(!v.ok){
+    return {
+      medications: data.medications || [],
+      labs: data.labs || [],
+      diagnoses: data.diagnoses || [],
+      symptoms: data.symptoms || [],
+      procedures: data.procedures || [],
+      imaging: data.imaging || []
+    };
+  }
+  return data;
+}
+
 async function geminiStructuredExtract({ text="", files=[] }){
-  // 1) معالجة النص (تقسيم ذكي)
   const textParts = splitTextSmart(text, 6000);
 
-  // 2) رفع الملفات (إن وُجدت)
+  // رفع الملفات
   const uploaded = [];
   for (const f of files || []) {
     const mime = f?.mimeType || "application/octet-stream";
@@ -250,16 +239,13 @@ async function geminiStructuredExtract({ text="", files=[] }){
     uploaded.push({ uri, mime:mm });
   }
 
-  // 3) map: استخراج لكل دفعة (نجمع النص الكلي + كل الملفات مرة واحدة لتفادي فقد السياق)
-  // إذا كان النص طويلًا جدًا، ننفّذ عدة مكالمات ونُجمِّع
+  // map-reduce
   const blocks = [];
   const batches = textParts.length ? textParts.map(t => [t]) : [[]];
   for (const batch of batches){
     const resp = await geminiExtractChunked({ textParts: batch, fileParts: uploaded });
     blocks.push(resp);
   }
-
-  // 4) reduce: دمج وتصفية
   return mergeExtractionBlocks(blocks);
 }
 
@@ -337,7 +323,6 @@ const AUDIT_JSON_SCHEMA = {
   strict: true
 };
 
-// استدعاء OpenAI مع Structured Outputs، مع fallbacks
 async function chatgptAuditJSON(bundle, lang){
   const messages = [
     { role:"system", content: auditInstructions(lang) },
@@ -353,10 +338,7 @@ async function chatgptAuditJSON(bundle, lang){
         body: JSON.stringify({
           model: OPENAI_MODEL,
           messages,
-          response_format:{
-            type:"json_schema",
-            json_schema: AUDIT_JSON_SCHEMA
-          }
+          response_format:{ type:"json_schema", json_schema: AUDIT_JSON_SCHEMA }
         })
       });
       const data = await r.json();
@@ -365,7 +347,7 @@ async function chatgptAuditJSON(bundle, lang){
     }, "openaiStructured");
     return resp;
   }catch(e){
-    // المحاولة 2: json_object (أقل صرامة)
+    // المحاولة 2: json_object
     const resp2 = await withRetry(async()=> {
       const r = await fetch(OPENAI_API_URL,{
         method:"POST",
@@ -385,56 +367,54 @@ async function chatgptAuditJSON(bundle, lang){
 }
 
 /* =========================
-   طبقة قواعد بسيطة (Post-Validation Rules)
+   طبقة قواعد بسيطة (Post-Validation)
 ========================= */
 function applyRuleEngine(structured, { patientInfo, extracted }){
-  // مؤشرات مساعدة
   const eGFR = Number(patientInfo?.labs?.eGFR ?? NaN);
 
-  // 1) متفورمين مع eGFR
+  // متفورمين مقابل eGFR
   for(const r of structured.table||[]){
     if(r.itemType === "medication" && /metformin/i.test(r.name||"")){
       if(!Number.isNaN(eGFR) && eGFR < 30){
-        r.insuranceDecision.label = r.insuranceDecision.label || "Rejected";
-        r.insuranceDecision.justification = r.insuranceDecision.justification + " | Metformin contraindicated if eGFR < 30.";
+        r.insuranceDecision.label = "Rejected";
+        r.insuranceDecision.justification = (r.insuranceDecision.justification||"") + " | Metformin contraindicated if eGFR < 30.";
         r.overallRiskPercent = Math.max(r.overallRiskPercent||0, 90);
       }
     }
   }
 
-  // 2) سوائل وريدية في ADHF
+  // سوائل IV في ADHF
   const hasADHF = (extracted?.diagnoses||[]).some(d=> /acute decompensated heart failure|adhf|قصور قلب حاد/i.test(d.name||""));
   if(hasADHF){
     for(const r of structured.table||[]){
       if(r.itemType === "procedure" && /(IV\s*fluids|Normal\s*saline|Bolus|محاليل)/i.test(r.name||"")){
         r.insuranceDecision.label = "Rejected";
-        r.insuranceDecision.justification = r.insuranceDecision.justification + " | IV fluids in ADHF without shock is harmful.";
+        r.insuranceDecision.justification = (r.insuranceDecision.justification||"") + " | IV fluids in ADHF without shock is harmful.";
         r.overallRiskPercent = Math.max(r.overallRiskPercent||0, 95);
       }
     }
   }
 
-  // 3) NSAIDs في HF/CKD
-  const hasHF = (extracted?.diagnoses||[]).some(d=> /heart failure|قصور قلب/i.test(d.name||""));
+  // NSAIDs في HF/CKD
+  const hasHF  = (extracted?.diagnoses||[]).some(d=> /heart failure|قصور قلب/i.test(d.name||""));
   const hasCKD = (extracted?.diagnoses||[]).some(d=> /(ckd|chronic kidney|مرض كلى مزمن)/i.test(d.name||""));
   if(hasHF || hasCKD){
     for(const r of structured.table||[]){
       if(r.itemType === "medication" && /(ibuprofen|diclofenac|naproxen|ketorolac|nsaid|مسكنات غير ستيرويدية)/i.test(r.name||"")){
         r.insuranceDecision.label = "Rejected";
-        r.insuranceDecision.justification = r.insuranceDecision.justification + " | NSAIDs increase risk in HF/CKD.";
+        r.insuranceDecision.justification = (r.insuranceDecision.justification||"") + " | NSAIDs increase risk in HF/CKD.";
         r.overallRiskPercent = Math.max(r.overallRiskPercent||0, 90);
       }
     }
   }
 
-  // 4) مدد مزمنة > 30 يوم في زيارة أولية
+  // مدد > 30 يوم بدون مبرر
   for(const r of structured.table||[]){
     if(r.itemType === "medication" && (r.durationDays ?? null) && r.durationDays > 30){
       if(!/chronic|maintenance/i.test(r.intendedIndication||"")){
-        if(!/Subject to Rejection|معرض للرفض|Rejected|قابل للرفض/i.test(r.insuranceDecision.label||"")){
-          r.insuranceDecision.label = "Subject to Rejection";
-        }
-        r.insuranceDecision.justification = r.insuranceDecision.justification + " | Initial long duration without re-evaluation.";
+        r.insuranceDecision.label = /Subject to Rejection|معرض للرفض|Rejected|قابل للرفض/.test(r.insuranceDecision.label||"")
+          ? r.insuranceDecision.label : "Subject to Rejection";
+        r.insuranceDecision.justification = (r.insuranceDecision.justification||"") + " | Initial long duration without re-evaluation.";
       }
     }
   }
@@ -474,7 +454,7 @@ function toHtml(s){
   const tableRows = (s.table||[]).map(r => {
     const decisionColor = getDecisionColor(r.insuranceDecision?.label);
     const riskC = pctColor(r.overallRiskPercent);
-    const doseInfo = (r.itemType === 'medication' && r.doseRegimen) ? r.doseRegimen : (r.doseRegimen || '-');
+    const doseInfo = (r.doseRegimen && r.doseRegimen !== '-') ? r.doseRegimen : (r.itemType === 'medication' ? '-' : (r.doseRegimen || '-'));
     return `
       <tr>
         <td>
@@ -530,7 +510,7 @@ function toHtml(s){
     <p class="summary-text">${s.patientSummary?.text || 'غير متوفر.'}</p>
     <p class="summary-text">${s.overallAssessment?.text || 'غير متوفر.'}</p>
   </div>
-  
+
   <div class="report-section" id="details-section">
     <h2><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 16H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h12c.55 0 1 .45 1 1zM8 11h8v2H8zm0-4h8v2H8z"/></svg>التحليل التفصيلي للطلبات</h2>
     <table class="audit-table">
@@ -576,36 +556,11 @@ export default async function handler(req, res){
     // 1) استخراج مُنظّم من Gemini (مع تقسيم/دمج)
     const extracted = await geminiStructuredExtract({ text, files });
 
-    // 2) بناء حزمة إدخال غنية لـ OpenAI
+    // 2) بناء الحزمة لـ OpenAI
     const bundle = {
       patientInfo: patientInfo || {},
-      extracted,                          // مُنظّم
-      userText: String(text||"").slice(0, 5000) // للمرجعية فقط
+      extracted,
+      userText: String(text||"").slice(0, 5000)
     };
 
-    // 3) تدقيق سريري مُهيكل من OpenAI
-    let structured = await chatgptAuditJSON(bundle, lang);
-
-    // 4) طبقة قواعد بعديّة (تحسين الصرامة)
-    structured = applyRuleEngine(structured, { patientInfo, extracted });
-
-    // 5) حراسة: إذا غابت citations أضف الأساسية
-    if(!Array.isArray(structured.citations) || !structured.citations.length){
-      structured.citations = [
-        { label: "AHA/ACC/HFSA 2022 Heart Failure Guideline", url: "https://www.ahajournals.org/doi/10.1161/CIR.0000000000001063" },
-        { label: "ESC 2021 Heart Failure Guideline", url: "https://academic.oup.com/eurheartj/article/42/36/3599/6358045" },
-        { label: "KDIGO 2022 Diabetes in CKD Guideline", url: "https://kdigo.org/guidelines/diabetes-ckd/" },
-        { label: "ADA Standards of Care 2025 (Diabetes)", url: "https://diabetesjournals.org/care/issue" },
-        { label: "ESC 2023 Hypertension Guidelines", url: "https://www.escardio.org/Guidelines/Clinical-Practice-Guidelines" }
-      ];
-    }
-
-    // 6) تحويل إلى HTML غنيّ
-    const html = toHtml(structured);
-
-    return ok(res,{ html, structured, extracted });
-  }catch(err){
-    console.error("/api/gpt error:", err);
-    return bad(res,500, err?.message || String(err));
-  }
-}
+    // 3) تدقي
