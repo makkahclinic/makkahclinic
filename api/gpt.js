@@ -25,7 +25,7 @@ const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg })
 const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
 
 const parseJsonSafe = async (r) => {
-  const ct = (r.headers.get("content-type")||"").toLowerCase();
+  const ct = (r.headers.get?.("content-type")||"").toLowerCase?.() || "";
   if (ct.includes("application/json")) return r.json();
   return { raw: await r.text() };
 };
@@ -77,7 +77,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
 }
 
 /* =========================
-   مخطط الاستخراج القياسي (JSON)
+   مخطط الاستخراج القياسي (JSON) — تم تصحيح الأقواس
 ========================= */
 const EXTRACTION_SCHEMA = {
   type: "object",
@@ -97,23 +97,23 @@ const EXTRACTION_SCHEMA = {
     }},
     diagnoses: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"]}, status:{type:["string","null"]}, certainty:{type:["string","null"]}, source:{type:["string","null"]}
+        name:{type:"string"}, status:{type:["string","null"]}, certainty:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }},
     symptoms: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"]}, status:{type:["string","null"]}, severity:{type:["string","null"]},
+        name:{type:"string"}, status:{type:["string","null"]}, severity:{type:["string","null"]},
         onsetDate:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }},
     procedures: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"]}, date:{type:["string","null"]}, source:{type:["string","null"]}
+        name:{type:"string"}, date:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }},
     imaging: { type:"array", items:{
       type:"object", properties:{
-        name:{type:"string"]}, findings:{type:["string","null"]}, date:{type:["string","null"]}, source:{type:["string","null"]}
+        name:{type:"string"}, findings:{type:["string","null"]}, date:{type:["string","null"]}, source:{type:["string","null"]}
       }, required:["name"], additionalProperties:false
     }}
   },
@@ -139,7 +139,8 @@ ${JSON.stringify(EXTRACTION_SCHEMA, null, 2)}
 عند وجود أسماء أدوية/جرعات مختلفة لنفس الدواء، احتفظ بها كما وردت مع الإشارة إلى المصدر.
 `;
 
-// ✅ القيم الصحيحة فقط (Developer API)
+// الفئات المدعومة فقط — Developer API
+// https://ai.google.dev/gemini-api/docs/safety-settings
 const GEMINI_SAFETY = [
   { category: "HARM_CATEGORY_DANGEROUS_CONTENT",  threshold: "BLOCK_NONE" },
   { category: "HARM_CATEGORY_HARASSMENT",         threshold: "BLOCK_NONE" },
@@ -189,13 +190,12 @@ async function geminiExtractChunked({ textParts = [], fileParts = [] }){
   if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات." });
 
   const body = {
-    system_instruction: { role:"system", parts: [{ text: GEMINI_SYSTEM_EXTRACTION }] },
+    system_instruction: { parts: [{ text: GEMINI_SYSTEM_EXTRACTION }] },
     contents: [{ role: "user", parts: userParts }],
     safetySettings: GEMINI_SAFETY,
     generationConfig: {
-      response_mime_type: "application/json",
+      response_mime_type: "application/json",  // JSON Mode
       max_output_tokens: MAX_TOKENS_GEMINI
-      // ملاحظة: يمكن إضافة response_schema حين الانتقال لنسخ تدعمها بالكامل
     }
   };
 
@@ -563,4 +563,29 @@ export default async function handler(req, res){
       userText: String(text||"").slice(0, 5000)
     };
 
-    // 3) تدقي
+    // 3) تدقيق سريري مُهيكل
+    let structured = await chatgptAuditJSON(bundle, lang);
+
+    // 4) قواعد بعديّة
+    structured = applyRuleEngine(structured, { patientInfo, extracted });
+
+    // 5) حراسة: إن غابت المراجع نضيف الأساسية
+    if(!Array.isArray(structured.citations) || !structured.citations.length){
+      structured.citations = [
+        { label: "AHA/ACC/HFSA 2022 Heart Failure Guideline", url: "https://www.ahajournals.org/doi/10.1161/CIR.0000000000001063" },
+        { label: "ESC 2021 Heart Failure Guideline", url: "https://academic.oup.com/eurheartj/article/42/36/3599/6358045" },
+        { label: "KDIGO 2022 Diabetes in CKD Guideline", url: "https://kdigo.org/guidelines/diabetes-ckd/" },
+        { label: "ADA Standards of Care 2025 (Diabetes)", url: "https://diabetesjournals.org/care/issue" },
+        { label: "ESC/ACC Hypertension (2023/2024)", url: "https://www.escardio.org/Guidelines/Clinical-Practice-Guidelines" }
+      ];
+    }
+
+    // 6) تحويل إلى HTML
+    const html = toHtml(structured);
+
+    return ok(res,{ html, structured, extracted });
+  }catch(err){
+    console.error("/api/gpt error:", err);
+    return bad(res,500, err?.message || String(err));
+  }
+}
