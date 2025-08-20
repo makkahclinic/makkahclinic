@@ -121,14 +121,7 @@ ${langRule}
       "name": "string",
       "itemType": "lab"|"medication"|"procedure"|"device"|"imaging",
       "doseRegimen": "string|null",
-      "durationDays": "number|null",
       "intendedIndication": "string|null",
-      "riskAnalysis": {
-        "clinicalValidity": {"score": "number", "reasoning": "string"},
-        "documentationStrength": {"score": "number", "reasoning": "string"},
-        "financialImpact": {"score": "number", "reasoning": "string"}
-      },
-      "overallRiskPercent": "number",
       "insuranceDecision": {"label": "مقبول"|"قابل للمراجعة"|"قابل للرفض"|"إيقاف مؤقت / إعادة تقييم"|"Accepted"|"Reviewable"|"Rejected"|"Temporary Stop / Re-evaluate", "justification": "string"}
     }
   ],
@@ -159,12 +152,6 @@ async function chatgptJSON(bundle, lang){
 
 
 // --- Advanced HTML Renderer ---
-function getRiskColor(score) {
-    if (score <= 40) return '#e53935'; // bad
-    if (score <= 70) return '#f9a825'; // warn
-    return '#2e7d32'; // ok
-}
-
 function getDecisionColor(label) {
     switch (label) {
         case 'مقبول':
@@ -185,63 +172,20 @@ function getDecisionColor(label) {
 
 function toHtml(s){
   const tableRows = (s.table||[]).map(r => {
-    const ra = r.riskAnalysis || {};
-    const cv = ra.clinicalValidity || {};
-    const ds = ra.documentationStrength || {};
-    const fi = ra.financialImpact || {};
     const decisionColor = getDecisionColor(r.insuranceDecision?.label);
-
-    let doseInfo = '';
-    if (r.itemType === 'medication' && (r.doseRegimen || r.durationDays)) {
-        doseInfo = `<div class="dose-info"><strong>الجرعة والمدة:</strong> ${r.doseRegimen || ''} ${r.durationDays ? `(لمدة ${r.durationDays} يوم)` : ''}</div>`;
-    }
+    let doseInfo = (r.itemType === 'medication' && r.doseRegimen) ? r.doseRegimen : '-';
 
     return `
-    <div class="audit-row">
-        <div class="row-header">
-            <div class="item-name">${r.name || '-'} <span class="item-type">${r.itemType || ''}</span></div>
-            <div class="decision" style="background-color:${decisionColor};">
-                ${r.insuranceDecision?.label || '-'}
-            </div>
-        </div>
-        <div class="row-body">
-            <div class="indication">
-                <strong>المؤشر السريري المستنتج:</strong>
-                <p>${r.intendedIndication || '<em>لم يتمكن النظام من استنتاج مؤشر واضح.</em>'}</p>
-            </div>
-            ${doseInfo}
-            <div class="risk-grid">
-                <div class="risk-cell">
-                    <div class="risk-title">
-                        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                        الصلاحية السريرية
-                    </div>
-                    <div class="risk-score" style="color:${getRiskColor(cv.score || 0)}">${cv.score || 0}%</div>
-                    <div class="risk-reasoning">${cv.reasoning || '-'}</div>
-                </div>
-                <div class="risk-cell">
-                    <div class="risk-title">
-                        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-                        قوة التوثيق
-                    </div>
-                    <div class="risk-score" style="color:${getRiskColor(ds.score || 0)}">${ds.score || 0}%</div>
-                    <div class="risk-reasoning">${ds.reasoning || '-'}</div>
-                </div>
-                <div class="risk-cell">
-                    <div class="risk-title">
-                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-12h2v4h-2zm0 6h2v2h-2z"/></svg>
-                        الأثر المالي
-                    </div>
-                    <div class="risk-score" style="color:${getRiskColor(fi.score || 0)}">${fi.score || 0}%</div>
-                    <div class="risk-reasoning">${fi.reasoning || '-'}</div>
-                </div>
-            </div>
-            <div class="justification">
-                <strong>الخلاصة والتبرير:</strong>
-                <p>${r.insuranceDecision?.justification || '-'}</p>
-            </div>
-        </div>
-    </div>
+      <tr>
+        <td>
+          <div class="item-name">${r.name || '-'}</div>
+          <div class="item-type">${r.itemType || ''}</div>
+        </td>
+        <td>${doseInfo}</td>
+        <td>${r.intendedIndication || '-'}</td>
+        <td><span class="decision-badge" style="background-color:${decisionColor};">${r.insuranceDecision?.label || '-'}</span></td>
+        <td>${r.insuranceDecision?.justification || '-'}</td>
+      </tr>
     `;
   }).join("");
 
@@ -255,37 +199,27 @@ function toHtml(s){
 
   return `
   <style>
-    .report-section { border: 1px solid #e5e7eb; border-radius: 16px; margin-bottom: 20px; padding: 18px; background: #fff; }
-    .report-section h2 { font-size: 20px; color: #105ca5; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
-    .report-section h2 svg { width: 24px; height: 24px; fill: #105ca5; }
-    .summary-text { font-size: 15px; line-height: 1.7; color: #334155; }
+    .report-section { border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 24px; padding: 20px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .report-section h2 { font-size: 22px; color: #0d47a1; margin: 0 0 16px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; }
+    .report-section h2 svg { width: 26px; height: 26px; fill: #1a73e8; }
+    .summary-text { font-size: 16px; line-height: 1.8; color: #333; }
     
-    .audit-row { border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
-    .row-header { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
-    .item-name { font-size: 18px; font-weight: 700; color: #0b4479; }
-    .item-type { font-size: 12px; font-weight: 500; color: #64748b; margin-right: 8px; background: #eef7ff; padding: 2px 6px; border-radius: 6px;}
-    .decision { color: #fff; font-weight: 700; padding: 6px 12px; border-radius: 8px; font-size: 14px; }
-    .row-body { padding: 16px; }
-    .indication { margin-bottom: 16px; }
-    .indication p { margin: 4px 0 0; color: #475569; }
-    .dose-info { background: #f1f5f9; padding: 8px 12px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; color: #475569;}
+    .audit-table { width: 100%; border-collapse: collapse; }
+    .audit-table th, .audit-table td { padding: 14px 12px; text-align: right; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+    .audit-table th { background-color: #f5f7f9; color: #0d47a1; font-weight: 600; font-size: 14px; }
+    .audit-table tr:last-child td { border-bottom: none; }
+    .audit-table tr:hover { background-color: #f8f9fa; }
     
-    .risk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
-    .risk-cell { background: #f8fbff; border: 1px dashed #dbeafe; border-radius: 10px; padding: 12px; }
-    .risk-title { display: flex; align-items: center; gap: 6px; font-weight: 500; color: #105ca5; margin-bottom: 8px; font-size: 14px; }
-    .risk-title svg { width: 18px; height: 18px; fill: #87c7ff; }
-    .risk-score { font-size: 24px; font-weight: 700; margin-bottom: 4px; text-align: center; }
-    .risk-reasoning { font-size: 12px; color: #64748b; text-align: center; line-height: 1.5; }
+    .item-name { font-weight: 600; color: #202124; margin-bottom: 4px; }
+    .item-type { font-size: 12px; color: #5f6368; }
+    .decision-badge { color: #fff; font-weight: 600; padding: 5px 10px; border-radius: 16px; font-size: 13px; display: inline-block; }
     
-    .justification { margin-top: 12px; background: #eef7ff; padding: 12px; border-radius: 8px; border-left: 4px solid #1e90ff; }
-    .justification p { margin: 4px 0 0; color: #0b4479; }
-    
-    .rec-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+    .rec-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #f8f9fa; }
     .rec-priority { flex-shrink: 0; font-weight: 700; padding: 4px 10px; border-radius: 8px; font-size: 12px; color: #fff; }
-    .rec-priority.urgent { background: #e53935; }
-    .rec-priority.best-practice { background: #2e7d32; }
-    .rec-desc { color: #334155; }
-    .rec-related { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .rec-priority.urgent { background: #ea4335; }
+    .rec-priority.best-practice { background: #34a853; }
+    .rec-desc { color: #333; }
+    .rec-related { font-size: 11px; color: #5f6368; margin-top: 4px; }
   </style>
 
   <div class="report-section" id="summary-section">
@@ -296,7 +230,20 @@ function toHtml(s){
   
   <div class="report-section" id="details-section">
     <h2><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 16H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h12c.55 0 1 .45 1 1v12c0 .55-.45 1-1 1zM8 11h8v2H8zm0-4h8v2H8z"/></svg>التحليل التفصيلي للطلبات</h2>
-    ${tableRows}
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>الطلب</th>
+          <th>الجرعة / النظام</th>
+          <th>المؤشر المستنتج</th>
+          <th>القرار</th>
+          <th>التبرير</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+      </tbody>
+    </table>
   </div>
 
   <div class="report-section" id="recommendations-section">
