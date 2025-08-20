@@ -54,7 +54,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
+// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini (V12) ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -66,13 +66,25 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
   }
   if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
-  const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block.
+
+  // **تحسين جوهري V12**: تعليمات متخصصة لقراءة الروشتات الصعبة.
+  const systemPrompt = `You are an expert AI-powered OCR and transcription service specializing in deciphering difficult handwritten medical prescriptions. Your task is to analyze the provided image(s) with extreme precision and transcribe ALL written information.
   **CRITICAL RULES:**
-  1.  **DO NOT SUMMARIZE.** Transcribe everything.
-  2.  For each document/file, first identify and state the **Date of Visit** clearly.
-  3.  Under each date, list all patient details, complaints, vital signs, diagnoses, and every single lab test, medication, and procedure mentioned in that document, including duplicates.
-  4.  This creates a chronological record of the patient's journey. Do not merge data from different dates.
-  5.  Present the information in a clear, structured manner.`;
+  1.  **Full Transcription:** Transcribe everything you can read: patient information, diagnoses (Dx), and every single medication (Rx).
+  2.  **Decipher Handwriting:** The handwriting may be difficult. Do your best to interpret drug names, even if they are not perfectly spelled.
+  3.  **Extract All Details for Each Medication:** For every single drug, you MUST extract:
+      * **Drug Name:** (e.g., Amlopine, Duodart, Rozavi)
+      * **Dosage:** (e.g., 10, 0.5, 100/12.5)
+      * **Frequency/Sig:** (e.g., 1x1, 1x2, tid)
+      * **Duration:** (e.g., x90, x7)
+  4.  **Format as a List:** Present the final transcription as a clear, structured list. For example:
+      * Diagnosis: [List of diagnoses]
+      * Medications:
+          * Amlopine 10mg - 1x1 x90
+          * Duodart 0.5mg - 1x1 x90
+          * ...and so on for every drug.
+  This detailed transcription is critical for the next step of the analysis. Do not summarize or omit anything.`;
+  
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: "user", parts: userParts }],
@@ -87,7 +99,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V11) ---
+// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V11 Logic) ---
 function getExpertAuditorInstructions(lang = 'ar') {
   const langConfig = {
     ar: {
@@ -123,7 +135,6 @@ function getExpertAuditorInstructions(lang = 'ar') {
   };
   const selectedLang = langConfig[lang] || langConfig['ar'];
 
-  // **تحسين جوهري V11**: استعادة التحليل العميق مع المنطق الجديد.
   return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case and respond with a valid JSON object.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
