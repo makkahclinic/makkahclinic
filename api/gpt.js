@@ -1,41 +1,317 @@
-ملخص الحالة والتقييم العام
-The patient is Ahmed Mohammed Alshumrani, aged 60, with Type 2 Diabetes Mellitus with neurological complications and Essential Hypertension. He presented on 07/08/2025 with symptoms including elevated blood pressure, hyperglycemia, peripheral neuropathy, and epigastric and periumbilical pain. Vital signs showed blood pressure of 140/100 mmHg and a temperature of 37.5°C.
+// هذا الإعداد مخصص لـ Next.js لزيادة حجم الطلب المسموح به، وهو ضروري لرفع ملفات كبيرة.
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "50mb", // السماح بطلبات تصل إلى 50 ميجابايت
+    },
+  },
+};
 
-The patient's care shows appropriate selection of laboratory tests such as CBC, renal function tests, liver enzymes, and HbA1c given his chronic conditions. However, critical tests like ECG and Troponin are missing despite presenting with epigastric pain, raising suspicion for possible ACS. There are multiple instances of duplicate orders for medications and procedures, suggesting potential errors in entry or unnecessary repetition. The inclusion of Dengue IgG is inappropriate given the primary complaints are not consistent with acute or recent Dengue infection symptoms.
+// --- الإعدادات الرئيسية ---
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-التحليل التفصيلي للإجراءات
-الإجراء	الحالة	قرار التأمين	التبرير
-ECG
-إغفال خطير
-مفقود ولكنه ضروري	مرفوض	Missing ECG given the patient's risk factors and presentation with epigastric pain.
-Troponin
-إغفال خطير
-مفقود ولكنه ضروري	مرفوض	Missing Troponin could overlook potential ACS.
-Dengue Ab IgG
-غير مبرر طبياً
-تم إجراؤه	مرفوض	Dengue IgG is inappropriate for the presentation of symptoms.
-Normal Saline IV Infusion
-إجراء مكرر
-تم إجراؤه	مرفوض	Duplicate listing of Normal Saline IV Infusion.
-Pantozol 40mg IV Powder for Injection
-إجراء مكرر
-تم إجراؤه	مرفوض	Duplicate listing of Pantozol administration.
-Primperan 5mg/ml 2ml-Amp
-إجراء مكرر
-تم إجراؤه	مرفوض	Duplicate listing of Primperan administration.
-Annual fundus exam
-إغفال خطير
-مفقود ولكنه ضروري	معلق	Standard of care for diabetic patients; missing from documentation.
-التوصيات والإجراءات المقترحة
-عاجلة
-Perform ECG and Troponin tests immediately due to the risk of acute coronary syndrome in a patient with epigastric pain.
-مرتبط بـ: ECG, Troponin
-أفضل ممارسة
-Include an annual fundus exam for this diabetic patient as per endocrinology standards.
-مرتبط بـ: Annual fundus exam
-للمراجعة
-Evaluate the duplication of orders for infusion medications to prevent unnecessary administration.
-مرتبط بـ: Normal Saline IV Infusion, Pantozol 40mg IV Powder for Injection, Primperan 5mg/ml 2ml-Amp
-للمراجعة
-Review the clinical justification for the use of Dengue IgG testing to prevent inappropriate billing.
-مرتبط بـ: Dengue Ab IgG
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
+const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
+const GEMINI_GEN_URL = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+// --- دوال مساعدة ---
+const ok = (res, json) => res.status(200).json({ ok: true, ...json });
+const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
+const parseJsonSafe = async (response) => (response.headers.get("content-type") || "").includes("application/json") ? response.json() : { raw: await response.text() };
+
+// --- معالج رفع الملفات إلى Gemini ---
+async function geminiUploadBase64({ name, mimeType, base64 }) {
+  const binaryData = Buffer.from(base64, "base64");
+  const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+    method: "POST",
+    headers: {
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(binaryData.byteLength),
+      "X-Goog-Upload-Header-Content-Type": mimeType,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
+  });
+  if (!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
+  const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
+  if (!sessionUrl) throw new Error("Gemini upload session URL is missing");
+  const uploadRes = await fetch(sessionUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": mimeType,
+      "X-Goog-Upload-Command": "upload, finalize",
+      "X-Goog-Upload-Offset": "0",
+      "Content-Length": String(binaryData.byteLength),
+    },
+    body: binaryData,
+  });
+  const metadata = await parseJsonSafe(uploadRes);
+  if (!uploadRes.ok) throw new Error(`Gemini finalize failed: ${JSON.stringify(metadata)}`);
+  return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
+}
+
+// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
+async function aggregateClinicalDataWithGemini({ text, files }) {
+  const userParts = [];
+  if (text) userParts.push({ text });
+  for (const file of files || []) {
+    const mime = file?.mimeType || "application/octet-stream";
+    const base64Data = (file?.data || "").split("base64,").pop() || file?.data;
+    if (!base64Data) continue;
+    const { uri, mime: finalMime } = await geminiUploadBase64({ name: file?.name || "unnamed_file", mimeType: mime, base64: base64Data });
+    userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
+  }
+  if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
+  const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block.
+  **CRITICAL RULES:**
+  1.  **DO NOT SUMMARIZE.** Transcribe everything.
+  2.  For each document/file, first identify and state the **Date of Visit** clearly.
+  3.  Under each date, list all patient details, complaints, vital signs, diagnoses, and every single lab test, medication, and procedure mentioned in that document, including duplicates.
+  4.  This creates a chronological record of the patient's journey. Do not merge data from different dates.
+  5.  Present the information in a clear, structured manner.`;
+  const body = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: userParts }],
+  };
+  const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJsonSafe(response);
+  if (!response.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
+  return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
+}
+
+// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V9) ---
+function getExpertAuditorInstructions(lang = 'ar') {
+  const langConfig = {
+    ar: {
+      rule: "**قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.**",
+      schema: {
+        patientSummary: {"text": "ملخص تفصيلي لحالة المريض الحالية، العلامات الحيوية، والتشخيصات على مدار الفترة الزمنية الكاملة."},
+        overallAssessment: {"text": "رأيك الخبير الشامل حول جودة الرعاية، مع تسليط الضوء على القرارات الصحيحة الرئيسية، والإغفالات الخطيرة، وأنماط الرعاية مثل تكرار الفحوصات والتفاعلات الدوائية."},
+        table: [
+          {
+            "name": "string", "itemType": "lab|medication|procedure", "status": "تم إجراؤه|مفقود ولكنه ضروري",
+            "analysisCategory": "صحيح ومبرر|إجراء مكرر|غير مبرر طبياً|إجراء يتعارض مع التشخيص|إغفال خطير",
+            "insuranceDecision": {"label": "مقبول|مرفوض", "justification": "string"}
+          }
+        ],
+        recommendations: [ { "priority": "عاجلة|أفضل ممارسة", "description": "string", "relatedItems": ["string"] } ]
+      }
+    },
+    en: {
+      rule: "**Language Rule: All outputs MUST be in clear, professional English.**",
+      schema: {
+        patientSummary: {"text": "A detailed summary of the patient's presentation, vitals, and diagnoses over the entire period."},
+        overallAssessment: {"text": "Your expert overall opinion on the quality of care, highlighting major correct decisions, critical omissions, and patterns of care like test repetition and drug-disease interactions."},
+        table: [
+          {
+            "name": "string", "itemType": "lab|medication|procedure", "status": "Performed|Missing but Necessary",
+            "analysisCategory": "Correct and Justified|Duplicate Procedure|Not Medically Justified|Procedure Contradicts Diagnosis|Critical Omission",
+            "insuranceDecision": {"label": "Accepted|Rejected", "justification": "string"}
+          }
+        ],
+        recommendations: [ { "priority": "Urgent|Best Practice", "description": "string", "relatedItems": ["string"] } ]
+      }
+    }
+  };
+  const selectedLang = langConfig[lang] || langConfig['ar'];
+
+  // **تحسين جوهري V9**: منطق تحليل شامل ومتعدد الطبقات.
+  return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case and respond with a valid JSON object.
+
+**Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
+* **Cardiology:** AHA/ACC/ESC Guidelines. For a patient with risk factors (Age > 50, DM, HTN) presenting with epigastric pain, an ECG and Troponin are **Class 1 (Mandatory)**.
+* **Endocrinology:** ADA Standards of Care. Annual fundus exam is mandatory for all Type 2 diabetics.
+* **Reimbursement & Utilization:** Focus on **Medical Necessity**, Duplication, and Contraindications.
+
+**Mandatory Analysis Rules & Reasoning Logic (Multi-Layered Analysis):**
+1.  **List EVERY SINGLE ITEM:** List each item as it appears in the source, even if it's a duplicate. If "Dengue AB IGG" appears twice, it must have two separate entries in the final table.
+2.  **For each listed item, perform a two-layer analysis:**
+    * **Layer 1: Core Clinical Validity:** Is this procedure/medication appropriate for the patient's diagnoses and symptoms?
+        * **Contraindication:** (e.g., Normal Saline in HTN without hypotension). Justification must be clinical: "إجراء يتعارض مع التشخيص (ارتفاع ضغط الدم) لعدم وجود جفاف أو قيء."
+        * **Medical Unnecessity:** (e.g., Dengue test without relevant symptoms). Justification must be clinical: "غير مبرر طبياً لعدم وجود أعراض داعمة (مثل الحمى، الطفح الجلدي) أو سجل سفر لمناطق موبوءة."
+        * **Incorrect Test Type:** (e.g., Dengue IgG for acute symptoms). Justification must be educational: "تم طلب فحص IgG الذي يكشف العدوى السابقة. لتشخيص عدوى حادة، كان يجب طلب فحص IgM أو NS1 Antigen."
+    * **Layer 2: Duplication:** Is this the second (or third, etc.) time this exact item has been listed for this visit?
+3.  **Combine Findings for the Final Justification:**
+    * **For the FIRST instance of a flawed item:** The justification must focus on the Layer 1 clinical error.
+    * **For the SECOND (and subsequent) instances:** The justification should be concise: "إجراء مكرر للطلب السابق." The \`analysisCategory\` should be "إجراء مكرر".
+4.  **Proactive Standard of Care Analysis (Identify what is MISSING):** Identify **Critical Omissions** (like missing ECG/Troponin) and **Best Practice Omissions** (like missing referrals) and list them in the table.
+5.  **Generate DEEPLY DETAILED Recommendations:** Recommendations must be specific, actionable, and educational.
+
+${selectedLang.rule}
+
+**Your response must be ONLY the valid JSON object that conforms to the following exact schema. Do not include any other text or formatting.**
+\`\`\`json
+${JSON.stringify(selectedLang.schema, null, 2)}
+\`\`\``;
+}
+
+// دالة للتواصل مع OpenAI والحصول على رد JSON منظم
+async function getAuditFromOpenAI(bundle, lang) {
+  const response = await fetch(OPENAI_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [
+        { role: "system", content: getExpertAuditorInstructions(lang) },
+        { role: "user", content: "Clinical Data for Audit:\n" + JSON.stringify(bundle, null, 2) },
+      ],
+      response_format: { type: "json_object" },
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`OpenAI error: ${JSON.stringify(data)}`);
+  return JSON.parse(data?.choices?.[0]?.message?.content || "{}");
+}
+
+// --- عارض التقرير المتقدم (HTML Renderer) ---
+function renderHtmlReport(structuredData, lang = 'ar') {
+    const s = structuredData;
+    const isArabic = lang === 'ar';
+    const text = {
+        summaryTitle: isArabic ? "ملخص الحالة والتقييم العام" : "Case Summary & Overall Assessment",
+        detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات" : "Detailed Analysis of Procedures",
+        recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
+        itemHeader: isArabic ? "الإجراء" : "Item",
+        statusHeader: isArabic ? "الحالة" : "Status",
+        decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
+        justificationHeader: isArabic ? "التبرير" : "Justification",
+        relatedTo: isArabic ? "مرتبط بـ" : "Related to",
+        notAvailable: isArabic ? "غير متوفر." : "Not available."
+    };
+
+    const getDecisionStyle = (label) => {
+        const normalizedLabel = (label || '').toLowerCase();
+        if (normalizedLabel.includes('مقبول') || normalizedLabel.includes('accepted')) return 'background-color: #e6f4ea; color: #1e8e3e;';
+        if (normalizedLabel.includes('مرفوض') || normalizedLabel.includes('rejected')) return 'background-color: #fce8e6; color: #d93025;';
+        return 'background-color: #e8eaed; color: #3c4043;';
+    };
+    const getCategoryIcon = (category) => {
+        const normalizedCategory = (category || '').toLowerCase();
+        if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#1e8e3e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
+        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
+        if (normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/></svg>`;
+        if (normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
+        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`;
+        return '';
+    };
+
+    const tableRows = (s.table || []).map(r => `
+        <tr>
+        <td>
+            <div class="item-name">${r.name || '-'}</div>
+            <div class="item-category">
+            ${getCategoryIcon(r.analysisCategory)}
+            <span>${r.analysisCategory || ''}</span>
+            </div>
+        </td>
+        <td>${r.status || '-'}</td>
+        <td><span class="decision-badge" style="${getDecisionStyle(r.insuranceDecision?.label)}">${r.insuranceDecision?.label || '-'}</span></td>
+        <td>${r.insuranceDecision?.justification || '-'}</td>
+        </tr>
+    `).join("");
+
+    const recommendationsList = (s.recommendations || []).map(rec => {
+        const priorityClass = (rec.priority || '').toLowerCase();
+        let borderClass = 'best-practice-border';
+        if (priorityClass.includes('عاجلة') || priorityClass.includes('urgent')) borderClass = 'urgent-border';
+
+        return `
+        <div class="rec-item ${borderClass}">
+        <span class="rec-priority ${priorityClass}">${rec.priority}</span>
+        <div class="rec-content">
+            <div class="rec-desc">${rec.description}</div>
+            ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">${text.relatedTo}: ${rec.relatedItems.join(', ')}</div>` : ''}
+        </div>
+        </div>
+    `}).join("");
+
+    return `
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+        body { direction: ${isArabic ? 'rtl' : 'ltr'}; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; }
+        .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
+        .audit-table { width: 100%; border-collapse: collapse; }
+        .audit-table th, .audit-table td { padding: 16px 12px; text-align: ${isArabic ? 'right' : 'left'}; border-bottom: 1px solid #e9ecef; }
+        .rec-item { border-${isArabic ? 'right' : 'left'}: 4px solid; }
+        /* Add other styles here for a complete look */
+        .item-name { font-weight: 700; color: #202124; font-size: 15px; margin-bottom: 6px; }
+        .item-category { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #5f6368; }
+        .decision-badge { font-weight: 700; padding: 6px 12px; border-radius: 16px; font-size: 13px; display: inline-block; border: 1px solid; }
+        .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; }
+        .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
+        .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
+        .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
+        .rec-item.urgent-border { border-color: #d93025; }
+        .rec-item.best-practice-border { border-color: #1e8e3e; }
+        .rec-content { display: flex; flex-direction: column; }
+        .rec-desc { color: #202124; font-size: 15px; }
+        .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
+    </style>
+    <div class="report-section">
+        <h2>${text.summaryTitle}</h2>
+        <p class="summary-text">${s.patientSummary?.text || text.notAvailable}</p>
+        <p class="summary-text">${s.overallAssessment?.text || text.notAvailable}</p>
+    </div>
+    <div class="report-section">
+        <h2>${text.detailsTitle}</h2>
+        <table class="audit-table"><thead><tr><th>${text.itemHeader}</th><th>${text.statusHeader}</th><th>${text.decisionHeader}</th><th>${text.justificationHeader}</th></tr></thead><tbody>${tableRows}</tbody></table>
+    </div>
+    <div class="report-section">
+        <h2>${text.recommendationsTitle}</h2>
+        ${recommendationsList}
+    </div>
+    `;
+}
+
+
+// --- معالج الطلبات الرئيسي (API Handler) ---
+export default async function handler(req, res) {
+  console.log("--- New Request Received ---");
+  try {
+    if (req.method !== "POST") {
+      return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
+    }
+    if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
+        console.error("CRITICAL ERROR: API Key is missing.");
+        return bad(res, 500, "Server Configuration Error: API Key is missing.");
+    }
+
+    const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
+    
+    console.log(`Processing request with language: ${lang}`);
+    
+    console.log("Step 1: Starting data aggregation with Gemini...");
+    const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
+    console.log("Step 1: Gemini aggregation successful.");
+    
+    const auditBundle = { patientInfo, aggregatedClinicalText, originalUserText: text };
+
+    console.log("Step 2: Starting expert audit with OpenAI...");
+    const structuredAudit = await getAuditFromOpenAI(auditBundle, lang);
+    console.log("Step 2: OpenAI audit successful.");
+    
+    console.log("Step 3: Rendering HTML report...");
+    const htmlReport = renderHtmlReport(structuredAudit, lang);
+    console.log("Step 3: HTML rendering successful.");
+
+    console.log("--- Request Processed Successfully ---");
+    return ok(res, { html: htmlReport, structured: structuredAudit });
+
+  } catch (err) {
+    console.error("---!!!--- An error occurred during the process ---!!!---");
+    console.error("Error Message:", err.message);
+    console.error("Error Stack:", err.stack);
+    console.error("---!!!--- End of Error Report ---!!!---");
+    return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
+  }
+}
