@@ -146,7 +146,7 @@ ${langRule}
       "name": "string",
       "itemType": "lab"|"medication"|"procedure",
       "status": "تم إجراؤه"|"مفقود ولكنه ضروري",
-      "analysisCategory": "صحيح"|"إجراء مكرر"|"غير مبرر طبياً"|"إغفال خطير",
+      "analysisCategory": "صحيح ومبرر"|"إجراء مكرر"|"غير مبرر طبياً"|"إغفال خطير",
       "insuranceDecision": {"label": "مقبول"|"مرفوض"|"معرض للرفض", "justification": "string"}
     }
   ],
@@ -176,32 +176,35 @@ async function getAuditFromOpenAI(bundle, lang) {
   return JSON.parse(data?.choices?.[0]?.message?.content || "{}");
 }
 
-// --- عارض التقرير المتقدم (HTML Renderer) - نسخة مطورة V2 ---
+// --- عارض التقرير المتقدم (HTML Renderer) - نسخة مطورة V3 ---
 function renderHtmlReport(structuredData) {
   const s = structuredData;
   const getDecisionStyle = (label) => {
     switch (label) {
-      case 'مقبول': return 'background-color: #2e7d32;'; // Green
-      case 'معرض للرفض': return 'background-color: #f9a825;'; // Yellow
-      case 'مرفوض': return 'background-color: #d93025; color: #fff;'; // Red
+      case 'مقبول': return 'background-color: #e6f4ea; color: #1e8e3e;'; // Green
+      case 'معرض للرفض': return 'background-color: #fff0e1; color: #e8710a;'; // Yellow
+      case 'مرفوض': return 'background-color: #fce8e6; color: #d93025;'; // Red
       default: return 'background-color: #e8eaed; color: #3c4043;';
     }
   };
-  const getCategoryStyle = (category) => {
-    switch (category) {
-        case 'صحيح': return 'color: #2e7d32;';
-        case 'إجراء مكرر':
-        case 'غير مبرر طبياً': return 'color: #f9a825; font-weight: bold;';
-        case 'إغفال خطير': return 'color: #d93025; font-weight: bold;';
-        default: return '';
-    }
+  const getCategoryIcon = (category) => {
+      switch (category) {
+          case 'صحيح ومبرر': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#1e8e3e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
+          case 'إجراء مكرر': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
+          case 'غير مبرر طبياً': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/></svg>`;
+          case 'إغفال خطير': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`;
+          default: return '';
+      }
   }
 
   const tableRows = (s.table || []).map(r => `
     <tr>
       <td>
         <div class="item-name">${r.name || '-'}</div>
-        <div class="item-type" style="${getCategoryStyle(r.analysisCategory)}">${r.analysisCategory || ''}</div>
+        <div class="item-category">
+          ${getCategoryIcon(r.analysisCategory)}
+          <span>${r.analysisCategory || ''}</span>
+        </div>
       </td>
       <td>${r.status || '-'}</td>
       <td><span class="decision-badge" style="${getDecisionStyle(r.insuranceDecision?.label)}">${r.insuranceDecision?.label || '-'}</span></td>
@@ -210,34 +213,37 @@ function renderHtmlReport(structuredData) {
   `).join("");
 
   const recommendationsList = (s.recommendations || []).map(rec => `
-    <div class="rec-item">
+    <div class="rec-item ${rec.priority === 'عاجلة' ? 'urgent-border' : 'best-practice-border'}">
       <span class="rec-priority ${rec.priority === 'عاجلة' ? 'urgent' : 'best-practice'}">${rec.priority}</span>
-      <div class="rec-desc">${rec.description}</div>
-      ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">مرتبط بـ: ${rec.relatedItems.join(', ')}</div>` : ''}
+      <div class="rec-content">
+        <div class="rec-desc">${rec.description}</div>
+        ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">مرتبط بـ: ${rec.relatedItems.join(', ')}</div>` : ''}
+      </div>
     </div>
   `).join("");
 
   return `
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
-    body { direction: rtl; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; }
+    body { direction: rtl; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; }
     .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 16px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }
+    .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
     .report-section h2 svg { width: 28px; height: 28px; fill: #1a73e8; }
-    .summary-text { font-size: 16px; line-height: 1.8; color: #3c4043; margin-bottom: 12px; }
+    .summary-text { font-size: 16px; line-height: 1.8; margin-bottom: 12px; }
     .audit-table { width: 100%; border-collapse: collapse; }
     .audit-table th, .audit-table td { padding: 16px 12px; text-align: right; border-bottom: 1px solid #e9ecef; vertical-align: top; }
-    .audit-table th { background-color: #f1f3f5; color: #0d47a1; font-weight: 700; font-size: 14px; text-transform: uppercase; }
+    .audit-table th { background-color: #f1f3f5; color: #0d47a1; font-weight: 700; font-size: 14px; }
     .audit-table tr:last-child td { border-bottom: none; }
-    .item-name { font-weight: 700; color: #202124; font-size: 15px; }
-    .item-type { font-size: 13px; }
-    .decision-badge { font-weight: 500; padding: 6px 12px; border-radius: 16px; font-size: 13px; display: inline-block; color: #fff; }
-    .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f1f3f5; border-right: 4px solid; }
+    .item-name { font-weight: 700; color: #202124; font-size: 15px; margin-bottom: 6px; }
+    .item-category { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #5f6368; }
+    .decision-badge { font-weight: 700; padding: 6px 12px; border-radius: 16px; font-size: 13px; display: inline-block; border: 1px solid; }
+    .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-right: 4px solid; }
     .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
     .rec-priority.urgent { background: #d93025; }
     .rec-priority.best-practice { background: #1e8e3e; }
     .rec-item.urgent-border { border-color: #d93025; }
     .rec-item.best-practice-border { border-color: #1e8e3e; }
+    .rec-content { display: flex; flex-direction: column; }
     .rec-desc { color: #202124; font-size: 15px; }
     .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
   </style>
