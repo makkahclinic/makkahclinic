@@ -64,7 +64,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini (نسخة مطورة) ---
+// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini (V5) ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -80,14 +80,13 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
 
   if (userParts.length === 0) userParts.push({ text: "لا يوجد نص أو ملفات لتحليلها." });
 
-  // **تحسين جوهري**: الـ Prompt الآن أكثر صرامة ويطلب تحديد التكرار.
   const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block.
   **CRITICAL RULES:**
   1.  **DO NOT SUMMARIZE.** Transcribe everything.
-  2.  Extract all patient details, complaints, vital signs (BP, Temp, etc.), diagnoses, and ICD codes.
-  3.  List every single lab test, medication, and procedure mentioned.
-  4.  **If an item is listed more than once, explicitly state it.** For example: "DENGUE AB IGG (Listed 2 times)".
-  5.  Present the information in a clear, structured manner. Do not interpret or analyze. Just transcribe the facts as they are presented.`;
+  2.  For each document/file, first identify and state the **Date of Visit** clearly.
+  3.  Under each date, list all patient details, complaints, vital signs, diagnoses, and every single lab test, medication, and procedure mentioned in that document.
+  4.  This creates a chronological record of the patient's journey. Do not merge data from different dates.
+  5.  Present the information in a clear, structured manner.`;
   
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -105,53 +104,56 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (نسخة مطورة بعمق) ---
+// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (نسخة مطورة بعمق V6) ---
 function getExpertAuditorInstructions(lang = 'ar') {
   const langRule = lang === 'en' 
     ? "**Language Rule: All outputs MUST be in clear, professional English.**"
     : "**قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.**";
 
-  // **تحسين جوهري**: هذا الـ Prompt هو "العقل" الجديد للنظام. إنه يحول GPT-4o إلى فريق من الخبراء.
-  return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case, applying strict clinical and insurance reimbursement rules.
+  // **تحسين جوهري V6**: إضافة منطق تحليل التفاعلات الدوائية المتقدم.
+  return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case, applying strict clinical reasoning and insurance reimbursement rules.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
-* **Heart Failure & ACS:** AHA/ACC/HFSA 2022/2023 Guidelines. An ECG is mandatory for epigastric pain in high-risk patients.
-* **Diabetes in CKD:** KDIGO 2022 Clinical Practice Guideline.
-* **General Diabetes:** ADA Standards of Care 2024/2025. Fundus exam referral is standard of care.
-* **Hypertension:** ESC 2023 & ACC 2024 Guidelines.
-* **Reimbursement Rules:** Focus on Medical Necessity. A procedure or test without a clear supporting symptom or diagnosis is considered unnecessary.
+* **Pharmacology & Pharmacokinetics:** Use guidelines like KDIGO for renal dose adjustments. For every medication, you MUST cross-reference it with the patient's diagnoses and available lab values.
+* **Cardiology:** AHA/ACC/ESC Guidelines.
+* **Endocrinology:** ADA Standards of Care.
+* **Reimbursement & Utilization:** Focus on Medical Necessity, Duplication, and Contraindications.
 
-**Mandatory Analysis Rules:**
-1.  **Identify ALL items:** Scrutinize the aggregated text and list every single medication, lab, and procedure.
-2.  **Detect Duplicates:** If an item is listed more than once, flag it as "إجراء مكرر" and mark it for rejection.
-3.  **Assess Medical Necessity:** For each item, ask "Is this justified by the patient's complaints and diagnosis?".
-    * Example: A Dengue Fever test for a patient with no travel history, fever pattern, or rash is medically unnecessary. Flag it as "غير مبرر طبياً".
-    * Example: A nebulizer session for a patient with no respiratory symptoms is medically unnecessary.
-4.  **Pharmaceutical Analysis (Dose, Duration, Monitoring):**
-    * **Excessive Duration:** Flag any chronic medication prescribed for more than 30 days in an initial visit as "معرض للرفض". Justification: "Long duration requires re-evaluation."
-    * **Missing Monitoring Labs:** For drugs like statins or ACEi/ARBs, check if required monitoring labs (LFTs, Creatinine/K+) were ordered. If not, add an **Urgent** recommendation.
+**Mandatory Analysis Rules & Reasoning Logic:**
+1.  **Drug-Disease Interaction Analysis (CRITICAL):**
+    * For every prescribed medication, check against the patient's list of diagnoses for any contraindications or necessary precautions.
+    * **Example:** If a patient has "Renal Failure" or "CKD" and is prescribed "Levofloxacin", you MUST flag this as **"تعارض دوائي-مرضي"**.
+    * The justification must be clinical and precise: "دواء ليفوفلوكساسين يتطلب تعديل الجرعة في مرضى القصور الكلوي. يجب حساب معدل الترشيح الكبيبي (eGFR) قبل إعطاء الدواء لتجنب السمية."
+2.  **Missing Pre-requisite Labs:**
+    * If a drug requires a specific lab for safe administration (like GFR for Levofloxacin, or K+ for Spironolactone) and that lab is missing, you MUST flag the **missing lab** as a **"إغفال خطير"**.
+3.  **Analyze the Timeline & Repetition:**
+    * **Unjustified Repetition:** If a routine test is repeated without a clear clinical change, flag it as **"تكرار يتطلب تبريرًا"**.
+    * **Duplicates within a visit:** If an item is listed multiple times on the SAME DAY, flag it as **"إجراء مكرر"**.
+4.  **Assess Medical Necessity & Correctness:**
+    * **Clinically Inappropriate Actions:** (e.g., Normal Saline in a hypertensive patient).
+    * **Incorrect Test Selection:** (e.g., Dengue IgG for acute symptoms).
 5.  **Proactive Standard of Care Analysis (Identify what is MISSING):**
-    * **Cardiac Risk:** For a 60-year-old patient with DM, HTN, and epigastric pain, an **ECG** and **cardiac enzymes (Troponin)** are **MANDATORY** to rule out an acute coronary syndrome (ACS). Flag their absence as a critical omission.
-    * **Diabetes Care:** Check for a fundus exam referral.
-    * **Specialist Referrals:** Based on the diagnoses (HTN, DM with neuropathy), recommend referrals to **Cardiology**, **Endocrinology**, and **Ophthalmology**.
+    * Identify **Critical Omissions** (like missing ECG/Troponin for relevant symptoms).
+    * Identify **Best Practice Omissions** (like missing referrals).
+6.  **Generate DEEPLY DETAILED Recommendations:** Recommendations must be specific, actionable, and educational.
 
 ${langRule}
 
 **Output ONLY JSON with the following exact schema:**
 {
-  "patientSummary": {"text": "A detailed summary of the patient's presentation, vitals, and diagnoses."},
-  "overallAssessment": {"text": "Your expert overall opinion on the quality of care, highlighting major correct decisions and critical omissions."},
+  "patientSummary": {"text": "A detailed summary of the patient's presentation, vitals, and diagnoses over the entire period."},
+  "overallAssessment": {"text": "Your expert overall opinion on the quality of care, highlighting major correct decisions, critical omissions, and patterns of care like test repetition and drug-disease interactions."},
   "table": [
     {
       "name": "string",
       "itemType": "lab"|"medication"|"procedure",
       "status": "تم إجراؤه"|"مفقود ولكنه ضروري",
-      "analysisCategory": "صحيح ومبرر"|"إجراء مكرر"|"غير مبرر طبياً"|"إغفال خطير",
-      "insuranceDecision": {"label": "مقبول"|"مرفوض"|"معرض للرفض", "justification": "string"}
+      "analysisCategory": "صحيح ومبرر"|"إجراء مكرر"|"تكرار يتطلب تبريرًا"|"غير مبرر طبياً"|"إجراء يتعارض مع التشخيص"|"تعارض دوائي-مرضي"|"إغفال خطير",
+      "insuranceDecision": {"label": "مقبول"|"مرفوض"|"معلق", "justification": "string"}
     }
   ],
   "recommendations": [
-    { "priority": "عاجلة"|"أفضل ممارسة", "description": "string", "relatedItems": ["string"] }
+    { "priority": "عاجلة"|"أفضل ممارسة"|"للمراجعة", "description": "string", "relatedItems": ["string"] }
   ]
 }
 ONLY JSON.`;
@@ -176,13 +178,13 @@ async function getAuditFromOpenAI(bundle, lang) {
   return JSON.parse(data?.choices?.[0]?.message?.content || "{}");
 }
 
-// --- عارض التقرير المتقدم (HTML Renderer) - نسخة مطورة V3 ---
+// --- عارض التقرير المتقدم (HTML Renderer) - نسخة مطورة V6 ---
 function renderHtmlReport(structuredData) {
   const s = structuredData;
   const getDecisionStyle = (label) => {
     switch (label) {
       case 'مقبول': return 'background-color: #e6f4ea; color: #1e8e3e;'; // Green
-      case 'معرض للرفض': return 'background-color: #fff0e1; color: #e8710a;'; // Yellow
+      case 'معلق': return 'background-color: #fff0e1; color: #e8710a;'; // Yellow
       case 'مرفوض': return 'background-color: #fce8e6; color: #d93025;'; // Red
       default: return 'background-color: #e8eaed; color: #3c4043;';
     }
@@ -190,8 +192,11 @@ function renderHtmlReport(structuredData) {
   const getCategoryIcon = (category) => {
       switch (category) {
           case 'صحيح ومبرر': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#1e8e3e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
-          case 'إجراء مكرر': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
+          case 'إجراء مكرر': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
+          case 'تكرار يتطلب تبريرًا': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-1-5h2v2h-2zm0-8h2v6h-2z"/></svg>`;
           case 'غير مبرر طبياً': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/></svg>`;
+          case 'إجراء يتعارض مع التشخيص': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
+          case 'تعارض دوائي-مرضي': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M21.9,8.88l-7.7-7.7a.5.5,0,0,0-.71,0L.29,14.39a.5.5,0,0,0,0,.71l7.7,7.7a.5.5,0,0,0,.71,0l13.2-13.2A.5.5,0,0,0,21.9,8.88ZM9.11,15.2,3,9.1,14.39,3,20.5,9.11Z"/></svg>`;
           case 'إغفال خطير': return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`;
           default: return '';
       }
@@ -213,82 +218,5 @@ function renderHtmlReport(structuredData) {
   `).join("");
 
   const recommendationsList = (s.recommendations || []).map(rec => `
-    <div class="rec-item ${rec.priority === 'عاجلة' ? 'urgent-border' : 'best-practice-border'}">
-      <span class="rec-priority ${rec.priority === 'عاجلة' ? 'urgent' : 'best-practice'}">${rec.priority}</span>
-      <div class="rec-content">
-        <div class="rec-desc">${rec.description}</div>
-        ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">مرتبط بـ: ${rec.relatedItems.join(', ')}</div>` : ''}
-      </div>
-    </div>
-  `).join("");
-
-  return `
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
-    body { direction: rtl; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; }
-    .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
-    .report-section h2 svg { width: 28px; height: 28px; fill: #1a73e8; }
-    .summary-text { font-size: 16px; line-height: 1.8; margin-bottom: 12px; }
-    .audit-table { width: 100%; border-collapse: collapse; }
-    .audit-table th, .audit-table td { padding: 16px 12px; text-align: right; border-bottom: 1px solid #e9ecef; vertical-align: top; }
-    .audit-table th { background-color: #f1f3f5; color: #0d47a1; font-weight: 700; font-size: 14px; }
-    .audit-table tr:last-child td { border-bottom: none; }
-    .item-name { font-weight: 700; color: #202124; font-size: 15px; margin-bottom: 6px; }
-    .item-category { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #5f6368; }
-    .decision-badge { font-weight: 700; padding: 6px 12px; border-radius: 16px; font-size: 13px; display: inline-block; border: 1px solid; }
-    .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-right: 4px solid; }
-    .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
-    .rec-priority.urgent { background: #d93025; }
-    .rec-priority.best-practice { background: #1e8e3e; }
-    .rec-item.urgent-border { border-color: #d93025; }
-    .rec-item.best-practice-border { border-color: #1e8e3e; }
-    .rec-content { display: flex; flex-direction: column; }
-    .rec-desc { color: #202124; font-size: 15px; }
-    .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
-  </style>
-  <div class="report-section">
-    <h2><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>ملخص الحالة والتقييم العام</h2>
-    <p class="summary-text">${s.patientSummary?.text || 'غير متوفر.'}</p>
-    <p class="summary-text">${s.overallAssessment?.text || 'غير متوفر.'}</p>
-  </div>
-  <div class="report-section">
-    <h2><svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>التحليل التفصيلي للإجراءات</h2>
-    <table class="audit-table"><thead><tr><th>الإجراء</th><th>الحالة</th><th>قرار التأمين</th><th>التبرير</th></tr></thead><tbody>${tableRows}</tbody></table>
-  </div>
-  <div class="report-section">
-    <h2><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-2h2v2h-2zm2-4h-2V7h2v6z"/></svg>التوصيات والإجراءات المقترحة</h2>
-    ${recommendationsList}
-  </div>
-  `;
-}
-
-
-// --- معالج الطلبات الرئيسي (API Handler) ---
-export default async function handler(req, res) {
-  try {
-    if (req.method !== "POST") return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
-    if (!OPENAI_API_KEY) return bad(res, 500, "Server Configuration Error: Missing OPENAI_API_KEY");
-    if (!GEMINI_API_KEY) return bad(res, 500, "Server Configuration Error: Missing GEMINI_API_KEY");
-
-    const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
-    
-    // --- خط سير العمل المطور ---
-    // الخطوة 1: استخلاص وتجميع كل البيانات السريرية بدقة متناهية باستخدام Gemini.
-    const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
-    const auditBundle = { patientInfo, aggregatedClinicalText, originalUserText: text };
-
-    // الخطوة 2: إجراء التدقيق العميق والتحليل الخبير باستخدام GPT-4o والتعليمات الجديدة.
-    const structuredAudit = await getAuditFromOpenAI(auditBundle, lang);
-    
-    // الخطوة 3: تحويل نتيجة JSON المعقدة إلى تقرير HTML غني وواضح.
-    const htmlReport = renderHtmlReport(structuredAudit);
-    
-    // إرجاع كل من التقرير المرئي (HTML) والبيانات المنظمة (JSON)
-    return ok(res, { html: htmlReport, structured: structuredAudit });
-
-  } catch (err) {
-    console.error("/api/clinical-audit error:", err);
-    return bad(res, 500, err?.message || String(err));
-  }
-}
+    <div class="rec-item ${rec.priority === 'عاجلة' ? 'urgent-border' : (rec.priority === 'للمراجعة' ? 'review-border' : 'best-practice-border')}">
+      <span class="rec-priority ${rec.priority === 'عاجلة' ? 'urgent' : (rec.priority === 'للمرا
