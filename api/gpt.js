@@ -87,7 +87,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V9) ---
+// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o (V10) ---
 function getExpertAuditorInstructions(lang = 'ar') {
   const langConfig = {
     ar: {
@@ -99,7 +99,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
           {
             "name": "string", "itemType": "lab|medication|procedure", "status": "تم إجراؤه|مفقود ولكنه ضروري",
             "analysisCategory": "صحيح ومبرر|إجراء مكرر|غير مبرر طبياً|إجراء يتعارض مع التشخيص|إغفال خطير",
-            "insuranceDecision": {"label": "مقبول|مرفوض", "justification": "string"}
+            "insuranceDecision": {"label": "مقبول|مرفوض|لا ينطبق", "justification": "string"}
           }
         ],
         recommendations: [ { "priority": "عاجلة|أفضل ممارسة", "description": "string", "relatedItems": ["string"] } ]
@@ -114,7 +114,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
           {
             "name": "string", "itemType": "lab|medication|procedure", "status": "Performed|Missing but Necessary",
             "analysisCategory": "Correct and Justified|Duplicate Procedure|Not Medically Justified|Procedure Contradicts Diagnosis|Critical Omission",
-            "insuranceDecision": {"label": "Accepted|Rejected", "justification": "string"}
+            "insuranceDecision": {"label": "Accepted|Rejected|Not Applicable", "justification": "string"}
           }
         ],
         recommendations: [ { "priority": "Urgent|Best Practice", "description": "string", "relatedItems": ["string"] } ]
@@ -123,7 +123,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
   };
   const selectedLang = langConfig[lang] || langConfig['ar'];
 
-  // **تحسين جوهري V9**: منطق تحليل شامل ومتعدد الطبقات.
+  // **تحسين جوهري V10**: تصحيح منطق الإجراءات المفقودة.
   return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case and respond with a valid JSON object.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
@@ -132,17 +132,14 @@ function getExpertAuditorInstructions(lang = 'ar') {
 * **Reimbursement & Utilization:** Focus on **Medical Necessity**, Duplication, and Contraindications.
 
 **Mandatory Analysis Rules & Reasoning Logic (Multi-Layered Analysis):**
-1.  **List EVERY SINGLE ITEM:** List each item as it appears in the source, even if it's a duplicate. If "Dengue AB IGG" appears twice, it must have two separate entries in the final table.
+1.  **List EVERY SINGLE ITEM:** List each item as it appears in the source, even if it's a duplicate.
 2.  **For each listed item, perform a two-layer analysis:**
     * **Layer 1: Core Clinical Validity:** Is this procedure/medication appropriate for the patient's diagnoses and symptoms?
-        * **Contraindication:** (e.g., Normal Saline in HTN without hypotension). Justification must be clinical: "إجراء يتعارض مع التشخيص (ارتفاع ضغط الدم) لعدم وجود جفاف أو قيء."
-        * **Medical Unnecessity:** (e.g., Dengue test without relevant symptoms). Justification must be clinical: "غير مبرر طبياً لعدم وجود أعراض داعمة (مثل الحمى، الطفح الجلدي) أو سجل سفر لمناطق موبوءة."
-        * **Incorrect Test Type:** (e.g., Dengue IgG for acute symptoms). Justification must be educational: "تم طلب فحص IgG الذي يكشف العدوى السابقة. لتشخيص عدوى حادة، كان يجب طلب فحص IgM أو NS1 Antigen."
-    * **Layer 2: Duplication:** Is this the second (or third, etc.) time this exact item has been listed for this visit?
-3.  **Combine Findings for the Final Justification:**
-    * **For the FIRST instance of a flawed item:** The justification must focus on the Layer 1 clinical error.
-    * **For the SECOND (and subsequent) instances:** The justification should be concise: "إجراء مكرر للطلب السابق." The \`analysisCategory\` should be "إجراء مكرر".
-4.  **Proactive Standard of Care Analysis (Identify what is MISSING):** Identify **Critical Omissions** (like missing ECG/Troponin) and **Best Practice Omissions** (like missing referrals) and list them in the table.
+    * **Layer 2: Duplication:** After analyzing its core validity, check if the item is repeated.
+3.  **Combine Findings:** The final justification must reflect ALL findings. Prioritize the most severe clinical error.
+4.  **Proactive Standard of Care Analysis (Identify what is MISSING):**
+    * Identify **Critical Omissions** (like missing ECG/Troponin) and **Best Practice Omissions** (like missing referrals) and list them in the table.
+    * **CRITICAL LOGIC:** For any item with a status of "Missing but Necessary" (مفقود ولكنه ضروري), the \`insuranceDecision.label\` MUST be "Not Applicable" (لا ينطبق). There is nothing to reject if it was never requested.
 5.  **Generate DEEPLY DETAILED Recommendations:** Recommendations must be specific, actionable, and educational.
 
 ${selectedLang.rule}
@@ -192,24 +189,23 @@ function renderHtmlReport(structuredData, lang = 'ar') {
         const normalizedLabel = (label || '').toLowerCase();
         if (normalizedLabel.includes('مقبول') || normalizedLabel.includes('accepted')) return 'background-color: #e6f4ea; color: #1e8e3e;';
         if (normalizedLabel.includes('مرفوض') || normalizedLabel.includes('rejected')) return 'background-color: #fce8e6; color: #d93025;';
+        if (normalizedLabel.includes('لا ينطبق') || normalizedLabel.includes('not applicable')) return 'background-color: #e8eaed; color: #5f6368;';
         return 'background-color: #e8eaed; color: #3c4043;';
     };
-    const getCategoryIcon = (category) => {
+    
+    const getRiskClass = (category) => {
         const normalizedCategory = (category || '').toLowerCase();
-        if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#1e8e3e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
-        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
-        if (normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#e8710a"><path d="M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/></svg>`;
-        if (normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
-        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission')) return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#d93025"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`;
+        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts')) return 'risk-critical';
+        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate') || normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified')) return 'risk-warning';
+        if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) return 'risk-ok';
         return '';
     };
 
     const tableRows = (s.table || []).map(r => `
-        <tr>
+        <tr class="${getRiskClass(r.analysisCategory)}">
         <td>
             <div class="item-name">${r.name || '-'}</div>
             <div class="item-category">
-            ${getCategoryIcon(r.analysisCategory)}
             <span>${r.analysisCategory || ''}</span>
             </div>
         </td>
@@ -243,9 +239,8 @@ function renderHtmlReport(structuredData, lang = 'ar') {
         .audit-table { width: 100%; border-collapse: collapse; }
         .audit-table th, .audit-table td { padding: 16px 12px; text-align: ${isArabic ? 'right' : 'left'}; border-bottom: 1px solid #e9ecef; }
         .rec-item { border-${isArabic ? 'right' : 'left'}: 4px solid; }
-        /* Add other styles here for a complete look */
         .item-name { font-weight: 700; color: #202124; font-size: 15px; margin-bottom: 6px; }
-        .item-category { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #5f6368; }
+        .item-category { font-size: 13px; font-weight: 500; color: #5f6368; }
         .decision-badge { font-weight: 700; padding: 6px 12px; border-radius: 16px; font-size: 13px; display: inline-block; border: 1px solid; }
         .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; }
         .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
@@ -256,6 +251,11 @@ function renderHtmlReport(structuredData, lang = 'ar') {
         .rec-content { display: flex; flex-direction: column; }
         .rec-desc { color: #202124; font-size: 15px; }
         .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
+        
+        /* Risk Coloring */
+        .audit-table tr.risk-critical { background-color: #fce8e6 !important; }
+        .audit-table tr.risk-warning { background-color: #fff0e1 !important; }
+        .audit-table tr.risk-ok { background-color: #e6f4ea !important; }
     </style>
     <div class="report-section">
         <h2>${text.summaryTitle}</h2>
