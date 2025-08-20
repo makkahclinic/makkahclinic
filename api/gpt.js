@@ -54,7 +54,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- المرحلة الأولى: تجميع البيانات السريرية (V18) ---
+// --- المرحلة الأولى: تجميع البيانات السريرية (V18 Logic) ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -67,10 +67,10 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
 
-  // **تحسين جوهري V18**: تعليمات متخصصة لاستخراج كل تفاصيل الوصفة الطبية بشكل منفصل.
+  // **استخدام محرك القراءة الدقيق للجرعات**
   const systemPrompt = `You are an expert AI-powered OCR and transcription service specializing in deciphering difficult handwritten medical documents. Your task is to analyze the provided image(s) with forensic precision and transcribe ALL written information into a structured format.
   **CRITICAL RULES:**
-  1.  **Full Transcription:** Transcribe everything you can read: patient information, diagnoses (Dx), and every single prescribed item.
+  1.  **Full Transcription:** Transcribe everything you can read: patient information (including GENDER), diagnoses (Dx), and every single prescribed item.
   2.  **Look for EVERYTHING:** Pay close attention to and transcribe Medications (Rx), Medical Supplies (like test strips, lancets), and Supplements.
   3.  **Extract Granular Details for Each Item:** For every single item, you MUST extract and clearly label the following separate pieces of information:
       * **Item Name:** (e.g., Amlopine, E-core strips)
@@ -93,7 +93,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- المرحلة الثانية: تعليمات المدقق الخبير (V18) ---
+// --- المرحلة الثانية: تعليمات المدقق الخبير (V21) ---
 function getExpertAuditorInstructions(lang = 'ar') {
   const langConfig = {
     ar: {
@@ -106,7 +106,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
             "name": "string", "itemType": "medication|procedure|lab|supply",
             "doseStrength": "string", "doseFrequency": "string", "doseDuration": "string",
             "status": "موصوف|تم إجراؤه|مفقود ولكنه ضروري",
-            "analysisCategory": "صحيح ومبرر|جرعة غير صحيحة|كمية عالية|إغفال خطير",
+            "analysisCategory": "صحيح ومبرر|جرعة غير صحيحة|كمية عالية|إغفال خطير|تكرار علاجي|غير مبرر طبياً|إجراء يتعارض مع التشخيص",
             "insuranceDecision": {"label": "مقبول|مرفوض|للمراجعة|لا ينطبق", "justification": "string"}
           }
         ],
@@ -123,7 +123,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
             "name": "string", "itemType": "medication|procedure|lab|supply",
             "doseStrength": "string", "doseFrequency": "string", "doseDuration": "string",
             "status": "Prescribed|Performed|Missing but Necessary",
-            "analysisCategory": "Correct and Justified|Incorrect Dose|High Quantity|Critical Omission",
+            "analysisCategory": "Correct and Justified|Incorrect Dose|High Quantity|Critical Omission|Therapeutic Duplication|Not Medically Justified|Procedure Contradicts Diagnosis",
             "insuranceDecision": {"label": "Accepted|Rejected|For Review|Not Applicable", "justification": "string"}
           }
         ],
@@ -133,7 +133,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
   };
   const selectedLang = langConfig[lang] || langConfig['ar'];
 
-  // **تحسين جوهري V18**: إضافة تحليل الجرعة والكمية بشكل مفصل.
+  // **تحسين جوهري V21**: استعادة التحليل العميق مع الحفاظ على شفافية الجرعة.
   return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case and respond with a valid JSON object.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
@@ -145,9 +145,11 @@ function getExpertAuditorInstructions(lang = 'ar') {
 1.  **List EVERY SINGLE ITEM:** List each medication, supply, lab, and procedure as transcribed.
 2.  **Populate Dose Fields:** For each item, you MUST populate the \`doseStrength\`, \`doseFrequency\`, and \`doseDuration\` fields from the transcribed data. If not specified, use "غير محدد".
 3.  **Deep Pharmaceutical Review for EACH medication/supply:**
+    * **Drug-Gender Mismatch (CRITICAL):** First, check if the patient's gender is specified. If a gender-specific diagnosis (like BPH) or medication (like Duodart) is present for the wrong gender, this is a major error. Classify it as **"إجراء يتعارض مع التشخيص"** and the justification must be: "تم وصف دواء Duodart لعلاج تضخم البروستاتا لمريضة أنثى، وهو خطأ سريري فادح."
     * **Appropriateness:** Is the item appropriate for the given diagnosis?
     * **Dose & Frequency:** Is the dose specified and clear? Is the frequency correct for the formulation (e.g., once daily for Modified Release drugs like Diamicron MR)? If not, it's an **"جرعة غير صحيحة"** error.
-    * **Duration/Quantity:** **Any prescription for a duration longer than 30 days is considered "High Quantity" (كمية عالية).** The justification must be: "وصف الدواء لمدة 90 يومًا يتطلب تقييمًا للاستقرار والمتابعة قبل صرف هذه الكمية الكبيرة."
+    * **Duration/Quantity:** **Any prescription for a duration longer than 30 days is considered "High Quantity" (كمية عالية).**
+    * **Therapeutic Duplication:** Identify if multiple drugs are prescribed for the same indication.
 4.  **Proactive Standard of Care Analysis (Identify what is MISSING):**
     * Identify **Critical Omissions** (like missing ECG/Troponin) and **Best Practice Omissions** (like missing referrals).
     * For missing items, the \`status\` is "مفقود ولكنه ضروري" and the \`insuranceDecision.label\` MUST be "لا ينطبق".
@@ -210,8 +212,8 @@ function renderHtmlReport(structuredData, lang = 'ar') {
     
     const getRiskClass = (category) => {
         const normalizedCategory = (category || '').toLowerCase();
-        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('جرعة غير صحيحة')) return 'risk-critical';
-        if (normalizedCategory.includes('كمية') || normalizedCategory.includes('quantity')) return 'risk-warning';
+        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('جرعة غير صحيحة') || normalizedCategory.includes('يتعارض')) return 'risk-critical';
+        if (normalizedCategory.includes('كمية') || normalizedCategory.includes('quantity') || normalizedCategory.includes('تكرار علاجي')) return 'risk-warning';
         if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) return 'risk-ok';
         return '';
     };
