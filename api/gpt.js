@@ -316,7 +316,7 @@ function renderHtmlReport(structuredData, lang = "ar") {
         recommendationsTitle: "التوصيات والإجراءات المقترحة", itemHeader: "العنصر",
         therapyTypeHeader: "نوع العلاج", daysHeader: "أيام الصرف", statusHeader: "الحالة",
         decisionHeader: "قرار التأمين", signalsHeader: "إشارات السلامة",
-        ocrHeader: "التوثيق", notAvailable: "غير متوفر."
+        notAvailable: "غير متوفر."
     };
 
     const getDecisionStyle = (label = "") => {
@@ -330,14 +330,6 @@ function renderHtmlReport(structuredData, lang = "ar") {
         if (category.includes("إغفال") || category.includes("يتعارض") || category.includes("جرعة غير صحيحة")) return "risk-critical";
         if (category.includes("كمية عالية") || category.includes("تكرار علاجي")) return "risk-warning";
         return "";
-    };
-
-    const ocrBadge = (g) => {
-        if (!g) return "-";
-        if (g.evidenceRaw === "Inferred by system") return `<span title="أضافه النظام كمعيار رعاية" class="badge-info">مقترح</span>`;
-        return g.matched
-            ? `<span title="Score: ${g.score}\nSource: '${g.evidenceRaw}'" class="badge-success">موثق</span>`
-            : `<span title="Score: ${g.score}" class="badge-danger">⚠️ غير موثق</span>`;
     };
 
     const formatSignals = (signals = []) => signals.length
@@ -355,7 +347,6 @@ function renderHtmlReport(structuredData, lang = "ar") {
             <td>${r.status || "-"}</td>
             <td><span class="decision-badge" ${getDecisionStyle(r.insuranceDecision?.label)}>${r.insuranceDecision?.label || "-"}</span></td>
             <td>${formatSignals(r.safetySignals)}</td>
-            <td>${ocrBadge(r.grounding)}</td>
         </tr>`).join("");
 
     const recommendations = (s.recommendations || []).map(rec => `
@@ -380,10 +371,6 @@ function renderHtmlReport(structuredData, lang = "ar") {
         .item-category { font-size: 12px; color: #5f6368; }
         .decision-badge { font-weight: 700; padding: 4px 10px; border-radius: 14px; font-size: 12px; }
         .signals-list { margin:0; padding-right: 18px; font-size: 13px; list-style-type: '– '; }
-        .badge-success, .badge-danger, .badge-info { padding: 3px 8px; border-radius: 8px; font-size: 12px; font-weight: 500; }
-        .badge-success { background:#e6f4ea; color:#137333; }
-        .badge-danger { background:#fce8e6; color:#d93025; }
-        .badge-info { background:#e8f0fe; color:#1967d2; }
         tr.risk-critical { background-color: #fce8e6 !important; }
         tr.risk-warning { background-color: #fff0e1 !important; }
         .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-right: 4px solid; }
@@ -398,7 +385,7 @@ function renderHtmlReport(structuredData, lang = "ar") {
     <div class="report-section"><h2>${text.summaryTitle}</h2><p>${s.patientSummary?.text || text.notAvailable}</p><p>${s.overallAssessment?.text || text.notAvailable}</p></div>
     <div class="report-section"><h2>${text.detailsTitle}</h2><table class="audit-table"><thead><tr>
         <th>${text.itemHeader}</th><th>${text.therapyTypeHeader}</th><th>${text.daysHeader}</th><th>${text.statusHeader}</th>
-        <th>${text.decisionHeader}</th><th>${text.signalsHeader}</th><th>${text.ocrHeader}</th>
+        <th>${text.decisionHeader}</th><th>${text.signalsHeader}</th>
     </tr></thead><tbody>${rows}</tbody></table></div>
     <div class="report-section"><h2>${text.recommendationsTitle}</h2>${recommendations}</div>
     `;
