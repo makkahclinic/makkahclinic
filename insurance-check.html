@@ -15,8 +15,13 @@
       --ok:#2e7d32; --warn:#f9a825; --bad:#e53935; --muted:#6b7280; --card:#ffffff; --ring:#d1e8ff;
     }
     *{box-sizing:border-box}
+    html, body { height: 100%; }
     body{font-family:"Tajawal",system-ui; background:linear-gradient(180deg,var(--sea-50),#fff); color:#0f172a; margin:0}
     html[dir="ltr"] body{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif}
+
+    /* مهم: منع أي قص داخل الحاويات العليا */
+    body, .container, #reportWrap, #reportHTML { overflow: visible !important; }
+
     .container{max-width:1050px; margin:32px auto; padding:24px; background:var(--card); border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 10px 35px rgba(3,102,214,.07)}
     .title{display:flex; align-items:center; justify-content:center; gap:10px; color:var(--sea-800)}
     h1{font-size:28px; margin:8px 0 2px}
@@ -67,24 +72,19 @@
     /* ====== تحسين الطباعة والـPDF (مهم جداً) ====== */
     .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
     .page-break { break-before: page; page-break-before: always; }
-    
-    /* تحسينات للتقرير في PDF */
-    .report-content { width: 100%; }
-    .report-content table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-    .report-content th, .report-content td { border: 1px solid #ddd; padding: 10px; text-align: right; }
-    .report-content th { background-color: #f0f7ff; }
-    .report-content img { max-width: 100%; height: auto; }
 
     @media print{
       .no-print{display:none !important}
       body{background:#fff}
-      .container{box-shadow:none; border:none; max-width: 100%; margin: 0; padding: 12px;}
+      .container{box-shadow:none; border:none}
       .page-break{break-before:page}
-      /* إخفاء العناصر غير الضرورية في الطباعة */
-      .topbar, .evidence-banner, .section:not(#reportWrap), .report-toolbar { display: none !important; }
-      #reportWrap { display: block !important; margin: 0; }
-      #reportContent { width: 100% !important; }
     }
+
+    /* إطار عرض التقرير واختباره */
+    #reportFrame { border:1px dashed #dbeafe; background:#fff; border-radius:14px; padding:0; }
+    #reportToolbarSmall { display:flex; gap:8px; align-items:center; }
+    .size-chip { padding:6px 10px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; cursor:pointer; font-size:12px }
+    .size-chip.active { background:#1e90ff; color:#fff; border-color:#1e90ff }
   </style>
 </head>
 
@@ -200,9 +200,15 @@
 
     <!-- التقرير -->
     <div id="reportWrap" class="section" style="display:none">
-      <div class="report-toolbar no-print">
+      <div class="report-toolbar no-print" id="reportToolbarSmall">
         <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">تصدير PDF (عميل)</button>
         <button class="btn btn-outline" id="exportServerBtn">تصدير PDF (خادم)</button>
+        <!-- أدوات لمعالجة الحجم أثناء العرض فقط -->
+        <span class="size-chip" data-w="700">700px</span>
+        <span class="size-chip active" data-w="794">A4≈794px</span>
+        <span class="size-chip" data-w="900">900px</span>
+        <span class="size-chip" data-w="auto">Auto</span>
+        <button class="size-chip" id="debugClipBtn">Debug قصّ</button>
       </div>
       <!-- سنغلف مخرجات الخادم داخل reportContent -->
       <div id="reportHTML" class="avoid-break"></div>
@@ -492,10 +498,26 @@
         if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
 
         document.getElementById('reportWrap').style.display = 'block';
-        // نغلف HTML المُعاد داخلياً في حاوية ثابتة العرض لمنع مشاكل الالتقاط
-        const html = `<div id="reportContent" class="report-content avoid-break" style="width:794px; margin:0 auto">${data.html || ''}</div>`;
-        document.getElementById('reportHTML').innerHTML = html;
+
+        // تنظيف HTML القادم (إزالة html/body/head إن وُجدت)
+        const raw = String(data.html || '');
+        const cleaned = raw
+          .replace(/<!doctype[^>]*>/ig, '')
+          .replace(/<\/(html|head|body)[^>]*>/ig, '')
+          .replace(/<(html|head|body)[^>]*>/ig, '');
+
+        // ساندبوكس CSS لمنع أي قص داخلي غير مقصود + حاوية بعرض قابل للتبديل
+        document.getElementById('reportHTML').innerHTML = `
+          <style id="reportSandboxCSS">
+            #reportContent, #reportContent * { overflow: visible !important; max-height: none !important; word-break: break-word; white-space: normal; }
+            #reportContent table { width: 100%; border-collapse: collapse; }
+            #reportContent th, #reportContent td { vertical-align: top; }
+            #reportContent .avoid-break, #reportContent table, #reportContent tr, #reportContent td, #reportContent th { break-inside: avoid; page-break-inside: avoid; }
+          </style>
+          <div id="reportContent" class="avoid-break" style="width:794px; margin:0 auto">${cleaned}</div>`;
+
         document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
+        wireWidthChips();
       }catch(err){
         alert('خطأ: ' + err.message);
       }finally{
@@ -504,46 +526,33 @@
     }
     document.getElementById('analyzeBtn').addEventListener('click', analyze);
 
+    // ===== تبديل عرض التقرير أثناء المعاينة =====
+    function wireWidthChips(){
+      const chips = document.querySelectorAll('.size-chip[data-w]');
+      const rc = document.getElementById('reportContent');
+      chips.forEach(ch => ch.addEventListener('click', () => {
+        chips.forEach(c => c.classList.remove('active'));
+        ch.classList.add('active');
+        const w = ch.getAttribute('data-w');
+        if(w === 'auto'){ rc.style.width = '100%'; rc.style.maxWidth = '100%'; }
+        else { rc.style.width = w+'px'; rc.style.maxWidth = 'none'; }
+        window.scrollTo({ top: rc.offsetTop - 20, behavior: 'smooth' });
+      }));
+    }
+
     // ===== تصدير PDF (عميل) محسّن =====
     document.getElementById('exportPdfBtn').addEventListener('click', async () => {
       const reportElement = document.getElementById('reportContent');
       if(!reportElement){ alert('التقرير غير جاهز للتصدير.'); return; }
 
-      // إجبار عرض كامل ومنع القص مؤقتاً
       const restore = forceFullCapture(reportElement);
-      
-      // الانتظار حتى يتم تحميل جميع الصور (إن وجدت)
-      const images = reportElement.getElementsByTagName('img');
-      const imagePromises = Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise((resolve, reject) => {
-          img.addEventListener('load', resolve);
-          img.addEventListener('error', reject);
-        });
-      });
-
-      try {
-        await Promise.all(imagePromises);
-      } catch (e) {
-        console.error('فشل تحميل بعض الصور', e);
-      }
-
       try {
         const opt = {
           filename: 'Medical_Audit_Report.pdf',
           margin: 10,
-          pagebreak: {
-            mode: ['avoid-all','css','legacy'],
-            avoid: ['.avoid-break','tr','td','th','img','.card']
-          },
+          pagebreak: { mode: ['avoid-all','css','legacy'], avoid: ['.avoid-break','tr','td','th','img','.card'] },
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            windowWidth: reportElement.scrollWidth,
-            windowHeight: reportElement.scrollHeight,
-            logging: false // إيقاف التسجيل لتجنب الفوضى في console
-          },
+          html2canvas: { scale: 2, useCORS: true, windowWidth: reportElement.scrollWidth, windowHeight: reportElement.scrollHeight },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         await html2pdf().set(opt).from(reportElement).save();
@@ -559,19 +568,12 @@
       try{
         const html = document.getElementById('reportContent')?.outerHTML || '';
         if(!html){ alert('التقرير غير جاهز للتصدير.'); return; }
-        const resp = await fetch('/api/pdf', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ html, lang: currentLang })
-        });
+        const resp = await fetch('/api/pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ html, lang: currentLang }) });
         if(!resp.ok){ throw new Error('HTTP '+resp.status); }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'Medical_Audit_Report.pdf'; a.click();
-        URL.revokeObjectURL(url);
-      }catch(e){
-        alert('خيار التصدير الخادمي غير مُفعّل أو حدث خطأ: ' + e.message);
-      }
+        const a = document.createElement('a'); a.href = url; a.download = 'Medical_Audit_Report.pdf'; a.click(); URL.revokeObjectURL(url);
+      }catch(e){ alert('خيار التصدير الخادمي غير مُفعّل أو حدث خطأ: ' + e.message); }
     });
 
     // ===== أدوات مساعدة =====
@@ -579,29 +581,27 @@
       const touched = [];
       root.querySelectorAll('*').forEach(el => {
         const cs = getComputedStyle(el);
-        if (cs.overflow !== 'visible') {
-          touched.push([el, el.style.overflow]);
-          el.style.overflow = 'visible';
-        }
-        // إذا كان العنصر يحتوي على عرض ثابت، قد نحتاج إلى توسيعه ليتناسب مع المحتوى
-        if (cs.width === 'auto' || cs.maxWidth !== 'none') {
-          touched.push([el, el.style.width, 'width']);
-          el.style.width = 'auto';
-        }
+        if (cs.overflow !== 'visible') { touched.push([el, el.style.overflow]); el.style.overflow = 'visible'; }
       });
       const prevWidth = root.style.width;
-      root.style.width = '794px'; // عرض A4 تقريبي عند 96dpi
-      return () => {
-        touched.forEach(([el, prev, type]) => {
-          if (type === 'width') {
-            el.style.width = prev || '';
-          } else {
-            el.style.overflow = prev || '';
-          }
-        });
-        root.style.width = prevWidth || '';
-      };
+      root.style.width = '794px';
+      return () => { touched.forEach(([el, prev]) => el.style.overflow = prev || ''); root.style.width = prevWidth || ''; };
     }
+
+    // زر فحص القصّ لتحديد العناصر المسببة
+    document.getElementById('debugClipBtn').addEventListener('click', () => {
+      const root = document.getElementById('reportContent'); if(!root){ alert('لا يوجد تقرير بعد'); return; }
+      const offenders = [];
+      root.querySelectorAll('*').forEach(el => {
+        const cs = getComputedStyle(el);
+        const badOverflow = ['hidden','clip'].includes(cs.overflow) || ['hidden','clip'].includes(cs.overflowY);
+        const hasMaxH = cs.maxHeight && cs.maxHeight !== 'none';
+        const fixedH  = cs.height && cs.height.endsWith('px') && cs.height !== 'auto';
+        if (badOverflow || hasMaxH || fixedH) { offenders.push({ el, overflow: cs.overflow, overflowY: cs.overflowY, height: cs.height, maxHeight: cs.maxHeight }); el.style.outline = '2px dashed #e53935'; }
+      });
+      console.log('Potential clipping elements:', offenders);
+      alert(`تم تحديد ${offenders.length} عنصر قد يسبب قصّ المحتوى. راجع الـConsole للتفاصيل.`);
+    });
 
     // لغة افتراضية
     setLanguage('ar');
