@@ -1,15 +1,11 @@
-// api/analyze.js
-
-// --- تكوين Next.js لرفع ملفات كبيرة ---
+// --- Next.js body size for large payloads ---
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: "50mb",
-    },
+    bodyParser: { sizeLimit: "50mb" },
   },
 };
 
-// --- المتغيّرات الأساسية ---
+// --- ENV & Endpoints ---
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -22,59 +18,39 @@ const GEMINI_GEN_URL = (model) =>
     GEMINI_API_KEY
   )}`;
 
-// --- دوال مساعدة عامة ---
+// --- helpers ---
 const ok = (res, json) => res.status(200).json({ ok: true, ...json });
 const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
-
 const parseJsonSafe = async (response) =>
   (response.headers.get("content-type") || "").includes("application/json")
     ? response.json()
     : { raw: await response.text() };
 
-// يحوّل الأرقام العربية-الهندية إلى إنجليزية (مثال: ٩٠ → 90)
 function toEnglishDigits(str = "") {
-  const map = { "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9" };
+  const map = { "٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9" };
   return String(str).replace(/[٠-٩]/g, (d) => map[d] || d);
 }
 
-// استخراج أول كائن JSON من نص متّصل
 function extractFirstJson(text = "") {
   const s = String(text || "");
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
+  const start = s.indexOf("{"); const end = s.lastIndexOf("}");
   if (start >= 0 && end > start) {
     const candidate = s.slice(start, end + 1);
-    try {
-      return JSON.parse(candidate);
-    } catch {
-      // محاولة تنظيف فاصلات زائدة
-      try {
-        const cleaned = candidate.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
-        return JSON.parse(cleaned);
-      } catch {
-        return null;
-      }
+    try { return JSON.parse(candidate); } catch {
+      try { return JSON.parse(candidate.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")); } catch { return null; }
     }
   }
   return null;
 }
 
-// --- تحليل المدة والتكرار لتقدير أيام الصرف ---
 function parseDurationToDays(duration = "") {
   if (!duration) return null;
   const d = toEnglishDigits(duration).toLowerCase();
-  // أنماط شائعة: x90 / 90d / 3 months / 12 wk
-  const m1 = d.match(/x\s*(\d{1,4})\b/);
-  if (m1) return parseInt(m1[1], 10);
-  const m2 = d.match(/(\d{1,4})\s*(d|day|days)\b/);
-  if (m2) return parseInt(m2[1], 10);
-  const m3 = d.match(/(\d{1,3})\s*(w|wk|wks|week|weeks)\b/);
-  if (m3) return parseInt(m3[1], 10) * 7;
-  const m4 = d.match(/(\d{1,2})\s*(m|mo|mos|month|months)\b/);
-  if (m4) return parseInt(m4[1], 10) * 30;
-  const m5 = d.match(/(\d{1,2})\s*(y|yr|year|years)\b/);
-  if (m5) return parseInt(m5[1], 10) * 365;
-  // أحيانًا تُكتب 90 فقط مع كلمة "صرف" أو "مدة"
+  const m1 = d.match(/x\s*(\d{1,4})\b/); if (m1) return parseInt(m1[1], 10);
+  const m2 = d.match(/(\d{1,4})\s*(d|day|days)\b/); if (m2) return parseInt(m2[1], 10);
+  const m3 = d.match(/(\d{1,3})\s*(w|wk|wks|week|weeks)\b/); if (m3) return parseInt(m3[1], 10) * 7;
+  const m4 = d.match(/(\d{1,2})\s*(m|mo|mos|month|months)\b/); if (m4) return parseInt(m4[1], 10) * 30;
+  const m5 = d.match(/(\d{1,2})\s*(y|yr|year|years)\b/); if (m5) return parseInt(m5[1], 10) * 365;
   if (/\b90\b/.test(d)) return 90;
   return null;
 }
@@ -82,49 +58,44 @@ function parseDurationToDays(duration = "") {
 function parseFrequencyPerDay(freq = "") {
   if (!freq) return null;
   const f = toEnglishDigits(freq).toLowerCase().replace(/\s+/g, "");
-  // خرائط شائعة
   if (/(od|qd|once|1x1|q24h)\b/.test(f)) return 1;
   if (/(bid|2x1|1x2|q12h)/.test(f)) return 2;
   if (/(tid|3x1|1x3|q8h)/.test(f)) return 3;
   if (/(qid|4x1|1x4|q6h)/.test(f)) return 4;
-  if (/(qhs|hs)/.test(f)) return 1; // مرة مساءً
-  if (/(qam|am)/.test(f)) return 1; // مرة صباحًا
+  if (/(qhs|hs|qam|am)\b/.test(f)) return 1;
   if (/weekly|qw|qwk/.test(f)) return 1 / 7;
   if (/q2d/.test(f)) return 0.5;
-  // صيغ مثل "1x1x90" لاستخراج الجزء الأوسط
-  const m = f.match(/(\d)\s*x\s*(\d)/);
-  if (m) return parseInt(m[2], 10);
+  const m = f.match(/(\d)\s*x\s*(\d)/); if (m) return parseInt(m[2], 10);
   return null;
 }
 
-function estimateDaySupply({ doseDuration, doseFrequency, daySupplyEstimate }) {
+function estimateDaySupply({ doseDuration, daySupplyEstimate }) {
   if (Number.isFinite(daySupplyEstimate)) return daySupplyEstimate;
   const d = parseDurationToDays(doseDuration);
-  if (d) return d;
-  // إذا توفر التكرار فقط بلا مدة، لا يمكن تقدير أيام الصرف بدقة
-  return null;
+  return d || 0;
 }
 
-const PREGNANCY_RISK_CLASSES = [
-  // فئات دوائية نموذجية يجب تجنّبها غالبًا في الحمل
-  "statin",
-  "ace inhibitor",
-  "arb",
-  "renin inhibitor",
-  "warfarin",
-  "isotretinoin",
-  "valproate",
-];
-
-const BPH_MEDS = ["tamsulosin", "dutasteride", "finasteride", "duodart"];
-
-// أدوات مطابقة نصية بسيطة
 function includesAny(hay = "", needles = []) {
   const s = String(hay || "").toLowerCase();
-  return needles.some((n) => s.includes(n.toLowerCase()));
+  return needles.some((n) => s.includes(String(n).toLowerCase()));
 }
 
-// --- معالج رفع الملفات إلى Gemini ---
+// --- simple string normalization & similarity (token Jaccard) ---
+function normalizeText(x = "") {
+  return toEnglishDigits(x).toLowerCase().replace(/[^a-z\u0621-\u064A0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+function tokenSet(str = "") {
+  return new Set(normalizeText(str).split(" ").filter(Boolean));
+}
+function jaccard(a = "", b = "") {
+  const A = tokenSet(a), B = tokenSet(b);
+  if (!A.size && !B.size) return 1;
+  const inter = new Set([...A].filter((x) => B.has(x)));
+  const uni = new Set([...A, ...B]);
+  return inter.size / uni.size;
+}
+
+// --- Gemini upload ---
 async function geminiUploadBase64({ name, mimeType, base64 }) {
   const binaryData = Buffer.from(base64, "base64");
   const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
@@ -156,7 +127,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- المرحلة (أ): OCR منضبط يعيد JSON شامل (دواء + إجراءات) ---
+// --- (A) OCR via Gemini -> Structured JSON ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -176,55 +147,36 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
 
   const systemPrompt = `
-أنت نظام OCR طبي خبير يستخلص النص اليدوي والطباعي بدقة جنائية ويعيد **JSON** منظمًا فقط.
-قواعد صارمة:
-1) استخرج **كل ما هو مكتوب**: بيانات المريض (العمر، الجنس، الوزن، الضغط، النبض، eGFR إن وُجد)، التشخيصات، الأدوية (Rx)، الإجراءات، التحاليل، الصور الشعاعية، التحويلات، والمستلزمات.
-2) لكل عنصر:
-   - type: medication | procedure | lab | imaging | referral | supply | supplement
-   - raw: السطر الأصلي كما قُرئ
-   - name, form, route, strength, frequency, duration, quantity, indication
-   - durationDays: رقم إن أمكن (لا تُخمّن)
-   - confidence: بين 0 و 1 لكل حقل (confidence.{field})
-   - ambiguities: بدائل محتملة لعبارات ملتبسة (مثل: amlodipine/amlopine)
-   - source: {page, box: [x1,y1,x2,y2] إن أمكن}
-   - handwritten: true|false
-3) لا تُسقِط أي عنصر حتى لو الثقة منخفضة؛ اذكره بثقة منخفضة.
-أعد كائن JSON فقط بالمخطط التالي:
+أنت نظام OCR طبي خبير يعيد **JSON فقط** وفق المخطط أدناه، دون أي نص آخر.
+قواعد:
+- استخرج كل ما كُتب (بيانات المريض/التشخيصات/الأدوية/الإجراءات/المختبر/التصوير/التحويل/المستلزمات) حتى لو الثقة منخفضة.
+- لكل عنصر: { type, raw, name, form, route, strength, frequency, duration, quantity, indication, durationDays, handwritten, confidence:{...}, ambiguities:[...], source:{page, box:[x1,y1,x2,y2]} }
+- لا تُخمن أرقامًا؛ اترك الحقول غير المعروفة فارغة أو confidence منخفض.
+- أعد JSON مطابقًا تمامًا للهيكل التالي:
 {
-  "patient": { "name": "", "gender": "", "age": "", "weight": "", "vitals": {"bp": "", "hr": ""}, "eGFR": "" },
-  "diagnoses": [ "..."],
-  "items": [ { ... كما أعلاه ... } ]
-}
-`;
+  "patient": { "name":"", "gender":"", "age":"", "weight":"", "vitals":{"bp":"","hr":""}, "eGFR": "" },
+  "diagnoses": [ "..." ],
+  "items": [ { /* كما أعلاه */ } ]
+}`;
 
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: "user", parts: userParts }],
-  };
-
-  const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
+  const body = { system_instruction: { parts: [{ text: systemPrompt }] }, contents: [{ role: "user", parts: userParts }] };
+  const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await parseJsonSafe(response);
   if (!response.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
 
   const textOut = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n") || "";
   const parsed = extractFirstJson(textOut) || { patient: {}, diagnoses: [], items: [] };
 
-  // تطبيع أولي للمدد والتكرار لتسهيل التدقيق اللاحق
+  // normalize durations
   for (const it of parsed.items || []) {
     it.duration = it.duration || "";
     it.frequency = it.frequency || "";
     it.durationDays = Number.isFinite(it.durationDays) ? it.durationDays : parseDurationToDays(it.duration);
   }
-
   return parsed;
 }
 
-// --- تعليمات المدقّق الخبير (توسيع مخطط JSON) ---
+// --- (B) Expert Auditor Prompt with Hallucination Guard ---
 function getExpertAuditorInstructions(lang = "ar") {
   const schema = {
     patientSummary: { text: "..." },
@@ -242,43 +194,42 @@ function getExpertAuditorInstructions(lang = "ar") {
         analysisCategory:
           "صحيح ومبرر|جرعة غير صحيحة|كمية عالية|إغفال خطير|تكرار علاجي|غير مبرر طبياً|إجراء يتعارض مع التشخيص",
         safetySignals: [
-          { type: "Renal|Hepatic|Pregnancy|Gender|HR|BP|Age|Interaction|Other", severity: "Critical|Major|Minor", detail: "string" },
+          { type: "Renal|Hepatic|Pregnancy|Gender|HR|BP|Age|Interaction|Other", severity: "Critical|Major|Minor", detail: "string" }
         ],
         conflictsWithPatient: ["string"],
-        insuranceDecision: { label: "مقبول|مرفوض|للمراجعة|لا ينطبق", justification: "string" },
-      },
+        evidenceRef: null,           // index in ocrItems
+        inferred: false,             // true only for omissions/Best Practice items
+        insuranceDecision: { label: "مقبول|مرفوض|للمراجعة|لا ينطبق", justification: "string" }
+      }
     ],
-    recommendations: [{ priority: "عاجلة|أفضل ممارسة", description: "string", relatedItems: ["string"] }],
+    recommendations: [{ priority: "عاجلة|أفضل ممارسة", description: "string", relatedItems: ["string"] }]
   };
 
   return `
-أنت صيدلي سريري ومدقّق طبي قائم على الأدلة. حلّل الحالة بعمق وأعد **JSON صالحًا فقط** بهذا المخطط:
+أنت صيدلي سريري ومدقّق طبي قائم على الأدلة. أعِد **JSON صالحًا فقط** بهذا المخطط (دون نص إضافي).
 
+- **حارس الهلوسة:** أي عنصر حالته "موصوف" أو "تم إجراؤه" يجب أن يرتبط بعنصر فعلي من ocrItems عبر evidenceRef (فهرس). لا يُسمح بالعناصر المخترعة. العناصر المقترحة معيار رعاية تُوسَم inferred=true وstatus="مفقود ولكنه ضروري".
+- التزم بإرشادات: ACC/AHA 2021 للصدر، ADA (سكري)، KDIGO (كلية)، Beers/STOPP-START للشيخوخة.
+- معدّل إطلاق معدّل (MR): Gliclazide/DIAMICRON MR يجب أن يكون "مرة يوميًا". أي تكرار أعلى = "جرعة غير صحيحة".
+- أي مدة >30 يوم = "كمية عالية". 90+ يوم: مقبول غالبًا لأدوية الصيانة فقط وبشروط الاستقرار؛ وإلا "للمراجعة"/"مرفوض".
+- املأ doseStrength/doseFrequency/doseDuration مما في OCR، وإن غاب اكتب "غير محدد".
+- أدرج الإغفالات الحرجة (مثل ECG وhs‑cTn في ألم صدري) كـ inferred=true و"لا ينطبق" للتأمين.
+
+اللغة: العربية الفصحى، موجزة، مهنية.
+
+المخطط:
 ${JSON.stringify(schema, null, 2)}
-
-قواعد إلزامية (اختصار شديد):
-- التزم بإرشادات: ADA 2025 لسكري، KDIGO 2024 للـ CKD، معايير Beers 2023، STOPP/START v3 2023. لا تُخالفها.
-- اذكر **كل عنصر** من OCR (دواء/إجراء/مختبر/صورة/تحويل/مستلزم).
-- املأ doseStrength/doseFrequency/doseDuration من OCR، وإن غاب اكتب "غير محدد".
-- استنتج therapyType لكل دواء: Maintenance (مثبّت ضغط/ستاتين/ليفوثيروكسين/إنسولين قاعدي… إلخ) أو Acute (مضاد حيوي قصير…)، أو Unknown.
-- احسب daySupplyEstimate (إن تعذّر، اترك 0).
-- تضارب الجرعة مع حالة المريض: تحقّق من الجنس/الحمل/العمر/ضغط/نبض/eGFR/التشخيص:
-  * أمثلة حرجة: Metformin عند eGFR<30 (إشارة حرجة)، أدوية BPH لمريضة أنثى، ACEi/ARB/Statin في الحمل (عادةً يجب التوقف).
-- المدد: أي وصفة >30 يوم = "كمية عالية". 90+ يوم: لا تُقبل إلا لدواء Maintenance وبشروط الاستقرار؛ إن غاب الدليل اكتب "للمراجعة".
-- التكرار العلاجي: اكتشف الازدواج لنفس المؤشر (مثل مثبّط ACE + ARB، أو اثنان من نفس الفئة دون مبرر).
-- omissions: أضف ما يلزم كـ "مفقود ولكنه ضروري" (status)، و"لا ينطبق" للتأمين لهذه العناصر.
-- المخرجات بالعربية الفصحى، مختصرة ومهنية.
 `;
 }
 
-// --- استدعاء OpenAI للحصول على JSON مُنظّم ---
+// --- (C) Call OpenAI ---
 async function getAuditFromOpenAI(bundle) {
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: JSON.stringify({
       model: OPENAI_MODEL,
-      temperature: 0.1,
+      temperature: 0, // تشديد الحسم وتقليل الهلوسة
       messages: [
         { role: "system", content: getExpertAuditorInstructions("ar") },
         { role: "user", content: "Clinical Data for Audit:\n" + JSON.stringify(bundle, null, 2) },
@@ -291,7 +242,9 @@ async function getAuditFromOpenAI(bundle) {
   return JSON.parse(data?.choices?.[0]?.message?.content || "{}");
 }
 
-// --- طبقة تدقيق حتمية بعدية لمعالجة النقاط الحرجة (90 يوم/التضارب) ---
+// --- (D) Deterministic Policy & Safety Checks (incl. Diamicron MR) ---
+const PREGNANCY_RISK_CLASSES = ["statin","ace inhibitor","arb","renin inhibitor","warfarin","isotretinoin","valproate"];
+const BPH_MEDS = ["tamsulosin","dutasteride","finasteride","duodart"];
 function postProcessPolicyAndSafety(structured, patientInfo) {
   const gender = (patientInfo?.gender || patientInfo?.sex || "").toLowerCase();
   const pregnant = Boolean(patientInfo?.pregnant);
@@ -300,85 +253,59 @@ function postProcessPolicyAndSafety(structured, patientInfo) {
 
   structured.table = (structured.table || []).map((row) => {
     const r = { ...row };
+    r.daySupplyEstimate = estimateDaySupply({ doseDuration: r.doseDuration, daySupplyEstimate: r.daySupplyEstimate });
 
-    // تقدير أيام الصرف
-    const estimatedDays = estimateDaySupply({
-      doseDuration: r.doseDuration,
-      doseFrequency: r.doseFrequency,
-      daySupplyEstimate: r.daySupplyEstimate,
-    });
-    r.daySupplyEstimate = Number.isFinite(estimatedDays) ? estimatedDays : 0;
-
-    // وسم "كمية عالية" تلقائيًا
+    // High quantity auto-tag
     if (r.daySupplyEstimate > 30 && !/كمية عالية/.test(r.analysisCategory || "")) {
       r.analysisCategory = r.analysisCategory || "كمية عالية";
     }
 
-    // سياسة 90+ يوم
-    if (r.daySupplyEstimate >= 90 && r.itemType === "medication") {
+    // 90+ day supply policy
+    if (r.itemType === "medication" && r.daySupplyEstimate >= 90) {
       const tt = (r.therapyType || "Unknown").toLowerCase();
       if (tt !== "maintenance") {
-        r.insuranceDecision = r.insuranceDecision || {};
-        r.insuranceDecision.label = "مرفوض";
-        r.insuranceDecision.justification =
-          r.insuranceDecision.justification ||
-          "صرف لمدة 90 يومًا لدواء غير صيانـي؛ السياسات عادةً تقصر الكميات الكبيرة على أدوية الصيانة وتتطلّب مبررات/موافقة مسبقة.";
-      } else {
-        // Maintenance ولكن بلا دليل استقرار
-        if (!/مستقر|ثابت|متابع/.test((structured.patientSummary?.text || "") + " " + (r.justification || ""))) {
-          r.insuranceDecision = r.insuranceDecision || {};
-          if (!r.insuranceDecision.label || r.insuranceDecision.label === "مقبول")
-            r.insuranceDecision.label = "للمراجعة";
-          r.insuranceDecision.justification =
-            r.insuranceDecision.justification ||
-            "صرف 90 يومًا لدواء صيانـي: يُفضّل التأكد من استقرار الجرعة وسياسة الخطة/الصيدلية (غالبًا عبر بريد/توريد ممتد).";
-        }
+        r.insuranceDecision = { label: "مرفوض", justification: "صرف 90 يومًا لدواء غير صيانـي؛ يُقيَّد عادةً بأدوية الصيانة مع مبررات/موافقة." };
+      } else if (!r.insuranceDecision?.label) {
+        r.insuranceDecision = { label: "للمراجعة", justification: "صرف ممتد لدواء صيانـي يتطلب دليل استقرار وسياسة خطة/صيدلية." };
       }
     }
 
-    // إشارات سلامة حتمية
-    r.safetySignals = r.safetySignals || [];
-    r.conflictsWithPatient = r.conflictsWithPatient || [];
-
-    // جنس أنثى + أدوية BPH
+    // Gender/BPH meds
     if (gender === "female" && includesAny(r.name, BPH_MEDS)) {
-      r.safetySignals.push({ type: "Gender", severity: "Critical", detail: "دواء لعلاج تضخّم البروستاتا وُصف لمريضة." });
+      r.safetySignals = [...(r.safetySignals || []), { type: "Gender", severity: "Critical", detail: "دواء لعلاج تضخّم البروستاتا وُصف لمريضة." }];
       r.analysisCategory = "إجراء يتعارض مع التشخيص";
-      r.conflictsWithPatient.push("عدم اتساق الدواء مع جنس المريضة");
-      r.insuranceDecision = { label: "مرفوض", justification: "وصف دواء خاص بـ BPH لمريضة أنثى." };
+      r.insuranceDecision = { label: "مرفوض", justification: "وصف خاص بـ BPH لمريضة أنثى." };
     }
 
-    // حمل + أدوية غالبًا مجتنبة
+    // Pregnancy risk classes
     if (pregnant && includesAny(r.name, PREGNANCY_RISK_CLASSES)) {
-      r.safetySignals.push({
-        type: "Pregnancy",
-        severity: "Critical",
-        detail: "دواء يُنصح غالبًا بتجنّبه أثناء الحمل؛ يلزم تقييم فائدة/مخاطر وإيقافه غالبًا.",
-      });
-      r.conflictsWithPatient.push("خطر على الحمل");
-      if (!r.insuranceDecision?.label) r.insuranceDecision = { label: "للمراجعة", justification: "حمل قائم." };
+      r.safetySignals = [...(r.safetySignals || []), { type: "Pregnancy", severity: "Critical", detail: "دواء يُنصح بتجنّبه أثناء الحمل." }];
+      r.insuranceDecision = r.insuranceDecision?.label ? r.insuranceDecision : { label: "للمراجعة", justification: "حمل قائم؛ راجع الفوائد/المخاطر." };
     }
 
     // Metformin + eGFR<30
     if (eGFR !== null && eGFR < 30 && /metformin|glucophage|kazano|segluro/i.test(r.name || "")) {
-      r.safetySignals.push({
-        type: "Renal",
-        severity: "Critical",
-        detail: `eGFR=${eGFR} ml/min/1.73m²؛ الميتفورمين مُضاد استطباب عند eGFR<30.`,
-      });
+      r.safetySignals = [...(r.safetySignals || []), { type: "Renal", severity: "Critical", detail: `eGFR=${eGFR}؛ الميتفورمين مُضاد استطباب عند eGFR<30.` }];
       r.analysisCategory = "غير مبرر طبياً";
-      r.conflictsWithPatient.push("قصور كلوي شديد مع Metformin");
-      r.insuranceDecision = { label: "مرفوض", justification: "مخاطر حماض لبني؛ بدائل آمنة مطلوبة." };
+      r.insuranceDecision = { label: "مرفوض", justification: "خطر الحماض اللبني؛ يلزم بديل آمن." };
     }
 
-    // بطء قلب شديد + حاصرات بيتا/Non-DHP (تحذير)
+    // *** Diamicron MR (Gliclazide MR) must be once daily ***
+    const isGliclazideMR = /(diamicron|gliclazide).*(mr|modified\s*release|sr|xr)/i.test(String(r.name || ""));
+    const freq = parseFrequencyPerDay(r.doseFrequency || "");
+    if (r.itemType === "medication" && isGliclazideMR && freq && freq > 1) {
+      r.analysisCategory = "جرعة غير صحيحة";
+      r.safetySignals = [...(r.safetySignals || []), {
+        type: "Other", severity: "Major",
+        detail: "Gliclazide MR (DIAMICRON MR) يُؤخذ مرة واحدة يوميًا؛ زيادة التكرار قد ترفع خطر نقص سكر الدم."
+      }];
+      r.insuranceDecision = r.insuranceDecision?.label ? r.insuranceDecision : { label: "للمراجعة", justification: "تكرار غير مطابق للنشرة الرسمية." };
+    }
+
+    // Bradycardia + beta-blocker/Non-DHP CCB
     if (hr !== null && hr < 50 && /(bisoprolol|metoprolol|atenolol|propranolol|carvedilol|verapamil|diltiazem)/i.test(r.name || "")) {
-      r.safetySignals.push({
-        type: "HR",
-        severity: "Major",
-        detail: `نبض منخفض (HR=${hr}); راجع ملاءمة الجرعة/الدواء.`,
-      });
-      if (!r.insuranceDecision?.label) r.insuranceDecision = { label: "للمراجعة", justification: "بطء قلب ملحوظ." };
+      r.safetySignals = [...(r.safetySignals || []), { type: "HR", severity: "Major", detail: `نبض منخفض (HR=${hr}); راجع الجرعة/الملاءمة.` }];
+      r.insuranceDecision = r.insuranceDecision?.label ? r.insuranceDecision : { label: "للمراجعة", justification: "بطء قلب ملحوظ." };
     }
 
     return r;
@@ -387,13 +314,78 @@ function postProcessPolicyAndSafety(structured, patientInfo) {
   return structured;
 }
 
-// --- عارض التقرير المتقدم (HTML Renderer) ---
+// --- (E) Grounding to OCR to prevent hallucinations ---
+function groundAuditRowsToOCR(structured, ocrItems = []) {
+  const table = structured.table || [];
+  const normalizedOCR = ocrItems.map((it, idx) => ({
+    idx, type: String(it.type || ""), name: String(it.name || it.raw || ""),
+    norm: normalizeText(it.name || it.raw || "")
+  }));
+
+  structured.table = table.map((r) => {
+    const out = { ...r };
+    const rNorm = normalizeText(r.name || "");
+    let best = { score: -1, idx: -1, name: "", type: "" };
+
+    for (const it of normalizedOCR) {
+      const score = jaccard(rNorm, it.norm);
+      if (score > best.score) best = { score, idx: it.idx, name: it.name, type: it.type };
+    }
+
+    // attach grounding info
+    out.grounding = { matched: best.score >= 0.35, score: Number(best.score.toFixed(2)), evidenceRaw: best.idx >= 0 ? ocrItems[best.idx]?.raw || "" : "" };
+    if (out.status && (out.status.includes("موصوف") || out.status.includes("تم إجراؤه"))) {
+      if (!out.evidenceRef && out.grounding.matched) out.evidenceRef = best.idx;
+      if (!out.grounding.matched) {
+        out.safetySignals = [...(out.safetySignals || []), { type: "Other", severity: "Major", detail: "⚠️ عنصر غير موثق في OCR (احتمال هلوسة)."}];
+        out.insuranceDecision = out.insuranceDecision?.label ? out.insuranceDecision : { label: "للمراجعة", justification: "تحقق من التوثيق الأصلي." };
+      }
+    }
+    return out;
+  });
+
+  return structured;
+}
+
+// --- (F) Add Standard-of-Care Omissions: ECG + hs‑cTn when chest pain/ACS context ---
+function hasACSOrChestPainContext({ diagnoses = [], text = "" }) {
+  const ctx = normalizeText([...(diagnoses || []), text].join(" "));
+  const keys = [
+    "chest pain","angina","acs","nstemi","stemi","unstable angina",
+    "الم صدري","ألم صدري","ذبحة","ذبحة صدرية","احتشاء","جلطة قلبية","متلازمة الشريان التاجي الحادة"
+  ];
+  return includesAny(ctx, keys);
+}
+
+function ensureECGAndTroponin(structured, context) {
+  if (!hasACSOrChestPainContext(context)) return structured;
+
+  const names = (structured.table || []).map((r) => normalizeText(r.name || ""));
+  const hasECG = names.some((n) => includesAny(n, ["ecg","electrocardiogram","تخطيط القلب","رسم القلب","12-lead"]));
+  const hasTroponin = names.some((n) => includesAny(n, ["troponin","hs-ctn","تروبونين","troponine","high sensitivity troponin"]));
+
+  const mkMissing = (name, itemType) => ({
+    name, itemType, therapyType: "Unknown",
+    doseStrength: "-", doseFrequency: "-", doseDuration: "-",
+    daySupplyEstimate: 0, status: "مفقود ولكنه ضروري",
+    analysisCategory: "إغفال خطير",
+    safetySignals: [{ type: "Other", severity: "Major", detail: "عنصر تشخيصي أساسي في تقييم ألم صدري/ACS حسب الإرشادات." }],
+    conflictsWithPatient: [], evidenceRef: null, inferred: true,
+    insuranceDecision: { label: "لا ينطبق", justification: "عنصر تقييم/تشخيص." }
+  });
+
+  if (!hasECG) structured.table.push(mkMissing("ECG 12‑lead (تخطيط القلب)", "procedure"));
+  if (!hasTroponin) structured.table.push(mkMissing("High‑Sensitivity Troponin (hs‑cTn)", "lab"));
+  return structured;
+}
+
+// --- (G) HTML Renderer (adds OCR verification badge) ---
 function renderHtmlReport(structuredData, lang = "ar") {
   const s = structuredData;
   const isArabic = lang === "ar";
   const text = {
     summaryTitle: isArabic ? "ملخص الحالة والتقييم العام" : "Case Summary & Overall Assessment",
-    detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات" : "Detailed Analysis of Items",
+    detailsTitle: isArabic ? "التحليل التفصيلي للعناصر" : "Detailed Analysis of Items",
     recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
     itemHeader: isArabic ? "العنصر" : "Item",
     therapyTypeHeader: isArabic ? "نوع العلاج" : "Therapy Type",
@@ -405,7 +397,7 @@ function renderHtmlReport(structuredData, lang = "ar") {
     decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
     justificationHeader: isArabic ? "التحليل والتبرير" : "Analysis & Justification",
     signalsHeader: isArabic ? "تنبيهات الأمان" : "Safety Signals",
-    relatedTo: isArabic ? "مرتبط بـ" : "Related to",
+    ocrHeader: isArabic ? "توثيق OCR" : "OCR Evidence",
     notAvailable: isArabic ? "غير متوفر." : "Not available.",
   };
 
@@ -428,78 +420,54 @@ function renderHtmlReport(structuredData, lang = "ar") {
     return "";
   };
 
+  const ocrBadge = (g) => {
+    if (!g) return "-";
+    return g.matched
+      ? `<span title="Grounded (score=${g.score})" style="background:#e6f4ea;color:#137333;padding:3px 8px;border-radius:8px;font-size:12px;">موثق</span>`
+      : `<span title="Not grounded (score=${g.score})" style="background:#fce8e6;color:#d93025;padding:3px 8px;border-radius:8px;font-size:12px;">⚠️ غير موثق</span>`;
+  };
+
   const formatSignals = (signals = []) =>
-    signals.length
-      ? `<ul style="margin:0;padding-inline-start:18px">${signals
-          .map((s) => `<li><b>${s.type}</b>: ${s.detail} (${s.severity})</li>`)
-          .join("")}</ul>`
+    signals?.length
+      ? `<ul style="margin:0;padding-inline-start:18px">${signals.map((s) => `<li><b>${s.type}</b>: ${s.detail} (${s.severity})</li>`).join("")}</ul>`
       : "-";
 
-  const tableRows = (s.table || [])
-    .map(
-      (r) => `
-      <tr class="${getRiskClass(r.analysisCategory)}">
-        <td>
-          <div class="item-name">${r.name || "-"}</div>
-          <div class="item-category"><span>${r.itemType || ""}</span> — <span>${r.analysisCategory || ""}</span></div>
-        </td>
-        <td>${r.therapyType || "-"}</td>
-        <td>${r.doseStrength || "-"}</td>
-        <td>${r.doseFrequency || "-"}</td>
-        <td>${r.doseDuration || "-"}</td>
-        <td>${Number.isFinite(r.daySupplyEstimate) && r.daySupplyEstimate > 0 ? r.daySupplyEstimate : "-"}</td>
-        <td>${r.status || "-"}</td>
-        <td><span class="decision-badge" style="${getDecisionStyle(r.insuranceDecision?.label)}">${r.insuranceDecision?.label || "-"}</span></td>
-        <td>${r.insuranceDecision?.justification || "-"}</td>
-        <td>${formatSignals(r.safetySignals)}</td>
-      </tr>`
-    )
-    .join("");
-
-  const recommendationsList = (s.recommendations || [])
-    .map((rec) => {
-      const priorityClass = (rec.priority || "").toLowerCase();
-      let borderClass = "best-practice-border";
-      if (priorityClass.includes("عاجلة") || priorityClass.includes("urgent")) borderClass = "urgent-border";
-      return `
-        <div class="rec-item ${borderClass}">
-          <span class="rec-priority ${priorityClass}">${rec.priority}</span>
-          <div class="rec-content">
-            <div class="rec-desc">${rec.description}</div>
-            ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">${text.relatedTo}: ${rec.relatedItems.join(", ")}</div>` : ""}
-          </div>
-        </div>`;
-    })
-    .join("");
+  const rows = (s.table || []).map((r) => `
+    <tr class="${getRiskClass(r.analysisCategory)}">
+      <td>
+        <div class="item-name">${r.name || "-"}</div>
+        <div class="item-category"><span>${r.itemType || ""}</span> — <span>${r.analysisCategory || ""}</span></div>
+      </td>
+      <td>${r.therapyType || "-"}</td>
+      <td>${r.doseStrength || "-"}</td>
+      <td>${r.doseFrequency || "-"}</td>
+      <td>${r.doseDuration || "-"}</td>
+      <td>${Number.isFinite(r.daySupplyEstimate) && r.daySupplyEstimate > 0 ? r.daySupplyEstimate : "-"}</td>
+      <td>${r.status || "-"}</td>
+      <td><span class="decision-badge" style="${getDecisionStyle(r.insuranceDecision?.label)}">${r.insuranceDecision?.label || "-"}</span></td>
+      <td>${r.insuranceDecision?.justification || "-"}</td>
+      <td>${ocrBadge(r.grounding)}</td>
+    </tr>
+  `).join("");
 
   return `
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
     body { direction: ${isArabic ? "rtl" : "ltr"}; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; }
     .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
+    .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
     .audit-table { width: 100%; border-collapse: collapse; }
     .audit-table th, .audit-table td { padding: 12px 10px; text-align: ${isArabic ? "right" : "left"}; border-bottom: 1px solid #e9ecef; vertical-align: top; }
-    .audit-table th { font-size: 12px; color: #5f6368; text-transform: uppercase; letter-spacing: .4px; }
-    .rec-item { border-${isArabic ? "right" : "left"}: 4px solid; }
+    .audit-table th { font-size: 12px; color: #5f6368; text-transform: uppercase; letter-spacing: .4px; position: sticky; top: 0; background: #fff; }
     .item-name { font-weight: 700; color: #202124; font-size: 15px; margin-bottom: 6px; }
     .item-category { font-size: 12px; font-weight: 500; color: #5f6368; }
     .decision-badge { font-weight: 700; padding: 4px 10px; border-radius: 14px; font-size: 12px; display: inline-block; border: 1px solid; }
-    .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; }
-    .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
-    .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
-    .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
-    .rec-item.urgent-border { border-color: #d93025; }
-    .rec-item.best-practice-border { border-color: #1e8e3e; }
-    .rec-content { display: flex; flex-direction: column; }
-    .rec-desc { color: #202124; font-size: 15px; }
-    .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
-    /* تلوين المخاطر */
+    .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? "right" : "left"}: 4px solid; }
+    .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; color:#fff; padding:5px 12px; border-radius:8px; font-weight:700; font-size:12px; }
+    .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; color:#fff; padding:5px 12px; border-radius:8px; font-weight:700; font-size:12px; }
     .audit-table tr.risk-critical { background-color: #fce8e6 !important; }
     .audit-table tr.risk-warning { background-color: #fff0e1 !important; }
     .audit-table tr.risk-ok { background-color: #e6f4ea !important; }
-    /* رأس الجدول */
-    .audit-table thead th { position: sticky; top: 0; background: #fff; z-index: 1; }
   </style>
 
   <div class="report-section">
@@ -522,27 +490,32 @@ function renderHtmlReport(structuredData, lang = "ar") {
           <th>${text.statusHeader}</th>
           <th>${text.decisionHeader}</th>
           <th>${text.justificationHeader}</th>
-          <th>${text.signalsHeader}</th>
+          <th>${text.ocrHeader}</th>
         </tr>
       </thead>
-      <tbody>${tableRows}</tbody>
+      <tbody>${rows}</tbody>
     </table>
   </div>
 
   <div class="report-section">
     <h2>${text.recommendationsTitle}</h2>
-    ${recommendationsList}
+    ${(s.recommendations || []).map(rec => `
+      <div class="rec-item ${/عاجلة|urgent/i.test(rec.priority||"") ? "urgent-border" : "best-practice-border"}">
+        <span class="rec-priority ${rec.priority}">${rec.priority}</span>
+        <div class="rec-content">
+          <div class="rec-desc">${rec.description}</div>
+          ${rec.relatedItems?.length ? `<div class="rec-related">${isArabic?"مرتبط بـ":"Related to"}: ${rec.relatedItems.join(", ")}</div>` : ""}
+        </div>
+      </div>`).join("")}
   </div>
   `;
 }
 
-// --- المعالج الرئيسي ---
+// --- Main handler ---
 export default async function handler(req, res) {
   console.log("--- New Request Received ---");
   try {
-    if (req.method !== "POST") {
-      return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
-    }
+    if (req.method !== "POST") return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
     if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
       console.error("CRITICAL ERROR: API Key is missing.");
       return bad(res, 500, "Server Configuration Error: API Key is missing.");
@@ -551,35 +524,41 @@ export default async function handler(req, res) {
     const { text = "", files = [], patientInfo = null, lang = "ar" } = req.body || {};
     console.log(`Processing request with language: ${lang}`);
 
-    // الخطوة 1: OCR شامل كـ JSON
-    console.log("Step 1: Starting OCR+Aggregation with Gemini...");
+    // 1) OCR
+    console.log("Step 1: OCR+Aggregation (Gemini)...");
     const ocrBundle = await aggregateClinicalDataWithGemini({ text, files });
-    console.log("Step 1: Gemini OCR aggregation successful.");
+    console.log("Step 1: OK.");
 
-    // نمرر معلومات المريض مع OCR إلى المدقق
+    // 2) LLM Audit
+    console.log("Step 2: Expert Audit (OpenAI)...");
     const auditBundle = { patientInfo, diagnoses: ocrBundle?.diagnoses || [], ocrItems: ocrBundle?.items || [], ocrPatient: ocrBundle?.patient || {}, originalUserText: text };
-
-    // الخطوة 2: تدقيق خبير عبر OpenAI
-    console.log("Step 2: Starting expert audit with OpenAI...");
     const structuredAudit = await getAuditFromOpenAI(auditBundle);
-    console.log("Step 2: OpenAI audit successful.");
+    console.log("Step 2: OK.");
 
-    // الخطوة 2-ب: طبقة سياسات/سلامة حتمية بعدية
-    console.log("Step 2b: Applying deterministic policy & safety checks...");
-    const structuredWithPolicies = postProcessPolicyAndSafety(structuredAudit, patientInfo || ocrBundle?.patient || {});
+    // 2b) Policy & Safety (deterministic)
+    console.log("Step 2b: Policies & Safety...");
+    let structured = postProcessPolicyAndSafety(structuredAudit, patientInfo || ocrBundle?.patient || {});
 
-    // الخطوة 3: عرض HTML
-    console.log("Step 3: Rendering HTML report...");
-    const htmlReport = renderHtmlReport(structuredWithPolicies, lang);
-    console.log("Step 3: HTML rendering successful.");
+    // 2c) Ground to OCR to prevent hallucinations
+    console.log("Step 2c: Grounding to OCR...");
+    structured = groundAuditRowsToOCR(structured, ocrBundle?.items || []);
+
+    // 2d) Ensure ECG+hs‑cTn omissions when chest pain context
+    console.log("Step 2d: Ensuring ECG+Troponin omissions when appropriate...");
+    const contextText = [text, JSON.stringify(patientInfo||{}), ...(ocrBundle?.diagnoses||[])].join(" ");
+    structured = ensureECGAndTroponin(structured, { diagnoses: ocrBundle?.diagnoses || [], text: contextText });
+
+    // 3) HTML
+    console.log("Step 3: Rendering HTML...");
+    const htmlReport = renderHtmlReport(structured, lang);
 
     console.log("--- Request Processed Successfully ---");
-    return ok(res, { html: htmlReport, structured: structuredWithPolicies, ocr: ocrBundle });
+    return ok(res, { html: htmlReport, structured: structured, ocr: ocrBundle });
+
   } catch (err) {
-    console.error("---!!!--- An error occurred during the process ---!!!---");
+    console.error("---!!!--- ERROR ---!!!---");
     console.error("Error Message:", err.message);
     console.error("Error Stack:", err.stack);
-    console.error("---!!!--- End of Error Report ---!!!---");
-    return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
+    return bad(res, 500, `Internal server error: ${err.message}`);
   }
 }
