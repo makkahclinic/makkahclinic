@@ -54,7 +54,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- المرحلة الأولى: تجميع البيانات السريرية (V18 Logic) ---
+// --- المرحلة الأولى: تجميع البيانات السريرية (V19 Logic) ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -67,7 +67,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   }
   if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
 
-  // **استخدام محرك القراءة الدقيق للجرعات**
+  // **استعادة محرك القراءة الدقيق للجرعات**
   const systemPrompt = `You are an expert AI-powered OCR and transcription service specializing in deciphering difficult handwritten medical documents. Your task is to analyze the provided image(s) with forensic precision and transcribe ALL written information into a structured format.
   **CRITICAL RULES:**
   1.  **Full Transcription:** Transcribe everything you can read: patient information (including GENDER), diagnoses (Dx), and every single prescribed item.
@@ -93,7 +93,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- المرحلة الثانية: تعليمات المدقق الخبير (V21) ---
+// --- المرحلة الثانية: تعليمات المدقق الخبير (V22 Logic) ---
 function getExpertAuditorInstructions(lang = 'ar') {
   const langConfig = {
     ar: {
@@ -133,7 +133,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
   };
   const selectedLang = langConfig[lang] || langConfig['ar'];
 
-  // **تحسين جوهري V21**: استعادة التحليل العميق مع الحفاظ على شفافية الجرعة.
+  // **استعادة التحليل العميق مع الحفاظ على شفافية الجرعة**
   return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to deeply analyze the following case and respond with a valid JSON object.
 
 **Primary Knowledge Base (Your analysis MUST conform to these guidelines):**
