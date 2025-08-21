@@ -67,12 +67,23 @@
     /* ====== تحسين الطباعة والـPDF (مهم جداً) ====== */
     .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
     .page-break { break-before: page; page-break-before: always; }
+    
+    /* تحسينات للتقرير في PDF */
+    .report-content { width: 100%; }
+    .report-content table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    .report-content th, .report-content td { border: 1px solid #ddd; padding: 10px; text-align: right; }
+    .report-content th { background-color: #f0f7ff; }
+    .report-content img { max-width: 100%; height: auto; }
 
     @media print{
       .no-print{display:none !important}
       body{background:#fff}
-      .container{box-shadow:none; border:none}
+      .container{box-shadow:none; border:none; max-width: 100%; margin: 0; padding: 12px;}
       .page-break{break-before:page}
+      /* إخفاء العناصر غير الضرورية في الطباعة */
+      .topbar, .evidence-banner, .section:not(#reportWrap), .report-toolbar { display: none !important; }
+      #reportWrap { display: block !important; margin: 0; }
+      #reportContent { width: 100% !important; }
     }
   </style>
 </head>
@@ -482,7 +493,7 @@
 
         document.getElementById('reportWrap').style.display = 'block';
         // نغلف HTML المُعاد داخلياً في حاوية ثابتة العرض لمنع مشاكل الالتقاط
-        const html = `<div id="reportContent" class="avoid-break" style="width:794px; margin:0 auto">${data.html || ''}</div>`;
+        const html = `<div id="reportContent" class="report-content avoid-break" style="width:794px; margin:0 auto">${data.html || ''}</div>`;
         document.getElementById('reportHTML').innerHTML = html;
         document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
       }catch(err){
@@ -500,6 +511,23 @@
 
       // إجبار عرض كامل ومنع القص مؤقتاً
       const restore = forceFullCapture(reportElement);
+      
+      // الانتظار حتى يتم تحميل جميع الصور (إن وجدت)
+      const images = reportElement.getElementsByTagName('img');
+      const imagePromises = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+          img.addEventListener('load', resolve);
+          img.addEventListener('error', reject);
+        });
+      });
+
+      try {
+        await Promise.all(imagePromises);
+      } catch (e) {
+        console.error('فشل تحميل بعض الصور', e);
+      }
+
       try {
         const opt = {
           filename: 'Medical_Audit_Report.pdf',
@@ -513,7 +541,8 @@
             scale: 2,
             useCORS: true,
             windowWidth: reportElement.scrollWidth,
-            windowHeight: reportElement.scrollHeight
+            windowHeight: reportElement.scrollHeight,
+            logging: false // إيقاف التسجيل لتجنب الفوضى في console
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
@@ -554,11 +583,22 @@
           touched.push([el, el.style.overflow]);
           el.style.overflow = 'visible';
         }
+        // إذا كان العنصر يحتوي على عرض ثابت، قد نحتاج إلى توسيعه ليتناسب مع المحتوى
+        if (cs.width === 'auto' || cs.maxWidth !== 'none') {
+          touched.push([el, el.style.width, 'width']);
+          el.style.width = 'auto';
+        }
       });
       const prevWidth = root.style.width;
       root.style.width = '794px'; // عرض A4 تقريبي عند 96dpi
       return () => {
-        touched.forEach(([el, prev]) => el.style.overflow = prev || '');
+        touched.forEach(([el, prev, type]) => {
+          if (type === 'width') {
+            el.style.width = prev || '';
+          } else {
+            el.style.overflow = prev || '';
+          }
+        });
         root.style.width = prevWidth || '';
       };
     }
