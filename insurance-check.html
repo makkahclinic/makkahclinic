@@ -1,12 +1,3 @@
-# واجهة كاملة (كل الميزات) + تصدير PDF من الخادم فقط
-
-> هذه نسخة شاملة تُبقي كل الميزات التي كانت عندك (النماذج، الرفع، التحليل، الإظهار المهيكل، i18n عربي/إنجليزي، RTL) لكن **تستبدل التصدير بالكامل** بمسار خادمي ثابت لضمان PDF مطابق للمعاينة.
-
----
-
-## 1) صفحة الواجهة (HTML كاملة)
-
-```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -16,25 +7,29 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     :root{
       --sea-50:#eef7ff; --sea-100:#d9efff; --sea-200:#b6dfff; --sea-300:#87c7ff; --sea-400:#4aa6ff; --sea-500:#1e90ff; --sea-600:#1677d3; --sea-700:#105ca5; --sea-800:#0b4479; --sea-900:#082f55;
-      --ok:#2e7d32; --warn:#f9a825; --bad:#d93025; --muted:#6b7280; --card:#ffffff; --ring:#d1e8ff; --ink:#202124; --ink2:#3c4043;
+      --ok:#2e7d32; --warn:#f9a825; --bad:#e53935; --muted:#6b7280; --card:#ffffff; --ring:#d1e8ff;
     }
     *{box-sizing:border-box}
-    body{font-family:"Tajawal",system-ui; background:linear-gradient(180deg,var(--sea-50),#fff); color:var(--ink); margin:0}
+    body{font-family:"Tajawal",system-ui; background:linear-gradient(180deg,var(--sea-50),#fff); color:#0f172a; margin:0}
     html[dir="ltr"] body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; }
-    .container{max-width:1050px; margin:24px auto; padding:16px}
+    .container{max-width:1050px; margin:32px auto; padding:24px; background:var(--card); border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 10px 35px rgba(3,102,214,.07)}
     .title{display:flex; align-items:center; justify-content:center; gap:10px; color:var(--sea-800)}
     h1{font-size:28px; margin:8px 0 2px}
     .subtitle{color:var(--muted); font-size:14px; text-align:center; margin-bottom:14px}
-    .topbar{display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:12px}
+    .topbar{display:flex; gap:10px; align-items:center; justify-content:flex-start; margin-bottom:12px}
     .chip{border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px; font-size:14px; background:#fff; cursor: pointer;}
     .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid var(--sea-600)}
     .home svg{width:18px; height:18px; fill:#fff}
 
-    .evidence-banner{background:#eef6ff; border:1px solid #bfdbfe; color:#0b4479; padding:10px 12px; border-radius:12px; margin-bottom:12px; font-size:13px; display:flex; align-items:center; gap:8px}
+    .evidence-banner{
+      background:#eef6ff; border:1px solid #bfdbfe; color:#0b4479;
+      padding:10px 12px; border-radius:12px; margin-bottom:12px; font-size:13px;
+      display:flex; align-items:center; gap:8px;
+    }
     .evidence-banner svg{width:18px; height:18px; flex:0 0 auto}
 
     .section{margin-top:18px}
@@ -61,7 +56,7 @@
     .fileCard{position:relative; background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 8px 22px rgba(2,6,23,.05)}
     .thumb{width:100%; height:150px; object-fit:cover; display:block; background:#f1f5f9}
     .meta{padding:10px 12px; font-size:13px; color:#334155}
-    .remove{position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700}
+    .remove{position:absolute; top:10px; right:10px; left:auto; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700}
 
     .btn{appearance:none; border:none; cursor:pointer; padding:14px 18px; border-radius:14px; background:var(--sea-600); color:#fff; font-weight:700}
     .btn:disabled{opacity:.6; cursor:not-allowed}
@@ -72,13 +67,7 @@
     .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
     .muted{color:var(--muted)}
 
-    /* ====== معاينة/طباعة A4 ثابتة ====== */
-    .print-page{ width:190mm; min-height:257mm; margin:0 auto; background:#fff; color:var(--ink2); border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 8px 32px rgba(2,6,23,.08); padding:10mm; overflow:visible }
-    .print-section{ margin-bottom:12mm }
-    .avoid-break, .card, table, tr, td, th, img { break-inside: avoid; page-break-inside: avoid; }
-
-    @page{ size:A4; margin:10mm }
-    @media print{ .no-print{display:none !important} body{background:#fff} .container{box-shadow:none; border:none} .print-page{ box-shadow:none; border:none; border-radius:0; width:auto; min-height:auto; margin:0; padding:0 } }
+    @media print{ .no-print{display:none} body{background:#fff} .container{box-shadow:none; border:none} }
   </style>
 </head>
 <body>
@@ -88,15 +77,13 @@
         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         <span data-translate="home_page">الصفحة الرئيسية</span>
       </a>
-      <div style="display:flex; gap:10px; align-items:center">
-        <span class="chip" id="lang-switcher" data-translate="lang_english">English</span>
-        <button class="btn-secondary btn no-print" id="exportPdfBtn" data-translate="export_button">تصدير PDF</button>
-      </div>
+      <span class="chip" id="lang-switcher" data-translate="lang_english">English</span>
     </div>
 
     <div class="title"><h1 data-translate="main_title">تقييم الحالة الطبية وطلبات التأمين</h1></div>
     <p class="subtitle" data-translate="subtitle">واجهة إدخال سريرية سهلة — تحليل عميق متناغم مع احتياجات التأمين</p>
 
+    <!-- Evidence Banner -->
     <div class="evidence-banner">
       <svg viewBox="0 0 24 24"><path fill="#0b4479" d="M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V8h2v5Z"/></svg>
       <div data-translate="evidence_banner">يستند الحكم التأميني إلى أدلة موجزة من <b>WHO</b> و<b>CDC</b> و<b>Medscape</b>—ويظهر التبرير داخل الجدول.</div>
@@ -105,7 +92,7 @@
     <!-- (1) معلومات المريض -->
     <div class="section">
       <h2><span class="dot"></span><span data-translate="patient_info_title"> 1) معلومات المريض</span></h2>
-      <div class="card avoid-break">
+      <div class="card">
         <div class="grid">
           <div class="col-4"><label data-translate="label_name">الاسم (اختياري)</label><input id="name" data-translate-placeholder="placeholder_name" placeholder="مثال: أحمد خالد" /></div>
           <div class="col-4">
@@ -165,10 +152,10 @@
       </div>
     </div>
 
-    <!-- (2) خطّ الحياة والأعراض -->
+    <!-- (2) خط الحياة والأعراض -->
     <div class="section">
       <h2><span class="dot"></span><span data-translate="timeline_symptoms_title"> 2) خطّ الحياة والأعراض</span></h2>
-      <div class="card avoid-break">
+      <div class="card">
         <div class="grid">
           <div class="col-12"><label data-translate="label_free_text">وصف الحالة (نص حر)</label><textarea id="freeText" data-translate-placeholder="placeholder_free_text" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط..."></textarea></div>
           <div class="col-6"><label data-translate="label_initial_dx">التشخيصات المبدئية (نص)</label><textarea id="initialDx" data-translate-placeholder="placeholder_initial_dx" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea></div>
@@ -194,19 +181,16 @@
       <span id="busy" class="muted" style="display:none" data-translate="analyzing_text">جاري التحليل…</span>
     </div>
 
-    <!-- التقرير (معاينة داخل صفحة A4 ثابتة) -->
+    <!-- التقرير -->
     <div id="reportWrap" class="section" style="display:none">
       <div class="report-toolbar no-print">
-        <button class="btn-secondary btn" id="exportPdfBtnTop" data-translate="export_button">تصدير PDF</button>
+        <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">تصدير تقرير PDF</button>
       </div>
-      <article id="reportPrintPage" class="print-page" aria-label="A4 preview"></article>
+      <div id="reportHTML"></div>
       <details style="margin-top:10px" class="no-print">
         <summary data-translate="show_json_summary">إظهار JSON (للبحث/الإحصاءات)</summary>
         <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
       </details>
-      <div class="report-toolbar no-print" style="margin-top:10px">
-        <button class="btn-secondary btn" id="exportPdfBtnBottom" data-translate="export_button">تصدير PDF</button>
-      </div>
     </div>
   </div>
 
@@ -267,7 +251,7 @@
         uploader_text: "اضغط هنا لرفع ملف واحد أو أكثر",
         analyze_button: "تحليل الحالة",
         analyzing_text: "جاري التحليل…",
-        export_button: "تصدير PDF",
+        export_button: "تصدير تقرير PDF",
         show_json_summary: "إظهار JSON (للبحث/الإحصاءات)",
       },
       en: {
@@ -319,149 +303,221 @@
         label_labs_imaging: "Mentioned Labs/Imaging (Text)",
         placeholder_labs_imaging: "e.g., HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
         label_orders: "Prescribed Meds/Procedures (if any)",
+        placeholder_orders: "e.g., Xigduo XR bid, Metformin 1000 tid ...",
         file_upload_title: " 3) Upload Files (Images/PDF) — Optional",
         uploader_text: "Click here to upload one or more files",
         analyze_button: "Analyze Case",
         analyzing_text: "Analyzing…",
-        export_button: "Export PDF",
+        export_button: "Export PDF Report",
         show_json_summary: "Show JSON (for search/analytics)",
       }
     };
 
     let currentLang = 'ar';
+
     function setLanguage(lang) {
-      currentLang = lang; document.documentElement.lang = lang; document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-      document.querySelectorAll('[data-translate]').forEach(el => { const key = el.getAttribute('data-translate'); if (translations[lang][key]) { el.innerHTML = translations[lang][key]; } });
-      document.querySelectorAll('[data-translate-placeholder]').forEach(el => { const key = el.getAttribute('data-translate-placeholder'); if (translations[lang][key]) { el.placeholder = translations[lang][key]; } });
+      currentLang = lang;
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+      
+      document.querySelectorAll('[data-translate]').forEach(el => {
+        const key = el.getAttribute('data-translate');
+        if (translations[lang][key]) {
+          el.innerHTML = translations[lang][key];
+        }
+      });
+
+      document.querySelectorAll('[data-translate-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-translate-placeholder');
+        if (translations[lang][key]) {
+          el.placeholder = translations[lang][key];
+        }
+      });
       document.title = translations[lang].app_title;
     }
-    document.getElementById('lang-switcher').addEventListener('click', () => { setLanguage(currentLang === 'ar' ? 'en' : 'ar'); });
-    setLanguage('ar');
+
+    document.getElementById('lang-switcher').addEventListener('click', () => {
+      const newLang = currentLang === 'ar' ? 'en' : 'ar';
+      setLanguage(newLang);
+    });
 
     // ===== مزامنة الحمل مع الجنس =====
     const genderEl = document.getElementById('gender');
     const pregSel = document.getElementById('pregnant');
     const pregMonths = document.getElementById('pregnancyMonths');
-    function syncPregnancyControls(){ const g = genderEl.value; if(g !== 'أنثى'){ pregSel.value = 'na'; pregSel.disabled = true; pregMonths.value = ''; pregMonths.disabled = true; } else { pregSel.disabled = false; pregMonths.disabled = pregSel.value !== 'yes'; } }
+    function syncPregnancyControls(){
+      const g = genderEl.value;
+      if(g !== 'أنثى'){
+        pregSel.value = 'na'; pregSel.disabled = true; pregMonths.value = ''; pregMonths.disabled = true;
+      }else{ pregSel.disabled = false; pregMonths.disabled = pregSel.value !== 'yes'; }
+    }
     genderEl.addEventListener('change', syncPregnancyControls);
     pregSel.addEventListener('change', ()=>{ pregMonths.disabled = pregSel.value !== 'yes'; });
     syncPregnancyControls();
 
-    // ===== رافع الملفات =====
+    // ===== رافع الملفات (بطاقات + معاينة + حذف) =====
     const fileInput = document.getElementById('fileInput');
     const dropZone  = document.getElementById('dropZone');
     const cardsBox  = document.getElementById('cards');
     const fileList  = document.getElementById('fileList');
-    ['dragenter','dragover','dragleave','drop'].forEach(ev => { window.addEventListener(ev, e => e.preventDefault()); });
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => {
+      window.addEventListener(ev, e => e.preventDefault());
+    });
+
     const filesState = []; // { name, mimeType, data (dataURL) }
+
+    // ** FIX: Direct click handler for file input **
     dropZone.addEventListener('click', () => fileInput.click());
+
     dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
     dropZone.addEventListener('dragover',  e=>{ e.preventDefault(); });
     dropZone.addEventListener('dragleave', e=>{ e.preventDefault(); dropZone.classList.remove('drag'); });
-    dropZone.addEventListener('drop', async e=>{ e.preventDefault(); dropZone.classList.remove('drag'); await handleFiles(Array.from(e.dataTransfer.files)); });
-    fileInput.addEventListener('change', async ()=>{ await handleFiles(Array.from(fileInput.files)); fileInput.value = ''; });
-    async function handleFiles(files){ for(const f of files){ const base64Url = await fileToDataURL(f); filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64Url }); } renderCards(); fileList.textContent = filesState.map((f)=>`• ${f.name}`).join('
-'); }
-    function renderCards(){ cardsBox.innerHTML = ''; filesState.forEach((f, i)=>{ const isImg = (f.mimeType||'').startsWith('image/'); const thumb = isImg ? f.data : 'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`); const el = document.createElement('div'); el.className = 'fileCard avoid-break'; el.innerHTML = `
+    dropZone.addEventListener('drop', async e=>{
+      e.preventDefault(); dropZone.classList.remove('drag');
+      await handleFiles(Array.from(e.dataTransfer.files));
+    });
+
+    fileInput.addEventListener('change', async ()=>{
+      await handleFiles(Array.from(fileInput.files));
+      fileInput.value = '';
+    });
+
+    async function handleFiles(files){
+      for(const f of files){
+        const base64Url = await fileToDataURL(f); // data:<mime>;base64,...
+        filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64Url });
+      }
+      renderCards();
+      fileList.textContent = filesState.map((f)=>`• ${f.name}`).join('\n');
+    }
+
+    function renderCards(){
+      cardsBox.innerHTML = '';
+      filesState.forEach((f, i)=>{
+        const isImg = (f.mimeType||'').startsWith('image/');
+        const thumb = isImg ? f.data : 'data:image/svg+xml;utf8,'+encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`);
+        const el = document.createElement('div');
+        el.className = 'fileCard';
+        el.innerHTML = `
           <button class="remove" data-i="${i}" title="إزالة">×</button>
           <img class="thumb" src="${thumb}" alt="${f.name}">
           <div class="meta">
             <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="${f.name}">${f.name}</div>
             <div class="muted">${f.mimeType||'—'}</div>
-          </div>`; cardsBox.appendChild(el); }); cardsBox.querySelectorAll('.remove').forEach(btn=>btn.addEventListener('click', (e)=>{ const i = +e.currentTarget.dataset.i; filesState.splice(i,1); renderCards(); fileList.textContent = filesState.map(f=>`• ${f.name}`).join('
-'); })); }
-    function fileToDataURL(file){ return new Promise((resolve,reject)=>{ const r = new FileReader(); r.onerror = () => { console.error('Failed to read file', file?.name); alert('تعذّر قراءة الملف: ' + (file?.name || '')); reject(new Error('failed to read file')); }; r.onload = () => resolve(r.result); r.readAsDataURL(file); }); }
+          </div>`;
+        cardsBox.appendChild(el);
+      });
+      cardsBox.querySelectorAll('.remove').forEach(btn=>btn.addEventListener('click', (e)=>{
+        const i = +e.currentTarget.dataset.i; filesState.splice(i,1); renderCards(); fileList.textContent = filesState.map(f=>`• ${f.name}`).join('\n');
+      }));
+    }
+
+    function fileToDataURL(file){
+      return new Promise((resolve,reject)=>{
+        const r = new FileReader();
+        r.onerror = () => { console.error('Failed to read file', file?.name); alert('تعذّر قراءة الملف: ' + (file?.name || '')); reject(new Error('failed to read file')); };
+        r.onload = () => resolve(r.result);
+        r.readAsDataURL(file);
+      });
+    }
 
     // ===== بناء patientInfo =====
-    function buildPatientInfo(){ const ageYears = Number(document.getElementById('age').value || NaN); const gender = document.getElementById('gender').value || null; const smokingStatus = document.getElementById('smoking').value || null; const packYears = document.getElementById('packYears').value ? Number(document.getElementById('packYears').value) : null; const temp = document.getElementById('temp').value ? Number(document.getElementById('temp').value) : null; const weight = document.getElementById('weight').value ? Number(document.getElementById('weight').value) : null; const height = document.getElementById('height').value ? Number(document.getElementById('height').value) : null; const hasCough = document.getElementById('hasCough').value || null; const coughWeeks = document.getElementById('coughWeeks').value ? Number(document.getElementById('coughWeeks').value) : null; const coughType = document.getElementById('coughType').value || null; const pVal = pregSel.value; const pregnant = (gender === 'أنثى') ? { isPregnant: pVal === 'yes', gestationalWeeks: (pVal === 'yes' && document.getElementById('pregnancyMonths').value) ? Number(document.getElementById('pregnancyMonths').value) * 4 : null } : null; return { name: document.getElementById('name').value || null, ageYears: isNaN(ageYears) ? null : ageYears, gender, pregnant, smoking: smokingStatus ? { status: smokingStatus, packYears } : null, temperatureC: temp, weightKg: weight, heightCm: height, cough: { has: hasCough, weeks: coughWeeks, type: coughType } }; }
+    function buildPatientInfo(){
+      const ageYears = Number(document.getElementById('age').value || NaN);
+      const gender = document.getElementById('gender').value || null;
+      const smokingStatus = document.getElementById('smoking').value || null;
+      const packYears = document.getElementById('packYears').value ? Number(document.getElementById('packYears').value) : null;
+      const temp = document.getElementById('temp').value ? Number(document.getElementById('temp').value) : null;
+      const weight = document.getElementById('weight').value ? Number(document.getElementById('weight').value) : null;
+      const height = document.getElementById('height').value ? Number(document.getElementById('height').value) : null;
+      const hasCough = document.getElementById('hasCough').value || null;
+      const coughWeeks = document.getElementById('coughWeeks').value ? Number(document.getElementById('coughWeeks').value) : null;
+      const coughType = document.getElementById('coughType').value || null;
 
-    // ===== تحليل واستلام التقرير من الباك-إند =====
-    async function analyze(){ const analyzeBtn = document.getElementById('analyzeBtn'); const busy = document.getElementById('busy'); analyzeBtn.disabled = true; busy.style.display = 'inline'; try{ const textParts = []; const ft = document.getElementById('freeText').value.trim(); if(ft) textParts.push(`وصف الحالة: ${ft}`); const dx = document.getElementById('initialDx').value.trim(); if(dx) textParts.push(`التشخيصات المبدئية: ${dx}`); const labs = document.getElementById('labsImaging').value.trim(); if(labs) textParts.push(`تحاليل/أشعة: ${labs}`); const orders = document.getElementById('orders').value.trim(); if(orders) textParts.push(`الأدوية/الإجراءات: ${orders}`); const mergedText = textParts.join('
-'); const filesPayload = filesState.map(f=>({ name: f.name, mimeType: f.mimeType, data: f.data.split('base64,').pop() })); const payload = { text: mergedText, patientInfo: buildPatientInfo(), files: filesPayload, lang: currentLang };
-        const resp = await fetch('/api/gpt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        const data = await resp.json().catch(()=> ({})); if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
+      const pVal = pregSel.value;
+      const pregnant = (gender === 'أنثى') ? {
+        isPregnant: pVal === 'yes',
+        gestationalWeeks: (pVal === 'yes' && document.getElementById('pregnancyMonths').value)
+          ? Number(document.getElementById('pregnancyMonths').value) * 4
+          : null
+      } : null;
+
+      return {
+        name: document.getElementById('name').value || null,
+        ageYears: isNaN(ageYears) ? null : ageYears,
+        gender,
+        pregnant,
+        smoking: smokingStatus ? { status: smokingStatus, packYears } : null,
+        temperatureC: temp,
+        weightKg: weight,
+        heightCm: height,
+        cough: { has: hasCough, weeks: coughWeeks, type: coughType }
+      };
+    }
+
+    // ===== استدعاء الباك-إند =====
+    async function analyze(){
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const busy = document.getElementById('busy');
+      analyzeBtn.disabled = true; busy.style.display = 'inline';
+      try{
+        const textParts = [];
+        const ft = document.getElementById('freeText').value.trim(); if(ft) textParts.push(`وصف الحالة: ${ft}`);
+        const dx = document.getElementById('initialDx').value.trim(); if(dx) textParts.push(`التشخيصات المبدئية: ${dx}`);
+        const labs = document.getElementById('labsImaging').value.trim(); if(labs) textParts.push(`تحاليل/أشعة: ${labs}`);
+        const orders = document.getElementById('orders').value.trim(); if(orders) textParts.push(`الأدوية/الإجراءات: ${orders}`);
+        const mergedText = textParts.join('\n');
+
+        const filesPayload = filesState.map(f=>({
+          name: f.name,
+          mimeType: f.mimeType,
+          data: f.data.split('base64,').pop()
+        }));
+
+        const payload = {
+          text: mergedText,
+          patientInfo: buildPatientInfo(),
+          files: filesPayload,
+          lang: currentLang // Send current language to backend
+        };
+
+        const resp = await fetch('/api/gpt', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        const data = await resp.json().catch(()=> ({}));
+        if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
+
         document.getElementById('reportWrap').style.display = 'block';
-        const contentHtml = data.html || '';
-        document.getElementById('reportPrintPage').innerHTML = `<section class="print-section avoid-break">${contentHtml}</section>`;
+        document.getElementById('reportHTML').innerHTML = `<div id="reportContent">${data.html}</div>`;
         document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
-      }catch(err){ alert('خطأ: ' + err.message); }finally{ analyzeBtn.disabled = false; busy.style.display = 'none'; } }
+      }catch(err){
+        alert('خطأ: ' + err.message);
+      }finally{
+        analyzeBtn.disabled = false; busy.style.display = 'none';
+      }
+    }
     document.getElementById('analyzeBtn').addEventListener('click', analyze);
 
-    // ===== تصدير PDF (خادم فقط) =====
-    function hookExport(btnId){ const btn = document.getElementById(btnId); btn.addEventListener('click', async ()=>{ const pageEl = document.getElementById('reportPrintPage'); if(!pageEl || !pageEl.firstElementChild){ return alert('التقرير غير جاهز للتصدير.'); } const html = pageEl.outerHTML; try{ const resp = await fetch('/api/pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ html, lang: currentLang }) }); if(!resp.ok){ throw new Error('HTTP '+resp.status); } const blob = await resp.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'Medical_Audit_Report.pdf'; a.click(); URL.revokeObjectURL(url); }catch(e){ alert('فشل توليد PDF: '+ e.message); } }); }
-    hookExport('exportPdfBtn'); hookExport('exportPdfBtnTop'); hookExport('exportPdfBtnBottom');
+    // ===== تصدير PDF (تم تحديثه بالكامل) =====
+    document.getElementById('exportPdfBtn').addEventListener('click', ()=> {
+      const reportElement = document.getElementById('reportContent');
+      if(!reportElement){ 
+        alert('التقرير غير جاهز للتصدير.'); 
+        return; 
+      }
+      const opt = { 
+        filename: 'Medical_Audit_Report.pdf', 
+        margin: 10, 
+        image: { type: 'jpeg', quality: 0.98 }, 
+        html2canvas: { scale: 2, useCORS: true }, 
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+      };
+      html2pdf().from(reportElement).set(opt).save();
+    });
+
+    // Set initial language
+    setLanguage('ar');
   </script>
 </body>
 </html>
-```
-
----
-
-## 2) مسار خادمي للطباعة `/pages/api/pdf.ts`
-
-> هذا المسار لا يغيّر باك-إند التحليل عندك (`/api/gpt`). فقط مسؤول عن التوليد الموثوق للـPDF.
-
-```ts
-// pages/api/pdf.ts
-import type { NextApiRequest, NextApiResponse } from 'next'
-
-export const config = { api: { bodyParser: { sizeLimit: '50mb' } } }
-
-async function launchBrowser(){
-  try {
-    const chromium = await import('chrome-aws-lambda');
-    const puppeteerCore = await import('puppeteer-core');
-    const browser = await puppeteerCore.default.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: chromium.headless
-    });
-    return browser;
-  } catch { // تشغيل محلي
-    const puppeteer = await import('puppeteer');
-    return puppeteer.default.launch({ headless: 'new' });
-  }
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse){
-  if(req.method !== 'POST') return res.status(405).json({ ok:false, error:'Method Not Allowed' });
-  const { html = '', lang = 'ar' } = (req.body||{});
-  if(!html) return res.status(400).json({ ok:false, error:'Missing html' });
-
-  const doc = `<!doctype html>
-<html lang="${lang}" dir="${lang==='ar'?'rtl':'ltr'}">
-<head>
-<meta charset="utf-8" />
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-  @page{ size: A4; margin:10mm }
-  html,body{ margin:0; padding:0; background:#fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .print-page, .avoid-break, table, tr, td, th, img { break-inside: avoid; page-break-inside: avoid; }
-  img{ max-width:100%; height:auto }
-</style>
-</head>
-<body>
-${html}
-</body>
-</html>`
-
-  let browser: any;
-  try{
-    browser = await launchBrowser();
-    const page = await browser.newPage();
-    await page.emulateMediaType('screen');
-    await page.setContent(doc, { waitUntil: 'networkidle0' });
-    const pdf = await page.pdf({
-      format: 'A4', printBackground: true, preferCSSPageSize: true,
-      margin: { top:'10mm', right:'10mm', bottom:'10mm', left:'10mm' }
-    });
-    res.setHeader('Content-Type','application/pdf');
-    res.setHeader('Content-Disposition','attachment; filename="Medical_Audit_Report.pdf"');
-    return res.status(200).send(pdf);
-  }catch(err:any){
-    console.error('PDF error:', err);
-    return res.status(500).send('PDF generation failed: '+(err?.message||'unknown'));
-  }finally{ try{ await browser?.close(); }catch{} }
-}
-```
