@@ -64,7 +64,6 @@
     .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
     .muted{color:var(--muted)}
 
-    /* ====== تحسين الطباعة والـPDF (مهم جداً) ====== */
     .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
     .page-break { break-before: page; page-break-before: always; }
     
@@ -97,7 +96,6 @@
       margin: 0;
       color: #1e293b;
     }
-
 
     @media print{
       .no-print{display:none !important}
@@ -217,8 +215,9 @@
 
     <div id="reportWrap" class="section" style="display:none">
       <div class="report-toolbar no-print">
-        <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">تصدير PDF (عميل)</button>
-        </div>
+        <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button_fast">تصدير PDF (سريع)</button>
+        <button class="btn btn-outline" id="exportServerBtn" data-translate="export_button_hq">تصدير PDF (جودة عالية)</button>
+      </div>
       <div id="reportHTML" class="avoid-break"></div>
       <details style="margin-top:10px" class="no-print">
         <summary data-translate="show_json_summary">إظهار JSON (للبحث/الإحصاءات)</summary>
@@ -284,7 +283,8 @@
         uploader_text: "اضغط هنا لرفع ملف واحد أو أكثر",
         analyze_button: "تحليل الحالة",
         analyzing_text: "جاري التحليل…",
-        export_button: "تصدير PDF",
+        export_button_fast: "تصدير PDF (سريع)",
+        export_button_hq: "تصدير PDF (جودة عالية)",
         show_json_summary: "إظهار JSON (للبحث/الإحصاءات)",
       },
       en: {
@@ -341,7 +341,8 @@
         uploader_text: "Click here to upload one or more files",
         analyze_button: "Analyze Case",
         analyzing_text: "Analyzing…",
-        export_button: "Export PDF",
+        export_button_fast: "Export PDF (Fast)",
+        export_button_hq: "Export PDF (High Quality)",
         show_json_summary: "Show JSON (for search/analytics)",
       }
     };
@@ -366,7 +367,6 @@
       setLanguage(newLang);
     });
 
-    // ===== مزامنة الحمل مع الجنس =====
     const genderEl = document.getElementById('gender');
     const pregSel = document.getElementById('pregnant');
     const pregMonths = document.getElementById('pregnancyMonths');
@@ -380,7 +380,6 @@
     pregSel.addEventListener('change', ()=>{ pregMonths.disabled = pregSel.value !== 'yes'; });
     syncPregnancyControls();
 
-    // ===== رافع الملفات =====
     const fileInput = document.getElementById('fileInput');
     const dropZone  = document.getElementById('dropZone');
     const cardsBox  = document.getElementById('cards');
@@ -388,7 +387,7 @@
     ['dragenter','dragover','dragleave','drop'].forEach(ev => {
       window.addEventListener(ev, e => e.preventDefault());
     });
-    const filesState = []; // { name, mimeType, data (dataURL) }
+    const filesState = []; 
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
     dropZone.addEventListener('dragover',  e=>{ e.preventDefault(); });
@@ -437,7 +436,6 @@
       });
     }
 
-    // ===== بناء patientInfo =====
     function buildPatientInfo(){
       const ageYears = Number(document.getElementById('age').value || NaN);
       const gender = document.getElementById('gender').value || null;
@@ -460,18 +458,13 @@
 
       return {
         name: document.getElementById('name').value || null,
-        ageYears: isNaN(ageYears) ? null : ageYears,
-        gender,
-        pregnant,
+        ageYears: isNaN(ageYears) ? null : ageYears, gender, pregnant,
         smoking: smokingStatus ? { status: smokingStatus, packYears } : null,
-        temperatureC: temp,
-        weightKg: weight,
-        heightCm: height,
+        temperatureC: temp, weightKg: weight, heightCm: height,
         cough: { has: hasCough, weeks: coughWeeks, type: coughType }
       };
     }
 
-    // ===== استدعاء الباك-إند للتحليل =====
     async function analyze(){
       const analyzeBtn = document.getElementById('analyzeBtn');
       const busy = document.getElementById('busy');
@@ -504,8 +497,7 @@
         if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
 
         document.getElementById('reportWrap').style.display = 'block';
-        // نغلف HTML المُعاد داخلياً في حاوية ثابتة العرض لمنع مشاكل الالتقاط
-        const html = `<div id="reportContent" class="avoid-break" style="width:794px; margin:0 auto">${data.html || ''}</div>`;
+        const html = `<div id="reportContent" class="avoid-break">${data.html || ''}</div>`;
         document.getElementById('reportHTML').innerHTML = html;
         document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
       }catch(err){
@@ -516,28 +508,17 @@
     }
     document.getElementById('analyzeBtn').addEventListener('click', analyze);
 
-    // ===== تصدير PDF (عميل) محسّن =====
+    // --- تعديل: هذا الزر للتصدير السريع من المتصفح ---
     document.getElementById('exportPdfBtn').addEventListener('click', async () => {
       const reportElement = document.getElementById('reportContent');
       if(!reportElement){ alert('التقرير غير جاهز للتصدير.'); return; }
-
-      // إجبار عرض كامل ومنع القص مؤقتاً
       const restore = forceFullCapture(reportElement);
       try {
         const opt = {
-          filename: 'Medical_Audit_Report.pdf',
-          margin: 10,
-          pagebreak: {
-            mode: ['avoid-all','css','legacy'],
-            avoid: ['.avoid-break','tr','td','th','img','.card']
-          },
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            windowWidth: reportElement.scrollWidth,
-            windowHeight: reportElement.scrollHeight
-          },
+          filename: 'Medical_Audit_Report-fast.pdf', margin: 10,
+          pagebreak: { mode: ['avoid-all','css','legacy'], avoid: ['.avoid-break','tr','td','th','img','.card'] },
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, windowWidth: reportElement.scrollWidth, windowHeight: reportElement.scrollHeight },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         await html2pdf().set(opt).from(reportElement).save();
@@ -548,30 +529,33 @@
       }
     });
 
-    // ===== تصدير PDF (خادم) عبر Puppeteer (اختياري) =====
-    // const exportServerBtn = document.getElementById('exportServerBtn');
-    // if (exportServerBtn) {
-    //   exportServerBtn.addEventListener('click', async () => {
-    //     try{
-    //       const html = document.getElementById('reportContent')?.outerHTML || '';
-    //       if(!html){ alert('التقرير غير جاهز للتصدير.'); return; }
-    //       const resp = await fetch('/api/pdf', {
-    //         method:'POST', headers:{'Content-Type':'application/json'},
-    //         body: JSON.stringify({ html, lang: currentLang })
-    //       });
-    //       if(!resp.ok){ throw new Error('HTTP '+resp.status); }
-    //       const blob = await resp.blob();
-    //       const url = URL.createObjectURL(blob);
-    //       const a = document.createElement('a');
-    //       a.href = url; a.download = 'Medical_Audit_Report.pdf'; a.click();
-    //       URL.revokeObjectURL(url);
-    //     }catch(e){
-    //       alert('خيار التصدير الخادمي غير مُفعّل أو حدث خطأ: ' + e.message);
-    //     }
-    //   });
-    // }
+    // --- تعديل: هذا الزر للتصدير عالي الجودة من الخادم ---
+    document.getElementById('exportServerBtn').addEventListener('click', async () => {
+      const busy = document.getElementById('busy');
+      busy.style.display = 'inline';
+      try{
+        const html = document.getElementById('reportContent')?.outerHTML || '';
+        if(!html){ alert('التقرير غير جاهز للتصدير.'); return; }
+        const resp = await fetch('/api/pdf', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ html, lang: currentLang })
+        });
+        if(!resp.ok){
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${resp.status}`); 
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'Medical_Audit_Report-HQ.pdf'; a.click();
+        URL.revokeObjectURL(url);
+      }catch(e){
+        alert('حدث خطأ أثناء التصدير عالي الجودة: ' + e.message);
+      } finally {
+        busy.style.display = 'none';
+      }
+    });
 
-    // ===== أدوات مساعدة =====
     function forceFullCapture(root) {
       const touched = [];
       root.querySelectorAll('*').forEach(el => {
@@ -582,14 +566,13 @@
         }
       });
       const prevWidth = root.style.width;
-      root.style.width = '794px'; // عرض A4 تقريبي عند 96dpi
+      root.style.width = '794px'; 
       return () => {
         touched.forEach(([el, prev]) => el.style.overflow = prev || '');
         root.style.width = prevWidth || '';
       };
     }
 
-    // لغة افتراضية
     setLanguage('ar');
   </script>
 </body>
