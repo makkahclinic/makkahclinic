@@ -63,11 +63,11 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     }
     if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
     
-    const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block. **CRITICAL RULES:**
+    const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs and extract clinical information into a clean text block. **CRITICAL RULES:**
 1.  **DO NOT SUMMARIZE.** Transcribe everything.
-2.  List all patient details, diagnoses, and every single lab test, medication, and procedure mentioned.
-3.  **For medications, transcribe the name, then on the same line, clearly state the dosage, frequency, and duration exactly as written (e.g., Amlopine 10 - 1x1x90).**
-4.  Present the information in a clear, structured manner.`;
+2.  List all diagnoses, medications, and procedures.
+3.  **For each medication, transcribe its name, dosage, frequency, and duration on a single line exactly as written (e.g., Amlopine 10 1x1x90).**
+4.  Present the information clearly.`;
     
     const body = {
         system_instruction: { parts: [{ text: systemPrompt }] },
@@ -82,6 +82,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
 }
 
 // --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o ---
+// --- تعديل جذري: تم تبسيط التعليمات بالكامل لتكون أكثر ذكاءً وموثوقية ---
 function getExpertAuditorInstructions(lang = 'ar') {
     const langConfig = {
         ar: {
@@ -103,36 +104,29 @@ function getExpertAuditorInstructions(lang = 'ar') {
     };
     const selectedLang = langConfig[lang] || langConfig['ar'];
 
-    return `You are an expert, evidence-based clinical pharmacist and medical auditor. Respond with a valid JSON object.
+    return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to analyze the provided clinical data and respond with a valid JSON object that follows the exact schema.
 
-**Primary Knowledge Base:**
-* **Cardiology:** AHA/ACC/ESC Guidelines. For patients with risk factors (Age > 50, DM, HTN), ECG and Troponin are mandatory for relevant symptoms.
-* **Endocrinology:** ADA Standards. Annual fundus exam is mandatory for Type 2 diabetics. **Diamicron MR (Gliclazide MR)** is dosed **once daily**. Twice daily is a major dosing error.
-* **Reimbursement:** Focus on Medical Necessity, Duplication, Contraindications, and unusual quantities.
+**Your Thought Process:**
 
-**Mandatory Analysis Rules:**
+1.  **Summarize:** Read all the provided data (diagnoses, patient info, etc.) and write a concise \`patientSummary\` and an \`overallAssessment\` of the care quality.
 
-**Rule 0: Comprehensive Listing (MOST IMPORTANT):**
-The final JSON \`table\` **MUST** contain one entry for **EVERY SINGLE** medication, lab, and procedure from the clinical data. **DO NOT OMIT ANY ITEM.**
-* **For correct items:** List them with \`analysisCategory\` as "صحيح ومبرر" (Correct and Justified).
-* **For each medication:** You **MUST** populate the \`dosage_written\` field with the exact text transcribed from the source (e.g., "10 1x1x90", "30 1x2x90").
+2.  **Analyze Line-by-Line:** Go through the transcribed medications and procedures one by one. For **EVERY SINGLE ITEM** listed, create a corresponding entry in the \`table\` array.
+    * For each item, populate all fields: \`name\`, \`dosage_written\`, \`itemType\`, \`status\`, etc.
+    * Apply your clinical knowledge to determine the \`analysisCategory\` and \`insuranceDecision\`. Use the following guiding principles:
+        * **Standard & Correct:** If a drug like Amlopine 10mg is given once daily for Hypertension, it is "صحيح ومبرر" (Correct and Justified) and "مقبول" (Accepted).
+        * **Dosing Errors:** A drug like Diamicron MR (Gliclazide MR) should be once daily. If prescribed twice daily, this is a "خطأ في الجرعة أو التكرار" (Dosing or Frequency Error) and must be "مرفوض" (Rejected).
+        * **Quantity Review:** A 90-day supply for a chronic, stable condition is acceptable. If stability is not clear, or for certain medications, flag it as "الكمية تحتاج لمراجعة" (Quantity Requires Review).
+        * **Medical Necessity:** If an item like 'Triplex' has unclear benefits for the patient's conditions, it is "غير مبرر طبياً" (Not Medically Justified).
 
-**Rule 1: Clinical Validity Analysis:**
-* **Dosing/Frequency Error:** Flag incorrect dosages (e.g., Diamicron MR twice daily). Justification: "خطأ في الجرعة/التكرار. الجرعة القياسية هي مرة واحدة يومياً."
-* **Medical Unnecessity:** Flag items without supporting symptoms or diagnosis.
-* **Contraindication:** Flag items that conflict with the patient's conditions.
+3.  **Identify Omissions:** After analyzing all prescribed items, think about what is MISSING based on the patient's profile (age, diagnoses like HTN, DM).
+    * For a 76-year-old with HTN and DM, are an ECG and Troponin test missing? Is a Fundus Exam missing?
+    * Add these missing items to the \`table\` with a status of "مفقود ولكنه ضروري" (Missing but Necessary).
 
-**Rule 2: Prescription Duration Analysis (90-Day Rule):**
-* If a medication is prescribed for a duration of 90 days, you must analyze its appropriateness.
-* If the patient's condition is chronic and stable, this can be "صحيح ومبرر".
-* However, if stability is not documented or for a first-time prescription, set the \`analysisCategory\` to **"الكمية تحتاج لمراجعة"** (Quantity Requires Review). Justification: "وصفة لمدة 90 يوماً تتطلب مبرراً واضحاً للاستقرار السريري، وهو غير متوفر."
-
-**Rule 3: Proactive Standard of Care Analysis (Omissions):**
-* Identify and list **Critical Omissions** (like missing ECG/Troponin/Fundus Exam).
+4.  **Recommend Actions:** Based on your findings (especially errors and omissions), create clear, actionable \`recommendations\`.
 
 ${selectedLang.rule}
 
-**Your response must be ONLY the valid JSON object conforming to this exact schema. Do not include any other text.**
+**Your response must be ONLY the valid JSON object conforming to this exact schema. Do not include any other text or formatting.**
 \`\`\`json
 ${JSON.stringify(selectedLang.schema, null, 2)}
 \`\`\``;
@@ -217,7 +211,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         </div>`;
     }).join("");
 
-    // --- تعديل جذري: تم إعادة كتابة CSS بالكامل لضمان ثبات التصدير ---
     return `
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
@@ -348,7 +341,7 @@ export default async function handler(req, res) {
         console.log("Step 2: OpenAI audit successful.");
         
         console.log("Step 3: Rendering HTML report...");
-        const htmlReport = renderHtmlReport(structuredAudit, files, lang);
+        const htmlReport = renderHtmlReport(structuredData, files, lang);
         console.log("Step 3: HTML rendering successful.");
 
         console.log("--- Request Processed Successfully ---");
