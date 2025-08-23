@@ -67,7 +67,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
 1.  **DO NOT SUMMARIZE.** Transcribe everything.
 2.  List all diagnoses, medications, and procedures.
 3.  **For each medication, transcribe its name, dosage, frequency, and duration on a single line exactly as written (e.g., Amlopine 10 1x1x90).**
-4.  Present the information clearly.`;
+4.  Present the information in a clear, structured manner.`;
     
     const body = {
         system_instruction: { parts: [{ text: systemPrompt }] },
@@ -341,7 +341,7 @@ export default async function handler(req, res) {
         console.log("Step 2: OpenAI audit successful.");
         
         console.log("Step 3: Rendering HTML report...");
-        const htmlReport = renderHtmlReport(structuredData, files, lang);
+        const htmlReport = renderHtmlReport(structuredAudit, files, lang);
         console.log("Step 3: HTML rendering successful.");
 
         console.log("--- Request Processed Successfully ---");
