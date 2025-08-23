@@ -174,14 +174,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         relatedTo: isArabic ? "مرتبط بـ" : "Related to",
         notAvailable: isArabic ? "غير متوفر." : "Not available."
     };
-
-    const getDecisionStyle = (label) => {
-        const normalizedLabel = (label || '').toLowerCase();
-        if (normalizedLabel.includes('مقبول') || normalizedLabel.includes('accepted')) return 'background-color: #e6f4ea; color: #1e8e3e;';
-        if (normalizedLabel.includes('مرفوض') || normalizedLabel.includes('rejected')) return 'background-color: #fce8e6; color: #d93025;';
-        if (normalizedLabel.includes('لا ينطبق') || normalizedLabel.includes('not applicable')) return 'background-color: #e8eaed; color: #5f6368;';
-        return 'background-color: #e8eaed; color: #3c4043;';
-    };
    
     const getRiskClass = (category) => {
         const normalizedCategory = (category || '').toLowerCase();
@@ -194,20 +186,21 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
     const sourceDocsHtml = (files || []).map(f => {
         const isImg = (f.mimeType || '').startsWith('image/');
         const src = `data:${f.mimeType};base64,${f.data}`;
-        const filePreview = isImg ? `<img src="${src}" alt="${f.name}" />` : `<div style="padding:20px; border:1px dashed #e5e7eb; border-radius:8px; background:#f9fbfc; color:#6b7280; text-align:center;">${f.name}</div>`;
+        const filePreview = isImg ? `<img src="${src}" alt="${f.name}" />` : `<div class="pdf-placeholder">${f.name}</div>`;
         return `<div class="source-doc-card"><h3>${f.name}</h3>${filePreview}</div>`;
     }).join('');
 
-    // --- تعديل: تم تبسيط بنية الخلية الأولى لتجنب الانحراف ---
     const tableRows = (s.table || []).map(r =>        `<tr class="${getRiskClass(r.analysisCategory)}">
-        <td class="item-cell">
-            <div class="item-name">${r.name || '-'}</div>
-            <small class="item-category">${r.analysisCategory || ''}</small>
+        <td>
+            <div class="cell-content">
+                <span class="item-name">${r.name || '-'}</span>
+                <span class="item-category">${r.analysisCategory || ''}</span>
+            </div>
         </td>
-        <td class="dosage-cell">${r.dosage_written || '-'}</td>
-        <td>${r.status || '-'}</td>
-        <td><span class="decision-badge">${r.insuranceDecision?.label || '-'}</span></td>
-        <td>${r.insuranceDecision?.justification || '-'}</td>
+        <td><div class="cell-content dosage-cell">${r.dosage_written || '-'}</div></td>
+        <td><div class="cell-content">${r.status || '-'}</div></td>
+        <td><div class="cell-content"><span class="decision-badge">${r.insuranceDecision?.label || '-'}</span></div></td>
+        <td><div class="cell-content">${r.insuranceDecision?.justification || '-'}</div></td>
         </tr>`
     ).join("");
 
@@ -224,13 +217,14 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         </div>`;
     }).join("");
 
-    // --- تعديل: تم إعادة كتابة CSS الجدول بالكامل لضمان ثبات التصدير ---
+    // --- تعديل جذري: تم إعادة كتابة CSS بالكامل لضمان ثبات التصدير ---
     return `
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+        * { box-sizing: border-box; }
         body { direction: ${isArabic ? 'rtl' : 'ltr'}; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; line-height: 1.6; }
         .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); page-break-inside: avoid; }
-        .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
+        .report-section h2 { font-size: 22px; font-weight: 700; color: #0d4a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
         
         .audit-table {
             width: 100%;
@@ -239,25 +233,29 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
             font-size: 14px;
         }
         .audit-table th, .audit-table td {
-            padding: 12px;
             text-align: ${isArabic ? 'right' : 'left'};
             border-bottom: 1px solid #e9ecef;
             vertical-align: top;
-            word-wrap: break-word;
+            padding: 0;
         }
-        .audit-table th {
-            background-color: #f8f9fa;
-            font-weight: 700;
+        .audit-table th .cell-content {
+             padding: 12px;
+             font-weight: 700;
+             background-color: #f8f9fa;
+        }
+        .audit-table td .cell-content {
+            padding: 12px;
         }
         .audit-table tr { page-break-inside: avoid; }
 
-        .item-cell .item-name {
+        .cell-content .item-name {
             font-weight: 700;
             color: #202124;
             font-size: 15px;
-            margin: 0 0 4px 0;
+            display: block;
+            margin-bottom: 4px;
         }
-        .item-cell .item-category {
+        .cell-content .item-category {
             font-size: 12px;
             font-weight: 500;
             color: #5f6368;
@@ -275,7 +273,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
             border-radius: 16px;
             font-size: 13px;
             display: inline-block;
-            border: 1px solid transparent;
         }
         
         .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? 'right' : 'left'}: 4px solid; page-break-inside: avoid; }
@@ -284,22 +281,13 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
         .rec-item.urgent-border { border-color: #d93025; }
         .rec-item.best-practice-border { border-color: #1e8e3e; }
-        .rec-content { display: flex; flex-direction: column; }
-        .rec-desc { color: #202124; font-size: 15px; }
-        .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
+        
+        .audit-table tr.risk-critical td { background-color: #fce8e6; }
+        .audit-table tr.risk-warning td { background-color: #fff0e1; }
+        .audit-table tr.risk-ok td { background-color: #e6f4ea; }
 
-        .audit-table tr.risk-critical td { background-color: #fce8e6 !important; }
-        .audit-table tr.risk-warning td { background-color: #fff0e1 !important; }
-        .audit-table tr.risk-ok td { background-color: #e6f4ea !important; }
-        .audit-table tr td .decision-badge {
-             background-color: #e8eaed; color: #5f6368;
-        }
-        .audit-table tr.risk-ok td .decision-badge {
-             background-color: #e6f4ea; color: #1e8e3e;
-        }
-        .audit-table tr.risk-critical td .decision-badge {
-             background-color: #fce8e6; color: #d93025;
-        }
+        .pdf-placeholder { padding:20px; border:1px dashed #e5e7eb; border-radius:8px; background:#f9fbfc; color:#6b7280; text-align:center; }
+        .source-doc-card { page-break-inside: avoid; }
     </style>
     <div class="report-section">
         <h2>${text.sourceDocsTitle}</h2>
@@ -316,11 +304,11 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
             <table class="audit-table">
                 <thead>
                     <tr>
-                        <th style="width: 28%;">${text.itemHeader}</th>
-                        <th style="width: 15%;">${text.dosageHeader}</th>
-                        <th style="width: 15%;">${text.statusHeader}</th>
-                        <th style="width: 15%;">${text.decisionHeader}</th>
-                        <th style="width: 27%;">${text.justificationHeader}</th>
+                        <th style="width: 28%;"><div class="cell-content">${text.itemHeader}</div></th>
+                        <th style="width: 15%;"><div class="cell-content">${text.dosageHeader}</div></th>
+                        <th style="width: 15%;"><div class="cell-content">${text.statusHeader}</div></th>
+                        <th style="width: 15%;"><div class="cell-content">${text.decisionHeader}</div></th>
+                        <th style="width: 27%;"><div class="cell-content">${text.justificationHeader}</div></th>
                     </tr>
                 </thead>
                 <tbody>${tableRows}</tbody>
