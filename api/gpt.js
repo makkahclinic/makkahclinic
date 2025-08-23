@@ -63,11 +63,11 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     }
     if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
     
-    const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs and extract clinical information into a clean text block. **CRITICAL RULES:**
+    const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block. **CRITICAL RULES:**
 1.  **DO NOT SUMMARIZE.** Transcribe everything.
-2.  List all diagnoses, medications, and procedures.
-3.  **For each medication, transcribe its name, dosage, frequency, and duration on a single line exactly as written (e.g., Amlopine 10 1x1x90).**
-4.  Present the information clearly.`;
+2.  List all patient details, diagnoses, and every single lab test, medication, and procedure mentioned.
+3.  **For medications, transcribe the name, then on the same line, clearly state the dosage, frequency, and duration exactly as written (e.g., Amlopine 10 - 1x1x90).**
+4.  Present the information in a clear, structured manner.`;
     
     const body = {
         system_instruction: { parts: [{ text: systemPrompt }] },
@@ -103,23 +103,32 @@ function getExpertAuditorInstructions(lang = 'ar') {
     };
     const selectedLang = langConfig[lang] || langConfig['ar'];
 
-    return `You are an expert, evidence-based clinical pharmacist and medical auditor. Your mission is to analyze the provided clinical data and respond with a valid JSON object that follows the exact schema.
+    return `You are an expert, evidence-based clinical pharmacist and medical auditor. Respond with a valid JSON object.
 
-**Your Thought Process:**
+**Primary Knowledge Base:**
+* **Cardiology:** AHA/ACC/ESC Guidelines. For patients with risk factors (Age > 50, DM, HTN), ECG and Troponin are mandatory for relevant symptoms.
+* **Endocrinology:** ADA Standards. Annual fundus exam is mandatory for Type 2 diabetics. **Diamicron MR (Gliclazide MR)** is dosed **once daily**. Twice daily is a major dosing error.
+* **Reimbursement:** Focus on Medical Necessity, Duplication, Contraindications, and unusual quantities.
 
-1.  **Summarize:** Read all the provided data (diagnoses, patient info, etc.) and write a concise \`patientSummary\` and an \`overallAssessment\` of the care quality.
+**Mandatory Analysis Rules:**
 
-2.  **Analyze Line-by-Line:** Go through the transcribed medications and procedures one by one. For **EVERY SINGLE ITEM** listed, create a corresponding entry in the \`table\` array.
-    * For each item, populate all fields: \`name\`, \`dosage_written\`, \`itemType\`, \`status\`, etc.
-    * Apply your clinical knowledge to determine the \`analysisCategory\` and \`insuranceDecision\`. Use these guiding principles:
-        * **Standard & Correct:** If a drug is appropriate for the diagnosis and dosage is standard, it is "صحيح ومبرر" and "مقبول".
-        * **Dosing Errors:** A drug like Diamicron MR (Gliclazide MR) should be once daily. If prescribed twice daily, this is a "خطأ في الجرعة أو التكرار" and must be "مرفوض".
-        * **Quantity Review:** A 90-day supply for a chronic, stable condition is acceptable. If stability is not clear, flag it as "الكمية تحتاج لمراجعة".
-        * **Medical Necessity:** If an item has unclear benefits for the patient's conditions, it is "غير مبرر طبياً".
+**Rule 0: Comprehensive Listing (MOST IMPORTANT):**
+The final JSON \`table\` **MUST** contain one entry for **EVERY SINGLE** medication, lab, and procedure from the clinical data. **DO NOT OMIT ANY ITEM.**
+* **For correct items:** List them with \`analysisCategory\` as "صحيح ومبرر" (Correct and Justified).
+* **For each medication:** You **MUST** populate the \`dosage_written\` field with the exact text transcribed from the source (e.g., "10 1x1x90", "30 1x2x90").
 
-3.  **Identify Omissions:** After analyzing all prescribed items, think about what is MISSING based on the patient's profile (age, diagnoses like HTN, DM). Add these missing items to the \`table\` with a status of "مفقود ولكنه ضروري".
+**Rule 1: Clinical Validity Analysis:**
+* **Dosing/Frequency Error:** Flag incorrect dosages (e.g., Diamicron MR twice daily). Justification: "خطأ في الجرعة/التكرار. الجرعة القياسية هي مرة واحدة يومياً."
+* **Medical Unnecessity:** Flag items without supporting symptoms or diagnosis.
+* **Contraindication:** Flag items that conflict with the patient's conditions.
 
-4.  **Recommend Actions:** Based on your findings, create clear, actionable \`recommendations\`.
+**Rule 2: Prescription Duration Analysis (90-Day Rule):**
+* If a medication is prescribed for a duration of 90 days, you must analyze its appropriateness.
+* If the patient's condition is chronic and stable, this can be "صحيح ومبرر".
+* However, if stability is not documented or for a first-time prescription, set the \`analysisCategory\` to **"الكمية تحتاج لمراجعة"** (Quantity Requires Review). Justification: "وصفة لمدة 90 يوماً تتطلب مبرراً واضحاً للاستقرار السريري، وهو غير متوفر."
+
+**Rule 3: Proactive Standard of Care Analysis (Omissions):**
+* Identify and list **Critical Omissions** (like missing ECG/Troponin/Fundus Exam).
 
 ${selectedLang.rule}
 
@@ -149,91 +158,179 @@ async function getAuditFromOpenAI(bundle, lang) {
 }
 
 // --- عارض التقرير المتقدم (HTML Renderer) ---
-function renderHtmlReport(structuredAudit, files, lang = 'ar') {
-    const s = structuredAudit;
+function renderHtmlReport(structuredData, files, lang = 'ar') {
+    const s = structuredData;
     const isArabic = lang === 'ar';
     const text = {
-        sourceDocsTitle: "المستندات المصدرية",
-        summaryTitle: "ملخص الحالة والتقييم العام",
-        detailsTitle: "التحليل التفصيلي للإجراءات",
-        recommendationsTitle: "التوصيات والإجراءات المقترحة",
-        itemHeader: "الإجراء",
-        dosageHeader: "الجرعة المكتوبة",
-        statusHeader: "الحالة",
-        decisionHeader: "قرار التأمين",
-        justificationHeader: "التبرير",
-        relatedTo: "مرتبط بـ",
-        notAvailable: "غير متوفر."
+        sourceDocsTitle: isArabic ? "المستندات المصدرية" : "Source Documents",
+        summaryTitle: isArabic ? "ملخص الحالة والتقييم العام" : "Case Summary & Overall Assessment",
+        detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات" : "Detailed Analysis of Procedures",
+        recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
+        itemHeader: isArabic ? "الإجراء" : "Item",
+        dosageHeader: isArabic ? "الجرعة المكتوبة" : "Written Dosage",
+        statusHeader: isArabic ? "الحالة" : "Status",
+        decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
+        justificationHeader: isArabic ? "التبرير" : "Justification",
+        relatedTo: isArabic ? "مرتبط بـ" : "Related to",
+        notAvailable: isArabic ? "غير متوفر." : "Not available."
+    };
+
+    const getDecisionStyle = (label) => {
+        const normalizedLabel = (label || '').toLowerCase();
+        if (normalizedLabel.includes('مقبول') || normalizedLabel.includes('accepted')) return 'background-color: #e6f4ea; color: #1e8e3e;';
+        if (normalizedLabel.includes('مرفوض') || normalizedLabel.includes('rejected')) return 'background-color: #fce8e6; color: #d93025;';
+        if (normalizedLabel.includes('لا ينطبق') || normalizedLabel.includes('not applicable')) return 'background-color: #e8eaed; color: #5f6368;';
+        return 'background-color: #e8eaed; color: #3c4043;';
     };
    
     const getRiskClass = (category) => {
-        const cat = (category || '').toLowerCase();
-        if (cat.includes('إغفال') || cat.includes('omission') || cat.includes('خطأ') || cat.includes('error')) return 'risk-critical';
-        if (cat.includes('مراجعة') || cat.includes('review') || cat.includes('غير مبرر') || cat.includes('not justified')) return 'risk-warning';
-        return 'risk-ok';
+        const normalizedCategory = (category || '').toLowerCase();
+        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts') || normalizedCategory.includes('خطأ في الجرعة') || normalizedCategory.includes('dosing error')) return 'risk-critical';
+        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate') || normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified') || normalizedCategory.includes('تحتاج لمراجعة') || normalizedCategory.includes('requires review')) return 'risk-warning';
+        if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) return 'risk-ok';
+        return '';
     };
 
     const sourceDocsHtml = (files || []).map(f => {
-        const src = `data:${f.mimeType};base64,${f.data.split(',')[1] || f.data}`;
-        return `<div class="source-doc-card"><h3>${f.name}</h3><img src="${src}" alt="${f.name}" /></div>`;
+        const isImg = (f.mimeType || '').startsWith('image/');
+        const src = `data:${f.mimeType};base64,${f.data}`;
+        const filePreview = isImg ? `<img src="${src}" alt="${f.name}" />` : `<div style="padding:20px; border:1px dashed #e5e7eb; border-radius:8px; background:#f9fbfc; color:#6b7280; text-align:center;">${f.name}</div>`;
+        return `<div class="source-doc-card"><h3>${f.name}</h3>${filePreview}</div>`;
     }).join('');
 
+    // --- تعديل: تم تبسيط بنية الخلية الأولى لتجنب الانحراف ---
     const tableRows = (s.table || []).map(r =>        `<tr class="${getRiskClass(r.analysisCategory)}">
-        <td><div class="cell-content"><span class="item-name">${r.name || '-'}</span><span class="item-category">${r.analysisCategory || ''}</span></div></td>
-        <td><div class="cell-content dosage-cell">${r.dosage_written || '-'}</div></td>
-        <td><div class="cell-content">${r.status || '-'}</div></td>
-        <td><div class="cell-content"><span class="decision-badge">${r.insuranceDecision?.label || '-'}</span></div></td>
-        <td><div class="cell-content">${r.insuranceDecision?.justification || '-'}</div></td>
+        <td class="item-cell">
+            <div class="item-name">${r.name || '-'}</div>
+            <small class="item-category">${r.analysisCategory || ''}</small>
+        </td>
+        <td class="dosage-cell">${r.dosage_written || '-'}</td>
+        <td>${r.status || '-'}</td>
+        <td><span class="decision-badge">${r.insuranceDecision?.label || '-'}</span></td>
+        <td>${r.insuranceDecision?.justification || '-'}</td>
         </tr>`
     ).join("");
 
     const recommendationsList = (s.recommendations || []).map(rec => {
         const priorityClass = (rec.priority || '').toLowerCase();
-        return `<div class="rec-item ${priorityClass.includes('عاجلة') ? 'urgent-border' : 'best-practice-border'}">
-        <span class="rec-priority">${rec.priority}</span>
-        <div class="rec-content">${rec.description}</div>
+        let borderClass = 'best-practice-border';
+        if (priorityClass.includes('عاجلة') || priorityClass.includes('urgent')) borderClass = 'urgent-border';
+        return `<div class="rec-item ${borderClass}">
+        <span class="rec-priority ${priorityClass}">${rec.priority}</span>
+        <div class="rec-content">
+            <div class="rec-desc">${rec.description}</div>
+            ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">${text.relatedTo}: ${rec.relatedItems.join(', ')}</div>` : ''}
+        </div>
         </div>`;
     }).join("");
 
+    // --- تعديل: تم إعادة كتابة CSS الجدول بالكامل لضمان ثبات التصدير ---
     return `
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
-        * { box-sizing: border-box; }
-        body { direction: rtl; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; line-height: 1.6; }
-        .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; page-break-inside: avoid; }
-        .report-section h2 { font-size: 22px; font-weight: 700; color: #0d4a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
-        .source-docs-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-        .source-doc-card { text-align: center; } .source-doc-card img { max-width: 100%; height: auto; border: 1px solid #e2e8f0; }
-        .audit-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
-        .audit-table th, .audit-table td { text-align: right; border-bottom: 1px solid #e9ecef; vertical-align: top; padding: 0; }
-        .audit-table th .cell-content { padding: 12px; font-weight: 700; background-color: #f8f9fa; }
-        .audit-table td .cell-content { padding: 12px; }
+        body { direction: ${isArabic ? 'rtl' : 'ltr'}; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; line-height: 1.6; }
+        .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); page-break-inside: avoid; }
+        .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
+        
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 14px;
+        }
+        .audit-table th, .audit-table td {
+            padding: 12px;
+            text-align: ${isArabic ? 'right' : 'left'};
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: top;
+            word-wrap: break-word;
+        }
+        .audit-table th {
+            background-color: #f8f9fa;
+            font-weight: 700;
+        }
         .audit-table tr { page-break-inside: avoid; }
-        .cell-content .item-name { font-weight: 700; font-size: 15px; display: block; margin-bottom: 4px; }
-        .cell-content .item-category { font-size: 12px; color: #5f6368; display: block; }
-        .dosage-cell { font-family: monospace; font-size: 14px; white-space: nowrap; }
-        .decision-badge { font-weight: 700; padding: 5px 10px; border-radius: 16px; font-size: 13px; display: inline-block; }
-        .rec-item { display: flex; gap: 16px; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-right: 4px solid; }
+
+        .item-cell .item-name {
+            font-weight: 700;
+            color: #202124;
+            font-size: 15px;
+            margin: 0 0 4px 0;
+        }
+        .item-cell .item-category {
+            font-size: 12px;
+            font-weight: 500;
+            color: #5f6368;
+            display: block;
+        }
+        .dosage-cell {
+            font-family: monospace, sans-serif;
+            color: #3d3d3d;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .decision-badge {
+            font-weight: 700;
+            padding: 5px 10px;
+            border-radius: 16px;
+            font-size: 13px;
+            display: inline-block;
+            border: 1px solid transparent;
+        }
+        
+        .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? 'right' : 'left'}: 4px solid; page-break-inside: avoid; }
         .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
-        .rec-priority.عاجلة { background: #d93025; } .rec-item.urgent-border { border-color: #d93025; }
-        .rec-priority.أفضل { background: #1e8e3e; } .rec-item.best-practice-border { border-color: #1e8e3e; }
-        .audit-table tr.risk-critical td { background-color: #fce8e6; }
-        .audit-table tr.risk-warning td { background-color: #fff0e1; }
-        .audit-table tr.risk-ok td { background-color: #e6f4ea; }
+        .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
+        .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
+        .rec-item.urgent-border { border-color: #d93025; }
+        .rec-item.best-practice-border { border-color: #1e8e3e; }
+        .rec-content { display: flex; flex-direction: column; }
+        .rec-desc { color: #202124; font-size: 15px; }
+        .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
+
+        .audit-table tr.risk-critical td { background-color: #fce8e6 !important; }
+        .audit-table tr.risk-warning td { background-color: #fff0e1 !important; }
+        .audit-table tr.risk-ok td { background-color: #e6f4ea !important; }
+        .audit-table tr td .decision-badge {
+             background-color: #e8eaed; color: #5f6368;
+        }
+        .audit-table tr.risk-ok td .decision-badge {
+             background-color: #e6f4ea; color: #1e8e3e;
+        }
+        .audit-table tr.risk-critical td .decision-badge {
+             background-color: #fce8e6; color: #d93025;
+        }
     </style>
-    <div class="report-section"><h2>${text.sourceDocsTitle}</h2><div class="source-docs-grid">${sourceDocsHtml}</div></div>
-    <div class="report-section"><h2>${text.summaryTitle}</h2><p>${s.patientSummary?.text || text.notAvailable}</p><p>${s.overallAssessment?.text || text.notAvailable}</p></div>
-    <div class="report-section"><h2>${text.detailsTitle}</h2><div style="overflow-x: auto;"><table class="audit-table">
-    <thead><tr>
-        <th style="width: 28%;"><div class="cell-content">${text.itemHeader}</div></th>
-        <th style="width: 15%;"><div class="cell-content">${text.dosageHeader}</div></th>
-        <th style="width: 15%;"><div class="cell-content">${text.statusHeader}</div></th>
-        <th style="width: 15%;"><div class="cell-content">${text.decisionHeader}</div></th>
-        <th style="width: 27%;"><div class="cell-content">${text.justificationHeader}</div></th>
-    </tr></thead>
-    <tbody>${tableRows}</tbody>
-    </table></div></div>
-    <div class="report-section"><h2>${text.recommendationsTitle}</h2>${recommendationsList}</div>
+    <div class="report-section">
+        <h2>${text.sourceDocsTitle}</h2>
+        <div class="source-docs-grid">${sourceDocsHtml}</div>
+    </div>
+    <div class="report-section">
+        <h2>${text.summaryTitle}</h2>
+        <p class="summary-text">${s.patientSummary?.text || text.notAvailable}</p>
+        <p class="summary-text">${s.overallAssessment?.text || text.notAvailable}</p>
+    </div>
+    <div class="report-section">
+        <h2>${text.detailsTitle}</h2>
+        <div style="overflow-x: auto;">
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th style="width: 28%;">${text.itemHeader}</th>
+                        <th style="width: 15%;">${text.dosageHeader}</th>
+                        <th style="width: 15%;">${text.statusHeader}</th>
+                        <th style="width: 15%;">${text.decisionHeader}</th>
+                        <th style="width: 27%;">${text.justificationHeader}</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        </div>
+    </div>
+    <div class="report-section">
+        <h2>${text.recommendationsTitle}</h2>
+        ${recommendationsList}
+    </div>
     `;
 }
 
@@ -245,28 +342,34 @@ export default async function handler(req, res) {
             return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
         }
         if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
+            console.error("CRITICAL ERROR: API Key is missing.");
             return bad(res, 500, "Server Configuration Error: API Key is missing.");
         }
 
         const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
-        
-        console.log("Step 1: Aggregating data with Gemini...");
-        const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
-        
-        const auditBundle = { patientInfo, aggregatedClinicalText };
+        console.log(`Processing request with language: ${lang}`);
 
-        console.log("Step 2: Getting expert audit from OpenAI...");
+        console.log("Step 1: Starting data aggregation with Gemini...");
+        const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
+        console.log("Step 1: Gemini aggregation successful.");
+        
+        const auditBundle = { patientInfo, aggregatedClinicalText, originalUserText: text };
+
+        console.log("Step 2: Starting expert audit with OpenAI...");
         const structuredAudit = await getAuditFromOpenAI(auditBundle, lang);
+        console.log("Step 2: OpenAI audit successful.");
         
         console.log("Step 3: Rendering HTML report...");
         const htmlReport = renderHtmlReport(structuredAudit, files, lang);
+        console.log("Step 3: HTML rendering successful.");
 
         console.log("--- Request Processed Successfully ---");
         return ok(res, { html: htmlReport, structured: structuredAudit });
     } catch (err) {
-        console.error("---!!!--- An error occurred in handler ---!!!---");
+        console.error("---!!!--- An error occurred during the process ---!!!---");
         console.error("Error Message:", err.message);
         console.error("Error Stack:", err.stack);
         return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
     }
 }
+
