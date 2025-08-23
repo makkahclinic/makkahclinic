@@ -63,7 +63,6 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     }
     if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
     
-    // --- تعديل: تعليمات أكثر دقة لنسخ الجرعة بوضوح ---
     const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block. **CRITICAL RULES:**
 1.  **DO NOT SUMMARIZE.** Transcribe everything.
 2.  List all patient details, diagnoses, and every single lab test, medication, and procedure mentioned.
@@ -87,7 +86,6 @@ function getExpertAuditorInstructions(lang = 'ar') {
     const langConfig = {
         ar: {
             rule: "**قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.**",
-            // --- تعديل: إضافة حقل dosage_written ---
             schema: {
                 patientSummary: {"text": "ملخص تفصيلي لحالة المريض الحالية والتشخيصات."},
                 overallAssessment: {"text": "رأيك الخبير الشامل حول جودة الرعاية، مع تسليط الضوء على القرارات الصحيحة والإغفالات والإجراءات الخاطئة."},
@@ -102,26 +100,9 @@ function getExpertAuditorInstructions(lang = 'ar') {
                 recommendations: [ { "priority": "عاجلة|أفضل ممارسة", "description": "string", "relatedItems": ["string"] } ]
             }
         },
-        en: {
-            rule: "**Language Rule: All outputs MUST be in clear, professional English.**",
-            schema: {
-                patientSummary: {"text": "A detailed summary of the patient's presentation and diagnoses."},
-                overallAssessment: {"text": "Your expert overall opinion on the quality of care, highlighting correct decisions, omissions, and incorrect procedures."},
-                table: [
-                    {
-                        "name": "string", "dosage_written": "string", "itemType": "lab|medication|procedure",
-                        "status": "Performed|Missing but Necessary",
-                        "analysisCategory": "Correct and Justified|Duplicate|Not Medically Justified|Contradicts Diagnosis|Critical Omission|Dosing/Frequency Error|Quantity Requires Review",
-                        "insuranceDecision": {"label": "Accepted|Rejected|Not Applicable", "justification": "string"}
-                    }
-                ],
-                recommendations: [ { "priority": "Urgent|Best Practice", "description": "string", "relatedItems": ["string"] } ]
-            }
-        }
     };
     const selectedLang = langConfig[lang] || langConfig['ar'];
 
-    // --- تعديل: إضافة قاعدة تحليل مدة الوصفة (90 يوم) ---
     return `You are an expert, evidence-based clinical pharmacist and medical auditor. Respond with a valid JSON object.
 
 **Primary Knowledge Base:**
@@ -186,7 +167,7 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات" : "Detailed Analysis of Procedures",
         recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
         itemHeader: isArabic ? "الإجراء" : "Item",
-        dosageHeader: isArabic ? "الجرعة المكتوبة" : "Written Dosage", // --- تعديل: إضافة عنوان للعمود الجديد
+        dosageHeader: isArabic ? "الجرعة المكتوبة" : "Written Dosage",
         statusHeader: isArabic ? "الحالة" : "Status",
         decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
         justificationHeader: isArabic ? "التبرير" : "Justification",
@@ -217,17 +198,15 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         return `<div class="source-doc-card"><h3>${f.name}</h3>${filePreview}</div>`;
     }).join('');
 
-    // --- تعديل: إضافة عمود الجرعة `r.dosage_written` ---
+    // --- تعديل: تم تبسيط بنية الخلية الأولى لتجنب الانحراف ---
     const tableRows = (s.table || []).map(r =>        `<tr class="${getRiskClass(r.analysisCategory)}">
-        <td>
+        <td class="item-cell">
             <div class="item-name">${r.name || '-'}</div>
-            <div class="item-category">
-            <span>${r.analysisCategory || ''}</span>
-            </div>
+            <small class="item-category">${r.analysisCategory || ''}</small>
         </td>
         <td class="dosage-cell">${r.dosage_written || '-'}</td>
         <td>${r.status || '-'}</td>
-        <td><span class="decision-badge" style="${getDecisionStyle(r.insuranceDecision?.label)}">${r.insuranceDecision?.label || '-'}</span></td>
+        <td><span class="decision-badge">${r.insuranceDecision?.label || '-'}</span></td>
         <td>${r.insuranceDecision?.justification || '-'}</td>
         </tr>`
     ).join("");
@@ -245,20 +224,61 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         </div>`;
     }).join("");
 
+    // --- تعديل: تم إعادة كتابة CSS الجدول بالكامل لضمان ثبات التصدير ---
     return `
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
-        body { direction: ${isArabic ? 'rtl' : 'ltr'}; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; }
-        .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        body { direction: ${isArabic ? 'rtl' : 'ltr'}; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; line-height: 1.6; }
+        .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); page-break-inside: avoid; }
         .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
-        .audit-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-        .audit-table th, .audit-table td { padding: 14px 12px; text-align: ${isArabic ? 'right' : 'left'}; border-bottom: 1px solid #e9ecef; }
-        .audit-table th { background-color: #f8f9fa; font-weight: 700; }
-        .item-name { font-weight: 700; color: #202124; font-size: 15px; margin-bottom: 4px; }
-        .item-category { font-size: 13px; font-weight: 500; color: #5f6368; }
-        .dosage-cell { font-family: monospace, sans-serif; color: #3d3d3d; font-size: 14px; white-space: nowrap; }
-        .decision-badge { font-weight: 700; padding: 6px 12px; border-radius: 16px; font-size: 13px; display: inline-block; border: 1px solid transparent; }
-        .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? 'right' : 'left'}: 4px solid; }
+        
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 14px;
+        }
+        .audit-table th, .audit-table td {
+            padding: 12px;
+            text-align: ${isArabic ? 'right' : 'left'};
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: top;
+            word-wrap: break-word;
+        }
+        .audit-table th {
+            background-color: #f8f9fa;
+            font-weight: 700;
+        }
+        .audit-table tr { page-break-inside: avoid; }
+
+        .item-cell .item-name {
+            font-weight: 700;
+            color: #202124;
+            font-size: 15px;
+            margin: 0 0 4px 0;
+        }
+        .item-cell .item-category {
+            font-size: 12px;
+            font-weight: 500;
+            color: #5f6368;
+            display: block;
+        }
+        .dosage-cell {
+            font-family: monospace, sans-serif;
+            color: #3d3d3d;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .decision-badge {
+            font-weight: 700;
+            padding: 5px 10px;
+            border-radius: 16px;
+            font-size: 13px;
+            display: inline-block;
+            border: 1px solid transparent;
+        }
+        
+        .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? 'right' : 'left'}: 4px solid; page-break-inside: avoid; }
         .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
         .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
         .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
@@ -267,9 +287,19 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         .rec-content { display: flex; flex-direction: column; }
         .rec-desc { color: #202124; font-size: 15px; }
         .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
-        .audit-table tr.risk-critical { background-color: #fce8e6 !important; }
-        .audit-table tr.risk-warning { background-color: #fff0e1 !important; }
-        .audit-table tr.risk-ok { background-color: #e6f4ea !important; }
+
+        .audit-table tr.risk-critical td { background-color: #fce8e6 !important; }
+        .audit-table tr.risk-warning td { background-color: #fff0e1 !important; }
+        .audit-table tr.risk-ok td { background-color: #e6f4ea !important; }
+        .audit-table tr td .decision-badge {
+             background-color: #e8eaed; color: #5f6368;
+        }
+        .audit-table tr.risk-ok td .decision-badge {
+             background-color: #e6f4ea; color: #1e8e3e;
+        }
+        .audit-table tr.risk-critical td .decision-badge {
+             background-color: #fce8e6; color: #d93025;
+        }
     </style>
     <div class="report-section">
         <h2>${text.sourceDocsTitle}</h2>
@@ -282,7 +312,20 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
     </div>
     <div class="report-section">
         <h2>${text.detailsTitle}</h2>
-        <table class="audit-table"><thead><tr><th>${text.itemHeader}</th><th>${text.dosageHeader}</th><th>${text.statusHeader}</th><th>${text.decisionHeader}</th><th>${text.justificationHeader}</th></tr></thead><tbody>${tableRows}</tbody></table>
+        <div style="overflow-x: auto;">
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th style="width: 28%;">${text.itemHeader}</th>
+                        <th style="width: 15%;">${text.dosageHeader}</th>
+                        <th style="width: 15%;">${text.statusHeader}</th>
+                        <th style="width: 15%;">${text.decisionHeader}</th>
+                        <th style="width: 27%;">${text.justificationHeader}</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        </div>
     </div>
     <div class="report-section">
         <h2>${text.recommendationsTitle}</h2>
@@ -290,7 +333,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
     </div>
     `;
 }
-
 
 // --- معالج الطلبات الرئيسي (API Handler) ---
 export default async function handler(req, res) {
