@@ -4,9 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title id="app-title">تقييم الحالة الطبية وطلبات التأمين</title>
+
+  <!-- خطوط عربية مناسبة للعرض -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- html2pdf (المسار العميلي) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <style>
@@ -23,7 +27,7 @@
     .subtitle{color:var(--muted); font-size:14px; text-align:center; margin-bottom:14px}
     .topbar{display:flex; gap:10px; align-items:center; justify-content:flex-start; margin-bottom:12px}
     .chip{border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px; font-size:14px; background:#fff; cursor:pointer}
-    .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid var(--sea-600)}
+    .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid #sea-600}
     .home svg{width:18px; height:18px; fill:#fff}
 
     .evidence-banner{background:#eef6ff; border:1px solid #bfdbfe; color:#0b4479; padding:10px 12px; border-radius:12px; margin-bottom:12px; font-size:13px; display:flex; align-items:center; gap:8px}
@@ -64,7 +68,7 @@
     .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
     .muted{color:var(--muted)}
 
-    /* ====== تحسين الطباعة والـPDF (مهم جداً) ====== */
+    /* ====== تحسين الطباعة والـPDF ====== */
     .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
     .page-break { break-before: page; page-break-before: always; }
 
@@ -185,16 +189,15 @@
     <div class="section no-print" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
       <button class="btn" id="analyzeBtn" data-translate="analyze_button">تحليل الحالة</button>
       <span id="busy" class="muted" style="display:none" data-translate="analyzing_text">جاري التحليل…</span>
+
+      <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">تصدير PDF (عميل)</button>
+      <button class="btn btn-outline" id="exportServerBtn">تصدير PDF (خادم)</button>
     </div>
 
     <!-- التقرير -->
     <div id="reportWrap" class="section" style="display:none">
-      <div class="report-toolbar no-print">
-        <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">تصدير PDF (عميل)</button>
-        <button class="btn btn-outline" id="exportServerBtn">تصدير PDF (خادم)</button>
-      </div>
-      <!-- سنغلف مخرجات الخادم داخل reportContent -->
-      <div id="reportHTML" class="avoid-break"></div>
+      <div class="report-toolbar no-print"></div>
+      <div id="reportHTML"></div>
       <details style="margin-top:10px" class="no-print">
         <summary data-translate="show_json_summary">إظهار JSON (للبحث/الإحصاءات)</summary>
         <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
@@ -203,124 +206,65 @@
   </div>
 
   <script>
-    // ===== Internationalization (i18n) =====
+    // ===== i18n =====
     const translations = {
       ar: {
-        app_title: "تقييم الحالة الطبية وطلبات التأمين",
-        home_page: "الصفحة الرئيسية",
-        lang_english: "English",
+        app_title: "تقييم الحالة الطبية وطلبات التأمين", home_page: "الصفحة الرئيسية", lang_english: "English",
         main_title: "تقييم الحالة الطبية وطلبات التأمين",
         subtitle: "واجهة إدخال سريرية سهلة — تحليل عميق متناغم مع احتياجات التأمين",
         evidence_banner: "يستند الحكم التأميني إلى أدلة موجزة من <b>WHO</b> و<b>CDC</b> و<b>Medscape</b>—ويظهر التبرير داخل الجدول.",
         patient_info_title: " 1) معلومات المريض",
-        label_name: "الاسم (اختياري)",
-        placeholder_name: "مثال: أحمد خالد",
-        label_gender: "الجنس",
-        option_select: "اختر",
-        option_male: "ذكر",
-        option_female: "أنثى",
-        label_age: "العمر (بالسنوات)",
-        placeholder_age: "مثال: 63",
-        label_pregnant: "هل المريضة حامل؟",
-        option_no: "لا",
-        option_yes: "نعم",
-        option_na: "غير منطبق",
-        label_pregnancy_months: "شهر الحمل (إن وُجد)",
-        placeholder_pregnancy_months: "مثال: 5",
-        label_smoking: "هل المريض مدخّن؟",
-        option_smoker: "مدخن",
-        option_non_smoker: "غير مدخن",
-        option_ex_smoker: "سابق",
-        label_pack_years: "Pack-Years (إن وُجد)",
-        placeholder_pack_years: "مثال: 15",
-        label_weight: "الوزن (كجم)",
-        placeholder_weight: "مثال: 78",
-        label_height: "الطول (سم)",
-        placeholder_height: "مثال: 172",
-        label_temp: "درجة الحرارة (°م)",
-        placeholder_temp: "مثال: 37.4",
+        label_name: "الاسم (اختياري)", placeholder_name: "مثال: أحمد خالد",
+        label_gender: "الجنس", option_select: "اختر", option_male: "ذكر", option_female: "أنثى",
+        label_age: "العمر (بالسنوات)", placeholder_age: "مثال: 63",
+        label_pregnant: "هل المريضة حامل؟", option_no: "لا", option_yes: "نعم", option_na: "غير منطبق",
+        label_pregnancy_months: "شهر الحمل (إن وُجد)", placeholder_pregnancy_months: "مثال: 5",
+        label_smoking: "هل المريض مدخّن؟", option_smoker: "مدخن", option_non_smoker: "غير مدخن", option_ex_smoker: "سابق",
+        label_pack_years: "Pack-Years (إن وُجد)", placeholder_pack_years: "مثال: 15",
+        label_weight: "الوزن (كجم)", placeholder_weight: "مثال: 78",
+        label_height: "الطول (سم)", placeholder_height: "مثال: 172",
+        label_temp: "درجة الحرارة (°م)", placeholder_temp: "مثال: 37.4",
         label_has_cough: "هل يوجد سُعال؟",
-        label_cough_weeks: "مدة السعال (أسابيع)",
-        placeholder_cough_weeks: "مثال: 12",
-        label_cough_type: "نوع السعال",
-        option_dry: "جاف",
-        option_productive: "ببلغم",
-        option_hemoptysis: "بدم",
+        label_cough_weeks: "مدة السعال (أسابيع)", placeholder_cough_weeks: "مثال: 12",
+        label_cough_type: "نوع السعال", option_dry: "جاف", option_productive: "ببلغم", option_hemoptysis: "بدم",
         timeline_symptoms_title: " 2) خطّ الحياة والأعراض",
-        label_free_text: "وصف الحالة (نص حر)",
-        placeholder_free_text: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...",
-        label_initial_dx: "التشخيصات المبدئية (نص)",
-        placeholder_initial_dx: "مثال: T2DM, HTN, COPD? Dermatitis",
-        label_labs_imaging: "تحاليل/الأشعة المذكورة (نص)",
-        placeholder_labs_imaging: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
-        label_orders: "الأدوية/الإجراءات المقرّرة (إن وُجدت)",
-        placeholder_orders: "مثال: Xigduo XR bid, Metformin 1000 tid ...",
-        file_upload_title: " 3) رفع ملفات (صور/PDF) — اختياري",
-        uploader_text: "اضغط هنا لرفع ملف واحد أو أكثر",
-        analyze_button: "تحليل الحالة",
-        analyzing_text: "جاري التحليل…",
-        export_button: "تصدير PDF",
-        show_json_summary: "إظهار JSON (للبحث/الإحصاءات)",
+        label_free_text: "وصف الحالة (نص حر)", placeholder_free_text: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...",
+        label_initial_dx: "التشخيصات المبدئية (نص)", placeholder_initial_dx: "مثال: T2DM, HTN, COPD? Dermatitis",
+        label_labs_imaging: "تحاليل/الأشعة المذكورة (نص)", placeholder_labs_imaging: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
+        label_orders: "الأدوية/الإجراءات المقرّرة (إن وُجدت)", placeholder_orders: "مثال: Xigduo XR bid, Metformin 1000 tid ...",
+        file_upload_title: " 3) رفع ملفات (صور/PDF) — اختياري", uploader_text: "اضغط هنا لرفع ملف واحد أو أكثر",
+        analyze_button: "تحليل الحالة", analyzing_text: "جاري التحليل…",
+        export_button: "تصدير PDF", show_json_summary: "إظهار JSON (للبحث/الإحصاءات)",
       },
       en: {
-        app_title: "Medical Case & Insurance Claim Assessment",
-        home_page: "Home Page",
-        lang_english: "العربية",
+        app_title: "Medical Case & Insurance Claim Assessment", home_page: "Home Page", lang_english: "العربية",
         main_title: "Medical Case & Insurance Claim Assessment",
         subtitle: "Easy clinical entry interface — Deep analysis aligned with insurance needs",
         evidence_banner: "Insurance judgment is based on concise evidence from <b>WHO</b>, <b>CDC</b>, and <b>Medscape</b>—justification appears within the table.",
         patient_info_title: " 1) Patient Information",
-        label_name: "Name (Optional)",
-        placeholder_name: "e.g., John Doe",
-        label_gender: "Gender",
-        option_select: "Select",
-        option_male: "Male",
-        option_female: "Female",
-        label_age: "Age (Years)",
-        placeholder_age: "e.g., 63",
-        label_pregnant: "Is the patient pregnant?",
-        option_no: "No",
-        option_yes: "Yes",
-        option_na: "N/A",
-        label_pregnancy_months: "Month of Pregnancy (if any)",
-        placeholder_pregnancy_months: "e.g., 5",
-        label_smoking: "Is the patient a smoker?",
-        option_smoker: "Smoker",
-        option_non_smoker: "Non-smoker",
-        option_ex_smoker: "Ex-smoker",
-        label_pack_years: "Pack-Years (if any)",
-        placeholder_pack_years: "e.g., 15",
-        label_weight: "Weight (kg)",
-        placeholder_weight: "e.g., 78",
-        label_height: "Height (cm)",
-        placeholder_height: "e.g., 172",
-        label_temp: "Temperature (°C)",
-        placeholder_temp: "e.g., 37.4",
+        label_name: "Name (Optional)", placeholder_name: "e.g., John Doe",
+        label_gender: "Gender", option_select: "Select", option_male: "Male", option_female: "Female",
+        label_age: "Age (Years)", placeholder_age: "e.g., 63",
+        label_pregnant: "Is the patient pregnant?", option_no: "No", option_yes: "Yes", option_na: "N/A",
+        label_pregnancy_months: "Month of Pregnancy (if any)", placeholder_pregnancy_months: "e.g., 5",
+        label_smoking: "Is the patient a smoker?", option_smoker: "Smoker", option_non_smoker: "Non-smoker", option_ex_smoker: "Ex-smoker",
+        label_pack_years: "Pack-Years (if any)", placeholder_pack_years: "e.g., 15",
+        label_weight: "Weight (kg)", placeholder_weight: "e.g., 78",
+        label_height: "Height (cm)", placeholder_height: "e.g., 172",
+        label_temp: "Temperature (°C)", placeholder_temp: "e.g., 37.4",
         label_has_cough: "Is there a cough?",
-        label_cough_weeks: "Cough Duration (weeks)",
-        placeholder_cough_weeks: "e.g., 12",
-        label_cough_type: "Cough Type",
-        option_dry: "Dry",
-        option_productive: "Productive",
-        option_hemoptysis: "Hemoptysis",
+        label_cough_weeks: "Cough Duration (weeks)", placeholder_cough_weeks: "e.g., 12",
+        label_cough_type: "Cough Type", option_dry: "Dry", option_productive: "Productive", option_hemoptysis: "Hemoptysis",
         timeline_symptoms_title: " 2) Timeline & Symptoms",
-        label_free_text: "Case Description (Free Text)",
-        placeholder_free_text: "e.g., Chronic cough for 12 weeks with slight weight loss...",
-        label_initial_dx: "Initial Diagnoses (Text)",
-        placeholder_initial_dx: "e.g., T2DM, HTN, COPD? Dermatitis",
-        label_labs_imaging: "Mentioned Labs/Imaging (Text)",
-        placeholder_labs_imaging: "e.g., HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
-        label_orders: "Prescribed Meds/Procedures (if any)",
-        placeholder_orders: "e.g., Xigduo XR bid, Metformin 1000 tid ...",
-        file_upload_title: " 3) Upload Files (Images/PDF) — Optional",
-        uploader_text: "Click here to upload one or more files",
-        analyze_button: "Analyze Case",
-        analyzing_text: "Analyzing…",
-        export_button: "Export PDF",
-        show_json_summary: "Show JSON (for search/analytics)",
+        label_free_text: "Case Description (Free Text)", placeholder_free_text: "e.g., Chronic cough for 12 weeks with slight weight loss...",
+        label_initial_dx: "Initial Diagnoses (Text)", placeholder_initial_dx: "e.g., T2DM, HTN, COPD? Dermatitis",
+        label_labs_imaging: "Mentioned Labs/Imaging (Text)", placeholder_labs_imaging: "e.g., HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
+        label_orders: "Prescribed Meds/Procedures (if any)", placeholder_orders: "e.g., Xigduo XR bid, Metformin 1000 tid ...",
+        file_upload_title: " 3) Upload Files (Images/PDF) — Optional", uploader_text: "Click here to upload one or more files",
+        analyze_button: "Analyze Case", analyzing_text: "Analyzing…",
+        export_button: "Export PDF", show_json_summary: "Show JSON (for search/analytics)",
       }
     };
-
     let currentLang = 'ar';
     function setLanguage(lang) {
       currentLang = lang;
@@ -360,9 +304,7 @@
     const dropZone  = document.getElementById('dropZone');
     const cardsBox  = document.getElementById('cards');
     const fileList  = document.getElementById('fileList');
-    ['dragenter','dragover','dragleave','drop'].forEach(ev => {
-      window.addEventListener(ev, e => e.preventDefault());
-    });
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => { window.addEventListener(ev, e => e.preventDefault()); });
     const filesState = []; // { name, mimeType, data (dataURL) }
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
@@ -464,7 +406,7 @@
         const filesPayload = filesState.map(f=>({
           name: f.name,
           mimeType: f.mimeType,
-          data: f.data.split('base64,').pop()
+          data: f.data.split('base64,').pop() // فقط البايس64 دون البادئة
         }));
 
         const payload = {
@@ -481,8 +423,9 @@
         if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
 
         document.getElementById('reportWrap').style.display = 'block';
-        // نغلف HTML المُعاد داخلياً في حاوية ثابتة العرض لمنع مشاكل الالتقاط
-        const html = `<div id="reportContent" class="avoid-break" style="width:794px; margin:0 auto">${data.html || ''}</div>`;
+
+        // ملاحظة مهمة: لا نضع .avoid-break على الحاوية الكبيرة
+        const html = `<div id="reportContent" style="width:794px; margin:0 auto">${data.html || ''}</div>`;
         document.getElementById('reportHTML').innerHTML = html;
         document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
       }catch(err){
@@ -493,25 +436,25 @@
     }
     document.getElementById('analyzeBtn').addEventListener('click', analyze);
 
-    // ===== تصدير PDF (عميل) محسّن =====
+    // ===== تصدير PDF (عميل) مُحسّن بدون avoid-all =====
     document.getElementById('exportPdfBtn').addEventListener('click', async () => {
       const reportElement = document.getElementById('reportContent');
       if(!reportElement){ alert('التقرير غير جاهز للتصدير.'); return; }
-
-      // إجبار عرض كامل ومنع القص مؤقتاً
       const restore = forceFullCapture(reportElement);
       try {
         const opt = {
           filename: 'Medical_Audit_Report.pdf',
           margin: 10,
           pagebreak: {
-            mode: ['avoid-all','css','legacy'],
-            avoid: ['.avoid-break','tr','td','th','img','.card']
+            mode: ['css','legacy'],      // بدون avoid-all لتجنّب القص في الطويلة
+            avoid: ['tr','td','th','.card','img']
           },
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: {
-            scale: 2,
+            scale: 3,
             useCORS: true,
+            scrollX: 0,
+            scrollY: 0,
             windowWidth: reportElement.scrollWidth,
             windowHeight: reportElement.scrollHeight
           },
@@ -525,7 +468,7 @@
       }
     });
 
-    // ===== تصدير PDF (خادم) عبر Puppeteer (اختياري) =====
+    // ===== تصدير PDF (خادم) عبر Puppeteer — أفضل وضوح للعربية =====
     document.getElementById('exportServerBtn').addEventListener('click', async () => {
       try{
         const html = document.getElementById('reportContent')?.outerHTML || '';
@@ -568,4 +511,3 @@
   </script>
 </body>
 </html>
-
