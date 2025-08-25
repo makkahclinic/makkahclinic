@@ -2,15 +2,19 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title id="app-title">تقييم الحالة الطبية وطلبات التأمين</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <!-- خطوط UI للصفحة (عرض فقط) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-  
-  <!-- ✅ المكتبات المحسنة للتصدير -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <!-- pdfmake (لإخراج PDF عربي متجهي على المتصفح) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.9/pdfmake.min.js" defer></script>
+  <!-- لا نحمّل vfs_fonts الافتراضي (Roboto) لأننا سنحدد خطوط عربية عبر URL حسب توثيق pdfmake -->
+  <!-- html2pdf (خيار تراثي فقط عند الحاجة) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 
   <style>
     :root{
@@ -18,8 +22,11 @@
       --ok:#2e7d32; --warn:#f9a825; --bad:#e53935; --muted:#6b7280; --card:#ffffff; --ring:#d1e8ff;
     }
     *{box-sizing:border-box}
+    html,body{height:100%}
     body{font-family:"Tajawal",system-ui; background:linear-gradient(180deg,var(--sea-50),#fff); color:#0f172a; margin:0}
     html[dir="ltr"] body{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif}
+
+    /* تخطيط عام */
     .container{max-width:1050px; margin:32px auto; padding:24px; background:var(--card); border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 10px 35px rgba(3,102,214,.07)}
     .title{display:flex; align-items:center; justify-content:center; gap:10px; color:var(--sea-800)}
     h1{font-size:28px; margin:8px 0 2px}
@@ -56,90 +63,38 @@
     .fileCard{position:relative; background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 8px 22px rgba(2,6,23,.05)}
     .thumb{width:100%; height:150px; object-fit:cover; display:block; background:#f1f5f9}
     .meta{padding:10px 12px; font-size:13px; color:#334155}
-    .remove{position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700}
+    .remove{position:absolute; top:10px; inset-inline-end:10px; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700}
 
     .btn{appearance:none; border:none; cursor:pointer; padding:14px 18px; border-radius:14px; background:var(--sea-600); color:#fff; font-weight:700}
     .btn:disabled{opacity:.6; cursor:not-allowed}
     .btn-secondary{background:#0b4479}
     .btn-outline{background:#fff; color:var(--sea-700); border:1px solid #cbd5e1}
+    .muted{color:var(--muted)}
 
     #reportWrap{margin-top:24px}
     .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
-    .muted{color:var(--muted)}
 
-    /* ====== 🔧 CSS محسن للـ PDF ====== */
-    .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
-    .page-break { break-before: page; page-break-before: always; }
-
-    /* تحسينات خاصة للتصدير */
-    #reportContent {
-      font-family: 'Tajawal', Arial, sans-serif !important;
-      background: white !important;
-      padding: 20px !important;
-      color: #000 !important;
-      line-height: 1.5 !important;
-    }
-
-    #reportContent .report-section {
-      margin-bottom: 20px !important;
-      break-inside: avoid !important;
-      page-break-inside: avoid !important;
-    }
-
-    #reportContent .audit-table {
-      width: 100% !important;
-      border-collapse: collapse !important;
-      font-size: 12px !important;
-      margin-bottom: 15px !important;
-    }
-
-    #reportContent .audit-table th,
-    #reportContent .audit-table td {
-      border: 1px solid #ddd !important;
-      padding: 8px !important;
-      text-align: right !important;
-      vertical-align: top !important;
-      background: white !important;
-    }
-
-    #reportContent .audit-table th {
-      background-color: #f5f5f5 !important;
-      font-weight: 700 !important;
-    }
-
-    #reportContent img {
-      max-width: 300px !important;
-      max-height: 200px !important;
-      object-fit: contain !important;
-      display: block !important;
-      margin: 10px auto !important;
-      border: 1px solid #ddd !important;
-    }
-
-    #reportContent .source-docs-grid {
-      display: grid !important;
-      grid-template-columns: repeat(2, 1fr) !important;
-      gap: 15px !important;
-      margin-bottom: 15px !important;
-    }
-
-    #reportContent .source-doc-card {
-      border: 1px solid #ddd !important;
-      padding: 10px !important;
-      background: white !important;
-      break-inside: avoid !important;
-    }
-
+    /* ===== طباعة/صفحات: نجعل Chromium/المتصفح يحترم حجم الصفحة من CSS ===== */
+    @page { size: A4; margin: 12mm; }
     @media print{
       .no-print{display:none !important}
-      body{background:#fff}
+      body{background:#fff; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
       .container{box-shadow:none; border:none}
-      .page-break{break-before:page}
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     }
+
+    /* منع الانكسارات غير المرغوبة داخل الصفوف والخلايا */
+    .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+
+    /* جدول التقرير داخل HTML */
+    .audit-table{width:100%; border-collapse:collapse; table-layout:fixed; font-size:14px}
+    .audit-table th, .audit-table td{border-bottom:1px solid #e5e7eb; padding:10px; vertical-align:top; text-align:right; word-wrap:break-word}
+    .audit-table th{background:#f8f9fa; color:#0b4479; font-weight:700}
+    .risk-ok td{background:#e6f4ea}
+    .risk-warning td{background:#fff0e1}
+    .risk-critical td{background:#fce8e6}
+    .decision-badge{display:inline-block; padding:4px 10px; border-radius:16px; font-weight:700; border:1px solid #e5e7eb}
   </style>
 </head>
-
 <body>
   <div class="container">
     <div class="topbar">
@@ -155,7 +110,7 @@
 
     <div class="evidence-banner">
       <svg viewBox="0 0 24 24"><path fill="#0b4479" d="M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V8h2v5Z"/></svg>
-      <div data-translate="evidence_banner">يستند الحكم التأميني إلى أدلة موجزة من <b>WHO</b> و<b>CDC</b> و<b>Medscape</b>—ويظهر التبرير داخل الجدول.</div>
+      <div data-translate="evidence_banner">يعتمد القرار التأميني على أدلة موجزة من أدلّة <b>ADA</b>، <b>AHA/ACC</b>، <b>KDIGO</b>، <b>GOLD</b> وغيرها، وتظهر المراجع داخل الجدول والتوصيات.</div>
     </div>
 
     <!-- (1) معلومات المريض -->
@@ -163,7 +118,7 @@
       <h2><span class="dot"></span><span data-translate="patient_info_title"> 1) معلومات المريض</span></h2>
       <div class="card avoid-break">
         <div class="grid">
-          <div class="col-4"><label data-translate="label_name">الاسم (اختياري)</label><input id="name" data-translate-placeholder="placeholder_name" placeholder="مثال: أحمد خالد" /></div>
+          <div class="col-4"><label data-translate="label_name">الاسم (اختياري)</label><input id="name" placeholder="مثال: أحمد خالد" /></div>
           <div class="col-4">
             <label data-translate="label_gender">الجنس</label>
             <select id="gender">
@@ -172,49 +127,49 @@
               <option value="أنثى" data-translate="option_female">أنثى</option>
             </select>
           </div>
-          <div class="col-4"><label data-translate="label_age">العمر (بالسنوات)</label><input id="age" type="number" min="0" data-translate-placeholder="placeholder_age" placeholder="مثال: 63" /></div>
+          <div class="col-4"><label data-translate="label_age">العمر (بالسنوات)</label><input id="age" type="number" min="0" placeholder="مثال: 63" /></div>
 
           <div class="col-4">
             <label data-translate="label_pregnant">هل المريضة حامل؟</label>
             <select id="pregnant">
-              <option value="no" data-translate="option_no">لا</option>
-              <option value="yes" data-translate="option_yes">نعم</option>
-              <option value="na" data-translate="option_na">غير منطبق</option>
+              <option value="no">لا</option>
+              <option value="yes">نعم</option>
+              <option value="na">غير منطبق</option>
             </select>
           </div>
-          <div class="col-4"><label data-translate="label_pregnancy_months">شهر الحمل (إن وُجد)</label><input id="pregnancyMonths" type="number" min="1" max="10" data-translate-placeholder="placeholder_pregnancy_months" placeholder="مثال: 5" /></div>
+          <div class="col-4"><label data-translate="label_pregnancy_months">شهر الحمل (إن وُجد)</label><input id="pregnancyMonths" type="number" min="1" max="10" placeholder="مثال: 5" /></div>
 
           <div class="col-4">
             <label data-translate="label_smoking">هل المريض مدخّن؟</label>
             <select id="smoking">
-              <option value="" data-translate="option_select">اختر</option>
-              <option value="مدخن" data-translate="option_smoker">مدخن</option>
-              <option value="غير مدخن" data-translate="option_non_smoker">غير مدخن</option>
-              <option value="سابق" data-translate="option_ex_smoker">سابق</option>
+              <option value="">اختر</option>
+              <option value="مدخن">مدخن</option>
+              <option value="غير مدخن">غير مدخن</option>
+              <option value="سابق">سابق</option>
             </select>
           </div>
 
-          <div class="col-4"><label data-translate="label_pack_years">Pack-Years (إن وُجد)</label><input id="packYears" type="number" min="0" step="0.5" data-translate-placeholder="placeholder_pack_years" placeholder="مثال: 15" /></div>
-          <div class="col-4"><label data-translate="label_weight">الوزن (كجم)</label><input id="weight" type="number" min="0" step="0.1" data-translate-placeholder="placeholder_weight" placeholder="مثال: 78" /></div>
-          <div class="col-4"><label data-translate="label_height">الطول (سم)</label><input id="height" type="number" min="0" step="0.5" data-translate-placeholder="placeholder_height" placeholder="مثال: 172" /></div>
+          <div class="col-4"><label>Pack-Years (إن وُجد)</label><input id="packYears" type="number" min="0" step="0.5" placeholder="مثال: 15" /></div>
+          <div class="col-4"><label>الوزن (كجم)</label><input id="weight" type="number" min="0" step="0.1" placeholder="مثال: 78" /></div>
+          <div class="col-4"><label>الطول (سم)</label><input id="height" type="number" min="0" step="0.5" placeholder="مثال: 172" /></div>
 
-          <div class="col-4"><label data-translate="label_temp">درجة الحرارة (°م)</label><input id="temp" type="number" step="0.1" data-translate-placeholder="placeholder_temp" placeholder="مثال: 37.4" /></div>
+          <div class="col-4"><label>درجة الحرارة (°م)</label><input id="temp" type="number" step="0.1" placeholder="مثال: 37.4" /></div>
           <div class="col-4">
-            <label data-translate="label_has_cough">هل يوجد سُعال؟</label>
+            <label>هل يوجد سُعال؟</label>
             <select id="hasCough">
-              <option value="" data-translate="option_select">اختر</option>
-              <option value="نعم" data-translate="option_yes">نعم</option>
-              <option value="لا" data-translate="option_no">لا</option>
+              <option value="">اختر</option>
+              <option value="نعم">نعم</option>
+              <option value="لا">لا</option>
             </select>
           </div>
-          <div class="col-4"><label data-translate="label_cough_weeks">مدة السعال (أسابيع)</label><input id="coughWeeks" type="number" min="0" data-translate-placeholder="placeholder_cough_weeks" placeholder="مثال: 12" /></div>
+          <div class="col-4"><label>مدة السعال (أسابيع)</label><input id="coughWeeks" type="number" min="0" placeholder="مثال: 12" /></div>
           <div class="col-4">
-            <label data-translate="label_cough_type">نوع السعال</label>
+            <label>نوع السعال</label>
             <select id="coughType">
-              <option value="" data-translate="option_select">اختر</option>
-              <option value="جاف" data-translate="option_dry">جاف</option>
-              <option value="ببلغم" data-translate="option_productive">ببلغم</option>
-              <option value="بدم" data-translate="option_hemoptysis">بدم</option>
+              <option value="">اختر</option>
+              <option value="جاف">جاف</option>
+              <option value="ببلغم">ببلغم</option>
+              <option value="بدم">بدم</option>
             </select>
           </div>
         </div>
@@ -223,186 +178,67 @@
 
     <!-- (2) خطّ الحياة والأعراض -->
     <div class="section">
-      <h2><span class="dot"></span><span data-translate="timeline_symptoms_title"> 2) خطّ الحياة والأعراض</span></h2>
+      <h2><span class="dot"></span><span> 2) خطّ الحياة والأعراض</span></h2>
       <div class="card avoid-break">
         <div class="grid">
-          <div class="col-12"><label data-translate="label_free_text">وصف الحالة (نص حر)</label><textarea id="freeText" data-translate-placeholder="placeholder_free_text" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط..."></textarea></div>
-          <div class="col-6"><label data-translate="label_initial_dx">التشخيصات المبدئية (نص)</label><textarea id="initialDx" data-translate-placeholder="placeholder_initial_dx" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea></div>
-          <div class="col-6"><label data-translate="label_labs_imaging">تحاليل/الأشعة المذكورة (نص)</label><textarea id="labsImaging" data-translate-placeholder="placeholder_labs_imaging" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ..."></textarea></div>
-          <div class="col-12"><label data-translate="label_orders">الأدوية/الإجراءات المقرّرة (إن وُجدت)</label><textarea id="orders" data-translate-placeholder="placeholder_orders" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid ..."></textarea></div>
+          <div class="col-12"><label>وصف الحالة (نص حر)</label><textarea id="freeText" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط..."></textarea></div>
+          <div class="col-6"><label>التشخيصات المبدئية (نص)</label><textarea id="initialDx" placeholder="مثال: T2DM, HTN, COPD?"></textarea></div>
+          <div class="col-6"><label>تحاليل/الأشعة المذكورة (نص)</label><textarea id="labsImaging" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ..."></textarea></div>
+          <div class="col-12"><label>الأدوية/الإجراءات المقرّرة (إن وُجدت)</label><textarea id="orders" placeholder="مثال: Xigduo XR bid, Metformin 1000 tid ..."></textarea></div>
         </div>
       </div>
     </div>
 
-    <!-- (3) رفع ملفات (صور/PDF) -->
+    <!-- (3) رفع ملفات -->
     <div class="section">
-      <h2><span class="dot"></span><span data-translate="file_upload_title"> 3) رفع ملفات (صور/PDF) — اختياري</span></h2>
-      <label class="uploader no-print" for="fileInput" id="dropZone" data-translate="uploader_text">
-        اضغط هنا لرفع ملف واحد أو أكثر
+      <h2><span class="dot"></span><span> 3) رفع ملفات (صور/PDF) — اختياري</span></h2>
+      <label class="uploader no-print" for="fileInput" id="dropZone">اضغط هنا لرفع ملف واحد أو أكثر
         <input id="fileInput" type="file" multiple accept="image/*,application/pdf" />
       </label>
       <div id="cards" class="cards" aria-live="polite"></div>
       <div id="fileList" class="muted" style="margin-top:8px"></div>
     </div>
 
+    <!-- أزرار العمل -->
     <div class="section no-print" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-      <button class="btn" id="analyzeBtn" data-translate="analyze_button">تحليل الحالة</button>
-      <span id="busy" class="muted" style="display:none" data-translate="analyzing_text">جاري التحليل…</span>
+      <button class="btn" id="analyzeBtn">تحليل الحالة</button>
+      <span id="busy" class="muted" style="display:none">جاري التحليل…</span>
     </div>
 
     <!-- التقرير -->
     <div id="reportWrap" class="section" style="display:none">
       <div class="report-toolbar no-print">
-        <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">📄 تصدير PDF محسن</button>
-        <button class="btn btn-outline" id="exportServerBtn">تصدير PDF (خادم)</button>
+        <button class="btn-secondary btn" id="exportServerBtn">تصدير PDF (خادم موصى به)</button>
+        <button class="btn btn-outline" id="exportPdfMakeBtn">تصدير PDF (pdfmake متوافق مع العربية)</button>
+        <button class="btn btn-outline" id="exportLegacyBtn" title="html2pdf (تراثي)">تصدير PDF (تراثي)</button>
       </div>
-      <!-- سنغلف مخرجات الخادم داخل reportContent -->
       <div id="reportHTML" class="avoid-break"></div>
       <details style="margin-top:10px" class="no-print">
-        <summary data-translate="show_json_summary">إظهار JSON (للبحث/الإحصاءات)</summary>
+        <summary>إظهار JSON (للبحث/الإحصاءات)</summary>
         <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
       </details>
     </div>
   </div>
 
   <script>
-    // ===== Internationalization (i18n) =====
+    // ===== i18n بسيط =====
     const translations = {
-      ar: {
-        app_title: "تقييم الحالة الطبية وطلبات التأمين",
-        home_page: "الصفحة الرئيسية",
-        lang_english: "English",
-        main_title: "تقييم الحالة الطبية وطلبات التأمين",
-        subtitle: "واجهة إدخال سريرية سهلة — تحليل عميق متناغم مع احتياجات التأمين",
-        evidence_banner: "يستند الحكم التأميني إلى أدلة موجزة من <b>WHO</b> و<b>CDC</b> و<b>Medscape</b>—ويظهر التبرير داخل الجدول.",
-        patient_info_title: " 1) معلومات المريض",
-        label_name: "الاسم (اختياري)",
-        placeholder_name: "مثال: أحمد خالد",
-        label_gender: "الجنس",
-        option_select: "اختر",
-        option_male: "ذكر",
-        option_female: "أنثى",
-        label_age: "العمر (بالسنوات)",
-        placeholder_age: "مثال: 63",
-        label_pregnant: "هل المريضة حامل؟",
-        option_no: "لا",
-        option_yes: "نعم",
-        option_na: "غير منطبق",
-        label_pregnancy_months: "شهر الحمل (إن وُجد)",
-        placeholder_pregnancy_months: "مثال: 5",
-        label_smoking: "هل المريض مدخّن؟",
-        option_smoker: "مدخن",
-        option_non_smoker: "غير مدخن",
-        option_ex_smoker: "سابق",
-        label_pack_years: "Pack-Years (إن وُجد)",
-        placeholder_pack_years: "مثال: 15",
-        label_weight: "الوزن (كجم)",
-        placeholder_weight: "مثال: 78",
-        label_height: "الطول (سم)",
-        placeholder_height: "مثال: 172",
-        label_temp: "درجة الحرارة (°م)",
-        placeholder_temp: "مثال: 37.4",
-        label_has_cough: "هل يوجد سُعال؟",
-        label_cough_weeks: "مدة السعال (أسابيع)",
-        placeholder_cough_weeks: "مثال: 12",
-        label_cough_type: "نوع السعال",
-        option_dry: "جاف",
-        option_productive: "ببلغم",
-        option_hemoptysis: "بدم",
-        timeline_symptoms_title: " 2) خطّ الحياة والأعراض",
-        label_free_text: "وصف الحالة (نص حر)",
-        placeholder_free_text: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...",
-        label_initial_dx: "التشخيصات المبدئية (نص)",
-        placeholder_initial_dx: "مثال: T2DM, HTN, COPD? Dermatitis",
-        label_labs_imaging: "تحاليل/الأشعة المذكورة (نص)",
-        placeholder_labs_imaging: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
-        label_orders: "الأدوية/الإجراءات المقرّرة (إن وُجدت)",
-        placeholder_orders: "مثال: Xigduo XR bid, Metformin 1000 tid ...",
-        file_upload_title: " 3) رفع ملفات (صور/PDF) — اختياري",
-        uploader_text: "اضغط هنا لرفع ملف واحد أو أكثر",
-        analyze_button: "تحليل الحالة",
-        analyzing_text: "جاري التحليل…",
-        export_button: "📄 تصدير PDF محسن",
-        show_json_summary: "إظهار JSON (للبحث/الإحصاءات)",
-      },
-      en: {
-        app_title: "Medical Case & Insurance Claim Assessment",
-        home_page: "Home Page",
-        lang_english: "العربية",
-        main_title: "Medical Case & Insurance Claim Assessment",
-        subtitle: "Easy clinical entry interface — Deep analysis aligned with insurance needs",
-        evidence_banner: "Insurance judgment is based on concise evidence from <b>WHO</b>, <b>CDC</b>, and <b>Medscape</b>—justification appears within the table.",
-        patient_info_title: " 1) Patient Information",
-        label_name: "Name (Optional)",
-        placeholder_name: "e.g., John Doe",
-        label_gender: "Gender",
-        option_select: "Select",
-        option_male: "Male",
-        option_female: "Female",
-        label_age: "Age (Years)",
-        placeholder_age: "e.g., 63",
-        label_pregnant: "Is the patient pregnant?",
-        option_no: "No",
-        option_yes: "Yes",
-        option_na: "N/A",
-        label_pregnancy_months: "Month of Pregnancy (if any)",
-        placeholder_pregnancy_months: "e.g., 5",
-        label_smoking: "Is the patient a smoker?",
-        option_smoker: "Smoker",
-        option_non_smoker: "Non-smoker",
-        option_ex_smoker: "Ex-smoker",
-        label_pack_years: "Pack-Years (if any)",
-        placeholder_pack_years: "e.g., 15",
-        label_weight: "Weight (kg)",
-        placeholder_weight: "e.g., 78",
-        label_height: "Height (cm)",
-        placeholder_height: "e.g., 172",
-        label_temp: "Temperature (°C)",
-        placeholder_temp: "e.g., 37.4",
-        label_has_cough: "Is there a cough?",
-        label_cough_weeks: "Cough Duration (weeks)",
-        placeholder_cough_weeks: "e.g., 12",
-        label_cough_type: "Cough Type",
-        option_dry: "Dry",
-        option_productive: "Productive",
-        option_hemoptysis: "Hemoptysis",
-        timeline_symptoms_title: " 2) Timeline & Symptoms",
-        label_free_text: "Case Description (Free Text)",
-        placeholder_free_text: "e.g., Chronic cough for 12 weeks with slight weight loss...",
-        label_initial_dx: "Initial Diagnoses (Text)",
-        placeholder_initial_dx: "e.g., T2DM, HTN, COPD? Dermatitis",
-        label_labs_imaging: "Mentioned Labs/Imaging (Text)",
-        placeholder_labs_imaging: "e.g., HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
-        label_orders: "Prescribed Meds/Procedures (if any)",
-        placeholder_orders: "e.g., Xigduo XR bid, Metformin 1000 tid ...",
-        file_upload_title: " 3) Upload Files (Images/PDF) — Optional",
-        uploader_text: "Click here to upload one or more files",
-        analyze_button: "Analyze Case",
-        analyzing_text: "Analyzing…",
-        export_button: "📄 Export Improved PDF",
-        show_json_summary: "Show JSON (for search/analytics)",
-      }
+      ar: { lang_english: "English", main_title: "تقييم الحالة الطبية وطلبات التأمين", subtitle: "واجهة إدخال سريرية سهلة — تحليل عميق متناغم مع احتياجات التأمين", home_page: "الصفحة الرئيسية" },
+      en: { lang_english: "العربية", main_title: "Medical Case & Insurance Claim Assessment", subtitle: "Easy clinical entry interface — Deep analysis aligned with insurance needs", home_page: "Home Page" }
     };
-
     let currentLang = 'ar';
     function setLanguage(lang) {
       currentLang = lang;
       document.documentElement.lang = lang;
-      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-      document.querySelectorAll('[data-translate]').forEach(el => {
-        const key = el.getAttribute('data-translate');
-        if (translations[lang][key]) el.innerHTML = translations[lang][key];
-      });
-      document.querySelectorAll('[data-translate-placeholder]').forEach(el => {
-        const key = el.getAttribute('data-translate-placeholder');
-        if (translations[lang][key]) el.placeholder = translations[lang][key];
-      });
-      document.title = translations[lang].app_title;
+      document.documentElement.dir = (lang === 'ar') ? 'rtl' : 'ltr';
+      document.getElementById('app-title').textContent = translations[lang].main_title;
+      document.querySelector('[data-translate="lang_english"]').textContent = translations[lang].lang_english;
+      document.querySelector('[data-translate="main_title"]').textContent = translations[lang].main_title;
+      document.querySelector('[data-translate="subtitle"]').textContent = translations[lang].subtitle;
+      document.querySelector('[data-translate="home_page"]').textContent = translations[lang].home_page;
     }
-    document.getElementById('lang-switcher').addEventListener('click', () => {
-      const newLang = currentLang === 'ar' ? 'en' : 'ar';
-      setLanguage(newLang);
-    });
+    document.getElementById('lang-switcher').addEventListener('click', () => setLanguage(currentLang === 'ar' ? 'en' : 'ar'));
+    setLanguage('ar');
 
     // ===== مزامنة الحمل مع الجنس =====
     const genderEl = document.getElementById('gender');
@@ -410,9 +246,8 @@
     const pregMonths = document.getElementById('pregnancyMonths');
     function syncPregnancyControls(){
       const g = genderEl.value;
-      if(g !== 'أنثى'){
-        pregSel.value = 'na'; pregSel.disabled = true; pregMonths.value = ''; pregMonths.disabled = true;
-      }else{ pregSel.disabled = false; pregMonths.disabled = pregSel.value !== 'yes'; }
+      if(g !== 'أنثى'){ pregSel.value='na'; pregSel.disabled=true; pregMonths.value=''; pregMonths.disabled=true; }
+      else { pregSel.disabled=false; pregMonths.disabled = pregSel.value !== 'yes'; }
     }
     genderEl.addEventListener('change', syncPregnancyControls);
     pregSel.addEventListener('change', ()=>{ pregMonths.disabled = pregSel.value !== 'yes'; });
@@ -422,4 +257,257 @@
     const fileInput = document.getElementById('fileInput');
     const dropZone  = document.getElementById('dropZone');
     const cardsBox  = document.getElementById('cards');
-    const file
+    const fileList  = document.getElementById('fileList');
+    const filesState = []; // { name, mimeType, data(base64url) }
+
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => {
+      window.addEventListener(ev, e => e.preventDefault());
+    });
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
+    dropZone.addEventListener('dragover',  e=>{ e.preventDefault(); });
+    dropZone.addEventListener('dragleave', e=>{ e.preventDefault(); dropZone.classList.remove('drag'); });
+    dropZone.addEventListener('drop', async e=>{
+      e.preventDefault(); dropZone.classList.remove('drag');
+      await handleFiles(Array.from(e.dataTransfer.files));
+    });
+    fileInput.addEventListener('change', async ()=>{
+      await handleFiles(Array.from(fileInput.files)); fileInput.value='';
+    });
+
+    async function handleFiles(files){
+      for(const f of files){
+        const base64Url = await fileToDataURL(f);
+        filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64Url.split('base64,').pop() });
+      }
+      renderCards();
+      fileList.textContent = filesState.map((f)=>`• ${f.name}`).join('\n');
+    }
+    function renderCards(){
+      cardsBox.innerHTML = '';
+      filesState.forEach((f, i)=>{
+        const isImg = (f.mimeType||'').startsWith('image/');
+        const thumb = isImg ? `data:${f.mimeType};base64,${f.data}` :
+          'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`);
+        const el = document.createElement('div');
+        el.className = 'fileCard avoid-break';
+        el.innerHTML = `
+          <button class="remove" data-i="${i}" title="إزالة">×</button>
+          <img class="thumb" src="${thumb}" alt="${f.name}">
+          <div class="meta">
+            <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="${f.name}">${f.name}</div>
+            <div class="muted">${f.mimeType||'—'}</div>
+          </div>`;
+        cardsBox.appendChild(el);
+      });
+      cardsBox.querySelectorAll('.remove').forEach(btn=>btn.addEventListener('click', (e)=>{
+        const i = +e.currentTarget.dataset.i; filesState.splice(i,1); renderCards(); fileList.textContent = filesState.map(f=>`• ${f.name}`).join('\n');
+      }));
+    }
+    function fileToDataURL(file){
+      return new Promise((resolve,reject)=>{
+        const r = new FileReader();
+        r.onerror = () => { alert('تعذّر قراءة الملف: ' + (file?.name || '')); reject(new Error('failed to read file')); };
+        r.onload = () => resolve(r.result);
+        r.readAsDataURL(file);
+      });
+    }
+
+    // ===== بناء معلومات المريض =====
+    function buildPatientInfo(){
+      const ageYears = Number(document.getElementById('age').value || NaN);
+      const gender = document.getElementById('gender').value || null;
+      const smokingStatus = document.getElementById('smoking').value || null;
+      const packYears = document.getElementById('packYears').value ? Number(document.getElementById('packYears').value) : null;
+      const temp = document.getElementById('temp').value ? Number(document.getElementById('temp').value) : null;
+      const weight = document.getElementById('weight').value ? Number(document.getElementById('weight').value) : null;
+      const height = document.getElementById('height').value ? Number(document.getElementById('height').value) : null;
+      const hasCough = document.getElementById('hasCough').value || null;
+      const coughWeeks = document.getElementById('coughWeeks').value ? Number(document.getElementById('coughWeeks').value) : null;
+      const coughType = document.getElementById('coughType').value || null;
+
+      const pVal = document.getElementById('pregnant').value;
+      const pregnant = (gender === 'أنثى') ? {
+        isPregnant: pVal === 'yes',
+        gestationalWeeks: (pVal === 'yes' && document.getElementById('pregnancyMonths').value)
+          ? Number(document.getElementById('pregnancyMonths').value) * 4
+          : null
+      } : null;
+
+      return {
+        name: document.getElementById('name').value || null,
+        ageYears: isNaN(ageYears) ? null : ageYears,
+        gender, pregnant,
+        smoking: smokingStatus ? { status: smokingStatus, packYears } : null,
+        temperatureC: temp, weightKg: weight, heightCm: height,
+        cough: { has: hasCough, weeks: coughWeeks, type: coughType }
+      };
+    }
+
+    // ===== التحليل عبر الخادم =====
+    async function analyze(){
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const busy = document.getElementById('busy');
+      analyzeBtn.disabled = true; busy.style.display = 'inline';
+      try{
+        const textParts = [];
+        const ft = document.getElementById('freeText').value.trim(); if(ft) textParts.push(`وصف الحالة: ${ft}`);
+        const dx = document.getElementById('initialDx').value.trim(); if(dx) textParts.push(`التشخيصات المبدئية: ${dx}`);
+        const labs = document.getElementById('labsImaging').value.trim(); if(labs) textParts.push(`تحاليل/أشعة: ${labs}`);
+        const orders = document.getElementById('orders').value.trim(); if(orders) textParts.push(`الأدوية/الإجراءات: ${orders}`);
+        const mergedText = textParts.join('\n');
+
+        const filesPayload = filesState.map(f=>({ name: f.name, mimeType: f.mimeType, data: f.data }));
+
+        const payload = { text: mergedText, patientInfo: buildPatientInfo(), files: filesPayload, lang: currentLang };
+        const resp = await fetch('/api/gpt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await resp.json().catch(()=> ({}));
+        if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
+
+        document.getElementById('reportWrap').style.display = 'block';
+        const html = `<div id="reportContent" class="avoid-break">${data.html || ''}</div>`;
+        document.getElementById('reportHTML').innerHTML = html;
+        document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
+        window.__STRUCTURED__ = data.structured || {};
+        window.__FILES__ = filesPayload || [];
+      }catch(err){
+        alert('خطأ: ' + err.message);
+      }finally{
+        analyzeBtn.disabled = false; busy.style.display = 'none';
+      }
+    }
+    document.getElementById('analyzeBtn').addEventListener('click', analyze);
+
+    // ===== تصدير PDF (موصى به) عبر الخادم Puppeteer =====
+    document.getElementById('exportServerBtn').addEventListener('click', async () => {
+      try{
+        const html = document.getElementById('reportContent')?.outerHTML || '';
+        if(!html){ alert('التقرير غير جاهز للتصدير.'); return; }
+        const resp = await fetch('/api/pdf', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ html, lang: currentLang })
+        });
+        if(!resp.ok){ throw new Error('HTTP '+resp.status); }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'Medical_Audit_Report.pdf'; a.click();
+        URL.revokeObjectURL(url);
+      }catch(e){
+        alert('خيار التصدير الخادمي غير مُفعّل أو حدث خطأ: ' + e.message);
+      }
+    });
+
+    // ===== تصدير PDF (pdfmake متجهي) =====
+    document.getElementById('exportPdfMakeBtn').addEventListener('click', async () => {
+      const s = window.__STRUCTURED__ || null;
+      if(!s){ alert('التقرير غير جاهز للتصدير.'); return; }
+      try{
+        await ensurePdfMakeFonts(); // تحميل خطوط عربية عبر URL حسب توثيق pdfmake
+        const dd = buildDocDefinitionFromStructured(s, window.__FILES__ || [], currentLang);
+        // pdfmake يسمح أيضاً بتمرير fonts محلياً إلى createPdf إن رغبت.
+        pdfMake.createPdf(dd).download('Medical_Audit_Report.pdf');
+      }catch(e){ alert('خطأ في pdfmake: ' + e.message); }
+    });
+
+    // ===== تصدير PDF (تراثي) — html2pdf كصورة (غير مفضل) =====
+    document.getElementById('exportLegacyBtn').addEventListener('click', async () => {
+      const reportElement = document.getElementById('reportContent');
+      if(!reportElement){ alert('التقرير غير جاهز للتصدير.'); return; }
+      const opt = {
+        filename: 'Medical_Audit_Report_Legacy.pdf',
+        margin: 10,
+        pagebreak: { mode: ['avoid-all','css','legacy'], avoid: ['.avoid-break','tr','td','th','img','.card'] },
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: document.documentElement.scrollWidth },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      await html2pdf().set(opt).from(reportElement).save();
+    });
+
+    // ===== خطوط pdfmake عبر URL (حسب التوثيق الرسمي) =====
+    async function ensurePdfMakeFonts(){
+      if (window.__PDFMAKE_FONTS__) return;
+      // استخدم خطوط عربية مفتوحة المصدر (Amiri + Tajawal). يمكن استبدال الروابط باستضافة داخلية.
+      pdfMake.fonts = {
+        Amiri: {
+          normal: 'https://cdn.jsdelivr.net/npm/elm-common-standards@2.3.9/assets/layout/Amiri-Regular.ttf',
+          bold:   'https://cdn.jsdelivr.net/gh/aliftype/amiri@0.113/Amiri-Bold.ttf'
+        },
+        Tajawal: {
+          normal: 'https://cdn.jsdelivr.net/gh/googlefonts/tajawal/fonts/ttf/Tajawal-Regular.ttf',
+          bold:   'https://cdn.jsdelivr.net/gh/googlefonts/tajawal/fonts/ttf/Tajawal-Bold.ttf'
+        }
+      };
+      window.__PDFMAKE_FONTS__ = true;
+    }
+
+    // ===== تحويل Structured JSON إلى docDefinition لـ pdfmake =====
+    function buildDocDefinitionFromStructured(s, files, lang='ar'){
+      const isAr = lang === 'ar';
+      // مصادر الصور (في حال رفع صور) — pdfmake يقبل dataURL
+      const images = {};
+      (files||[]).filter(f => (f.mimeType||'').startsWith('image/')).forEach((f,i)=>{
+        images['img'+i] = `data:${f.mimeType};base64,${f.data}`;
+      });
+
+      const headerRow = isAr
+        ? ['الإجراء','الجرعة المكتوبة','الحالة','قرار التأمين','التبرير']
+        : ['Item','Written Dose','Status','Insurance Decision','Justification'];
+
+      const rows = (s.table||[]).map(r => ([
+        {text: r.name||'-', bold:true, alignment:isAr?'right':'left'},
+        {text: r.dosage_written||'-', font:'Tajawal'},
+        {text: r.status||'-'},
+        {text: r.insuranceDecision?.label||'-'},
+        {text: r.insuranceDecision?.justification||'-'}
+      ]));
+
+      const recs = (s.recommendations||[]).map(rec => {
+        const tags = (rec.relatedItems||[]).join(isAr?', ':' ,');
+        const cits = (rec.citations||[]).map(c=>`[${c.id}]`).join(isAr?'، ':', ');
+        return { ul: [
+          { text: (isAr?`الأولوية: `:`Priority: `) + (rec.priority||'-'), bold:true },
+          { text: rec.description || '-' },
+          { text: (isAr?`مرتبط بـ: `:`Related: `)+ (tags||'-') },
+          cits ? { text: (isAr?`مراجع: `:`Refs: `)+cits, color:'#0b4479'} : {}
+        ].filter(Boolean), margin:[0,4,0,6] };
+      });
+
+      // قائمة مراجع مُجمَّعة من الحقل s.citations
+      const bib = (s.citations||[]).map(ci => {
+        return { text: `[${ci.id}] ${ci.title} — ${ci.url}`, link: ci.url, color:'#0b4479', margin:[0,0,0,3] };
+      });
+
+      return {
+        pageSize: 'A4',
+        pageMargins: [18,18,18,22],
+        defaultStyle: { font: 'Amiri', alignment: isAr?'right':'left' },
+        images,
+        content: [
+          { text: isAr ? 'تقرير تدقيق طبي قائم على الدليل' : 'Evidence-Based Medical Audit Report', font:'Tajawal', style:'title' },
+          { text: s.patientSummary?.text || (isAr?'ملخص الحالة غير متوفر.':'No case summary.'), margin:[0,4,0,10] },
+          { text: s.overallAssessment?.text || (isAr?'التقييم العام غير متوفر.':'No overall assessment.'), color:'#0b4479', margin:[0,0,0,14] },
+
+          { text: isAr?'التحليل التفصيلي للإجراءات':'Detailed Analysis of Procedures', style:'h2', margin:[0,4,0,6] },
+          {
+            table:{ headerRows:1, widths:['*','auto','auto','auto','*'],
+              body: [ headerRow, ...rows ]
+            },
+            layout: 'lightHorizontalLines', font:'Tajawal'
+          },
+
+          { text: isAr?'التوصيات والإجراءات المقترحة':'Recommendations & Proposed Actions', style:'h2', margin:[0,12,0,6] },
+          ...recs,
+
+          (s.citations||[]).length ? { text: isAr?'المراجع':'References', style:'h2', margin:[0,12,0,6] } : null,
+          ...(bib||[])
+        ].filter(Boolean),
+        styles: {
+          title:{ fontSize:20, bold:true },
+          h2:{ fontSize:16, bold:true, color:'#105ca5' }
+        }
+      };
+    }
+  </script>
+</body>
+</html>
