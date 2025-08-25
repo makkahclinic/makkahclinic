@@ -57,8 +57,6 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
 async function aggregateClinicalDataWithGemini({ text, files }) {
     const userParts = [];
     if (text) userParts.push({ text });
-    // Note: The geminiUploadBase64 function is not used in the front-end code, 
-    // files are sent as raw base64 data to the API. So we need to handle that here.
     for (const file of files || []) {
         const mime = file?.mimeType || "application/octet-stream";
         const base64Data = file?.data;
@@ -178,7 +176,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         justificationHeader: isArabic ? "التبرير" : "Justification", relatedTo: isArabic ? "مرتبط بـ" : "Related to",
         notAvailable: isArabic ? "غير متوفر." : "Not available."
     };
-
     const getRiskClass = (category) => {
         const normalizedCategory = (category || '').toLowerCase();
         if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts') || normalizedCategory.includes('خطأ في الجرعة') || normalizedCategory.includes('dosing error') || normalizedCategory.includes('تعارض دوائي') || normalizedCategory.includes('duplicate order') || normalizedCategory.includes('مكرر')) return 'risk-critical';
@@ -193,7 +190,7 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         const filePreview = isImg ? `<img src="${src}" alt="${f.name}" style="max-width:100%; height:auto; display:block; border-radius:8px;"/>` : `<div style="padding:20px; border:1px dashed #e5e7eb; border-radius:8px; background:#f9fbfc; color:#6b7280; text-align:center;">${f.name}</div>`;
         return `<div class="source-doc-card" style="margin-bottom:12px;"><h3>${f.name}</h3>${filePreview}</div>`;
     }).join('');
-
+    
     const tableRows = (s.table || []).map(r => `
         <tr class="${getRiskClass(r.analysisCategory)}">
             <td class="item-cell">
@@ -218,7 +215,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
                 </div>
             </div>`;
     }).join("");
-
     return `
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
@@ -234,11 +230,9 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         .dosage-cell { font-family: monospace, sans-serif; color: #3d3d3d; font-size: 14px; white-space: nowrap; }
         .decision-badge { font-weight: 700; padding: 5px 10px; border-radius: 16px; font-size: 13px; display: inline-block; border: 1px solid transparent; }
         .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? 'right' : 'left'}: 4px solid; page-break-inside: avoid; }
-        .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
+        .rec-priority { flex-shrink: 0; font-weight: bold; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
         .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
         .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
-        .rec-item.urgent-border { border-color: #d93025; }
-        .rec-item.best-practice-border { border-color: #1e8e3e; }
         .rec-content { display: flex; flex-direction: column; }
         .rec-desc { color: #202124; font-size: 15px; }
         .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
