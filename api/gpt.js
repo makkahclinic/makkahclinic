@@ -22,16 +22,23 @@ import puppeteer from 'puppeteer';
 // --- دوال مساعدة ---
 const ok = (res, json) => res.status(200).json({ ok: true, ...json });
 const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
-const parseJsonSafe = async (response) => (response.headers.get("content-type") || "").includes("application/json") ? response.json() : { raw: await response.text() };
+// تم تحسين هذه الدالة لتتعامل مع الاستجابات غير JSON بشكل أكثر مرونة
+const parseJsonSafe = async (response) => {
+    try {
+        const text = await response.text();
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("Failed to parse JSON response:", e);
+        return { error: 'Failed to parse JSON response', raw: text };
+    }
+};
 
-// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini (تم التعديل) ---
+// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
     const parts = [];
     if (text) {
         parts.push({ text });
     }
-    // **تمت إزالة خطوة رفع الملفات إلى خدمة Gemini**
-    // **يتم الآن إرسال الملفات مباشرة كجزء من محتوى الطلب، وهي طريقة أكثر موثوقية**
     for (const file of files || []) {
         if (file?.data && file?.mimeType) {
             parts.push({
@@ -65,7 +72,8 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     const data = await parseJsonSafe(response);
     if (!response.ok) {
         console.error("Gemini API Error Response:", data);
-        throw new Error(`Gemini generateContent failed. Details: ${JSON.stringify(data.error?.message || data)}`);
+        const errorDetail = data.error?.message || data.raw || JSON.stringify(data);
+        throw new Error(`Gemini generateContent failed. Details: ${errorDetail}`);
     }
     return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
