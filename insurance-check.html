@@ -4,14 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title id="app-title">تقييم الحالة الطبية وطلبات التأمين</title>
-
-  <!-- خطوط عربية مناسبة للعرض -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <!-- html2pdf (المسار العميلي) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  
+  <!-- ✅ المكتبات المحسنة للتصدير -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <style>
     :root{
@@ -27,7 +26,7 @@
     .subtitle{color:var(--muted); font-size:14px; text-align:center; margin-bottom:14px}
     .topbar{display:flex; gap:10px; align-items:center; justify-content:flex-start; margin-bottom:12px}
     .chip{border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px; font-size:14px; background:#fff; cursor:pointer}
-    .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid #sea-600}
+    .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid var(--sea-600)}
     .home svg{width:18px; height:18px; fill:#fff}
 
     .evidence-banner{background:#eef6ff; border:1px solid #bfdbfe; color:#0b4479; padding:10px 12px; border-radius:12px; margin-bottom:12px; font-size:13px; display:flex; align-items:center; gap:8px}
@@ -68,15 +67,75 @@
     .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
     .muted{color:var(--muted)}
 
-    /* ====== تحسين الطباعة والـPDF ====== */
+    /* ====== 🔧 CSS محسن للـ PDF ====== */
     .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
     .page-break { break-before: page; page-break-before: always; }
+
+    /* تحسينات خاصة للتصدير */
+    #reportContent {
+      font-family: 'Tajawal', Arial, sans-serif !important;
+      background: white !important;
+      padding: 20px !important;
+      color: #000 !important;
+      line-height: 1.5 !important;
+    }
+
+    #reportContent .report-section {
+      margin-bottom: 20px !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
+    #reportContent .audit-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 12px !important;
+      margin-bottom: 15px !important;
+    }
+
+    #reportContent .audit-table th,
+    #reportContent .audit-table td {
+      border: 1px solid #ddd !important;
+      padding: 8px !important;
+      text-align: right !important;
+      vertical-align: top !important;
+      background: white !important;
+    }
+
+    #reportContent .audit-table th {
+      background-color: #f5f5f5 !important;
+      font-weight: 700 !important;
+    }
+
+    #reportContent img {
+      max-width: 300px !important;
+      max-height: 200px !important;
+      object-fit: contain !important;
+      display: block !important;
+      margin: 10px auto !important;
+      border: 1px solid #ddd !important;
+    }
+
+    #reportContent .source-docs-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 15px !important;
+      margin-bottom: 15px !important;
+    }
+
+    #reportContent .source-doc-card {
+      border: 1px solid #ddd !important;
+      padding: 10px !important;
+      background: white !important;
+      break-inside: avoid !important;
+    }
 
     @media print{
       .no-print{display:none !important}
       body{background:#fff}
       .container{box-shadow:none; border:none}
       .page-break{break-before:page}
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     }
   </style>
 </head>
@@ -189,15 +248,16 @@
     <div class="section no-print" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
       <button class="btn" id="analyzeBtn" data-translate="analyze_button">تحليل الحالة</button>
       <span id="busy" class="muted" style="display:none" data-translate="analyzing_text">جاري التحليل…</span>
-
-      <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">تصدير PDF (عميل)</button>
-      <button class="btn btn-outline" id="exportServerBtn">تصدير PDF (خادم)</button>
     </div>
 
     <!-- التقرير -->
     <div id="reportWrap" class="section" style="display:none">
-      <div class="report-toolbar no-print"></div>
-      <div id="reportHTML"></div>
+      <div class="report-toolbar no-print">
+        <button class="btn-secondary btn" id="exportPdfBtn" data-translate="export_button">📄 تصدير PDF محسن</button>
+        <button class="btn btn-outline" id="exportServerBtn">تصدير PDF (خادم)</button>
+      </div>
+      <!-- سنغلف مخرجات الخادم داخل reportContent -->
+      <div id="reportHTML" class="avoid-break"></div>
       <details style="margin-top:10px" class="no-print">
         <summary data-translate="show_json_summary">إظهار JSON (للبحث/الإحصاءات)</summary>
         <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
@@ -206,65 +266,124 @@
   </div>
 
   <script>
-    // ===== i18n =====
+    // ===== Internationalization (i18n) =====
     const translations = {
       ar: {
-        app_title: "تقييم الحالة الطبية وطلبات التأمين", home_page: "الصفحة الرئيسية", lang_english: "English",
+        app_title: "تقييم الحالة الطبية وطلبات التأمين",
+        home_page: "الصفحة الرئيسية",
+        lang_english: "English",
         main_title: "تقييم الحالة الطبية وطلبات التأمين",
         subtitle: "واجهة إدخال سريرية سهلة — تحليل عميق متناغم مع احتياجات التأمين",
         evidence_banner: "يستند الحكم التأميني إلى أدلة موجزة من <b>WHO</b> و<b>CDC</b> و<b>Medscape</b>—ويظهر التبرير داخل الجدول.",
         patient_info_title: " 1) معلومات المريض",
-        label_name: "الاسم (اختياري)", placeholder_name: "مثال: أحمد خالد",
-        label_gender: "الجنس", option_select: "اختر", option_male: "ذكر", option_female: "أنثى",
-        label_age: "العمر (بالسنوات)", placeholder_age: "مثال: 63",
-        label_pregnant: "هل المريضة حامل؟", option_no: "لا", option_yes: "نعم", option_na: "غير منطبق",
-        label_pregnancy_months: "شهر الحمل (إن وُجد)", placeholder_pregnancy_months: "مثال: 5",
-        label_smoking: "هل المريض مدخّن؟", option_smoker: "مدخن", option_non_smoker: "غير مدخن", option_ex_smoker: "سابق",
-        label_pack_years: "Pack-Years (إن وُجد)", placeholder_pack_years: "مثال: 15",
-        label_weight: "الوزن (كجم)", placeholder_weight: "مثال: 78",
-        label_height: "الطول (سم)", placeholder_height: "مثال: 172",
-        label_temp: "درجة الحرارة (°م)", placeholder_temp: "مثال: 37.4",
+        label_name: "الاسم (اختياري)",
+        placeholder_name: "مثال: أحمد خالد",
+        label_gender: "الجنس",
+        option_select: "اختر",
+        option_male: "ذكر",
+        option_female: "أنثى",
+        label_age: "العمر (بالسنوات)",
+        placeholder_age: "مثال: 63",
+        label_pregnant: "هل المريضة حامل؟",
+        option_no: "لا",
+        option_yes: "نعم",
+        option_na: "غير منطبق",
+        label_pregnancy_months: "شهر الحمل (إن وُجد)",
+        placeholder_pregnancy_months: "مثال: 5",
+        label_smoking: "هل المريض مدخّن؟",
+        option_smoker: "مدخن",
+        option_non_smoker: "غير مدخن",
+        option_ex_smoker: "سابق",
+        label_pack_years: "Pack-Years (إن وُجد)",
+        placeholder_pack_years: "مثال: 15",
+        label_weight: "الوزن (كجم)",
+        placeholder_weight: "مثال: 78",
+        label_height: "الطول (سم)",
+        placeholder_height: "مثال: 172",
+        label_temp: "درجة الحرارة (°م)",
+        placeholder_temp: "مثال: 37.4",
         label_has_cough: "هل يوجد سُعال؟",
-        label_cough_weeks: "مدة السعال (أسابيع)", placeholder_cough_weeks: "مثال: 12",
-        label_cough_type: "نوع السعال", option_dry: "جاف", option_productive: "ببلغم", option_hemoptysis: "بدم",
+        label_cough_weeks: "مدة السعال (أسابيع)",
+        placeholder_cough_weeks: "مثال: 12",
+        label_cough_type: "نوع السعال",
+        option_dry: "جاف",
+        option_productive: "ببلغم",
+        option_hemoptysis: "بدم",
         timeline_symptoms_title: " 2) خطّ الحياة والأعراض",
-        label_free_text: "وصف الحالة (نص حر)", placeholder_free_text: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...",
-        label_initial_dx: "التشخيصات المبدئية (نص)", placeholder_initial_dx: "مثال: T2DM, HTN, COPD? Dermatitis",
-        label_labs_imaging: "تحاليل/الأشعة المذكورة (نص)", placeholder_labs_imaging: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
-        label_orders: "الأدوية/الإجراءات المقرّرة (إن وُجدت)", placeholder_orders: "مثال: Xigduo XR bid, Metformin 1000 tid ...",
-        file_upload_title: " 3) رفع ملفات (صور/PDF) — اختياري", uploader_text: "اضغط هنا لرفع ملف واحد أو أكثر",
-        analyze_button: "تحليل الحالة", analyzing_text: "جاري التحليل…",
-        export_button: "تصدير PDF", show_json_summary: "إظهار JSON (للبحث/الإحصاءات)",
+        label_free_text: "وصف الحالة (نص حر)",
+        placeholder_free_text: "مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط...",
+        label_initial_dx: "التشخيصات المبدئية (نص)",
+        placeholder_initial_dx: "مثال: T2DM, HTN, COPD? Dermatitis",
+        label_labs_imaging: "تحاليل/الأشعة المذكورة (نص)",
+        placeholder_labs_imaging: "مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
+        label_orders: "الأدوية/الإجراءات المقرّرة (إن وُجدت)",
+        placeholder_orders: "مثال: Xigduo XR bid, Metformin 1000 tid ...",
+        file_upload_title: " 3) رفع ملفات (صور/PDF) — اختياري",
+        uploader_text: "اضغط هنا لرفع ملف واحد أو أكثر",
+        analyze_button: "تحليل الحالة",
+        analyzing_text: "جاري التحليل…",
+        export_button: "📄 تصدير PDF محسن",
+        show_json_summary: "إظهار JSON (للبحث/الإحصاءات)",
       },
       en: {
-        app_title: "Medical Case & Insurance Claim Assessment", home_page: "Home Page", lang_english: "العربية",
+        app_title: "Medical Case & Insurance Claim Assessment",
+        home_page: "Home Page",
+        lang_english: "العربية",
         main_title: "Medical Case & Insurance Claim Assessment",
         subtitle: "Easy clinical entry interface — Deep analysis aligned with insurance needs",
         evidence_banner: "Insurance judgment is based on concise evidence from <b>WHO</b>, <b>CDC</b>, and <b>Medscape</b>—justification appears within the table.",
         patient_info_title: " 1) Patient Information",
-        label_name: "Name (Optional)", placeholder_name: "e.g., John Doe",
-        label_gender: "Gender", option_select: "Select", option_male: "Male", option_female: "Female",
-        label_age: "Age (Years)", placeholder_age: "e.g., 63",
-        label_pregnant: "Is the patient pregnant?", option_no: "No", option_yes: "Yes", option_na: "N/A",
-        label_pregnancy_months: "Month of Pregnancy (if any)", placeholder_pregnancy_months: "e.g., 5",
-        label_smoking: "Is the patient a smoker?", option_smoker: "Smoker", option_non_smoker: "Non-smoker", option_ex_smoker: "Ex-smoker",
-        label_pack_years: "Pack-Years (if any)", placeholder_pack_years: "e.g., 15",
-        label_weight: "Weight (kg)", placeholder_weight: "e.g., 78",
-        label_height: "Height (cm)", placeholder_height: "e.g., 172",
-        label_temp: "Temperature (°C)", placeholder_temp: "e.g., 37.4",
+        label_name: "Name (Optional)",
+        placeholder_name: "e.g., John Doe",
+        label_gender: "Gender",
+        option_select: "Select",
+        option_male: "Male",
+        option_female: "Female",
+        label_age: "Age (Years)",
+        placeholder_age: "e.g., 63",
+        label_pregnant: "Is the patient pregnant?",
+        option_no: "No",
+        option_yes: "Yes",
+        option_na: "N/A",
+        label_pregnancy_months: "Month of Pregnancy (if any)",
+        placeholder_pregnancy_months: "e.g., 5",
+        label_smoking: "Is the patient a smoker?",
+        option_smoker: "Smoker",
+        option_non_smoker: "Non-smoker",
+        option_ex_smoker: "Ex-smoker",
+        label_pack_years: "Pack-Years (if any)",
+        placeholder_pack_years: "e.g., 15",
+        label_weight: "Weight (kg)",
+        placeholder_weight: "e.g., 78",
+        label_height: "Height (cm)",
+        placeholder_height: "e.g., 172",
+        label_temp: "Temperature (°C)",
+        placeholder_temp: "e.g., 37.4",
         label_has_cough: "Is there a cough?",
-        label_cough_weeks: "Cough Duration (weeks)", placeholder_cough_weeks: "e.g., 12",
-        label_cough_type: "Cough Type", option_dry: "Dry", option_productive: "Productive", option_hemoptysis: "Hemoptysis",
+        label_cough_weeks: "Cough Duration (weeks)",
+        placeholder_cough_weeks: "e.g., 12",
+        label_cough_type: "Cough Type",
+        option_dry: "Dry",
+        option_productive: "Productive",
+        option_hemoptysis: "Hemoptysis",
         timeline_symptoms_title: " 2) Timeline & Symptoms",
-        label_free_text: "Case Description (Free Text)", placeholder_free_text: "e.g., Chronic cough for 12 weeks with slight weight loss...",
-        label_initial_dx: "Initial Diagnoses (Text)", placeholder_initial_dx: "e.g., T2DM, HTN, COPD? Dermatitis",
-        label_labs_imaging: "Mentioned Labs/Imaging (Text)", placeholder_labs_imaging: "e.g., HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
-        label_orders: "Prescribed Meds/Procedures (if any)", placeholder_orders: "e.g., Xigduo XR bid, Metformin 1000 tid ...",
-        file_upload_title: " 3) Upload Files (Images/PDF) — Optional", uploader_text: "Click here to upload one or more files",
-        analyze_button: "Analyze Case", analyzing_text: "Analyzing…",
-        export_button: "Export PDF", show_json_summary: "Show JSON (for search/analytics)",
+        label_free_text: "Case Description (Free Text)",
+        placeholder_free_text: "e.g., Chronic cough for 12 weeks with slight weight loss...",
+        label_initial_dx: "Initial Diagnoses (Text)",
+        placeholder_initial_dx: "e.g., T2DM, HTN, COPD? Dermatitis",
+        label_labs_imaging: "Mentioned Labs/Imaging (Text)",
+        placeholder_labs_imaging: "e.g., HbA1c 8.7%, eGFR 38→62, K 5.6 ...",
+        label_orders: "Prescribed Meds/Procedures (if any)",
+        placeholder_orders: "e.g., Xigduo XR bid, Metformin 1000 tid ...",
+        file_upload_title: " 3) Upload Files (Images/PDF) — Optional",
+        uploader_text: "Click here to upload one or more files",
+        analyze_button: "Analyze Case",
+        analyzing_text: "Analyzing…",
+        export_button: "📄 Export Improved PDF",
+        show_json_summary: "Show JSON (for search/analytics)",
       }
     };
+
     let currentLang = 'ar';
     function setLanguage(lang) {
       currentLang = lang;
@@ -303,211 +422,4 @@
     const fileInput = document.getElementById('fileInput');
     const dropZone  = document.getElementById('dropZone');
     const cardsBox  = document.getElementById('cards');
-    const fileList  = document.getElementById('fileList');
-    ['dragenter','dragover','dragleave','drop'].forEach(ev => { window.addEventListener(ev, e => e.preventDefault()); });
-    const filesState = []; // { name, mimeType, data (dataURL) }
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragenter', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
-    dropZone.addEventListener('dragover',  e=>{ e.preventDefault(); });
-    dropZone.addEventListener('dragleave', e=>{ e.preventDefault(); dropZone.classList.remove('drag'); });
-    dropZone.addEventListener('drop', async e=>{
-      e.preventDefault(); dropZone.classList.remove('drag');
-      await handleFiles(Array.from(e.dataTransfer.files));
-    });
-    fileInput.addEventListener('change', async ()=>{
-      await handleFiles(Array.from(fileInput.files));
-      fileInput.value = '';
-    });
-    async function handleFiles(files){
-      for(const f of files){
-        const base64Url = await fileToDataURL(f);
-        filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64Url });
-      }
-      renderCards();
-      fileList.textContent = filesState.map((f)=>`• ${f.name}`).join('\n');
-    }
-    function renderCards(){
-      cardsBox.innerHTML = '';
-      filesState.forEach((f, i)=>{
-        const isImg = (f.mimeType||'').startsWith('image/');
-        const thumb = isImg ? f.data : 'data:image/svg+xml;utf8,'+encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#64748b">${f.name}</text></svg>`);
-        const el = document.createElement('div');
-        el.className = 'fileCard avoid-break';
-        el.innerHTML = `
-          <button class="remove" data-i="${i}" title="إزالة">×</button>
-          <img class="thumb" src="${thumb}" alt="${f.name}">
-          <div class="meta">
-            <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="${f.name}">${f.name}</div>
-            <div class="muted">${f.mimeType||'—'}</div>
-          </div>`;
-        cardsBox.appendChild(el);
-      });
-      cardsBox.querySelectorAll('.remove').forEach(btn=>btn.addEventListener('click', (e)=>{
-        const i = +e.currentTarget.dataset.i; filesState.splice(i,1); renderCards(); fileList.textContent = filesState.map(f=>`• ${f.name}`).join('\n');
-      }));
-    }
-    function fileToDataURL(file){
-      return new Promise((resolve,reject)=>{
-        const r = new FileReader();
-        r.onerror = () => { console.error('Failed to read file', file?.name); alert('تعذّر قراءة الملف: ' + (file?.name || '')); reject(new Error('failed to read file')); };
-        r.onload = () => resolve(r.result);
-        r.readAsDataURL(file);
-      });
-    }
-
-    // ===== بناء patientInfo =====
-    function buildPatientInfo(){
-      const ageYears = Number(document.getElementById('age').value || NaN);
-      const gender = document.getElementById('gender').value || null;
-      const smokingStatus = document.getElementById('smoking').value || null;
-      const packYears = document.getElementById('packYears').value ? Number(document.getElementById('packYears').value) : null;
-      const temp = document.getElementById('temp').value ? Number(document.getElementById('temp').value) : null;
-      const weight = document.getElementById('weight').value ? Number(document.getElementById('weight').value) : null;
-      const height = document.getElementById('height').value ? Number(document.getElementById('height').value) : null;
-      const hasCough = document.getElementById('hasCough').value || null;
-      const coughWeeks = document.getElementById('coughWeeks').value ? Number(document.getElementById('coughWeeks').value) : null;
-      const coughType = document.getElementById('coughType').value || null;
-
-      const pVal = pregSel.value;
-      const pregnant = (gender === 'أنثى') ? {
-        isPregnant: pVal === 'yes',
-        gestationalWeeks: (pVal === 'yes' && document.getElementById('pregnancyMonths').value)
-          ? Number(document.getElementById('pregnancyMonths').value) * 4
-          : null
-      } : null;
-
-      return {
-        name: document.getElementById('name').value || null,
-        ageYears: isNaN(ageYears) ? null : ageYears,
-        gender,
-        pregnant,
-        smoking: smokingStatus ? { status: smokingStatus, packYears } : null,
-        temperatureC: temp,
-        weightKg: weight,
-        heightCm: height,
-        cough: { has: hasCough, weeks: coughWeeks, type: coughType }
-      };
-    }
-
-    // ===== استدعاء الباك-إند للتحليل =====
-    async function analyze(){
-      const analyzeBtn = document.getElementById('analyzeBtn');
-      const busy = document.getElementById('busy');
-      analyzeBtn.disabled = true; busy.style.display = 'inline';
-      try{
-        const textParts = [];
-        const ft = document.getElementById('freeText').value.trim(); if(ft) textParts.push(`وصف الحالة: ${ft}`);
-        const dx = document.getElementById('initialDx').value.trim(); if(dx) textParts.push(`التشخيصات المبدئية: ${dx}`);
-        const labs = document.getElementById('labsImaging').value.trim(); if(labs) textParts.push(`تحاليل/أشعة: ${labs}`);
-        const orders = document.getElementById('orders').value.trim(); if(orders) textParts.push(`الأدوية/الإجراءات: ${orders}`);
-        const mergedText = textParts.join('\n');
-
-        const filesPayload = filesState.map(f=>({
-          name: f.name,
-          mimeType: f.mimeType,
-          data: f.data.split('base64,').pop() // فقط البايس64 دون البادئة
-        }));
-
-        const payload = {
-          text: mergedText,
-          patientInfo: buildPatientInfo(),
-          files: filesPayload,
-          lang: currentLang
-        };
-
-        const resp = await fetch('/api/gpt', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-        });
-        const data = await resp.json().catch(()=> ({}));
-        if(!resp.ok){ throw new Error(data?.error || `HTTP ${resp.status}`); }
-
-        document.getElementById('reportWrap').style.display = 'block';
-
-        // ملاحظة مهمة: لا نضع .avoid-break على الحاوية الكبيرة
-        const html = `<div id="reportContent" style="width:794px; margin:0 auto">${data.html || ''}</div>`;
-        document.getElementById('reportHTML').innerHTML = html;
-        document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
-      }catch(err){
-        alert('خطأ: ' + err.message);
-      }finally{
-        analyzeBtn.disabled = false; busy.style.display = 'none';
-      }
-    }
-    document.getElementById('analyzeBtn').addEventListener('click', analyze);
-
-    // ===== تصدير PDF (عميل) مُحسّن بدون avoid-all =====
-    document.getElementById('exportPdfBtn').addEventListener('click', async () => {
-      const reportElement = document.getElementById('reportContent');
-      if(!reportElement){ alert('التقرير غير جاهز للتصدير.'); return; }
-      const restore = forceFullCapture(reportElement);
-      try {
-        const opt = {
-          filename: 'Medical_Audit_Report.pdf',
-          margin: 10,
-          pagebreak: {
-            mode: ['css','legacy'],      // بدون avoid-all لتجنّب القص في الطويلة
-            avoid: ['tr','td','th','.card','img']
-          },
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: {
-            scale: 3,
-            useCORS: true,
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: reportElement.scrollWidth,
-            windowHeight: reportElement.scrollHeight
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        await html2pdf().set(opt).from(reportElement).save();
-      } catch (e) {
-        alert('خطأ في التصدير (عميل): ' + e.message);
-      } finally {
-        restore();
-      }
-    });
-
-    // ===== تصدير PDF (خادم) عبر Puppeteer — أفضل وضوح للعربية =====
-    document.getElementById('exportServerBtn').addEventListener('click', async () => {
-      try{
-        const html = document.getElementById('reportContent')?.outerHTML || '';
-        if(!html){ alert('التقرير غير جاهز للتصدير.'); return; }
-        const resp = await fetch('/api/pdf', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ html, lang: currentLang })
-        });
-        if(!resp.ok){ throw new Error('HTTP '+resp.status); }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'Medical_Audit_Report.pdf'; a.click();
-        URL.revokeObjectURL(url);
-      }catch(e){
-        alert('خيار التصدير الخادمي غير مُفعّل أو حدث خطأ: ' + e.message);
-      }
-    });
-
-    // ===== أدوات مساعدة =====
-    function forceFullCapture(root) {
-      const touched = [];
-      root.querySelectorAll('*').forEach(el => {
-        const cs = getComputedStyle(el);
-        if (cs.overflow !== 'visible') {
-          touched.push([el, el.style.overflow]);
-          el.style.overflow = 'visible';
-        }
-      });
-      const prevWidth = root.style.width;
-      root.style.width = '794px'; // عرض A4 تقريبي عند 96dpi
-      return () => {
-        touched.forEach(([el, prev]) => el.style.overflow = prev || '');
-        root.style.width = prevWidth || '';
-      };
-    }
-
-    // لغة افتراضية
-    setLanguage('ar');
-  </script>
-</body>
-</html>
+    const file
