@@ -14,7 +14,6 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
-const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
 const GEMINI_GEN_URL = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
 // استيراد Puppeteer - يجب تثبيته: npm install puppeteer
@@ -25,46 +24,28 @@ const ok = (res, json) => res.status(200).json({ ok: true, ...json });
 const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
 const parseJsonSafe = async (response) => (response.headers.get("content-type") || "").includes("application/json") ? response.json() : { raw: await response.text() };
 
-// --- معالج رفع الملفات إلى Gemini ---
-async function geminiUploadBase64({ name, mimeType, base64 }) {
-    const binaryData = Buffer.from(base64, "base64");
-    const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
-        method: "POST",
-        headers: {
-            "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start",
-            "X-Goog-Upload-Header-Content-Length": String(binaryData.byteLength),
-            "X-Goog-Upload-Header-Content-Type": mimeType, "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
-    });
-    if (!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
-    const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
-    if (!sessionUrl) throw new Error("Gemini upload session URL is missing");
-    const uploadRes = await fetch(sessionUrl, {
-        method: "PUT",
-        headers: {
-            "Content-Type": mimeType, "X-Goog-Upload-Command": "upload, finalize",
-            "X-Goog-Upload-Offset": "0", "Content-Length": String(binaryData.byteLength),
-        },
-        body: binaryData,
-    });
-    const metadata = await parseJsonSafe(uploadRes);
-    if (!uploadRes.ok) throw new Error(`Gemini finalize failed: ${JSON.stringify(metadata)}`);
-    return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
-}
-
-// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
+// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini (تم التعديل) ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
-    const userParts = [];
-    if (text) userParts.push({ text });
-    for (const file of files || []) {
-        const mime = file?.mimeType || "application/octet-stream";
-        const base64Data = file?.data;
-        if (!base64Data) continue;
-        const { uri, mime: finalMime } = await geminiUploadBase64({ name: file?.name || "unnamed_file", mimeType: mime, base64: base64Data });
-        userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
+    const parts = [];
+    if (text) {
+        parts.push({ text });
     }
-    if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
+    // **تمت إزالة خطوة رفع الملفات إلى خدمة Gemini**
+    // **يتم الآن إرسال الملفات مباشرة كجزء من محتوى الطلب، وهي طريقة أكثر موثوقية**
+    for (const file of files || []) {
+        if (file?.data && file?.mimeType) {
+            parts.push({
+                inline_data: {
+                    data: file.data,
+                    mime_type: file.mimeType,
+                },
+            });
+        }
+    }
+    
+    if (parts.length === 0) {
+        throw new Error("No text or files provided for analysis.");
+    }
     
     const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block. **CRITICAL RULES:**
 1.  **DO NOT SUMMARIZE.** Transcribe everything.
@@ -74,13 +55,18 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     
     const body = {
         system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: userParts }],
+        contents: [{ role: "user", parts }],
     };
+    
     const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
+    
     const data = await parseJsonSafe(response);
-    if (!response.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
+    if (!response.ok) {
+        console.error("Gemini API Error Response:", data);
+        throw new Error(`Gemini generateContent failed. Details: ${JSON.stringify(data.error?.message || data)}`);
+    }
     return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
