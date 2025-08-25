@@ -9,7 +9,7 @@ export const config = {
 
 // --- الإعدادات الرئيسية ---
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini"; // استخدام gpt-4o-mini لتحسين الأداء
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -282,9 +282,12 @@ export default async function handler(req, res) {
         if (req.method !== "POST") {
             return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
         }
+        
+        // **هذا هو الفحص الإضافي الذي تم إضافته**
         if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
-            console.error("CRITICAL ERROR: API Key is missing.");
-            return bad(res, 500, "Server Configuration Error: API Key is missing.");
+            const missingKey = !OPENAI_API_KEY ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY';
+            console.error(`CRITICAL ERROR: The API key for ${missingKey} is missing.`);
+            return bad(res, 500, `Server Configuration Error: The API key for ${missingKey} is missing or not configured correctly. Please check your .env.local file.`);
         }
 
         const { pathname } = new URL(req.url, `http://${req.headers.host}`);
@@ -348,7 +351,6 @@ export default async function handler(req, res) {
         console.error("---!!!--- An error occurred during the process ---!!!---");
         console.error("Error Message:", err.message);
         console.error("Error Stack:", err.stack);
-        // This is the improved error response
         const errorMessage = `An internal server error occurred. Please check the server logs. Details: ${err.message || 'No specific error message provided.'}`;
         return bad(res, 500, errorMessage);
     }
