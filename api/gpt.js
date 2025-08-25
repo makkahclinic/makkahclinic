@@ -229,7 +229,7 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         .item-cell .item-category { font-size: 12px; font-weight: 500; color: #5f6368; display: block; }
         .dosage-cell { font-family: monospace, sans-serif; color: #3d3d3d; font-size: 14px; white-space: nowrap; }
         .decision-badge { font-weight: 700; padding: 5px 10px; border-radius: 16px; font-size: 13px; display: inline-block; border: 1px solid transparent; }
-        .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? 'right' : 'left'}: 4px solid; page-break-inside: avoid; }
+        .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-right: 4px solid; margin-bottom: 12px; page-break-inside: avoid; }
         .rec-priority { flex-shrink: 0; font-weight: bold; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
         .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
         .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
@@ -348,6 +348,8 @@ export default async function handler(req, res) {
         console.error("---!!!--- An error occurred during the process ---!!!---");
         console.error("Error Message:", err.message);
         console.error("Error Stack:", err.stack);
-        return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
+        // This is the improved error response
+        const errorMessage = `An internal server error occurred. Please check the server logs. Details: ${err.message || 'No specific error message provided.'}`;
+        return bad(res, 500, errorMessage);
     }
 }
