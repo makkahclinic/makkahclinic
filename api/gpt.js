@@ -1,35 +1,35 @@
 // pages/api/gpt.js
-
+// ملاحظة: Next.js Pages Router API Route
 export const config = {
   api: { bodyParser: { sizeLimit: "50mb" } },
 };
 
-/** بيئة الخادم (.env.local):
+/** .env.local:
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-4o
 GEMINI_API_KEY=AIza...
 GEMINI_MODEL=gemini-1.5-pro-latest
 */
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
+const GEMINI_API_KEY   = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL     = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
 const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
-const GEMINI_GEN_URL = (model) =>
+const GEMINI_GEN_URL   = (model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
-const ok = (res, json) => { res.setHeader("Cache-Control", "no-store"); return res.status(200).json({ ok: true, ...json }); };
-const bad = (res, code, msg) => { res.setHeader("Cache-Control", "no-store"); return res.status(code).json({ ok: false, error: msg }); };
+const ok  = (res, json) => res.status(200).json({ ok: true,  ...json });
+const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
 
 async function parseJsonSafe(response) {
   const ct = response.headers.get("content-type") || "";
   return ct.includes("application/json") ? response.json() : { raw: await response.text() };
 }
 
-/** رفع ملفات Base64 إلى Gemini (Resumable Upload) */
+/* ------------ Gemini: resumable upload -------------- */
 async function geminiUploadBase64({ name, mimeType, base64 }) {
   const binaryData = Buffer.from(base64, "base64");
 
@@ -65,58 +65,69 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-/** المرحلة 1: تجميع محايد (Gemini) مع عزل الحالة */
+/* ------------ المرحلة 1: تجميع محايد مع عزل الحالة -------------- */
 async function aggregateClinicalDataWithGemini({ text, files, caseId, lang }) {
   const userParts = [];
   if (text) userParts.push({ text });
 
-  for (const f of files || []) {
-    if (!f?.data) continue;
-    const { uri, mime } = await geminiUploadBase64({
-      name: f?.name || "file",
-      mimeType: f?.mimeType || "application/octet-stream",
-      base64: f.data,
+  for (const file of files || []) {
+    const mime       = file?.mimeType || "application/octet-stream";
+    const base64Data = (file?.data || "").includes("base64,")
+      ? file.data.split("base64,").pop()
+      : (file?.data || "");
+    if (!base64Data) continue;
+
+    const { uri, mime: finalMime } = await geminiUploadBase64({
+      name: file?.name || "unnamed_file",
+      mimeType: mime,
+      base64: base64Data,
     });
-    userParts.push({ file_data: { file_uri: uri, mime_type: mime } });
+    userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
   }
+
   if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
 
   const systemPrompt = `
-You are a meticulous medical transcription engine.
-STRICT CASE ISOLATION: Only use the inputs attached to CASE_ID=${caseId}. Ignore any prior cases.
+You are a meticulous medical data transcriptionist.
+STRICT CASE ISOLATION: Only use inputs that belong to CASE_ID=${caseId}. Ignore anything else.
 Language: ${lang === "en" ? "English" : "Arabic"}.
-Rules:
-1) DO NOT summarize; transcribe ALL clinical details verbatim into structured text.
-2) List every diagnosis, lab value, imaging, procedure, and each medication with dosage/frequency/duration exactly as written.
-3) Produce clean, well-ordered ${lang === "en" ? "English" : "Arabic"} text blocks that are easy to parse downstream.
+CRITICAL RULES:
+1) DO NOT summarize; transcribe ALL clinical details as-is.
+2) List every diagnosis, lab value, imaging, procedure, AND every medication with exact dosage/frequency/duration if written.
+3) If a medication's dosage/frequency/duration is NOT explicitly written, write "—" for that field (do NOT infer).
 `.trim();
 
-  const body = { system_instruction: { parts: [{ text: systemPrompt }] }, contents: [{ role: "user", parts: userParts }] };
+  const body = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: userParts }],
+    // تثبيت الإخراج وتقليل التنوّع
+    generationConfig: { temperature: 0, topP: 0.2, topK: 1 },
+  };
 
-  const resp = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
+  const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const data = await parseJsonSafe(resp);
-  if (!resp.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
+  const data = await parseJsonSafe(response);
+  if (!response.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
 
   return data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n") || "";
 }
 
-/** المرحلة 2: تدقيق إكلينيكي عميق (OpenAI) */
-function getExpertAuditorInstructions(lang, { caseId }) {
+/* ------------ المرحلة 2: تعليمات مدقق خبير مُهيكلة بصرامة -------------- */
+function getExpertAuditorInstructions(lang = "ar", { caseId }) {
   const schema = {
     meta: { caseId: "string" },
-    summary: {
-      caseOverview: lang === "en" ? "Brief case overview with key evidence." : "ملخص موجز للحالة بالأدلة الأساسية.",
-      keyFindings: [lang === "en" ? "Key point 1" : "نقطة أساسية 1"],
-    },
+    patientSummary: { text: lang === "en" ? "Detailed case summary." : "ملخّص تفصيلي للحالة." },
+    overallAssessment: { text: lang === "en" ? "Global expert assessment." : "تقييم خبير شامل." },
+
     diagnoses: {
       primary: lang === "en" ? "Primary diagnosis" : "التشخيص الرئيسي",
-      secondary: [lang === "en" ? "Secondary diagnoses (if any)" : "تشاخيص ثانوية (إن وجدت)"],
-      certaintyNotes: lang === "en" ? "Notes on certainty/differentials." : "ملاحظات اليقين/التفريقي.",
+      secondary: [],
+      certaintyNotes: lang === "en" ? "Certainty/differentials." : "ملاحظات اليقين/الاحتمالات التفريقية",
     },
+
     risksAndConflicts: {
       redFlags: [],
       guidelineOmissions: [],
@@ -124,6 +135,7 @@ function getExpertAuditorInstructions(lang, { caseId }) {
       doseOrDurationErrors: [],
       notMedicallyNecessary: [],
     },
+
     table: [
       {
         name: "string",
@@ -137,22 +149,29 @@ function getExpertAuditorInstructions(lang, { caseId }) {
         insuranceDecision: { label: lang === "en" ? "Approved|Denied|N/A" : "مقبول|مرفوض|لا ينطبق", justification: "string" },
       },
     ],
-    recommendations: [
-      { priority: lang === "en" ? "Urgent|Best practice" : "عاجلة|أفضل ممارسة", description: "string", relatedItems: ["string"] },
-    ],
+
+    recommendations: [{ priority: lang === "en" ? "Urgent|Best practice" : "عاجلة|أفضل ممارسة", description: "string", relatedItems: ["string"] }],
   };
 
+  const knowledgeAnchors = `
+Primary Knowledge Base (illustrative, keep concise & neutral):
+- Cardiology: AHA/ACC/ESC.
+- Endocrinology: ADA Standards (e.g., annual fundus exam for T2DM; Gliclazide MR once daily).
+- General: Medical necessity, duplication, contraindications, unusual quantities—reimbursement lens.
+- If ophthalmology terms are present (e.g., blepharitis/dry eye/ocular drops), include standard-of-care steps (e.g., lid hygiene/warm compresses) before broad-spectrum antibiotics when appropriate.
+`;
+
   return `
-You are an evidence-based clinical auditor (clinical pharmacist + family medicine) producing professional ${lang === "en" ? "English" : "Arabic"} outputs.
+You are an evidence-based clinical auditor producing professional ${lang === "en" ? "English" : "Arabic"} outputs.
 STRICT CASE ISOLATION: Analyze ONLY data for CASE_ID=${caseId}.
 
-Knowledge anchors to cite in reasoning (no need to output citations): Cardiology AHA/ACC/ESC; Diabetes ADA Standards (annual fundus exam for T2DM); Gliclazide MR once daily; reimbursement focuses: medical necessity, duplication, contraindications, unusual quantities.
+${knowledgeAnchors}
 
-Rules:
+RULES:
 0) Output ONLY valid JSON per the schema below.
-1) Start with a clear case summary then primary/secondary diagnoses.
-2) Extract red flags, conflicts, omissions, dosing/quantity errors; apply the 90‑day rule ("quantity needs review" if stability not documented).
-3) Build a table that lists EVERY medication/lab/procedure mentioned and important omissions. For every medication, fill "dosage_written" EXACTLY as transcribed.
+1) Start with a clear case summary, then explicit diagnoses (primary/secondary).
+2) Extract red flags, omissions, drug–drug conflicts, dose/quantity errors (apply 90‑day rule: "quantity needs review" if stability not documented).
+3) Build a table that lists EVERY medication/lab/procedure mentioned AND important omissions. For every medication, fill "dosage_written" EXACTLY as transcribed—or "—" if not written (no guessing).
 4) Keep language ${lang === "en" ? "English" : "Arabic"}; concise and professional.
 
 Schema:
@@ -160,8 +179,9 @@ ${JSON.stringify(schema, null, 2)}
 `.trim();
 }
 
+/* ------------ OpenAI: JSON mode + temperature 0 -------------- */
 async function getAuditFromOpenAI({ bundle, lang, caseId }) {
-  const resp = await fetch(OPENAI_API_URL, {
+  const response = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: JSON.stringify({
@@ -169,185 +189,217 @@ async function getAuditFromOpenAI({ bundle, lang, caseId }) {
       temperature: 0,
       messages: [
         { role: "system", content: getExpertAuditorInstructions(lang, { caseId }) },
-        { role: "user", content: "Clinical Data for Audit:\n" + JSON.stringify(bundle, null, 2) },
+        { role: "user",   content: "Clinical Data for Audit:\n" + JSON.stringify(bundle, null, 2) },
       ],
-      response_format: { type: "json_object" },
+      response_format: { type: "json_object" }, // Structured outputs / JSON mode
     }),
   });
-  const data = await parseJsonSafe(resp);
-  if (!resp.ok) throw new Error(`OpenAI error: ${JSON.stringify(data)}`);
+  const data = await parseJsonSafe(response);
+  if (!response.ok) throw new Error(`OpenAI error: ${JSON.stringify(data)}`);
   return JSON.parse(data?.choices?.[0]?.message?.content || "{}");
 }
 
-/** المرحلة 3: HTML موحّد من الخادم */
-function tDict(lang) {
-  return lang === "en"
-    ? {
-        summaryTitle: "Case Summary",
-        diagnosisTitle: "Diagnosis",
-        risksTitle: "Risks & Conflicts",
-        detailsTitle: "Detailed Analysis of Items",
-        recsTitle: "Clinical Recommendations",
-        itemHeader: "Item",
-        dosageHeader: "Written dosage",
-        statusHeader: "Status",
-        decisionHeader: "Insurance decision",
-        justificationHeader: "Justification",
-        none: "Not available.",
+/* ------------ تحقّق بسيط بعد النموذج (منع “السعر بدل الجرعة”) -------------- */
+function postProcess(structured) {
+  try {
+    const s = structured || {};
+    if (Array.isArray(s.table)) {
+      for (const row of s.table) {
+        const d = (row?.dosage_written || "").toString();
+        const looksLikePrice = /(\bSAR\b|ريال|AED|USD|\d+\s*x\s*\d+\.\d{2}\s*(?:ريال|SAR))/i.test(d);
+        if (looksLikePrice) {
+          row.analysisCategory = row.analysisCategory || "الكمية تحتاج لمراجعة";
+          row.insuranceDecision = row.insuranceDecision || {};
+          row.insuranceDecision.justification =
+            row.insuranceDecision.justification ||
+            "حقل الجرعة يحتوي قيمة مالية/سعر بدل الجرعة؛ الرجاء توثيق الجرعة/التكرار/المدة.";
+          row.dosage_written = "—";
+        }
       }
-    : {
-        summaryTitle: "تلخيص الحالة",
-        diagnosisTitle: "التشخيص",
-        risksTitle: "المخاطر والتعارضات",
-        detailsTitle: "التحليل التفصيلي للإجراءات/الأدوية",
-        recsTitle: "التوصيات الإكلينيكية",
-        itemHeader: "الإجراء",
-        dosageHeader: "الجرعة المكتوبة",
-        statusHeader: "الحالة",
-        decisionHeader: "قرار التأمين",
-        justificationHeader: "التبرير",
-        none: "غير متوفر.",
-      };
+    }
+    return s;
+  } catch {
+    return structured;
+  }
 }
 
-function riskClass(cat = "") {
-  const s = (cat || "").toLowerCase();
-  if (s.includes("omission") || s.includes("إغفال") || s.includes("conflict") || s.includes("تعارض") || s.includes("duplicate") || s.includes("خطأ"))
-    return "risk-critical";
-  if (s.includes("review") || s.includes("غير مبرر") || s.includes("تحتاج لمراجعة")) return "risk-warning";
-  if (s.includes("correct") || s.includes("صحيح")) return "risk-ok";
-  return "";
-}
-function decisionBadge(label) {
-  const base =
-    "font-weight:700;padding:5px 10px;border-radius:16px;font-size:13px;display:inline-block;border:1px solid transparent;";
-  if (["Approved", "مقبول"].includes(label)) return base + "background:#e6f4ea;color:#1e8e3e";
-  if (["Denied", "مرفوض"].includes(label)) return base + "background:#fce8e6;color:#d93025";
-  return base + "background:#e8eaed;color:#5f6368";
-}
+/* ------------ عرض HTML (أبقينا أسلوبك مع توسيع الحقول) -------------- */
+function renderHtmlReport(structuredData, files, lang = "ar") {
+  const s = structuredData;
+  const isArabic = lang === "ar";
+  const text = {
+    sourceDocsTitle: isArabic ? "المستندات المصدرية" : "Source Documents",
+    summaryTitle: isArabic ? "ملخص الحالة والتقييم العام" : "Case Summary & Overall Assessment",
+    diagnosisTitle: isArabic ? "التشخيصات" : "Diagnoses",
+    risksTitle: isArabic ? "المخاطر والتعارضات" : "Risks & Conflicts",
+    detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات/الأدوية" : "Detailed Analysis of Items",
+    recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
+    itemHeader: isArabic ? "البند" : "Item",
+    dosageHeader: isArabic ? "الجرعة المكتوبة" : "Written Dosage",
+    statusHeader: isArabic ? "الحالة" : "Status",
+    decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
+    justificationHeader: isArabic ? "التبرير" : "Justification",
+    relatedTo: isArabic ? "مرتبط بـ" : "Related to",
+    notAvailable: isArabic ? "غير متوفر." : "Not available.",
+  };
 
-function renderHtmlReport(structured, lang) {
-  const s = structured || {};
-  const tt = tDict(lang);
+  const getRiskClass = (category = "") => {
+    const s = category.toLowerCase();
+    if (s.includes("omission") || s.includes("إغفال") || s.includes("conflict") || s.includes("تعارض") || s.includes("dose") || s.includes("جرعة") || s.includes("duplicate"))
+      return "risk-critical";
+    if (s.includes("review") || s.includes("غير مبرر") || s.includes("تحتاج")) return "risk-warning";
+    if (s.includes("correct") || s.includes("صحيح")) return "risk-ok";
+    return "";
+  };
 
-  const diagList = [
-    s?.diagnoses?.primary ? `<li><b>${lang === "en" ? "Primary:" : "التشخيص الرئيسي:"}</b> ${s.diagnoses.primary}</li>` : "",
-    ...(Array.isArray(s?.diagnoses?.secondary) ? s.diagnoses.secondary.map((d) => `<li>${d}</li>`) : []),
-  ].join("");
-
-  const rs = s?.risksAndConflicts || {};
-  const riskBlock = (title, arr) =>
-    Array.isArray(arr) && arr.length
-      ? `<div style="margin-bottom:8px"><b>${title}:</b><ul style="margin:6px 18px">${arr.map((x) => `<li>${x}</li>`).join("")}</ul></div>`
-      : "";
-  const risks = [
-    riskBlock(lang === "en" ? "Red flags" : "علامات إنذارية", rs.redFlags),
-    riskBlock(lang === "en" ? "Guideline omissions" : "نواقص قياسية", rs.guidelineOmissions),
-    riskBlock(lang === "en" ? "Drug–drug conflicts" : "تعارضات دوائية", rs.drugDrugConflicts),
-    riskBlock(lang === "en" ? "Dose/Duration errors" : "أخطاء جرعة/مدة", rs.doseOrDurationErrors),
-    riskBlock(lang === "en" ? "Not medically necessary" : "غير مبرّر طبياً", rs.notMedicallyNecessary),
-  ].join("");
+  const sourceDocsHtml = (files || [])
+    .map((f) => {
+      const isImg = (f.mimeType || "").startsWith("image/");
+      const src = `data:${f.mimeType};base64,${(f.data || "").replace(/^data:[^;]+;base64,/, "")}`;
+      const filePreview = isImg
+        ? `<img src="${src}" alt="${f.name}" style="max-width:100%;height:auto;display:block;border-radius:8px"/>`
+        : `<div style="padding:20px;border:1px dashed #e5e7eb;border-radius:8px;background:#f9fbfc;color:#6b7280;text-align:center">${f.name}</div>`;
+      return `<div class="source-doc-card" style="margin-bottom:12px"><h3>${f.name}</h3>${filePreview}</div>`;
+    })
+    .join("");
 
   const rows = (s.table || [])
     .map(
       (r) => `
-      <tr class="${riskClass(r.analysisCategory)}">
+      <tr class="${getRiskClass(r.analysisCategory)}">
         <td><div style="font-weight:700">${r.name || "-"}</div><small style="color:#5f6368">${r.analysisCategory || ""}</small></td>
-        <td style="font-family:monospace">${r.dosage_written || "-"}</td>
+        <td style="font-family:monospace">${r.dosage_written || "—"}</td>
         <td>${r.status || "-"}</td>
-        <td><span style="${decisionBadge(r?.insuranceDecision?.label)}">${r?.insuranceDecision?.label || "-"}</span></td>
-        <td>${(r?.insuranceDecision && r.insuranceDecision.justification) || "-"}</td>
+        <td><span class="decision-badge" style="background:#e8eaed;color:#5f6368">${r.insuranceDecision?.label || "-"}</span></td>
+        <td>${(r.insuranceDecision && r.insuranceDecision.justification) || "-"}</td>
       </tr>`
     )
     .join("");
+
+  const risks = s?.risksAndConflicts
+    ? [
+        ["redFlags", isArabic ? "علامات إنذارية" : "Red flags"],
+        ["guidelineOmissions", isArabic ? "نواقص قياسية" : "Guideline omissions"],
+        ["drugDrugConflicts", isArabic ? "تعارضات دوائية" : "Drug–drug conflicts"],
+        ["doseOrDurationErrors", isArabic ? "أخطاء جرعة/مدة" : "Dose/Duration errors"],
+        ["notMedicallyNecessary", isArabic ? "غير مبرّر طبياً" : "Not medically necessary"],
+      ]
+        .map(([key, title]) => {
+          const arr = s.risksAndConflicts[key] || [];
+          if (!arr.length) return "";
+          return `<div style="margin-bottom:8px"><b>${title}:</b><ul style="margin:6px 18px">${arr.map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
+        })
+        .join("")
+    : "";
 
   const recs =
     (s.recommendations || [])
       .map(
         (rec) => `
-      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:8px;background:#f8fafc;border-right:4px solid ${
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:8px;background:#f8f9fa;border-right:4px solid ${
         (rec.priority || "").toLowerCase().includes("urgent") || (rec.priority || "").includes("عاجلة") ? "#d93025" : "#1e8e3e"
       };margin-bottom:12px">
         <span style="font-weight:700;padding:4px 10px;border-radius:8px;font-size:12px;color:#fff;background:${
           (rec.priority || "").toLowerCase().includes("urgent") || (rec.priority || "").includes("عاجلة") ? "#d93025" : "#1e8e3e"
         }">${rec.priority || ""}</span>
-        <div><div>${rec.description || ""}</div>${
-          rec.relatedItems?.length
-            ? `<div style="font-size:12px;color:#5f6368;margin-top:6px">${lang === "en" ? "Related to" : "مرتبط بـ"}: ${rec.relatedItems.join(", ")}</div>`
-            : ""
-        }</div>
+        <div>
+          <div>${rec.description || ""}</div>
+          ${
+            rec.relatedItems?.length
+              ? `<div style="font-size:12px;color:#5f6368;margin-top:6px">${text.relatedTo}: ${rec.relatedItems.join(", ")}</div>`
+              : ""
+          }
+        </div>
       </div>`
       )
-      .join("") || `<div style="color:#64748b">${tt.none}</div>`;
+      .join("") || `<div style="color:#64748b">${text.notAvailable}</div>`;
 
   return `
   <style>
     .audit-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px}
-    .audit-table th,.audit-table td{padding:12px;text-align:${lang === "en" ? "left" : "right"};border-bottom:1px solid #e5e7eb;vertical-align:top;word-wrap:break-word}
-    .audit-table th{background:#f8fafc}
+    .audit-table th,.audit-table td{padding:12px;text-align:${isArabic ? "right" : "left"};border-bottom:1px solid #e9ecef;vertical-align:top;word-wrap:break-word}
+    .audit-table th{background:#f8f9fa}
     .risk-critical td{background:#fce8e6}.risk-warning td{background:#fff0e1}.risk-ok td{background:#e6f4ea}
   </style>
 
   <div class="report-section">
-    <h2 style="font-size:20px;font-weight:700;color:#0d47a1;border-bottom:2px solid #1a73e8;padding-bottom:8px;margin-top:0">${tt.summaryTitle}</h2>
-    <p>${s?.summary?.caseOverview || tt.none}</p>
-    ${
-      Array.isArray(s?.summary?.keyFindings) && s.summary.keyFindings.length
-        ? `<ul style="margin:6px 18px">${s.summary.keyFindings.map((x) => `<li>${x}</li>`).join("")}</ul>`
-        : ""
-    }
+    <h2>${text.sourceDocsTitle}</h2>
+    <div class="source-docs-grid">${sourceDocsHtml}</div>
   </div>
 
   <div class="report-section">
-    <h2 style="font-size:20px;font-weight:700;color:#0d47a1;border-bottom:2px solid #1a73e8;padding-bottom:8px">${tt.diagnosisTitle}</h2>
-    <ul style="margin:6px 18px">${diagList || `<li>${tt.none}</li>`}</ul>
-    <div style="color:#475569">${s?.diagnoses?.certaintyNotes || ""}</div>
+    <h2>${text.summaryTitle}</h2>
+    <p>${s.patientSummary?.text || text.notAvailable}</p>
+    <p>${s.overallAssessment?.text || ""}</p>
   </div>
 
   <div class="report-section">
-    <h2 style="font-size:20px;font-weight:700;color:#0d47a1;border-bottom:2px solid #1a73e8;padding-bottom:8px">${tt.risksTitle}</h2>
-    ${risks || `<div style="color:#64748b">${tt.none}</div>`}
+    <h2>${text.diagnosisTitle}</h2>
+    <ul style="margin:6px 18px">
+      ${s?.diagnoses?.primary ? `<li><b>${isArabic ? "الرئيسي:" : "Primary:"}</b> ${s.diagnoses.primary}</li>` : ""}
+      ${
+        Array.isArray(s?.diagnoses?.secondary) && s.diagnoses.secondary.length
+          ? s.diagnoses.secondary.map((d) => `<li>${d}</li>`).join("")
+          : ""
+      }
+    </ul>
+    ${s?.diagnoses?.certaintyNotes ? `<div style="color:#475569">${s.diagnoses.certaintyNotes}</div>` : ""}
   </div>
 
   <div class="report-section">
-    <h2 style="font-size:20px;font-weight:700;color:#0d47a1;border-bottom:2px solid #1a73e8;padding-bottom:8px">${tt.detailsTitle}</h2>
+    <h2>${text.risksTitle}</h2>
+    ${risks || `<div style="color:#64748b">${text.notAvailable}</div>`}
+  </div>
+
+  <div class="report-section">
+    <h2>${text.detailsTitle}</h2>
     <div style="overflow-x:auto">
       <table class="audit-table">
-        <thead><tr>
-          <th style="width:28%">${tt.itemHeader}</th>
-          <th style="width:15%">${tt.dosageHeader}</th>
-          <th style="width:15%">${tt.statusHeader}</th>
-          <th style="width:15%">${tt.decisionHeader}</th>
-          <th style="width:27%">${tt.justificationHeader}</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th style="width:28%">${text.itemHeader}</th>
+            <th style="width:15%">${text.dosageHeader}</th>
+            <th style="width:15%">${text.statusHeader}</th>
+            <th style="width:15%">${text.decisionHeader}</th>
+            <th style="width:27%">${text.justificationHeader}</th>
+          </tr>
+        </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
   </div>
 
   <div class="report-section">
-    <h2 style="font-size:20px;font-weight:700;color:#0d47a1;border-bottom:2px solid #1a73e8;padding-bottom:8px">${tt.recsTitle}</h2>
+    <h2>${text.recommendationsTitle}</h2>
     ${recs}
   </div>
   `;
 }
 
+/* ------------ API Handler -------------- */
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
-    if (!OPENAI_API_KEY || !GEMINI_API_KEY) return bad(res, 500, "Server configuration error: API keys are missing.");
+    if (!OPENAI_API_KEY || !GEMINI_API_KEY) return bad(res, 500, "Server Configuration Error: API keys are missing.");
 
-    const { text = "", files = [], patientInfo = null, lang = "ar", caseId } = req.body || {};
-    const safeCaseId = caseId || String(Date.now());
-    const safeLang = ["ar", "en"].includes(lang) ? lang : "ar";
+    const { text = "", files = [], patientInfo = null, lang = "ar" } = req.body || {};
+    const safeLang  = ["ar", "en"].includes(lang) ? lang : "ar";
+    const caseId    = String(Date.now()); // أو استخدم UUID من الواجهة
 
-    const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files, caseId: safeCaseId, lang: safeLang });
+    // 1) تجميع محايد صارم من Gemini
+    const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files, caseId, lang: safeLang });
 
-    const auditBundle = { caseId: safeCaseId, patientInfo, aggregatedClinicalText, originalUserText: text };
-    const structured = await getAuditFromOpenAI({ bundle: auditBundle, lang: safeLang, caseId: safeCaseId });
+    // 2) تدقيق خبير منظَّم من OpenAI (JSON + temp=0)
+    const bundle = { caseId, patientInfo, aggregatedClinicalText, originalUserText: text };
+    const structuredRaw = await getAuditFromOpenAI({ bundle, lang: safeLang, caseId });
 
-    const html = renderHtmlReport(structured, safeLang);
-    return ok(res, { html, structured, caseId: safeCaseId, lang: safeLang });
+    // 3) Post-process (تنظيف الجرعات التي هي أسعار بالخطأ، إلخ)
+    const structured = postProcess(structuredRaw);
+
+    // 4) HTML
+    const html = renderHtmlReport(structured, files, safeLang);
+
+    return ok(res, { html, structured, caseId, lang: safeLang });
   } catch (err) {
     console.error("API /api/gpt error:", err);
     return bad(res, 500, `Internal error: ${err.message || "unknown"}`);
