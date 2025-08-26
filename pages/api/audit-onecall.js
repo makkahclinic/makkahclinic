@@ -1,24 +1,36 @@
 // pages/api/audit-onecall.js
 export const config = { api: { bodyParser: { sizeLimit: "50mb" } } };
 
-/** .env.local (أضف إلى مشروعك):
-OPENAI_API_KEY=sk-********************************
-OPENAI_MODEL=gpt-4o
-*/
+/**
+ * .env.local
+ * ----------
+ * OPENAI_API_KEY=sk-********************************
+ * OPENAI_MODEL=gpt-4o
+ * ALLOW_ORIGIN=https://m2020m.org    // غيّرها أو اتركها فارغة لتعطيل CORS
+ */
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ALLOW_ORIGIN   = process.env.ALLOW_ORIGIN || "";
 
-const ok  = (res, json) => res.status(200).json({ ok: true, ...json });
-const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
+/* ------------------------- Helpers ------------------------- */
+function withCors(res) {
+  if (ALLOW_ORIGIN) {
+    res.setHeader("Access-Control-Allow-Origin", ALLOW_ORIGIN);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+}
+const ok  = (res, json) => { withCors(res); return res.status(200).json({ ok: true, ...json }); };
+const bad = (res, code, msg) => { withCors(res); return res.status(code).json({ ok: false, error: msg }); };
 
-/* ======== 1) SCHEMA الصارم (Structured Outputs) ======== */
+/* ======== 1) SCHEMA ======== */
 function buildJsonSchema(lang = "ar") {
-  const isArabic = lang !== "en";
   return {
     name: "clinical_audit",
-    strict: true, // يفرض التطابق التام مع المخطط
+    strict: true,
     schema: {
       type: "object",
       properties: {
@@ -57,16 +69,13 @@ function buildJsonSchema(lang = "ar") {
             type: "object",
             properties: {
               name: { type: "string" },
-              dosage_written: { type: "string" }, // اكتب "—" إن لم تُذكر الجرعة
+              dosage_written: { type: "string" },
               itemType: { type: "string", enum: ["lab", "medication", "procedure", "omission"] },
               status: { type: "string" },
               analysisCategory: { type: "string" },
               insuranceDecision: {
                 type: "object",
-                properties: {
-                  label: { type: "string" },
-                  justification: { type: "string" }
-                }
+                properties: { label: { type: "string" }, justification: { type: "string" } }
               }
             },
             required: ["name", "itemType"]
@@ -77,7 +86,7 @@ function buildJsonSchema(lang = "ar") {
           items: {
             type: "object",
             properties: {
-              priority: { type: "string" }, // "عاجلة|أفضل ممارسة" أو "Urgent|Best practice"
+              priority: { type: "string" },
               description: { type: "string" },
               relatedItems: { type: "array", items: { type: "string" } }
             },
@@ -90,14 +99,14 @@ function buildJsonSchema(lang = "ar") {
   };
 }
 
-/* ======== 2) HTML Renderer (اختياري—لترجيع HTML جاهز) ======== */
+/* ======== 2) HTML Renderer (اختياري) ======== */
 function renderHtmlReport(structured, files, lang = "ar") {
   const s = structured || {};
   const isArabic = lang !== "en";
   const t = (ar, en) => (isArabic ? ar : en);
 
   const getRiskClass = (category = "") => {
-    const a = category.toLowerCase();
+    const a = (category || "").toLowerCase();
     if (a.includes("omission") || a.includes("إغفال") || a.includes("conflict") || a.includes("تعارض") || a.includes("dose") || a.includes("جرعة") || a.includes("duplicate")) return "risk-critical";
     if (a.includes("review") || a.includes("غير مبرر") || a.includes("تحتاج")) return "risk-warning";
     if (a.includes("correct") || a.includes("صحيح")) return "risk-ok";
@@ -164,7 +173,6 @@ function renderHtmlReport(structured, files, lang = "ar") {
   <div class="report-section">
     <h2>${t("ملخص الحالة والتقييم العام","Case Summary & Overall Assessment")}</h2>
     <p>${s.patientSummary?.text || t("غير متوفر.","Not available.")}</p>
-    ${s.overallAssessment?.text ? `<p>${s.overallAssessment.text}</p>` : ""}
   </div>
   <div class="report-section">
     <h2>${t("التشخيصات","Diagnoses")}</h2>
@@ -201,7 +209,7 @@ function renderHtmlReport(structured, files, lang = "ar") {
   </div>`;
 }
 
-/* ======== 3) POST-PROCESS بسيط (منع السعر بدل الجرعة) ======== */
+/* ======== 3) Sanitize ======== */
 function sanitizeStructured(structured) {
   try {
     const s = structured || {};
@@ -223,17 +231,17 @@ function sanitizeStructured(structured) {
   }
 }
 
-/* ======== 4) HANDLER ======== */
+/* ======== 4) Handler ======== */
 export default async function handler(req, res) {
   try {
-    if (req.method !== "POST") return bad(res, 405, "Only POST is accepted.");
-    if (!OPENAI_API_KEY)       return bad(res, 500, "Missing OPENAI_API_KEY.");
+    if (req.method === "OPTIONS") { withCors(res); return res.status(204).end(); }
+    if (req.method !== "POST")     return bad(res, 405, "Only POST is accepted.");
+    if (!OPENAI_API_KEY)           return bad(res, 500, "Missing OPENAI_API_KEY.");
+
     const { text = "", files = [], patientInfo = null, lang = "ar", seed = null } = req.body || {};
-
     const safeLang = ["ar","en"].includes(lang) ? lang : "ar";
-    const caseId   = String(Date.now()); // عزل الحالة
+    const caseId   = String(Date.now());
 
-    // نبني محتوى الرسالة (نص + صور Base64)
     const content = [];
     const header = `
 CASE_ID=${caseId}
@@ -241,7 +249,7 @@ STRICT CASE ISOLATION: Analyze ONLY inputs for this case.
 Language: ${safeLang === "en" ? "English" : "Arabic"} (write professionally).
 TASK: Read the images/text and produce the clinical audit JSON per schema. 
 RULES:
-1) For medications, copy dosage/frequency/duration exactly as written; if not explicitly written, put "—" (no guessing).
+1) For medications, copy dosage/frequency/duration exactly as written; if not explicitly written, put "—".
 2) List EVERY medication/lab/procedure; add important "omission" rows for critical standard-of-care gaps.
 3) Apply 90-day quantity rule when relevant (mark "quantity needs review" if stability not documented).
 `.trim();
@@ -251,9 +259,7 @@ RULES:
 
     for (const f of files || []) {
       const mime = f?.mimeType || "";
-      const base64 = (f?.data || "").includes("base64,")
-        ? f.data.split("base64,").pop()
-        : (f?.data || "");
+      const base64 = (f?.data || "").includes("base64,") ? f.data.split("base64,").pop() : (f?.data || "");
       if (mime.startsWith("image/") && base64) {
         content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } });
       } else if (f?.name) {
@@ -261,18 +267,13 @@ RULES:
       }
     }
 
-    const response_format = {
-      type: "json_schema",
-      json_schema: buildJsonSchema(safeLang)
-    };
+    const response_format = { type: "json_schema", json_schema: buildJsonSchema(safeLang) };
 
     const r = await fetch(OPENAI_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0,
-        ...(seed ? { seed } : {}), // اختياري: تحسين القابلية للتكرار (غير مضمون بالكامل)
+        model: OPENAI_MODEL, temperature: 0, ...(seed ? { seed } : {}),
         response_format,
         messages: [
           {
@@ -290,15 +291,11 @@ RULES:
     if (!r.ok) return bad(res, r.status, `OpenAI error: ${JSON.stringify(data)}`);
 
     const structuredRaw = JSON.parse(data?.choices?.[0]?.message?.content || "{}");
-    // ضمان meta
     structuredRaw.meta = structuredRaw.meta || {};
     structuredRaw.meta.caseId = caseId;
     structuredRaw.meta.lang   = safeLang;
 
-    // تنظيف بسيط
     const structured = sanitizeStructured(structuredRaw);
-
-    // HTML جاهز (اختياري)
     const html = renderHtmlReport(structured, files, safeLang);
 
     return ok(res, { caseId, lang: safeLang, structured, html });
@@ -307,4 +304,3 @@ RULES:
     return bad(res, 500, `Internal error: ${err.message || "unknown"}`);
   }
 }
-
