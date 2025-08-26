@@ -166,46 +166,48 @@ function renderHtmlReport(structured, files, lang = "ar") {
     .audit-table th{background:#f8f9fa}
     .risk-critical td{background:#fce8e6}.risk-warning td{background:#fff0e1}.risk-ok td{background:#e6f4ea}
   </style>
-  <div class="report-section">
-    <h2>${t("المستندات المصدرية","Source Documents")}</h2>
-    ${srcDocs || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
-  </div>
-  <div class="report-section">
-    <h2>${t("ملخص الحالة والتقييم العام","Case Summary & Overall Assessment")}</h2>
-    <p>${s.patientSummary?.text || t("غير متوفر.","Not available.")}</p>
-  </div>
-  <div class="report-section">
-    <h2>${t("التشخيصات","Diagnoses")}</h2>
-    <ul style="margin:6px 18px">
-      ${s?.diagnoses?.primary ? `<li><b>${t("الرئيسي:","Primary:")}</b> ${s.diagnoses.primary}</li>` : ""}
-      ${Array.isArray(s?.diagnoses?.secondary)? s.diagnoses.secondary.map(d=>`<li>${d}</li>`).join("") : ""}
-    </ul>
-    ${s?.diagnoses?.certaintyNotes ? `<div style="color:#475569">${s.diagnoses.certaintyNotes}</div>`:""}
-  </div>
-  <div class="report-section">
-    <h2>${t("المخاطر والتعارضات","Risks & Conflicts")}</h2>
-    ${risks || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
-  </div>
-  <div class="report-section">
-    <h2>${t("التحليل التفصيلي للإجراءات/الأدوية","Detailed Analysis of Items")}</h2>
-    <div style="overflow-x:auto">
-      <table class="audit-table">
-        <thead>
-          <tr>
-            <th style="width:28%">${t("البند","Item")}</th>
-            <th style="width:15%">${t("الجرعة المكتوبة","Written Dosage")}</th>
-            <th style="width:15%">${t("الحالة","Status")}</th>
-            <th style="width:15%">${t("قرار التأمين","Insurance Decision")}</th>
-            <th style="width:27%">${t("التبرير","Justification")}</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
+  <div dir="${isArabic ? 'rtl' : 'ltr'}" style="text-align: ${isArabic ? 'right' : 'left'};">
+    <div class="report-section">
+      <h2>${t("المستندات المصدرية","Source Documents")}</h2>
+      ${srcDocs || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
     </div>
-  </div>
-  <div class="report-section">
-    <h2>${t("التوصيات والإجراءات المقترحة","Recommendations & Proposed Actions")}</h2>
-    ${recs || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
+    <div class="report-section">
+      <h2>${t("ملخص الحالة والتقييم العام","Case Summary & Overall Assessment")}</h2>
+      <p>${s.patientSummary?.text || t("غير متوفر.","Not available.")}</p>
+    </div>
+    <div class="report-section">
+      <h2>${t("التشخيصات","Diagnoses")}</h2>
+      <ul style="margin:6px 18px">
+        ${s?.diagnoses?.primary ? `<li><b>${t("الرئيسي:","Primary:")}</b> ${s.diagnoses.primary}</li>` : ""}
+        ${Array.isArray(s?.diagnoses?.secondary)? s.diagnoses.secondary.map(d=>`<li>${d}</li>`).join("") : ""}
+      </ul>
+      ${s?.diagnoses?.certaintyNotes ? `<div style="color:#475569">${s.diagnoses.certaintyNotes}</div>`:""}
+    </div>
+    <div class="report-section">
+      <h2>${t("المخاطر والتعارضات","Risks & Conflicts")}</h2>
+      ${risks || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
+    </div>
+    <div class="report-section">
+      <h2>${t("التحليل التفصيلي للإجراءات/الأدوية","Detailed Analysis of Items")}</h2>
+      <div style="overflow-x:auto">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th style="width:28%">${t("البند","Item")}</th>
+              <th style="width:15%">${t("الجرعة المكتوبة","Written Dosage")}</th>
+              <th style="width:15%">${t("الحالة","Status")}</th>
+              <th style="width:15%">${t("قرار التأمين","Insurance Decision")}</th>
+              <th style="width:27%">${t("التبرير","Justification")}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="report-section">
+      <h2>${t("التوصيات والإجراءات المقترحة","Recommendations & Proposed Actions")}</h2>
+      ${recs || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
+    </div>
   </div>`;
 }
 
@@ -239,6 +241,12 @@ export default async function handler(req, res) {
     if (!OPENAI_API_KEY)           return bad(res, 500, "Missing OPENAI_API_KEY.");
 
     const { text = "", files = [], patientInfo = null, lang = "ar", seed = null } = req.body || {};
+    
+    // التحقق من وجود بيانات للإرسال إلى OpenAI
+    if (!text && (!files || files.length === 0)) {
+      return bad(res, 400, "Either text or files must be provided.");
+    }
+
     const safeLang = ["ar","en"].includes(lang) ? lang : "ar";
     const caseId   = String(Date.now());
 
@@ -261,7 +269,7 @@ RULES:
       const mime = f?.mimeType || "";
       const base64 = (f?.data || "").includes("base64,") ? f.data.split("base64,").pop() : (f?.data || "");
       if (mime.startsWith("image/") && base64) {
-        content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } });
+        content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${base64}`, detail: "high" } });
       } else if (f?.name) {
         content.push({ type: "text", text: `Attached (not previewed): ${f.name}` });
       }
@@ -273,7 +281,9 @@ RULES:
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
       body: JSON.stringify({
-        model: OPENAI_MODEL, temperature: 0, ...(seed ? { seed } : {}),
+        model: OPENAI_MODEL, 
+        temperature: 0, 
+        ...(seed ? { seed } : {}),
         response_format,
         messages: [
           {
@@ -290,7 +300,12 @@ RULES:
     const data = await r.json();
     if (!r.ok) return bad(res, r.status, `OpenAI error: ${JSON.stringify(data)}`);
 
-    const structuredRaw = JSON.parse(data?.choices?.[0]?.message?.content || "{}");
+    // التحقق من أن الرد يحتوي على محتوى
+    if (!data?.choices?.[0]?.message?.content) {
+      return bad(res, 500, "No content received from OpenAI");
+    }
+
+    const structuredRaw = JSON.parse(data.choices[0].message.content);
     structuredRaw.meta = structuredRaw.meta || {};
     structuredRaw.meta.caseId = caseId;
     structuredRaw.meta.lang   = safeLang;
