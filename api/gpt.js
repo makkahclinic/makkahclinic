@@ -1,321 +1,405 @@
-// pages/api/gpt.js
-export const config = { api: { bodyParser: { sizeLimit: "50mb" } } };
-
-/**
- * .env.local
- * ----------
- * OPENAI_API_KEY=sk-********************************
- * OPENAI_MODEL=gpt-4o
- * ALLOW_ORIGIN=https://m2020m.org    // غيّرها أو اتركها فارغة لتعطيل CORS
- */
-
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_MODEL   = process.env.OPENAI_MODEL || "gpt-4o";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const ALLOW_ORIGIN   = process.env.ALLOW_ORIGIN || "";
-
-/* ------------------------- Helpers ------------------------- */
-function withCors(res) {
-  if (ALLOW_ORIGIN) {
-    res.setHeader("Access-Control-Allow-Origin", ALLOW_ORIGIN);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  }
-}
-const ok  = (res, json) => { withCors(res); return res.status(200).json({ ok: true, ...json }); };
-const bad = (res, code, msg) => { withCors(res); return res.status(code).json({ ok: false, error: msg }); };
-
-/* ======== 1) SCHEMA ======== */
-function buildJsonSchema(lang = "ar") {
-  return {
-    name: "clinical_audit",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        meta: {
-          type: "object",
-          properties: { caseId: { type: "string" }, lang: { type: "string" } },
-          required: ["caseId"]
-        },
-        patientSummary: {
-          type: "object",
-          properties: { text: { type: "string" } },
-          required: ["text"]
-        },
-        diagnoses: {
-          type: "object",
-          properties: {
-            primary: { type: "string" },
-            secondary: { type: "array", items: { type: "string" } },
-            certaintyNotes: { type: "string" }
-          },
-          required: ["primary"]
-        },
-        risksAndConflicts: {
-          type: "object",
-          properties: {
-            redFlags: { type: "array", items: { type: "string" } },
-            guidelineOmissions: { type: "array", items: { type: "string" } },
-            drugDrugConflicts: { type: "array", items: { type: "string" } },
-            doseOrDurationErrors: { type: "array", items: { type: "string" } },
-            notMedicallyNecessary: { type: "array", items: { type: "string" } }
-          }
-        },
-        table: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              dosage_written: { type: "string" },
-              itemType: { type: "string", enum: ["lab", "medication", "procedure", "omission"] },
-              status: { type: "string" },
-              analysisCategory: { type: "string" },
-              insuranceDecision: {
-                type: "object",
-                properties: { label: { type: "string" }, justification: { type: "string" } }
-              }
-            },
-            required: ["name", "itemType"]
-          }
-        },
-        recommendations: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              priority: { type: "string" },
-              description: { type: "string" },
-              relatedItems: { type: "array", items: { type: "string" } }
-            },
-            required: ["priority", "description"]
-          }
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام التحليل الطبي - M2020M</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-      },
-      required: ["meta", "patientSummary", "diagnoses", "table"]
-    }
-  };
-}
-
-/* ======== 2) HTML Renderer (اختياري) ======== */
-function renderHtmlReport(structured, files, lang = "ar") {
-  const s = structured || {};
-  const isArabic = lang !== "en";
-  const t = (ar, en) => (isArabic ? ar : en);
-
-  const getRiskClass = (category = "") => {
-    const a = (category || "").toLowerCase();
-    if (a.includes("omission") || a.includes("إغفال") || a.includes("conflict") || a.includes("تعارض") || a.includes("dose") || a.includes("جرعة") || a.includes("duplicate")) return "risk-critical";
-    if (a.includes("review") || a.includes("غير مبرر") || a.includes("تحتاج")) return "risk-warning";
-    if (a.includes("correct") || a.includes("صحيح")) return "risk-ok";
-    return "";
-  };
-
-  const srcDocs = (files || []).map(f => {
-    const isImg = (f.mimeType || "").startsWith("image/");
-    const b64 = (f.data || "").replace(/^data:[^;]+;base64,/, "");
-    const src = `data:${f.mimeType};base64,${b64}`;
-    return `
-      <div style="margin-bottom:12px">
-        <h3 style="margin:0 0 8px 0">${f.name || ""}</h3>
-        ${isImg ? `<img src="${src}" alt="${f.name}" style="max-width:100%;height:auto;display:block;border-radius:8px"/>`
-                : `<div style="padding:20px;border:1px dashed #e5e7eb;border-radius:8px;background:#f9fbfc;color:#6b7280;text-align:center">${f.name || ""}</div>`}
-      </div>`;
-  }).join("");
-
-  const rows = (s.table || []).map(r => `
-    <tr class="${getRiskClass(r.analysisCategory)}">
-      <td><div style="font-weight:700">${r.name || "-"}</div><small style="color:#5f6368">${r.analysisCategory || ""}</small></td>
-      <td style="font-family:monospace">${r.dosage_written || "—"}</td>
-      <td>${r.status || "-"}</td>
-      <td><span style="background:#e8eaed;color:#5f6368;padding:4px 8px;border-radius:12px;font-weight:700">${r.insuranceDecision?.label || "-"}</span></td>
-      <td>${r.insuranceDecision?.justification || "-"}</td>
-    </tr>
-  `).join("");
-
-  const risks = s.risksAndConflicts ? [
-    ["redFlags", t("علامات إنذارية", "Red flags")],
-    ["guidelineOmissions", t("نواقص قياسية", "Guideline omissions")],
-    ["drugDrugConflicts", t("تعارضات دوائية", "Drug–drug conflicts")],
-    ["doseOrDurationErrors", t("أخطاء جرعة/مدة", "Dose/Duration errors")],
-    ["notMedicallyNecessary", t("غير مبرّر طبيًا", "Not medically necessary")]
-  ].map(([k, title]) => {
-    const arr = s.risksAndConflicts[k] || [];
-    if (!arr.length) return "";
-    return `<div style="margin-bottom:8px"><b>${title}:</b><ul style="margin:6px 18px">${arr.map(x=>`<li>${x}</li>`).join("")}</ul></div>`;
-  }).join("") : "";
-
-  const recs = (s.recommendations || []).map(rec => {
-    const urgent = (rec.priority||"").toLowerCase().includes("urgent") || (rec.priority||"").includes("عاجلة");
-    return `
-      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:8px;background:#f8f9fa;border-${isArabic?'right':'left'}:4px solid ${urgent?'#d93025':'#1e8e3e'};margin-bottom:12px">
-        <span style="font-weight:700;padding:4px 10px;border-radius:8px;font-size:12px;color:#fff;background:${urgent?'#d93025':'#1e8e3e'}">${rec.priority||""}</span>
-        <div>
-          <div>${rec.description||""}</div>
-          ${rec.relatedItems?.length ? `<div style="font-size:12px;color:#5f6368;margin-top:6px">${t("مرتبط بـ","Related to")}: ${rec.relatedItems.join(", ")}</div>` : ""}
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(90deg, #1976d2 0%, #0d47a1 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        
+        .logo i {
+            font-size: 32px;
+            margin-left: 10px;
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin: 10px 0;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .section {
+            background: #f9fbfc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .section-title {
+            color: #0d47a1;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e3f2fd;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title i {
+            margin-left: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #1976d2;
+            box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        .upload-area {
+            border: 2px dashed #1976d2;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            background: #f3f9ff;
+            margin-bottom: 20px;
+            transition: background 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            background: #e3f2fd;
+        }
+        
+        .upload-area i {
+            font-size: 48px;
+            color: #1976d2;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            color: #1976d2;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .upload-hint {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .file-list {
+            margin-top: 20px;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            background: #e8f5e9;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .file-item i {
+            color: #388e3c;
+            margin-left: 10px;
+        }
+        
+        .btn {
+            background: linear-gradient(90deg, #1976d2 0%, #0d47a1 100%);
+            color: white;
+            border: none;
+            padding: 14px 25px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn i {
+            margin-left: 8px;
+        }
+        
+        .result-area {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid #e0e0e0;
+            min-height: 200px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            background: #f1f8e9;
+            border-radius: 8px;
+            margin-top: 20px;
+            color: #388e3c;
+            font-weight: 600;
+        }
+        
+        .status-indicator i {
+            margin-left: 10px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 14px;
+            border-top: 1px solid #eee;
+            margin-top: 20px;
+        }
+        
+        .temperature-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1976d2;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .temperature-label {
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-heartbeat"></i>
+                <h1>نظام التحليل الطبي</h1>
+            </div>
+            <p class="subtitle">www.m2020m.org - منصة متخصصة في التحليل الطبي الذكي</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="section">
+                    <h2 class="section-title"><i class="fas fa-info-circle"></i> معلومات الحالة</h2>
+                    
+                    <div class="form-group">
+                        <label for="temperature">درجة الحرارة (مئوية)</label>
+                        <div class="temperature-value">37.0</div>
+                        <div class="temperature-label">طبيعي</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">وصف الحالة (نص حر)</label>
+                        <textarea id="description" placeholder="أدخل وصفًا مفصلًا للحالة الطبية...">أعز اقتراحات...</textarea>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title"><i class="fas fa-upload"></i> رفع الملفات</h2>
+                    
+                    <div class="upload-area" id="dropZone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <div class="upload-text">سحب وإفلات الملفات هنا</div>
+                        <div class="upload-hint">يدعم الصور وملفات PDF (بحد أقصى 10 ملفات)</div>
+                    </div>
+                    
+                    <div class="file-list">
+                        <div class="file-item">
+                            <i class="fas fa-file-pdf"></i>
+                            <span>التقرير_الطبي.pdf</span>
+                        </div>
+                        <div class="file-item">
+                            <i class="fas fa-file-image"></i>
+                            <span>صورة_التحليل.png</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="right-panel">
+                <div class="section">
+                    <h2 class="section-title"><i class="fas fa-cogs"></i> إعدادات التحليل</h2>
+                    
+                    <div class="form-group">
+                        <label for="analysisType">نوع التحليل</label>
+                        <select id="analysisType">
+                            <option>تحليل الأدوية والجرعات</option>
+                            <option>تحليل التفاعلات الدوائية</option>
+                            <option>تحليل التكلفة والفوائد</option>
+                            <option>تحليل المخاطر الطبية</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="priority">أولوية التحليل</label>
+                        <select id="priority">
+                            <option>عادية</option>
+                            <option>متوسطة</option>
+                            <option>عاجلة</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn" id="analyzeBtn">
+                        <i class="fas fa-play-circle"></i> بدء التحليل
+                    </button>
+                    
+                    <div class="status-indicator">
+                        <i class="fas fa-check-circle"></i>
+                        <span>جاهز للتحليل</span>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2 class="section-title"><i class="fas fa-chart-line"></i> نتائج التحليل</h2>
+                    
+                    <div class="result-area">
+                        <p>سيظهر هنا نتائج التحليل بعد الضغط على زر "بدء التحليل".</p>
+                        <p>سيقوم النظام بتحليل البيانات والمستندات المقدمة وتقديم التوصيات الطبية المناسبة.</p>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>`;
-  }).join("");
-
-  return `
-  <style>
-    .audit-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px}
-    .audit-table th,.audit-table td{padding:12px;text-align:${isArabic?"right":"left"};border-bottom:1px solid #e9ecef;vertical-align:top;word-wrap:break-word}
-    .audit-table th{background:#f8f9fa}
-    .risk-critical td{background:#fce8e6}.risk-warning td{background:#fff0e1}.risk-ok td{background:#e6f4ea}
-  </style>
-  <div dir="${isArabic ? 'rtl' : 'ltr'}" style="text-align: ${isArabic ? 'right' : 'left'};">
-    <div class="report-section">
-      <h2>${t("المستندات المصدرية","Source Documents")}</h2>
-      ${srcDocs || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
+        
+        <footer>
+            <p>© 2025 www.m2020m.org - جميع الحقوق محفوظة</p>
+            <p>هذه المنصة مخصصة للاستخدام الطبي المحترف وتخضع لشروط الخصوصية والأمان الطبي</p>
+        </footer>
     </div>
-    <div class="report-section">
-      <h2>${t("ملخص الحالة والتقييم العام","Case Summary & Overall Assessment")}</h2>
-      <p>${s.patientSummary?.text || t("غير متوفر.","Not available.")}</p>
-    </div>
-    <div class="report-section">
-      <h2>${t("التشخيصات","Diagnoses")}</h2>
-      <ul style="margin:6px 18px">
-        ${s?.diagnoses?.primary ? `<li><b>${t("الرئيسي:","Primary:")}</b> ${s.diagnoses.primary}</li>` : ""}
-        ${Array.isArray(s?.diagnoses?.secondary)? s.diagnoses.secondary.map(d=>`<li>${d}</li>`).join("") : ""}
-      </ul>
-      ${s?.diagnoses?.certaintyNotes ? `<div style="color:#475569">${s.diagnoses.certaintyNotes}</div>`:""}
-    </div>
-    <div class="report-section">
-      <h2>${t("المخاطر والتعارضات","Risks & Conflicts")}</h2>
-      ${risks || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
-    </div>
-    <div class="report-section">
-      <h2>${t("التحليل التفصيلي للإجراءات/الأدوية","Detailed Analysis of Items")}</h2>
-      <div style="overflow-x:auto">
-        <table class="audit-table">
-          <thead>
-            <tr>
-              <th style="width:28%">${t("البند","Item")}</th>
-              <th style="width:15%">${t("الجرعة المكتوبة","Written Dosage")}</th>
-              <th style="width:15%">${t("الحالة","Status")}</th>
-              <th style="width:15%">${t("قرار التأمين","Insurance Decision")}</th>
-              <th style="width:27%">${t("التبرير","Justification")}</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>
-    <div class="report-section">
-      <h2>${t("التوصيات والإجراءات المقترحة","Recommendations & Proposed Actions")}</h2>
-      ${recs || `<div style="color:#64748b">${t("غير متوفر.","Not available.")}</div>`}
-    </div>
-  </div>`;
-}
 
-/* ======== 3) Sanitize ======== */
-function sanitizeStructured(structured) {
-  try {
-    const s = structured || {};
-    if (Array.isArray(s.table)) {
-      for (const row of s.table) {
-        const d = (row?.dosage_written || "").toString();
-        const looksLikePrice = /(\bSAR\b|ريال|AED|USD|\d+\s*x\s*\d+\.\d{2}\s*(?:ريال|SAR))/i.test(d);
-        if (looksLikePrice || d.trim() === "" ) {
-          row.dosage_written = "—";
-          row.analysisCategory = row.analysisCategory || "الكمية تحتاج لمراجعة";
-          row.insuranceDecision = row.insuranceDecision || {};
-          row.insuranceDecision.justification = row.insuranceDecision.justification || "الجرعة غير موثّقة أو تحتوي سعرًا؛ الرجاء توثيق الجرعة/التكرار/المدة.";
-        }
-      }
-    }
-    return s;
-  } catch {
-    return structured;
-  }
-}
-
-/* ======== 4) Handler ======== */
-export default async function handler(req, res) {
-  try {
-    if (req.method === "OPTIONS") { withCors(res); return res.status(204).end(); }
-    if (req.method !== "POST")     return bad(res, 405, "Only POST is accepted.");
-    if (!OPENAI_API_KEY)           return bad(res, 500, "Missing OPENAI_API_KEY.");
-
-    const { text = "", files = [], patientInfo = null, lang = "ar", seed = null } = req.body || {};
-    
-    // التحقق من وجود بيانات للإرسال إلى OpenAI
-    if (!text && (!files || files.length === 0)) {
-      return bad(res, 400, "Either text or files must be provided.");
-    }
-
-    const safeLang = ["ar","en"].includes(lang) ? lang : "ar";
-    const caseId   = String(Date.now());
-
-    const content = [];
-    const header = `
-CASE_ID=${caseId}
-STRICT CASE ISOLATION: Analyze ONLY inputs for this case.
-Language: ${safeLang === "en" ? "English" : "Arabic"} (write professionally).
-TASK: Read the images/text and produce the clinical audit JSON per schema. 
-RULES:
-1) For medications, copy dosage/frequency/duration exactly as written; if not explicitly written, put "—".
-2) List EVERY medication/lab/procedure; add important "omission" rows for critical standard-of-care gaps.
-3) Apply 90-day quantity rule when relevant (mark "quantity needs review" if stability not documented).
-`.trim();
-
-    content.push({ type: "text", text: header });
-    if (text) content.push({ type: "text", text });
-
-    for (const f of files || []) {
-      const mime = f?.mimeType || "";
-      const base64 = (f?.data || "").includes("base64,") ? f.data.split("base64,").pop() : (f?.data || "");
-      if (mime.startsWith("image/") && base64) {
-        content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${base64}`, detail: "high" } });
-      } else if (f?.name) {
-        content.push({ type: "text", text: `Attached (not previewed): ${f.name}` });
-      }
-    }
-
-    const response_format = { type: "json_schema", json_schema: buildJsonSchema(safeLang) };
-
-    const r = await fetch(OPENAI_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: OPENAI_MODEL, 
-        temperature: 0, 
-        ...(seed ? { seed } : {}),
-        response_format,
-        messages: [
-          {
-            role: "system",
-            content: safeLang === "en"
-              ? "You are an evidence-based clinical auditor. Output JSON only per schema."
-              : "أنت مدقق إكلينيكي أدلّي. أخرج JSON فقط حسب المخطط."
-          },
-          { role: "user", content }
-        ]
-      })
-    });
-
-    const data = await r.json();
-    if (!r.ok) return bad(res, r.status, `OpenAI error: ${JSON.stringify(data)}`);
-
-    // التحقق من أن الرد يحتوي على محتوى
-    if (!data?.choices?.[0]?.message?.content) {
-      return bad(res, 500, "No content received from OpenAI");
-    }
-
-    const structuredRaw = JSON.parse(data.choices[0].message.content);
-    structuredRaw.meta = structuredRaw.meta || {};
-    structuredRaw.meta.caseId = caseId;
-    structuredRaw.meta.lang   = safeLang;
-
-    const structured = sanitizeStructured(structuredRaw);
-    const html = renderHtmlReport(structured, files, safeLang);
-
-    return ok(res, { caseId, lang: safeLang, structured, html });
-  } catch (err) {
-    console.error("API /api/gpt error:", err);
-    return bad(res, 500, `Internal error: ${err.message || "unknown"}`);
-  }
-}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropZone = document.getElementById('dropZone');
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            
+            // تمكين سحب وإفلات الملفات
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.style.background = '#e3f2fd';
+            });
+            
+            dropZone.addEventListener('dragleave', function() {
+                this.style.background = '#f3f9ff';
+            });
+            
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.style.background = '#f3f9ff';
+                alert('تم إضافة الملفات بنجاح!');
+            });
+            
+            // محاكاة عملية التحليل
+            analyzeBtn.addEventListener('click', function() {
+                const statusIndicator = document.querySelector('.status-indicator');
+                statusIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارِ التحليل...';
+                statusIndicator.style.background = '#fff3e0';
+                statusIndicator.style.color = '#f57c00';
+                
+                // محاكاة وقت التحليل
+                setTimeout(function() {
+                    statusIndicator.innerHTML = '<i class="fas fa-check-circle"></i> اكتمل التحليل بنجاح';
+                    statusIndicator.style.background = '#e8f5e9';
+                    statusIndicator.style.color = '#388e3c';
+                    
+                    document.querySelector('.result-area').innerHTML = `
+                        <h3>نتائج التحليل:</h3>
+                        <ul>
+                            <li>لا توجد تفاعلات دوائية خطيرة</li>
+                            <li>الجرعات مناسبة للحالة</li>
+                            <li>يوصى بمتابعة الحالة بعد أسبوعين</li>
+                            <li>تم اكتشاف دواء زائد يمكن الاستغناء عنه</li>
+                        </ul>
+                        <h3>التوصيات:</h3>
+                        <ol>
+                            <li>الاستمرار على الخطة العلاجية الحالية</li>
+                            <li>مراقبة مستوى السكر يوميًا</li>
+                            <li>الالتزام بالمواعيد الدوائية بدقة</li>
+                            <li>مراجعة العيادة بعد أسبوعين</li>
+                        </ol>
+                    `;
+                }, 3000);
+            });
+        });
+    </script>
+</body>
+</html>
