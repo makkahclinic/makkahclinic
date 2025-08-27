@@ -1,80 +1,218 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Insurance Case Analyzer</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  </head>
-  <body style="font-family: Arial; padding: 20px">
-    <h1>🩺 Insurance Medical Case Analyzer</h1>
-
-    <textarea
-      id="caseText"
-      rows="5"
-      cols="60"
-      placeholder="Enter patient case text..."
-    ></textarea>
-    <br />
-
-    <!-- ⛔ يقبل كل شيء ما عدا PDF -->
-    <input type="file" id="fileInput" />
-    <br />
-
-    <button onclick="analyzeCase()">Analyze Case</button>
-
-    <div id="result-section" style="margin-top: 20px"></div>
-
-    <script>
-      async function analyzeCase() {
-        const caseText = document.getElementById("caseText").value;
-        const file = document.getElementById("fileInput").files[0];
-
-        if (file && file.type === "application/pdf") {
-          alert("❌ PDF files are not supported. Please upload another file type.");
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append("caseText", caseText);
-        if (file) formData.append("file", file);
-
-        const res = await fetch("/api/gpt", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
-
-        const openaiResult =
-          data.openai?.choices?.[0]?.message?.content || "N/A";
-        const geminiResult =
-          data.gemini?.candidates?.[0]?.content?.parts?.[0]?.text || "N/A";
-
-        document.getElementById("result-section").innerHTML = `
-          <h2>📊 Analysis Result</h2>
-          <table border="1" cellpadding="10" style="border-collapse: collapse; width: 100%">
-            <thead>
-              <tr>
-                <th>Aspect</th>
-                <th>ChatGPT (OpenAI)</th>
-                <th>Gemini</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Diagnosis & Procedures</td>
-                <td>${openaiResult}</td>
-                <td>${geminiResult}</td>
-              </tr>
-            </tbody>
-          </table>
-          <button onclick="exportPDF()" style="margin-top: 20px">Export to PDF</button>
-        `;
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تحليل حالات طبية — Gemini & GPT‑4o</title>
+  <style>
+    body {font-family: Arial, system-ui, -apple-system; margin: 24px; background:#f8f9fb;}
+    h1 {margin: 0 0 12px;}
+    .card {background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:16px; margin:16px 0;}
+    label {display:block; margin:10px 0 6px;}
+    input[type="file"]{margin:6px 0 12px;}
+    button {padding:10px 16px; border:0; border-radius:8px; background:#111827; color:#fff; cursor:pointer}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    .row {display:flex; gap:12px; flex-wrap:wrap}
+    .row > * {flex:1; min-width:260px}
+    .muted{color:#6b7280; font-size:13px}
+    .log{white-space:pre-wrap; background:#0b1020; color:#c7d2fe; padding:12px; border-radius:8px; max-height:240px; overflow:auto}
+    .report{white-space:pre-wrap; background:#fff; border:1px dashed #cbd5e1; padding:12px; border-radius:8px}
+    progress{width:100%; height:14px}
+  </style>
+  <!-- PDF.js via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js" defer></script>
+  <script>
+    // تهيئة عامل PDF.js
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window['pdfjsLib']) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js";
       }
+    });
+  </script>
+</head>
+<body>
+  <h1>تحليل الحالات الطبية (Gemini & GPT‑4o)</h1>
+  <div class="muted">
+    * يُرفع الملف مباشرةً إلى Vercel Blob (لتجاوز حد 4.5MB).<br/>
+    * محتوى التقرير للأغراض التعليمية وتحسين الجودة، ويجب أن يُراجِعه طبيب مرخّص قبل أي قرار علاجي/مالي.
+  </div>
 
-      function exportPDF() {
-        const element = document.getElementById("result-section");
-        html2pdf().from(element).save("insurance_case_analysis.pdf");
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>اختر ملفات (صورة/‏PDF — عربي/إنجليزي، خط يدوي أو مطبوع):</label>
+        <input id="fileInput" type="file" accept=".pdf,image/*" multiple />
+        <div class="muted">يمكن رفع عدة ملفات؛ سيجري تحويل صفحات الـPDF إلى صور عالية الدقة.</div>
+      </div>
+      <div>
+        <label>اللغة المطلوبة للتقرير:</label>
+        <select id="lang">
+          <option value="ar" selected>العربية</option>
+          <option value="en">English</option>
+        </select>
+        <label>النموذج المستخدم:</label>
+        <select id="model">
+          <option value="both" selected>كلاهما (Gemini + GPT‑4o)</option>
+          <option value="openai">GPT‑4o فقط</option>
+          <option value="gemini">Gemini فقط</option>
+        </select>
+        <label>التخصص (اختياري):</label>
+        <input id="specialty" placeholder="أسنان، جلدية، قلب، ..."/>
+      </div>
+    </div>
+
+    <label>وصف مختصر للحالة/سياق التأمين (اختياري):</label>
+    <textarea id="context" rows="4" style="width:100%;"></textarea>
+
+    <div class="row">
+      <div>
+        <button id="analyzeBtn">تحليل الحالة</button>
+      </div>
+      <div>
+        <progress id="prog" value="0" max="100" hidden></progress>
+      </div>
+    </div>
+
+    <div class="muted" id="uploadSummary"></div>
+  </div>
+
+  <div class="card">
+    <h3>النتيجة المدمجة</h3>
+    <div id="merged" class="report"></div>
+  </div>
+
+  <div class="card">
+    <h3>مخرجات GPT‑4o</h3>
+    <div id="openaiOut" class="report"></div>
+  </div>
+
+  <div class="card">
+    <h3>مخرجات Gemini</h3>
+    <div id="geminiOut" class="report"></div>
+  </div>
+
+  <div class="card">
+    <h3>السجل</h3>
+    <div id="log" class="log"></div>
+  </div>
+
+<script>
+const log = (...a)=>{ document.getElementById('log').textContent += a.join(' ') + '\n'; };
+
+async function signUploadUrl(filename, contentType){
+  const res = await fetch('/api/gpt?action=sign', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ filename, contentType })
+  });
+  if(!res.ok) throw new Error('Failed to sign upload URL');
+  return res.json(); // { uploadUrl }
+}
+
+async function uploadToBlob(file) {
+  const { uploadUrl } = await signUploadUrl(file.name, file.type || 'application/octet-stream');
+  const up = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {'Content-Type': file.type || 'application/octet-stream'},
+    body: file
+  });
+  if(!up.ok) throw new Error('Blob upload failed');
+  const data = await up.json(); // {url, pathname, ...}
+  return { url: data.url, mimeType: file.type, name: file.name };
+}
+
+// تحويل صفحة PDF إلى Blob صورة PNG
+async function pdfPageToBlob(pdf, pageNumber, scale=2) {
+  const page = await pdf.getPage(pageNumber);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: context, viewport }).promise;
+  return new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png', 0.92));
+}
+
+async function handleFiles(files) {
+  const prog = document.getElementById('prog');
+  prog.hidden = false; prog.value = 0;
+  const uploaded = [];
+  let processed = 0, totalSteps = files.length;
+
+  for (const file of files) {
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      log(`> تحويل PDF: ${file.name}`);
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const maxPages = Math.min(pdf.numPages, 15); // يمكنك تعديل الحد الأقصى للصفحات
+      totalSteps += (maxPages - 1); // لأننا سنرفع عدة صور
+      for (let i = 1; i <= maxPages; i++) {
+        const blob = await pdfPageToBlob(pdf, i, 2);
+        const pageFile = new File([blob], `${file.name.replace(/\.pdf$/i,'')}-p${i}.png`, { type:'image/png' });
+        const up = await uploadToBlob(pageFile);
+        uploaded.push(up);
+        processed++; prog.value = Math.round(processed*100/totalSteps);
+        log(`✓ رُفعت صفحة ${i}/${maxPages} من ${file.name}`);
       }
-    </script>
-  </body>
+    } else {
+      // صورة مباشرة
+      const up = await uploadToBlob(file);
+      uploaded.push(up);
+      processed++; prog.value = Math.round(processed*100/totalSteps);
+      log(`✓ رُفعت الصورة: ${file.name}`);
+    }
+  }
+  prog.hidden = true;
+  document.getElementById('uploadSummary').textContent =
+    `تم تجهيز ${uploaded.length} صورة/صفحة للتحليل.`;
+  return uploaded;
+}
+
+async function analyze(filesMeta, options) {
+  const res = await fetch('/api/gpt?action=analyze', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      files: filesMeta, // [{url, mimeType, name}]
+      language: options.language,
+      model: options.model,
+      specialty: options.specialty || '',
+      context: options.context || ''
+    })
+  });
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error('API error: ' + t);
+  }
+  return res.json();
+}
+
+document.getElementById('analyzeBtn').addEventListener('click', async ()=>{
+  try{
+    const input = document.getElementById('fileInput');
+    if(!input.files.length) { alert('اختر ملفاً واحداً على الأقل.'); return; }
+    const language = document.getElementById('lang').value;
+    const model = document.getElementById('model').value;
+    const specialty = document.getElementById('specialty').value.trim();
+    const context = document.getElementById('context').value.trim();
+
+    document.getElementById('analyzeBtn').disabled = true;
+    log('بدء الرفع والتحويل ...');
+    const uploaded = await handleFiles(Array.from(input.files));
+    log('بدء التحليل عبر النماذج ...');
+    const result = await analyze(uploaded, { language, model, specialty, context });
+    document.getElementById('merged').textContent = result.merged || '';
+    document.getElementById('openaiOut').textContent = result.openai || '—';
+    document.getElementById('geminiOut').textContent = result.gemini || '—';
+    log('اكتمل التحليل.');
+  }catch(e){
+    log('خطأ: ' + e.message);
+    alert(e.message);
+  }finally{
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+});
+</script>
+</body>
 </html>
