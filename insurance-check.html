@@ -17,13 +17,13 @@
     button{padding:10px 16px; border:0; border-radius:8px; background:var(--ink); color:#fff; cursor:pointer}
     button:disabled{opacity:.5; cursor:not-allowed}
     .muted{color:var(--muted); font-size:13px}
+    .warn{padding:10px; background:#fff7ed; border:1px solid #f59e0b; border-radius:8px; margin:8px 0; color:#92400e}
     .report{white-space:pre-wrap; background:#fff; border:1px dashed #cbd5e1; padding:12px; border-radius:8px; min-height:64px}
     .log{white-space:pre-wrap; background:#0b1020; color:#c7d2fe; padding:12px; border-radius:8px; max-height:280px; overflow:auto}
     progress{width:100%; height:14px}
-    .warn{padding:10px; background:#fff7ed; border:1px solid #f59e0b; border-radius:8px; margin:8px 0; color:#92400e}
   </style>
 
-  <!-- PDF.js كـ ES Module من CDN (مع worker مطابق للإصدار) -->
+  <!-- PDF.js (ES Modules + worker عبر CDN) -->
   <script>
     let __pdfjsModule;
     async function getPdfJs(){
@@ -50,8 +50,7 @@
   <h1>تحليل الحالات الطبية (Gemini & GPT‑4o)</h1>
   <div id="health" class="warn" style="display:none"></div>
   <div class="muted">
-    * يتم الرفع مباشرةً إلى Vercel Blob لتجاوز حد 4.5MB على الدوال.<br/>
-    * التقرير تعليمي لتحسين الجودة ويُراجع من طبيب مرخّص قبل أي قرار سريري/مالي.
+    * يتم الرفع مباشرةً إلى Vercel Blob لتجاوز حد 4.5MB على الدوال. التقرير تعليمي لتحسين الجودة ويُراجع من طبيب مرخّص قبل أي قرار. 
   </div>
 
   <div class="card">
@@ -89,49 +88,34 @@
     <div id="uploadSummary" class="muted"></div>
   </div>
 
-  <div class="card">
-    <h3>النتيجة المدمجة</h3>
-    <div id="merged" class="report"></div>
-  </div>
-
-  <div class="card">
-    <h3>مخرجات GPT‑4o</h3>
-    <div id="openaiOut" class="report"></div>
-  </div>
-
-  <div class="card">
-    <h3>مخرجات Gemini</h3>
-    <div id="geminiOut" class="report"></div>
-  </div>
-
-  <div class="card">
-    <h3>السجل</h3>
-    <div id="log" class="log"></div>
-  </div>
+  <div class="card"><h3>النتيجة المدمجة</h3><div id="merged" class="report"></div></div>
+  <div class="card"><h3>مخرجات GPT‑4o</h3><div id="openaiOut" class="report"></div></div>
+  <div class="card"><h3>مخرجات Gemini</h3><div id="geminiOut" class="report"></div></div>
+  <div class="card"><h3>السجل</h3><div id="log" class="log"></div></div>
 
 <script>
 const $ = (id)=>document.getElementById(id);
 const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
 
-// فحص صحة البيئة من السيرفر (وجود التوكنات)
+// فحص صحة البيئة (يحتاج BLOB_READ_WRITE_TOKEN و/أو مفاتيح النماذج)
 async function healthCheck(){
   try{
     const r = await fetch('/api/gpt?action=health'); 
+    if(!r.ok) return;
     const j = await r.json();
     const probs = [];
-    if(!j.hasBlobToken) probs.push('مفقود BLOB_READ_WRITE_TOKEN (اربط Blob store بالمشروع من لوحة Vercel).');
+    if(!j.hasBlobToken) probs.push('مفقود BLOB_READ_WRITE_TOKEN (اربط Blob store بالمشروع).');
     if(!j.hasOpenAI) probs.push('مفقود OPENAI_API_KEY.');
     if(!j.hasGemini) probs.push('مفقود GEMINI_API_KEY (لن يعمل تحليل Gemini).');
     if(probs.length){
       const box = $('health'); box.style.display='block';
       box.textContent = 'تحذير الإعدادات: ' + probs.join(' | ');
     }
-  }catch(e){
-    console.warn('health check failed', e);
-  }
+  }catch(e){ /* تجاهل */ }
 }
 healthCheck();
 
+// --- PDF -> صورة ---
 async function pdfPageToBlob(pdf, pageNumber, scale=2){
   const page = await pdf.getPage(pageNumber);
   const viewport = page.getViewport({ scale });
@@ -142,21 +126,40 @@ async function pdfPageToBlob(pdf, pageNumber, scale=2){
   return new Promise(resolve => canvas.toBlob(b=>resolve(b), 'image/png', 0.92));
 }
 
-async function uploadFileToBlob(file){
-  const upload = await getVercelUpload();
-  const useMultipart = file.size >= 10 * 1024 * 1024;
-  const result = await upload(file.name, file, {
-    access: 'public',
-    handleUploadUrl: '/api/gpt?action=sign', // السيرفر يولّد التوكن
-    multipart: useMultipart,
-    onUploadProgress: ({ percentage }) => {
-      const prog = $('prog');
-      if (!prog.hidden && typeof percentage === 'number') {
-        prog.value = Math.min(99, Math.floor(percentage));
-      }
-    }
+// --- الرفع إلى Blob: أساسي (client upload) + احتياطي (server put) ---
+async function uploadViaServerPut(file){
+  // ملاحظة: هذا المسار محكوم بحد 4.5MB على الدوال. :contentReference[oaicite:8]{index=8}
+  const res = await fetch(`/api/gpt?action=put&filename=${encodeURIComponent(file.name)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file
   });
-  return { url: result.url, mimeType: file.type || 'application/octet-stream', name: file.name };
+  if(!res.ok) throw new Error('Server PUT failed: ' + await res.text());
+  const j = await res.json();
+  return { url: j.url, mimeType: file.type || 'application/octet-stream', name: file.name };
+}
+
+async function uploadFileToBlob(file){
+  try{
+    const upload = await getVercelUpload();
+    const useMultipart = file.size >= 10 * 1024 * 1024;
+    const result = await upload(file.name, file, {
+      access: 'public',
+      handleUploadUrl: '/api/gpt?action=sign', // السيرفر يوقّع التوكن (حسب الدليل)
+      multipart: useMultipart,
+      onUploadProgress: ({ percentage }) => {
+        const prog = $('prog');
+        if (!prog.hidden && typeof percentage === 'number') {
+          prog.value = Math.min(99, Math.floor(percentage));
+        }
+      }
+    });
+    return { url: result.url, mimeType: file.type || 'application/octet-stream', name: file.name };
+  }catch(err){
+    // fallback إذا فشل توليد التوكن لأي سبب
+    log('⚠️ استخدام الرفع الاحتياطي عبر السيرفر بسبب:', err.message);
+    return await uploadViaServerPut(file);
+  }
 }
 
 async function handleFiles(files){
@@ -171,7 +174,7 @@ async function handleFiles(files){
       const pdfjsLib = await getPdfJs();
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const maxPages = Math.min(pdf.numPages, 15); // حد افتراضي لتقليل الكلفة
+      const maxPages = Math.min(pdf.numPages, 15);
       totalSteps += (maxPages - 1);
       for(let i=1;i<=maxPages;i++){
         const blob = await pdfPageToBlob(pdf, i, 2);
@@ -209,29 +212,29 @@ async function analyze(filesMeta, options){
   return res.json();
 }
 
-$('analyzeBtn').addEventListener('click', async ()=>{
+document.getElementById('analyzeBtn').addEventListener('click', async ()=>{
   try{
-    const files = Array.from($('fileInput').files || []);
+    const files = Array.from(document.getElementById('fileInput').files || []);
     if(!files.length){ alert('اختر ملفاً واحداً على الأقل.'); return; }
-    $('analyzeBtn').disabled = true;
+    document.getElementById('analyzeBtn').disabled = true;
     log('بدء الرفع/التحويل ...');
     const uploaded = await handleFiles(files);
     log('بدء التحليل عبر النماذج ...');
     const result = await analyze(uploaded, {
-      language: $('lang').value,
-      model: $('model').value,
-      specialty: $('specialty').value.trim(),
-      context: $('context').value.trim()
+      language: document.getElementById('lang').value,
+      model: document.getElementById('model').value,
+      specialty: document.getElementById('specialty').value.trim(),
+      context: document.getElementById('context').value.trim()
     });
-    $('merged').textContent = result.merged || '';
-    $('openaiOut').textContent = result.openai || '—';
-    $('geminiOut').textContent = result.gemini || '—';
+    document.getElementById('merged').textContent = result.merged || '';
+    document.getElementById('openaiOut').textContent = result.openai || '—';
+    document.getElementById('geminiOut').textContent = result.gemini || '—';
     log('اكتمل التحليل.');
   }catch(e){
     log('خطأ: ' + e.message);
     alert(e.message);
   }finally{
-    $('analyzeBtn').disabled = false;
+    document.getElementById('analyzeBtn').disabled = false;
   }
 });
 </script>
