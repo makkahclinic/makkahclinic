@@ -77,6 +77,19 @@ function extractTextFromGemini(json){
   }catch{ return JSON.stringify(json,null,2); }
 }
 
+// تحويل req Node إلى Request Web (لاستخدامه مع handleUpload)
+function asWebRequest(req, bodyString) {
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host  = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
+  const url   = `${proto}://${host}${req.url}`;
+  const headers = new Headers();
+  for (const [k,v] of Object.entries(req.headers)) {
+    if (Array.isArray(v)) headers.set(k, v.join(', '));
+    else if (typeof v === 'string') headers.set(k, v);
+  }
+  return new Request(url, { method: req.method, headers, body: bodyString });
+}
+
 module.exports = async (req, res) => {
   setCORS(res);
   if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
@@ -85,26 +98,20 @@ module.exports = async (req, res) => {
   const action = u.searchParams.get('action') || 'analyze';
 
   try {
-    // ========= [1] توليد توكنات الرفع للعميل =========
+    // ========= [1] توقيع الرفع للعميل (Client Upload Token) =========
     if (req.method === 'POST' && action === 'sign') {
       const body = await readJson(req);
-
-      // handleUpload من @vercel/blob/client (كما في المستندات الرسمية)
       const { handleUpload } = await import('@vercel/blob/client');
 
-      // بناء Request متوافق مع Web Fetch API
-      const request = new Request(`https://${req.headers.host}${req.url}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      // بناء Request كما تتوقعه handleUpload (مطابق للدليل الرسمي)
+      const request = asWebRequest(req, JSON.stringify(body));
 
       const jsonResponse = await handleUpload({
         body,
         request,
         onBeforeGenerateToken: async (pathname /*, clientPayload, multipart */) => {
           return {
-            addRandomSuffix: true,                 // يُسمح به هنا (سيرفر)
+            addRandomSuffix: true,                 // يُضبط من السيرفر
             allowedContentTypes: [
               'image/jpeg','image/png','image/webp',
               'image/heic','image/heif','image/tiff','application/pdf'
@@ -133,7 +140,7 @@ module.exports = async (req, res) => {
 
       const systemInstructions = buildSystemInstructions({ language, specialty, context });
 
-      // --- OpenAI GPT‑4o ---
+      // --- OpenAI GPT‑4o (Responses API) ---
       let openaiText = null;
       if (model === 'both' || model === 'openai') {
         const imageParts = files.map(f => ({
@@ -167,7 +174,7 @@ module.exports = async (req, res) => {
         openaiText = extractTextFromOpenAI(oaJson);
       }
 
-      // --- Google Gemini ---
+      // --- Google Gemini (inline_data Base64) ---
       let geminiText = null;
       if (model === 'both' || model === 'gemini') {
         const parts = [{ text: systemInstructions }];
