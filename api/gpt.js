@@ -1,129 +1,93 @@
 // api/gpt.js
-// Vercel Node.js Serverless Function (CommonJS)
+// Vercel Serverless Function (Node.js, CommonJS)
 
 const { URL } = require('url');
 
-// CORS بسيط إن لزم
 function setCORS(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
-
 async function readJson(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const raw = Buffer.concat(chunks).toString('utf8');
-  try { return JSON.parse(raw || '{}'); } catch (e) {
-    const err = new Error('Invalid JSON body');
-    err.status = 400; throw err;
+  try { return JSON.parse(raw || '{}'); } catch {
+    const e = new Error('Invalid JSON'); e.status = 400; throw e;
   }
 }
-
-function buildSystemInstructions({ language='ar', specialty='', context='' }) {
-  // تعليمات صارمة لضبط المخرجات (تقرير مُهيكل وقابل للتدقيق)
-  return `
-أنت مساعد سريري لتحسين الجودة والدخل المستند إلى الأدلة، لا تُقدّم تشخيصًا نهائيًا ولا توصيات علاجية دون مراجعة سريرية.
-المطلوب: تحليل حالة طبية بناءً على صور/وثائق مُحمّلة (عربي/إنجليزي). 
-أخرج النتائج باللغة: ${language === 'ar' ? 'العربية' : 'English'}.
-التخصص (إن وُجد): ${specialty || 'عام/غير محدد'}.
-سياق إضافي: ${context || '—'}.
-
-قواعد صارمة:
-1) التزم بنزع أي معرّفات شخصية محتملة (PHI) وعدم استنتاج هوية المرضى.
-2) اعرض تقريرًا منظّمًا بصيغة JSON فقط، بالمفاتيح التالية:
-{
-  "patient_summary": "...",
-  "key_findings": ["...", "..."],
-  "differential_diagnoses": [{"dx": "...", "why": "..."}],
-  "severity_red_flags": ["..."],
-  "procedural_issues": [{"issue": "...", "impact": "...", "evidence": "..."}],
-  "missed_opportunities": [{"what": "...", "why_it_matters": "..."}],
-  "revenue_quality_opportunities": [
-    {"opportunity": "...", "category": "documentation|diagnostics|procedure|follow-up", "rationale": "...", "risk_note": "..."}
-  ],
-  "suggested_next_steps": [{"action": "...", "justification": "..."}],
-  "patient_safety_note": "هذا المحتوى لأغراض تعليمية وتحسين الجودة فقط ويجب مراجعته من طبيب مرخّص.",
-  "references": [
-    {"title": "اسم الدليل/الجهة", "org": "WHO|NICE|CDC|...", "link": "https://..."}
-  ]
-}
-3) استند إلى إرشادات عالمية (مثل WHO/NICE) عند الاقتضاء، وإن لم تكن واثقًا من مرجع محدد، قل "Reference to be verified".
-4) لا تقترح أي إجراء غير مبرر طبيًا أو مخالف للأخلاقيات؛ ركّز على توثيق أفضل، فحوصات لازمة، متابعة مناسبة، ومسارات إحالة سليمة.
-`;
-}
-
-function extractTextFromOpenAI(json) {
-  // Responses API
-  if (json && typeof json.output_text === 'string') return json.output_text;
-  // fallback قديم
-  try {
-    const c = json.choices?.[0];
-    if (typeof c?.message?.content === 'string') return c.message.content;
-    if (Array.isArray(c?.message?.content)) {
-      return c.message.content.map(p => p.text || p).join('\n');
-    }
-  } catch {}
-  return JSON.stringify(json, null, 2);
-}
-
-function extractTextFromGemini(json) {
-  try {
-    const cand = json.candidates?.[0];
-    if (!cand) return JSON.stringify(json, null, 2);
-    const parts = cand.content?.parts || [];
-    return parts.map(p => p.text || '').join('');
-  } catch {
-    return JSON.stringify(json, null, 2);
-  }
-}
-
-// محاولة تحويل أي نص JSON جزئي إلى كائن
-function coerceJson(text) {
-  try { return JSON.parse(text); } catch {}
-  // التقط كتلة JSON بين أقواس معقوفة
-  const m = text.match(/\{[\s\S]*\}/);
-  if (m) { try { return JSON.parse(m[0]); } catch {} }
-  return null;
-}
-
-function mergeReports(openaiText, geminiText) {
-  const o = openaiText ? coerceJson(openaiText) : null;
-  const g = geminiText ? coerceJson(geminiText) : null;
-  // دمج بسيط إن نجحت البنى
-  const base = o || g;
-  if (!base) return openaiText || geminiText || '';
-  const other = (base === o) ? g : o;
-  if (!other) return JSON.stringify(base, null, 2);
-
-  function arr(a){ return Array.isArray(a) ? a : (a? [a] : []); }
-  const merged = { ...base };
-  const keys = new Set([
-    ...Object.keys(base), ...(other? Object.keys(other) : [])
-  ]);
-  for (const k of keys) {
-    const A = base[k], B = other[k];
-    if (Array.isArray(A) || Array.isArray(B)) {
-      const aa = arr(A), bb = arr(B);
-      const joined = [...aa, ...bb];
-      // إزالة التكرار نصيًا
-      merged[k] = Array.from(new Map(joined.map(x => [JSON.stringify(x), x])).values());
-    } else if (typeof A === 'object' && typeof B === 'object') {
-      merged[k] = { ...(A||{}), ...(B||{}) };
-    } else {
-      merged[k] = A ?? B;
-    }
-  }
-  return JSON.stringify(merged, null, 2);
-}
-
-// تعيين mime افتراضي
 function mimeFromName(name, fallback='image/png'){
   const n = (name||'').toLowerCase();
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'image/jpeg';
+  if (n.endswith?.('.heic') || n.includes('.heic')) return 'image/heic';
+  if (n.endswith?.('.heif') || n.includes('.heif')) return 'image/heif';
   if (n.endsWith('.png')) return 'image/png';
   if (n.endsWith('.webp')) return 'image/webp';
+  if (n.endsWith('.tif') || n.endsWith('.tiff')) return 'image/tiff';
   return fallback;
+}
+
+function buildSystemInstructions({ language='ar', specialty='', context='' }) {
+  return `
+أنت مساعد سريري لتحسين الجودة والدخل المستند إلى الأدلة، لا تُقدّم تشخيصًا نهائيًا ولا توصيات علاجية دون مراجعة بشرية.
+اللغة: ${language==='ar'?'العربية':'English'}
+التخصص: ${specialty || 'عام'}
+السياق: ${context || '—'}
+
+قواعد:
+1) إزالة/تجنّب ذكر أي مُعرّفات شخصية (PHI) وفق نهج Safe Harbor لـ HIPAA.
+2) أعِد جوابًا بصيغة JSON حصراً بالمفاتيح التالية:
+{
+  "patient_summary": "...",
+  "key_findings": ["..."],
+  "differential_diagnoses": [{"dx":"...","why":"..."}],
+  "severity_red_flags": ["..."],
+  "procedural_issues": [{"issue":"...","impact":"...","evidence":"..."}],
+  "missed_opportunities": [{"what":"...","why_it_matters":"..."}],
+  "revenue_quality_opportunities": [
+    {"opportunity":"...","category":"documentation|diagnostics|procedure|follow-up","rationale":"...","risk_note":"..."}
+  ],
+  "suggested_next_steps": [{"action":"...","justification":"..."}],
+  "patient_safety_note":"هذا المحتوى لأغراض تعليمية وتحسين الجودة فقط ويُراجع من طبيب مرخّص.",
+  "references":[{"title":"...","org":"WHO|NICE|CDC|...","link":"https://..."}]
+}
+3) استند إلى إرشادات عالمية (WHO, NICE) عند الاقتضاء، واذكر مرجعًا مختصرًا مع رابط حيث أمكن.
+`;
+}
+
+function coerceJson(text){ try{ return JSON.parse(text); }catch{ const m = text?.match?.(/\{[\s\S]*\}/); if(m){ try{ return JSON.parse(m[0]); }catch{} } return null; } }
+function mergeReports(openaiText, geminiText){
+  const A = openaiText ? coerceJson(openaiText) : null;
+  const B = geminiText ? coerceJson(geminiText) : null;
+  const base = A || B; if(!base) return openaiText || geminiText || '';
+  const other = (base===A)?B:A; if(!other) return JSON.stringify(base,null,2);
+  const merged = { ...base };
+  const keys = new Set([...Object.keys(base), ...Object.keys(other)]);
+  const asArr = (x)=>Array.isArray(x)?x:(x?[x]:[]);
+  for(const k of keys){
+    const x = base[k], y = other[k];
+    if(Array.isArray(x) || Array.isArray(y)){
+      const v = [...asArr(x), ...asArr(y)];
+      merged[k] = Array.from(new Map(v.map(o=>[JSON.stringify(o),o])).values());
+    }else if(typeof x==='object' && typeof y==='object'){ merged[k]={...(x||{}), ...(y||{})};
+    }else{ merged[k]= x ?? y; }
+  }
+  return JSON.stringify(merged,null,2);
+}
+
+function extractTextFromOpenAI(json){
+  if(json && typeof json.output_text === 'string') return json.output_text;
+  const c = json?.choices?.[0];
+  if(typeof c?.message?.content === 'string') return c.message.content;
+  if(Array.isArray(c?.message?.content)) return c.message.content.map(p=>p.text||p).join('\n');
+  return JSON.stringify(json,null,2);
+}
+function extractTextFromGemini(json){
+  try{
+    const cand = json?.candidates?.[0];
+    const parts = cand?.content?.parts || [];
+    return parts.map(p=>p.text||'').join('');
+  }catch{ return JSON.stringify(json,null,2); }
 }
 
 module.exports = async (req, res) => {
@@ -134,21 +98,40 @@ module.exports = async (req, res) => {
   const action = u.searchParams.get('action') || 'analyze';
 
   try {
+    // ========= 1) توقيع رفع عميل Vercel Blob =========
     if (req.method === 'POST' && action === 'sign') {
-      // إنشاء رابط رفع لملف واحد
       const body = await readJson(req);
-      const { filename='file.bin', contentType='application/octet-stream' } = body || {};
-      const { generateUploadURL } = await import('@vercel/blob');
-      const { url } = await generateUploadURL({
-        access: 'public',
-        contentType,
-        // نحفظ داخل مجلد uploads
-        pathname: `uploads/${Date.now()}-${filename}`
+      const { handleUpload } = await import('@vercel/blob/client'); // توجيه توكنات الرفع
+      // نصنع Request متوافقًا مع Web Fetch API كما يتوقعها handleUpload
+      const headers = new Headers();
+      Object.entries(req.headers).forEach(([k,v]) => { if(v!==undefined) headers.set(k, String(v)); });
+      const request = new Request(`https://${req.headers.host}${req.url}`, {
+        method: 'POST', headers, body: JSON.stringify(body)
       });
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ uploadUrl: url }));
+
+      const jsonResponse = await handleUpload({
+        body,
+        request,
+        onBeforeGenerateToken: async (pathname /*, clientPayload */) => {
+          return {
+            allowedContentTypes: [
+              'application/pdf','image/png','image/jpeg','image/webp',
+              'image/heic','image/heif','image/tiff'
+            ],
+            addRandomSuffix: true,
+            tokenPayload: JSON.stringify({ ts: Date.now(), pathname })
+          };
+        },
+        onUploadCompleted: async ({ blob /*, tokenPayload */ }) => {
+          console.log('Blob uploaded:', blob.url);
+        },
+      });
+
+      res.setHeader('Content-Type','application/json; charset=utf-8');
+      return res.end(JSON.stringify(jsonResponse));
     }
 
+    // ========= 2) التحليل عبر النماذج =========
     if (req.method === 'POST' && action === 'analyze') {
       const body = await readJson(req);
       const { files=[], language='ar', model='both', specialty='', context='' } = body || {};
@@ -158,28 +141,26 @@ module.exports = async (req, res) => {
 
       const systemInstructions = buildSystemInstructions({ language, specialty, context });
 
-      // —— OpenAI (GPT‑4o) —— //
+      // --- OpenAI GPT‑4o ---
       let openaiText = null;
       if (model === 'both' || model === 'openai') {
         const imageParts = files.map(f => ({
           type: "input_image",
-          image_url: f.url // يدعم URL مباشر للصورة
+          image_url: f.url   // URL عام من Vercel Blob
         }));
-
         const oaPayload = {
-          model: "gpt-4o", // يمكنك تغييره إلى gpt-4o-mini لخفض التكلفة
+          model: "gpt-4o",
           instructions: systemInstructions,
           input: [
             {
               role: "user",
               content: [
-                { type: "input_text", text: "حلّل الصور/الوثائق التالية حسب التعليمات." },
+                { type: "input_text", text: "حلّل هذه الصور/الوثائق وفق التعليمات." },
                 ...imageParts
               ]
             }
           ]
         };
-
         const oaRes = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
           headers: {
@@ -192,10 +173,9 @@ module.exports = async (req, res) => {
         openaiText = extractTextFromOpenAI(oaJson);
       }
 
-      // —— Gemini —— //
+      // --- Google Gemini ---
       let geminiText = null;
       if (model === 'both' || model === 'gemini') {
-        // نحضر الصور كـ Base64 inline (متوافق مع generateContent)
         const parts = [{ text: systemInstructions }];
         for (const f of files) {
           const resp = await fetch(f.url);
@@ -208,23 +188,18 @@ module.exports = async (req, res) => {
             }
           });
         }
-        const gemModel = "gemini-1.5-pro"; // يمكن استبداله بـ 1.5-flash لسرعة أقل تكلفة
-        const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gemModel}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ contents: [{ role: "user", parts }] })
-        });
+        const gemModel = "gemini-1.5-pro"; // بدّل إلى 1.5‑flash للتكلفة الأقل
+        const gRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${gemModel}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ contents:[{ role:"user", parts }] }) }
+        );
         const gJson = await gRes.json();
         geminiText = extractTextFromGemini(gJson);
       }
 
-      // دمج تقارير النموذجين (عند توفّرهما)
       const merged = mergeReports(openaiText, geminiText);
-
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return res.end(JSON.stringify({
-        merged, openai: openaiText, gemini: geminiText
-      }));
+      res.setHeader('Content-Type','application/json; charset=utf-8');
+      return res.end(JSON.stringify({ merged, openai: openaiText, gemini: geminiText }));
     }
 
     res.statusCode = 404;
