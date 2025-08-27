@@ -19,10 +19,10 @@ async function readJson(req) {
 function mimeFromName(name, fallback='image/png'){
   const n = (name||'').toLowerCase();
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'image/jpeg';
-  if (n.endswith?.('.heic') || n.includes('.heic')) return 'image/heic';
-  if (n.endswith?.('.heif') || n.includes('.heif')) return 'image/heif';
   if (n.endsWith('.png')) return 'image/png';
   if (n.endsWith('.webp')) return 'image/webp';
+  if (n.endsWith('.heic')) return 'image/heic';
+  if (n.endsWith('.heif')) return 'image/heif';
   if (n.endsWith('.tif') || n.endsWith('.tiff')) return 'image/tiff';
   return fallback;
 }
@@ -35,22 +35,9 @@ function buildSystemInstructions({ language='ar', specialty='', context='' }) {
 السياق: ${context || '—'}
 
 قواعد:
-1) إزالة/تجنّب ذكر أي مُعرّفات شخصية (PHI) وفق نهج Safe Harbor لـ HIPAA.
-2) أعِد جوابًا بصيغة JSON حصراً بالمفاتيح التالية:
-{
-  "patient_summary": "...",
-  "key_findings": ["..."],
-  "differential_diagnoses": [{"dx":"...","why":"..."}],
-  "severity_red_flags": ["..."],
-  "procedural_issues": [{"issue":"...","impact":"...","evidence":"..."}],
-  "missed_opportunities": [{"what":"...","why_it_matters":"..."}],
-  "revenue_quality_opportunities": [
-    {"opportunity":"...","category":"documentation|diagnostics|procedure|follow-up","rationale":"...","risk_note":"..."}
-  ],
-  "suggested_next_steps": [{"action":"...","justification":"..."}],
-  "patient_safety_note":"هذا المحتوى لأغراض تعليمية وتحسين الجودة فقط ويُراجع من طبيب مرخّص.",
-  "references":[{"title":"...","org":"WHO|NICE|CDC|...","link":"https://..."}]
-}
+1) إزالة/تجنّب أي مُعرّفات شخصية (PHI) وفق نهج Safe Harbor لـ HIPAA.
+2) أعِد جوابًا بصيغة JSON حصراً بالمفاتيح:
+{"patient_summary":"","key_findings":[],"differential_diagnoses":[{"dx":"","why":""}],"severity_red_flags":[],"procedural_issues":[{"issue":"","impact":"","evidence":""}],"missed_opportunities":[{"what":"","why_it_matters":""}],"revenue_quality_opportunities":[{"opportunity":"","category":"documentation|diagnostics|procedure|follow-up","rationale":"","risk_note":""}],"suggested_next_steps":[{"action":"","justification":""}],"patient_safety_note":"هذا المحتوى لأغراض تعليمية وتحسين الجودة فقط ويُراجع من طبيب مرخّص.","references":[{"title":"","org":"WHO|NICE|CDC|...","link":""}]}
 3) استند إلى إرشادات عالمية (WHO, NICE) عند الاقتضاء، واذكر مرجعًا مختصرًا مع رابط حيث أمكن.
 `;
 }
@@ -98,27 +85,32 @@ module.exports = async (req, res) => {
   const action = u.searchParams.get('action') || 'analyze';
 
   try {
-    // ========= 1) توقيع رفع عميل Vercel Blob =========
+    // ========= [1] توليد توكنات الرفع للعميل =========
     if (req.method === 'POST' && action === 'sign') {
       const body = await readJson(req);
-      const { handleUpload } = await import('@vercel/blob/client'); // توجيه توكنات الرفع
-      // نصنع Request متوافقًا مع Web Fetch API كما يتوقعها handleUpload
-      const headers = new Headers();
-      Object.entries(req.headers).forEach(([k,v]) => { if(v!==undefined) headers.set(k, String(v)); });
+
+      // handleUpload من @vercel/blob/client (كما في المستندات الرسمية)
+      const { handleUpload } = await import('@vercel/blob/client');
+
+      // بناء Request متوافق مع Web Fetch API
       const request = new Request(`https://${req.headers.host}${req.url}`, {
-        method: 'POST', headers, body: JSON.stringify(body)
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
       });
 
       const jsonResponse = await handleUpload({
         body,
         request,
-        onBeforeGenerateToken: async (pathname /*, clientPayload */) => {
+        onBeforeGenerateToken: async (pathname /*, clientPayload, multipart */) => {
           return {
+            addRandomSuffix: true,                 // يُسمح به هنا (سيرفر)
             allowedContentTypes: [
-              'application/pdf','image/png','image/jpeg','image/webp',
-              'image/heic','image/heif','image/tiff'
+              'image/jpeg','image/png','image/webp',
+              'image/heic','image/heif','image/tiff','application/pdf'
             ],
-            addRandomSuffix: true,
+            maximumSizeInBytes: 80 * 1024 * 1024,  // 80MB لكل عنصر
+            validUntil: Date.now() + 10 * 60 * 1000,
             tokenPayload: JSON.stringify({ ts: Date.now(), pathname })
           };
         },
@@ -131,7 +123,7 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify(jsonResponse));
     }
 
-    // ========= 2) التحليل عبر النماذج =========
+    // ========= [2] التحليل عبر النماذج =========
     if (req.method === 'POST' && action === 'analyze') {
       const body = await readJson(req);
       const { files=[], language='ar', model='both', specialty='', context='' } = body || {};
@@ -146,8 +138,9 @@ module.exports = async (req, res) => {
       if (model === 'both' || model === 'openai') {
         const imageParts = files.map(f => ({
           type: "input_image",
-          image_url: f.url   // URL عام من Vercel Blob
+          image_url: f.url
         }));
+
         const oaPayload = {
           model: "gpt-4o",
           instructions: systemInstructions,
@@ -161,6 +154,7 @@ module.exports = async (req, res) => {
             }
           ]
         };
+
         const oaRes = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
           headers: {
@@ -182,13 +176,10 @@ module.exports = async (req, res) => {
           const buf = Buffer.from(await resp.arrayBuffer());
           const b64 = buf.toString('base64');
           parts.push({
-            inline_data: {
-              mime_type: f.mimeType || mimeFromName(f.name),
-              data: b64
-            }
+            inline_data: { mime_type: f.mimeType || mimeFromName(f.name), data: b64 }
           });
         }
-        const gemModel = "gemini-1.5-pro"; // بدّل إلى 1.5‑flash للتكلفة الأقل
+        const gemModel = "gemini-1.5-pro";
         const gRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${gemModel}:generateContent?key=${process.env.GEMINI_API_KEY}`,
           { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ contents:[{ role:"user", parts }] }) }
