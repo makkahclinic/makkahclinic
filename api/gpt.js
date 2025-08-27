@@ -1,93 +1,71 @@
-import formidable from "formidable";
-import fs from "fs";
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Insurance Case Analyzer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  </head>
+  <body style="font-family: Arial; padding: 20px">
+    <h1>🩺 Insurance Medical Case Analyzer</h1>
 
-export const config = { api: { bodyParser: false } };
+    <textarea
+      id="caseText"
+      rows="5"
+      cols="60"
+      placeholder="Enter patient case text..."
+    ></textarea>
+    <br />
+    <input type="file" id="fileInput" accept="image/*" />
+    <br />
+    <button onclick="analyzeCase()">Analyze Case (Text/Image)</button>
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    <div id="result-section" style="margin-top: 20px"></div>
 
-export default async function handler(req, res) {
-  try {
-    const form = formidable();
-    form.parse(req, async (err, fields, files) => {
-      if (err) return res.status(500).json({ ok: false, error: err.message });
+    <script>
+      async function analyzeCase() {
+        const caseText = document.getElementById("caseText").value;
+        const file = document.getElementById("fileInput").files[0];
+        const formData = new FormData();
+        formData.append("caseText", caseText);
+        if (file) formData.append("file", file);
 
-      const caseText = fields.caseText?.[0] || "";
-      let imageBuffer = null;
-
-      if (files.file) {
-        const imagePath = files.file[0].filepath;
-        imageBuffer = fs.readFileSync(imagePath).toString("base64");
-      }
-
-      // -------- OpenAI --------
-      let openaiPayload = {
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are a medical consultant analyzing patient insurance cases.",
-          },
-          {
-            role: "user",
-            content: caseText
-              ? [{ type: "text", text: caseText }]
-              : [{ type: "text", text: "Analyze this medical case from image" }],
-          },
-        ],
-      };
-
-      if (imageBuffer) {
-        openaiPayload.messages[1].content.push({
-          type: "image_url",
-          image_url: { url: `data:image/jpeg;base64,${imageBuffer}` },
-        });
-      }
-
-      const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(openaiPayload),
-      });
-      const openaiData = await openaiRes.json();
-
-      // -------- Gemini --------
-      let geminiPayload = {
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: caseText || "Analyze this medical case from image" }],
-          },
-        ],
-      };
-
-      if (imageBuffer) {
-        geminiPayload.contents[0].parts.push({
-          inlineData: { mimeType: "image/jpeg", data: imageBuffer },
-        });
-      }
-
-      const geminiRes = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=" +
-          GEMINI_API_KEY,
-        {
+        const res = await fetch("/api/gpt", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(geminiPayload),
-        }
-      );
-      const geminiData = await geminiRes.json();
+          body: formData,
+        });
+        const data = await res.json();
 
-      res.status(200).json({
-        ok: true,
-        openai: openaiData,
-        gemini: geminiData,
-      });
-    });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
-}
+        const openaiResult =
+          data.openai?.choices?.[0]?.message?.content || "N/A";
+        const geminiResult =
+          data.gemini?.candidates?.[0]?.content?.parts?.[0]?.text || "N/A";
+
+        document.getElementById("result-section").innerHTML = `
+          <h2>📊 Analysis Result</h2>
+          <table border="1" cellpadding="10" style="border-collapse: collapse; width: 100%">
+            <thead>
+              <tr>
+                <th>Aspect</th>
+                <th>ChatGPT (OpenAI)</th>
+                <th>Gemini</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Diagnosis & Procedures</td>
+                <td>${openaiResult}</td>
+                <td>${geminiResult}</td>
+              </tr>
+            </tbody>
+          </table>
+          <button onclick="exportPDF()" style="margin-top: 20px">Export to PDF</button>
+        `;
+      }
+
+      function exportPDF() {
+        const element = document.getElementById("result-section");
+        html2pdf().from(element).save("insurance_case_analysis.pdf");
+      }
+    </script>
+  </body>
+</html>
