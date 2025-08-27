@@ -22,9 +22,8 @@
     progress{width:100%; height:14px}
   </style>
 
-  <!-- تحميل PDF.js كـ ES Module من CDN -->
+  <!-- تحميل PDF.js كـ ES Module من CDN (مع worker مطابق للإصدار) -->
   <script>
-    // تحميل PDF.js مرة واحدة عند الحاجة (إصدار يتضمن pdf.min.mjs و pdf.worker.min.mjs)
     let __pdfjsModule;
     async function getPdfJs(){
       if(!__pdfjsModule){
@@ -35,7 +34,7 @@
       return __pdfjsModule;
     }
 
-    // تحميل دالة الرفع من حزمة Vercel Blob (متوافق مع المتصفح عبر esm.sh)
+    // upload() من @vercel/blob/client عبر esm.sh (لا يحتاج باندلر)
     let __vercelUpload;
     async function getVercelUpload(){
       if(!__vercelUpload){
@@ -49,8 +48,7 @@
 <body>
   <h1>تحليل الحالات الطبية (Gemini & GPT‑4o)</h1>
   <div class="muted">
-    * يتم رفع الملفات مباشرةً إلى Vercel Blob لتجاوز حد 4.5MB على دوال السيرفرلس.<br/>
-    * التقرير لغرض تحسين الجودة فقط ويجب مراجعته من طبيب مرخّص قبل أي قرار سريري/مالي.
+    * يتم الرفع مباشرةً إلى Vercel Blob لتجاوز حد 4.5MB لدوال السيرفرلس. *التقرير تعليمي لتحسين الجودة ويُراجع من طبيب مرخّص قبل أي قرار سريري/مالي*. 
   </div>
 
   <div class="card">
@@ -58,7 +56,7 @@
       <div>
         <label>اختر ملفات (صورة/‏PDF — عربي/إنجليزي، خط يدوي أو مطبوع):</label>
         <input id="fileInput" type="file" accept=".pdf,image/*" multiple />
-        <div class="muted">سَيحوَّل أي PDF إلى صور صفحات داخل المتصفح.</div>
+        <div class="muted">سيُحوَّل أي PDF إلى صور صفحات داخل المتصفح.</div>
       </div>
       <div>
         <label>اللغة المطلوبة للتقرير:</label>
@@ -112,6 +110,7 @@
 const $ = (id)=>document.getElementById(id);
 const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
 
+// تحويل صفحة PDF إلى صورة PNG
 async function pdfPageToBlob(pdf, pageNumber, scale=2){
   const page = await pdf.getPage(pageNumber);
   const viewport = page.getViewport({ scale });
@@ -122,15 +121,22 @@ async function pdfPageToBlob(pdf, pageNumber, scale=2){
   return new Promise(resolve => canvas.toBlob(b=>resolve(b), 'image/png', 0.92));
 }
 
+// رفع إلى Vercel Blob عبر client upload (بدون خيارات غير مسموحة)
 async function uploadFileToBlob(file){
   const upload = await getVercelUpload();
-  const put = await upload(file.name, file, {
+  const useMultipart = file.size >= 10 * 1024 * 1024; // للأكبر من 10MB
+  const result = await upload(file.name, file, {
     access: 'public',
-    contentType: file.type || 'application/octet-stream',
     handleUploadUrl: '/api/gpt?action=sign',
-    addRandomSuffix: true
+    multipart: useMultipart,
+    onUploadProgress: ({ percentage }) => {
+      const prog = $('prog');
+      if (!prog.hidden && typeof percentage === 'number') {
+        prog.value = Math.min(99, Math.floor(percentage));
+      }
+    }
   });
-  return { url: put.url, mimeType: file.type || 'application/octet-stream', name: file.name };
+  return { url: result.url, mimeType: file.type || 'application/octet-stream', name: file.name };
 }
 
 async function handleFiles(files){
@@ -145,7 +151,7 @@ async function handleFiles(files){
       const pdfjsLib = await getPdfJs();
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const maxPages = Math.min(pdf.numPages, 15); // حد افتراضي
+      const maxPages = Math.min(pdf.numPages, 15); // حد افتراضي لتقليل التكلفة
       totalSteps += (maxPages - 1);
       for(let i=1;i<=maxPages;i++){
         const blob = await pdfPageToBlob(pdf, i, 2);
@@ -179,10 +185,7 @@ async function analyze(filesMeta, options){
       context: options.context || ''
     })
   });
-  if(!res.ok){
-    const t = await res.text();
-    throw new Error('API error: ' + t);
-  }
+  if(!res.ok){ throw new Error('API error: ' + await res.text()); }
   return res.json();
 }
 
