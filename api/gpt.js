@@ -3,22 +3,18 @@
 
 const { URL } = require('url');
 
-// ---------- Utils ----------
+// --- CORS ---
 function setCORS(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
-
 async function readJson(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const raw = Buffer.concat(chunks).toString('utf8');
-  if (!raw) return {};
-  try { return JSON.parse(raw); }
-  catch { const e = new Error('Invalid JSON'); e.status = 400; throw e; }
+  try { return JSON.parse(raw || '{}'); } catch { const e = new Error('Invalid JSON'); e.status = 400; throw e; }
 }
-
 function mimeFromName(name, fallback='image/png'){
   const n = (name||'').toLowerCase();
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'image/jpeg';
@@ -27,10 +23,10 @@ function mimeFromName(name, fallback='image/png'){
   if (n.endsWith('.heic')) return 'image/heic';
   if (n.endsWith('.heif')) return 'image/heif';
   if (n.endsWith('.tif') || n.endsWith('.tiff')) return 'image/tiff';
-  if (n.endsWith('.pdf')) return 'application/pdf';
   return fallback;
 }
 
+// --- Prompt template ---
 function buildSystemInstructions({ language='ar', specialty='', context='' }) {
   return `
 أنت مساعد سريري لتحسين الجودة والدخل المستند إلى الأدلة، لا تُقدّم تشخيصًا نهائيًا ولا توصيات علاجية دون مراجعة بشرية.
@@ -46,47 +42,33 @@ function buildSystemInstructions({ language='ar', specialty='', context='' }) {
 `;
 }
 
-function coerceJson(text){
-  try { return JSON.parse(text); }
-  catch {
-    const m = text?.match?.(/\{[\s\S]*\}/);
-    if (m) { try { return JSON.parse(m[0]); } catch {} }
-    return null;
-  }
-}
-
+// --- Helpers to merge model outputs ---
+function coerceJson(text){ try{ return JSON.parse(text); }catch{ const m = text?.match?.(/\{[\s\S]*\}/); if(m){ try{ return JSON.parse(m[0]); }catch{} } return null; } }
 function mergeReports(openaiText, geminiText){
   const A = openaiText ? coerceJson(openaiText) : null;
   const B = geminiText ? coerceJson(geminiText) : null;
-  const base = A || B;
-  if (!base) return openaiText || geminiText || '';
-  const other = (base===A)?B:A;
-  if (!other) return JSON.stringify(base,null,2);
+  const base = A || B; if(!base) return openaiText || geminiText || '';
+  const other = (base===A)?B:A; if(!other) return JSON.stringify(base,null,2);
   const merged = { ...base };
   const keys = new Set([...Object.keys(base), ...Object.keys(other)]);
   const asArr = (x)=>Array.isArray(x)?x:(x?[x]:[]);
-  for (const k of keys){
+  for(const k of keys){
     const x = base[k], y = other[k];
-    if (Array.isArray(x) || Array.isArray(y)){
+    if(Array.isArray(x) || Array.isArray(y)){
       const v = [...asArr(x), ...asArr(y)];
       merged[k] = Array.from(new Map(v.map(o=>[JSON.stringify(o),o])).values());
-    } else if (typeof x==='object' && typeof y==='object'){
-      merged[k] = { ...(x||{}), ...(y||{}) };
-    } else {
-      merged[k] = (x ?? y);
-    }
+    }else if(typeof x==='object' && typeof y==='object'){ merged[k]={...(x||{}), ...(y||{})};
+    }else{ merged[k]= x ?? y; }
   }
   return JSON.stringify(merged,null,2);
 }
-
 function extractTextFromOpenAI(json){
-  if (json && typeof json.output_text === 'string') return json.output_text;
+  if(json && typeof json.output_text === 'string') return json.output_text;
   const c = json?.choices?.[0];
-  if (typeof c?.message?.content === 'string') return c.message.content;
-  if (Array.isArray(c?.message?.content)) return c.message.content.map(p=>p.text||p).join('\n');
+  if(typeof c?.message?.content === 'string') return c.message.content;
+  if(Array.isArray(c?.message?.content)) return c.message.content.map(p=>p.text||p).join('\n');
   return JSON.stringify(json,null,2);
 }
-
 function extractTextFromGemini(json){
   try{
     const cand = json?.candidates?.[0];
@@ -95,7 +77,19 @@ function extractTextFromGemini(json){
   }catch{ return JSON.stringify(json,null,2); }
 }
 
-// ---------- Handler ----------
+// --- Convert Node req => Web Request (كما تتوقعه handleUpload) ---
+function asWebRequest(req, bodyString) {
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host  = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
+  const url   = `${proto}://${host}${req.url}`;
+  const headers = new Headers();
+  for (const [k,v] of Object.entries(req.headers)) {
+    if (Array.isArray(v)) headers.set(k, v.join(', '));
+    else if (typeof v === 'string') headers.set(k, v);
+  }
+  return new Request(url, { method: req.method, headers, body: bodyString });
+}
+
 module.exports = async (req, res) => {
   setCORS(res);
   if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
@@ -104,42 +98,53 @@ module.exports = async (req, res) => {
   const action = u.searchParams.get('action') || 'analyze';
 
   try {
-    // ===== [A] إصدار Client Upload Token للمتصفح =====
-    if (req.method === 'POST' && action === 'sign') {
-      const body = await readJson(req);
+    // -------- [0] Health check --------
+    if (req.method === 'GET' && action === 'health') {
+      const hasBlobToken = !!process.env.BLOB_READ_WRITE_TOKEN;
+      const hasOpenAI = !!process.env.OPENAI_API_KEY;
+      const hasGemini = !!process.env.GEMINI_API_KEY;
+      res.setHeader('Content-Type','application/json; charset=utf-8');
+      return res.end(JSON.stringify({ ok:true, hasBlobToken, hasOpenAI, hasGemini }));
+    }
 
-      // Note: dynamic import to use ESM package inside CJS
+    // -------- [1] توليد توكن الرفع للعميل (Client Upload Token) --------
+    if (req.method === 'POST' && action === 'sign') {
+      if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        const e = new Error('Server missing BLOB_READ_WRITE_TOKEN. Connect a Blob store to this project in Vercel dashboard.');
+        e.status = 500; throw e;
+      }
+
+      const body = await readJson(req);
       const { handleUpload } = await import('@vercel/blob/client');
 
-      // نبني Request متوافق مع Web Fetch API كما تطلبه handleUpload
-      const request = new Request(`https://${req.headers.host}${req.url}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      // بناء Request موافق لما تتوقعه handleUpload (تمامًا كما في docs)
+      const request = asWebRequest(req, JSON.stringify(body));
 
       const jsonResponse = await handleUpload({
         body,
         request,
-        onBeforeGenerateToken: async () => ({
-          addRandomSuffix: true,
-          allowedContentTypes: [
-            'image/jpeg','image/png','image/webp',
-            'image/heic','image/heif','image/tiff','application/pdf'
-          ],
-          maximumSizeInBytes: 80 * 1024 * 1024,  // 80MB لكل عنصر
-          validUntil: Date.now() + 10 * 60 * 1000,
-        }),
-        onUploadCompleted: async ({ blob }) => {
-          console.log('[Blob uploaded]', blob.url);
+        onBeforeGenerateToken: async (pathname /*, clientPayload, multipart */) => {
+          return {
+            addRandomSuffix: true,                 // الإعدادات المتقدمة من جهة السيرفر
+            allowedContentTypes: [
+              'image/jpeg','image/png','image/webp',
+              'image/heic','image/heif','image/tiff','application/pdf'
+            ],
+            maximumSizeInBytes: 80 * 1024 * 1024,  // 80MB لكل عنصر
+            validUntil: Date.now() + 10 * 60 * 1000,
+            tokenPayload: JSON.stringify({ ts: Date.now(), pathname })
+          };
+        },
+        onUploadCompleted: async ({ blob /*, tokenPayload */ }) => {
+          console.log('Blob uploaded:', blob.url);
         },
       });
 
       res.setHeader('Content-Type','application/json; charset=utf-8');
-      return res.end(JSON.stringify(jsonResponse));
+      return res.statusCode = 200, res.end(JSON.stringify(jsonResponse));
     }
 
-    // ===== [B] تحليل الملفات عبر النماذج =====
+    // -------- [2] التحليل عبر النماذج --------
     if (req.method === 'POST' && action === 'analyze') {
       const body = await readJson(req);
       const { files=[], language='ar', model='both', specialty='', context='' } = body || {};
@@ -149,7 +154,7 @@ module.exports = async (req, res) => {
 
       const systemInstructions = buildSystemInstructions({ language, specialty, context });
 
-      // --- OpenAI GPT-4o ---
+      // --- OpenAI GPT‑4o (Responses API) ---
       let openaiText = null;
       if (model === 'both' || model === 'openai') {
         const imageParts = files.map(f => ({ type: "input_image", image_url: f.url }));
@@ -157,29 +162,19 @@ module.exports = async (req, res) => {
           model: "gpt-4o",
           instructions: systemInstructions,
           input: [
-            { role: "user", content: [{ type: "input_text", text: "حلّل هذه الصور/الوثائق وفق التعليمات." }, ...imageParts] }
+            { role: "user", content: [ { type:"input_text", text:"حلّل هذه الصور/الوثائق وفق التعليمات." }, ...imageParts ] }
           ]
         };
-
         const oaRes = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
-          headers: {
-            "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json"
-          },
+          headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify(oaPayload)
         });
-
-        if (!oaRes.ok) {
-          const txt = await oaRes.text();
-          console.error('[OpenAI error]', oaRes.status, txt);
-          throw new Error('OpenAI error: ' + txt);
-        }
         const oaJson = await oaRes.json();
         openaiText = extractTextFromOpenAI(oaJson);
       }
 
-      // --- Google Gemini ---
+      // --- Google Gemini (inline_data Base64) ---
       let geminiText = null;
       if (model === 'both' || model === 'gemini') {
         const parts = [{ text: systemInstructions }];
@@ -187,22 +182,13 @@ module.exports = async (req, res) => {
           const resp = await fetch(f.url);
           const buf = Buffer.from(await resp.arrayBuffer());
           const b64 = buf.toString('base64');
-          parts.push({
-            inline_data: { mime_type: f.mimeType || mimeFromName(f.name), data: b64 }
-          });
+          parts.push({ inline_data: { mime_type: f.mimeType || mimeFromName(f.name), data: b64 } });
         }
-
         const gemModel = "gemini-1.5-pro";
         const gRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${gemModel}:generateContent?key=${process.env.GEMINI_API_KEY}`,
           { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ contents:[{ role:"user", parts }] }) }
         );
-
-        if (!gRes.ok) {
-          const txt = await gRes.text();
-          console.error('[Gemini error]', gRes.status, txt);
-          throw new Error('Gemini error: ' + txt);
-        }
         const gJson = await gRes.json();
         geminiText = extractTextFromGemini(gJson);
       }
@@ -215,7 +201,6 @@ module.exports = async (req, res) => {
     res.statusCode = 404;
     res.end('Not Found');
   } catch (err) {
-    console.error('[API error]', err);
     res.statusCode = err.status || 500;
     res.end(err.message || 'Internal Error');
   }
