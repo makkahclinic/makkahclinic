@@ -1,209 +1,218 @@
-// api/gpt.js
-// Vercel Serverless Function (Node.js, CommonJS)
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>تحليل الحالات الطبية — Gemini & GPT-4o</title>
+  <style>
+    :root { --bg:#f8f9fb; --card:#fff; --border:#e5e7eb; --muted:#6b7280; --ink:#111827;}
+    body{font-family:Arial,system-ui,-apple-system; background:var(--bg); color:#111; margin:24px}
+    h1{margin:0 0 12px}
+    .card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin:16px 0}
+    .row{display:flex; gap:12px; flex-wrap:wrap}
+    .row>*{flex:1; min-width:260px}
+    label{display:block; margin:10px 0 6px}
+    input[type="file"]{margin:6px 0 12px}
+    input,select,textarea{padding:10px; border:1px solid var(--border); border-radius:8px; width:100%}
+    button{padding:10px 16px; border:0; border-radius:8px; background:var(--ink); color:#fff; cursor:pointer}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    .muted{color:var(--muted); font-size:13px}
+    .report{white-space:pre-wrap; background:#fff; border:1px dashed #cbd5e1; padding:12px; border-radius:8px; min-height:64px}
+    .log{white-space:pre-wrap; background:#0b1020; color:#c7d2fe; padding:12px; border-radius:8px; max-height:280px; overflow:auto}
+    progress{width:100%; height:14px}
+  </style>
 
-const { URL } = require('url');
+  <!-- PDF.js (module + worker مطابق للإصدار) -->
+  <script>
+    let __pdfjsModule;
+    async function getPdfJs(){
+      if(!__pdfjsModule){
+        __pdfjsModule = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.min.mjs');
+        __pdfjsModule.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs';
+      }
+      return __pdfjsModule;
+    }
+    // upload() من @vercel/blob/client عبر esm.sh
+    let __vercelUpload;
+    async function getVercelUpload(){
+      if(!__vercelUpload){
+        const mod = await import('https://esm.sh/@vercel/blob@0.25.1/client?bundle');
+        __vercelUpload = mod.upload;
+      }
+      return __vercelUpload;
+    }
+  </script>
+</head>
+<body>
+  <h1>تحليل الحالات الطبية (Gemini & GPT-4o)</h1>
+  <div class="muted">
+    * يتم الرفع مباشرةً إلى Vercel Blob لتجاوز حد 4.5MB لدوال السيرفرلس. *التقرير تعليمي لتحسين الجودة ويُراجع من طبيب مرخّص قبل أي قرار سريري/مالي*.
+  </div>
 
-function setCORS(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>اختر ملفات (صورة/‏PDF — عربي/إنجليزي، خط يدوي أو مطبوع):</label>
+        <input id="fileInput" type="file" accept=".pdf,image/*" multiple />
+        <div class="muted">سيُحوَّل أي PDF إلى صور صفحات داخل المتصفح.</div>
+      </div>
+      <div>
+        <label>اللغة المطلوبة للتقرير:</label>
+        <select id="lang">
+          <option value="ar" selected>العربية</option>
+          <option value="en">English</option>
+        </select>
+        <label>النموذج المستخدم:</label>
+        <select id="model">
+          <option value="both" selected>كلاهما (Gemini + GPT-4o)</option>
+          <option value="openai">GPT-4o فقط</option>
+          <option value="gemini">Gemini فقط</option>
+        </select>
+        <label>التخصص (اختياري):</label>
+        <input id="specialty" placeholder="أسنان، جلدية، قلب، ..." />
+      </div>
+    </div>
+
+    <label>وصف مختصر للحالة/سياق التأمين (اختياري):</label>
+    <textarea id="context" rows="4"></textarea>
+
+    <div class="row" style="align-items:center">
+      <div><button id="analyzeBtn">تحليل الحالة</button></div>
+      <div><progress id="prog" value="0" max="100" hidden></progress></div>
+    </div>
+
+    <div id="uploadSummary" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h3>النتيجة المدمجة</h3>
+    <div id="merged" class="report"></div>
+  </div>
+
+  <div class="card">
+    <h3>مخرجات GPT-4o</h3>
+    <div id="openaiOut" class="report"></div>
+  </div>
+
+  <div class="card">
+    <h3>مخرجات Gemini</h3>
+    <div id="geminiOut" class="report"></div>
+  </div>
+
+  <div class="card">
+    <h3>السجل</h3>
+    <div id="log" class="log"></div>
+  </div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
+
+// تحويل صفحة PDF إلى صورة PNG
+async function pdfPageToBlob(pdf, pageNumber, scale=2){
+  const page = await pdf.getPage(pageNumber);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = viewport.width; canvas.height = viewport.height;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return new Promise(resolve => canvas.toBlob(b=>resolve(b), 'image/png', 0.92));
 }
-async function readJson(req) {
-  const chunks = [];
-  for await (const c of req) chunks.push(c);
-  const raw = Buffer.concat(chunks).toString('utf8');
-  try { return JSON.parse(raw || '{}'); } catch {
-    const e = new Error('Invalid JSON'); e.status = 400; throw e;
+
+// رفع إلى Vercel Blob عبر Client Uploads
+async function uploadFileToBlob(file){
+  const upload = await getVercelUpload();
+  const useMultipart = file.size >= 10 * 1024 * 1024; // للأكبر من 10MB
+  const result = await upload(file.name, file, {
+    access: 'public',
+    handleUploadUrl: '/api/gpt?action=sign', // مهم: هذا المسار يصدر التوكن من السيرفر
+    multipart: useMultipart,
+    onUploadProgress: ({ percentage }) => {
+      const prog = $('prog');
+      if (!prog.hidden && typeof percentage === 'number') {
+        prog.value = Math.min(99, Math.floor(percentage));
+      }
+    }
+  });
+  return { url: result.url, mimeType: file.type || 'application/octet-stream', name: file.name };
+}
+
+async function handleFiles(files){
+  const prog = $('prog'); prog.hidden = false; prog.value = 0;
+  const uploaded = [];
+  let processed = 0, totalSteps = files.length;
+
+  for(const file of files){
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if(isPdf){
+      log(`> تحويل PDF: ${file.name}`);
+      const pdfjsLib = await getPdfJs();
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const maxPages = Math.min(pdf.numPages, 15); // حدّ افتراضي لتقليل التكلفة
+      totalSteps += (maxPages - 1);
+      for(let i=1;i<=maxPages;i++){
+        const blob = await pdfPageToBlob(pdf, i, 2);
+        const pageFile = new File([blob], `${file.name.replace(/\.pdf$/i,'')}-p${i}.png`, {type:'image/png'});
+        const up = await uploadFileToBlob(pageFile);
+        uploaded.push(up);
+        processed++; prog.value = Math.round(processed*100/totalSteps);
+        log(`✓ رُفعت صفحة ${i}/${maxPages} من ${file.name}`);
+      }
+    }else{
+      const up = await uploadFileToBlob(file);
+      uploaded.push(up);
+      processed++; prog.value = Math.round(processed*100/totalSteps);
+      log(`✓ رُفعت الصورة: ${file.name}`);
+    }
   }
-}
-function mimeFromName(name, fallback='image/png'){
-  const n = (name||'').toLowerCase();
-  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'image/jpeg';
-  if (n.endsWith('.png')) return 'image/png';
-  if (n.endsWith('.webp')) return 'image/webp';
-  if (n.endsWith('.heic')) return 'image/heic';
-  if (n.endsWith('.heif')) return 'image/heif';
-  if (n.endsWith('.tif') || n.endsWith('.tiff')) return 'image/tiff';
-  return fallback;
+  prog.hidden = true;
+  $('uploadSummary').textContent = `تم تجهيز ${uploaded.length} صورة/صفحة للتحليل.`;
+  return uploaded;
 }
 
-function buildSystemInstructions({ language='ar', specialty='', context='' }) {
-  return `
-أنت مساعد سريري لتحسين الجودة والدخل المستند إلى الأدلة، لا تُقدّم تشخيصًا نهائيًا ولا توصيات علاجية دون مراجعة بشرية.
-اللغة: ${language==='ar'?'العربية':'English'}
-التخصص: ${specialty || 'عام'}
-السياق: ${context || '—'}
-
-قواعد:
-1) إزالة/تجنّب أي مُعرّفات شخصية (PHI) وفق نهج Safe Harbor لـ HIPAA.
-2) أعِد جوابًا بصيغة JSON حصراً بالمفاتيح:
-{"patient_summary":"","key_findings":[],"differential_diagnoses":[{"dx":"","why":""}],"severity_red_flags":[],"procedural_issues":[{"issue":"","impact":"","evidence":""}],"missed_opportunities":[{"what":"","why_it_matters":""}],"revenue_quality_opportunities":[{"opportunity":"","category":"documentation|diagnostics|procedure|follow-up","rationale":"","risk_note":""}],"suggested_next_steps":[{"action":"","justification":""}],"patient_safety_note":"هذا المحتوى لأغراض تعليمية وتحسين الجودة فقط ويُراجع من طبيب مرخّص.","references":[{"title":"","org":"WHO|NICE|CDC|...","link":""}]}
-3) استند إلى إرشادات عالمية (WHO, NICE) عند الاقتضاء، واذكر مرجعًا مختصرًا مع رابط حيث أمكن.
-`;
+async function analyze(filesMeta, options){
+  const res = await fetch('/api/gpt?action=analyze', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      files: filesMeta,
+      language: options.language,
+      model: options.model,
+      specialty: options.specialty || '',
+      context: options.context || ''
+    })
+  });
+  if(!res.ok){ throw new Error('API error: ' + await res.text()); }
+  return res.json();
 }
 
-function coerceJson(text){ try{ return JSON.parse(text); }catch{ const m = text?.match?.(/\{[\s\S]*\}/); if(m){ try{ return JSON.parse(m[0]); }catch{} } return null; } }
-function mergeReports(openaiText, geminiText){
-  const A = openaiText ? coerceJson(openaiText) : null;
-  const B = geminiText ? coerceJson(geminiText) : null;
-  const base = A || B; if(!base) return openaiText || geminiText || '';
-  const other = (base===A)?B:A; if(!other) return JSON.stringify(base,null,2);
-  const merged = { ...base };
-  const keys = new Set([...Object.keys(base), ...Object.keys(other)]);
-  const asArr = (x)=>Array.isArray(x)?x:(x?[x]:[]);
-  for(const k of keys){
-    const x = base[k], y = other[k];
-    if(Array.isArray(x) || Array.isArray(y)){
-      const v = [...asArr(x), ...asArr(y)];
-      merged[k] = Array.from(new Map(v.map(o=>[JSON.stringify(o),o])).values());
-    }else if(typeof x==='object' && typeof y==='object'){ merged[k]={...(x||{}), ...(y||{})};
-    }else{ merged[k]= x ?? y; }
-  }
-  return JSON.stringify(merged,null,2);
-}
-
-function extractTextFromOpenAI(json){
-  if(json && typeof json.output_text === 'string') return json.output_text;
-  const c = json?.choices?.[0];
-  if(typeof c?.message?.content === 'string') return c.message.content;
-  if(Array.isArray(c?.message?.content)) return c.message.content.map(p=>p.text||p).join('\n');
-  return JSON.stringify(json,null,2);
-}
-function extractTextFromGemini(json){
+$('analyzeBtn').addEventListener('click', async ()=>{
   try{
-    const cand = json?.candidates?.[0];
-    const parts = cand?.content?.parts || [];
-    return parts.map(p=>p.text||'').join('');
-  }catch{ return JSON.stringify(json,null,2); }
-}
-
-// تحويل req Node إلى Request Web (لاستخدامه مع handleUpload)
-function asWebRequest(req, bodyString) {
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  const host  = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
-  const url   = `${proto}://${host}${req.url}`;
-  const headers = new Headers();
-  for (const [k,v] of Object.entries(req.headers)) {
-    if (Array.isArray(v)) headers.set(k, v.join(', '));
-    else if (typeof v === 'string') headers.set(k, v);
+    const files = Array.from($('fileInput').files || []);
+    if(!files.length){ alert('اختر ملفاً واحداً على الأقل.'); return; }
+    $('analyzeBtn').disabled = true;
+    log('بدء الرفع/التحويل ...');
+    const uploaded = await handleFiles(files);
+    log('بدء التحليل عبر النماذج ...');
+    const result = await analyze(uploaded, {
+      language: $('lang').value,
+      model: $('model').value,
+      specialty: $('specialty').value.trim(),
+      context: $('context').value.trim()
+    });
+    $('merged').textContent = result.merged || '';
+    $('openaiOut').textContent = result.openai || '—';
+    $('geminiOut').textContent = result.gemini || '—';
+    log('اكتمل التحليل.');
+  }catch(e){
+    log('خطأ: ' + e.message);
+    alert(e.message);
+  }finally{
+    $('analyzeBtn').disabled = false;
   }
-  return new Request(url, { method: req.method, headers, body: bodyString });
-}
-
-module.exports = async (req, res) => {
-  setCORS(res);
-  if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
-
-  const u = new URL(req.url, `http://${req.headers.host}`);
-  const action = u.searchParams.get('action') || 'analyze';
-
-  try {
-    // ========= [1] توقيع الرفع للعميل (Client Upload Token) =========
-    if (req.method === 'POST' && action === 'sign') {
-      const body = await readJson(req);
-      const { handleUpload } = await import('@vercel/blob/client');
-
-      // بناء Request كما تتوقعه handleUpload (مطابق للدليل الرسمي)
-      const request = asWebRequest(req, JSON.stringify(body));
-
-      const jsonResponse = await handleUpload({
-        body,
-        request,
-        onBeforeGenerateToken: async (pathname /*, clientPayload, multipart */) => {
-          return {
-            addRandomSuffix: true,                 // يُضبط من السيرفر
-            allowedContentTypes: [
-              'image/jpeg','image/png','image/webp',
-              'image/heic','image/heif','image/tiff','application/pdf'
-            ],
-            maximumSizeInBytes: 80 * 1024 * 1024,  // 80MB لكل عنصر
-            validUntil: Date.now() + 10 * 60 * 1000,
-            tokenPayload: JSON.stringify({ ts: Date.now(), pathname })
-          };
-        },
-        onUploadCompleted: async ({ blob /*, tokenPayload */ }) => {
-          console.log('Blob uploaded:', blob.url);
-        },
-      });
-
-      res.setHeader('Content-Type','application/json; charset=utf-8');
-      return res.end(JSON.stringify(jsonResponse));
-    }
-
-    // ========= [2] التحليل عبر النماذج =========
-    if (req.method === 'POST' && action === 'analyze') {
-      const body = await readJson(req);
-      const { files=[], language='ar', model='both', specialty='', context='' } = body || {};
-      if (!Array.isArray(files) || files.length === 0) {
-        const e = new Error('لا توجد ملفات للتحليل'); e.status = 400; throw e;
-      }
-
-      const systemInstructions = buildSystemInstructions({ language, specialty, context });
-
-      // --- OpenAI GPT‑4o (Responses API) ---
-      let openaiText = null;
-      if (model === 'both' || model === 'openai') {
-        const imageParts = files.map(f => ({
-          type: "input_image",
-          image_url: f.url
-        }));
-
-        const oaPayload = {
-          model: "gpt-4o",
-          instructions: systemInstructions,
-          input: [
-            {
-              role: "user",
-              content: [
-                { type: "input_text", text: "حلّل هذه الصور/الوثائق وفق التعليمات." },
-                ...imageParts
-              ]
-            }
-          ]
-        };
-
-        const oaRes = await fetch("https://api.openai.com/v1/responses", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(oaPayload)
-        });
-        const oaJson = await oaRes.json();
-        openaiText = extractTextFromOpenAI(oaJson);
-      }
-
-      // --- Google Gemini (inline_data Base64) ---
-      let geminiText = null;
-      if (model === 'both' || model === 'gemini') {
-        const parts = [{ text: systemInstructions }];
-        for (const f of files) {
-          const resp = await fetch(f.url);
-          const buf = Buffer.from(await resp.arrayBuffer());
-          const b64 = buf.toString('base64');
-          parts.push({
-            inline_data: { mime_type: f.mimeType || mimeFromName(f.name), data: b64 }
-          });
-        }
-        const gemModel = "gemini-1.5-pro";
-        const gRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${gemModel}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ contents:[{ role:"user", parts }] }) }
-        );
-        const gJson = await gRes.json();
-        geminiText = extractTextFromGemini(gJson);
-      }
-
-      const merged = mergeReports(openaiText, geminiText);
-      res.setHeader('Content-Type','application/json; charset=utf-8');
-      return res.end(JSON.stringify({ merged, openai: openaiText, gemini: geminiText }));
-    }
-
-    res.statusCode = 404;
-    res.end('Not Found');
-  } catch (err) {
-    res.statusCode = err.status || 500;
-    res.end(err.message || 'Internal Error');
-  }
-};
+});
+</script>
+</body>
+</html>
