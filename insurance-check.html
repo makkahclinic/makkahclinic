@@ -5,203 +5,755 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>تحليل الحالات الطبية — Gemini & GPT‑4o (محسّن)</title>
   <style>
-    :root{--bg:#f8f9fb;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111827}
-    body{font-family:Arial,system-ui,-apple-system;background:var(--bg);color:#111;margin:24px}
-    h1{margin:0 0 12px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:16px 0}
-    .row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:260px}
-    label{display:block;margin:10px 0 6px}
-    input[type=file]{margin:6px 0 12px}
-    input,select,textarea{padding:10px;border:1px solid var(--border);border-radius:8px;width:100%}
-    button{padding:10px 16px;border:0;border-radius:8px;background:var(--ink);color:#fff;cursor:pointer}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    .muted{color:var(--muted);font-size:13px}
-    .warn{padding:10px;background:#fff7ed;border:1px solid #f59e0b;border-radius:8px;margin:8px 0;color:#92400e}
-    .report{white-space:pre-wrap;background:#fff;border:1px dashed #cbd5e1;padding:12px;border-radius:8px;min-height:64px}
-    .log{white-space:pre-wrap;background:#0b1020;color:#c7d2fe;padding:12px;border-radius:8px;max-height:280px;overflow:auto}
-    progress{width:100%;height:14px}
+    :root {
+      --bg: #f8f9fb;
+      --card: #fff;
+      --border: #e5e7eb;
+      --muted: #6b7280;
+      --ink: #111827;
+      --primary: #2563eb;
+      --success: #059669;
+      --warning: #d97706;
+      --error: #dc2626;
+    }
+    
+    body {
+      font-family: Arial, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      margin: 0;
+      padding: 24px;
+      line-height: 1.6;
+    }
+    
+    h1, h2, h3 {
+      color: var(--ink);
+      margin-top: 0;
+    }
+    
+    h1 {
+      margin-bottom: 12px;
+      font-size: 1.8rem;
+    }
+    
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    
+    .row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .row > * {
+      flex: 1;
+      min-width: 260px;
+    }
+    
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 500;
+    }
+    
+    input[type="file"] {
+      margin: 6px 0 12px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 100%;
+      background: white;
+    }
+    
+    input, select, textarea {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    
+    button {
+      padding: 12px 20px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--primary);
+      color: white;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: #1d4ed8;
+    }
+    
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    .muted {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    
+    .warn {
+      padding: 12px 16px;
+      background: #fffbeb;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      margin: 12px 0;
+      color: #92400e;
+    }
+    
+    .report {
+      white-space: pre-wrap;
+      background: #f9fafb;
+      border: 1px dashed #d1d5db;
+      padding: 16px;
+      border-radius: 8px;
+      min-height: 100px;
+      max-height: 400px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+    
+    .log {
+      white-space: pre-wrap;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 8px;
+      max-height: 280px;
+      overflow: auto;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+    
+    progress {
+      width: 100%;
+      height: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    progress::-webkit-progress-bar {
+      background: #e5e7eb;
+      border-radius: 6px;
+    }
+    
+    progress::-webkit-progress-value {
+      background: var(--primary);
+      border-radius: 6px;
+    }
+    
+    .status-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 12px 0;
+    }
+    
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .step-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 16px 0;
+    }
+    
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .step-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 12px;
+    }
+    
+    .step-active {
+      background: var(--primary);
+      color: white;
+    }
+    
+    .step-completed {
+      background: var(--success);
+      color: white;
+    }
+    
+    .step-pending {
+      background: var(--muted);
+      color: white;
+    }
+    
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    
+    .tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    
+    .tab-active {
+      border-bottom-color: var(--primary);
+      color: var(--primary);
+      font-weight: 500;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content-active {
+      display: block;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+      
+      .row {
+        flex-direction: column;
+        gap: 12px;
+      }
+      
+      .card {
+        padding: 16px;
+      }
+    }
   </style>
 
-  <!-- PDF.js كـ ES Modules + worker عبر CDN -->
-  <script>
-    let __pdfjsModule;
-    async function getPdfJs(){
-      if(!__pdfjsModule){
-        __pdfjsModule = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.min.mjs');
-        __pdfjsModule.GlobalWorkerOptions.workerSrc =
+  <!-- تحميل المكتبات مسبقًا لتحسين الأداء -->
+  <script type="module">
+    // تحميل المكتبات بشكل استباقي عند تحميل الصفحة
+    window.pdfjsLibPromise = (async () => {
+      try {
+        const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.min.mjs');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 
           'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs';
+        return pdfjsLib;
+      } catch (error) {
+        console.error('Failed to load PDF.js:', error);
+        throw new Error('تعذر تحميل مكتبة PDF: ' + error.message);
       }
-      return __pdfjsModule;
-    }
-    async function getVercelUpload(){
-      const mod = await import('https://esm.sh/@vercel/blob@0.25.1/client?bundle');
-      return mod.upload;
-    }
+    })();
+
+    window.vercelUploadPromise = (async () => {
+      try {
+        const mod = await import('https://esm.sh/@vercel/blob@0.25.1/client?bundle');
+        return mod.upload;
+      } catch (error) {
+        console.error('Failed to load Vercel Blob:', error);
+        throw new Error('تعذر تحميل مكتبة الرفع: ' + error.message);
+      }
+    })();
   </script>
 </head>
 <body>
   <h1>تحليل الحالات الطبية (Gemini & GPT‑4o)</h1>
-  <div id="ver" class="muted"></div>
   <div id="health" class="warn" style="display:none"></div>
   <div class="muted">
-    * الرفع مباشر إلى Vercel Blob. *التقرير تعليمي ويُراجع طبيًا قبل أي قرار*.  
-    * يتم استخراج نص PDF داخليًا وإرساله مع الصور لرفع الدقة. (PDF.js / worker عبر CDN).
+    * الرفع مباشر إلى Vercel Blob. *التقرير تعليمي لتحسين الجودة ويُراجع طبيًا قبل أي قرار*.  
+    * يدعم PDF عربي/إنجليزي (خط يدوي/مطبوع) + استخراج نص PDF داخليًا لتحسين الدقة.
   </div>
 
   <div class="card">
     <div class="row">
       <div>
-        <label>اختر ملفات (صورة/‏PDF):</label>
+        <label for="fileInput">اختر ملفات (صورة/‏PDF):</label>
         <input id="fileInput" type="file" accept=".pdf,image/*" multiple />
-        <div class="muted">سنعالج كل PDF إلى صور + نص.</div>
+        <div class="muted">سيُحوَّل أي PDF إلى صور صفحات **ويُستخرج نصّه**.</div>
+        <div id="fileValidation" class="muted" style="color: var(--error); display: none;"></div>
       </div>
       <div>
-        <label>اللغة:</label>
-        <select id="lang"><option value="ar" selected>العربية</option><option value="en">English</option></select>
-        <label>النموذج:</label>
+        <label for="lang">اللغة:</label>
+        <select id="lang">
+          <option value="ar" selected>العربية</option>
+          <option value="en">English</option>
+        </select>
+        
+        <label for="model">النموذج:</label>
         <select id="model">
           <option value="both" selected>كلاهما (Gemini + GPT‑4o)</option>
           <option value="openai">GPT‑4o فقط</option>
           <option value="gemini">Gemini فقط</option>
         </select>
-        <label>التخصص (اختياري):</label>
-        <input id="specialty" placeholder="أسنان، جلدية، قلب، ..." />
+        
+        <label for="specialty">التخصص (اختياري):</label>
+        <input id="specialty" type="text" placeholder="أسنان، جلدية، قلب، ..."/>
       </div>
     </div>
-    <label>وصف مختصر/سياق التأمين (اختياري):</label>
-    <textarea id="context" rows="3"></textarea>
-
-    <div class="row" style="align-items:center">
-      <div><button id="analyzeBtn">تحليل الحالة</button></div>
-      <div><progress id="prog" value="0" max="100" hidden></progress></div>
+    
+    <label for="context">وصف مختصر/سياق التأمين (اختياري):</label>
+    <textarea id="context" rows="3" placeholder="أدخل وصفًا مختصرًا للحالة أو سياق التحليل..."></textarea>
+    
+    <div class="step-progress">
+      <div class="step">
+        <span id="step1Icon" class="step-icon step-pending">1</span>
+        <span>رفع الملفات وتحويلها</span>
+      </div>
+      <div class="step">
+        <span id="step2Icon" class="step-icon step-pending">2</span>
+        <span>تحليل النماذج</span>
+      </div>
+      <div class="step">
+        <span id="step3Icon" class="step-icon step-pending">3</span>
+        <span>عرض النتائج</span>
+      </div>
     </div>
+    
+    <div class="row" style="align-items:center">
+      <div>
+        <button id="analyzeBtn">بدء التحليل</button>
+      </div>
+      <div style="flex: 2;">
+        <progress id="prog" value="0" max="100" hidden></progress>
+        <div id="statusText" class="muted" style="text-align: center;"></div>
+      </div>
+    </div>
+    
     <div id="uploadSummary" class="muted"></div>
   </div>
 
-  <div class="card"><h3>النتيجة المدمجة</h3><div id="merged" class="report"></div></div>
-  <div class="card"><h3>مخرجات GPT‑4o</h3><div id="openaiOut" class="report"></div></div>
-  <div class="card"><h3>مخرجات Gemini</h3><div id="geminiOut" class="report"></div></div>
-  <div class="card"><h3>السجل</h3><div id="log" class="log"></div></div>
+  <div class="tabs">
+    <div class="tab tab-active" data-tab="merged">النتيجة المدمجة</div>
+    <div class="tab" data-tab="openai">مخرجات GPT‑4o</div>
+    <div class="tab" data-tab="gemini">مخرجات Gemini</div>
+    <div class="tab" data-tab="log">سجل التنفيذ</div>
+  </div>
+
+  <div id="mergedTab" class="tab-content tab-content-active">
+    <div class="card">
+      <h3>النتيجة المدمجة</h3>
+      <div id="merged" class="report">ستظهر النتائج هنا بعد اكتمال التحليل...</div>
+    </div>
+  </div>
+
+  <div id="openaiTab" class="tab-content">
+    <div class="card">
+      <h3>مخرجات GPT‑4o</h3>
+      <div id="openaiOut" class="report">ستظهر نتائج GPT-4o هنا...</div>
+    </div>
+  </div>
+
+  <div id="geminiTab" class="tab-content">
+    <div class="card">
+      <h3>مخرجات Gemini</h3>
+      <div id="geminiOut" class="report">ستظهر نتائج Gemini هنا...</div>
+    </div>
+  </div>
+
+  <div id="logTab" class="tab-content">
+    <div class="card">
+      <h3>سجل التنفيذ</h3>
+      <div id="log" class="log"></div>
+    </div>
+  </div>
 
 <script>
+// عناصر DOM
 const $ = id => document.getElementById(id);
-const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
+const log = (...args) => { 
+  $('log').textContent += args.join(' ') + '\n'; 
+  $('log').scrollTop = $('log').scrollHeight;
+};
 
-// إظهار نسخة الـAPI للتأكد من نشر التعديلات
-(async()=>{
-  try{
-    const v = await fetch('/api/gpt?action=version'); if(v.ok){ const j=await v.json(); $('ver').textContent = `API Version: ${j.apiVersion}`; }
-    const r = await fetch('/api/gpt?action=health'); if(!r.ok) return; const j = await r.json();
-    const probs=[]; if(!j.hasBlobToken) probs.push('BLOB_READ_WRITE_TOKEN مفقود');
-    if(!j.pkgBlob) probs.push('حزمة @vercel/blob غير مثبتة');
-    if(!j.hasOpenAI) probs.push('OPENAI_API_KEY مفقود');
-    if(!j.hasGemini) probs.push('GEMINI_API_KEY مفقود');
-    if(probs.length){ const el=$('health'); el.style.display='block'; el.textContent='تحذير: '+probs.join(' | '); }
-  }catch{}
-})();
+// حالة التطبيق
+const state = {
+  isProcessing: false,
+  currentStep: 0,
+  totalSteps: 0
+};
 
-function redactLinesBasic(s){
-  if(!s) return s;
-  const patterns = [
-    /^.*\b(Name|Patient\s*File\s*No|ID\s*No|D\.?O\.?B|Provider Name|Insurance Co\.|TPA Name)\b.*$/gmi,
-    /^.*\b(الاسم|رقم\s*الملف|رقم\s*الهوية|تاريخ\s*الميلاد|مزود\s*الخدمة|شركة\s*التأمين)\b.*$/gmi
-  ];
-  let out = s; for(const p of patterns) out = out.replace(p,''); return out;
+// تحميل المكتبات
+async function getPdfJs() {
+  try {
+    return await window.pdfjsLibPromise;
+  } catch (error) {
+    throw new Error('فشل تحميل مكتبة PDF: ' + error.message);
+  }
 }
 
-async function pdfPageToBlob(pdf, pageNumber, scale=2){
+async function getVercelUpload() {
+  try {
+    return await window.vercelUploadPromise;
+  } catch (error) {
+    throw new Error('فشل تحميل مكتبة الرفع: ' + error.message);
+  }
+}
+
+// التحقق من صحة الملفات
+function validateFiles(files) {
+  const maxSize = 50 * 1024 * 1024; // 50MB
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  
+  for (const file of files) {
+    if (file.size > maxSize) {
+      throw new Error(`الملف ${file.name} يتجاوز الحجم المسموح به (50MB)`);
+    }
+    
+    if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.pdf')) {
+      throw new Error(`نوع الملف ${file.name} غير مدعوم`);
+    }
+  }
+  
+  return true;
+}
+
+// تحديث واجهة المستخدم بناء على الحالة
+function updateUI() {
+  $('analyzeBtn').disabled = state.isProcessing;
+  
+  // تحديث خطوات التقدم
+  const steps = ['step1Icon', 'step2Icon', 'step3Icon'];
+  steps.forEach((stepId, index) => {
+    const stepElement = $(stepId);
+    if (index < state.currentStep) {
+      stepElement.className = 'step-icon step-completed';
+      stepElement.textContent = '✓';
+    } else if (index === state.currentStep) {
+      stepElement.className = 'step-icon step-active';
+      stepElement.textContent = index + 1;
+    } else {
+      stepElement.className = 'step-icon step-pending';
+      stepElement.textContent = index + 1;
+    }
+  });
+}
+
+// تحويل صفحة PDF إلى صورة
+async function pdfPageToBlob(pdf, pageNumber, scale = 1.5) {
   const page = await pdf.getPage(pageNumber);
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  canvas.width = viewport.width; canvas.height = viewport.height;
-  await page.render({ canvasContext: ctx, viewport }).promise;
-  return new Promise(resolve => canvas.toBlob(b=>resolve(b), 'image/png', 0.92));
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  
+  await page.render({
+    canvasContext: ctx,
+    viewport
+  }).promise;
+  
+  return new Promise((resolve) => {
+    canvas.toBlob(blob => resolve(blob), 'image/png', 0.9);
+  });
 }
 
-async function extractPdfText(pdf){
-  let chunks = [];
-  for(let i=1;i<=pdf.numPages;i++){
+// استخراج نص من PDF
+async function extractPdfText(pdf) {
+  let textChunks = [];
+  const numPages = pdf.numPages;
+  
+  for (let i = 1; i <= numPages; i++) {
     const page = await pdf.getPage(i);
-    const tc = await page.getTextContent();
-    chunks.push(tc.items.map(it=>it.str).join(' '));
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(' ');
+    textChunks.push(`صفحة ${i}: ${pageText}`.trim());
   }
-  return redactLinesBasic(chunks.join('\n\n'));
+  
+  return textChunks.join('\n\n');
 }
 
-async function uploadFileToBlob(file){
+// رفع ملف إلى Blob
+async function uploadFileToBlob(file) {
   const upload = await getVercelUpload();
+  const useMultipart = file.size >= 10 * 1024 * 1024; // 10MB
+  
   const result = await upload(file.name, file, {
-    access:'public',
-    handleUploadUrl:'/api/gpt?action=sign',
-    multipart: file.size >= 10*1024*1024,
-    onUploadProgress: ({ percentage })=>{
-      const p=$('prog'); if(!p.hidden && typeof percentage==='number'){ p.value=Math.min(99, Math.floor(percentage)); }
+    access: 'public',
+    handleUploadUrl: '/api/gpt?action=sign',
+    multipart: useMultipart,
+    onUploadProgress: ({ percentage }) => {
+      if (typeof percentage === 'number') {
+        $('prog').value = Math.min(99, Math.floor(percentage));
+        $('statusText').textContent = `جاري رفع الملف: ${Math.floor(percentage)}%`;
+      }
     }
   });
-  return { url: result.url, mimeType: file.type || 'application/octet-stream', name: file.name };
+  
+  return {
+    url: result.url,
+    mimeType: file.type || 'application/octet-stream',
+    name: file.name
+  };
 }
 
-async function handleFiles(files){
-  const prog = $('prog'); prog.hidden=false; prog.value=0;
-  const uploaded=[]; let docTextAggregate=[]; let processed=0; let totalSteps=files.length;
-
-  for(const file of files){
-    const isPdf = file.type==='application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if(isPdf){
-      log(`> تحويل PDF واستخراج نص: ${file.name}`);
-      const pdfjsLib = await getPdfJs();
-      const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      const text = await extractPdfText(pdf); if(text) docTextAggregate.push(text);
-      const maxPages = Math.min(pdf.numPages, 15); totalSteps += (maxPages - 1);
-      for(let i=1;i<=maxPages;i++){
-        const blob = await pdfPageToBlob(pdf, i, 2);
-        const pageFile = new File([blob], `${file.name.replace(/\.pdf$/i,'')}-p${i}.png`, {type:'image/png'});
-        const up = await uploadFileToBlob(pageFile);
-        uploaded.push(up);
-        processed++; prog.value=Math.round(processed*100/totalSteps);
-        log(`✓ رُفعت صفحة ${i}/${maxPages} من ${file.name}`);
+// معالجة الملفات
+async function handleFiles(files) {
+  const uploadedFiles = [];
+  let docTextAggregate = [];
+  let processedItems = 0;
+  const totalItems = files.length;
+  
+  $('prog').hidden = false;
+  $('prog').value = 0;
+  $('statusText').textContent = 'بدء معالجة الملفات...';
+  
+  for (const file of files) {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    
+    if (isPdf) {
+      log(`> معالجة PDF: ${file.name}`);
+      
+      try {
+        const pdfjsLib = await getPdfJs();
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        // استخراج النص من PDF
+        $('statusText').textContent = `جاري استخراج النص من ${file.name}...`;
+        const text = await extractPdfText(pdf);
+        if (text) docTextAggregate.push(text);
+        
+        // تحويل صفحات PDF إلى صور
+        const maxPages = Math.min(pdf.numPages, 15);
+        log(`- تحويل ${maxPages} صفحة إلى صور`);
+        
+        for (let i = 1; i <= maxPages; i++) {
+          $('statusText').textContent = `جاري تحويل الصفحة ${i} من ${maxPages}...`;
+          
+          const blob = await pdfPageToBlob(pdf, i);
+          const pageFile = new File(
+            [blob], 
+            `${file.name.replace(/\.pdf$/i, '')}-p${i}.png`, 
+            { type: 'image/png' }
+          );
+          
+          const uploaded = await uploadFileToBlob(pageFile);
+          uploadedFiles.push(uploaded);
+          
+          processedItems++;
+          $('prog').value = Math.round((processedItems / (totalItems + maxPages - 1)) * 100);
+          
+          log(`✓ تم رفع صفحة ${i}/${maxPages} من ${file.name}`);
+        }
+      } catch (error) {
+        log(`✗ خطأ في معالجة PDF: ${file.name} - ${error.message}`);
+        throw error;
       }
-    }else{
-      const up = await uploadFileToBlob(file);
-      uploaded.push(up); processed++; prog.value=Math.round(processed*100/totalSteps);
-      log(`✓ رُفعت الصورة: ${file.name}`);
+    } else {
+      // معالجة ملفات الصور مباشرة
+      try {
+        $('statusText').textContent = `جاري رفع ${file.name}...`;
+        const uploaded = await uploadFileToBlob(file);
+        uploadedFiles.push(uploaded);
+        
+        processedItems++;
+        $('prog').value = Math.round((processedItems / totalItems) * 100);
+        
+        log(`✓ تم رفع الصورة: ${file.name}`);
+      } catch (error) {
+        log(`✗ خطأ في رفع الصورة: ${file.name} - ${error.message}`);
+        throw error;
+      }
     }
   }
-  prog.hidden=true;
-  $('uploadSummary').textContent = `تم تجهيز ${uploaded.length} صورة/صفحة + نص PDF للتحليل.`;
-  return { images: uploaded, docText: docTextAggregate.join('\n\n') };
+  
+  $('prog').hidden = true;
+  $('statusText').textContent = 'تم الانتهاء من معالجة الملفات';
+  $('uploadSummary').textContent = `تم تجهيز ${uploadedFiles.length} صورة/صفحة + نص PDF للتحليل.`;
+  
+  return {
+    images: uploadedFiles,
+    docText: docTextAggregate.join('\n\n')
+  };
 }
 
-async function analyze(payload){
-  const r = await fetch('/api/gpt?action=analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-  if(!r.ok) throw new Error('API error: '+await r.text());
-  return r.json();
+// إرسال طلب التحليل إلى الخادم
+async function analyze(payload) {
+  state.currentStep = 1;
+  updateUI();
+  
+  $('statusText').textContent = 'جاري التحليل بواسطة النماذج...';
+  
+  const response = await fetch('/api/gpt?action=analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`خطأ من الخادم: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
 }
 
-$('analyzeBtn').addEventListener('click', async ()=>{
-  try{
-    const files = Array.from(document.getElementById('fileInput').files||[]);
-    if(!files.length){ alert('اختر ملفاً واحداً على الأقل.'); return; }
-    document.getElementById('analyzeBtn').disabled=true; 
-    document.getElementById('prog').hidden=false;
+// تهيئة التطبيق
+function initApp() {
+  // إعداد علامات التبويب
+  const tabs = document.querySelectorAll('.tab');
+  const tabContents = document.querySelectorAll('.tab-content');
+  
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabId = tab.getAttribute('data-tab');
+      
+      // إلغاء تفعيل جميع علامات التبويب والمحتويات
+      tabs.forEach(t => t.classList.remove('tab-active'));
+      tabContents.forEach(c => c.classList.remove('tab-content-active'));
+      
+      // تفعيل علامة التبويب والمحتوى المحدد
+      tab.classList.add('tab-active');
+      $(`${tabId}Tab`).classList.add('tab-content-active');
+    });
+  });
+  
+  // إعداد زر التحليل
+  $('analyzeBtn').addEventListener('click', startAnalysis);
+  
+  // التحقق من صحة الملفات عند التحديد
+  $('fileInput').addEventListener('change', () => {
+    const files = Array.from($('fileInput').files);
+    const validationElement = $('fileValidation');
+    
+    try {
+      if (files.length > 0) {
+        validateFiles(files);
+        validationElement.style.display = 'none';
+      }
+    } catch (error) {
+      validationElement.textContent = error.message;
+      validationElement.style.display = 'block';
+    }
+  });
+  
+  // فحص حالة الخادم
+  healthCheck();
+}
+
+// فحص صحة الخادم
+async function healthCheck() {
+  try {
+    const response = await fetch('/api/gpt?action=health');
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    const problems = [];
+    
+    if (!data.hasBlobToken) {
+      problems.push('BLOB_READ_WRITE_TOKEN مفقود (يرجى ربط Blob Store).');
+    }
+    
+    if (!data.pkgBlob) {
+      problems.push('حزمة @vercel/blob غير مثبتة.');
+    }
+    
+    if (!data.hasOpenAI) {
+      problems.push('OPENAI_API_KEY مفقود.');
+    }
+    
+    if (!data.hasGemini) {
+      problems.push('GEMINI_API_KEY مفقود.');
+    }
+    
+    if (problems.length > 0) {
+      const healthElement = $('health');
+      healthElement.style.display = 'block';
+      healthElement.textContent = 'تحذير: ' + problems.join(' | ');
+    }
+  } catch (error) {
+    console.error('فشل فحص الصحة:', error);
+  }
+}
+
+// بدء عملية التحليل
+async function startAnalysis() {
+  if (state.isProcessing) return;
+  
+  try {
+    state.isProcessing = true;
+    state.currentStep = 0;
+    updateUI();
+    
+    // مسح النتائج السابقة
+    $('merged').textContent = 'جاري المعالجة...';
+    $('openaiOut').textContent = 'جاري المعالجة...';
+    $('geminiOut').textContent = 'جاري المعالجة...';
+    $('log').textContent = '';
+    
+    // الحصول على الملفات والتحقق من صحتها
+    const files = Array.from($('fileInput').files);
+    if (files.length === 0) {
+      throw new Error('يرجى اختيار ملف واحد على الأقل.');
+    }
+    
+    validateFiles(files);
+    
+    // معالجة الملفات ورفعها
+    state.currentStep = 0;
+    updateUI();
+    
     const { images, docText } = await handleFiles(files);
+    
+    // إرسال طلب التحليل
     const result = await analyze({
       files: images,
       docText,
-      language: document.getElementById('lang').value,
-      model: document.getElementById('model').value,
-      specialty: document.getElementById('specialty').value.trim(),
-      context: document.getElementById('context').value.trim()
+      language: $('lang').value,
+      model: $('model').value,
+      specialty: $('specialty').value.trim(),
+      context: $('context').value.trim()
     });
-    document.getElementById('merged').textContent  = result.merged  || '';
-    document.getElementById('openaiOut').textContent = result.openai || '—';
-    document.getElementById('geminiOut').textContent = result.gemini || '—';
-    document.getElementById('prog').hidden=true;
-  }catch(e){ log('خطأ: '+e.message); alert(e.message); }
-  finally{ document.getElementById('analyzeBtn').disabled=false; }
-});
+    
+    // عرض النتائج
+    state.currentStep = 2;
+    updateUI();
+    
+    $('merged').textContent = result.merged || '';
+    $('openaiOut').textContent = result.openai || '—';
+    $('geminiOut').textContent = result.gemini || '—';
+    $('statusText').textContent = 'تم الانتهاء من التحليل بنجاح';
+    
+    log('✓ اكتمل التحليل بنجاح');
+    
+  } catch (error) {
+    log('✗ خطأ: ' + error.message);
+    $('statusText').textContent = 'فشل في التحليل: ' + error.message;
+    alert('حدث خطأ: ' + error.message);
+  } finally {
+    state.isProcessing = false;
+    updateUI();
+  }
+}
+
+// بدء التطبيق عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', initApp);
 </script>
 </body>
 </html>
