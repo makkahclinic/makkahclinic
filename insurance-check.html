@@ -22,7 +22,7 @@
     progress{width:100%;height:14px}
   </style>
 
-  <!-- PDF.js كـ ES Modules + worker من CDN (حسب التوثيق) -->
+  <!-- PDF.js كـ ES Modules + worker عبر CDN -->
   <script>
     let __pdfjsModule;
     async function getPdfJs(){
@@ -33,7 +33,6 @@
       }
       return __pdfjsModule;
     }
-    // @vercel/blob/client للرفع المباشر
     async function getVercelUpload(){
       const mod = await import('https://esm.sh/@vercel/blob@0.25.1/client?bundle');
       return mod.upload;
@@ -42,10 +41,11 @@
 </head>
 <body>
   <h1>تحليل الحالات الطبية (Gemini & GPT‑4o)</h1>
+  <div id="ver" class="muted"></div>
   <div id="health" class="warn" style="display:none"></div>
   <div class="muted">
     * الرفع مباشر إلى Vercel Blob. *التقرير تعليمي ويُراجع طبيًا قبل أي قرار*.  
-    * يتم استخراج نص PDF داخليًا وإرساله مع الصور لرفع الدقة. (PDF.js / worker عبر CDN). 
+    * يتم استخراج نص PDF داخليًا وإرساله مع الصور لرفع الدقة. (PDF.js / worker عبر CDN).
   </div>
 
   <div class="card">
@@ -87,12 +87,12 @@
 const $ = id => document.getElementById(id);
 const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
 
-// فحص الإعدادات
+// إظهار نسخة الـAPI للتأكد من نشر التعديلات
 (async()=>{
   try{
-    const r = await fetch('/api/gpt?action=health'); if(!r.ok) return;
-    const j = await r.json(); const probs=[];
-    if(!j.hasBlobToken) probs.push('BLOB_READ_WRITE_TOKEN مفقود'); 
+    const v = await fetch('/api/gpt?action=version'); if(v.ok){ const j=await v.json(); $('ver').textContent = `API Version: ${j.apiVersion}`; }
+    const r = await fetch('/api/gpt?action=health'); if(!r.ok) return; const j = await r.json();
+    const probs=[]; if(!j.hasBlobToken) probs.push('BLOB_READ_WRITE_TOKEN مفقود');
     if(!j.pkgBlob) probs.push('حزمة @vercel/blob غير مثبتة');
     if(!j.hasOpenAI) probs.push('OPENAI_API_KEY مفقود');
     if(!j.hasGemini) probs.push('GEMINI_API_KEY مفقود');
@@ -102,13 +102,11 @@ const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
 
 function redactLinesBasic(s){
   if(!s) return s;
-  // حذف أسطر تحتوي PHI شائعة
   const patterns = [
-    /^.*\b(Name|Patient\s*File\s*No|ID\s*No|D\.?O\.?B|الاسم|رقم\s*الهوية|رقم\s*الملف|تاريخ\s*الميلاد)\b.*$/gmi
+    /^.*\b(Name|Patient\s*File\s*No|ID\s*No|D\.?O\.?B|Provider Name|Insurance Co\.|TPA Name)\b.*$/gmi,
+    /^.*\b(الاسم|رقم\s*الملف|رقم\s*الهوية|تاريخ\s*الميلاد|مزود\s*الخدمة|شركة\s*التأمين)\b.*$/gmi
   ];
-  let out = s;
-  for(const p of patterns) out = out.replace(p, '');
-  return out;
+  let out = s; for(const p of patterns) out = out.replace(p,''); return out;
 }
 
 async function pdfPageToBlob(pdf, pageNumber, scale=2){
@@ -129,11 +127,6 @@ async function extractPdfText(pdf){
     chunks.push(tc.items.map(it=>it.str).join(' '));
   }
   return redactLinesBasic(chunks.join('\n\n'));
-}
-
-async function getVercelUpload(){
-  const upload = (await import('https://esm.sh/@vercel/blob@0.25.1/client?bundle')).upload;
-  return upload;
 }
 
 async function uploadFileToBlob(file){
@@ -189,24 +182,25 @@ async function analyze(payload){
 
 $('analyzeBtn').addEventListener('click', async ()=>{
   try{
-    const files = Array.from($('fileInput').files||[]); if(!files.length){ alert('اختر ملفاً واحداً على الأقل.'); return; }
-    $('analyzeBtn').disabled=true; log('بدء الرفع/التحويل ...');
+    const files = Array.from(document.getElementById('fileInput').files||[]);
+    if(!files.length){ alert('اختر ملفاً واحداً على الأقل.'); return; }
+    document.getElementById('analyzeBtn').disabled=true; 
+    document.getElementById('prog').hidden=false;
     const { images, docText } = await handleFiles(files);
-    log('بدء التحليل ...');
     const result = await analyze({
       files: images,
       docText,
-      language: $('lang').value,
-      model: $('model').value,
-      specialty: $('specialty').value.trim(),
-      context: $('context').value.trim()
+      language: document.getElementById('lang').value,
+      model: document.getElementById('model').value,
+      specialty: document.getElementById('specialty').value.trim(),
+      context: document.getElementById('context').value.trim()
     });
-    $('merged').textContent  = result.merged  || '';
-    $('openaiOut').textContent = result.openai || '—';
-    $('geminiOut').textContent = result.gemini || '—';
-    log('اكتمل التحليل.');
+    document.getElementById('merged').textContent  = result.merged  || '';
+    document.getElementById('openaiOut').textContent = result.openai || '—';
+    document.getElementById('geminiOut').textContent = result.gemini || '—';
+    document.getElementById('prog').hidden=true;
   }catch(e){ log('خطأ: '+e.message); alert(e.message); }
-  finally{ $('analyzeBtn').disabled=false; }
+  finally{ document.getElementById('analyzeBtn').disabled=false; }
 });
 </script>
 </body>
