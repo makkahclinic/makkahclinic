@@ -1,346 +1,260 @@
-// api/gpt.js — Vercel Serverless Function (CommonJS, Node 18+)
-// === v4.4.0 ===
+// api/gpt.js
+// ================================
+// Edge Function — JSON in / JSON out
+// يتكلم العربية/الإنجليزية وينتج تقريرًا منظّمًا مع مراجع.
+// المتغيرات المطلوبة: OPENAI_API_KEY, GEMINI_API_KEY (اختياري أيهما متوفر)
 
-const API_VERSION = 'v4.4.0';
+export const config = { runtime: 'edge' };
 
-// ---------- infra helpers ----------
-function setCORS(res){ res.setHeader('Access-Control-Allow-Origin','*'); res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS'); res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization'); }
-async function readBody(req){
-  const bufs=[]; for await (const c of req) bufs.push(c);
-  const raw = Buffer.concat(bufs).toString('utf8');
-  let obj={}; try{ obj = JSON.parse(raw||'{}'); }catch{}
-  return { raw, obj };
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const GEMINI_API_KEY  = process.env.GEMINI_API_KEY  || '';
+
+/** أدوات صغيرة **/
+const enc = new TextEncoder();
+function jsonResponse(obj, status=200){
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: {'content-type':'application/json; charset=utf-8'}
+  });
 }
-function mimeFromName(name, fallback='image/png'){ const n=(name||'').toLowerCase(); if(n.endsWith('.jpg')||n.endsWith('.jpeg'))return 'image/jpeg'; if(n.endsWith('.png'))return 'image/png'; if(n.endsWith('.webp'))return 'image/webp'; if(n.endsWith('.heic'))return 'image/heic'; if(n.endsWith('.heif'))return 'image/heif'; if(n.endsWith('.tif')||n.endsWith('.tiff'))return 'image/tiff'; return fallback; }
-function asWebRequest(req, bodyString){
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  const host  = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
-  const url   = `${proto}://${host}${req.url}`;
-  const headers = new Headers();
-  for (const [k,v] of Object.entries(req.headers)) {
-    if (Array.isArray(v)) headers.set(k, v.join(', '));
-    else if (typeof v === 'string') headers.set(k, v);
+function pick(v, def){ return (v===undefined||v===null)?def:v; }
+function safe(obj){ try{return JSON.stringify(obj).slice(0,1200)}catch{ return '' } }
+
+function extractJSON(text){
+  if(!text) return null;
+  // جرّب التقاط { ... } الأول
+  const match = text.match(/\{[\s\S]*\}$/);
+  try { return JSON.parse(match ? match[0] : text); } catch {
+    // جرب إزالة الأسلاك
+    const codeMatch = text.match(/```json([\s\S]*?)```/i) || text.match(/```([\s\S]*?)```/i);
+    if(codeMatch) { try{ return JSON.parse(codeMatch[1]); }catch{} }
+    return null;
   }
-  return new Request(url, { method: req.method, headers, body: bodyString });
 }
 
-// ---------- reference bank (credible links) ----------
-const REF_BANK = [
-  {title:'NICE CKS — Carpal tunnel syndrome (assessment / when to arrange NCS)', org:'NICE CKS', link:'https://cks.nice.org.uk/topics/carpal-tunnel-syndrome/diagnosis/assessment/'},
-  {title:'NICE CKS — Tennis elbow (diagnosis and management)', org:'NICE CKS', link:'https://cks.nice.org.uk/topics/tennis-elbow/'},
-  {title:'ICD‑10‑CM — S50.1 Contusion of forearm (non‑billable, injury code)', org:'ICD10Data', link:'https://www.icd10data.com/ICD10CM/Codes/S00-T88/S50-S59/S50-/S50.1'},
-  {title:'ICD‑10‑CM — M77.12 Lateral epicondylitis, left elbow', org:'ICD10Data', link:'https://www.icd10data.com/ICD10CM/Codes/M00-M99/M70-M79/M77-/M77.12'},
-  {title:'ICD‑10‑CM — G56.02 Carpal tunnel syndrome, left upper limb', org:'ICD10Data', link:'https://www.icd10data.com/ICD10CM/Codes/G00-G99/G50-G59/G56-/G56.02'},
-  {title:'BC Guidelines — ESR/CRP Testing (When to order)', org:'Government of British Columbia', link:'https://www2.gov.bc.ca/gov/content/health/practitioner-professional-resources/bc-guidelines/esr'},
-  {title:'American Academy of Dermatology — Atopic Dermatitis Guidelines', org:'AAD', link:'https://www.aad.org/member/clinical-quality/guidelines/atopic-dermatitis'},
-  {title:'UpToDate — Atopic dermatitis (eczema): Pathogenesis, clinical manifestations, and diagnosis', org:'UpToDate', link:'https://www.uptodate.com/contents/atopic-dermatitis-eczema-pathogenesis-clinical-manifestations-and-diagnosis'},
-  {title:'WHO — Anatomical Therapeutic Chemical Classification System', org:'WHO', link:'https://www.who.int/tools/atc-ddd-toolkit/atc-classification'},
-  {title:'CDC — Clinical Practice Guidelines for Dermatology', org:'CDC', link:'https://www.cdc.gov/dermatology/clinical-guidelines/index.html'},
-  {title:'Journal of the American Academy of Dermatology — Treatment Guidelines', org:'JAAD', link:'https://www.jaad.org/action/showPdf?pii=S0190-9622%2818%2932679-6'},
-  {title:'American Academy of Orthopaedic Surgeons — Hand Pain Guidelines', org:'AAOS', link:'https://www.aaos.org/quality/quality-programs/upper-extremity-programs/hand-and-wrist/'},
-  {title:'National Institute of Arthritis and Musculoskeletal and Skin Diseases — Hand Pain', org:'NIAMS', link:'https://www.niams.nih.gov/health-topics/hand-pain'},
-  {title:'American Society for Surgery of the Hand — Clinical Guidelines', org:'ASSH', link:'https://www.assh.org/practice/clinical-practice-guidelines'},
-  {title:'ICD-10-CM Official Guidelines for Coding and Reporting', org:'CDC', link:'https://www.cdc.gov/nchs/icd/icd-10-cm.htm'},
-  {title:'American College of Rheumatology — Guidelines', org:'ACR', link:'https://www.rheumatology.org/Practice-Quality/Clinical-Support/Clinical-Practice-Guidelines'},
-  {title:'National Institute for Health and Care Excellence — Rheumatology Guidelines', org:'NICE', link:'https://www.nice.org.uk/guidance/conditions-and-diseases/musculoskeletal-conditions/rheumatology'}
-];
+// اندماج عناصر متشابهة بالنص
+function mergeArrays(a=[], b=[], keyFields=['dx','issue','what','opportunity','action','step','item']){
+  const out = [];
+  const seen = new Set();
+  function sig(x){
+    for(const k of keyFields){
+      if(x && x[k]) return `${k}:${String(x[k]).trim().toLowerCase()}`;
+    }
+    return JSON.stringify(x).slice(0,120);
+  }
+  for(const it of [...a,...b]){
+    const s = sig(it);
+    if(!seen.has(s)){ out.push(it); seen.add(s); }
+  }
+  return out;
+}
 
-// ---------- JSON schema (shared) ----------
-const REPORT_SCHEMA = {
-  type:"object",
-  properties:{
-    executive_summary:{type:"string"},
-    patient_summary:{type:"string"},
-    clinical_assessment:{type:"object",properties:{
-      subjective_findings:{type:"array",items:{type:"string"}},
-      objective_findings:{type:"array",items:{type:"string"}},
-      assessment:{type:"string"},
-      plan:{type:"string"},
-      complexity_score:{type:"number",minimum:1,maximum:10}
-    },required:["subjective_findings","objective_findings","assessment","plan"]},
-    key_findings:{type:"array",items:{type:"string"}},
-    differential_diagnoses:{type:"array",items:{type:"object",properties:{
-      dx:{type:"string"},
-      why:{type:"string"},
-      confidence:{type:"string",enum:["high","medium","low"]},
-      supporting_evidence:{type:"array",items:{type:"string"}},
-      ruling_out:{type:"array",items:{type:"string"}},
-      diagnostic_tests:{type:"array",items:{type:"string"}},
-      treatment_options:{type:"array",items:{type:"string"}},
-      urgency:{type:"string",enum:["emergent","urgent","routine"]}
-    },required:["dx","why","confidence","urgency"]}},
-    severity_red_flags:{type:"array",items:{type:"object",properties:{
-      flag:{type:"string"},
-      clinical_significance:{type:"string"},
-      immediate_action:{type:"string"},
-      risk_level:{type:"string",enum:["critical","high","medium","low"]},
-      documentation_requirements:{type:"array",items:{type:"string"}}
-    },required:["flag","risk_level"]}},
-    procedural_issues:{type:"array",items:{type:"object",properties:{
-      issue:{type:"string"},
-      impact:{type:"string"},
-      evidence:{type:"string"},
-      recommendation:{type:"string"},
-      severity:{type:"string",enum:["critical","high","medium","low"]},
-      financial_impact:{type:"string"},
-      compliance_risk:{type:"string"},
-      corrective_action:{type:"string"},
-      timeline:{type:"string"},
-      responsible_party:{type:"string"}
-    },required:["issue","severity"]}},
-    missed_opportunities:{type:"array",items:{type:"object",properties:{
-      what:{type:"string"},
-      why_it_matters:{type:"string"},
-      potential_impact:{type:"string"},
-      suggested_action:{type:"string"},
-      priority:{type:"string",enum:["high","medium","low"]},
-      expected_outcome:{type:"string"},
-      responsible_party:{type:"string"},
-      timeline:{type:"string"}
-    },required:["what","why_it_matters","priority"]}},
-    revenue_quality_opportunities:{type:"array",items:{type:"object",properties:{
-      opportunity:{type:"string"},
-      category:{type:"string",enum:["documentation","diagnostics","procedure","follow-up","coding","billing","quality_improvement"]},
-      rationale:{type:"string"},
-      risk_note:{type:"string"},
-      expected_impact:{type:"string"},
-      implementation_complexity:{type:"string",enum:["low","medium","high"]},
-      estimated_revenue_impact:{type:"string"},
-      timeline:{type:"string"},
-      metrics:{type:"array",items:{type:"string"}},
-      kpi_targets:{type:"array",items:{type:"string"}}
-    },required:["opportunity","category","expected_impact"]}},
-    suggested_next_steps:{type:"array",items:{type:"object",properties:{
-      action:{type:"string"},
-      justification:{type:"string"},
-      priority:{type:"string",enum:["immediate","within_24h","within_week","routine"]},
-      responsible_party:{type:"string"},
-      timeline:{type:"string"},
-      expected_outcome:{type:"string"},
-      resources_needed:{type:"array",items:{type:"string"}},
-      cost_estimate:{type:"string"},
-      roi_analysis:{type:"string"}
-    },required:["action","priority"]}},
-    patient_safety_note:{type:"string"},
-    coding_recommendations:{type:"array",items:{type:"object",properties:{
-      current_code:{type:"string"},
-      recommended_code:{type:"string"},
-      rationale:{type:"string"},
-      confidence:{type:"string",enum:["high","medium","low"]},
-      documentation_requirements:{type:"array",items:{type:"string"}},
-      cpt_codes:{type:"array",items:{type:"string"}},
-      compliance_notes:{type:"string"},
-      revenue_impact:{type:"string"},
-      audit_risk:{type:"string",enum:["high","medium","low"]}
-    },required:["current_code","recommended_code"]}},
-    quality_metrics:{type:"array",items:{type:"object",properties:{
-      metric:{type:"string"},
-      status:{type:"string",enum:["met","not_met","partial"]},
-      improvement_opportunity:{type:"string"},
-      benchmark:{type:"string"},
-      current_performance:{type:"string"},
-      target:{type:"string"},
-      measurement_period:{type:"string"}
-    },required:["metric","status"]}},
-    financial_analysis:{type:"object",properties:{
-      estimated_cost_impact:{type:"string"},
-      revenue_opportunities:{type:"array",items:{type:"string"}},
-      risk_factors:{type:"array",items:{type:"string"}},
-      recommendations:{type:"array",items:{type:"string"}},
-      roi_calculation:{type:"string"},
-      break_even_analysis:{type:"string"}
-    }},
-    references:{type:"array",items:{type:"object",properties:{title:{type:"string"},org:{type:"string"},link:{type:"string"}},required:["title","link"]}},
-    report_quality_score:{type:"number",minimum:1,maximum:10},
-    confidence_level:{type:"string",enum:["high","medium","low"]},
-    data_quality_issues:{type:"array",items:{type:"object",properties:{
-      issue:{type:"string"},
-      impact:{type:"string"},
-      recommendation:{type:"string"}
-    }}}
+// ======== بناء موجه التحليل (System Prompt) =========
+function buildSystemPrompt(lang='ar'){
+  const L = (ar,en)=> (lang==='ar'? ar : en);
+  return L(
+`أنت "مدقق سريري تأميني" رفيع المستوى. مهمتك:
+- استخراج حقائق الحالة من المستندات (الشكوى، العلامات الحيوية، العلامات المهمة، التشخيصات، الأوامر/التحاليل، الأدوية، الأكواد).
+- كشف التناقضات والأخطاء (مثال: كود إصابة/كدمة مع توثيق "لا توجد صدمة"، أو مضاد حيوي واسع لحالة فيروسية بلا مبرر).
+- تقديم "ما كان يجب فعله" و"فرص تحسين الجودة/الدخل" المستندة لإرشادات عالمية (NICE, WHO, CDC, AAD, IDSA…)، مع روابط مختصرة موثوقة.
+- إزالة أي مُعرّفات شخصية (PHI) والاقتصار على المحتوى السريري.
+
+أعد JSON فقط بالمفاتيح التالية (بدون أي نص خارج JSON):
+{
+  "patient_summary":"",
+  "key_findings":[],
+  "physician_actions":{
+    "chief_complaint":"",
+    "diagnoses":[],
+    "icd10_codes":[],
+    "vitals":[],
+    "significant_signs":[],
+    "orders":[],
+    "meds":[]
   },
-  required:["executive_summary","patient_summary","clinical_assessment","key_findings","differential_diagnoses","patient_safety_note","references"]
-};
+  "contradictions":[{"item":"","evidence":"","impact":""}],
+  "procedural_issues":[{"issue":"","impact":"","evidence":""}],
+  "missed_opportunities":[{"what":"","why_it_matters":""}],
+  "revenue_quality_opportunities":[{"opportunity":"","category":"documentation|diagnostics|procedure|follow-up|coding","rationale":"","risk_note":""}],
+  "differential_diagnoses":[{"dx":"","why":""}],
+  "severity_red_flags":[],
+  "should_have_been_done":[{"step":"","reason":""}],
+  "suggested_next_steps":[{"action":"","justification":""}],
+  "icd_suggestions":[{"code":"","label":"","why":""}],
+  "cpt_suggestions":[{"code":"","label":"","why":""}],
+  "references":[{"title":"","org":"","link":""}],
+  "executive_summary":""
+}
+قواعد مهمة:
+- استند إلى الدليل: NG84 (التهاب الحلق)، NG120 (السعال الحاد)، NG59 (ألم الظهر)، NG118 (مغص كلوي/حصيات)، NG136 (ارتفاع الضغط)، NG190 وCKS/AAD (الأكزيما)، وأضف روابط لكل توصية رئيسية.
+- إن وُجد "NO TRAUMA" مع كود S50.1 (كدمة الساعد) فاذكر التناقض صراحةً وتأثيره التأميني.
+- لا تُكرر عناصر متماثلة لفظيًا. إن تعذر الاستدلال اترك الحقل فارغًا [].
+- اكتب بالعربية الفصحى المختصرة الواضحة.
+`,
+`You are a Senior Clinical & Insurance Auditor. Tasks:
+- Extract facts (chief complaint, vitals, key signs, diagnoses, orders/tests, meds, codes).
+- Flag contradictions (e.g., contusion code with 'no trauma'), coding/documentation errors, and antimicrobial stewardship issues.
+- Provide “Should have been done” and “Revenue/Quality opportunities” backed by NICE/WHO/CDC/AAD/IDSA with links.
+- Remove PHI. Output JSON ONLY with the exact schema shown (no extra text). Use concise, professional English.
 
-// ---------- prompts ----------
-function toRefBankText(){ return REF_BANK.map(r=>`- ${r.title} — ${r.link}`).join('\n'); }
-function buildSystem({ language='ar', specialty='', context='', refBankText='' }) {
-  const specialtyPrompt = specialty ? `أنت استشاري متخصص في ${specialty} مع خبرة 20 سنة في الجودة والترميز الطبي.` : 'أنت استشاري طبي إداري مع خبرة في الجودة والترميز والإيرادات.';
-  
-  return `
-${specialtyPrompt} مهمتك هي تقديم تحليل طبي إداري متعمق يشمل الجوانب السريرية والمالية والإدارية.
-
-## تعليمات صارمة للتحليل:
-
-1. **الهيكل والتنظيم**:
-   - ابدأ بملخص تنفيذي يلخص النقاط الرئيسية بشكل احترافي
-   - نظم المحتوى في أقسام واضحة ومرتبة منطقياً
-   - استخدم لغة طبية إدارية متخصصة واحترافية
-   - تأكد من اكتمال جميع الحقول المطلوبة في المخطط
-
-2. **التحليل السريري المتعمق**:
-   - قدم تحليل SOAP (Subjective, Objective, Assessment, Plan) كامل ومفصل
-   - اذكر 3-5 تشخيصات تفريقية مع درجات ثقة وأدلة داعمة قوية
-   - حدد الاختبارات التشخيصية المطلوبة لكل تشخيص مع التكلفة المتوقعة
-   - حلل عوامل الخطر والإنذار بشكل كمي
-
-3. **الجوانب الإدارية والمالية**:
-   - حلل جودة التوثيق الطبي ونقاط الضعف بشكل نقدي
-   - ابحث عن فرص تحسين الإيرادات مع تقدير التأثير المالي الدقيق
-   - حدد مخاطر الامتثال والتداعيات المالية بشكل كمي
-   - قدم توصيات ترميز محددة برموز ICD-10/CPT مع التحليل المالي
-
-4. **جودة الرعاية والسلامة**:
-   - حدد الأعلام الحمراء ومستويات الخطورة بشكل مفصل
-   - حلل فرص تحسين الجودة ومقاييس الأداء بروابط قابلة للقياس
-   - قدم خطة متابعة شاملة بجداول زمنية ومسؤوليات محددة
-
-5. **التوصيات العملية**:
-   - جميع التوصيات يجب أن تكون قابلة للتنفيذ ومحددة وقابلة للقياس
-   - حدد أولويات واضحة مع جداول زمنية واقعية
-   - عيّن جهات مسؤولة محددة مع مسؤوليات واضحة
-   - اذكر النتائج المتوقعة والمواعيد النهائية بشكل كمي
-
-6. **الالتزام بالمعايير**:
-   - استخدم المصطلحات الطبية الدقيقة والموحدة
-   - ارجع إلى الإرشادات السريرية مع روابط مباشرة
-   - التزم بمعايير التوثيق والترميز الدولية
-
-## أمثلة على التحليل المتوقع للآلام اليدوية:
-- تقييم شامل للعصب المتوسط والنفق الرسغي باستخدام مقاييس معيارية
-- تحليل لوضعية العمل والأنشطة المتكررة مع توصيات إرجونوميكية
-- خيارات العلاج التحفظي والجراحي مع تحليل التكلفة والفعالية
-- تحليل العائد على الاستثناء للعلاجات المختلفة
-
-بنك المراجع:
-${refBankText}
-
-## قواعد صارمة للجودة:
-1. جميع التوصيات يجب أن تكون قابلة للتنفيذ خلال إطار زمني واقعي
-2. التحليل المالي يجب أن يكون كمياً وواقعياً
-3. التوصيات السريرية يجب أن تستند إلى أدلة قوية
-4. يجب تحديد مسؤوليات واضحة لكل إجراء
-5. يجب قياس وتحسين مؤشرات الأداء الرئيسية
-
-## تعليمات خاصة بجودة البيانات:
-إذا كانت البيانات غير كافية لتقديم تحليل مفصل:
-1. صف مشكلة جودة البيانات بوضوح
-2. قدم توصيات محددة لتحسين جمع البيانات
-3. حدد أنواع الفحوصات والاختبارات المطلوبة
-4. اقترح تحسينات في عملية التوثيق الطبي
-
-تأكد من:
-1. تقديم تحليل متعمق وليس سطحياً
-2. ربط جميع التوصيات بالأدلة والمراجع
-3. تقديم أرقام وتقديرات مالية دقيقة
-4. تحديد أولويات واضحة وجداول زمنية واقعية
-5. استخدام لغة طبية إدارية متخصصة واحترافية
-
-قواعد:
-- احذف/استبدل أي PHI بـ [REDACTED].
-- لا تضع أي كائن استجابة أو أسوار كود، JSON فقط.
-- كن دقيقاً ومحدداً في جميع التحليلات.
-- رتب النتائج بشكل منطقي ومنظم.
-- استخدم لغة احترافية تناسب المستوى الاستشاري.
-`;
+Use: NG84 (sore throat), NG120 (acute cough), NG59 (low back pain), NG118 (renal colic/stones), NG136 (hypertension), NG190 + CKS/AAD (eczema).`
+);
 }
 
-// ---------- PHI redaction ----------
-function redactTextPHI(s){
-  if(!s) return s;
-  const rules = [
-    {re:/^.*\b(Name|Patient\s*File\s*No|ID\s*No|D\.?O\.?B|Provider Name|Insurance Co\.|TPA Name)\b.*$/gmi, rep:''},
-    {re:/^.*\b(الاسم|رقم\s*الملف|رقم\s*الهوية|تاريخ\s*الميلاد|مزود\s*الخدمة|شركة\s*التأمين)\b.*$/gmi, rep:''},
-    {re:/\b\d{8,}\b/g, rep:'[REDACTED]'},
-    {re:/(المريضة|المريض)\s+(اسمها|اسمه)\s+[^\s،,.]+(\s+[^\s،,.]+){0,3}/g, rep:'[REDACTED]'}
-  ];
-  let out = s; for(const r of rules) out = out.replace(r.re, r.rep); return out;
+// ======== بناء رسالة المستخدم (User Content) =========
+function buildUserMessage({lang, specialty, context, text, images, fileNames=[]}){
+  const L = (ar,en)=> (lang==='ar'? ar : en);
+  const meta = L(
+`اللغة: العربية
+التخصص (اختياري): ${specialty||'عام'}
+سياق التأمين/الوصف (اختياري): ${context||'—'}
+
+## حقائق الحالة المستخرجة من المستند (نص PDF/النماذج):
+${text||'—'}
+
+## الصور (لقطات PDF/صور سريرية):
+- عدد الصور: ${images?.length||0}
+- الملفات: ${fileNames.join(', ') || '—'}
+
+قم بتحليل الصور والنص معًا. أعد JSON حصراً.`,
+`Language: English
+Specialty (optional): ${specialty||'General'}
+Insurance context: ${context||'-'}
+
+## Case Facts (from PDF text/forms):
+${text||'-'}
+
+## Images (PDF renders/clinical images):
+- count: ${images?.length||0}
+- files: ${fileNames.join(', ') || '-'}
+
+Analyze both text and images. Return JSON only.`
+);
+  return meta;
 }
-function deepRedact(v){
-  if(v==null) return v;
-  if(typeof v==='string') return redactTextPHI(v);
-  if(Array.isArray(v)) return v.map(deepRedact);
-  if(typeof v==='object'){ const o={}; for(const k of Object.keys(v)) o[k]=deepRedact(v[k]); return o; }
-  return v;
+
+// ======== استدعاء GPT‑4o =========
+async function callOpenAI({lang, userMsg, images}){
+  if(!OPENAI_API_KEY) return { ok:false, raw:'', data:null, note:'OPENAI_API_KEY missing' };
+  const content = [{ type:'text', text:userMsg }];
+  for(const b64 of (images||[])){
+    content.push({ type:'input_image', image_url:`data:image/jpeg;base64,${b64}` });
+  }
+  const system = buildSystemPrompt(lang);
+  const payload = {
+    model: "gpt-4o-2024-08-06",
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+    messages: [
+      { role:"system", content: system },
+      { role:"user",   content }
+    ]
+  };
+  const r = await fetch('https://api.openai.com/v1/chat/completions',{
+    method:'POST',
+    headers:{'Authorization':`Bearer ${OPENAI_API_KEY}`,'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const j = await r.json();
+  const raw = j?.choices?.[0]?.message?.content || JSON.stringify(j);
+  return { ok:true, raw, data: extractJSON(raw) };
 }
-const stripFences = s => typeof s==='string' ? s.replace(/```json|```/g,'').trim() : s;
-function parseJsonSafe(s){ try{ return JSON.parse(s); }catch{ const m=s?.match?.(/\{[\s\S]*\}/); if(m){ try{ return JSON.parse(m[0); }catch{} } return null; }}
 
-// ---------- heuristics (قواعد ثابتة تُضاف للنتيجة) ----------
-function deriveHeuristics(docText=''){
-  const t = (docText||'').toUpperCase();
-  const hxNoTrauma = /NO\s+TRAUMA/.test(t);
-  const hasS501    = /S50\.1/.test(t);
-  const isLeft     = /\b(LT|LEFT)\b/.test(t) || /LEFT\s+FOREARM/i.test(docText);
-  const askCRP     = /CRP|C-?REACTIVE/i.test(t);
-  const askESR     = /\bESR\b/i.test(t);
-  const hasAntibiotics = /\b(amoxi|augmentin|azithro|ceftriaxone|penicillin)\b/i.test(t);
-  const hasFever = /\b(38|39|40|fever|pyrexia|حمى|حرارة)\b/i.test(t);
-  const hasHypertension = /\b(155|88|ضغط|hypertension)\b/i.test(t);
-  const hasDermatitis = /\b(التهاب|جلد|طفح|حكة|dermatitis|eczema|rash)\b/i.test(t);
-  const hasHandPain = /\b(يد|يدوية|سبابة|ألم|محدودية|تورم|hand|pain|finger)\b/i.test(t);
-  const hasVitaminDTest = /\b(فيتامين\s*د|vitamin\s*d)\b/i.test(t);
-  const hasLimitedData = docText.length < 100; // إذا كانت البيانات قليلة
-  
-  const issues = []; const refs = new Set(); const recs = [];
-  const qualityMetrics = [];
-  const codingRecs = [];
-  const missedOpportunities = [];
-  const dataQualityIssues = [];
+// ======== استدعاء Gemini =========
+async function callGemini({lang, userMsg, images}){
+  if(!GEMINI_API_KEY) return { ok:false, raw:'', data:null, note:'GEMINI_API_KEY missing' };
+  const parts = [{ text: userMsg }];
+  for(const b64 of (images||[])){
+    parts.push({ inline_data:{ mime_type:'image/jpeg', data:b64 }});
+  }
+  const system = buildSystemPrompt(lang);
+  const payload = {
+    contents:[ { role:'user', parts } ],
+    system_instruction: { role:'system', parts:[{text:system}] },
+    generationConfig: { temperature: 0.2, maxOutputTokens: 1800, responseMimeType: "application/json" }
+  };
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${GEMINI_API_KEY}`,{
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  const j = await r.json();
+  const raw = j?.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(j);
+  return { ok:true, raw, data: extractJSON(raw) };
+}
 
-  if (hasLimitedData) {
-    dataQualityIssues.push({
-      issue: 'البيانات السريرية غير كافية',
-      impact: 'عدم القدرة على تقديم تحليل سريري مفصل',
-      recommendation: 'تحسين عملية جمع البيانات السريرية وتوثيقها'
-    });
-    
-    missedOpportunities.push({
-      what: 'توثيق سريري غير كاف',
-      why_it_matters: 'يحد من جودة الرعاية والقدرة على التحليل',
-      potential_impact: 'تأثير سلبي على جودة الرعاية والنتائج المالية',
-      suggested_action: 'تنفيذ نظام توثيق سريري شامل',
-      priority: 'high',
-      expected_outcome: 'تحسين جودة البيانات بنسبة 70% خلال 3 أشهر',
-      responsible_party: 'مدير الجودة والطبيب المسؤول',
-      timeline: 'خلال شهر'
-    });
-  }
+// ======== دمج التقريرين =========
+function mergeReports(a={}, b={}){
+  const merged = {
+    patient_summary: a.patient_summary || b.patient_summary || '',
+    key_findings: mergeArrays(a.key_findings, b.key_findings, ['_txt']).filter(Boolean),
+    physician_actions: {
+      chief_complaint: a.physician_actions?.chief_complaint || b.physician_actions?.chief_complaint || '',
+      diagnoses: mergeArrays(a.physician_actions?.diagnoses, b.physician_actions?.diagnoses, ['_txt']),
+      icd10_codes: mergeArrays(a.physician_actions?.icd10_codes, b.physician_actions?.icd10_codes, ['code']),
+      vitals: mergeArrays(a.physician_actions?.vitals, b.physician_actions?.vitals, ['_txt']),
+      significant_signs: mergeArrays(a.physician_actions?.significant_signs, b.physician_actions?.significant_signs, ['_txt']),
+      orders: mergeArrays(a.physician_actions?.orders, b.physician_actions?.orders, ['_txt']),
+      meds: mergeArrays(a.physician_actions?.meds, b.physician_actions?.meds, ['_txt'])
+    },
+    contradictions: mergeArrays(a.contradictions, b.contradictions, ['item']),
+    procedural_issues: mergeArrays(a.procedural_issues, b.procedural_issues, ['issue']),
+    missed_opportunities: mergeArrays(a.missed_opportunities, b.missed_opportunities, ['what']),
+    revenue_quality_opportunities: mergeArrays(a.revenue_quality_opportunities, b.revenue_quality_opportunities, ['opportunity']),
+    differential_diagnoses: mergeArrays(a.differential_diagnoses, b.differential_diagnoses, ['dx']),
+    severity_red_flags: mergeArrays(a.severity_red_flags, b.severity_red_flags, ['_txt']),
+    should_have_been_done: mergeArrays(a.should_have_been_done, b.should_have_been_done, ['step']),
+    suggested_next_steps: mergeArrays(a.suggested_next_steps, b.suggested_next_steps, ['action']),
+    icd_suggestions: mergeArrays(a.icd_suggestions, b.icd_suggestions, ['code']),
+    cpt_suggestions: mergeArrays(a.cpt_suggestions, b.cpt_suggestions, ['code']),
+    references: mergeArrays(a.references, b.references, ['link'])
+  };
 
-  if (hasS501 && hxNoTrauma) {
-    issues.push({
-      issue: 'S50.1 (رضّ الساعد) مع توثيق "لا إصابة"',
-      impact: 'عدم اتساق ترميزي قد يعرّض المطالبة للرفض',
-      evidence: 'S50.1 كود إصابي سطحي وغير قابل للفوترة ويتطلب سياق إصابة واضح',
-      severity: 'high',
-      financial_impact: 'مخاطر رفض المطالبة بكامل القيمة (100% من قيمة الخدمة)',
-      compliance_risk: 'مخالفة لوائح الترميز الطبي',
-      corrective_action: 'مراجعة السياق السريري وتصحيح الترميز',
-      timeline: 'فوري',
-      responsible_party: 'مسؤول الترميز'
-    });
-    refs.add('ICD‑10‑CM — S50.1 Contusion of forearm (non‑billable, injury code)');
+  // ملخص تنفيذي ذكي
+  const bullets = [];
+  if(merged.contradictions?.length) bullets.push(`تناقضات بارزة: ${merged.contradictions.map(x=>x.item).slice(0,3).join('، ')}`);
+  if(merged.revenue_quality_opportunities?.length) bullets.push(`فرص دخل/جودة: ${merged.revenue_quality_opportunities.map(x=>x.opportunity).slice(0,3).join('، ')}`);
+  if(merged.suggested_next_steps?.length) bullets.push(`الخطوات القادمة: ${merged.suggested_next_steps.map(x=>x.action).slice(0,3).join('، ')}`);
+  merged.executive_summary = [merged.patient_summary, bullets.join(' | ')].filter(Boolean).join(' — ');
+
+  // إضافة ملاحظة سلامة افتراضيًا
+  merged.patient_safety_note = "هذا المحتوى مُعَدّ لتحسين الجودة والتدقيق التأميني، ويُراجع من طبيب مرخّص قبل أي قرار سريري.";
+
+  return merged;
+}
+
+// ============= نقطة الدخول =============
+export default async function handler(req){
+  try{
+    if(req.method !== 'POST') return jsonResponse({error:'Use POST'},405);
+    const body = await req.json();
+    const { lang='ar', modelChoice='both', specialty='', context='', images=[], text='', fileNames=[], apiVersion='v1' } = body||{};
+    if(!OPENAI_API_KEY && !GEMINI_API_KEY){
+      return jsonResponse({ error:"Missing API keys", detail:"Set OPENAI_API_KEY and/or GEMINI_API_KEY in Vercel Environment." }, 500);
+    }
+    // تحضير الرسالة
+    const userMsg = buildUserMessage({lang, specialty, context, text, images, fileNames});
+
+    // استدعاءات
+    const wantsGPT = (modelChoice==='both' || modelChoice==='gpt') && OPENAI_API_KEY;
+    const wantsGem = (modelChoice==='both' || modelChoice==='gemini') && GEMINI_API_KEY;
+
+    const [gptRes, gemRes] = await Promise.all([
+      wantsGPT ? callOpenAI({lang, userMsg, images}) : Promise.resolve({ok:false,raw:'',data:null}),
+      wantsGem ? callGemini({lang, userMsg, images}) : Promise.resolve({ok:false,raw:'',data:null})
+    ]);
+
+    const a = gptRes.data || {};
+    const b = gemRes.data || {};
+    const merged = mergeReports(a,b);
+
+    return jsonResponse({
+      ok:true,
+      version: apiVersion,
+      merged,
+      gpt: { ok:gptRes.ok, raw: gptRes.raw?.slice(0,120000) },
+      gemini: { ok:gemRes.ok, raw: gemRes.raw?.slice(0,120000) }
+    }, 200);
+
+  }catch(err){
+    return jsonResponse({ ok:false, error:String(err?.message||err) }, 500);
   }
-  
-  if (askCRP && askESR) {
-    issues.push({
-      issue: 'طلب CRP وESR معًا بصورة روتينية',
-      impact: 'ازدواجية فحوصات بدون فائدة إضافية',
-      evidence: 'توصي الجهة الحكومية بتفضيل CRP أولًا واستخدام ESR انتقائيًا عند داعٍ',
-      severity: 'medium',
-      financial_impact: 'تكاليف غير ضرورية تصل إلى 50-100 دولار لكل مريض',
-      compliance_risk: 'مخاطر التدقيق على الفحوصات غير المبررة',
-      corrective_action: 'تبني البروتوكولات الإرشادية للفحوصات',
-      timeline: 'خلال أسبوع',
-      responsible_party: 'مدير الجودة'
-    });
-    refs.add('BC Guidelines — ESR/CRP Testing (When to order)');
-  }
-  
-  if (hasHypertension) {
-    issues.push({
-      issue: 'ارتفاع ضغط الدم 155/88 بدون خطة علاج محددة',
-      impact: 'مخاطر مضاعفات قلبية وعائية غير مُدارة',
-      evidence: 'ضغط الدم 155/88 يصنف كمرحلة 2 من ارتفاع الضغط ويتطلب تدخلاً عاجلاً',
-      severity: 'high',
-      financial_impact: 'مخاطر تكاليف مستقبلية لل
+}
