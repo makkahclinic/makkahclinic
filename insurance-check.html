@@ -6,7 +6,8 @@
   <title>تحليل الحالات الطبية — Gemini & GPT‑4o</title>
   <style>
     :root{--bg:#0f172a;--card:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--border:#1f2a44;--ok:#16a34a;--warn:#f59e0b;--bad:#ef4444;--chip:#111827}
-    *{box-sizing:border-box} body{margin:24px;background:var(--bg);color:var(--ink);font-family:system-ui, -apple-system, Segoe UI, Arial}
+    *{box-sizing:border-box}
+    body{margin:24px;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Arial}
     h1{margin:0 0 12px;font-size:22px} .muted{color:var(--muted)} a{color:#93c5fd}
     .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin:16px 0}
     .row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:250px}
@@ -27,19 +28,16 @@
     .hl{background:#0a1a3a;border:1px solid #1f2a44;padding:10px;border-radius:10px}
     .code{white-space:pre-wrap;background:#0a1327;border:1px dashed var(--border);padding:10px;border-radius:10px}
   </style>
-
-  <!-- PDF.js + worker عبر CDN -->
-  <script type="module">
-    let __pdfjs;
-    export async function getPdfJs(){
-      if(!__pdfjs){
-        __pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.min.mjs');
-        __pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs';
-      }
-      return __pdfjs;
-    }
-  </script>
   <script>
+    // PDF.js (ديناميكي)
+    async function getPdfJs(){
+      if(!window.__pdfjs){
+        window.__pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.min.mjs');
+        window.__pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs';
+      }
+      return window.__pdfjs;
+    }
+    // رفع إلى Vercel Blob
     async function getUpload(){ const m = await import('https://esm.sh/@vercel/blob@0.25.1/client?bundle'); return m.upload; }
   </script>
 </head>
@@ -53,7 +51,7 @@
       <div>
         <label>اختر ملفات (صورة/‏PDF):</label>
         <input id="fileInput" type="file" accept=".pdf,image/*" multiple/>
-        <div class="muted">أي PDF سيتحوّل إلى صور + يُستخرج نصّه بضبط PHI.</div>
+        <div class="muted">أي PDF سيتحوّل إلى صور + يُستخرج نصّه (مع إزالة PHI).</div>
       </div>
       <div>
         <label>اللغة:</label>
@@ -68,7 +66,10 @@
     <textarea id="context" rows="2" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما"></textarea>
 
     <div class="row" style="align-items:center">
-      <div><button id="analyzeBtn">تحليل الحالة</button> <button id="copyBtn" class="secondary" disabled>نسخ التقرير النصي</button></div>
+      <div>
+        <button id="analyzeBtn">تحليل الحالة</button>
+        <button id="copyBtn" class="secondary" disabled>نسخ ملخص نصّي</button>
+      </div>
       <div style="flex:2"><progress id="prog" value="0" max="100" hidden></progress></div>
     </div>
     <div id="uploadSummary" class="muted"></div>
@@ -76,29 +77,12 @@
 
   <div class="card report" id="reportView" style="display:none"></div>
 
-  <div class="card">
-    <h3>النتيجة (JSON)</h3>
-    <div class="code" id="merged"></div>
-  </div>
+  <div class="card"><h3>النتيجة (JSON)</h3><div class="code" id="merged"></div></div>
+  <div class="card"><h3>مخرجات GPT‑4o</h3><div class="code" id="openaiOut">—</div></div>
+  <div class="card"><h3>مخرجات Gemini</h3><div class="code" id="geminiOut">—</div></div>
+  <div class="card"><h3>السجل</h3><div class="code" id="log"></div></div>
 
-  <div class="card">
-    <h3>مخرجات GPT‑4o</h3>
-    <div class="code" id="openaiOut">—</div>
-  </div>
-
-  <div class="card">
-    <h3>مخرجات Gemini</h3>
-    <div class="code" id="geminiOut">—</div>
-  </div>
-
-  <div class="card">
-    <h3>السجل</h3>
-    <div class="code" id="log"></div>
-  </div>
-
-<script type="module">
-import { getPdfJs } from './insurance-check.html';
-
+<script>
 const $ = id => document.getElementById(id);
 const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
 
@@ -106,7 +90,8 @@ const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
   try{
     const v = await fetch('/api/gpt?action=version'); if(v.ok){ const j=await v.json(); $('ver').textContent = `API Version: ${j.apiVersion}`; }
     const r = await fetch('/api/gpt?action=health'); if(r.ok){ const j=await r.json();
-      const probs=[]; if(!j.hasBlobToken) probs.push('BLOB_READ_WRITE_TOKEN مفقود.');
+      const probs=[];
+      if(!j.hasBlobToken) probs.push('BLOB_READ_WRITE_TOKEN مفقود.');
       if(!j.pkgBlob) probs.push('الحزمة @vercel/blob غير مثبتة.');
       if(!j.hasOpenAI) probs.push('OPENAI_API_KEY مفقود.');
       if(!j.hasGemini) probs.push('GEMINI_API_KEY مفقود.');
@@ -115,14 +100,14 @@ const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
   }catch{}
 })();
 
-function redactBasic(s){
+function redactPHI(s){
   if(!s) return s;
   const rules=[
     /^.*\b(Name|Patient\s*File\s*No|ID\s*No|D\.?O\.?B|Provider Name|Insurance Co\.|TPA Name)\b.*$/gmi,
     /^.*\b(الاسم|رقم\s*الملف|رقم\s*الهوية|تاريخ\s*الميلاد|مزود\s*الخدمة|شركة\s*التأمين)\b.*$/gmi,
     /\b\d{8,}\b/g
   ];
-  let out=s; for(const r of rules) out = out.replace(r,''); return out.trim();
+  let out=s; for(const r of rules) out=out.replace(r,''); return out.trim();
 }
 
 async function pdfPageToBlob(pdf, pageNumber, scale=2){
@@ -131,7 +116,7 @@ async function pdfPageToBlob(pdf, pageNumber, scale=2){
   const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
   canvas.width = viewport.width; canvas.height = viewport.height;
   await page.render({ canvasContext: ctx, viewport }).promise;
-  return new Promise(resolve=>canvas.toBlob(b=>resolve(b),'image/png',0.92));
+  return new Promise(resolve=> canvas.toBlob(b=>resolve(b),'image/png',0.92));
 }
 async function extractPdfText(pdf){
   const chunks=[];
@@ -140,7 +125,7 @@ async function extractPdfText(pdf){
     const tc = await page.getTextContent();
     chunks.push(tc.items.map(it=>it.str).join(' '));
   }
-  return redactBasic(chunks.join('\n\n'));
+  return redactPHI(chunks.join('\n\n'));
 }
 
 async function uploadFileToBlob(file){
@@ -158,33 +143,33 @@ async function uploadFileToBlob(file){
 
 async function handleFiles(files){
   const prog=$('prog'); prog.hidden=false; prog.value=0;
-  const uploaded=[]; let docText=[]; let processed=0; let totalSteps=files.length;
-
+  const uploaded=[]; let textChunks=[]; let processed=0; let totalSteps=files.length;
   for(const file of files){
     const isPdf = file.type==='application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if(isPdf){
       log(`> تحويل PDF واستخراج نص: ${file.name}`);
       const pdfjs = await getPdfJs();
-      const buf = await file.arrayBuffer(); const pdf = await pdfjs.getDocument({ data: buf }).promise;
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: buf }).promise;
       const maxPages = Math.min(pdf.numPages, 15);
-      const text = await extractPdfText(pdf); if(text) docText.push(text);
-      totalSteps += (maxPages-1);
+      const text = await extractPdfText(pdf); if(text) textChunks.push(text);
+      totalSteps += (maxPages - 1);
       for(let i=1;i<=maxPages;i++){
         const blob = await pdfPageToBlob(pdf, i, 2);
         const pageFile = new File([blob], `${file.name.replace(/\.pdf$/i,'')}-p${i}.png`, {type:'image/png'});
         const up = await uploadFileToBlob(pageFile);
         uploaded.push(up); processed++; prog.value=Math.round(processed*100/totalSteps);
-        log(`✓ صفحة ${i}/${maxPages} رُفعت`);
+        log(`✓ رُفعت صفحة ${i}/${maxPages} من ${file.name}`);
       }
     }else{
       const up = await uploadFileToBlob(file);
       uploaded.push(up); processed++; prog.value=Math.round(processed*100/totalSteps);
-      log(`✓ صورة: ${file.name}`);
+      log(`✓ رُفعت الصورة: ${file.name}`);
     }
   }
   prog.hidden=true;
   $('uploadSummary').textContent = `تم تجهيز ${uploaded.length} صورة/صفحة + نص PDF للتحليل.`;
-  return { images: uploaded, docText: docText.join('\n\n') };
+  return { images: uploaded, docText: textChunks.join('\n\n') };
 }
 
 async function analyze(payload){
@@ -209,15 +194,9 @@ function buildNarrative(r){
     const meds=(pa.meds||[]).join(', '); const orders=(pa.orders||[]).join(', ');
     lines.push(`**ما فعله الطبيب:** شكوى: ${pa.chief_complaint||'—'}؛ علامات مهمّة: ${(pa.significant_signs||[]).join('، ')||'—'}؛ تشخيصات: ${(pa.diagnoses||[]).join('، ')||'—'}؛ أوامر/تحاليل: ${orders||'—'}؛ أدوية: ${meds||'—'}.`);
   }
-  if(r.contradictions?.length){
-    lines.push(`**تعارضات/أخطاء:** `+r.contradictions.map(c=>`${c.item} (الأثر: ${c.impact||'—'})`).join('؛ '));
-  }
-  if(r.should_have_been_done?.length){
-    lines.push(`**ما كان يجب عمله:** `+r.should_have_been_done.map(s=>s.step).join('؛ '));
-  }
-  if(r.suggested_next_steps?.length){
-    lines.push(`**الخطوات القادمة:** `+r.suggested_next_steps.map(s=>s.action).join('؛ '));
-  }
+  if(r.contradictions?.length) lines.push(`**تعارضات/أخطاء:** `+r.contradictions.map(c=>`${c.item} (الأثر: ${c.impact||'—'})`).join('؛ '));
+  if(r.should_have_been_done?.length) lines.push(`**ما كان يجب عمله:** `+r.should_have_been_done.map(s=>s.step).join('؛ '));
+  if(r.suggested_next_steps?.length) lines.push(`**الخطوات القادمة:** `+r.suggested_next_steps.map(s=>s.action).join('؛ '));
   return lines.join('\n');
 }
 
@@ -245,10 +224,30 @@ function renderReport(obj){
   const rqTbl = tbl(['فرصة','فئة','التبرير','ملاحظة المخاطر'], (r.revenue_quality_opportunities||[]).map(o=>[o.opportunity,o.category,o.rationale,o.risk_note]));
   const shouldTbl = tbl(['ما يجب عمله','السبب'], (r.should_have_been_done||[]).map(s=>[s.step,s.reason]));
   const nextTbl = tbl(['الإجراء','التبرير'], (r.suggested_next_steps||[]).map(s=>[s.action,s.justification]));
+
+  // تجميع زيارات (إن وُجد)
+  let aggHTML='';
+  if(r.meta_aggregate){
+    const ov=r.meta_aggregate.overview||{};
+    const vrows=(r.meta_aggregate.visits||[]).map(v=>[
+      v.date||'—', (v.diagnoses||[]).join('<br>'), (v.meds||[]).join('<br>'), (v.orders||[]).join('<br>'), v.flags||'—'
+    ]);
+    aggHTML = section('تقرير مُجمّع للزيارات', `
+      <div class="kpi">
+        ${kv('عدد الزيارات', ov.visits_count||'—')}
+        ${kv('الفترة', ov.date_range||'—')}
+        ${kv('المشكلات الرئيسية', (ov.main_problems||[]).join('، ')||'—')}
+        ${kv('أخطاء ترميز/تعارضات مرصودة', ov.issues_count!=null?ov.issues_count:'—')}
+      </div>
+      ${tbl(['التاريخ','التشخيصات','الأدوية','الأوامر/التحاليل','ملاحظات/أعلام'], vrows)}
+    `);
+  }
+
   const refs = (r.references||[]).map(x=>`<li><a href="${x.link}" target="_blank" rel="noopener">${x.title}</a>${x.org?` — <span class="muted">${x.org}</span>`:''}</li>`).join('') || '<span class="muted">—</span>';
 
   $('reportView').innerHTML = `
     ${section('ملخص تنفيذي', kpis)}
+    ${aggHTML}
     ${section('ما فعله الطبيب (موثّق)', paTbl)}
     ${section('التعارضات والأخطاء', contraTbl)}
     ${section('مشكلات إجرائية', issuesTbl)}
@@ -262,7 +261,8 @@ function renderReport(obj){
   $('reportView').style.display='grid';
 
   const narrative = buildNarrative(r);
-  $('copyBtn').disabled = !narrative; $('copyBtn').onclick = ()=>navigator.clipboard.writeText(narrative);
+  $('copyBtn').disabled = !narrative;
+  $('copyBtn').onclick = ()=>navigator.clipboard.writeText(narrative);
 }
 
 $('analyzeBtn').addEventListener('click', async ()=>{
@@ -270,34 +270,9 @@ $('analyzeBtn').addEventListener('click', async ()=>{
     const files = Array.from($('fileInput').files||[]); if(!files.length){ alert('اختر ملفاً واحداً على الأقل.'); return; }
     $('analyzeBtn').disabled=true; $('prog').hidden=false; $('reportView').style.display='none';
     $('merged').textContent=''; $('openaiOut').textContent='—'; $('geminiOut').textContent='—'; $('log').textContent='';
-    const { images, docText } = await (async function handle(files){
-      const uploaded=[]; let textChunks=[]; let processed=0; let totalSteps=files.length;
-      for(const file of files){
-        const isPdf = file.type==='application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-        if(isPdf){
-          const { getDocument } = await (await getPdfJs()).getDocument({ data: await file.arrayBuffer() }).promise.constructor;
-          const pdf = await (await getPdfJs()).getDocument({ data: await file.arrayBuffer() }).promise;
-          const maxPages=Math.min(pdf.numPages,15); totalSteps+=(maxPages-1);
-          // نص
-          const txt = await extractPdfText(pdf); if(txt) textChunks.push(txt);
-          // صور
-          for(let i=1;i<=maxPages;i++){
-            const blob = await pdfPageToBlob(pdf,i,2);
-            const f = new File([blob], `${file.name.replace(/\.pdf$/i,'')}-p${i}.png`, {type:'image/png'});
-            const up = await uploadFileToBlob(f); uploaded.push(up);
-            processed++; $('prog').value=Math.round(processed*100/totalSteps);
-            log(`✓ PDF صفحة ${i}/${maxPages} مرفوعة`);
-          }
-        }else{
-          const up = await uploadFileToBlob(file); uploaded.push(up);
-          processed++; $('prog').value=Math.round(processed*100/totalSteps); log(`✓ صورة ${file.name}`);
-        }
-      }
-      $('prog').hidden=true; $('uploadSummary').textContent = `تم تجهيز ${uploaded.length} صورة/صفحة + نص PDF للتحليل.`;
-      return { images: uploaded, docText: redactBasic(textChunks.join('\n\n')) };
-    })(files);
-
-    log('بدء التحليل...');
+    log('بدء الرفع/التحويل ...');
+    const { images, docText } = await handleFiles(files);
+    log('بدء التحليل ...');
     const result = await analyze({
       files: images,
       docText,
@@ -310,15 +285,10 @@ $('analyzeBtn').addEventListener('click', async ()=>{
     $('openaiOut').textContent = result.openai || result.openai_raw || '—';
     $('geminiOut').textContent = result.gemini || '—';
 
-    // عرض التقرير المنسق
-    try{
-      const obj = JSON.parse(result.merged || '{}');
-      renderReport(obj);
-    }catch{ /* تجاهل */ }
-
+    try{ const obj = JSON.parse(result.merged || '{}'); renderReport(obj); }catch{}
     log('اكتمل التحليل.');
   }catch(e){ $('log').textContent += 'خطأ: '+e.message+'\n'; alert(e.message); }
-  finally{ $('analyzeBtn').disabled=false; }
+  finally{ $('prog').hidden=true; $('analyzeBtn').disabled=false; }
 });
 </script>
 </body>
