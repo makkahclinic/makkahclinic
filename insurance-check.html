@@ -1,294 +1,282 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>تحليل الحالات الطبية — Gemini & GPT‑4o</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>تحليل الحالات الطبية (Gemini & GPT‑4o)</title>
   <style>
-    :root{--bg:#0f172a;--card:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--border:#1f2a44;--ok:#16a34a;--warn:#f59e0b;--bad:#ef4444;--chip:#111827}
-    *{box-sizing:border-box}
-    body{margin:24px;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Arial}
-    h1{margin:0 0 12px;font-size:22px} .muted{color:var(--muted)} a{color:#93c5fd}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin:16px 0}
-    .row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:250px}
-    label{display:block;margin:8px 0 6px}.chip{display:inline-block;background:var(--chip);border:1px solid var(--border);padding:4px 8px;border-radius:999px;margin:2px 4px;font-size:12px;color:var(--muted)}
-    input[type=file],select,textarea,input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0a1327;color:var(--ink)}
-    button{padding:10px 14px;border:0;border-radius:10px;background:#2563eb;color:#fff;cursor:pointer}
-    button.secondary{background:#334155} button:disabled{opacity:.6;cursor:not-allowed}
-    progress{width:100%;height:10px}
-    .report{display:grid;gap:12px}
-    .kpi{display:flex;gap:10px;flex-wrap:wrap}
-    .kpi .box{background:#0a1327;border:1px solid var(--border);padding:10px;border-radius:10px;min-width:220px}
-    .tb{width:100%;border-collapse:collapse;border:1px solid var(--border)}
-    .tb th,.tb td{border:1px solid var(--border);padding:8px;vertical-align:top}
-    .tb th{background:#0a1327;color:#cbd5e1}
-    .flag-list li{margin:4px 0}
-    .pill{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:#0a1327;color:#e2e8f0}
-    .pill.ok{border-color:var(--ok);color:#bbf7d0}.pill.warn{border-color:var(--warn);color:#fde68a}.pill.bad{border-color:var(--bad);color:#fecaca}
-    .hl{background:#0a1a3a;border:1px solid #1f2a44;padding:10px;border-radius:10px}
-    .code{white-space:pre-wrap;background:#0a1327;border:1px dashed var(--border);padding:10px;border-radius:10px}
-  </style>
-  <script>
-    // PDF.js (ديناميكي)
-    async function getPdfJs(){
-      if(!window.__pdfjs){
-        window.__pdfjs = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.min.mjs');
-        window.__pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs';
-      }
-      return window.__pdfjs;
+    :root{--bg:#0b1020;--card:#fff;--muted:#667085;--brand:#0ea5e9}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Kufi Arabic",Tahoma,Arial,sans-serif;background:#f6f7fb;margin:0;color:#111}
+    header{padding:18px 20px;background:linear-gradient(90deg,#0ea5e9,#2563eb);color:#fff}
+    header h1{margin:0;font-size:20px}
+    main{max-width:1050px;margin:22px auto;padding:0 14px 60px}
+    .card{background:var(--card);border:1px solid #e6e8f0;border-radius:14px;padding:16px 16px 18px;margin:16px 0;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    label{font-size:14px;color:#334155}
+    input[type="file"],select,textarea,button,input[type="text"]{
+      width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font-size:14px
     }
-    // رفع إلى Vercel Blob
-    async function getUpload(){ const m = await import('https://esm.sh/@vercel/blob@0.25.1/client?bundle'); return m.upload; }
+    select{width:auto;min-width:210px}
+    textarea{min-height:110px;resize:vertical}
+    button{background:#0ea5e9;border:none;color:#fff;cursor:pointer}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    small.muted{color:#667085}
+    .chip{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;margin-inline:4px}
+    pre{background:#0b1020;color:#e2e8f0;border-radius:12px;padding:14px;overflow:auto}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+    .log{background:#0b1020;color:#bcd;min-height:70px;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace}
+    .ok{color:#059669}.warn{color:#b45309}.err{color:#dc2626}
+    .pill{background:#eef2ff;color:#1d4ed8;border-radius:999px;padding:2px 8px;font-size:12px}
+    .ref a{color:#0ea5e9;text-decoration:none}
+  </style>
+  <!-- PDF.js UMD (يمنع خطأ pdfjsLib is not defined) -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    // تهيئة عامل PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
   </script>
 </head>
 <body>
+<header>
   <h1>تحليل الحالات الطبية (Gemini & GPT‑4o)</h1>
-  <div id="ver" class="muted"></div>
-  <div id="health" class="hl" style="display:none"></div>
+  <div style="font-size:13px;opacity:.95">* المعالجة على الجهاز + الخادم؛ * التقرير تعليمي ويُراجع سريريًا قبل أي قرار؛ * إزالة PHI تلقائيًا.</div>
+</header>
 
-  <div class="card">
+<main>
+  <section class="card">
     <div class="row">
-      <div>
+      <div style="flex:1">
         <label>اختر ملفات (صورة/‏PDF):</label>
-        <input id="fileInput" type="file" accept=".pdf,image/*" multiple/>
-        <div class="muted">أي PDF سيتحوّل إلى صور + يُستخرج نصّه (مع إزالة PHI).</div>
+        <input id="fileInput" type="file" multiple accept="image/*,.pdf" />
+        <small class="muted">سيُحوَّل أي PDF إلى صور، ويُستخرج نصّه لرفع الدقة.</small>
       </div>
-      <div>
-        <label>اللغة:</label>
-        <select id="lang"><option value="ar" selected>العربية</option><option value="en">English</option></select>
-        <label>النموذج:</label>
-        <select id="model"><option value="both" selected>Gemini + GPT‑4o</option><option value="openai">GPT‑4o فقط</option><option value="gemini">Gemini فقط</option></select>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div><label>اللغة:</label>
+        <select id="lang">
+          <option value="ar" selected>العربية</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div><label>النموذج:</label>
+        <select id="model">
+          <option value="both" selected>Gemini + GPT‑4o</option>
+          <option value="gpt">GPT‑4o فقط</option>
+          <option value="gemini">Gemini فقط</option>
+        </select>
+      </div>
+      <div style="min-width:260px;flex:1">
         <label>التخصص (اختياري):</label>
-        <input id="specialty" placeholder="جلدية، أنف/أذن/حنجرة، عظام، ضغط، كُلى ..."/>
+        <input id="specialty" type="text" placeholder="أسنان، جلدية، قلب، ضغط، كُلى ..." />
       </div>
     </div>
-    <label>وصف مختصر/سياق التأمين (اختياري):</label>
-    <textarea id="context" rows="2" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما"></textarea>
+    <div style="margin-top:8px">
+      <label>وصف مختصر/سياق التأمين (اختياري):</label>
+      <textarea id="context" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما"></textarea>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="analyzeBtn">تحليل الحالة</button>
+      <span class="pill" id="prepInfo" style="display:none"></span>
+    </div>
+  </section>
 
-    <div class="row" style="align-items:center">
-      <div>
-        <button id="analyzeBtn">تحليل الحالة</button>
-        <button id="copyBtn" class="secondary" disabled>نسخ ملخص نصّي</button>
-      </div>
-      <div style="flex:2"><progress id="prog" value="0" max="100" hidden></progress></div>
-    </div>
-    <div id="uploadSummary" class="muted"></div>
+  <section class="card">
+    <h3 style="margin-top:0">النتيجة المدمجة</h3>
+    <div id="exec" class="card" style="background:#f8fafc;border:1px dashed #d0d5dd"></div>
+    <pre id="merged" dir="ltr"></pre>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h3 style="margin-top:0">مخرجات GPT‑4o</h3>
+      <pre id="gpt" dir="ltr"></pre>
+    </section>
+    <section class="card">
+      <h3 style="margin-top:0">مخرجات Gemini</h3>
+      <pre id="gemini" dir="ltr"></pre>
+    </section>
   </div>
 
-  <div class="card report" id="reportView" style="display:none"></div>
-
-  <div class="card"><h3>النتيجة (JSON)</h3><div class="code" id="merged"></div></div>
-  <div class="card"><h3>مخرجات GPT‑4o</h3><div class="code" id="openaiOut">—</div></div>
-  <div class="card"><h3>مخرجات Gemini</h3><div class="code" id="geminiOut">—</div></div>
-  <div class="card"><h3>السجل</h3><div class="code" id="log"></div></div>
+  <section class="card">
+    <h3 style="margin-top:0">السجل</h3>
+    <div id="log" class="log"></div>
+  </section>
+</main>
 
 <script>
-const $ = id => document.getElementById(id);
-const log = (...a)=>{ $('log').textContent += a.join(' ') + '\n'; };
+const logEl = document.getElementById('log');
+const btn = document.getElementById('analyzeBtn');
+const prepInfo = document.getElementById('prepInfo');
+const preMerged = document.getElementById('merged');
+const preGPT = document.getElementById('gpt');
+const preGemini = document.getElementById('gemini');
+const execDiv = document.getElementById('exec');
 
-(async()=>{
-  try{
-    const v = await fetch('/api/gpt?action=version'); if(v.ok){ const j=await v.json(); $('ver').textContent = `API Version: ${j.apiVersion}`; }
-    const r = await fetch('/api/gpt?action=health'); if(r.ok){ const j=await r.json();
-      const probs=[];
-      if(!j.hasBlobToken) probs.push('BLOB_READ_WRITE_TOKEN مفقود.');
-      if(!j.pkgBlob) probs.push('الحزمة @vercel/blob غير مثبتة.');
-      if(!j.hasOpenAI) probs.push('OPENAI_API_KEY مفقود.');
-      if(!j.hasGemini) probs.push('GEMINI_API_KEY مفقود.');
-      if(probs.length){ const el=$('health'); el.style.display='block'; el.innerText='تحذير بيئة: '+probs.join(' | '); }
-    }
-  }catch{}
-})();
-
-function redactPHI(s){
-  if(!s) return s;
-  const rules=[
-    /^.*\b(Name|Patient\s*File\s*No|ID\s*No|D\.?O\.?B|Provider Name|Insurance Co\.|TPA Name)\b.*$/gmi,
-    /^.*\b(الاسم|رقم\s*الملف|رقم\s*الهوية|تاريخ\s*الميلاد|مزود\s*الخدمة|شركة\s*التأمين)\b.*$/gmi,
-    /\b\d{8,}\b/g
-  ];
-  let out=s; for(const r of rules) out=out.replace(r,''); return out.trim();
+function log(msg, cls=""){ 
+  const span = document.createElement('div'); 
+  span.className = cls; 
+  span.textContent = msg; 
+  logEl.appendChild(span); 
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
-async function pdfPageToBlob(pdf, pageNumber, scale=2){
-  const page = await pdf.getPage(pageNumber);
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-  canvas.width = viewport.width; canvas.height = viewport.height;
-  await page.render({ canvasContext: ctx, viewport }).promise;
-  return new Promise(resolve=> canvas.toBlob(b=>resolve(b),'image/png',0.92));
+function b64FromCanvas(canvas, mime="image/jpeg", quality=0.78, maxW=1400){
+  // تصغير مع الحفاظ على التناسب
+  const scale = Math.min(1, maxW / canvas.width);
+  const tmp = document.createElement('canvas');
+  tmp.width = Math.max(1, Math.round(canvas.width * scale));
+  tmp.height = Math.max(1, Math.round(canvas.height * scale));
+  const ctx = tmp.getContext('2d');
+  ctx.drawImage(canvas, 0, 0, tmp.width, tmp.height);
+  return tmp.toDataURL(mime, quality).split(',')[1]; // بدون data:...;base64,
 }
-async function extractPdfText(pdf){
-  const chunks=[];
-  for(let i=1;i<=pdf.numPages;i++){
-    const page = await pdf.getPage(i);
+
+async function imageFileToB64(file){
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  await new Promise((res, rej)=>{
+    img.onload = ()=>res();
+    img.onerror = rej;
+    img.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+  canvas.getContext('2d').drawImage(img,0,0);
+  URL.revokeObjectURL(url);
+  return b64FromCanvas(canvas, file.type.includes('png')?'image/png':'image/jpeg', 0.78, 1600);
+}
+
+async function pdfToImagesAndText(file){
+  const arr = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:arr}).promise;
+  const images = [];
+  let fullText = '';
+  for(let p=1;p<=pdf.numPages;p++){
+    log(`> تحويل صفحة ${p}/${pdf.numPages} من ${file.name} ...`,`ok`);
+    const page = await pdf.getPage(p);
+    // صورة
+    const viewport = page.getViewport({scale:1.8});
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({canvasContext:ctx, viewport}).promise;
+    images.push(b64FromCanvas(canvas, "image/jpeg", 0.76, 1600));
+    // نص
     const tc = await page.getTextContent();
-    chunks.push(tc.items.map(it=>it.str).join(' '));
+    const pageText = tc.items.map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
+    fullText += `\n[PAGE ${p}] ${pageText}`;
   }
-  return redactPHI(chunks.join('\n\n'));
+  return {images, text: fullText.trim()};
 }
 
-async function uploadFileToBlob(file){
-  const upload = await getUpload();
-  const res = await upload(file.name, file, {
-    access:'public',
-    handleUploadUrl:'/api/gpt?action=sign',
-    multipart:file.size>=10*1024*1024,
-    onUploadProgress:({percentage})=>{
-      const p=$('prog'); if(!p.hidden && typeof percentage==='number'){ p.value=Math.min(99, Math.floor(percentage)); }
-    }
-  });
-  return { url: res.url, mimeType: file.type || 'application/octet-stream', name: file.name };
+function sanitize(str, max=22000){
+  return (str||'').replace(/[\u2028\u2029]/g,' ').slice(0,max);
 }
 
-async function handleFiles(files){
-  const prog=$('prog'); prog.hidden=false; prog.value=0;
-  const uploaded=[]; let textChunks=[]; let processed=0; let totalSteps=files.length;
-  for(const file of files){
-    const isPdf = file.type==='application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if(isPdf){
-      log(`> تحويل PDF واستخراج نص: ${file.name}`);
-      const pdfjs = await getPdfJs();
-      const buf = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument({ data: buf }).promise;
-      const maxPages = Math.min(pdf.numPages, 15);
-      const text = await extractPdfText(pdf); if(text) textChunks.push(text);
-      totalSteps += (maxPages - 1);
-      for(let i=1;i<=maxPages;i++){
-        const blob = await pdfPageToBlob(pdf, i, 2);
-        const pageFile = new File([blob], `${file.name.replace(/\.pdf$/i,'')}-p${i}.png`, {type:'image/png'});
-        const up = await uploadFileToBlob(pageFile);
-        uploaded.push(up); processed++; prog.value=Math.round(processed*100/totalSteps);
-        log(`✓ رُفعت صفحة ${i}/${maxPages} من ${file.name}`);
-      }
-    }else{
-      const up = await uploadFileToBlob(file);
-      uploaded.push(up); processed++; prog.value=Math.round(processed*100/totalSteps);
-      log(`✓ رُفعت الصورة: ${file.name}`);
-    }
-  }
-  prog.hidden=true;
-  $('uploadSummary').textContent = `تم تجهيز ${uploaded.length} صورة/صفحة + نص PDF للتحليل.`;
-  return { images: uploaded, docText: textChunks.join('\n\n') };
-}
-
-async function analyze(payload){
-  const r = await fetch('/api/gpt?action=analyze', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-  });
-  if(!r.ok) throw new Error('API error: '+await r.text());
-  return r.json();
-}
-
-function section(title, html){ return `<div><h3 style="margin:4px 0 8px">${title}</h3>${html}</div>`; }
-function li(items){ return `<ul class="flag-list">${(items||[]).map(x=>`<li>${x}</li>`).join('')||'<span class="muted">—</span>'}</ul>`; }
-function kv(label, val){ return `<div class="box"><div class="muted">${label}</div><div>${val || '<span class="muted">—</span>'}</div></div>`; }
-function tbl(head, rows){ return `<table class="tb"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c||'—'}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${head.length}" class="muted">— لا بيانات —</td></tr>`}</tbody></table>`; }
-
-function buildNarrative(r){
-  const lines=[];
-  if(r.patient_summary) lines.push(`**الملخص:** ${r.patient_summary}`);
-  if(r.key_findings?.length) lines.push(`**أهم النتائج:** ${r.key_findings.join('؛ ')}`);
-  if(r.physician_actions){
-    const pa=r.physician_actions;
-    const meds=(pa.meds||[]).join(', '); const orders=(pa.orders||[]).join(', ');
-    lines.push(`**ما فعله الطبيب:** شكوى: ${pa.chief_complaint||'—'}؛ علامات مهمّة: ${(pa.significant_signs||[]).join('، ')||'—'}؛ تشخيصات: ${(pa.diagnoses||[]).join('، ')||'—'}؛ أوامر/تحاليل: ${orders||'—'}؛ أدوية: ${meds||'—'}.`);
-  }
-  if(r.contradictions?.length) lines.push(`**تعارضات/أخطاء:** `+r.contradictions.map(c=>`${c.item} (الأثر: ${c.impact||'—'})`).join('؛ '));
-  if(r.should_have_been_done?.length) lines.push(`**ما كان يجب عمله:** `+r.should_have_been_done.map(s=>s.step).join('؛ '));
-  if(r.suggested_next_steps?.length) lines.push(`**الخطوات القادمة:** `+r.suggested_next_steps.map(s=>s.action).join('؛ '));
-  return lines.join('\n');
-}
-
-function renderReport(obj){
-  const r = obj;
-  const kpis = `
-    <div class="kpi">
-      ${kv('الملخص', r.patient_summary||'—')}
-      ${kv('نتائج مفتاحية', (r.key_findings||[]).join('، ')||'—')}
-      ${kv('رايات حمراء', (r.severity_red_flags||[]).length? r.severity_red_flags.length+' بند' : 'لا يوجد')}
-    </div>`;
-
-  const pa=r.physician_actions||{};
-  const paTbl = tbl(['العنصر','القيمة'], [
-    ['العلامات الحيوية',(pa.vitals||[]).join('<br>')],
-    ['الشكوى الرئيسية',pa.chief_complaint],
-    ['علامات الفحص', (pa.significant_signs||[]).join('<br>')],
-    ['التشخيصات', (pa.diagnoses||[]).join('<br>')],
-    ['الأوامر/التحاليل', (pa.orders||[]).join('<br>')],
-    ['الأدوية', (pa.meds||[]).join('<br>')]
-  ]);
-
-  const contraTbl = tbl(['التعارض/الخطأ','الدليل','الأثر'], (r.contradictions||[]).map(c=>[c.item,c.evidence,c.impact]));
-  const issuesTbl = tbl(['مشكلة إجرائية','الأثر','الدليل'], (r.procedural_issues||[]).map(c=>[c.issue,c.impact,c.evidence]));
-  const rqTbl = tbl(['فرصة','فئة','التبرير','ملاحظة المخاطر'], (r.revenue_quality_opportunities||[]).map(o=>[o.opportunity,o.category,o.rationale,o.risk_note]));
-  const shouldTbl = tbl(['ما يجب عمله','السبب'], (r.should_have_been_done||[]).map(s=>[s.step,s.reason]));
-  const nextTbl = tbl(['الإجراء','التبرير'], (r.suggested_next_steps||[]).map(s=>[s.action,s.justification]));
-
-  // تجميع زيارات (إن وُجد)
-  let aggHTML='';
-  if(r.meta_aggregate){
-    const ov=r.meta_aggregate.overview||{};
-    const vrows=(r.meta_aggregate.visits||[]).map(v=>[
-      v.date||'—', (v.diagnoses||[]).join('<br>'), (v.meds||[]).join('<br>'), (v.orders||[]).join('<br>'), v.flags||'—'
-    ]);
-    aggHTML = section('تقرير مُجمّع للزيارات', `
-      <div class="kpi">
-        ${kv('عدد الزيارات', ov.visits_count||'—')}
-        ${kv('الفترة', ov.date_range||'—')}
-        ${kv('المشكلات الرئيسية', (ov.main_problems||[]).join('، ')||'—')}
-        ${kv('أخطاء ترميز/تعارضات مرصودة', ov.issues_count!=null?ov.issues_count:'—')}
-      </div>
-      ${tbl(['التاريخ','التشخيصات','الأدوية','الأوامر/التحاليل','ملاحظات/أعلام'], vrows)}
-    `);
-  }
-
-  const refs = (r.references||[]).map(x=>`<li><a href="${x.link}" target="_blank" rel="noopener">${x.title}</a>${x.org?` — <span class="muted">${x.org}</span>`:''}</li>`).join('') || '<span class="muted">—</span>';
-
-  $('reportView').innerHTML = `
-    ${section('ملخص تنفيذي', kpis)}
-    ${aggHTML}
-    ${section('ما فعله الطبيب (موثّق)', paTbl)}
-    ${section('التعارضات والأخطاء', contraTbl)}
-    ${section('مشكلات إجرائية', issuesTbl)}
-    ${section('ما كان يجب عمله', shouldTbl)}
-    ${section('فرص تحسين الجودة والدخل', rqTbl)}
-    ${section('رايات حمراء', li(r.severity_red_flags||[]))}
-    ${section('الخطوات المقترحة', nextTbl)}
-    ${section('المراجع', `<ul>${refs}</ul>`)}
-    <div class="hl"><b>ملاحظة سلامة:</b> ${r.patient_safety_note || 'هذا المحتوى تعليمي ويُراجع طبيًا قبل أي قرار.'}</div>
+function renderExecutive(report){
+  if(!report) { execDiv.textContent=''; return; }
+  const lang = (document.getElementById('lang').value||'ar');
+  const refs = (report.references||[]).map(r=>`<li class="ref"><a href="${r.link}" target="_blank" rel="noopener">${r.title||r.org||r.link}</a></li>`).join('');
+  const kf = (report.key_findings||[]).map(k=>`<li>${k}</li>`).join('');
+  const ddx = (report.differential_diagnoses||[]).slice(0,4).map(d=>`<li><b>${d.dx}</b> — ${d.why}</li>`).join('');
+  const issues = (report.procedural_issues||[]).slice(0,3).map(i=>`<li><b>${i.issue}</b> — ${i.impact}</li>`).join('');
+  const opp = (report.revenue_quality_opportunities||[]).slice(0,4).map(o=>`<li><b>${o.opportunity}</b> <span class="chip">${o.category}</span> — ${o.rationale}</li>`).join('');
+  const next = (report.suggested_next_steps||[]).slice(0,4).map(s=>`<li><b>${s.action}</b> — ${s.justification}</li>`).join('');
+  const contrad = (report.contradictions||[]).slice(0,3).map(c=>`<li><b>${c.item||'تناقض'}</b>: ${c.evidence} <em>↳ ${c.impact||''}</em></li>`).join('');
+  execDiv.innerHTML = `
+    <div><b>ملخص تنفيذي:</b><div>${report.executive_summary||report.patient_summary||''}</div></div>
+    <hr>
+    <div class="grid-3">
+      <div><b>نتائج مفتاحية</b><ul>${kf||'<li>—</li>'}</ul></div>
+      <div><b>تشاخيص تفاضلية</b><ul>${ddx||'<li>—</li>'}</ul></div>
+      <div><b>تناقضات/أخطاء</b><ul>${contrad||'<li>—</li>'}</ul></div>
+    </div>
+    <div class="grid-3">
+      <div><b>مشكلات إجرائية</b><ul>${issues||'<li>—</li>'}</ul></div>
+      <div><b>فرص جودة/دخل</b><ul>${opp||'<li>—</li>'}</ul></div>
+      <div><b>الخطوات القادمة</b><ul>${next||'<li>—</li>'}</ul></div>
+    </div>
+    <div><b>مراجع</b><ul>${refs||'<li>—</li>'}</ul></div>
+    <div><small class="muted">${report.patient_safety_note||''}</small></div>
   `;
-  $('reportView').style.display='grid';
-
-  const narrative = buildNarrative(r);
-  $('copyBtn').disabled = !narrative;
-  $('copyBtn').onclick = ()=>navigator.clipboard.writeText(narrative);
 }
 
-$('analyzeBtn').addEventListener('click', async ()=>{
-  try{
-    const files = Array.from($('fileInput').files||[]); if(!files.length){ alert('اختر ملفاً واحداً على الأقل.'); return; }
-    $('analyzeBtn').disabled=true; $('prog').hidden=false; $('reportView').style.display='none';
-    $('merged').textContent=''; $('openaiOut').textContent='—'; $('geminiOut').textContent='—'; $('log').textContent='';
-    log('بدء الرفع/التحويل ...');
-    const { images, docText } = await handleFiles(files);
-    log('بدء التحليل ...');
-    const result = await analyze({
-      files: images,
-      docText,
-      language: $('lang').value,
-      model: $('model').value,
-      specialty: $('specialty').value.trim(),
-      context: $('context').value.trim()
-    });
-    $('merged').textContent = result.merged || '';
-    $('openaiOut').textContent = result.openai || result.openai_raw || '—';
-    $('geminiOut').textContent = result.gemini || '—';
+async function prepareFiles(files){
+  const images = []; let textChunks = [];
+  for(const f of files){
+    if(f.type === 'application/pdf'){
+      const {images:imgs,text} = await pdfToImagesAndText(f);
+      images.push(...imgs);
+      textChunks.push(`\n# PDF: ${f.name}\n${text}`);
+    }else{
+      log(`> تحويل صورة: ${f.name} ...`,'ok');
+      images.push(await imageFileToB64(f));
+    }
+  }
+  return { images, text: sanitize(textChunks.join('\n')) };
+}
 
-    try{ const obj = JSON.parse(result.merged || '{}'); renderReport(obj); }catch{}
-    log('اكتمل التحليل.');
-  }catch(e){ $('log').textContent += 'خطأ: '+e.message+'\n'; alert(e.message); }
-  finally{ $('prog').hidden=true; $('analyzeBtn').disabled=false; }
+function download(name, obj){
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+
+document.getElementById('analyzeBtn').addEventListener('click', async ()=>{
+  try{
+    logEl.textContent=''; preMerged.textContent=''; preGPT.textContent=''; preGemini.textContent=''; execDiv.textContent='';
+    const files = Array.from(document.getElementById('fileInput').files||[]);
+    if(files.length===0){ alert('اختر ملفًا واحدًا على الأقل'); return; }
+    btn.disabled = true; btn.textContent = '... جاري التحضير';
+    log('بدء التحضير ...');
+    const prep = await prepareFiles(files);
+    prepInfo.style.display='inline-block';
+    prepInfo.textContent = `تم تجهيز ${prep.images.length} صورة/صفحة + نص PDF للتحليل.`;
+    log('بدء التحليل ...');
+    btn.textContent = '... جاري التحليل';
+
+    const payload = {
+      lang: document.getElementById('lang').value || 'ar',
+      modelChoice: document.getElementById('model').value || 'both',
+      specialty: document.getElementById('specialty').value || '',
+      context: document.getElementById('context').value || '',
+      images: prep.images, // base64 بدون data:
+      text: prep.text,
+      fileNames: files.map(f=>f.name),
+      apiVersion: 'v5.0.0'
+    };
+
+    const res = await fetch('/api/gpt', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const errTxt = await res.text();
+      throw new Error(`(${res.status}) ${errTxt}`);
+    }
+    const data = await res.json();
+
+    // عرض النتائج
+    renderExecutive(data.merged);
+    preMerged.textContent = JSON.stringify(data.merged, null, 2);
+    preGPT.textContent = data.gpt?.raw || '';
+    preGemini.textContent = data.gemini?.raw || '';
+    log('اكتمل التحليل.','ok');
+
+    // رابط تنزيل
+    download('medical-case-report.json', data.merged);
+
+  }catch(err){
+    console.error(err);
+    alert('خطأ: ' + (err.message||err.toString()));
+    log(String(err),'err');
+  }finally{
+    btn.disabled=false; btn.textContent='تحليل الحالة';
+  }
 });
 </script>
 </body>
