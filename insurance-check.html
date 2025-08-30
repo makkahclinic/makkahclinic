@@ -1,177 +1,241 @@
-// api/gpt.js
-// Vercel Serverless Function (لا نستخدم SDKs حتى لا نصطدم بقيود Edge).
-// يتطلب: OPENAI_API_KEY, GEMINI_API_KEY
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>تحليل الحالات الطبية (Gemini & GPT‑4o)</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Kufi Arabic",Tahoma,Arial,sans-serif; margin:24px;}
+  h1{margin-bottom:6px}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+  .col{flex:1 1 280px}
+  textarea, select, input[type="text"]{width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px}
+  input[type="file"]{padding:8px}
+  button{padding:10px 16px; border:0; border-radius:8px; background:#0b6; color:#fff; cursor:pointer; font-weight:600}
+  button.secondary{background:#345}
+  button:disabled{opacity:.5; cursor:not-allowed}
+  .panel{border:1px solid #eee; border-radius:12px; padding:14px; margin:16px 0}
+  .muted{color:#666; font-size:13px}
+  .log{background:#0b1020; color:#d6e7ff; border-radius:10px; padding:12px; min-height:90px; white-space:pre-wrap; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .badge{display:inline-block; padding:2px 8px; border-radius:999px; background:#eef; margin-inline-start:8px; font-size:12px}
+  .section-title{display:flex; align-items:center; justify-content:space-between}
+  .jsonbox{background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; padding:10px; min-height:70px; white-space:pre-wrap; font-family:ui-monospace,Menlo,Consolas,monospace}
+</style>
+<!-- PDF.js (UMD) + Worker: إصلاح "pdfjsLib is not defined" -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.20/pdf.min.js" integrity="sha512-0oU5ZTW1kCqRjzLfgF9x0xk1KQycs7dC3zIYd2J8T1m+8nW0B8oYz5hZl0qkM6hQmWfW9w3vn2nYc0m3E0uZSQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+  // عيّن مسار العامل (الويركر) قبل الاستعمال
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.20/pdf.worker.min.js";
+</script>
+</head>
+<body>
+  <h1>تحليل الحالات الطبية <small class="badge">Gemini & GPT‑4o</small></h1>
+  <div class="muted">* تتم معالجة PDF إلى صور + نص محليًا (PDF.js) وتُزال PHI على الخادم. * التقرير تعليمي ويُراجع سريريًا قبل أي قرار.</div>
 
-const OPENAI_MODEL = 'gpt-4o-2024-08-06'; // يدعم رؤية عبر chat.completions
-const GEMINI_MODEL = 'gemini-1.5-pro';
+  <div class="panel">
+    <div class="row">
+      <div class="col">
+        <label>اختر ملفات (صورة/‏PDF):</label>
+        <input id="files" type="file" multiple accept="image/*,.pdf" />
+        <div id="prepStatus" class="muted"></div>
+      </div>
+      <div class="col">
+        <label>اللغة:</label>
+        <select id="lang">
+          <option value="ar" selected>العربية</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div class="col">
+        <label>النموذج:</label>
+        <select id="modelSel">
+          <option value="both" selected>Gemini + GPT‑4o</option>
+          <option value="gpt">GPT‑4o فقط</option>
+          <option value="gemini">Gemini فقط</option>
+        </select>
+      </div>
+    </div>
 
-function extractJson(text='') {
-  // يلتقط كتلة JSON حتى لو كانت بين ```json ... ```
-  const m = text.match(/\{[\s\S]*\}$/) || text.match(/```json([\s\S]*?)```/i);
-  const raw = m ? (m[1] ? m[1] : m[0]) : text;
-  try { return JSON.parse(raw); } catch { return null; }
-}
+    <div class="row" style="margin-top:8px">
+      <div class="col">
+        <label>التخصص (اختياري):</label>
+        <input id="spec" type="text" placeholder="أسنان، جلدية، قلب، ضغط، كُلى ..." />
+      </div>
+      <div class="col">
+        <label>وصف مختصر/سياق التأمين (اختياري):</label>
+        <input id="ctx" type="text" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما" />
+      </div>
+    </div>
 
-function buildSchema(language='ar'){
-  // مخطط تقرير موحّد غني (مفاتيح ثابتة تُسهّل العرض والفوترة)
-  const safetyNote = language === 'ar'
-    ? "هذا المحتوى مُعَدّ لتحسين الجودة والتدقيق التأميني، ويُراجع من طبيب مرخّص قبل أي قرار سريري."
-    : "This content is for quality-improvement and payer audit support; a licensed clinician must review before decisions.";
-  return {
-    schemaNote:
-`أعد JSON صارمًا فقط دون أي نص خارجه. المفاتيح المطلوبة:
-{
- "executive_summary": "",
- "patient_summary": "",
- "physician_actions": {
-   "chief_complaint": "", "vitals": [], "significant_signs": [], "diagnoses": [], "orders": [], "meds": [], "icd10_codes": []
- },
- "key_findings": [],
- "contradictions": [ { "item":"", "evidence":"", "impact":"" } ],
- "differential_diagnoses": [ { "dx":"", "why":"" } ],
- "severity_red_flags": [],
- "procedural_issues": [ { "issue":"", "impact":"", "evidence":"" } ],
- "missed_opportunities": [ { "what":"", "why_it_matters":"" } ],
- "revenue_quality_opportunities": [ { "opportunity":"", "category":"documentation|diagnostics|procedure|coding|follow-up", "rationale":"", "risk_note":"" } ],
- "icd_suggestions": [ { "code":"", "label":"", "why":"" } ],
- "cpt_suggestions": [ { "code":"", "label":"", "why":"" } ],
- "should_have_been_done": [ { "step":"", "reason":"" } ],
- "suggested_next_steps": [ { "action":"", "justification":"" } ],
- "references": [ { "title":"", "org":"", "link":"" } ],
- "patient_safety_note": "${safetyNote}"
-}`,
-    guardrails:
-`قواعد:
-1) لا تكشف PHI/الأسماء/المعرّفات؛ استخدم [REDACTED].
-2) اعتمد أدلة WHO/NICE/CDC/IDSA عند الاقتضاء واذكر روابط قصيرة في "references".
-3) لا تُرجِع نصًا خارج JSON ولا تضع فواصل زائدة.
-`
-  };
-}
+    <div class="row" style="margin-top:12px">
+      <button id="btnPrep" class="secondary">تحضير الملفات</button>
+      <button id="btnGo">تحليل الحالة</button>
+      <span id="apiV" class="muted">API Version: v6.1</span>
+    </div>
+  </div>
 
-function buildClinicalInstruction({language='ar', specialty='', insuranceContext='', texts=[]}){
-  const lang = language === 'en' ? 'English' : 'العربية';
-  const spec = specialty ? `التخصص السريري: ${specialty}` : 'التخصص: عام';
-  const ctx  = insuranceContext ? `سياق تأميني/وصف مقدم: ${insuranceContext}` : '—';
-  const ocr  = texts?.length ? `\n\n[نص مُستخرج من PDF (ملخّص)]:\n${texts.join('\n---\n').slice(0, 12000)}` : '';
-  return (
-`${spec} — اللغة المطلوبة للتقرير: ${lang}.
-أنت مساعد سريري للتدقيق وتحسين الدخل المعتمد على الأدلة. قدّم تقييمًا دقيقًا ومُنظّمًا، مع إبراز التناقضات الترميزية/السلوكية وماذا كان يجب فعله لرفع دخل العيادة بشكل مقبول تأمينيًا.
-${ctx}
-${ocr}
-إرجاع JSON فقط حسب المخطط المطلوب أدناه.`
-  );
-}
+  <div class="panel">
+    <div class="section-title"><strong>النتيجة المدمجة</strong>
+      <button id="copyCombined" class="secondary" style="padding:6px 10px">نسخ JSON</button>
+    </div>
+    <div id="combined" class="jsonbox"></div>
+  </div>
 
-function toGeminiParts({instruction, images=[], texts=[]}){
-  const parts = [{ text: instruction }];
-  // images: array of { dataUrl, contentType }
-  for (const img of images){
-    const m = String(img.dataUrl).match(/^data:(.+?);base64,(.*)$/);
-    if (!m) continue;
-    parts.push({
-      inlineData: { mimeType: m[1] || img.contentType || 'image/png', data: m[2] }
+  <div class="panel">
+    <strong>مخرجات GPT‑4o</strong>
+    <div id="gptOut" class="jsonbox"></div>
+  </div>
+
+  <div class="panel">
+    <strong>مخرجات Gemini</strong>
+    <div id="gemOut" class="jsonbox"></div>
+  </div>
+
+  <div class="panel">
+    <strong>السجل</strong>
+    <div id="log" class="log"></div>
+  </div>
+
+<script>
+(() => {
+  const logEl = document.getElementById('log');
+  const filesEl = document.getElementById('files');
+  const btnPrep = document.getElementById('btnPrep');
+  const btnGo = document.getElementById('btnGo');
+  const prepStatus = document.getElementById('prepStatus');
+  const combinedEl = document.getElementById('combined');
+  const gptEl = document.getElementById('gptOut');
+  const gemEl = document.getElementById('gemOut');
+  const copyCombined = document.getElementById('copyCombined');
+
+  let prepared = { images: [], texts: "" }; // images: [{dataUrl, contentType}], texts: string
+  const MAX_PAGES = 2;       // يمكن زيادتها لكن احذر حجم الطلب على Vercel
+  const MAX_DIM = 1400;      // أقصى بُعد للصورة (ضغط)
+  const JPEG_QUALITY = 0.78; // ضغط الصور
+
+  function log(msg){ logEl.textContent += (msg + "\n"); logEl.scrollTop = logEl.scrollHeight; }
+  function toast(msg){ alert(msg); }
+
+  function toDataURLFromImageFile(file){
+    return new Promise((resolve,reject)=>{
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = () => {
+        img.onload = () => {
+          const { width, height } = img;
+          const scale = Math.min(1, MAX_DIM/Math.max(width,height));
+          const w = Math.round(width*scale), h = Math.round(height*scale);
+          const can = document.createElement('canvas'); can.width=w; can.height=h;
+          const ctx = can.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+          // نستخدم JPEG عادة لتقليل الحجم – لو أردت PNG غيّر النوع
+          const dataUrl = can.toDataURL('image/jpeg', JPEG_QUALITY);
+          resolve({ dataUrl, contentType: 'image/jpeg' });
+        };
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
   }
-  if (texts?.length) parts.push({ text: texts.join('\n---\n').slice(0, 12000) });
-  return parts;
-}
 
-async function callOpenAI({ apiKey, instruction, images=[], temperature=0.2 }){
-  const content = [{ type: 'text', text: instruction }];
-  for (const img of images){
-    content.push({
-      type: 'image_url',
-      image_url: { url: img.dataUrl } // Data URL مدعومة عبر image_url
-    });
+  async function pdfToImagesAndText(file){
+    const arr = new Uint8Array(await file.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data: arr }).promise;
+    let outImgs = [];
+    let textsAll = [];
+    const pages = Math.min(pdf.numPages, MAX_PAGES);
+    for(let i=1;i<=pages;i++){
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 1.7 }); // دقة أعلى قليلاً
+      const can = document.createElement('canvas');
+      can.width = viewport.width; can.height = viewport.height;
+      const ctx = can.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      // ضغط إلى JPEG لتقليل الحجم
+      const dataUrl = can.toDataURL('image/jpeg', JPEG_QUALITY);
+      outImgs.push({ dataUrl, contentType: 'image/jpeg' });
+      // استخراج نص
+      const textContent = await page.getTextContent();
+      const text = textContent.items.map(it => it.str).join(' ').replace(/\s+/g,' ').trim();
+      textsAll.push(`(صفحة ${i}) ${text}`);
+    }
+    return { images: outImgs, text: textsAll.join('\n') };
   }
-  const body = {
-    model: OPENAI_MODEL,
-    temperature,
-    messages: [
-      { role: 'system', content: 'You are a meticulous clinical quality & revenue-improvement assistant. Return STRICT JSON only.' },
-      { role: 'user', content }
-    ],
-    response_format: { type: 'json_object' } // يفرض JSON
-  };
-  const r = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type':'application/json' },
-    body: JSON.stringify(body)
+
+  btnPrep.addEventListener('click', async () => {
+    try{
+      combinedEl.textContent = gptEl.textContent = gemEl.textContent = '';
+      prepared = { images: [], texts: "" };
+      const files = Array.from(filesEl.files || []);
+      if(!files.length){ toast('اختر ملفًا واحدًا على الأقل'); return; }
+      log('بدء التحضير ... < تحويل PDF واستخراج نص (إن وجد)');
+      let total = 0;
+      for(const f of files){
+        if(f.type === 'application/pdf' || /\.pdf$/i.test(f.name)){
+          const { images, text } = await pdfToImagesAndText(f);
+          prepared.images.push(...images);
+          prepared.texts += (text ? (text + '\n') : '');
+          total += images.length;
+          log(`✓ رُفعت ${images.length}/${images.length} صفحة من ${f.name}`);
+        }else if(f.type.startsWith('image/')){
+          prepared.images.push(await toDataURLFromImageFile(f));
+          total += 1;
+          log(`✓ جُهِّزت صورة: ${f.name}`);
+        }else{
+          log(`تخطي ملف غير مدعوم: ${f.name}`);
+        }
+      }
+      prepStatus.textContent = `تم تجهيز ${total} صورة/صفحة + نص PDF للتحليل.`;
+    }catch(err){
+      console.error(err);
+      toast('فشل التحضير: ' + (err && err.message ? err.message : err));
+    }
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error?.message || 'OpenAI error');
-  const text = data?.choices?.[0]?.message?.content || '';
-  return extractJson(text) || null;
-}
 
-async function callGemini({ apiKey, instruction, images=[], texts=[], temperature=0.2 }){
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const body = {
-    contents: [{ role:'user', parts: toGeminiParts({ instruction, images, texts }) }],
-    generationConfig: { temperature, responseMimeType: "application/json" }
-  };
-  const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error?.message || 'Gemini error');
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  return extractJson(text) || null;
-}
+  btnGo.addEventListener('click', async () => {
+    try{
+      btnGo.disabled = true;
+      log('بدء التحليل ...');
+      const payload = {
+        language: document.getElementById('lang').value,
+        modelChoice: document.getElementById('modelSel').value,
+        specialty: document.getElementById('spec').value || 'عام',
+        insuranceContext: document.getElementById('ctx').value || '',
+        images: prepared.images,  // [{dataUrl, contentType}]
+        texts: prepared.texts || ''
+      };
+      if((payload.images?.length||0)===0 && !payload.texts){
+        toast('لم يتم تجهيز أي صور أو نص. اضغط "تحضير الملفات" أولاً.');
+        btnGo.disabled = false; return;
+      }
+      const res = await fetch('/api/case-analyzer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if(!res.ok){ throw new Error(data?.error || res.statusText); }
+      combinedEl.textContent = JSON.stringify(data.combined, null, 2);
+      gptEl.textContent      = data.gpt?.error ? ('[Error] ' + data.gpt.error) : JSON.stringify(data.gpt?.parsed || data.gpt?.raw || {}, null, 2);
+      gemEl.textContent      = data.gemini?.error ? ('[Error] ' + data.gemini.error) : JSON.stringify(data.gemini?.parsed || data.gemini?.raw || {}, null, 2);
+      log('اكتمل التحليل.');
+      btnGo.disabled = false;
+    }catch(err){
+      console.error(err);
+      toast('فشل التحليل: ' + (err && err.message ? err.message : err));
+      btnGo.disabled = false;
+    }
+  });
 
-function mergeReports(a, b){
-  // دمج بسيط: يختار الحقول الأطول/الأغنى ويجمع المصفوفات بدون تكرار
-  const pick = (key, fallback='') => (a?.[key] && String(a[key]).length > String(b?.[key]||'').length ? a[key] : (b?.[key] ?? fallback));
-  const uniqArr = (arr=[]) => Array.from(new Map(arr.map(x=>[JSON.stringify(x), x])).values());
-
-  const merged = {
-    executive_summary: pick('executive_summary'),
-    patient_summary: pick('patient_summary'),
-    physician_actions: { ...(a?.physician_actions||{}), ...(b?.physician_actions||{}) },
-    key_findings: uniqArr([...(a?.key_findings||[]), ...(b?.key_findings||[])]),
-    contradictions: uniqArr([...(a?.contradictions||[]), ...(b?.contradictions||[])]),
-    differential_diagnoses: uniqArr([...(a?.differential_diagnoses||[]), ...(b?.differential_diagnoses||[])]),
-    severity_red_flags: uniqArr([...(a?.severity_red_flags||[]), ...(b?.severity_red_flags||[])]),
-    procedural_issues: uniqArr([...(a?.procedural_issues||[]), ...(b?.procedural_issues||[])]),
-    missed_opportunities: uniqArr([...(a?.missed_opportunities||[]), ...(b?.missed_opportunities||[])]),
-    revenue_quality_opportunities: uniqArr([...(a?.revenue_quality_opportunities||[]), ...(b?.revenue_quality_opportunities||[])]),
-    icd_suggestions: uniqArr([...(a?.icd_suggestions||[]), ...(b?.icd_suggestions||[])]),
-    cpt_suggestions: uniqArr([...(a?.cpt_suggestions||[]), ...(b?.cpt_suggestions||[])]),
-    should_have_been_done: uniqArr([...(a?.should_have_been_done||[]), ...(b?.should_have_been_done||[])]),
-    suggested_next_steps: uniqArr([...(a?.suggested_next_steps||[]), ...(b?.suggested_next_steps||[])]),
-    references: uniqArr([...(a?.references||[]), ...(b?.references||[])]),
-    patient_safety_note: a?.patient_safety_note || b?.patient_safety_note || ''
-  };
-  return merged;
-}
-
-export default async function handler(req, res){
-  try{
-    if (req.method !== 'POST') { res.status(405).json({ error: 'Only POST allowed' }); return; }
-
-    const { language='ar', model='both', specialty='', insuranceContext='', images=[], texts=[] } = req.body || {};
-    const { schemaNote, guardrails } = buildSchema(language);
-    const instruction = buildClinicalInstruction({ language, specialty, insuranceContext, texts })
-      + '\n\n' + guardrails + '\n\n' + schemaNote;
-
-    const wantOpenAI = (model === 'both' || model === 'openai') && !!process.env.OPENAI_API_KEY;
-    const wantGemini = (model === 'both' || model === 'gemini') && !!process.env.GEMINI_API_KEY;
-
-    let [gpt, gemini] = [null, null];
-    // نفّذ بالتوازي حسب المفاتيح المتاحة
-    const tasks = [];
-    if (wantOpenAI) tasks.push(callOpenAI({ apiKey: process.env.OPENAI_API_KEY, instruction, images }));
-    else tasks.push(Promise.resolve(null));
-    if (wantGemini) tasks.push(callGemini({ apiKey: process.env.GEMINI_API_KEY, instruction, images, texts }));
-    else tasks.push(Promise.resolve(null));
-
-    [gpt, gemini] = await Promise.all(tasks);
-
-    const base = gpt || gemini || { executive_summary:'', patient_summary:'', key_findings:[], references:[] };
-    const merged = gpt && gemini ? mergeReports(gpt, gemini) : base;
-
-    res.status(200).json({ merged, gpt, gemini, model_used: { openai: !!gpt, gemini: !!gemini } });
-  } catch (err){
-    console.error(err);
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-}
+  copyCombined.addEventListener('click', async () => {
+    try{
+      await navigator.clipboard.writeText(combinedEl.textContent || '');
+      toast('تم النسخ');
+    }catch{ /* no-op */ }
+  });
+})();
+</script>
+</body>
+</html>
