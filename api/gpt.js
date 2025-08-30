@@ -1,9 +1,9 @@
 // api/gpt.js (أو api/case-analyzer.js)
-// V7.0 - Specialized Pharmacy/Prescription Audit (Node.js)
+// V7.1 - Specialized Pharmacy Audit with Smart Merge Logic and Enhanced Critical Prompts (Node.js)
 
 export const config = { 
     runtime: 'nodejs',
-    maxDuration: 45 // زيادة المدة نظراً لعمق التحليل المطلوب
+    maxDuration: 50 // زيادة المدة لضمان اكتمال التحليل العميق
 }; 
 
 import OpenAI from "openai";
@@ -49,7 +49,6 @@ function extractJSON(text){
   }
 }
 
-// Specialized V7 Merge Logic
 function mergeArrays(a=[], b=[], keyFields=['medication', 'issue', 'gap', 'item', 'dx']){
   const out = [];
   const seen = new Set();
@@ -75,27 +74,30 @@ function mergeArrays(a=[], b=[], keyFields=['medication', 'issue', 'gap', 'item'
   return out;
 }
 
-// ======== V7.0: Specialized Pharmacy Audit Prompt and Schema =========
-// هذا الموجه مستوحى بشكل كبير من الأمر الناجح الذي زودتني به.
+// ======== V7.1: Enhanced Pharmacy Audit Prompt =========
+// تعزيز التركيز على تحديد التكرار العلاجي، الموانع المطلقة، والمخاطر الحرجة.
 function buildSystemPromptV7(lang='ar', specialty=''){
   const L = (ar,en)=> (lang==='ar'? ar : en);
   
   return L(
-`أنت "صيدلي سريري خبير ومدقق مطالبات تأمين" (Expert Clinical Pharmacist & Insurance Auditor). مهمتك تحليل الروشيتة/السجل الطبي المقدم بدقة فائقة لتقييم الأدوية الموصوفة.
+`أنت "صيدلي سريري خبير ومدقق مطالبات تأمين" (Expert Clinical Pharmacist & Insurance Auditor). مهمتك تحليل الروشيتة/السجل الطبي المقدم بدقة فائقة. **الأولوية القصوى هي سلامة المريض وتحديد المخاطر الدوائية.**
 
 # الأهداف الرئيسية:
-1. استخراج بيانات المريض (الاسم، العمر، النوع، رقم الملف) والتشخيصات واسم الطبيب وتخصصه.
-2. **تحليل الأدوية (الأهم):** قم بتحليل كل دواء أو إجراء موصوف بالتفصيل (ضمن مصفوفة \`medication_review\`).
-   - حدد الجرعة/التكرار (\`dose_frequency\`) والمدة/الكمية (\`duration_quantity\`).
-   - حدد موقف التأمين باستخدام الرموز (🟢 مقبول، 🟡 قابل للرفض/يحتاج مراجعة، 🔴 مرفوض) والترميز (GREEN, YELLOW, RED).
-   - **التعليل (justification):** قدم تبريراً سريرياً وتأمينياً مفصلاً. اذكر مدى ملاءمة الدواء للتشخيص، تضارب الأدوية (Drug Interactions)، الجرعات الخاطئة (مثل جرعة زائدة تؤدي لهبوط ضغط/سكر)، مخالفة الإرشادات (Guidelines)، أو إذا كان مجرد مكمل غذائي غير ضروري. كن ناقداً ودقيقاً.
-   - حدد الإجراء المطلوب (action_required).
-3. **تحليل استشاري:** قدم تحليلاً مقسماً إلى: إجراءات خطرة يجب إيقافها (Red Flags)، إجراءات تحتاج مراجعة/مشكوك فيها (Yellow Flags)، وإجراءات مناسبة (Green Flags).
-4. **تحليل الفجوات (Gap Analysis):** حدد الفحوصات أو التدخلات الناقصة بناءً على التشخيصات (مثل فحص قاع العين للسكري، وظائف الكلى، متابعة القلب لمرضى IHD).
+1. استخراج بيانات المريض (العمر مهم جداً للتحليل)، التشخيصات، والطبيب.
+2. **تحليل الأدوية النقدي (الأهم):** قم بتحليل كل دواء ضمن مصفوفة \`medication_review\`.
+   - حدد موقف التأمين (🟢 مقبول/GREEN، 🟡 قابل للرفض/YELLOW، 🔴 مرفوض/RED).
+   - **التعليل (justification):** هذا هو الجزء الأهم. قدم تبريراً سريرياً وتأمينياً مفصلاً. **ابحث بنشاط عن المشكلات التالية وصنفها كـ 🔴 RED أو 🟡 YELLOW:**
+     - **التكرار العلاجي (Therapeutic Duplication):** (مثال: دوائين من نفس الفئة لضغط الدم بدون مبرر موثق لارتفاع ضغط مقاوم).
+     - **التفاعلات الخطيرة** (مثل "الضربة الثلاثية/Triple Whammy": NSAID + Diuretic + ARB/ACEi).
+     - **موانع الاستعمال المطلقة (Contraindications):** (مثال: NSAIDs لمريض فشل كلوي/قلب/قرحة نشطة).
+     - **المخاطر لدى كبار السن (Beers Criteria):** (مثل زيادة خطر هبوط السكر باستخدام Sulfonylureas).
+     - الجرعات غير المناسبة (عالية جداً أو منخفضة جداً).
+     - المكملات الغذائية غير الضرورية تأمينياً.
+3. **تحليل استشاري:** قدم تحليلاً مقسماً إلى Red Flags (مخاطر فورية)، Yellow Flags (يحتاج مراجعة)، Green Flags (مناسب).
+4. **تحليل الفجوات (Gap Analysis):** حدد الفحوصات أو التدخلات الناقصة بناءً على الإرشادات العالمية.
 
 # القواعد الصارمة:
-- **JSON فقط:** سيتم فرض إخراج JSON عبر الـ API.
-- **الدقة:** كن دقيقاً جداً في قراءة أسماء الأدوية والجرعات من الصور.
+- **JSON فقط.**
 
 # هيكل JSON المطلوب (V7 - التزم به حرفيًا):
 {
@@ -105,11 +107,11 @@ function buildSystemPromptV7(lang='ar', specialty=''){
   "medication_review": [
     {
       "medication": "اسم الدواء/الإجراء",
-      "dose_frequency": "الجرعة والتكرار (مثال: 1x1, TID)",
-      "duration_quantity": "المدة أو الكمية (مثال: 90 يوم)",
+      "dose_frequency": "الجرعة والتكرار",
+      "duration_quantity": "المدة أو الكمية",
       "insurance_status_code": "GREEN|YELLOW|RED",
       "status_emoji": "🟢|🟡|🔴",
-      "justification": "التعليل السريري والتأميني المفصل (تفاعلات، جرعة، إرشادات)",
+      "justification": "التعليل السريري والتأميني المفصل والنقدي (يجب ذكر التكرار، التفاعلات، الموانع هنا)",
       "action_required": "None|Monitor|Stop|Clarify|Switch"
     }
   ],
@@ -122,9 +124,9 @@ function buildSystemPromptV7(lang='ar', specialty=''){
   "executive_summary": "ملخص تنفيذي يركز على أهم نتائج مراجعة الأدوية وسلامة المريض."
 }
 `,
-// English Prompt (Mirroring the Arabic V7 structure and goals)
-`You are an Expert Clinical Pharmacist & Insurance Auditor. Your task is to analyze the provided prescription/medical record with extreme precision to evaluate the prescribed medications.
-[... English prompt mirroring the Arabic instructions and V7 Schema ...]
+// English Prompt
+`You are an Expert Clinical Pharmacist & Insurance Auditor. Your task is to analyze the provided prescription/medical record with extreme precision. **The highest priority is patient safety and identification of medication risks.**
+[... English prompt mirroring the enhanced Arabic V7.1 instructions and Schema ...]
 `);
 }
 
@@ -154,7 +156,7 @@ ${truncatedText||'لا يوجد نص مستخرج. اعتمد على الصور 
   return meta;
 }
 
-// ======== استدعاء GPT‑4o (Updated for V7) =========
+// ======== استدعاء GPT‑4o (Updated for V7.1) =========
 async function callOpenAI({lang, specialty, userMsg, images}){
   if(!OPENAI_API_KEY) return { ok:false, data:null, note:'OPENAI_API_KEY missing' };
   
@@ -163,15 +165,14 @@ async function callOpenAI({lang, specialty, userMsg, images}){
 
     const content = [{ type:'text', text:userMsg }];
     for(const b64 of (images||[])){
-      // استخدام detail: high لقراءة دقيقة للروشتات
       content.push({ type:'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: "high" } });
     }
-    // استخدام الموجه المتخصص V7
+    // استخدام الموجه المحسن V7.1
     const system = buildSystemPromptV7(lang, specialty);
   
     const completion = await client.chat.completions.create({
       model: OPENAI_MODEL,
-      temperature: 0.1, // دقة عالية مطلوبة لمراجعة الأدوية
+      temperature: 0.1,
       response_format: { type: "json_object" },
       max_tokens: MAX_TOKENS,
       messages: [
@@ -191,13 +192,13 @@ async function callOpenAI({lang, specialty, userMsg, images}){
   }
 }
 
-// ======== استدعاء Gemini (Updated for V7) =========
+// ======== استدعاء Gemini (Updated for V7.1) =========
 async function callGemini({lang, specialty, userMsg, images}){
   if(!GEMINI_API_KEY) return { ok:false, data:null, note:'GEMINI_API_KEY missing' };
 
   try {
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    // استخدام الموجه المتخصص V7
+    // استخدام الموجه المحسن V7.1
     const system = buildSystemPromptV7(lang, specialty);
 
     const model = genAI.getGenerativeModel({ 
@@ -230,33 +231,81 @@ async function callGemini({lang, specialty, userMsg, images}){
   }
 }
 
-// ======== دمج التقريرين (V7 Merge Logic) =========
+// =====================================================================
+// *** V7.1: Smart Scoring and Merging Logic ***
+// =====================================================================
+
+// دالة تقييم جودة التقرير (الجديدة)
+function scoreReport(report) {
+    if (!report || Object.keys(report).length === 0) return 0;
+    let score = 0;
+
+    const analysis = report.consultative_analysis || {};
+    const medicationReview = report.medication_review || [];
+
+    // 1. تحديد المخاطر العالية (وزن مرتفع جداً)
+    const redFlags = analysis.red_flags_immediate_action || [];
+    score += redFlags.length * 50;
+    
+    // مكافأة خاصة لتحديد التكرار أو التفاعلات الخطيرة (مثل مثال المستخدم)
+    const criticalKeywords = ['تكرار', 'duplication', 'interaction', 'تفاعل', 'contraindication', 'موانع', 'triple whammy', 'ثلاثية', 'خطير', 'dangerous'];
+    if (redFlags.some(f => criticalKeywords.some(kw => f.issue.toLowerCase().includes(kw)))) {
+        score += 150;
+    }
+
+    // 2. تحديد الملاحظات (وزن متوسط)
+    score += (analysis.yellow_flags_monitoring_needed?.length || 0) * 20;
+    
+    // 3. عمق التحليل (قياس متوسط طول التعليل)
+    if (medicationReview.length > 0) {
+        const totalLength = medicationReview.reduce((sum, item) => sum + (item.justification?.length || 0), 0);
+        const avgLength = totalLength / medicationReview.length;
+        // مكافأة العمق (حتى 300 حرف متوسط يعتبر ممتازاً)
+        score += Math.min(avgLength, 300) * 0.5; 
+    }
+    
+    // 4. تحليل الفجوات
+    score += (report.gap_analysis_missing_interventions?.length || 0) * 15;
+
+    // 5. التغطية الأساسية (وزن منخفض)
+    score += medicationReview.length * 5;
+
+    return score;
+}
+
+// دمج التقريرين (V7.1 - يستخدم التقييم الذكي)
 function mergeReportsV7(a={}, b={}, lang='ar'){
   const L = (ar,en)=> (lang==='ar'? ar : en);
   const get = (obj, path, def=[]) => path.split('.').reduce((o, k) => (o || {})[k], obj) || def;
 
-  // تحديد التقرير الأساسي (الذي يحتوي على قائمة أدوية أكثر تفصيلاً)
-  const scoreA = get(a, 'medication_review').length;
-  const scoreB = get(b, 'medication_review').length;
+  // ** التغيير الحاسم: استخدام scoreReport لاختيار التقرير الأفضل جودة **
+  const scoreA = scoreReport(a);
+  const scoreB = scoreReport(b);
+
+  console.log(`Report Quality Scores: A=${scoreA.toFixed(1)}, B=${scoreB.toFixed(1)}`);
+
+  // اختيار التقرير ذو الجودة الأعلى كالأساس
   const primary = scoreA >= scoreB ? a : b;
   const secondary = scoreA >= scoreB ? b : a;
 
-  // استراتيجية الدمج V7: نعتمد التقرير الأساسي (الأكثر اكتمالاً) ونُكمّل البيانات الناقصة من الثانوي.
+  // استراتيجية الدمج V7.1: نعتمد التقرير الأساسي (الأعلى جودة) ونُكمّل البيانات الوصفية والقوائم المستقلة.
   const merged = {
+    // البيانات الوصفية
     patient_info: primary.patient_info || secondary.patient_info || {},
     physician_info: primary.physician_info || secondary.physician_info || {},
     
-    // دمج قوائم التشخيص
+    // التشخيصات: دمج القوائم
     diagnoses: mergeArrays(a.diagnoses, b.diagnoses),
 
-    // مراجعة الأدوية: نستخدم القائمة الأكثر شمولاً (الأساسية) لأن دمج المراجعات المعقدة يقلل الجودة غالباً.
+    // ** مراجعة الأدوية: نستخدم القائمة من التقرير الأعلى جودة (الأساسي) فقط لضمان الاتساق. **
     medication_review: primary.medication_review || secondary.medication_review || [],
 
-    // التحليل الاستشاري: دمج الأقسام الفرعية
+    // التحليل الاستشاري: دمج الأقسام الفرعية (Red/Yellow) لزيادة الشمولية
     consultative_analysis: {
         red_flags_immediate_action: mergeArrays(get(a, 'consultative_analysis.red_flags_immediate_action'), get(b, 'consultative_analysis.red_flags_immediate_action')),
         yellow_flags_monitoring_needed: mergeArrays(get(a, 'consultative_analysis.yellow_flags_monitoring_needed'), get(b, 'consultative_analysis.yellow_flags_monitoring_needed')),
-        green_flags_appropriate_care: mergeArrays(get(a, 'consultative_analysis.green_flags_appropriate_care'), get(b, 'consultative_analysis.green_flags_appropriate_care')),
+        // Green flags نأخذها من الأساسي
+        green_flags_appropriate_care: get(primary, 'consultative_analysis.green_flags_appropriate_care') || get(secondary, 'consultative_analysis.green_flags_appropriate_care'),
     },
 
     // تحليل الفجوات: دمج
@@ -284,7 +333,7 @@ export default async function handler(req, res){
     
     const body = await readJson(req);
 
-    const { lang='ar', modelChoice='both', specialty='', context='', images=[], text='', apiVersion='v7.0.0-node' } = body||{};
+    const { lang='ar', modelChoice='both', specialty='', context='', images=[], text='', apiVersion='v7.1.0-node' } = body||{};
     
     const sanitizedText = text ? text.slice(0, 100000) : '';
 
@@ -305,7 +354,6 @@ export default async function handler(req, res){
 
     // التنفيذ المتوازي
     const [gptRes, gemRes] = await Promise.all([
-        // ملاحظة: نستدعي الوظائف القياسية التي تستخدم الآن موجه V7 داخلياً.
       wantsGPT ? callOpenAI({lang, specialty, userMsg, images}) : Promise.resolve({ok:false, data:null, note:'Disabled or key missing.'}),
       wantsGem ? callGemini({lang, specialty, userMsg, images}) : Promise.resolve({ok:false, data:null, note:'Disabled or key missing.'})
     ]);
@@ -323,7 +371,7 @@ export default async function handler(req, res){
         });
     }
 
-    // الدمج باستخدام منطق V7
+    // الدمج باستخدام منطق V7.1 الذكي
     const merged = mergeReportsV7(gptRes.data || {}, gemRes.data || {}, lang);
 
     // الاستجابة النهائية
