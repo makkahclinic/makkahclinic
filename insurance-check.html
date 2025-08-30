@@ -1,229 +1,177 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <title>تحليل الحالات الطبية (Gemini & GPT‑4o)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- PDF.js (المكتبة + العامل). استخدم نفس الإصدار في الاثنين -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js" defer></script>
-  <style>
-    :root{--bg:#0b1020;--ink:#111827;--muted:#6b7280;--ring:#2563eb;--card:#0f172a}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto; background:#0b1324; color:#e5e7eb; margin:0; padding:24px}
-    h1{margin:0 0 8px; font-size:1.4rem}
-    .wrap{max-width:1100px; margin-inline:auto}
-    .panel{background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:14px 16px; margin:12px 0}
-    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
-    label{font-size:.95rem; color:#cbd5e1}
-    select, input[type="text"], textarea{width:100%; padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e5e7eb}
-    textarea{min-height:96px; resize:vertical}
-    button{background:#2563eb; color:#fff; border:0; padding:10px 16px; border-radius:10px; cursor:pointer}
-    button[disabled]{opacity:.5; cursor:not-allowed}
-    .btn-secondary{background:#334155}
-    .muted{color:#9ca3af; font-size:.88rem}
-    pre{white-space:pre-wrap; background:#060a16; border:1px dashed #334155; border-radius:10px; padding:12px; max-height:420px; overflow:auto}
-    .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
-    .badge{display:inline-block; padding:3px 8px; border:1px solid #334155; border-radius:999px; font-size:.8rem; color:#a5b4fc}
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <h1>تحليل الحالات الطبية <span class="badge">Gemini & GPT‑4o</span></h1>
-  <p class="muted">* تتم معالجة PDF لصور + نص محليًا عبر <strong>PDF.js</strong> ثم يُرسل ملخّص النص والصور للنماذج. * التقرير تعليمي ويُراجع سريريًا قبل أي قرار.</p>
+// api/gpt.js
+// Vercel Serverless Function (لا نستخدم SDKs حتى لا نصطدم بقيود Edge).
+// يتطلب: OPENAI_API_KEY, GEMINI_API_KEY
 
-  <div class="panel">
-    <div class="row">
-      <label style="flex:1 1 280px">اختر ملفات (صورة/‏PDF):
-        <input id="files" type="file" accept="application/pdf,image/*" multiple />
-      </label>
-      <label style="flex:1 1 160px">اللغة:
-        <select id="lang">
-          <option value="ar" selected>العربية</option>
-          <option value="en">English</option>
-        </select>
-      </label>
-      <label style="flex:1 1 220px">النموذج:
-        <select id="model">
-          <option value="both" selected>Gemini + GPT‑4o</option>
-          <option value="gemini">Gemini فقط</option>
-          <option value="openai">GPT‑4o فقط</option>
-        </select>
-      </label>
-    </div>
-    <div class="row">
-      <label style="flex:1 1 240px">التخصص (اختياري):
-        <input id="specialty" type="text" placeholder="أسنان، جلدية، قلب، ..." />
-      </label>
-      <label style="flex:1 1 100%">
-        وصف مختصر/سياق التأمين (اختياري):
-        <textarea id="insCtx" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما"></textarea>
-      </label>
-    </div>
-    <div class="row">
-      <button id="btnPrep" class="btn-secondary">تحضير الملفات</button>
-      <button id="btnAnalyze" disabled>تحليل الحالة</button>
-      <span id="prepInfo" class="muted"></span>
-    </div>
-  </div>
+const OPENAI_MODEL = 'gpt-4o-2024-08-06'; // يدعم رؤية عبر chat.completions
+const GEMINI_MODEL = 'gemini-1.5-pro';
 
-  <div class="panel">
-    <strong>السجل</strong>
-    <pre id="log">جاهز.</pre>
-  </div>
+function extractJson(text='') {
+  // يلتقط كتلة JSON حتى لو كانت بين ```json ... ```
+  const m = text.match(/\{[\s\S]*\}$/) || text.match(/```json([\s\S]*?)```/i);
+  const raw = m ? (m[1] ? m[1] : m[0]) : text;
+  try { return JSON.parse(raw); } catch { return null; }
+}
 
-  <div class="panel">
-    <h3 style="margin-top:0">النتيجة المدمجة</h3>
-    <pre id="merged"></pre>
-  </div>
+function buildSchema(language='ar'){
+  // مخطط تقرير موحّد غني (مفاتيح ثابتة تُسهّل العرض والفوترة)
+  const safetyNote = language === 'ar'
+    ? "هذا المحتوى مُعَدّ لتحسين الجودة والتدقيق التأميني، ويُراجع من طبيب مرخّص قبل أي قرار سريري."
+    : "This content is for quality-improvement and payer audit support; a licensed clinician must review before decisions.";
+  return {
+    schemaNote:
+`أعد JSON صارمًا فقط دون أي نص خارجه. المفاتيح المطلوبة:
+{
+ "executive_summary": "",
+ "patient_summary": "",
+ "physician_actions": {
+   "chief_complaint": "", "vitals": [], "significant_signs": [], "diagnoses": [], "orders": [], "meds": [], "icd10_codes": []
+ },
+ "key_findings": [],
+ "contradictions": [ { "item":"", "evidence":"", "impact":"" } ],
+ "differential_diagnoses": [ { "dx":"", "why":"" } ],
+ "severity_red_flags": [],
+ "procedural_issues": [ { "issue":"", "impact":"", "evidence":"" } ],
+ "missed_opportunities": [ { "what":"", "why_it_matters":"" } ],
+ "revenue_quality_opportunities": [ { "opportunity":"", "category":"documentation|diagnostics|procedure|coding|follow-up", "rationale":"", "risk_note":"" } ],
+ "icd_suggestions": [ { "code":"", "label":"", "why":"" } ],
+ "cpt_suggestions": [ { "code":"", "label":"", "why":"" } ],
+ "should_have_been_done": [ { "step":"", "reason":"" } ],
+ "suggested_next_steps": [ { "action":"", "justification":"" } ],
+ "references": [ { "title":"", "org":"", "link":"" } ],
+ "patient_safety_note": "${safetyNote}"
+}`,
+    guardrails:
+`قواعد:
+1) لا تكشف PHI/الأسماء/المعرّفات؛ استخدم [REDACTED].
+2) اعتمد أدلة WHO/NICE/CDC/IDSA عند الاقتضاء واذكر روابط قصيرة في "references".
+3) لا تُرجِع نصًا خارج JSON ولا تضع فواصل زائدة.
+`
+  };
+}
 
-  <div class="grid">
-    <div class="panel">
-      <h3 style="margin-top:0">مخرجات GPT‑4o</h3>
-      <pre id="gptOut"></pre>
-    </div>
-    <div class="panel">
-      <h3 style="margin-top:0">مخرجات Gemini</h3>
-      <pre id="geminiOut"></pre>
-    </div>
-  </div>
-</div>
+function buildClinicalInstruction({language='ar', specialty='', insuranceContext='', texts=[]}){
+  const lang = language === 'en' ? 'English' : 'العربية';
+  const spec = specialty ? `التخصص السريري: ${specialty}` : 'التخصص: عام';
+  const ctx  = insuranceContext ? `سياق تأميني/وصف مقدم: ${insuranceContext}` : '—';
+  const ocr  = texts?.length ? `\n\n[نص مُستخرج من PDF (ملخّص)]:\n${texts.join('\n---\n').slice(0, 12000)}` : '';
+  return (
+`${spec} — اللغة المطلوبة للتقرير: ${lang}.
+أنت مساعد سريري للتدقيق وتحسين الدخل المعتمد على الأدلة. قدّم تقييمًا دقيقًا ومُنظّمًا، مع إبراز التناقضات الترميزية/السلوكية وماذا كان يجب فعله لرفع دخل العيادة بشكل مقبول تأمينيًا.
+${ctx}
+${ocr}
+إرجاع JSON فقط حسب المخطط المطلوب أدناه.`
+  );
+}
 
-<script>
-(function(){
-  const logEl = document.getElementById('log');
-  const filesEl = document.getElementById('files');
-  const btnPrep = document.getElementById('btnPrep');
-  const btnAnalyze = document.getElementById('btnAnalyze');
-  const prepInfo = document.getElementById('prepInfo');
-  const mergedEl = document.getElementById('merged');
-  const gptEl = document.getElementById('gptOut');
-  const gemEl = document.getElementById('geminiOut');
-
-  // PDF.js worker setup (هذا أصل مشكلة pdfjsLib is not defined)
-  window.addEventListener('load', () => {
-    if (typeof window.pdfjsLib === 'undefined') {
-      alert('فشل التحضير: pdfjsLib is not defined — تأكد من تحميل CDN.');
-      return;
-    }
-    // طابق نفس الإصدار في رابطَي المكتبة والـ worker
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  });
-
-  const state = { images: [], texts: [], prepared: false };
-
-  function log(msg){ logEl.textContent += '\n' + msg; logEl.scrollTop = logEl.scrollHeight; }
-  function resetResults(){ mergedEl.textContent=''; gptEl.textContent=''; gemEl.textContent=''; }
-
-  async function fileToDataURL(file, maxDim=1600){
-    const blobURL = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = blobURL;
-    await img.decode();
-    const [w,h] = [img.naturalWidth, img.naturalHeight];
-    const scale = Math.min(1, maxDim/Math.max(w,h));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(w*scale));
-    canvas.height = Math.max(1, Math.round(h*scale));
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0,0, canvas.width, canvas.height);
-    URL.revokeObjectURL(blobURL);
-    return canvas.toDataURL('image/png', 0.92);
+function toGeminiParts({instruction, images=[], texts=[]}){
+  const parts = [{ text: instruction }];
+  // images: array of { dataUrl, contentType }
+  for (const img of images){
+    const m = String(img.dataUrl).match(/^data:(.+?);base64,(.*)$/);
+    if (!m) continue;
+    parts.push({
+      inlineData: { mimeType: m[1] || img.contentType || 'image/png', data: m[2] }
+    });
   }
+  if (texts?.length) parts.push({ text: texts.join('\n---\n').slice(0, 12000) });
+  return parts;
+}
 
-  async function pdfToImagesAndText(file, maxDim=1600){
-    const ab = await file.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({ data: ab }).promise;
-    const out = { images: [], text: '' };
-    for (let p=1; p<=pdf.numPages; p++){
-      const page = await pdf.getPage(p);
-      const vp = page.getViewport({ scale: 1.5 });
-      const scale = Math.min(1, maxDim / Math.max(vp.width, vp.height));
-      const viewport = page.getViewport({ scale: 1.5 * scale });
-
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      const ctx = canvas.getContext('2d');
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      out.images.push(canvas.toDataURL('image/png', 0.92));
-
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(i => i.str).join(' ').replace(/\s+/g,' ').trim();
-      out.text += (p>1? '\n\n---\n\n' : '') + pageText;
-    }
-    return out;
+async function callOpenAI({ apiKey, instruction, images=[], temperature=0.2 }){
+  const content = [{ type: 'text', text: instruction }];
+  for (const img of images){
+    content.push({
+      type: 'image_url',
+      image_url: { url: img.dataUrl } // Data URL مدعومة عبر image_url
+    });
   }
-
-  btnPrep.addEventListener('click', async () => {
-    try{
-      resetResults();
-      logEl.textContent = 'بدء التحضير ...';
-      const files = Array.from(filesEl.files || []);
-      if (!files.length){ alert('اختر ملفًا واحدًا على الأقل'); return; }
-
-      state.images = []; state.texts = []; state.prepared = false;
-      for (const f of files){
-        if (f.type === 'application/pdf'){
-          log('• تحويل PDF واستخراج النص: ' + f.name);
-          const r = await pdfToImagesAndText(f);
-          state.images.push(...r.images.map(d => ({ dataUrl: d, contentType: 'image/png', from: f.name })));
-          state.texts.push(r.text);
-          log('✓ رُفعت ' + r.images.length + ' صفحة من ' + f.name);
-        } else if (f.type.startsWith('image/')){
-          log('• ضغط صورة: ' + f.name);
-          const d = await fileToDataURL(f);
-          state.images.push({ dataUrl: d, contentType: 'image/png', from: f.name });
-        } else {
-          log('تخطّي ملف غير مدعوم: ' + f.name);
-        }
-      }
-      state.prepared = state.images.length > 0 || state.texts.length > 0;
-      prepInfo.textContent = state.prepared
-        ? `تم تجهيز ${state.images.length} صورة/صفحة + ${state.texts.length} نص PDF للتحليل.`
-        : 'لم يتم تجهيز أي شيء.';
-      btnAnalyze.disabled = !state.prepared;
-      log('انتهى التحضير.');
-    }catch(err){
-      console.error(err);
-      alert('فشل التحضير: ' + (err?.message || err));
-    }
+  const body = {
+    model: OPENAI_MODEL,
+    temperature,
+    messages: [
+      { role: 'system', content: 'You are a meticulous clinical quality & revenue-improvement assistant. Return STRICT JSON only.' },
+      { role: 'user', content }
+    ],
+    response_format: { type: 'json_object' } // يفرض JSON
+  };
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type':'application/json' },
+    body: JSON.stringify(body)
   });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.error?.message || 'OpenAI error');
+  const text = data?.choices?.[0]?.message?.content || '';
+  return extractJson(text) || null;
+}
 
-  btnAnalyze.addEventListener('click', async () => {
-    try{
-      if (!state.prepared){ alert('حضّر الملفات أولاً.'); return; }
-      btnAnalyze.disabled = true;
-      log('بدء التحليل ...');
-      const payload = {
-        language: document.getElementById('lang').value,
-        model: document.getElementById('model').value,
-        specialty: document.getElementById('specialty').value || '',
-        insuranceContext: document.getElementById('insCtx').value || '',
-        images: state.images,
-        texts: state.texts
-      };
-      const res = await fetch('/api/gpt', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || 'Server error');
-      log('اكتمل التحليل.');
+async function callGemini({ apiKey, instruction, images=[], texts=[], temperature=0.2 }){
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const body = {
+    contents: [{ role:'user', parts: toGeminiParts({ instruction, images, texts }) }],
+    generationConfig: { temperature, responseMimeType: "application/json" }
+  };
+  const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.error?.message || 'Gemini error');
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return extractJson(text) || null;
+}
 
-      mergedEl.textContent = JSON.stringify(json.merged, null, 2);
-      gptEl.textContent = json.gpt ? JSON.stringify(json.gpt, null, 2) : '—';
-      gemEl.textContent = json.gemini ? JSON.stringify(json.gemini, null, 2) : '—';
-    }catch(err){
-      console.error(err);
-      alert('خطأ: ' + (err?.message || err));
-      log('خطأ: ' + (err?.message || err));
-    }finally{
-      btnAnalyze.disabled = false;
-    }
-  });
-})();
-</script>
-</body>
-</html>
+function mergeReports(a, b){
+  // دمج بسيط: يختار الحقول الأطول/الأغنى ويجمع المصفوفات بدون تكرار
+  const pick = (key, fallback='') => (a?.[key] && String(a[key]).length > String(b?.[key]||'').length ? a[key] : (b?.[key] ?? fallback));
+  const uniqArr = (arr=[]) => Array.from(new Map(arr.map(x=>[JSON.stringify(x), x])).values());
+
+  const merged = {
+    executive_summary: pick('executive_summary'),
+    patient_summary: pick('patient_summary'),
+    physician_actions: { ...(a?.physician_actions||{}), ...(b?.physician_actions||{}) },
+    key_findings: uniqArr([...(a?.key_findings||[]), ...(b?.key_findings||[])]),
+    contradictions: uniqArr([...(a?.contradictions||[]), ...(b?.contradictions||[])]),
+    differential_diagnoses: uniqArr([...(a?.differential_diagnoses||[]), ...(b?.differential_diagnoses||[])]),
+    severity_red_flags: uniqArr([...(a?.severity_red_flags||[]), ...(b?.severity_red_flags||[])]),
+    procedural_issues: uniqArr([...(a?.procedural_issues||[]), ...(b?.procedural_issues||[])]),
+    missed_opportunities: uniqArr([...(a?.missed_opportunities||[]), ...(b?.missed_opportunities||[])]),
+    revenue_quality_opportunities: uniqArr([...(a?.revenue_quality_opportunities||[]), ...(b?.revenue_quality_opportunities||[])]),
+    icd_suggestions: uniqArr([...(a?.icd_suggestions||[]), ...(b?.icd_suggestions||[])]),
+    cpt_suggestions: uniqArr([...(a?.cpt_suggestions||[]), ...(b?.cpt_suggestions||[])]),
+    should_have_been_done: uniqArr([...(a?.should_have_been_done||[]), ...(b?.should_have_been_done||[])]),
+    suggested_next_steps: uniqArr([...(a?.suggested_next_steps||[]), ...(b?.suggested_next_steps||[])]),
+    references: uniqArr([...(a?.references||[]), ...(b?.references||[])]),
+    patient_safety_note: a?.patient_safety_note || b?.patient_safety_note || ''
+  };
+  return merged;
+}
+
+export default async function handler(req, res){
+  try{
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Only POST allowed' }); return; }
+
+    const { language='ar', model='both', specialty='', insuranceContext='', images=[], texts=[] } = req.body || {};
+    const { schemaNote, guardrails } = buildSchema(language);
+    const instruction = buildClinicalInstruction({ language, specialty, insuranceContext, texts })
+      + '\n\n' + guardrails + '\n\n' + schemaNote;
+
+    const wantOpenAI = (model === 'both' || model === 'openai') && !!process.env.OPENAI_API_KEY;
+    const wantGemini = (model === 'both' || model === 'gemini') && !!process.env.GEMINI_API_KEY;
+
+    let [gpt, gemini] = [null, null];
+    // نفّذ بالتوازي حسب المفاتيح المتاحة
+    const tasks = [];
+    if (wantOpenAI) tasks.push(callOpenAI({ apiKey: process.env.OPENAI_API_KEY, instruction, images }));
+    else tasks.push(Promise.resolve(null));
+    if (wantGemini) tasks.push(callGemini({ apiKey: process.env.GEMINI_API_KEY, instruction, images, texts }));
+    else tasks.push(Promise.resolve(null));
+
+    [gpt, gemini] = await Promise.all(tasks);
+
+    const base = gpt || gemini || { executive_summary:'', patient_summary:'', key_findings:[], references:[] };
+    const merged = gpt && gemini ? mergeReports(gpt, gemini) : base;
+
+    res.status(200).json({ merged, gpt, gemini, model_used: { openai: !!gpt, gemini: !!gemini } });
+  } catch (err){
+    console.error(err);
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+}
