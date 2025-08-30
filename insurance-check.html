@@ -1,285 +1,327 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>تحليل الحالات الطبية (Gemini & GPT‑4o)</title>
   <style>
-    :root{--fg:#111;--muted:#6b7280;--border:#e5e7eb;--bg:#f8fafc}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Naskh Arabic","Noto Sans Arabic",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--fg);margin:0}
-    header{padding:16px 20px;border-bottom:1px solid var(--border);background:#fff}
-    h1{margin:0;font-size:20px}
-    main{max-width:1100px;margin:24px auto;padding:0 16px}
-    .card{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:16px}
-    .card header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding:12px 16px}
-    .card .body{padding:14px 16px}
-    label{display:block;margin:8px 0 4px;font-weight:600}
-    input[type=file],select,textarea,button{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff}
-    textarea{min-height:90px;resize:vertical}
-    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
-    .col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-8{grid-column:span 8}.col-12{grid-column:span 12}
-    .muted{color:var(--muted);font-size:12px}
-    .badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:12px}
-    .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-    .area{min-height:160px}
-    .actions{display:flex;gap:8px;flex-wrap:wrap}
-    .btn{padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:#0ea5e9;color:#fff;font-weight:600;cursor:pointer}
-    .btn.sec{background:#fff;color:#111}
-    .log{background:#0b1220;color:#cbd5e1;border-radius:10px;padding:12px;min-height:120px;white-space:pre-wrap;overflow:auto}
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px dashed var(--border);border-radius:999px;background:#fafafa}
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .foot{font-size:12px;color:var(--muted);padding:6px 0}
+    :root { --bg:#0b1220; --card:#101a2b; --ink:#e6edf3; --muted:#9bb0c8; --accent:#3b82f6; --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background:#0b1220; color:var(--ink); }
+    header { padding:18px 16px; border-bottom:1px solid #1f2a3c; display:flex; gap:12px; align-items:center; justify-content:space-between;}
+    header .left { display:flex; gap:10px; align-items:center; font-weight:700; }
+    header small { color:var(--muted); }
+    main { max-width:1100px; margin:24px auto; padding:0 12px 72px; display:grid; grid-template-columns: 1fr; gap:16px; }
+    .card { background:var(--card); border:1px solid #1f2a3c; border-radius:14px; padding:16px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    label { font-size:.92rem; color:var(--muted); display:block; margin-bottom:6px; }
+    select, textarea, input[type="text"] { width:100%; background:#0d1726; color:var(--ink); border:1px solid #223047; border-radius:10px; padding:10px 12px; outline:none; }
+    textarea { min-height:110px; resize:vertical; }
+    input[type="file"] { width:100%; }
+    .btn { appearance:none; border:none; border-radius:11px; padding:12px 16px; font-weight:700; cursor:pointer; }
+    .btn.primary { background:var(--accent); color:white; }
+    .btn.ghost { background:#0d1726; color:var(--ink); border:1px dashed #2b3b55; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background:#0a0f1a; color:#cce2ff; padding:12px; border-radius:10px; height:160px; overflow:auto; border:1px solid #1f2a3c; }
+    h3 { margin:0 0 12px; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid #1f2a3c; background:#0d1726; color:var(--muted); font-size:.85rem; }
+    .ok { color:#22c55e; }
+    .warn { color:#f59e0b; }
+    .bad { color:#ef4444; }
+    pre { margin:0; white-space:pre-wrap; word-break:break-word; }
+    .cols { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width:900px){ .row,.cols{ grid-template-columns: 1fr; } }
   </style>
 
-  <!-- PDF.js (CDN) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.js" crossorigin="anonymous"></script>
+  <!-- PDF.js (نسخة ثابتة تُعرّف pdfjsLib عالميًا) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.111/pdf.min.js" defer></script>
   <script>
-    // تعيين عامل PDF.js الصحيح — يمنع خطأ "pdfjsLib is not defined"
-    // Official guidance: set GlobalWorkerOptions.workerSrc to the same version as the pdf.js script.  :contentReference[oaicite:5]{index=5}
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.js";
+    // تأكيد مسار الـ worker
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window['pdfjsLib']) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.111/pdf.worker.min.js';
+      }
+    });
   </script>
 </head>
 <body>
   <header>
-    <h1>تحليل الحالات الطبية (Gemini &amp; GPT‑4o)</h1>
+    <div class="left">
+      <span>تحليل الحالات الطبية (Gemini & GPT‑4o)</span>
+      <small class="pill">API Version: <b id="apiVersion">v6.0</b></small>
+    </div>
+    <small class="pill"> * المعالجة على الجهاز + الخادم؛ * التقرير تعليمي ويُراجع سريريًا؛ * إزالة PHI.</small>
   </header>
 
   <main>
-    <div class="card">
-      <header>
+    <section class="card">
+      <h3>اختر ملفات (صورة/‏PDF):</h3>
+      <input id="fileInput" type="file" multiple accept="image/*,.pdf" />
+      <small style="color:var(--muted)">سيُحوَّل أي PDF إلى صور، ويُستخرج نصّه لرفع الدقة.</small>
+
+      <div class="row" style="margin-top:14px">
         <div>
-          <div class="muted">* المعالجة على الجهاز + الخادم؛ * التقرير تعليمي ويُراجع سريريًا قبل أي قرار؛ * إزالة PHI تلقائيًا.</div>
+          <label>اللغة:</label>
+          <select id="langSel">
+            <option value="ar" selected>العربية</option>
+            <option value="en">English</option>
+          </select>
         </div>
-        <span class="badge">API Version: v6.0</span>
-      </header>
-      <div class="body">
-        <div class="row">
-          <div class="col-12">
-            <label>اختر ملفات (صورة/‏PDF):</label>
-            <input id="fileInput" type="file" accept=".pdf,image/*" multiple />
-            <div class="foot">سيُحوَّل أي PDF إلى صور، ويُستخرج نصّه لرفع الدقة (PDF.js).</div>
-          </div>
-
-          <div class="col-4">
-            <label>اللغة:</label>
-            <select id="lang">
-              <option value="ar" selected>العربية</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-
-          <div class="col-4">
-            <label>النموذج:</label>
-            <select id="model">
-              <option value="both" selected>Gemini + GPT‑4o</option>
-              <option value="gpt">GPT‑4o فقط</option>
-              <option value="gemini">Gemini فقط</option>
-            </select>
-          </div>
-
-          <div class="col-4">
-            <label>التخصص (اختياري):</label>
-            <input id="specialty" placeholder="أسنان، جلدية، قلب، ضغط، كُلى ..." />
-          </div>
-
-          <div class="col-12">
-            <label>وصف مختصر/سياق التأمين (اختياري):</label>
-            <textarea id="context" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما"></textarea>
-          </div>
-
-          <div class="col-12 actions">
-            <button id="prepBtn" class="btn sec">تحضير الملفات</button>
-            <button id="analyzeBtn" class="btn">تحليل الحالة</button>
-            <span class="pill"><span id="prepBadge">لم يتم التحضير</span></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <header><strong>النتيجة المدمجة</strong></header>
-      <div class="body">
-        <textarea id="merged" class="mono area" placeholder="—"></textarea>
-        <div class="actions">
-          <button class="btn sec" onclick="copyText('merged')">نسخ</button>
-          <button class="btn sec" onclick="downloadJSON('merged','merged_report.json')">تنزيل JSON</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid-2">
-      <div class="card">
-        <header><strong>مخرجات GPT‑4o</strong></header>
-        <div class="body">
-          <textarea id="gptOut" class="mono area" placeholder="—"></textarea>
-          <div class="actions">
-            <button class="btn sec" onclick="copyText('gptOut')">نسخ</button>
-            <button class="btn sec" onclick="downloadJSON('gptOut','gpt_report.json')">تنزيل</button>
-          </div>
+        <div>
+          <label>النموذج:</label>
+          <select id="modelSel">
+            <option value="both" selected>Gemini + GPT‑4o</option>
+            <option value="gpt">GPT‑4o فقط</option>
+            <option value="gemini">Gemini فقط</option>
+          </select>
         </div>
       </div>
 
-      <div class="card">
-        <header><strong>مخرجات Gemini</strong></header>
-        <div class="body">
-          <textarea id="gmOut" class="mono area" placeholder="—"></textarea>
-          <div class="actions">
-            <button class="btn sec" onclick="copyText('gmOut')">نسخ</button>
-            <button class="btn sec" onclick="downloadJSON('gmOut','gemini_report.json')">تنزيل</button>
-          </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>التخصص (اختياري):</label>
+          <input id="specInput" type="text" placeholder="أسنان، جلدية، قلب، ضغط، كُلى ..." />
+        </div>
+        <div>
+          <label>وصف مختصر/سياق التأمين (اختياري):</label>
+          <input id="ctxInput" type="text" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما" />
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <header><strong>السجل</strong></header>
-      <div class="body">
-        <div id="log" class="log">جاهز.</div>
+      <div class="row" style="margin-top:12px">
+        <button id="prepBtn" class="btn ghost">تحضير الملفات</button>
+        <button id="analyzeBtn" class="btn primary">تحليل الحالة</button>
       </div>
-    </div>
 
-    <div class="foot">
-      * يدعم إدخال **صور + PDF** وتحليل متعدد الصفحات/الزيارات داخل الورقة نفسها.  
-      * استخدام الصور مع Chat Completions عبر `image_url` (بيانات base64) موثق رسميًا، وإرسال الصور لـGemini عبر `inlineData`. الروابط في **المراجع** أدناه. :contentReference[oaicite:6]{index=6}
+      <div style="margin-top:10px; display:flex; gap:10px; align-items:center">
+        <span id="prepState" class="pill">الحالة: لم يتم التحضير</span>
+        <span id="pagesState" class="pill"></span>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>السجل</label>
+        <div class="log" id="log"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>النتيجة المدمجة</h3>
+      <div id="merged" class="log" style="height:auto; min-height:140px;"></div>
+    </section>
+
+    <div class="cols">
+      <section class="card">
+        <h3>مخرجات GPT‑4o</h3>
+        <div id="gptOut" class="log" style="height:280px;"></div>
+      </section>
+      <section class="card">
+        <h3>مخرجات Gemini</h3>
+        <div id="gemOut" class="log" style="height:280px;"></div>
+      </section>
     </div>
   </main>
 
-  <script>
-    const logEl = document.getElementById('log');
-    const fileInput = document.getElementById('fileInput');
-    const prepBadge = document.getElementById('prepBadge');
+<script>
+/* ========= حالة الواجهة ========= */
+const els = {
+  file: document.getElementById('fileInput'),
+  prepBtn: document.getElementById('prepBtn'),
+  analyzeBtn: document.getElementById('analyzeBtn'),
+  prepState: document.getElementById('prepState'),
+  pagesState: document.getElementById('pagesState'),
+  log: document.getElementById('log'),
+  merged: document.getElementById('merged'),
+  gptOut: document.getElementById('gptOut'),
+  gemOut: document.getElementById('gemOut'),
+  lang: document.getElementById('langSel'),
+  model: document.getElementById('modelSel'),
+  spec: document.getElementById('specInput'),
+  ctx: document.getElementById('ctxInput'),
+};
 
-    let prepared = { images: [], pdfText: "", totalBytes: 0, pages: 0 };
+let PREPARED = { images: [], text: "", bytes: 0 };
 
-    function log(msg){ logEl.textContent += "\\n" + msg; logEl.scrollTop = logEl.scrollHeight; }
-    function copyText(id){ const ta=document.getElementById(id); ta.select(); document.execCommand('copy'); }
-    function downloadJSON(id, name){
-      try {
-        const obj = JSON.parse(document.getElementById(id).value || "{}");
-        const blob = new Blob([JSON.stringify(obj,null,2)], {type:"application/json"});
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
-      } catch(e){ alert('JSON غير صالح'); }
-    }
+function log(msg) {
+  els.log.textContent += (typeof msg === 'string' ? msg : JSON.stringify(msg)) + '\n';
+  els.log.scrollTop = els.log.scrollHeight;
+}
 
-    document.getElementById('prepBtn').addEventListener('click', prepFiles);
-    document.getElementById('analyzeBtn').addEventListener('click', analyze);
+function fmtBytes(n){
+  if(!n) return '0 B';
+  const u=['B','KB','MB','GB']; let i=0; while(n>=1024&&i<u.length-1){ n/=1024; i++; }
+  return n.toFixed(1)+' '+u[i];
+}
 
-    async function prepFiles(){
-      prepared = { images: [], pdfText: "", totalBytes: 0, pages: 0 };
-      const files = Array.from(fileInput.files || []);
-      if (!files.length){ alert('اختر ملفًا واحدًا على الأقل'); return; }
-      log('بدء التحضير ...');
+/* ========= أدوات مساعدة ========= */
 
-      for (const f of files){
-        if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')){
-          await handlePDF(f);
-        } else if (f.type.startsWith('image/')){
-          const img = await imageToDataURL(f, 1400, 0.82);
-          prepared.images.push(img.dataURL);
-          prepared.totalBytes += img.bytes;
-          prepared.pages += 1;
-          log(`✓ صورة: ${f.name} (${(img.bytes/1024).toFixed(0)} KB)`);
-        } else {
-          log(`تجاهل ${f.name} (ليس صورة/‏PDF).`);
-        }
-      }
+// تحويل Canvas إلى JPEG DataURL مضغوط
+function canvasToJpegDataURL(canvas, q=0.72){
+  return canvas.toDataURL('image/jpeg', q);
+}
 
-      prepBadge.textContent = `جُهّز ${prepared.pages} صورة/صفحة + نص PDF للتحليل. الحجم ≈ ${(prepared.totalBytes/1024).toFixed(0)} KB`;
-      log('اكتمل التحضير.');
-    }
-
-    async function handlePDF(file){
-      const arrayBuf = await file.arrayBuffer();
-      prepared.totalBytes += arrayBuf.byteLength;
-
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-      log(`> تحويل PDF واستخراج نص: ${file.name} — ${pdf.numPages} صفحة`);
-
-      for (let p=1; p<=pdf.numPages; p++){
-        const page = await pdf.getPage(p);
-        const viewport = page.getViewport({ scale: 2.0 });    // جودة جيدة للصورة
-        // رسم إلى canvas ثم تحويل إلى JPEG مضغوط
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = Math.min(1600, viewport.width);
-        const scale = canvas.width / viewport.width;
-        canvas.height = Math.floor(viewport.height * scale);
-        await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale }) }).promise;
-
-        const dataURL = canvas.toDataURL('image/jpeg', 0.82);
-        prepared.images.push(dataURL);
-        prepared.totalBytes += Math.ceil((dataURL.length*3)/4);
-        prepared.pages += 1;
-
-        // استخراج النص من الصفحة
-        const textContent = await page.getTextContent();
-        const text = textContent.items.map(it => it.str).join(' ');
-        prepared.pdfText += `\\n\\n[PDF Page ${p}]\\n` + redactPHI(text);
-        log(`✓ رُفعت صفحة ${p}/${pdf.numPages} من ${file.name}`);
-      }
-    }
-
-    function redactPHI(text){
-      // حذف أسماء/أرقام/تواريخ ظاهرة (إخفاء خفيف، التحليل لا يعتمد عليها)
-      return (text || "")
-        .replace(/[A-Z]{2,}[A-Za-z\\s]+\\d{2,}|\\b\\d{9,}\\b/g, '[REDACTED]')
-        .replace(/\\b\\d{2}\\/\\d{2}\\/\\d{2,4}\\b/g, '[REDACTED-DATE]');
-    }
-
-    function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
-
-    async function analyze(){
-      if (!prepared.images.length && !prepared.pdfText.trim()){
-        alert('اضغط "تحضير الملفات" أولًا'); return;
-      }
-      const model = document.getElementById('model').value;
-      const lang = document.getElementById('lang').value;
-      const specialty = document.getElementById('specialty').value.trim();
-      const context = document.getElementById('context').value.trim();
-
-      log('بدء التحليل ...');
-
-      const payload = {
-        language: lang, model, specialty, context,
-        images: prepared.images, pdfText: prepared.pdfText.slice(0, 80_000) // حِماية حجم الطلب
+// ملف صورة -> DataURL (JPEG إن أمكن)
+function imageFileToDataURL(file, maxSide=1600, q=0.72){
+  return new Promise((resolve, reject)=>{
+    const fr = new FileReader();
+    fr.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvasToJpegDataURL(c, q));
       };
+      img.onerror = reject;
+      img.src = fr.result;
+    };
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
 
-      const res = await fetch('/api/gpt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-      const data = await res.json().catch(()=> ({}));
+// PDF -> { images[dataURL[]], text[string] }
+async function pdfToImagesAndText(file, maxSide=1600, q=0.72){
+  if (!window.pdfjsLib) {
+    throw new Error('PDF.js غير جاهز (pdfjsLib غير معرّف).');
+  }
+  const arrBuf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrBuf }).promise;
+  const pages = [];
+  let textAll = [];
+  for (let i=1; i<=pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2.0 }); // دقة جيدة
+    // ضبط القياسات لتحديد أقصى ضلع
+    const scale = Math.min(1, maxSide / Math.max(viewport.width, viewport.height));
+    const v2 = page.getViewport({ scale: 2.0 * scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(v2.width);
+    canvas.height = Math.ceil(v2.height);
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport: v2 }).promise;
+    const dataURL = canvasToJpegDataURL(canvas, q);
+    pages.push(dataURL);
 
-      if (data.error){ alert(data.error); log('خطأ: '+data.error); return; }
+    // استخراج نص
+    const txt = await page.getTextContent();
+    const t = (txt.items || []).map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+    if (t) textAll.push(`[صفحة ${i}] ${t}`);
+  }
+  return { images: pages, text: textAll.join('\n') };
+}
 
-      // عرض المخرجات
-      document.getElementById('gptOut').value   = data.gpt_json ? JSON.stringify(data.gpt_json, null, 2) : '';
-      document.getElementById('gmOut').value    = data.gem_json ? JSON.stringify(data.gem_json, null, 2) : '';
-      document.getElementById('merged').value   = data.merged   ? JSON.stringify(data.merged, null, 2)   : '';
+/* ========= التحضير ========= */
 
-      log('اكتمل التحليل.');
+async function prepareFiles(){
+  PREPARED = { images: [], text: "", bytes: 0 };
+  const files = Array.from(els.file.files || []);
+  if (files.length === 0) {
+    throw new Error('الرجاء اختيار ملف واحد على الأقل.');
+  }
+  log(`بدء التحضير لعدد ${files.length} ملف(ات) ...`);
+
+  for (const f of files){
+    if (f.type === 'application/pdf') {
+      const { images, text } = await pdfToImagesAndText(f);
+      PREPARED.images.push(...images);
+      PREPARED.text += (PREPARED.text ? '\n' : '') + text;
+    } else if (f.type.startsWith('image/')) {
+      const url = await imageFileToDataURL(f);
+      PREPARED.images.push(url);
+    } else {
+      log(`تخطّي ملف غير مدعوم: ${f.name}`);
     }
+  }
 
-    // أداة مساعدة: تحويل صورة ملف إلى DataURL مضغوط
-    async function imageToDataURL(file, maxW=1400, quality=0.82){
-      const img = document.createElement('img');
-      const reader = new FileReader();
-      const dataURL = await new Promise((resolve,reject)=>{
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      img.src = dataURL;
-      await new Promise(r => img.onload = r);
+  // تقدير الحجم
+  PREPARED.bytes = PREPARED.images.reduce((sum, d)=> sum + Math.ceil((d.length*3)/4), 0);
+  els.prepState.innerHTML = `الحالة: <span class="ok">تم التحضير</span> (${PREPARED.images.length} صورة, ${fmtBytes(PREPARED.bytes)})`;
+  els.pagesState.textContent = PREPARED.text ? 'نص PDF مُستخرج ✓' : 'لا يوجد نص مُستخرج';
+  log('اكتمل التحضير.');
+}
 
-      const scale = Math.min(1, maxW / img.naturalWidth);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.floor(img.naturalWidth * scale);
-      canvas.height = Math.floor(img.naturalHeight * scale);
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const out = canvas.toDataURL('image/jpeg', quality);
-      const bytes = Math.ceil((out.length*3)/4);
-      return { dataURL: out, bytes };
-    }
-  </script>
+/* ========= التحليل ========= */
+
+async function runAnalysis(){
+  // في حال نسي المستخدم الضغط على "تحضير الملفات"، نُحضّر تلقائيًا
+  if (!PREPARED.images.length && !(els.file.files && els.file.files.length)){
+    throw new Error('لم يتم اختيار ملفات.');
+  }
+  if (!PREPARED.images.length) {
+    await prepareFiles();
+  }
+
+  const payload = {
+    language: els.lang.value,
+    modelChoice: els.model.value,    // both | gpt | gemini
+    specialty: els.spec.value || "",
+    context: els.ctx.value || "",
+    images: PREPARED.images,         // data URLs (jpeg)
+    pdf_text: PREPARED.text || "",
+    api_version: document.getElementById('apiVersion').textContent || "v6.0"
+  };
+
+  log('بدء التحليل عبر الخادم ...');
+  els.analyzeBtn.disabled = true;
+
+  const res = await fetch('/api/gpt', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const errTxt = await res.text().catch(()=>res.statusText);
+    throw new Error(`HTTP ${res.status}: ${errTxt}`);
+  }
+
+  const data = await res.json();
+  els.merged.innerHTML = `<pre>${JSON.stringify(data.merged, null, 2)}</pre>`;
+  els.gptOut.textContent = data.gpt4o?.text || (data.gpt4o?.json ? JSON.stringify(data.gpt4o.json, null, 2) : '—');
+  els.gemOut.textContent = data.gemini?.text || (data.gemini?.json ? JSON.stringify(data.gemini.json, null, 2) : '—');
+  log('اكتمل التحليل.');
+}
+
+/* ========= ربط الأزرار ========= */
+
+els.prepBtn.addEventListener('click', async ()=>{
+  try {
+    els.prepBtn.disabled = true;
+    await prepareFiles();
+  } catch (e) {
+    alert(e.message || e);
+    log('خطأ التحضير: ' + (e.message||e));
+  } finally {
+    els.prepBtn.disabled = false;
+  }
+});
+
+els.analyzeBtn.addEventListener('click', async ()=>{
+  try {
+    await runAnalysis();
+  } catch (e){
+    alert(e.message || e);
+    log('خطأ التحليل: ' + (e.message||e));
+  } finally {
+    els.analyzeBtn.disabled = false;
+  }
+});
+
+// أي تغيير في الملفات يُعيد الحالة إلى "لم يتم التحضير"
+els.file.addEventListener('change', ()=>{
+  PREPARED = { images: [], text: "", bytes: 0 };
+  els.prepState.textContent = 'الحالة: لم يتم التحضير';
+  els.pagesState.textContent = '';
+  els.log.textContent = '';
+  els.merged.textContent = '';
+  els.gptOut.textContent = '';
+  els.gemOut.textContent = '';
+});
+</script>
 </body>
 </html>
