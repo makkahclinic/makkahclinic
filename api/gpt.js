@@ -127,7 +127,53 @@ function buildSystemPromptV8(lang = 'ar', specialty = '') {
 }
 `,
 // English V8 Prompt
-`You are a Board-Certified Clinical Pharmacist... [Content is identical to the full version provided previously]`
+`You are a Board-Certified Clinical Pharmacist and Insurance Auditing Expert. Your task is not just to extract information but to perform a deep, critical analysis as a medical professional. Patient safety is the absolute priority.
+
+# Mandatory Chain-of-Thought (CoT) Process (within \`_internal_reasoning_process\`):
+1.  **Understand the Case:** Summarize the patient's age, gender, and primary diagnoses.
+2.  **Inventory Medications:** List every drug with its dose, frequency, and duration.
+3.  **Critical Clinical Analysis (Most Important):** You must evaluate each drug and the entire regimen through the lens of the following clinical rules:
+    * **Serious Drug-Drug Interactions (DDIs):** Look for any significant interactions.
+    * **Therapeutic Duplication:** Are there two drugs from the same class? (e.g., 2 NSAIDs).
+    * **Contraindications:** Is a drug contraindicated for a specific diagnosis?
+    * **Mandatory Heuristics to search for:**
+        * **Renal "Triple Whammy":** Actively look for the combination of (NSAID + Diuretic + ACEi/ARB).
+        * **Serotonin Syndrome:** Look for (SSRI/SNRI + Tramadol/Triptans/MAOI).
+        * **High Bleeding Risk:** Look for (Anticoagulant + Antiplatelet + NSAID).
+        * **QTc Prolongation:** Look for known QTc-prolonging drugs used together (e.g., Macrolides + Antipsychotics).
+        * **Beers Criteria:** For elderly patients (>65), check for inappropriate medications (e.g., first-gen antihistamines, long-acting benzodiazepines).
+    * **Dose Evaluation:** Is the dose appropriate for the diagnosis and age? Might it need adjustment for renal/hepatic impairment (state this as a warning).
+4.  **Gap Analysis:** Think like a consultant physician. What tests or interventions are missing? (e.g., a diabetes patient without an HbA1c or eye exam, a hypertension patient without renal function monitoring, a patient on a statin without LFTs).
+5.  **Final Conclusion:** Based on the above, classify each drug and populate the JSON report.
+
+**After completing this deep analysis in \`_internal_reasoning_process\`, populate the V8 JSON schema meticulously.**
+
+# Required JSON Schema (V8 - Adhere to this strictly):
+{
+  "_internal_reasoning_process": "Place your detailed, step-by-step critical analysis here based on the instructions above...",
+  "patient_info": { "name": "", "age": "", "gender": "", "file_id": "" },
+  "diagnoses": [""],
+  "physician_info": { "name": "", "specialty": "" },
+  "medication_review": [
+    {
+      "medication": "Medication/Procedure Name",
+      "dose_frequency": "Dose and Frequency",
+      "duration_quantity": "Duration or Quantity",
+      "insurance_status_code": "GREEN|YELLOW|RED",
+      "status_emoji": "🟢|🟡|🔴",
+      "clinical_risk_level": "None|Low|Medium|High|Critical",
+      "justification": "Very detailed clinical and insurance justification, explaining the reason for acceptance or rejection and the specific risks (e.g., 'Acceptable for diabetes, but dose may need review in the elderly').",
+      "action_required": "None|Monitor|Stop|Clarify Dose|Switch"
+    }
+  ],
+  "consultative_analysis": {
+    "red_flags_immediate_action": [ { "issue": "Description of the critical problem", "recommendation": "Immediate recommendation" } ],
+    "yellow_flags_monitoring_needed": [ { "issue": "Description of the issue requiring follow-up", "recommendation": "Follow-up recommendation" } ],
+    "green_flags_appropriate_care": [ { "item": "The appropriate item", "note": "A note" } ]
+  },
+  "gap_analysis_missing_interventions": [ { "gap": "Therapeutic gap (missing test/procedure)", "recommendation": "Recommendation to perform it" } ],
+  "executive_summary": "An executive summary focusing on the most significant medication risks discovered, therapeutic gaps, and key recommendations to ensure patient safety."
+}`
     );
 }
 
@@ -150,7 +196,20 @@ ${truncatedText||'لا يوجد نص مستخرج. اعتمد على الصور 
 
 # المهمة
 حلل النص والصور المرئية (المرفقة) معًا. اتبع تعليمات النظام (بما في ذلك عملية التفكير CoT) بدقة وأعد تقرير JSON (V8) فقط.`,
-`# Review Context... [Content is identical to the full version provided previously]`
+`# Review Context
+Required Report Language: English
+Claim Context/Review Goal: ${context || 'Comprehensive review of prescribed medications for clinical and insurance appropriateness.'}
+
+# Documents Available for Analysis
+Number of visible images/pages: ${images?.length || 0}
+
+## Extracted Text Content (if any)
+<EXTRACTED_TEXT>
+${truncatedText || 'No extracted text. Rely entirely on the images.'}
+</EXTRACTED_TEXT>
+
+# Task
+Analyze the text and visual images (attached) together. Follow the system instructions (including the CoT process) precisely and return the JSON report (V8) only.`
 );
     return meta;
 }
@@ -165,7 +224,7 @@ async function callOpenAI({lang, specialty, userMsg, images}){
             content.push({ type:'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: "high" } });
         }
         const system = buildSystemPromptV8(lang, specialty);
-    
+       
         const completion = await client.chat.completions.create({
             model: OPENAI_MODEL,
             temperature: 0.15,
@@ -250,7 +309,7 @@ function mergeReportsV8(a={}, b={}, lang='ar'){
 
     const primary = scoreA >= scoreB ? a : b;
     const secondary = scoreA >= scoreB ? b : a;
-    
+   
     const get = (obj, path, def=[]) => path.split('.').reduce((o, k) => (o || {})[k], obj) || def;
 
     const mergedMedReview = mergeArrays(
@@ -271,7 +330,7 @@ function mergeReportsV8(a={}, b={}, lang='ar'){
         gap_analysis_missing_interventions: mergeArrays(a.gap_analysis_missing_interventions, b.gap_analysis_missing_interventions),
         executive_summary: primary.executive_summary || secondary.executive_summary || ''
     };
-    
+   
     merged.patient_safety_note = (lang === 'ar' ? 
         "إخلاء مسؤولية: هذا التقرير ناتج عن تحليل آلي (AI) وهو مخصص لمراجعة الأدوية والتدقيق التأميني. يجب مراجعة جميع النتائج من قبل صيدلي سريري أو طبيب مرخص قبل اتخاذ أي قرارات علاجية." :
         "Disclaimer: This report is generated by AI for medication review and insurance audit purposes. All findings must be reviewed by a licensed clinical pharmacist or physician before making therapeutic decisions."
@@ -291,10 +350,10 @@ export default async function handler(req, res){
         if(req.method !== 'POST') {
             return res.status(405).json({ok:false, error:'Use POST'});
         }
-        
+       
         const body = await readJson(req);
         const { lang='ar', modelChoice='both', specialty='', context='', images=[], text='' } = body||{};
-        
+       
         const sanitizedText = text ? text.slice(0, 100000) : '';
         if (images.length === 0 && sanitizedText.trim().length === 0) {
             return res.status(400).json({ ok:false, error:"No content provided." });
@@ -302,7 +361,7 @@ export default async function handler(req, res){
         if(!OPENAI_API_KEY && !GEMINI_API_KEY){
           return res.status(500).json({ ok:false, error:"Missing API keys." });
         }
-        
+       
         const userMsg = buildUserMessage({lang, context, text: sanitizedText, images});
 
         const wantsGPT = (modelChoice==='both' || modelChoice==='gpt') && !!OPENAI_API_KEY;
@@ -312,7 +371,7 @@ export default async function handler(req, res){
             wantsGPT ? callOpenAI({lang, specialty, userMsg, images}) : Promise.resolve({ok:false, data:null, note:'Disabled or key missing.'}),
             wantsGem ? callGemini({lang, specialty, userMsg, images}) : Promise.resolve({ok:false, data:null, note:'Disabled or key missing.'})
         ]);
-        
+       
         const errors = [];
         if (wantsGPT && !gptRes.ok) errors.push(`GPT-4o Error: ${gptRes.error}`);
         if (wantsGem && !gemRes.ok) errors.push(`Gemini Error: ${gemRes.error}`);
