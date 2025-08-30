@@ -31,7 +31,6 @@
     #status-log{font-family:monospace;font-size:13px;color:var(--muted);margin-top:8px}
     .report-placeholder{text-align:center;padding:60px 20px;color:var(--muted)}
     .report-placeholder i{font-size:48px;margin-bottom:16px;display:block}
-    /* V8 Report Styles */
     .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
     .stat-card{background:var(--brand-light);padding:16px;border-radius:12px;text-align:center}
     .stat-card .value{font-size:28px;font-weight:700;color:var(--brand)}
@@ -104,7 +103,6 @@
 </div>
 
 <script>
-// V8 Frontend Logic
 const fileInput = document.getElementById('fileInput');
 const fileDropArea = document.getElementById('file-drop-area');
 const filePreviews = document.getElementById('file-previews');
@@ -117,9 +115,8 @@ const preMerged = document.getElementById('merged');
 const preGPT = document.getElementById('gpt');
 const preGemini = document.getElementById('gemini');
 
-let uploadedFiles = []; // Store File objects
+let uploadedFiles = [];
 
-// --- V8 UI/UX Functions ---
 function updateStatus(message, progress) {
     statusLog.textContent = message;
     if (progress !== undefined) {
@@ -145,7 +142,6 @@ function removeFile(index) {
     renderFilePreviews();
 }
 
-// --- V8 File Handling ---
 fileDropArea.addEventListener('click', () => fileInput.click());
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
     fileDropArea.addEventListener(eventName, (e) => {
@@ -169,36 +165,69 @@ fileInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
     uploadedFiles.push(...files);
     renderFilePreviews();
-    fileInput.value = ''; // Reset for next selection
+    fileInput.value = '';
 });
 
 
-// --- PDF.js logic (same as V7, but ensure assets folder exists) ---
-// [NOTE: The pdf.js loading system is omitted for brevity, but it is the same as in the V7 code provided in the prompt. It should be included here.]
+// NOTE: PDF.js loading system should be included here if you need PDF support.
+// It was omitted in previous turns for brevity.
 
 
-// --- V8 Image/PDF Processing (Enhanced Quality) ---
-function b64FromCanvas(canvas, mime = "image/jpeg", quality = 0.9, maxW = 2200) { /* ... same as V7.2, maybe slightly higher quality/maxW ... */ }
-async function imageFileToB64(file) { /* ... same as V7.2 ... */ }
-async function pdfToImagesAndText(file, L) { /* ... same as V7.2 but with scale=3.0 for higher DPI ... */ }
+async function b64FromCanvas(canvas, mime = "image/jpeg", quality = 0.9, maxW = 2200) {
+    const scale = Math.min(1, maxW / canvas.width);
+    let targetCanvas = canvas;
+    if (scale < 1) {
+        const tmp = document.createElement('canvas');
+        tmp.width = Math.round(canvas.width * scale);
+        tmp.height = Math.round(canvas.height * scale);
+        const ctx = tmp.getContext('2d');
+        ctx.drawImage(canvas, 0, 0, tmp.width, tmp.height);
+        targetCanvas = tmp;
+    }
+    return targetCanvas.toDataURL(mime, quality).split(',')[1];
+}
+
+async function imageFileToB64(file){
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    try {
+        await new Promise((res, rej) => {
+            img.onload = res;
+            img.onerror = rej;
+            img.src = url;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        return b64FromCanvas(canvas, file.type);
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
 async function prepareFiles(files, L){
     const images = []; let textChunks = [];
     updateStatus(L('بدء تحضير الملفات...', 'Preparing files...'), 5);
-    
-    // ... [PDF.js initialization if needed] ...
 
     for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const progress = 5 + (i / files.length) * 45;
         updateStatus(`${L('... معالجة', '... Processing')} ${f.name}`, progress);
-        // ... [The core logic from V7's prepareFiles] ...
+        if (f.type.startsWith('image/')) {
+            const imgData = await imageFileToB64(f);
+            images.push(imgData);
+        }
+        // Add PDF processing logic here if needed
     }
     updateStatus(L('اكتمل تحضير الملفات.', 'File preparation complete.'), 50);
     return { images, text: (textChunks.join('\n') || '') };
 }
 
-// --- V8 Report Rendering ---
-function escapeHtml(unsafe) { /* ... same as V7 ... */ }
+function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return String(unsafe || '');
+    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 function renderReportV8(report) {
     const lang = document.getElementById('lang').value || 'ar';
@@ -210,13 +239,9 @@ function renderReportV8(report) {
     }
 
     const {
-        patient_info: patient = {},
-        physician_info: physician = {},
-        diagnoses = [],
-        medication_review: meds = [],
-        consultative_analysis: analysis = {},
-        gap_analysis_missing_interventions: gaps = [],
-        executive_summary = '',
+        patient_info: patient = {}, physician_info: physician = {}, diagnoses = [],
+        medication_review: meds = [], consultative_analysis: analysis = {},
+        gap_analysis_missing_interventions: gaps = [], executive_summary = '',
         patient_safety_note = ''
     } = report;
 
@@ -257,7 +282,6 @@ function renderReportV8(report) {
             <div class="stat-card yellow"><div class="value">${yellowFlags.length}</div><div class="label">${L('تنبيهات للمتابعة (Yellow Flags)', 'Warning Flags')}</div></div>
             <div class="stat-card"><div class="value">${gaps.length}</div><div class="label">${L('فجوات علاجية (Gaps)', 'Therapeutic Gaps')}</div></div>
         </div>
-
         <div class="report-section">
             <h4><i class="fa-solid fa-user-doctor"></i> ${L('الملخص التنفيذي وبيانات الحالة', 'Executive Summary & Case Data')}</h4>
             <p><b>${L('الملخص:', 'Summary:')}</b> ${escapeHtml(executive_summary)}</p>
@@ -265,12 +289,10 @@ function renderReportV8(report) {
             <br><b>${L('الطبيب:', 'Physician:')}</b> ${escapeHtml(physician.name)} (${escapeHtml(physician.specialty)})
             <br><b>${L('التشخيصات:', 'Diagnoses:')}</b> ${diagnoses.map(d => escapeHtml(d)).join(', ')}</p>
         </div>
-        
         <div class="report-section">
             <h4><i class="fa-solid fa-pills"></i> ${L('جدول مراجعة الأدوية', 'Medication Review Table')}</h4>
             ${medTableHtml}
         </div>
-
         <div class="report-section">
             <h4><i class="fa-solid fa-flag"></i> ${L('التوصيات الاستشارية', 'Consultative Recommendations')}</h4>
             <ul class="recommendation-list">
@@ -280,7 +302,6 @@ function renderReportV8(report) {
                 ${renderRecList(yellowFlags, 'yellow')}
             </ul>
         </div>
-        
         <div class="report-section">
             <h4><i class="fa-solid fa-magnifying-glass-chart"></i> ${L('تحليل الفجوات والتدخلات الناقصة', 'Gap Analysis & Missing Interventions')}</h4>
             <ul class="recommendation-list">
@@ -291,7 +312,6 @@ function renderReportV8(report) {
     `;
 }
 
-// --- V8 Main Logic ---
 analyzeBtn.addEventListener('click', async () => {
     const lang = document.getElementById('lang').value || 'ar';
     const L = (ar, en) => lang === 'ar' ? ar : en;
@@ -314,12 +334,12 @@ analyzeBtn.addEventListener('click', async () => {
             context: document.getElementById('context').value,
             images: prep.images,
             text: prep.text,
-            apiVersion: 'v8.0.0-ui'
+            apiVersion: 'v8.1.0-ui'
         };
 
         updateStatus(L('إرسال البيانات للتحليل...', 'Sending for analysis...'), 55);
-
-        const res = await fetch('/api/case-analyzer', { // Use new API endpoint name
+        
+        const res = await fetch('/api/gpt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -336,7 +356,6 @@ analyzeBtn.addEventListener('click', async () => {
 
         updateStatus(L('اكتمل التحليل بنجاح!', 'Analysis complete!'), 100);
 
-        // Render final report and raw data
         renderReportV8(data.merged);
         preMerged.textContent = JSON.stringify(data.merged, null, 2);
         preGPT.textContent = data.gpt.raw || `Error: ${data.gpt.error || 'N/A'}`;
