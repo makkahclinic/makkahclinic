@@ -1,219 +1,220 @@
 // api/gpt.js
-export const config = { runtime: 'edge' };
-// ↑ يعمل على Edge Runtime بدون احتياج لـ multer أو حزم تحميل ملفات.
+// Edge Function بدون مكتبات Node. تأكد من ضبط مفاتيح البيئة في Vercel:
+// OPENAI_API_KEY, GEMINI_API_KEY
 
-import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+export const runtime = 'edge'; // نتجنب Node imports غير المدعومة على Edge
 
-// ==== أدوات صغيرة
-const ok = (data) =>
-  new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
-
-const bad = (s, body) =>
-  new Response(typeof body === 'string' ? body : JSON.stringify(body || { error: s }), {
-    status: s,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
-
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-
-// ==== برومبت سريري قوي ومهيكل
-function clinicalPrompt({ language = 'ar', specialty = '', context = '' }) {
-  const lang = language === 'en' ? 'English' : 'Arabic';
-  const spec = specialty ? `\nالتخصص: ${specialty}\n` : '';
-  const ctx = context ? `\nسياق تأميني/وصف مختصر: ${context}\n` : '';
-  return `
-أنت مساعد سريري/تأميني لتحسين الجودة والدخل. لا تُصدر تشخيصًا نهائيًا ولا خطة علاج دون مراجعة بشرية.
-اللغة المطلوبة: ${lang}
-${spec}${ctx}
-
-اقرأ صور المطالبة/الاستمارة (قد تكون صور PDF مُحوَّلة) + النص المستخرج، واستخرج عناصر دقيقة ومُنظمة.
-أعد النتيجة بصيغة JSON *فقط* بالمفاتيح التالية وبهذا الترتيب:
-
-{
-  "executive_summary": "",                        // ملخص تنفيذي عملي من 3-6 أسطر
-  "patient_summary": "",                          // موجز موضوعي لما يظهر في الورقة (الشكوى/العلامات الحيوية/العلامات)
-  "physician_actions": {                          // ما فعله الطبيب كما هو موثَّق
-    "vitals": [], "chief_complaint": "", "significant_signs": [],
-    "diagnoses": [], "orders": [], "meds": []
-  },
-  "key_findings": [],                             // نقاط مفصلية من الوثيقة
-  "contradictions": [ { "item":"", "evidence":"", "impact":"" } ],
-  "differential_diagnoses": [ { "dx":"", "why":"" } ],
-  "missed_opportunities": [ { "what":"", "why_it_matters":"" } ],
-  "procedural_issues": [ { "issue":"", "evidence":"", "impact":"" } ],
-  "revenue_quality_opportunities": [              // فرص موثّقة لزيادة الدخل وتحسين الجودة
-    { "opportunity":"", "category":"documentation|diagnostics|procedure|follow-up|coding",
-      "rationale":"", "risk_note":"" }
-  ],
-  "should_have_been_done":[ { "step":"", "reason":"" } ],   // ما كان يجب عمله وفق الأدلة
-  "severity_red_flags": [],                       // رايات حمراء مهمة
-  "suggested_next_steps": [ { "action":"", "justification":"" } ],
-  "icd_suggestions": [ { "code":"", "label":"", "why":"" } ],
-  "cpt_suggestions": [ { "code":"", "label":"", "why":"" } ],
-  "references": [                                 // مراجع موثوقة بدلالة الدليل
-    { "title":"", "org":"NICE|CDC|WHO|IDSA|NHS|...", "link":"" }
-  ],
-  "patient_safety_note": "هذا المحتوى تعليمي لتحسين الجودة ويُراجع سريريًا."
+/** helper: قراءة JSON آمن */
+async function readJSON(req) {
+  try { return await req.json(); }
+  catch { return {}; }
 }
 
-قواعد:
-- اعتمد على ما يظهر فعليًا في الصور/النص المستخرج؛ لا تُخترع بيانات.
-- عند وجود تعارض (مثلاً تشخيص "كدمة" مع "لا صدمة"): اذكره تحت contradictions مع الأثر التأميني.
-- اجعل الفرص التأمينية واقعية (documentation/diagnostics/procedure/follow-up/coding) مع تبرير واضح.
-- استشهد بإرشادات موثوقة (NICE/CDC/WHO/IDSA/NHS...) عبر "references" مع روابط مباشرة.
-- اجعل اللغة عربية فصيحة موجزة إن كانت اللغة=ar؛ وإلا بالإنجليزية.
+/** helper: استخراج JSON من نص قد يحتوي على ```json ... ``` */
+function extractJSON(text) {
+  if (!text) return null;
+  try { return JSON.parse(text); } catch {}
+  const m = String(text).match(/```json([\s\S]*?)```/i) || String(text).match(/```([\s\S]*?)```/i);
+  if (m) { try { return JSON.parse(m[1]); } catch {} }
+  return null;
+}
+
+/** دمج بسيط لحقلين JSON */
+function smartMerge(a, b) {
+  const out = { ...(a||{}) };
+  for (const [k,v] of Object.entries(b || {})) {
+    if (Array.isArray(v)) {
+      out[k] = Array.from(new Set([...(out[k]||[]), ...v]));
+    } else if (v && typeof v === 'object') {
+      out[k] = smartMerge(out[k], v);
+    } else if (v != null) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** Prompt نظام موحّد لإخراج JSON قوي مؤسّس على أدلة */
+function buildSystemPrompt(lang='ar', specialty='عام') {
+  const L = lang === 'en' ? 'English' : 'العربية';
+  return `
+أنت مساعد سريري لتحسين الجودة والإيرادات مبني على الأدلة. اللغة: ${L}. التخصص: ${specialty}.
+القواعد:
+- أزل/أخفِ أي معلومات تعريف شخصية (PHI) (نهج Safe Harbor).
+- لا تشخيص نهائي؛ تقرير تعليمي يُراجع من طبيب.
+- اعتمد على الإرشادات العالمية (NICE/WHO/CDC/IDSA) حيث يلزم، واذكر المراجع بعناوين وروابط مختصرة.
+- أعد **JSON فقط** بالمفاتيح التالية:
+{
+ "executive_summary":"",
+ "patient_summary":"",
+ "physician_actions":{"chief_complaint":"","vitals":[],"significant_signs":[],"diagnoses":[],"icd10_codes":[],"orders":[],"meds":[]},
+ "key_findings":[],
+ "contradictions":[{"item":"","evidence":"","impact":""}],
+ "differential_diagnoses":[{"dx":"","why":""}],
+ "severity_red_flags":[],
+ "procedural_issues":[{"issue":"","impact":"","evidence":""}],
+ "missed_opportunities":[{"what":"","why_it_matters":""}],
+ "revenue_quality_opportunities":[{"opportunity":"","category":"documentation|diagnostics|procedure|follow-up|coding","rationale":"","risk_note":""}],
+ "should_have_been_done":[{"step":"","reason":""}],
+ "suggested_next_steps":[{"action":"","justification":""}],
+ "references":[{"title":"","org":"","link":""}],
+ "patient_safety_note":"هذا المحتوى لأغراض تعليمية وتحسين الجودة فقط ويُراجع من طبيب مرخّص."
+}
+مهم: إن لم تكن المعلومات كافية، اذكر ذلك صراحةً ضمن key_findings وmissed_opportunities.
 `;
 }
 
-// === طلب GPT‑4o عبر Chat Completions (image_url مدعوم، NOT input_image)
-async function callOpenAI({ images, text, prompt }) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const content = [{ type: 'text', text: prompt }];
+/** بنية رسالة المستخدم */
+function buildUserContent(language, insuranceContext, pdfText) {
+  const intro = language === 'en'
+    ? `Analyze the following clinical documents (images + extracted PDF text).`
+    : `حلّل المستندات السريرية التالية (صور + نص PDF مُستخرج).`;
+  const ctx = insuranceContext ? `\n\nسياق/تأمين: ${insuranceContext}` : '';
+  const textBlock = pdfText ? `\n\nنص من المستند (قد يحتوي تشخيص/علامات/أدوية/رموز):\n${pdfText.slice(0, 40000)}` : '';
+  return `${intro}${ctx}${textBlock}\n\nأعد الناتج بصيغة JSON فقط حسب القالب المطلوب.`;
+}
 
-  // أضف النص المُستخرج
-  if (text && text.trim()) {
-    content.push({ type: 'text', text: `\n\n[Extracted PDF Text]\n${text.substring(0, 15000)}` });
-  }
-
-  // أضف الصور (data URLs أو روابط)
-  for (const url of images.slice(0, 8)) {
-    content.push({ type: 'image_url', image_url: { url } });
-  }
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-2024-08-06',
-    temperature: 0.2,
-    messages: [
-      { role: 'system', content: 'You are a meticulous clinical quality & revenue integrity assistant.' },
-      { role: 'user', content }
-    ],
-    response_format: { type: "json_object" }
+/** استدعاء OpenAI Chat Completions (GPT‑4o) برؤية */
+async function callOpenAI({ apiKey, systemPrompt, userText, imagesDataURLs, language }) {
+  const content = [{ type: "text", text: userText }];
+  // نضيف حتى 8 صور كحد معقول
+  (imagesDataURLs || []).slice(0, 8).forEach(url => {
+    content.push({ type: "image_url", image_url: { url } });
   });
 
-  const txt = completion?.choices?.[0]?.message?.content || '';
-  let json = null;
-  try { json = JSON.parse(txt); } catch {}
-  return { text: txt, json };
-}
+  const body = {
+    model: "gpt-4o-mini", // يدعم رؤية عبر chat.completions
+    temperature: 0.2,
+    max_tokens: 1400,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content }
+    ]
+  };
 
-// === طلب Gemini 1.5 Pro (يدعم صور + نص)
-async function callGemini({ images, text, prompt }) {
-  const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genai.getGenerativeModel({ model: 'gemini-1.5-pro' });
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
 
-  // مكوّنات الإدخال: نص البرومبت + الصور + نص PDF
-  const parts = [prompt];
-  if (text && text.trim()) parts.push({ text: `\n\n[Extracted PDF Text]\n${text.substring(0, 15000)}` });
-
-  // الصور (data URL -> inlineData)
-  for (const dataUrl of images.slice(0, 8)) {
-    const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-    if (!m) continue;
-    parts.push({
-      inlineData: { data: m[2], mimeType: m[1] }
-    });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`OpenAI error ${res.status}: ${t}`);
   }
 
-  const resp = await model.generateContent({ contents:[{ role:'user', parts }] });
-  const txt = resp.response?.text() || '';
-  let json = null;
-  try { json = JSON.parse(txt); } catch {}
-  return { text: txt, json };
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content || "";
+  const json = extractJSON(text);
+  return { text, json, model: "gpt-4o-mini" };
 }
 
-// دمج ذكي: يفضّل الحقول الممتلئة ويجمع المراجع والرايات
-function mergeReports(a, b) {
-  const pick = (k) => a?.[k] ?? b?.[k];
-  const arr = (k) => {
-    const aa = Array.isArray(a?.[k]) ? a[k] : [];
-    const bb = Array.isArray(b?.[k]) ? b[k] : [];
-    // دمج مع إزالة التكرار البسيط
-    const seen = new Set();
-    const out = [];
-    for (const item of [...aa, ...bb]) {
-      const key = JSON.stringify(item || {});
-      if (!seen.has(key) && key !== '{}') { seen.add(key); out.push(item); }
-    }
-    return out;
-  };
-
-  return {
-    executive_summary: pick('executive_summary') || '',
-    patient_summary: pick('patient_summary') || '',
-    physician_actions: {
-      vitals: arr('physician_actions?.vitals') // سيبقى فارغ إن لم يوجد
-    },
-    key_findings: arr('key_findings'),
-    contradictions: arr('contradictions'),
-    differential_diagnoses: arr('differential_diagnoses'),
-    missed_opportunities: arr('missed_opportunities'),
-    procedural_issues: arr('procedural_issues'),
-    revenue_quality_opportunities: arr('revenue_quality_opportunities'),
-    should_have_been_done: arr('should_have_been_done'),
-    severity_red_flags: arr('severity_red_flags'),
-    suggested_next_steps: arr('suggested_next_steps'),
-    icd_suggestions: arr('icd_suggestions'),
-    cpt_suggestions: arr('cpt_suggestions'),
-    references: arr('references'),
-    patient_safety_note: pick('patient_safety_note') || 'هذا المحتوى تعليمي لتحسين الجودة ويُراجع سريريًا.'
-  };
+/** استدعاء Gemini REST بـ inlineData (Base64) */
+function dataUrlToBase64(dataUrl) {
+  return dataUrl.split(",")[1] || "";
 }
 
-// ==== المعالج الرئيسي
+async function callGemini({ apiKey, systemPrompt, userText, imagesDataURLs }) {
+  const parts = [{ text: systemPrompt + "\n\n" + userText }];
+  (imagesDataURLs || []).slice(0, 8).forEach(url => {
+    const b64 = dataUrlToBase64(url);
+    parts.push({ inlineData: { mimeType: "image/jpeg", data: b64 } });
+  });
+
+  const body = { contents: [{ role: "user", parts }], generationConfig: { temperature: 0.2, maxOutputTokens: 1400 } };
+  const endpoint = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=" + encodeURIComponent(apiKey);
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Gemini error ${res.status}: ${t}`);
+  }
+
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+  const json = extractJSON(text);
+  return { text, json, model: "gemini-1.5-pro" };
+}
+
+/** دمج النتيجتين */
+function mergeOutputs(g, m) {
+  const gJson = g?.json || extractJSON(g?.text);
+  const mJson = m?.json || extractJSON(m?.text);
+  const merged = smartMerge(gJson || {}, mJson || {});
+  // نضيف ملخصًا سريعًا إذا مفقود
+  if (!merged.executive_summary) {
+    const es = (gJson?.executive_summary || mJson?.executive_summary || "").trim();
+    if (es) merged.executive_summary = es;
+  }
+  return merged;
+}
+
 export default async function handler(req) {
-  if (req.method !== 'POST') return bad(405, { error: 'Method not allowed' });
-
-  let body;
-  try { body = await req.json(); }
-  catch { return bad(400, { error: 'Bad JSON body' }); }
-
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+  const body = await readJSON(req);
   const {
-    language = 'ar',
-    modelChoice = 'both',     // both | gpt | gemini
-    specialty = '',
-    context = '',
+    language = "ar",
+    modelChoice = "both",
+    specialty = "",
+    insuranceContext = "",
     images = [],
-    pdf_text = '',
-    api_version = 'v6.0'
+    pdfText = ""
   } = body || {};
 
-  if ((!images || images.length === 0) && !pdf_text) {
-    return bad(400, { error: 'No images or text provided.' });
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+  if (!OPENAI_API_KEY && (modelChoice === "both" || modelChoice === "gpt")) {
+    return new Response(JSON.stringify({ error: "OPENAI_API_KEY مفقود" }), { status: 500, headers: {"Content-Type":"application/json"}});
+  }
+  if (!GEMINI_API_KEY && (modelChoice === "both" || modelChoice === "gemini")) {
+    return new Response(JSON.stringify({ error: "GEMINI_API_KEY مفقود" }), { status: 500, headers: {"Content-Type":"application/json"}});
+  }
+  if (!images.length && !pdfText.trim()) {
+    return new Response(JSON.stringify({ error: "لا صور ولا نص PDF مُقدَّم للتحليل" }), { status: 400, headers: {"Content-Type":"application/json"}});
   }
 
-  // برومبت
-  const prompt = clinicalPrompt({ language, specialty, context });
+  const systemPrompt = buildSystemPrompt(language, specialty);
+  const userText    = buildUserContent(language, insuranceContext, pdfText);
 
-  // استدعاءات النماذج
-  const doGPT = modelChoice === 'both' || modelChoice === 'gpt';
-  const doGem = modelChoice === 'both' || modelChoice === 'gemini';
-
-  let gpt4o = null, gemini = null, merged = null;
+  const results = { debug: { images: images.length, pdfChars: (pdfText||"").length } };
+  try {
+    if (modelChoice === "both" || modelChoice === "gpt") {
+      results.gpt = await callOpenAI({
+        apiKey: OPENAI_API_KEY, systemPrompt, userText, imagesDataURLs: images, language
+      });
+    }
+  } catch (e) { results.gpt = { error: e.message }; }
 
   try {
-    if (doGPT) gpt4o = await callOpenAI({ images, text: pdf_text, prompt });
-  } catch (e) {
-    gpt4o = { error: e?.message || String(e) };
-  }
+    if (modelChoice === "both" || modelChoice === "gemini") {
+      results.gemini = await callGemini({
+        apiKey: GEMINI_API_KEY, systemPrompt, userText, imagesDataURLs: images
+      });
+    }
+  } catch (e) { results.gemini = { error: e.message }; }
+
+  // دمج (إن وُجد ناتج)
   try {
-    if (doGem) gemini = await callGemini({ images, text: pdf_text, prompt });
+    if (results.gpt || results.gemini) {
+      results.merged = mergeOutputs(results.gpt, results.gemini);
+    }
   } catch (e) {
-    gemini = { error: e?.message || String(e) };
+    results.merged = { note: "تعذر دمج JSON؛ أعرض النصوص الخام.", error: e.message };
   }
 
-  // تكوين تقرير نهائي
-  const a = gpt4o?.json || {};
-  const b = gemini?.json || {};
-  merged = mergeReports(a, b);
-
-  return ok({
-    api_version,
-    merged,
-    gpt4o,
-    gemini,
+  return new Response(JSON.stringify(results), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
   });
 }
