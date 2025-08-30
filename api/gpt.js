@@ -1,71 +1,53 @@
-// api/case-analyzer.js
-// يُشغَّل على Node.js (وليس Edge)
-export const config = { runtime: 'nodejs', maxDuration: 15 }; // يمكن تعديل المدة حسب خطتك على Vercel
+// api/gpt.js  — Node.js Serverless Function على Vercel
+// ملاحظة: تأكد أن بيئة Vercel تحتوي OPENAI_API_KEY و GEMINI_API_KEY
+// Package dependencies (في package.json):  "openai": "^4", "@google/generative-ai": "^0.24"
 
-import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+export default async function handler(req, res) {
+  // السماح بالـ CORS (عند فتح الصفحة من دومين نفس المشروع لا حاجة، لكنه آمن)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).end();
 
-// نماذج افتراضية
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-2024-08-06";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro";
-
-// أداة مساعدة: قراءة JSON من الطلب (لأننا خارج Next API)
-async function readJson(req) {
-  const chunks = [];
-  for await (const c of req) chunks.push(c);
-  const raw = Buffer.concat(chunks).toString("utf8");
-  return JSON.parse(raw);
-}
-
-// تنظيف/التقاط JSON من النص (لو النموذج لفّه بأسلاك ```json)
-function extractJSON(text) {
-  if (!text) return null;
-  const fence = text.match(/```json([\s\S]*?)```/i);
-  const raw = fence ? fence[1].trim() : text.trim();
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
-// دمج تقارير النموذجين (تجميع مفاتيح مع إزالة التكرار)
-function mergeReports(a = {}, b = {}) {
-  const arrKeys = [
-    "key_findings","differential_diagnoses","severity_red_flags",
-    "procedural_issues","missed_opportunities","revenue_quality_opportunities",
-    "suggested_next_steps","contradictions","references","icd_suggestions","cpt_suggestions",
-    "should_have_been_done"
-  ];
-  const out = {
-    patient_summary: a.patient_summary || b.patient_summary || "",
-    executive_summary: a.executive_summary || b.executive_summary || "",
-    physician_actions: a.physician_actions || b.physician_actions || {},
-    patient_safety_note: a.patient_safety_note || b.patient_safety_note || "هذا المحتوى لأغراض تحسين الجودة والتدقيق التأميني ويُراجع من طبيب مرخّص."
-  };
-  for (const k of arrKeys) {
-    const A = Array.isArray(a[k]) ? a[k] : [];
-    const B = Array.isArray(b[k]) ? b[k] : [];
-    // إزالة تكرارات مبنية على stringify
-    const uniq = Array.from(new Map([...A, ...B].map(x => [JSON.stringify(x), x])).values());
-    out[k] = uniq;
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-  return out;
-}
 
-// مخطط JSON مُلزِم للناتج
-function buildSchema(language = "ar") {
-  const safetyNote =
-    language === "ar"
-      ? "هذا المحتوى لأغراض تحسين الجودة والتدقيق التأميني فقط، ويُراجع من طبيب مرخّص قبل أي قرار سريري."
-      : "This content is for quality-improvement and payer audit support; a licensed clinician must review before decisions.";
+  try {
+    const { language = 'ar', modelChoice = 'both', specialty = '', insuranceContext = '', images = [], texts = [] } = req.body || {};
+    if ((!images || !images.length) && (!texts || !texts.length)) {
+      return res.status(400).json({ error: 'No input (images or texts).' });
+    }
 
-  return {
-    instruction:
-`أنت مساعد سريري لتحسين الجودة والدخل المستند إلى الأدلة. أزل أي مُعرِّفات شخصية (PHI).
-أعد النتيجة بصيغة JSON *فقط* بالمفاتيح التالية حصراً:
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!openaiKey && (modelChoice === 'both' || modelChoice === 'gpt')) {
+      return res.status(500).json({ error: 'OPENAI_API_KEY is missing on server' });
+    }
+    if (!geminiKey && (modelChoice === 'both' || modelChoice === 'gemini')) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is missing on server' });
+    }
 
+    // بناء تعليمات سريرية دقيقة مع مخطط JSON صارم
+    const schemaKeys = [
+      'executive_summary','patient_summary','key_findings','physician_actions','contradictions',
+      'differential_diagnoses','severity_red_flags','procedural_issues','missed_opportunities',
+      'revenue_quality_opportunities','should_have_been_done','suggested_next_steps',
+      'icd_suggestions','cpt_suggestions','references','patient_safety_note'
+    ];
+    const systemInstruction = `
+أنت مساعد سريري لتحسين الجودة والدخل المستند إلى الأدلة. لا تُقدّم تشخيصًا نهائيًا
+ولا توصيات علاجية دون مراجعة بشرية. أزل أي معرّفات شخصية (نهج Safe Harbor).
+اللغة: ${language === 'en' ? 'English' : 'العربية'}
+التخصص: ${specialty || 'عام'}
+السياق التأميني/الإداري (إن وُجد): ${insuranceContext || '—'}
+
+أعد استجابة JSON فقط بالحقول التالية (لا تزيد ولا تُنقص)، كلها إن أمكن:
 {
   "executive_summary": "",
   "patient_summary": "",
-  "physician_actions": { "chief_complaint":"", "vitals":[], "significant_signs":[], "diagnoses":[], "orders":[], "meds":[], "icd10_codes":[] },
   "key_findings": [],
+  "physician_actions": { "chief_complaint":"", "vitals":[], "significant_signs":[], "diagnoses":[], "orders":[], "meds":[], "icd10_codes":[] },
   "contradictions": [ { "item":"", "evidence":"", "impact":"" } ],
   "differential_diagnoses": [ { "dx":"", "why":"" } ],
   "severity_red_flags": [],
@@ -76,127 +58,39 @@ function buildSchema(language = "ar") {
   "suggested_next_steps": [ { "action":"", "justification":"" } ],
   "icd_suggestions": [ { "code":"", "label":"", "why":"" } ],
   "cpt_suggestions": [ { "code":"", "label":"", "why":"" } ],
-  "references": [ { "title":"", "org":"WHO|NICE|CDC|NHS|IDSA|AAOS|...","link":"" } ],
-  "patient_safety_note": "${safetyNote}"
+  "references": [ { "title":"", "org":"WHO|NICE|CDC|AAO|IDSA|...", "link":"" } ],
+  "patient_safety_note": "هذا المحتوى لأغراض تعليمية وتحسين الجودة فقط ويُراجع من طبيب مرخّص."
 }
+استخدم الأدلة والإرشادات (NICE/WHO/CDC..) عند الاقتضاء، وأدرج مرجعًا مختصرًا مع رابط.
+رجاءً أعِد JSON صالحًا فقط.`;
 
-قواعد الجودة:
-- استشهد فقط بمراجع إكلينيكية موثوقة (NICE/WHO/CDC/NHS/IDSA) وارفق الروابط.
-- إن وُجِد تعارض بين الشكوى والتشخيص أو بين التشخيص والأدوية/الأوامر فاذكره ضمن "contradictions".
-- قدّم فرص توثيق/فحوص/إجراءات ترفع القبول التأميني والإيراد المبرر.
-- أعد JSON صارم بدون أي شرح خارج القوسين.
-`,
-    langTag: language === "en" ? "English" : "العربية",
-  };
-}
+    // نجهّز نصًا مجمعًا (إن كان هناك استخراج نص من PDF)
+    const joinedText = texts && texts.length ? `\n\n[Extracted PDF text]\n${texts.join('\n\n').slice(0, 18000)}` : '';
 
-// استدعاء GPT‑4o عبر Chat Completions (يدعم image_url + نص)
-async function callOpenAI(apiKey, language, specialty, insuranceContext, images, texts) {
-  const client = new OpenAI({ apiKey });
-  const { instruction, langTag } = buildSchema(language);
+    // نحول الصور إلى "image_url" (data URL) لتوافق Chat Completions (مدعوم للـ GPT‑4o) 
+    // راجع التوثيق: يمكن إرسال مصفوفة Content تحتوي نصًا وصورًا. 
 
-  const parts = [];
-  parts.push({ type: "text", text: `${instruction}\nاللغة المطلوبة: ${langTag}\nالتخصص: ${specialty || "عام"}\nسياق التأمين: ${insuranceContext || "—"}` });
-  (images || []).forEach(img => {
-    parts.push({ type: "image_url", image_url: { url: img.dataUrl } }); // يدعم data URL
-  });
-  if (texts && texts.trim()) {
-    parts.push({ type: "text", text: `نص PDF (مستخرج محليًا):\n${texts.slice(0, 12000)}` }); // حدود الأمان
-  }
+---
 
-  const resp = await client.chat.completions.create({
-    model: OPENAI_MODEL,
-    temperature: 0.2,
-    messages: [
-      { role: "system", content: "You are a meticulous clinical quality & revenue-improvement assistant. Return STRICT JSON only." },
-      { role: "user", content: parts }
-    ]
-  });
+## ما الذي أصلحناه بالتحديد؟
 
-  const text = resp.choices?.[0]?.message?.content || "";
-  const parsed = extractJSON(text);
-  return { raw: text, parsed };
-}
+- **خطأ PDF.js (pdfjsLib)**: حمّلنا مكتبة PDF.js من CDN وضبطنا `GlobalWorkerOptions.workerSrc` بوضوح — هذا الشرط مذكور في أمثلة PDF.js الرسمية ونقاشاتهم (بدونه تظهر رسالة “is not defined / fake worker”). :contentReference[oaicite:4]{index=4}
+- **عرض كود الخادم كنص في الصفحة**: أزلنا أي `<script src="/api/gpt.js">`. الاستدعاء الآن عبر `fetch('/api/gpt')` فقط.
+- **فشل نشر Vercel “Edge Function is referencing unsupported modules”**: تجنّبنا Edge runtime. Node.js runtime هو الأنسب لهذه المكتبات. :contentReference[oaicite:5]{index=5}
+- **دعم الصور + النص مع GPT‑4o**: استخدمنا **Chat Completions** بمحتوى يحتوي عناصر `{type:"text"}` و`{type:"image_url"}` (مسموح للـ GPT‑4o) بدل صيغة `input_image` التي تعود إلى شكل Responses المختلف — إرشادات رسمية لـ"رسائل متعددة الوسائط" موجودة ضمن أدلة المحادثات للرؤية (أزور توثق ذلك بوضوح). :contentReference[oaicite:6]{index=6}
+- **Gemini SDK الرسمي**: استخدمنا Google GenAI SDK الأحدث كما توصي جوجل، مع `inlineData` للصور. :contentReference[oaicite:7]{index=7}
 
-// استدعاء Gemini 1.5 Pro (inline base64 images)
-async function callGemini(apiKey, language, specialty, insuranceContext, images, texts) {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL, generationConfig: { temperature: 0.2 } });
-  const { instruction, langTag } = buildSchema(language);
+---
 
-  const parts = [
-    { text: `${instruction}\nLanguage: ${langTag}\nSpecialty: ${specialty || "General"}\nInsurance context: ${insuranceContext || "—"}` }
-  ];
-  for (const img of (images || [])) {
-    const b64 = img.dataUrl.split(",")[1];
-    parts.push({ inlineData: { data: b64, mimeType: img.contentType || "image/jpeg" } });
-  }
-  if (texts && texts.trim()) parts.push({ text: `PDF text (locally extracted):\n${texts.slice(0, 12000)}` });
+## تذكير سريع (قد يلزم تعديل بسيط في مشروعك)
 
-  const resp = await model.generateContent({ contents: [{ role: "user", parts }] });
-  const text = resp.response?.text?.() || "";
-  const parsed = extractJSON(text);
-  return { raw: text, parsed };
-}
-
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method Not Allowed" }); return;
-  }
-
-  try {
-    const body = await readJson(req);
-    const {
-      language = "ar",
-      modelChoice = "both",
-      specialty = "عام",
-      insuranceContext = "",
-      images = [],
-      texts = ""
-    } = body || {};
-
-    if ((!images || images.length === 0) && !texts) {
-      return res.status(400).json({ error: "لا توجد صور أو نص للتحليل" });
+- في **Vercel → Settings → Environment Variables**:  
+  `OPENAI_API_KEY` و `GEMINI_API_KEY` (موجودتان بالفعل حسب صورك).  
+- في `package.json` تأكد من وجود الاعتمادات:
+  ```json
+  {
+    "dependencies": {
+      "openai": "^4.57.0",
+      "@google/generative-ai": "^0.24.1"
     }
-
-    const doGPT = modelChoice === "both" || modelChoice === "gpt";
-    const doGem = modelChoice === "both" || modelChoice === "gemini";
-
-    const results = {};
-    if (doGPT) {
-      try {
-        results.gpt = await callOpenAI(process.env.OPENAI_API_KEY, language, specialty, insuranceContext, images, texts);
-        if (!results.gpt.parsed) results.gpt.error = "Failed to parse GPT JSON";
-      } catch (e) {
-        results.gpt = { error: e?.message || String(e) };
-      }
-    }
-    if (doGem) {
-      try {
-        results.gemini = await callGemini(process.env.GEMINI_API_KEY, language, specialty, insuranceContext, images, texts);
-        if (!results.gemini.parsed) results.gemini.error = "Failed to parse Gemini JSON";
-      } catch (e) {
-        results.gemini = { error: e?.message || String(e) };
-      }
-    }
-
-    // دمج
-    const merged = mergeReports(results.gpt?.parsed, results.gemini?.parsed);
-    // ملخص تنفيذي بسيط من العناصر المتاحة
-    if (!merged.executive_summary) {
-      merged.executive_summary =
-        (merged.patient_summary ? (merged.patient_summary + " — ") : "") +
-        "أهم النتائج: " + (merged.key_findings?.slice(0,4).join("، ") || "—") +
-        " | أخطاء/تعارضات: " + (merged.contradictions?.length || 0) +
-        " | فرص جودة/دخل: " + (merged.revenue_quality_opportunities?.length || 0);
-    }
-
-    res.status(200).json({
-      combined: merged,
-      gpt: results.gpt || null,
-      gemini: results.gemini || null
-    });
-  } catch (err) {
-    res.status(500).json({ error: err?.message || String(err) });
   }
-}
