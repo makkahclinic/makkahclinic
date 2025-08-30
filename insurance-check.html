@@ -1,574 +1,271 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>منصة التدقيق السريري المتقدمة (Gemini & GPT‑4o) V6.1</title>
-  <style>
-    :root{--bg:#0b1020;--card:#fff;--muted:#667085;--brand:#0ea5e9;--err-color:#dc2626}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Kufi Arabic",Tahoma,Arial,sans-serif;background:#f6f7fb;margin:0;color:#111;line-height: 1.6;}
-    header{padding:18px 20px;background:linear-gradient(90deg,#0ea5e9,#2563eb);color:#fff}
-    header h1{margin:0;font-size:20px}
-    main{max-width:1100px;margin:22px auto;padding:0 14px 60px}
-    .card{background:var(--card);border:1px solid #e6e8f0;border-radius:14px;padding:18px;margin:16px 0;box-shadow:0 1px 2px rgba(16,24,40,.04)}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    label{font-size:14px;color:#334155;margin-bottom: 4px; display: block;}
-    input[type="file"],select,textarea,button,input[type="text"]{
-      width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font-size:14px;font-family: inherit;
-    }
-    select{width:auto;min-width:210px}
-    textarea{min-height:90px;resize:vertical}
-    button{background:#0ea5e9;border:none;color:#fff;cursor:pointer;transition: background 0.2s;}
-    button:hover{background: #0284c7;}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    small.muted{color:#667085}
-    .chip{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;margin-inline:2px;font-weight: 500;}
-    pre{background:#0b1020;color:#e2e8f0;border-radius:12px;padding:14px;overflow:auto;font-size: 13px;}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
-    @media (max-width: 800px) { .grid, .grid-3 { grid-template-columns: 1fr; } }
-    .log{background:#0b1020;color:#bcd;min-height:100px;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size: 13px;}
-    .ok{color:#10b981}.warn{color:#f59e0b}.err{color:var(--err-color)}
-    .pill{background:#eef2ff;color:#1d4ed8;border-radius:999px;padding:4px 10px;font-size:13px}
-    .ref a{color:#0ea5e9;text-decoration:none}
-    .ref a:hover{text-decoration: underline;}
-    #exec h4{margin-top: 18px; margin-bottom: 8px; color: #334155;}
-    #exec ul{padding-inline-start: 18px; margin-top: 5px;}
-    #exec li{margin-bottom: 8px;}
-    hr{border: none; border-top: 1px solid #e6e8f0; margin: 18px 0;}
-  </style>
-        <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.3.136/build/pdf.min.js"></script>
-  <script>
-      // تهيئة عامل PDF.js
-      if (typeof pdfjsLib !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.3.136/build/pdf.worker.min.js";
-      } else {
-        console.error("PDF.js library failed to load (pdfjsLib is undefined).");
-      }
-  </script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>تحليل الحالات الطبية (Gemini & GPT‑4o)</title>
+<style>
+  body {font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Naskh Arabic UI", Tahoma, Arial; background:#fafafa; color:#222; margin:0; padding:2rem;}
+  h1,h2{margin:0 0 .5rem}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 2px 6px rgba(0,0,0,.03)}
+  label{font-weight:600;display:block;margin:.25rem 0}
+  input[type="file"]{display:block;margin:.5rem 0 1rem}
+  select, input[type="text"], textarea, button{width:100%;padding:.7rem;border:1px solid #d1d5db;border-radius:10px;background:#fff}
+  textarea{min-height:110px;resize:vertical}
+  button{cursor:pointer;font-weight:700}
+  button.primary{background:#2563eb;color:#fff;border-color:#1d4ed8}
+  button:disabled{opacity:.6;cursor:not-allowed}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+  pre{white-space:pre-wrap;word-wrap:break-word;background:#0b1220;color:#cbd5e1;border-radius:10px;padding:12px;min-height:120px}
+  .muted{color:#666;font-size:.9rem}
+  .pill{display:inline-block;padding:.15rem .5rem;border:1px solid #ddd;border-radius:999px;background:#f3f4f6;margin-inline:.2rem}
+  .log{font-size:.9rem;max-height:200px;overflow:auto;background:#0b1220;color:#cbd5e1;border-radius:10px;padding:10px}
+</style>
 </head>
 <body>
-<header>
-  <h1>منصة التدقيق السريري المتقدمة (Gemini & GPT‑4o)</h1>
-  <div style="font-size:13px;opacity:.95">* التقرير لأغراض تعليمية وتدقيق الجودة فقط؛ * يُراجع سريريًا قبل أي قرار؛ * إزالة PHI تلقائيًا.</div>
-</header>
 
-<main>
-  <section class="card">
-        <div class="row" style="margin-bottom: 12px;">
-      <div style="flex:1; min-width: 300px;">
-        <label>اختر ملفات (صور/‏PDF):</label>
-        <input id="fileInput" type="file" multiple accept="image/*,.pdf" />
-        <small class="muted">يتم تحويل PDF إلى صور عالية الدقة واستخراج نصه مع الحفاظ على بنيته لضمان أعلى دقة تحليل.</small>
-      </div>
-    </div>
-    <div class="row" style="margin-bottom: 12px; align-items: flex-end;">
-      <div><label>لغة التقرير:</label>
-        <select id="lang">
-          <option value="ar" selected>العربية</option>
-          <option value="en">English</option>
-        </select>
-      </div>
-      <div><label>النموذج:</label>
-        <select id="model">
-          <option value="both" selected>Gemini + GPT‑4o (موصى به)</option>
-          <option value="gpt">GPT‑4o فقط</option>
-          <option value="gemini">Gemini فقط</option>
-        </select>
-      </div>
-      <div style="min-width:260px;flex:1">
-        <label>التخصص (اختياري، لتركيز التحليل):</label>
-        <input id="specialty" type="text" placeholder="مثل: جلدية، قلب، طب طوارئ، أسنان..." />
-      </div>
-    </div>
-    <div style="margin-bottom: 15px;">
-      <label>سياق المراجعة أو تفاصيل المطالبة التأمينية (اختياري):</label>
-      <textarea id="context" placeholder="مثال: مراجعة رفض مطالبة لزيارة أكزيما، أو تدقيق جودة توثيق لحالة التهاب رئوي."></textarea>
-    </div>
-    <div class="row">
-      <button id="analyzeBtn">بدء تحليل الحالة</button>
-      <span class="pill" id="prepInfo" style="display:none"></span>
-    </div>
-  </section>
+<h1>تحليل الحالات الطبية <span class="pill">Gemini & GPT‑4o</span></h1>
+<p class="muted">* تتم المعالجة على الجهاز + الخادم؛ * التقرير تعليمي ويُراجع سريريًا قبل أي قرار؛ * إزالة PHI تُطلب من النماذج. PDF يُحوَّل محليًا إلى صور + يُستخرج نصّه (PDF.js).</p>
 
-  <section class="card">
-    <h3 style="margin-top:0">التقرير المدمج (Executive Overview)</h3>
-    <div id="exec" class="card" style="background:#f8fafc;border:1px dashed #d0d5dd;padding: 20px;">
-        <div class="muted" style="text-align: center;">النتائج ستظهر هنا بعد اكتمال التحليل.</div>
+<div class="card">
+  <label>اختر ملفات (صورة/‏PDF):</label>
+  <input id="fileInput" type="file" accept="image/*,.pdf" multiple />
+  <div class="row">
+    <div>
+      <label>اللغة:</label>
+      <select id="lang">
+        <option value="ar" selected>العربية</option>
+        <option value="en">English</option>
+      </select>
     </div>
-    <details style="margin-top: 15px;">
-        <summary style="cursor: pointer; color: var(--brand);">عرض بيانات JSON الخام المدمجة</summary>
-       <pre id="merged" dir="ltr"></pre>
-    </details>
-  </section>
+    <div>
+      <label>النموذج:</label>
+      <select id="modelChoice">
+        <option value="both" selected>Gemini + GPT‑4o</option>
+        <option value="gpt">GPT‑4o فقط</option>
+        <option value="gemini">Gemini فقط</option>
+      </select>
+    </div>
+  </div>
 
-  <div class="grid">
-    <section class="card">
-      <h3 style="margin-top:0">مخرجات GPT‑4o (Raw)</h3>
-      <pre id="gpt" dir="ltr"></pre>
-    </section>
-    <section class="card">
-      <h3 style="margin-top:0">مخرجات Gemini (Raw)</h3>
-      <pre id="gemini" dir="ltr"></pre>
-    </section>
-  </div>
+  <div class="row">
+    <div>
+      <label>التخصص (اختياري):</label>
+      <input id="specialty" type="text" placeholder="أسنان، جلدية، قلب، ضغط، كُلى ..." />
+    </div>
+    <div>
+      <label>وصف مختصر/سياق التأمين (اختياري):</label>
+      <input id="context" type="text" placeholder="مثال: مراجعة رفض المطالبة لزيارة أكزيما" />
+    </div>
+  </div>
 
-  <section class="card">
-    <h3 style="margin-top:0">سجل العمليات (Log)</h3>
-    <div id="log" class="log"></div>
-  </section>
-</main>
+  <div class="row" style="margin-top:.5rem">
+    <button id="prepBtn" type="button">تحضير الملفات</button>
+    <button id="analyzeBtn" type="button" class="primary">تحليل الحالة</button>
+  </div>
+
+  <p id="prepStatus" class="muted">—</p>
+  <div class="log mono" id="log"></div>
+</div>
+
+<div class="card">
+  <h2>النتيجة المدمجة</h2>
+  <pre id="mergedBox" class="mono"></pre>
+</div>
+
+<div class="row">
+  <div class="card">
+    <h2>مخرجات GPT‑4o</h2>
+    <pre id="gptBox" class="mono"></pre>
+  </div>
+  <div class="card">
+    <h2>مخرجات Gemini</h2>
+    <pre id="geminiBox" class="mono"></pre>
+  </div>
+</div>
+
+<!-- PDF.js عبر CDN + تهيئة الـ worker -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-U2Q4i6o3ZPkbGQdNZqVb2Kp4wS9WvWv7mTZ8o9uJw0t0pgs3QZ8m7e8sQ4mTss6X3c0xx0tW5mGxFI6b5M+5wg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+  // اضبط workerSrc لنفس نسخة PDF.js
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+</script>
 
 <script>
-const logEl = document.getElementById('log');
-const btn = document.getElementById('analyzeBtn');
-const prepInfo = document.getElementById('prepInfo');
-const preMerged = document.getElementById('merged');
-const preGPT = document.getElementById('gpt');
-const preGemini = document.getElementById('gemini');
-const execDiv = document.getElementById('exec');
+(() => {
+  const $ = id => document.getElementById(id);
 
-// دالة مساعدة للسماح بتحديث واجهة المستخدم أثناء العمليات الثقيلة
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-function log(msg, cls=""){ 
-  const span = document.createElement('div'); 
-  span.className = cls; 
-  const timestamp = new Date().toLocaleTimeString();
-  span.textContent = `[${timestamp}] ${msg}`; 
-  if (logEl) logEl.appendChild(span); 
-  if (logEl) logEl.scrollTop = logEl.scrollHeight;
-  if (cls === 'err' || cls === 'warn') {
-    console.error(`[${cls.toUpperCase()}] ${msg}`);
-  }
-}
-
-// وظيفة تحويل الصورة إلى Base64 (مع معالجة أخطاء أساسية)
-function b64FromCanvas(canvas, mime="image/jpeg", quality=0.85, maxW=1800){
-  try {
-    if (canvas.width === 0 || canvas.height === 0) {
-        log(`تحذير: أبعاد Canvas هي صفر.`, 'warn');
-        return '';
-    }
-
-    const scale = Math.min(1, maxW / canvas.width);
-    if (scale >= 1) {
-        return canvas.toDataURL(mime, quality).split(',')[1];
-    }
-    
-    const tmp = document.createElement('canvas');
-    tmp.width = Math.max(1, Math.round(canvas.width * scale));
-    tmp.height = Math.max(1, Math.round(canvas.height * scale));
-    const ctx = tmp.getContext('2d');
-    if (!ctx) throw new Error("فشل تهيئة Canvas Context.");
-
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(canvas, 0, 0, tmp.width, tmp.height);
-    return tmp.toDataURL(mime, quality).split(',')[1];
-  } catch (error) {
-    log(`فشل في تحويل الصورة إلى Base64: ${error.message}`, 'err');
-    return ''; // إرجاع سلسلة فارغة عند الفشل
-  }
-}
-
-async function imageFileToB64(file){
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    try {
-        await new Promise((res, rej)=>{
-            img.onload = ()=>res();
-            img.onerror = (e) => rej(new Error(`فشل تحميل الصورة (قد يكون النوع غير مدعوم أو الملف تالف): ${file.name}`));
-            img.src = url;
-        });
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-        canvas.getContext('2d').drawImage(img,0,0);
-        const data = b64FromCanvas(canvas, file.type.includes('png')?'image/png':'image/jpeg', 0.85, 1800);
-        if (!data) throw new Error("تحويل الصورة أرجع بيانات فارغة.");
-        return data;
-    } finally {
-        URL.revokeObjectURL(url);
-    }
-}
-
-// *** التحديث الهام: وظيفة معالجة PDF محدثة بمتانة عالية ومعالجة دفاعية ***
-async function pdfToImagesAndText(file){
-    if (typeof pdfjsLib === 'undefined') {
-        log("خطأ فادح: مكتبة PDF.js غير متاحة.", 'err');
-        return { images: [], text: "[PDF Library Missing]" };
-    }
-
-    const images = [];
-    let fullText = '';
-    const scale = 2.2; // دقة الصورة
-
-    // 1. التحقق من توفر المكتبة وتحميل المستند
-    let pdf;
-    try {
-        const arr = await file.arrayBuffer();
-        if (!arr || arr.byteLength === 0) {
-            log(`تحذير: الملف ${file.name} فارغ.`, 'warn');
-            return { images: [], text: "[Empty File]" };
-        }
-        // استخدام standardFontDataUrl لزيادة التوافق
-        pdf = await pdfjsLib.getDocument({
-            data:arr,
-            standardFontDataUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.3.136/standard_fonts/"
-        }).promise;
-    } catch (pdfLoadError) {
-        let errorReason = pdfLoadError.name === 'PasswordException' ? 'محمي بكلمة مرور' : 'تالف أو غير صالح';
-        log(`فشل تحميل PDF: ${file.name}. السبب: ${errorReason}. (${pdfLoadError.message})`, 'err');
-        // إعادة نتائج فارغة بدلاً من رمي خطأ، للسماح للنظام بالاستمرار
-        return { images: [], text: `[PDF Loading Failed: ${errorReason}]` };
-    }
-
-    if (!pdf || pdf.numPages === 0) {
-        return { images: [], text: "[PDF Has No Pages]" };
-    }
-
-    // 2. معالجة كل صفحة مع معالجة أخطاء فردية
-    for(let p=1; p <= pdf.numPages; p++){
-        btn.textContent = `... معالجة صفحة ${p}/${pdf.numPages}`;
-        await sleep(15);
-        log(`> تحويل صفحة ${p}/${pdf.numPages} من ${file.name} ...`);
-
-        let page;
-        try {
-            page = await pdf.getPage(p);
-        } catch (pageLoadError) {
-            log(`فشل في تحميل الصفحة ${p}. تخطي الصفحة. (${pageLoadError.message})`, 'err');
-            fullText += `\n\n[PAGE ${p} FAILED TO LOAD]\n\n`;
-            continue;
-        }
-
-        const viewport = page.getViewport({scale: scale});
-
-        // 3. رسم الصورة (Image Rendering)
-        try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = viewport.width; canvas.height = viewport.height;
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            await page.render({canvasContext:ctx, viewport}).promise;
-            const imgData = b64FromCanvas(canvas, "image/jpeg", 0.85, 1800);
-            if (imgData) images.push(imgData);
-
-        } catch (renderError) {
-            log(`فشل في رسم صورة الصفحة ${p}. (${renderError.message})`, 'warn');
-            // الاستمرار لمحاولة استخراج النص حتى لو فشل الرسم
-        }
-        
-        // 4. استخراج النص (Text Extraction) مع آليات دفاعية وتراجع
-        let pageText = '';
-        try {
-            const tc = await page.getTextContent();
-            let lastY = -1;
-
-            // محاولة الاستخراج المنظم (Structured Extraction)
-            try { 
-                for (const item of tc.items) {
-                    // تحقق دفاعي أساسي
-                    if (!item || typeof item.str !== 'string' || item.str.trim() === '') continue;
-
-                    // التحقق الدفاعي من وجود بيانات التموضع (Spatial Data)
-                    // التحقق من أن transform مصفوفة ولها 6 عناصر على الأقل
-                    const currentY = (Array.isArray(item.transform) && item.transform.length >= 6) ? item.transform[5] : null;
-                    
-                    // استخدام ارتفاع افتراضي إذا كان height مفقودًا (ليس رقماً أو <= صفر)
-                    const height = (typeof item.height === 'number' && item.height > 0) ? item.height : 10; 
-
-                    // تطبيق منطق فواصل الأسطر فقط إذا كانت البيانات المكانية موثوقة
-                    if (lastY !== -1 && currentY !== null && Math.abs(currentY - lastY) > height * 0.5) {
-                        if (!pageText.endsWith('\n')) {
-                           pageText += '\n';
-                        }
-                    }
-                    
-                    pageText += item.str + ' ';
-                    
-                    // تحديث الموضع السابق فقط إذا كان الموضع الحالي متاحاً
-                    if (currentY !== null) {
-                        lastY = currentY;
-                    }
-                }
-            } catch (structuredError) {
-                // إذا فشل المنطق المنظم لأي سبب (مثل بنية PDF غير متوقعة تماماً)
-                log(`خطأ في استخراج النص المنظم (صفحة ${p}). محاولة الاستخراج البسيط. (${structuredError.message})`, 'warn');
-                // آلية التراجع: استخراج بسيط (Simple Extraction)
-                pageText = tc.items.map(i => i && typeof i.str === 'string' ? i.str : '').filter(Boolean).join(' ');
-            }
-
-        } catch (textError) {
-            // إذا فشلت عملية استخراج النص كلياً (مثل فشل getTextContent)
-            log(`فشل استخراج أي نص من الصفحة ${p}. (${textError.message})`, 'err');
-            pageText = "[Text Extraction Failed]";
-        }
-
-        pageText = pageText.replace(/[ \t]+/g, ' ').trim();
-        fullText += `\n\n[BEGIN PAGE ${p}]\n${pageText}\n[END PAGE ${p}]\n\n`;
-        
-        // تحرير موارد الصفحة
-        if (page) page.cleanup();
-        log(`> اكتملت صفحة ${p}.`, 'ok');
-      }
-      return {images, text: fullText.trim()};
-}
-
-// وظيفة تنظيف النص
-function sanitize(str, max=100000){
-  const sanitized = (str||'').replace(/[\u2028\u2029]/g,' ');
-  if (sanitized.length > max) {
-    log(`تحذير: تم اقتصاص النص المدخل لطوله الزائد (${sanitized.length} حرف). الحد الأقصى ${max}.`, 'warn');
-    return sanitized.slice(0, max) + "\n\n[...CONTENT TRUNCATED...]";
-  }
-  return sanitized;
-}
-
-// دالة مساعدة لتأمين عرض النص في HTML
-function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return String(unsafe || '');
-    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-// وظيفة عرض التقرير التنفيذي (لم تتغير جوهرياً)
-function renderExecutive(report){
-  const lang = document.getElementById('lang').value || 'ar';
-  const L = (ar, en) => lang === 'ar' ? ar : en;
-
-  if(!report || Object.keys(report).length === 0) { 
-    execDiv.innerHTML=`<div class="muted" style="text-align: center; padding: 20px;">${L('لم يتم توليد تقرير صالح. يرجى مراجعة "سجل العمليات" بحثًا عن أخطاء في الإدخال أو فشل في النماذج الخلفية.', 'No valid report generated. Please check the "Log" for input errors or backend model failures.')}</div>`;
-    return; 
-  }
-
-  const renderList = (items, mapper, limit=5) => {
-    if (!items || items.length === 0) return '<li>—</li>';
-    return items.slice(0, limit).map(mapper).join('');
+  const state = {
+    files: [],
+    images: [],       // dataURL (jpeg) مضغوطة
+    pdfText: "",      // نص مُستخرج من صفحات PDF
+    prepared: false
   };
 
-  // الوصول إلى البيانات وفق المخطط الجديد (V6)
-  const actions = report.physician_actions || {};
-  const analysis = report.analysis || {};
-  const recommendations = report.recommendations || {};
+  function log(msg){ const el=$("log"); el.textContent += (msg + "\n"); el.scrollTop = el.scrollHeight; }
+  function setPrepStatus(t){ $("prepStatus").textContent = t; }
 
-  // استخراج البيانات المنظمة
-  const vitals = renderList(actions.vitals, v => `<li><b>${escapeHtml(v.metric)}:</b> ${escapeHtml(v.value)} ${escapeHtml(v.unit||'')}</li>`);
-  const meds = renderList(actions.meds, m => `<li><b>${escapeHtml(m.name)}</b> (${escapeHtml(m.dose||'N/A')}, ${escapeHtml(m.route||'N/A')})</li>`);
-  const diagnoses = renderList(actions.diagnoses, d => `<li>${escapeHtml(d)}</li>`);
-  const codes = (actions.icd10_codes||[]).map(c => `<span class="chip">${escapeHtml(c)}</span>`).join('') || '—';
+  $("fileInput").addEventListener("change", (e) => {
+    state.files = Array.from(e.target.files || []);
+    state.prepared = false;
+    state.images = [];
+    state.pdfText = "";
+    setPrepStatus(state.files.length ? `تم اختيار ${state.files.length} ملف(ات).` : "—");
+  });
 
-  // استخراج التحليل والتوصيات
-  const refs = renderList(report.references, r=>`<li class="ref"><a href="${escapeHtml(r.link)}" target="_blank" rel="noopener">${escapeHtml(r.title||r.org||r.link)}</a></li>`, 10);
-  const kf = renderList(report.key_findings, k=>`<li>${escapeHtml(k)}</li>`, 7);
-  const ddx = renderList(analysis.differential_diagnoses, d=>`<li><b>${escapeHtml(d.dx)}</b> — ${escapeHtml(d.why)}</li>`);
-  const issues = renderList(analysis.procedural_issues, i=>`<li><b>${escapeHtml(i.issue)}</b><br><em>${L('التأثير', 'Impact')}:</em> ${escapeHtml(i.impact)}</li>`);
-  const opp = renderList(recommendations.revenue_quality_opportunities, o=>`<li><b>${escapeHtml(o.opportunity)}</b> <span class="chip">${escapeHtml(o.category)}</span><br><em>${L('المبرر', 'Rationale')}:</em> ${escapeHtml(o.rationale)}</li>`);
-  const next = renderList(recommendations.suggested_next_steps, s=>`<li><b>${escapeHtml(s.action)}</b><br><em>${L('التبرير', 'Justification')}:</em> ${escapeHtml(s.justification)}</li>`);
-  const contrad = renderList(analysis.contradictions, c=>`<li><b>${escapeHtml(c.item||L('تناقض', 'Contradiction'))}</b><br><em>${L('الدليل', 'Evidence')}:</em> ${escapeHtml(c.evidence)}<br><em style="color: var(--err-color);">${L('التأثير', 'Impact')}:</em> ${escapeHtml(c.impact||'')}</li>`);
-  
-  const summary = escapeHtml(report.executive_summary || report.patient_summary || L('لا يوجد ملخص.', 'No summary available.'));
+  $("prepBtn").addEventListener("click", async () => { await prepareFiles(); });
 
-  // هيكل عرض محسن
-  execDiv.innerHTML = `
-    <div style="font-size: 15px;"><h4>${L('ملخص تنفيذي شامل', 'Comprehensive Executive Summary')}</h4><div>${summary}</div></div>
-    <hr>
-    <h4>${L('ملخص الحالة والإجراءات المتخذة', 'Case Summary & Actions Taken')}</h4>
-    <div class="grid-3">
-        <div><b>${L('الشكوى الرئيسية','Chief Complaint')}</b><p>${escapeHtml(actions.chief_complaint) || '—'}</p></div>
-        <div><b>${L('التشخيصات الموثقة','Documented Diagnoses')}</b><ul>${diagnoses}</ul></div>
-        <div><b>${L('الأكواد المستخدمة (ICD-10)','Codes Used (ICD-10)')}</b><p>${codes}</p></div>
-    </div>
-    <div class="grid-3">
-        <div><b>${L('العلامات الحيوية','Vitals')}</b><ul>${vitals}</ul></div>
-        <div><b>${L('الأدوية الموصوفة','Prescribed Medications')}</b><ul>${meds}</ul></div>
-        <div><b>${L('نتائج سريرية هامة','Key Clinical Findings')}</b><ul>${kf}</ul></div>
-    </div>
-    <hr>
-    <h4>${L('التحليل والتدقيق السريري', 'Clinical Analysis & Audit')}</h4>
-    <div class="grid-3">
-      <div><b>${L('تناقضات أو أخطاء (توثيق/ترميز)', 'Contradictions/Errors (Doc/Coding)')}</b><ul>${contrad}</ul></div>
-      <div><b>${L('مشكلات إجرائية/توثيقية', 'Procedural/Documentation Issues')}</b><ul>${issues}</ul></div>
-      <div><b>${L('تشاخيص تفاضلية مقترحة', 'Suggested Differential Dx')}</b><ul>${ddx}</ul></div>
-    </div>
-    <hr>
-    <h4>${L('التوصيات وفرص التحسين (CDI/RCM)', 'Recommendations & Opportunities')}</h4>
-    <div class="grid-3">
-      <div><b>${L('فرص تحسين الجودة/الدخل', 'Quality/Revenue Opportunities')}</b><ul>${opp}</ul></div>
-      <div><b>${L('الخطوات التالية الموصى بها', 'Recommended Next Steps')}</b><ul>${next}</ul></div>
-      <div><b>${L('المراجع والإرشادات الداعمة', 'References & Guidelines')}</b><ul>${refs}</ul></div>
-    </div>
-    <div style="margin-top: 20px;"><small class="muted" style="font-style: italic;">${escapeHtml(report.patient_safety_note||'')}</small></div>
-  `;
-}
+  $("analyzeBtn").addEventListener("click", async () => {
+    try{
+      $("analyzeBtn").disabled = true;
+      $("analyzeBtn").textContent = "جارٍ التحليل...";
+      if(!state.prepared) await prepareFiles();
 
-// وظيفة تحضير الملفات (المنسق الرئيسي) - محدثة لتكون أكثر قوة وتدعم التوطين
-async function prepareFiles(files, L){
-  const images = []; let textChunks = [];
-  let startTime = Date.now();
-  let successfulFiles = 0;
+      if(!state.images.length && !state.pdfText.trim()){
+        alert("لم يتم تجهيز بيانات (صور/نص). رجاءً اختر ملف PDF/صورة ثم اضغط تحضير أو تحليل.");
+        return;
+      }
+      const body = {
+        language: $("lang").value,
+        modelChoice: $("modelChoice").value,
+        specialty: $("specialty").value || "",
+        insuranceContext: $("context").value || "",
+        images: state.images,     // dataURL (jpeg)
+        pdfText: state.pdfText
+      };
 
-  for(const f of files){
-    // استخدام try...catch للتعامل مع الأخطاء لكل ملف على حدة
-    try {
-        if(f.type === 'application/pdf'){
-            // pdfToImagesAndText الآن قوية وتعيد النتائج حتى لو كانت جزئية
-            const {images:imgs,text} = await pdfToImagesAndText(f);
-            // التحقق من نجاح المعالجة وعدم كون النص مجرد رسالة خطأ تحميل
-            if (imgs.length > 0 || (text.length > 0 && !text.startsWith("[PDF Loading Failed]"))) {
-                images.push(...imgs.filter(Boolean)); // التأكد من عدم إضافة صور فارغة
-                textChunks.push(`\n\n# BEGIN DOCUMENT: ${f.name} (Type: PDF)\n${text}\n# END DOCUMENT: ${f.name}\n\n`);
-                successfulFiles++;
+      log("بدء استدعاء /api/gpt ...");
+      const res = await fetch("/api/gpt", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(body)
+      });
+
+      if(!res.ok){
+        const t = await res.text();
+        throw new Error(`فشل طلب الخادم: ${res.status} — ${t}`);
+      }
+      const data = await res.json();
+      $("mergedBox").textContent = toPrettyJSON(data.merged || data);
+      $("gptBox").textContent    = toPrettyJSON(data.gpt || {note:"لا يوجد ناتج"});
+      $("geminiBox").textContent = toPrettyJSON(data.gemini || {note:"لا يوجد ناتج"});
+
+      log("اكتمل التحليل.");
+    }catch(err){
+      console.error(err);
+      alert(err.message);
+      log("خطأ: " + err.message);
+    }finally{
+      $("analyzeBtn").disabled = false;
+      $("analyzeBtn").textContent = "تحليل الحالة";
+    }
+  });
+
+  function toPrettyJSON(x){
+    try{
+      if(typeof x === "string"){
+        // حاول استخراج JSON داخل ``` ```
+        const m = x.match(/```json([\s\S]*?)```/i) || x.match(/```([\s\S]*?)```/i);
+        const raw = m ? m[1] : x;
+        return JSON.stringify(JSON.parse(raw), null, 2);
+      }
+      return JSON.stringify(x, null, 2);
+    }catch{ return typeof x === "string" ? x : JSON.stringify(x); }
+  }
+
+  async function prepareFiles(){
+    try{
+      if(!state.files.length){ alert("اختر ملفًا أو أكثر أولاً."); return; }
+      log("بدء التحضير ...");
+      const images = [];
+      const texts  = [];
+
+      for(const file of state.files){
+        if(file.type === "application/pdf" || /\.pdf$/i.test(file.name)){
+          log(`> تحويل PDF واستخراج نص: ${file.name}`);
+          const ab = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+          for(let p=1; p<=pdf.numPages; p++){
+            const page = await pdf.getPage(p);
+            // تحويل الصفحة إلى صورة مُضغّطة
+            const viewport = page.getViewport({ scale: 1.6 }); // جودة جيدة
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width  = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({canvasContext: ctx, viewport}).promise;
+
+            // تصغير (إن لزم) إلى عرض أقصى 1600 بكسل
+            const maxW = 1600;
+            const scale = Math.min(1, maxW / canvas.width);
+            let dataURL;
+            if(scale < 1){
+              const c2 = document.createElement("canvas");
+              c2.width = Math.round(canvas.width * scale);
+              c2.height = Math.round(canvas.height * scale);
+              c2.getContext("2d").drawImage(canvas, 0, 0, c2.width, c2.height);
+              dataURL = c2.toDataURL("image/jpeg", 0.82);
+            }else{
+              dataURL = canvas.toDataURL("image/jpeg", 0.82);
             }
-        } else if (f.type.startsWith('image/')){
-            btn.textContent = `... تحويل ${f.name}`;
-            await sleep(10);
-            log(`> تحويل صورة: ${f.name} ...`);
-            // imageFileToB64 قد ترمي خطأ إذا فشل التحويل (سيتم التقاطه هنا)
-            const imgData = await imageFileToB64(f);
-            images.push(imgData);
-            log(`> اكتمل تحويل الصورة.`, 'ok');
-            textChunks.push(`\n\n# IMAGE CONTEXT: ${f.name} (Type: Image)\n[Visual Content Provided Separately]\n\n`);
-            successfulFiles++;
-        } else {
-            log(`> تخطي نوع ملف غير مدعوم: ${f.name} (${f.type || 'Unknown Type'})`, 'warn');
-        }
-    } catch (error) {
-        // التعامل مع الأخطاء التي قد تحدث (مثل فشل imageFileToB64)
-        log(`فشل شامل في معالجة الملف ${f.name}. الخطأ: ${error.message}`, 'err');
-    }
-  }
+            images.push(dataURL);
 
-  // التحقق النهائي من وجود محتوى
-  if (images.length === 0 && textChunks.length === 0) {
-    // هذا الخطأ يحدث فقط إذا لم تتم معالجة أي ملف بنجاح مطلقًا
-    // استخدام دالة التوطين L لعرض الخطأ باللغة الصحيحة
-    throw new Error(L(
-        "لم يتم تجهيز أي محتوى للتحليل. يرجى مراجعة سجل الأخطاء لمعرفة سبب فشل معالجة الملفات (قد تكون تالفة أو محمية بكلمة مرور).",
-        "No content was prepared for analysis. Please review the error log for file processing failures (files might be corrupt or password-protected)."
-    ));
+            // نص PDF (رفع الدقة للنماذج)
+            const txt = await page.getTextContent();
+            texts.push(txt.items.map(i => i.str).join(" "));
+          }
+        }else if(file.type.startsWith("image/")){
+          log(`> تجهيز صورة: ${file.name}`);
+          const dataURL = await fileToCompressedDataURL(file);
+          images.push(dataURL);
+        }else{
+          log(`> تم تجاهل ملف غير مدعوم: ${file.name}`);
+        }
+      }
+
+      state.images = images;
+      state.pdfText = textsJoin(texts);
+      state.prepared = true;
+
+      setPrepStatus(`تم تجهيز ${images.length} صورة/صفحة + نص PDF للتحليل.`);
+      log("اكتمل التحضير.");
+    }catch(err){
+      console.error(err);
+      alert("فشل التحضير: " + err.message);
+      log("خطأ في التحضير: " + err.message);
+    }
   }
 
-  log(`اكتمل تحضير ${successfulFiles} ملف/ملفات في ${((Date.now() - startTime)/1000).toFixed(1)} ثانية.`, 'ok');
-  return { images, text: sanitize(textChunks.join('\n')) };
-}
-
-// وظيفة تنزيل التقرير
-function download(name, obj){
-  if (!obj || Object.keys(obj).length === 0) {
-    log('لا يوجد بيانات صالحة للتنزيل.', 'warn');
-    return;
+  function textsJoin(arr){ 
+    return (arr||[]).join("\n").replace(/[ \t]{2,}/g,' ').trim();
   }
-  const url = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}));
-  const a = document.createElement('a');
-  const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
-  a.href = url; a.download = `${name}-${timestamp}.json`; a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),5000);
-}
 
-// المستمع الرئيسي لزر التحليل
-document.getElementById('analyzeBtn').addEventListener('click', async ()=>{
-  const lang = document.getElementById('lang').value || 'ar';
-  // تعريف دالة التوطين L
-  const L = (ar, en) => lang === 'ar' ? ar : en;
-  let analysisStartTime;
+  function fileToCompressedDataURL(file){
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const maxW = 1600, maxH = 1600;
+          let {width:w, height:h} = img;
+          const s = Math.min(1, maxW/w, maxH/h);
+          const cw = Math.round(w*s), ch = Math.round(h*s);
+          const canvas = document.createElement("canvas");
+          canvas.width = cw; canvas.height = ch;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, cw, ch);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.onerror = () => reject(new Error("تعذر قراءة الصورة"));
+        img.src = fr.result;
+      };
+      fr.onerror = () => reject(new Error("تعذر قراءة الملف"));
+      fr.readAsDataURL(file);
+    });
+  }
 
-  try{
-    logEl.textContent=''; preMerged.textContent=''; preGPT.textContent=''; preGemini.textContent=''; 
-    execDiv.innerHTML=`<div class="muted" style="text-align: center;">${L('جاري التحضير...', 'Preparing...')}</div>`;
-    prepInfo.style.display='none';
-
-    const files = Array.from(document.getElementById('fileInput').files||[]);
-    if(files.length===0){ alert(L('الرجاء اختيار ملف واحد على الأقل.', 'Please select at least one file.')); return; }
-    
-    btn.disabled = true; 
-    btn.textContent = L('... جاري التحضير', '... Preparing');
-    log('بدء عملية التحضير والتحليل...');
-
-    // خطوة التحضير (تمرير دالة التوطين L)
-    const prep = await prepareFiles(files, L);
-    
-    prepInfo.style.display='inline-block';
-    const prepMsg = L(
-        `تم تجهيز ${prep.images.length} صورة/صفحة و ${prep.text.length} حرف نصي.`,
-        `Prepared ${prep.images.length} images/pages and ${prep.text.length} chars.`
-    );
-    prepInfo.textContent = prepMsg;
-    
-    // خطوة التحليل عبر الـ API
-    log('بدء التحليل عبر النماذج (قد يستغرق وقتاً)...');
-    execDiv.innerHTML=`<div class="muted" style="text-align: center;">${L('جاري التحليل، يرجى الانتظار...', 'Analyzing, please wait...')}</div>`;
-    btn.textContent = L('... جاري التحليل', '... Analyzing');
-
-    const payload = {
-      lang: lang,
-      modelChoice: document.getElementById('model').value || 'both',
-      specialty: document.getElementById('specialty').value || '',
-      context: document.getElementById('context').value || '',
-      images: prep.images,
-      text: prep.text,
-      fileNames: files.map(f=>f.name),
-      apiVersion: 'v6.1.0' // تحديث الإصدار ليعكس تحسينات المتانة
-    };
-
-    analysisStartTime = Date.now();
-    const res = await fetch('/api/gpt', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
-    
-    if(!res.ok){
-      const errTxt = await res.text();
-      log(`خطأ في الاستجابة من الخادم: HTTP ${res.status}`, 'err');
-      throw new Error(`Server Error (${res.status}): ${errTxt}`);
-    }
-    const data = await res.json();
-
-    if (!data.ok && !data.merged) {
-        throw new Error(`Analysis Failed on Server: ${data.error || 'Unknown error'}`);
-    }
-
-    // عرض النتائج
-    renderExecutive(data.merged);
-    preMerged.textContent = JSON.stringify(data.merged, null, 2);
-    
-    // عرض المخرجات الخام
-    const displayRaw = (preEl, modelData) => {
-        if (modelData?.raw) {
-            preEl.textContent = modelData.raw;
-        } else {
-            preEl.textContent = `Status: ${modelData?.note || (modelData?.ok ? 'OK (No Output)' : 'Failed/Skipped')}\nError: ${modelData?.error || 'None'}`;
-        }
-    };
-    displayRaw(preGPT, data.gpt);
-    displayRaw(preGemini, data.gemini);
-
-    // التعامل مع الأخطاء الجزئية
-    if (data.errors && data.errors.length > 0) {
-        log('تحذير: حدثت أخطاء جزئية أثناء التحليل (قد يكون أحد النماذج فشل):', 'warn');
-        data.errors.forEach(e => log(e, 'warn'));
-    }
-
-    const duration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
-    log(`اكتمل التحليل بنجاح في ${duration} ثانية.`,'ok');
-
-    // رابط تنزيل
-    download('medical-audit-report-v6', data.merged);
-
-  }catch(err){
-    // التعامل مع الأخطاء العامة (بما في ذلك خطأ "لم يتم تجهيز محتوى" الموطّن)
-    const errMsg = err.message || String(err);
-    alert(L('حدث خطأ أثناء التحليل: ', 'An error occurred during analysis: ') + errMsg.slice(0, 500));
-    execDiv.innerHTML=`<div class="err" style="text-align: center; padding: 20px; background: #fef2f2;">${L('فشل التحليل. تحقق من سجل العمليات.', 'Analysis failed. Check the log.')}</div>`;
-    log(`خطأ شامل: ${errMsg}`,'err');
-  }finally{
-    btn.disabled=false; 
-    btn.textContent= L('بدء تحليل الحالة', 'Analyze Case');
-  }
-});
+})();
 </script>
 </body>
 </html>
