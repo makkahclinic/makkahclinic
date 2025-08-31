@@ -1,397 +1,134 @@
-// /api/gpt.js
-// V8.1 - Clinical Consultant Engine with Advanced Heuristics (Compatible with legacy endpoint name)
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import formidable from 'formidable';
+import fs from 'fs';
+import path from 'path';
 
+// Vercel specific configuration for formidable
 export const config = {
-    runtime: 'nodejs',
-    maxDuration: 60
+    api: {
+        bodyParser: false,
+    },
 };
 
-import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const GEMINI_API_KEY  = process.env.GEMINI_API_KEY  || '';
-
-const OPENAI_MODEL = "gpt-4o-2024-08-06";
-const GEMINI_MODEL = "gemini-1.5-pro-latest";
-const MAX_TOKENS = 16384;
-
-/** Helpers **/
-async function readJson(req) {
-    try {
-        if (req.body && Object.keys(req.body).length > 0) {
-            return typeof req.body === 'object' ? req.body : JSON.parse(req.body);
-        }
-        const chunks = [];
-        for await (const c of req) chunks.push(c);
-        const raw = Buffer.concat(chunks).toString("utf8");
-        if (!raw) return {};
-        return JSON.parse(raw);
-    } catch (e) {
-        throw new Error(`Invalid JSON payload: ${e.message}`);
-    }
-}
-
-function extractJSON(text){
-  if(!text) return null;
-  const cleanText = text.trim().replace(/^```(json)?|```$/g, '').trim();
-  try { 
-    const start = cleanText.indexOf('{');
-    const end = cleanText.lastIndexOf('}');
-    if (start !== -1 && end !== -1 && end > start) {
-        return JSON.parse(cleanText.substring(start, end + 1));
-    }
-    return JSON.parse(cleanText); 
-  } catch (e) {
-    console.error("Failed to parse JSON:", e.message);
-    return null;
-  }
-}
-
-function mergeArrays(a=[], b=[], keyFields=['medication', 'issue', 'gap', 'item', 'dx']){
-  const out = [];
-  const seen = new Set();
- 
-  function sig(x){
-    if (typeof x === 'string') return x.trim().toLowerCase().slice(0, 150);
-    if (typeof x !== 'object' || x === null) return String(x).slice(0, 100);
-
-    for(const k of keyFields){
-      if(x[k]) return `${k}:${String(x[k]).trim().toLowerCase().slice(0, 150)}`;
-    }
-    try {
-        return JSON.stringify(Object.entries(x).sort().slice(0, 2)).slice(0, 150);
-    } catch {
-        return String(x).slice(0, 100);
-    }
-  }
-
-  for(const it of [...(a||[]),...(b||[])].filter(Boolean)){
-    const s = sig(it);
-    if(!seen.has(s)){ out.push(it); seen.add(s); }
-  }
-  return out;
-}
-
-
-function buildSystemPromptV8(lang = 'ar', specialty = '') {
-    const L = (ar, en) => (lang === 'ar' ? ar : en);
-
-    return L(
-`أنت "استشاري صيدلة سريرية وخبير تدقيق تأمين". مهمتك ليست مجرد استخراج المعلومات، بل إجراء تحليل نقدي عميق كخبير طبي. سلامة المريض هي الأولوية المطلقة.
-
-# عملية التفكير الإلزامية (Chain-of-Thought) داخل \`_internal_reasoning_process\`:
-1.  **استيعاب الحالة:** لخص عمر المريض، جنسه، وتشخيصاته الأساسية.
-2.  **جرد الأدوية:** أدرج كل دواء مع جرعته وتكراره ومدته.
-3.  **التحليل السريري النقدي (الأهم):** يجب عليك تقييم كل دواء ومنظومة الأدوية بالكامل من خلال عدسة القواعد السريرية التالية:
-    * **التفاعلات الدوائية الخطيرة:** ابحث عن أي تفاعلات مهمة.
-    * **التكرار العلاجي:** هل يوجد دواءان من نفس الفئة؟ (مثال: 2 من مضادات الالتهاب غير الستيرويدية).
-    * **موانع الاستعمال:** هل الدواء ممنوع استخدامه مع تشخيص معين؟
-    * **قواعد سريرية إلزامية للبحث عنها (Mandatory Heuristics):**
-        * **الضربة الثلاثية الكلوية (Triple Whammy):** ابحث بقوة عن تركيبة (NSAID + Diuretic + ACEi/ARB).
-        * **متلازمة السيروتونين:** ابحث عن تركيبة (SSRI/SNRI + Tramadol/Triptans/MAOI).
-        * **مخاطر النزيف العالية:** ابحث عن تركيبة (Anticoagulant + Antiplatelet + NSAID).
-        * **إطالة فترة QT (QTc Prolongation):** ابحث عن أدوية معروفة بذلك (مثل Macrolides + Antipsychotics).
-        * **معايير بيرز (Beers Criteria):** لكبار السن (>65)، تحقق من وجود أدوية غير مناسبة (مثل مضادات الهيستامين من الجيل الأول، البنزوديازيبينات طويلة المفعول).
-    * **تقييم الجرعة:** هل الجرعة مناسبة للتشخيص والعمر؟ هل قد تحتاج لتعديل في حالة وجود قصور كلوي/كبدي (اذكر هذه الملاحظة كتحذير).
-4.  **تحليل الفجوات (Gap Analysis):** فكر كطبيب استشاري. ما هي الفحوصات أو التدخلات المفقودة؟ (أمثلة: مريض سكري بدون فحص HbA1c أو فحص قاع عين، مريض ضغط بدون متابعة وظائف الكلى، مريض يأخذ ستاتين بدون تحليل LFTs).
-5.  **الاستنتاج النهائي:** بناءً على ما سبق، صنّف كل دواء واملأ تقرير JSON.
-
-**بعد إكمال هذا التحليل العميق في \`_internal_reasoning_process\`, قم بتعبئة هيكل JSON V8 بدقة.**
-
-# هيكل JSON المطلوب (V8 - التزم به حرفيًا):
-{
-  "_internal_reasoning_process": "ضع هنا تحليلك النقدي المفصل خطوة بخطوة بناءً على التعليمات أعلاه...",
-  "patient_info": { "name": "", "age": "", "gender": "", "file_id": "" },
-  "diagnoses": [""],
-  "physician_info": { "name": "", "specialty": "" },
-  "medication_review": [
-    {
-      "medication": "اسم الدواء/الإجراء",
-      "dose_frequency": "الجرعة والتكرار",
-      "duration_quantity": "المدة أو الكمية",
-      "insurance_status_code": "GREEN|YELLOW|RED",
-      "status_emoji": "🟢|🟡|🔴",
-      "clinical_risk_level": "None|Low|Medium|High|Critical",
-      "justification": "تعليل سريري وتأميني مفصل جدًا، يوضح سبب القبول أو الرفض والمخاطر المحددة (مثال: 'مقبول لعلاج السكري، لكن الجرعة قد تحتاج مراجعة لكبار السن').",
-      "action_required": "None|Monitor|Stop|Clarify Dose|Switch"
-    }
-  ],
-  "consultative_analysis": {
-    "red_flags_immediate_action": [ { "issue": "وصف المشكلة الخطيرة", "recommendation": "التوصية الفورية" } ],
-    "yellow_flags_monitoring_needed": [ { "issue": "وصف المشكلة التي تتطلب متابعة", "recommendation": "التوصية بالمتابعة" } ],
-    "green_flags_appropriate_care": [ { "item": "العنصر المناسب", "note": "ملاحظة" } ]
-  },
-  "gap_analysis_missing_interventions": [ { "gap": "الفجوة العلاجية (فحص/إجراء ناقص)", "recommendation": "التوصية بإجرائه" } ],
-  "executive_summary": "ملخص تنفيذي يركز على أهم المخاطر الدوائية المكتشفة، الفجوات العلاجية، والتوصيات الرئيسية لضمان سلامة المريض."
-}
-`,
-// English V8 Prompt
-`You are a Board-Certified Clinical Pharmacist and Insurance Auditing Expert. Your task is not just to extract information but to perform a deep, critical analysis as a medical professional. Patient safety is the absolute priority.
-
-# Mandatory Chain-of-Thought (CoT) Process (within \`_internal_reasoning_process\`):
-1.  **Understand the Case:** Summarize the patient's age, gender, and primary diagnoses.
-2.  **Inventory Medications:** List every drug with its dose, frequency, and duration.
-3.  **Critical Clinical Analysis (Most Important):** You must evaluate each drug and the entire regimen through the lens of the following clinical rules:
-    * **Serious Drug-Drug Interactions (DDIs):** Look for any significant interactions.
-    * **Therapeutic Duplication:** Are there two drugs from the same class? (e.g., 2 NSAIDs).
-    * **Contraindications:** Is a drug contraindicated for a specific diagnosis?
-    * **Mandatory Heuristics to search for:**
-        * **Renal "Triple Whammy":** Actively look for the combination of (NSAID + Diuretic + ACEi/ARB).
-        * **Serotonin Syndrome:** Look for (SSRI/SNRI + Tramadol/Triptans/MAOI).
-        * **High Bleeding Risk:** Look for (Anticoagulant + Antiplatelet + NSAID).
-        * **QTc Prolongation:** Look for known QTc-prolonging drugs used together (e.g., Macrolides + Antipsychotics).
-        * **Beers Criteria:** For elderly patients (>65), check for inappropriate medications (e.g., first-gen antihistamines, long-acting benzodiazepines).
-    * **Dose Evaluation:** Is the dose appropriate for the diagnosis and age? Might it need adjustment for renal/hepatic impairment (state this as a warning).
-4.  **Gap Analysis:** Think like a consultant physician. What tests or interventions are missing? (e.g., a diabetes patient without an HbA1c or eye exam, a hypertension patient without renal function monitoring, a patient on a statin without LFTs).
-5.  **Final Conclusion:** Based on the above, classify each drug and populate the JSON report.
-
-**After completing this deep analysis in \`_internal_reasoning_process\`, populate the V8 JSON schema meticulously.**
-
-# Required JSON Schema (V8 - Adhere to this strictly):
-{
-  "_internal_reasoning_process": "Place your detailed, step-by-step critical analysis here based on the instructions above...",
-  "patient_info": { "name": "", "age": "", "gender": "", "file_id": "" },
-  "diagnoses": [""],
-  "physician_info": { "name": "", "specialty": "" },
-  "medication_review": [
-    {
-      "medication": "Medication/Procedure Name",
-      "dose_frequency": "Dose and Frequency",
-      "duration_quantity": "Duration or Quantity",
-      "insurance_status_code": "GREEN|YELLOW|RED",
-      "status_emoji": "🟢|🟡|🔴",
-      "clinical_risk_level": "None|Low|Medium|High|Critical",
-      "justification": "Very detailed clinical and insurance justification, explaining the reason for acceptance or rejection and the specific risks (e.g., 'Acceptable for diabetes, but dose may need review in the elderly').",
-      "action_required": "None|Monitor|Stop|Clarify Dose|Switch"
-    }
-  ],
-  "consultative_analysis": {
-    "red_flags_immediate_action": [ { "issue": "Description of the critical problem", "recommendation": "Immediate recommendation" } ],
-    "yellow_flags_monitoring_needed": [ { "issue": "Description of the issue requiring follow-up", "recommendation": "Follow-up recommendation" } ],
-    "green_flags_appropriate_care": [ { "item": "The appropriate item", "note": "A note" } ]
-  },
-  "gap_analysis_missing_interventions": [ { "gap": "Therapeutic gap (missing test/procedure)", "recommendation": "Recommendation to perform it" } ],
-  "executive_summary": "An executive summary focusing on the most significant medication risks discovered, therapeutic gaps, and key recommendations to ensure patient safety."
-}`
-    );
-}
-
-function buildUserMessage({lang, context, text, images}){
-    const L = (ar,en)=> (lang==='ar'? ar : en);
-    const truncatedText = (text || '').slice(0, 100000); 
-
-    const meta = L(
-`# سياق المراجعة
-اللغة المطلوبة للتقرير: العربية
-سياق المطالبة/هدف المراجعة: ${context||'مراجعة شاملة للأدوية الموصوفة وملاءمتها التأمينية والسريرية'}
-
-# المستندات المتاحة للتحليل
-عدد الصور/الصفحات المرئية: ${images?.length||0}
-
-## المحتوى النصي المستخرج (إن وجد)
-<EXTRACTED_TEXT>
-${truncatedText||'لا يوجد نص مستخرج. اعتمد على الصور بشكل كامل.'}
-</EXTRACTED_TEXT>
-
-# المهمة
-حلل النص والصور المرئية (المرفقة) معًا. اتبع تعليمات النظام (بما في ذلك عملية التفكير CoT) بدقة وأعد تقرير JSON (V8) فقط.`,
-`# Review Context
-Required Report Language: English
-Claim Context/Review Goal: ${context || 'Comprehensive review of prescribed medications for clinical and insurance appropriateness.'}
-
-# Documents Available for Analysis
-Number of visible images/pages: ${images?.length || 0}
-
-## Extracted Text Content (if any)
-<EXTRACTED_TEXT>
-${truncatedText || 'No extracted text. Rely entirely on the images.'}
-</EXTRACTED_TEXT>
-
-# Task
-Analyze the text and visual images (attached) together. Follow the system instructions (including the CoT process) precisely and return the JSON report (V8) only.`
-);
-    return meta;
-}
-
-
-async function callOpenAI({lang, specialty, userMsg, images}){
-    if(!OPENAI_API_KEY) return { ok:false, data:null, note:'OPENAI_API_KEY missing' };
-    try {
-        const client = new OpenAI({ apiKey: OPENAI_API_KEY });
-        const content = [{ type:'text', text:userMsg }];
-        for(const b64 of (images||[])){
-            content.push({ type:'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: "high" } });
-        }
-        const system = buildSystemPromptV8(lang, specialty);
-       
-        const completion = await client.chat.completions.create({
-            model: OPENAI_MODEL,
-            temperature: 0.15,
-            response_format: { type: "json_object" },
-            max_tokens: MAX_TOKENS,
-            messages: [
-                { role:"system", content: system },
-                { role:"user",   content: content }
-            ]
-        });
-        const raw = completion.choices?.[0]?.message?.content;
-        const data = extractJSON(raw);
-        if (!data) throw new Error("Failed to extract valid JSON from OpenAI response.");
-        return { ok:true, raw, data };
-    } catch (e) {
-        console.error("OpenAI Call Failed:", e);
-        const errorMessage = e.message || String(e);
-        return { ok:false, raw: errorMessage, data:null, error: errorMessage };
-    }
-}
-
-async function callGemini({lang, specialty, userMsg, images}){
-    if(!GEMINI_API_KEY) return { ok:false, data:null, note:'GEMINI_API_KEY missing' };
-    try {
-        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const system = buildSystemPromptV8(lang, specialty);
-        const model = genAI.getGenerativeModel({ 
-            model: GEMINI_MODEL,
-            systemInstruction: system,
-            generationConfig: { 
-                temperature: 0.15,
-                maxOutputTokens: MAX_TOKENS,
-                responseMimeType: "application/json" 
+// --- Helper Function to parse the form ---
+async function parseForm(req) {
+    return new Promise((resolve, reject) => {
+        const form = formidable({});
+        form.parse(req, (err, fields, files) => {
+            if (err) {
+                reject(err);
+                return;
             }
+            // In Vercel, the file object might be nested inside an array
+            const file = Array.isArray(files.file) ? files.file[0] : files.file;
+            if (!file) {
+                reject(new Error("No file uploaded. Make sure the input name is 'file'."));
+                return;
+            }
+            resolve(file);
         });
-        const parts = [{ text: userMsg }];
-        for(const b64 of (images||[])){
-            parts.push({ inlineData:{ mimeType:'image/jpeg', data:b64 }});
-        }
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: parts }]
-        });
-        const raw = result.response?.text();
-        const data = extractJSON(raw);
-        if (!data) throw new Error("Failed to extract valid JSON from Gemini response.");
-        return { ok:true, raw, data };
-    } catch (e) {
-        console.error("Gemini Call Failed:", e);
-        const errorMessage = e.message || String(e);
-        return { ok:false, raw: errorMessage, data:null, error: errorMessage };
-    }
+    });
 }
 
-function scoreReportV8(report) {
-    if (!report || Object.keys(report).length === 0) return 0;
-    let score = 0;
-    const reasoning = (report._internal_reasoning_process || "").toLowerCase();
-    const analysis = report.consultative_analysis || {};
-    const medicationReview = report.medication_review || [];
-
-    if (reasoning.length > 150) score += Math.min(reasoning.length / 5, 250);
-
-    const criticalKeywords = ['triple whammy', 'serotonin syndrome', 'bleeding risk', 'qt prolongation', 'beers criteria', 'contraindication', 'تكرار علاجي', 'الضربة الثلاثية', 'متلازمة السيروتونين'];
-    const foundKeywords = criticalKeywords.filter(kw => reasoning.includes(kw));
-    score += foundKeywords.length * 200;
-
-    score += (analysis.red_flags_immediate_action?.length || 0) * 75;
-    score += (analysis.yellow_flags_monitoring_needed?.length || 0) * 30;
-    score += (report.gap_analysis_missing_interventions?.length || 0) * 40;
-
-    if (medicationReview.length > 0) {
-        const totalLength = medicationReview.reduce((sum, item) => sum + (item.justification?.length || 0), 0);
-        score += Math.min(totalLength / medicationReview.length, 400) * 0.5;
+// --- Main API Handler ---
+export default async function handler(req, res) {
+    if (req.method !== 'POST') {
+        res.setHeader('Allow', 'POST');
+        return res.status(405).json({ error: 'Method Not Allowed' });
     }
-    return score;
-}
 
-function mergeReportsV8(a={}, b={}, lang='ar'){
-    const scoreA = scoreReportV8(a);
-    const scoreB = scoreReportV8(b);
-    console.log(`Report Quality Scores (V8): A=${scoreA.toFixed(1)}, B=${scoreB.toFixed(1)}`);
-
-    const primary = scoreA >= scoreB ? a : b;
-    const secondary = scoreA >= scoreB ? b : a;
-   
-    const get = (obj, path, def=[]) => path.split('.').reduce((o, k) => (o || {})[k], obj) || def;
-
-    const mergedMedReview = mergeArrays(
-        get(a, 'medication_review'), 
-        get(b, 'medication_review')
-    );
-
-    const merged = {
-        patient_info: primary.patient_info || secondary.patient_info || {},
-        physician_info: primary.physician_info || secondary.physician_info || {},
-        diagnoses: mergeArrays(a.diagnoses, b.diagnoses),
-        medication_review: mergedMedReview,
-        consultative_analysis: {
-            red_flags_immediate_action: mergeArrays(get(a, 'consultative_analysis.red_flags_immediate_action'), get(b, 'consultative_analysis.red_flags_immediate_action')),
-            yellow_flags_monitoring_needed: mergeArrays(get(a, 'consultative_analysis.yellow_flags_monitoring_needed'), get(b, 'consultative_analysis.yellow_flags_monitoring_needed')),
-            green_flags_appropriate_care: mergeArrays(get(a, 'consultative_analysis.green_flags_appropriate_care'), get(b, 'consultative_analysis.green_flags_appropriate_care')),
-        },
-        gap_analysis_missing_interventions: mergeArrays(a.gap_analysis_missing_interventions, b.gap_analysis_missing_interventions),
-        executive_summary: primary.executive_summary || secondary.executive_summary || ''
-    };
-   
-    merged.patient_safety_note = (lang === 'ar' ? 
-        "إخلاء مسؤولية: هذا التقرير ناتج عن تحليل آلي (AI) وهو مخصص لمراجعة الأدوية والتدقيق التأميني. يجب مراجعة جميع النتائج من قبل صيدلي سريري أو طبيب مرخص قبل اتخاذ أي قرارات علاجية." :
-        "Disclaimer: This report is generated by AI for medication review and insurance audit purposes. All findings must be reviewed by a licensed clinical pharmacist or physician before making therapeutic decisions."
-    );
-
-    if (merged._internal_reasoning_process) {
-        delete merged._internal_reasoning_process;
-    }
-    if (a._internal_reasoning_process) delete a._internal_reasoning_process;
-    if (b._internal_reasoning_process) delete b._internal_reasoning_process;
-
-    return merged;
-}
-
-export default async function handler(req, res){
     try {
-        if(req.method !== 'POST') {
-            return res.status(405).json({ok:false, error:'Use POST'});
+        // 1. Initialize Gemini AI
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+
+        // 2. Parse uploaded file
+        const file = await parseForm(req);
+        const fileBuffer = fs.readFileSync(file.filepath);
+        const base64File = fileBuffer.toString('base64');
+        const mimeType = file.mimetype;
+
+        // 3. Define the detailed prompt for the AI
+        const prompt = `
+        You are an expert medical insurance claim analyst. Your task is to analyze the provided medical document (image or PDF) and return a structured JSON object.
+        The document contains clinical information about a patient.
+        
+        Follow these instructions precisely:
+        1.  Perform OCR on the document, including handwriting.
+        2.  Extract all relevant clinical and administrative information.
+        3.  Analyze the information for medical necessity, potential errors, and insurance coverage.
+        4.  Generate a JSON object with the exact structure below. Do NOT add any text or markdown formatting before or after the JSON object.
+
+        JSON structure to follow:
+        {
+          "summary": "A clear, concise summary of the patient's case and visit.",
+          "patientInfo": {
+            "name": "Patient's Full Name",
+            "age": "Patient's Age",
+            "gender": "Patient's Gender"
+          },
+          "physicianInfo": {
+            "name": "Physician's Full Name",
+            "specialty": "Physician's Specialty"
+          },
+          "analysis": {
+            "diagnoses": ["List of diagnoses as strings"],
+            "medications": ["List of prescribed medications as strings"],
+            "procedures": ["List of performed procedures as strings"]
+          },
+          "errorDetection": {
+            "hasErrors": true_or_false,
+            "details": ["Describe any inconsistencies, contradictions, missing justifications, or potential errors."]
+          },
+          "insuranceEvaluation": [
+            {
+              "item": "Name of the drug or procedure",
+              "status": "Accepted OR Rejected OR Needs Justification",
+              "reason": "Brief justification for the status. For 'Accepted', mention it's standard procedure. For 'Rejected', state why (e.g., not covered, experimental). For 'Needs Justification', explain what is missing (e.g., requires prior authorization, missing diagnosis link)."
+            }
+          ],
+          "recommendations": {
+            "todo": "Actionable advice for the physician to ensure future claims are approved.",
+            "toAvoid": "Specific actions the physician should avoid to prevent rejections."
+          }
         }
-       
-        const body = await readJson(req);
-        const { lang='ar', modelChoice='both', specialty='', context='', images=[], text='' } = body||{};
-       
-        const sanitizedText = text ? text.slice(0, 100000) : '';
-        if (images.length === 0 && sanitizedText.trim().length === 0) {
-            return res.status(400).json({ ok:false, error:"No content provided." });
+        `;
+
+        // 4. Prepare the request for Gemini
+        const imagePart = {
+            inlineData: {
+                data: base64File,
+                mimeType: mimeType,
+            },
+        };
+
+        const textPart = {
+            text: prompt,
+        };
+
+        // 5. Call the AI model
+        const result = await model.generateContent([textPart, imagePart]);
+        const response = result.response;
+        const responseText = response.text();
+
+        // 6. Clean and parse the JSON response from the AI
+        // The model sometimes wraps the JSON in markdown ```json ... ```
+        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+        const jsonString = jsonMatch ? jsonMatch[1] : responseText;
+        
+        let parsedData;
+        try {
+            parsedData = JSON.parse(jsonString);
+        } catch (e) {
+            console.error("Failed to parse JSON from AI response:", jsonString);
+            throw new Error("The AI returned an invalid response format.");
         }
-        if(!OPENAI_API_KEY && !GEMINI_API_KEY){
-          return res.status(500).json({ ok:false, error:"Missing API keys." });
-        }
-       
-        const userMsg = buildUserMessage({lang, context, text: sanitizedText, images});
 
-        const wantsGPT = (modelChoice==='both' || modelChoice==='gpt') && !!OPENAI_API_KEY;
-        const wantsGem = (modelChoice==='both' || modelChoice==='gemini') && !!GEMINI_API_KEY;
+        // 7. Send the structured data back to the frontend
+        return res.status(200).json(parsedData);
 
-        const [gptRes, gemRes] = await Promise.all([
-            wantsGPT ? callOpenAI({lang, specialty, userMsg, images}) : Promise.resolve({ok:false, data:null, note:'Disabled or key missing.'}),
-            wantsGem ? callGemini({lang, specialty, userMsg, images}) : Promise.resolve({ok:false, data:null, note:'Disabled or key missing.'})
-        ]);
-       
-        const errors = [];
-        if (wantsGPT && !gptRes.ok) errors.push(`GPT-4o Error: ${gptRes.error}`);
-        if (wantsGem && !gemRes.ok) errors.push(`Gemini Error: ${gemRes.error}`);
-
-        if (!gptRes.data && !gemRes.data) {
-            return res.status(500).json({ ok:false, error:"Both models failed.", errors });
-        }
-
-        const merged = mergeReportsV8(gptRes.data || {}, gemRes.data || {}, lang);
-
-        return res.status(200).json({
-            ok:true,
-            version: 'v8.1.0-node-consultant',
-            errors: errors.length > 0 ? errors : undefined,
-            merged,
-            gpt: { ok:gptRes.ok, raw: gptRes.raw, error: gptRes.error, note: gptRes.note },
-            gemini: { ok:gemRes.ok, raw: gemRes.raw, error: gemRes.error, note: gemRes.note }
-        });
-    } catch(err) {
-        console.error("Internal Handler Error:", err);
-        return res.status(500).json({ ok:false, error:err?.message || String(err) });
+    } catch (error) {
+        console.error('Error processing request:', error);
+        return res.status(500).json({ error: error.message || 'An internal server error occurred.' });
     }
 }
