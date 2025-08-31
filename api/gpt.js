@@ -23,32 +23,56 @@ const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg })
 const parseJsonSafe = async (response) => (response.headers.get("content-type") || "").includes("application/json") ? response.json() : { raw: await response.text() };
 
 // --- معالج رفع الملفات إلى Gemini ---
+// ✅ [تم الإصلاح] تم استبدال الدالة القديمة بدالة جديدة ومبسطة تتبع البروتوكول القياسي
 async function geminiUploadBase64({ name, mimeType, base64 }) {
     const binaryData = Buffer.from(base64, "base64");
+
+    // الخطوة 1: بدء جلسة الرفع القابلة للاستئناف للحصول على رابط الرفع
     const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
         method: "POST",
         headers: {
-            "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start",
-            "X-Goog-Upload-Header-Content-Length": String(binaryData.byteLength),
-            "X-Goog-Upload-Header-Content-Type": mimeType, "Content-Type": "application/json",
+            "Content-Type": "application/json",
+            "X-Goog-Upload-Protocol": "resumable",
         },
-        body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
+        body: JSON.stringify({
+            file: {
+                display_name: name,
+                mime_type: mimeType,
+            },
+        }),
     });
-    if (!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
+
+    if (!initRes.ok) {
+        throw new Error(`Gemini upload init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
+    }
+
     const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
-    if (!sessionUrl) throw new Error("Gemini upload session URL is missing");
+    if (!sessionUrl) {
+        throw new Error("Gemini upload session URL is missing from response headers.");
+    }
+
+    // الخطوة 2: رفع البيانات الفعلية للملف إلى الرابط الذي تم الحصول عليه
     const uploadRes = await fetch(sessionUrl, {
         method: "PUT",
         headers: {
-            "Content-Type": mimeType, "X-Goog-Upload-Command": "upload, finalize",
-            "X-Goog-Upload-Offset": "0", "Content-Length": String(binaryData.byteLength),
+            "Content-Type": mimeType,
+            "Content-Length": String(binaryData.byteLength),
         },
         body: binaryData,
     });
+
     const metadata = await parseJsonSafe(uploadRes);
-    if (!uploadRes.ok) throw new Error(`Gemini finalize failed: ${JSON.stringify(metadata)}`);
-    return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
+    if (!uploadRes.ok) {
+        throw new Error(`Gemini data upload failed: ${JSON.stringify(metadata)}`);
+    }
+
+    // الاستجابة النهائية تحتوي على معلومات الملف الذي تم رفعه
+    return {
+        uri: metadata?.file?.uri,
+        mime: metadata?.file?.mime_type || mimeType
+    };
 }
+
 
 // --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
@@ -56,8 +80,10 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     if (text) userParts.push({ text });
     for (const file of files || []) {
         const mime = file?.mimeType || "application/octet-stream";
-        const base64Data = (file?.data || "").split("base64,").pop() || file?.data;
+        // ✅ [تنظيف] تم تبسيط هذا السطر لأنه لا حاجة لإزالة البادئة التي تم حذفها بالفعل في الواجهة الأمامية
+        const base64Data = file?.data || '';
         if (!base64Data) continue;
+        
         const { uri, mime: finalMime } = await geminiUploadBase64({ name: file?.name || "unnamed_file", mimeType: mime, base64: base64Data });
         userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
     }
@@ -182,7 +208,7 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         if (normalizedLabel.includes('لا ينطبق') || normalizedLabel.includes('not applicable')) return 'background-color: #e8eaed; color: #5f6368;';
         return 'background-color: #e8eaed; color: #3c4043;';
     };
-   
+    
     const getRiskClass = (category) => {
         const normalizedCategory = (category || '').toLowerCase();
         if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts') || normalizedCategory.includes('خطأ في الجرعة') || normalizedCategory.includes('dosing error')) return 'risk-critical';
@@ -198,7 +224,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         return `<div class="source-doc-card"><h3>${f.name}</h3>${filePreview}</div>`;
     }).join('');
 
-    // --- تعديل: تم تبسيط بنية الخلية الأولى لتجنب الانحراف ---
     const tableRows = (s.table || []).map(r =>        `<tr class="${getRiskClass(r.analysisCategory)}">
         <td class="item-cell">
             <div class="item-name">${r.name || '-'}</div>
@@ -224,7 +249,6 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         </div>`;
     }).join("");
 
-    // --- تعديل: تم إعادة كتابة CSS الجدول بالكامل لضمان ثبات التصدير ---
     return `
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
@@ -372,4 +396,3 @@ export default async function handler(req, res) {
         return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
     }
 }
-
