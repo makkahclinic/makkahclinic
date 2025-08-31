@@ -320,6 +320,259 @@ async function getAuditFromOpenAI(bundle, lang, retries = 3) {
     }
 }
 
+// --- عارض التقرير المتقدم (HTML Renderer) ---
+function renderHtmlReport(structuredData, files, lang = 'ar') {
+    const s = structuredData;
+    const isArabic = lang === 'ar';
+    const text = {
+        sourceDocsTitle: isArabic ? "المستندات المصدرية" : "Source Documents",
+        summaryTitle: isArabic ? "ملخص الحالة والتقييم العام" : "Case Summary & Overall Assessment",
+        detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات" : "Detailed Analysis of Procedures",
+        recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
+        itemHeader: isArabic ? "الإجراء" : "Item",
+        dosageHeader: isArabic ? "الجرعة المكتوبة" : "Written Dosage",
+        strengthHeader: isArabic ? "القوة" : "Strength",
+        frequencyHeader: isArabic ? "التكرار" : "Frequency",
+        durationHeader: isArabic ? "المدة" : "Duration",
+        statusHeader: isArabic ? "الحالة" : "Status",
+        decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
+        justificationHeader: isArabic ? "التبرير" : "Justification",
+        relatedTo: isArabic ? "مرتبط بـ" : "Related to",
+        notAvailable: isArabic ? "غير متوفر." : "Not available."
+    };
+
+    const getDecisionStyle = (label) => {
+        const normalizedLabel = (label || '').toLowerCase();
+        if (normalizedLabel.includes('مقبول') || normalizedLabel.includes('accepted')) return 'background-color: #e6f4ea; color: #1e8e3e;';
+        if (normalizedLabel.includes('مرفوض') || normalizedLabel.includes('rejected')) return 'background-color: #fce8e6; color: #d93025;';
+        if (normalizedLabel.includes('لا ينطبق') || normalizedLabel.includes('not applicable')) return 'background-color: #e8eaed; color: #5f6368;';
+        return 'background-color: #e8eaed; color: #3c4043;';
+    };
+   
+    const getRiskClass = (category) => {
+        const normalizedCategory = (category || '').toLowerCase();
+        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || 
+            normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts') || 
+            normalizedCategory.includes('خطأ في الجرعة') || normalizedCategory.includes('dosing error')) {
+            return 'risk-critical';
+        }
+        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate') || 
+            normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified') || 
+            normalizedCategory.includes('تحتاج لمراجعة') || normalizedCategory.includes('requires review')) {
+            return 'risk-warning';
+        }
+        if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) {
+            return 'risk-ok';
+        }
+        return '';
+    };
+
+    const sourceDocsHtml = (files || []).map(f => {
+        const isImg = (f.mimeType || '').startsWith('image/');
+        const src = `data:${f.mimeType};base64,${f.data}`;
+        const filePreview = isImg ? 
+            `<img src="${src}" alt="${f.name}" style="max-width: 100%; max-height: 200px;" />` : 
+            `<div style="padding:20px; border:1px dashed #e5e7eb; border-radius:8px; background:#f9fbfc; color:#6b7280; text-align:center;">${f.name}</div>`;
+        return `<div class="source-doc-card"><h3>${f.name}</h3>${filePreview}</div>`;
+    }).join('');
+
+    const tableRows = (s.table || []).map(r => 
+        `<tr class="${getRiskClass(r.analysisCategory)}">
+            <td class="item-cell">
+                <div class="item-name">${r.name || '-'}</div>
+                <small class="item-category">${r.analysisCategory || ''}</small>
+            </td>
+            <td class="dosage-cell">${r.dosage_written || '-'}</td>
+            <td class="strength-cell">${r.strength || '-'}</td>
+            <td class="frequency-cell">${r.frequency || '-'}</td>
+            <td class="duration-cell">${r.duration || '-'}</td>
+            <td>${r.status || '-'}</td>
+            <td><span class="decision-badge">${r.insuranceDecision?.label || '-'}</span></td>
+            <td>${r.insuranceDecision?.justification || '-'}</td>
+        </tr>`
+    ).join("");
+
+    const recommendationsList = (s.recommendations || []).map(rec => {
+        const priorityClass = (rec.priority || '').toLowerCase();
+        let borderClass = 'best-practice-border';
+        if (priorityClass.includes('عاجلة') || priorityClass.includes('urgent')) borderClass = 'urgent-border';
+        return `<div class="rec-item ${borderClass}">
+            <span class="rec-priority ${priorityClass}">${rec.priority}</span>
+            <div class="rec-content">
+                <div class="rec-desc">${rec.description}</div>
+                ${rec.relatedItems && rec.relatedItems.length > 0 ? 
+                    `<div class="rec-related">${text.relatedTo}: ${rec.relatedItems.join(', ')}</div>` : ''}
+            </div>
+        </div>`;
+    }).join("");
+
+    return `
+    <!DOCTYPE html>
+    <html dir="${isArabic ? 'rtl' : 'ltr'}">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>التقرير الطبي</title>
+        <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+        <style>
+            body { 
+                direction: ${isArabic ? 'rtl' : 'ltr'}; 
+                font-family: 'Tajawal', sans-serif; 
+                background-color: #f8f9fa; 
+                color: #3c4043; 
+                line-height: 1.6; 
+                padding: 20px;
+            }
+            .report-container { max-width: 1200px; margin: 0 auto; }
+            .report-section { 
+                border: 1px solid #dee2e6; 
+                border-radius: 12px; 
+                margin-bottom: 24px; 
+                padding: 24px; 
+                background: #fff; 
+                box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+                page-break-inside: avoid; 
+            }
+            .report-section h2 { 
+                font-size: 22px; 
+                font-weight: 700; 
+                color: #0d47a1; 
+                margin: 0 0 20px; 
+                display: flex; 
+                align-items: center; 
+                gap: 12px; 
+                border-bottom: 2px solid #1a73e8; 
+                padding-bottom: 12px; 
+            }
+            
+            .source-docs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+            .source-doc-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; }
+            .source-doc-card h3 { margin: 0 0 10px; font-size: 16px; }
+            
+            .audit-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+            }
+            .audit-table th, .audit-table td {
+                padding: 12px;
+                text-align: ${isArabic ? 'right' : 'left'};
+                border-bottom: 1px solid #e9ecef;
+                vertical-align: top;
+            }
+            .audit-table th {
+                background-color: #f8f9fa;
+                font-weight: 700;
+            }
+            .audit-table tr { page-break-inside: avoid; }
+
+            .item-cell .item-name {
+                font-weight: 700;
+                color: #202124;
+                font-size: 15px;
+                margin: 0 0 4px 0;
+            }
+            .item-cell .item-category {
+                font-size: 12px;
+                font-weight: 500;
+                color: #5f6368;
+                display: block;
+            }
+            .dosage-cell, .strength-cell, .frequency-cell, .duration-cell {
+                font-family: monospace, sans-serif;
+                color: #3d3d3d;
+                font-size: 14px;
+            }
+            .decision-badge {
+                font-weight: 700;
+                padding: 5px 10px;
+                border-radius: 16px;
+                font-size: 13px;
+                display: inline-block;
+                border: 1px solid transparent;
+            }
+            
+            .rec-item { 
+                display: flex; 
+                gap: 16px; 
+                align-items: flex-start; 
+                margin-bottom: 12px; 
+                padding: 14px; 
+                border-radius: 8px; 
+                background: #f8f9fa; 
+                border-${isArabic ? 'right' : 'left'}: 4px solid; 
+                page-break-inside: avoid; 
+            }
+            .rec-priority { 
+                flex-shrink: 0; 
+                font-weight: 700; 
+                padding: 5px 12px; 
+                border-radius: 8px; 
+                font-size: 12px; 
+                color: #fff; 
+            }
+            .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
+            .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
+            .rec-item.urgent-border { border-color: #d93025; }
+            .rec-item.best-practice-border { border-color: #1e8e3e; }
+            .rec-content { display: flex; flex-direction: column; }
+            .rec-desc { color: #202124; font-size: 15px; }
+            .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
+
+            .audit-table tr.risk-critical td { background-color: #fce8e6 !important; }
+            .audit-table tr.risk-warning td { background-color: #fff0e1 !important; }
+            .audit-table tr.risk-ok td { background-color: #e6f4ea !important; }
+            .audit-table tr td .decision-badge { background-color: #e8eaed; color: #5f6368; }
+            .audit-table tr.risk-ok td .decision-badge { background-color: #e6f4ea; color: #1e8e3e; }
+            .audit-table tr.risk-critical td .decision-badge { background-color: #fce8e6; color: #d93025; }
+            
+            @media print {
+                body { background: white; }
+                .report-section { box-shadow: none; border: 1px solid #ddd; }
+                .rec-item { page-break-inside: avoid; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="report-container">
+            <div class="report-section">
+                <h2>${text.sourceDocsTitle}</h2>
+                <div class="source-docs-grid">${sourceDocsHtml}</div>
+            </div>
+            <div class="report-section">
+                <h2>${text.summaryTitle}</h2>
+                <p class="summary-text">${s.patientSummary?.text || text.notAvailable}</p>
+                <p class="summary-text">${s.overallAssessment?.text || text.notAvailable}</p>
+            </div>
+            <div class="report-section">
+                <h2>${text.detailsTitle}</h2>
+                <div style="overflow-x: auto;">
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th>${text.itemHeader}</th>
+                                <th>${text.dosageHeader}</th>
+                                <th>${text.strengthHeader}</th>
+                                <th>${text.frequencyHeader}</th>
+                                <th>${text.durationHeader}</th>
+                                <th>${text.statusHeader}</th>
+                                <th>${text.decisionHeader}</th>
+                                <th>${text.justificationHeader}</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableRows}</tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="report-section">
+                <h2>${text.recommendationsTitle}</h2>
+                ${recommendationsList}
+            </div>
+        </div>
+    </body>
+    </html>`;
+}
+
 // --- معالج الطلبات الرئيسي (API Handler) ---
 export default async function handler(req, res) {
     console.log("--- New Request Received ---");
