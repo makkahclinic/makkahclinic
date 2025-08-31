@@ -1,274 +1,375 @@
+// هذا الإعداد مخصص لـ Next.js لزيادة حجم الطلب المسموح به
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "50mb",
+    },
+  },
+};
 
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title id="app-title">تقييم الحالة الطبية وطلبات التأمين</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+// --- الإعدادات الرئيسية ---
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-  <style>
-    :root{
-      --sea-50:#eef7ff; --sea-100:#d9efff; --sea-200:#b6dfff; --sea-300:#87c7ff; --sea-400:#4aa6ff; --sea-500:#1e90ff; --sea-600:#1677d3; --sea-700:#105ca5; --sea-800:#0b4479; --sea-900:#082f55;
-      --ok:#2e7d32; --warn:#f9a825; --bad:#e53935; --muted:#6b7280; --card:#ffffff; --ring:#d1e8ff;
-    }
-    *{box-sizing:border-box}
-    body{font-family:"Tajawal",system-ui; background:linear-gradient(180deg,var(--sea-50),#fff); color:#0f172a; margin:0}
-    html[dir="ltr"] body{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif}
-    .container{max-width:1050px; margin:32px auto; padding:24px; background:var(--card); border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 10px 35px rgba(3,102,214,.07)}
-    .title{display:flex; align-items:center; justify-content:center; gap:10px; color:var(--sea-800)}
-    h1{font-size:28px; margin:8px 0 2px}
-    .subtitle{color:var(--muted); font-size:14px; text-align:center; margin-bottom:14px}
-    .topbar{display:flex; gap:10px; align-items:center; justify-content:flex-start; margin-bottom:12px}
-    .chip{border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px; font-size:14px; background:#fff; cursor:pointer}
-    .home{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sea-500); color:#fff; border-radius:12px; text-decoration:none; border:1px solid var(--sea-600)}
-    .home svg{width:18px; height:18px; fill:#fff}
-    .evidence-banner{background:#eef6ff; border:1px solid #bfdbfe; color:#0b4479; padding:10px 12px; border-radius:12px; margin-bottom:12px; font-size:13px; display:flex; align-items:center; gap:8px}
-    .section{margin-top:18px}
-    .section h2{font-size:18px; color:var(--sea-700); display:flex; align-items:center; gap:8px; margin:0 0 10px}
-    .card{border:1px dashed #dbeafe; background:#f8fbff; border-radius:14px; padding:14px}
-    .grid{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
-    .col-12{grid-column:span 12}
-    .col-6{grid-column:span 6}
-    .col-4{grid-column:span 4}
-    label{display:block; font-size:14px; color:#0f172a; margin-bottom:6px}
-    input, select, textarea{width:100%; padding:12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; outline:none}
-    input:focus, select:focus, textarea:focus{border-color:var(--sea-400); box-shadow:0 0 0 4px var(--ring)}
-    textarea{min-height:90px; resize:vertical}
-    .uploader{border:2px dashed #cfe6ff; border-radius:16px; padding:26px; text-align:center; color:#64748b; background:#f5faff; cursor:pointer}
-    .uploader.drag{background:#eef6ff}
-    .uploader input{display:none}
-    .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:12px}
-    .fileCard{position:relative; background:#fff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 8px 22px rgba(2,6,23,.05)}
-    .thumb{width:100%; height:150px; object-fit:cover; display:block; background:#f1f5f9}
-    .meta{padding:10px 12px; font-size:13px; color:#334155}
-    .remove{position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; background:var(--bad); color:#fff; border:none; cursor:pointer; font-weight:700}
-    .btn{appearance:none; border:none; cursor:pointer; padding:14px 18px; border-radius:14px; background:var(--sea-600); color:#fff; font-weight:700}
-    .btn:disabled{opacity:.6; cursor:not-allowed}
-    .btn-secondary{background:#0b4479}
-    .btn-outline{background:#fff; color:var(--sea-700); border:1px solid #cbd5e1}
-    #reportWrap{margin-top:24px}
-    .report-toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
-    .muted{color:var(--muted)}
-    .avoid-break, .card, table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
-    .page-break { break-before: page; page-break-before: always; }
-    @media print{
-      .no-print{display:none !important}
-      body{background:#fff}
-      .container{box-shadow:none; border:none}
-      .page-break{break-before:page}
-    }
-  </style>
-</head>
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
+const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
+const GEMINI_GEN_URL = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
-<body>
-  <div class="container">
-    <div class="topbar">
-      <a class="home" href="https://www.m2020m.org/portal.html" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="currentColor" height="24" width="24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-        <span>الصفحة الرئيسية</span>
-      </a>
-      <span class="chip" id="lang-switcher">English</span>
-    </div>
+// --- دوال مساعدة ---
+const ok = (res, json) => res.status(200).json({ ok: true, ...json });
+const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
+const parseJsonSafe = async (response) => (response.headers.get("content-type") || "").includes("application/json") ? response.json() : { raw: await response.text() };
 
-    <div class="title"><h1>تقييم الحالة الطبية وطلبات التأمين</h1></div>
-    <p class="subtitle">واجهة إدخال سريرية سهلة — تحليل عميق متناغم مع احتياجات التأمين</p>
-
-    <div class="evidence-banner">
-      <svg viewBox="0 0 24 24" fill="#0b4479" height="24" width="24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2V8h2v5z"/></svg>
-      <div>يستند الحكم التأميني إلى أدلة موجزة من <b>WHO</b> و<b>CDC</b> و<b>Medscape</b>—ويظهر التبرير داخل الجدول.</div>
-    </div>
-
-    <div class="section">
-      <h2> 1) معلومات المريض</h2>
-      <div class="card avoid-break">
-        <div class="grid">
-          <div class="col-4"><label>الاسم (اختياري)</label><input id="name" placeholder="مثال: أحمد خالد" /></div>
-          <div class="col-4"><label>الجنس</label><select id="gender"><option value="">اختر</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
-          <div class="col-4"><label>العمر (بالسنوات)</label><input id="age" type="number" min="0" placeholder="مثال: 63" /></div>
-          <div class="col-4"><label>هل المريضة حامل؟</label><select id="pregnant"><option value="no">لا</option><option value="yes">نعم</option><option value="na">غير منطبق</option></select></div>
-          <div class="col-4"><label>شهر الحمل (إن وُجد)</label><input id="pregnancyMonths" type="number" min="1" max="10" placeholder="مثال: 5" /></div>
-          <div class="col-4"><label>هل المريض مدخّن؟</label><select id="smoking"><option value="">اختر</option><option value="مدخن">مدخن</option><option value="غير مدخن">غير مدخن</option><option value="سابق">سابق</option></select></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2> 2) خطّ الحياة والأعراض</h2>
-      <div class="card avoid-break">
-        <div class="grid">
-          <div class="col-12"><label>وصف الحالة (نص حر)</label><textarea id="freeText" placeholder="مثال: سعال مزمن 12 أسبوعًا مع فقدان وزن بسيط..."></textarea></div>
-          <div class="col-6"><label>التشخيصات المبدئية (نص)</label><textarea id="initialDx" placeholder="مثال: T2DM, HTN, COPD? Dermatitis"></textarea></div>
-          <div class="col-6"><label>تحاليل/الأشعة المذكورة (نص)</label><textarea id="labsImaging" placeholder="مثال: HbA1c 8.7%, eGFR 38→62, K 5.6 ..."></textarea></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2> 3) رفع ملفات (صور/PDF) — اختياري</h2>
-      <label class="uploader no-print" for="fileInput" id="dropZone">
-        اضغط هنا لرفع ملف واحد أو أكثر
-        <input id="fileInput" type="file" multiple accept="image/*,application/pdf" />
-      </label>
-      <div id="cards" class="cards" aria-live="polite"></div>
-    </div>
-
-    <div class="section no-print" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-      <button class="btn" id="analyzeBtn">تحليل الحالة</button>
-      <span id="busy" class="muted" style="display:none">جاري التحليل…</span>
-    </div>
-
-    <div id="reportWrap" class="section" style="display:none">
-      <div class="report-toolbar no-print">
-        <button class="btn-secondary btn" id="exportHqBtn">تصدير PDF (جودة عالية)</button>
-      </div>
-      <div id="reportHTML" class="avoid-break"></div>
-      <details style="margin-top:10px" class="no-print">
-        <summary>إظهار JSON (للبحث/الإحصاءات)</summary>
-        <pre id="jsonOut" style="white-space:pre-wrap; background:#0b44790b; padding:12px; border-radius:12px; border:1px solid #e5e7eb"></pre>
-      </details>
-    </div>
-  </div>
-
-<script>
-    const filesState = [];
-    const fileInput = document.getElementById('fileInput');
-    const dropZone  = document.getElementById('dropZone');
-    const cardsBox  = document.getElementById('cards');
-
-    dropZone.addEventListener('click', () => fileInput.click());
-    ['dragenter','dragover','dragleave','drop'].forEach(evName => {
-        dropZone.addEventListener(evName, e => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
+// --- معالج رفع الملفات إلى Gemini ---
+async function geminiUploadBase64({ name, mimeType, base64 }) {
+    const binaryData = Buffer.from(base64, "base64");
+    const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+        method: "POST",
+        headers: {
+            "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start",
+            "X-Goog-Upload-Header-Content-Length": String(binaryData.byteLength),
+            "X-Goog-Upload-Header-Content-Type": mimeType, "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
     });
-    dropZone.addEventListener('dragenter', () => dropZone.classList.add('drag'));
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
-    dropZone.addEventListener('drop', e => {
-        dropZone.classList.remove('drag');
-        handleFiles(Array.from(e.dataTransfer.files));
+    if (!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
+    const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
+    if (!sessionUrl) throw new Error("Gemini upload session URL is missing");
+    const uploadRes = await fetch(sessionUrl, {
+        method: "PUT",
+        headers: {
+            "Content-Type": mimeType, "X-Goog-Upload-Command": "upload, finalize",
+            "X-Goog-Upload-Offset": "0", "Content-Length": String(binaryData.byteLength),
+        },
+        body: binaryData,
     });
-    fileInput.addEventListener('change', () => handleFiles(Array.from(fileInput.files)));
+    const metadata = await parseJsonSafe(uploadRes);
+    if (!uploadRes.ok) throw new Error(`Gemini finalize failed: ${JSON.stringify(metadata)}`);
+    return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
+}
 
-    async function handleFiles(files) {
-        for(const f of files){
-            const base64Url = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onerror = reject;
-                reader.onload = () => resolve(reader.result);
-                reader.readAsDataURL(f);
-            });
-            filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64Url });
-        }
-        renderCards();
-        fileInput.value = '';
+// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
+async function aggregateClinicalDataWithGemini({ text, files }) {
+    const userParts = [];
+    if (text) userParts.push({ text });
+    for (const file of files || []) {
+        const mime = file?.mimeType || "application/octet-stream";
+        const base64Data = (file?.data || "").split("base64,").pop() || file?.data;
+        if (!base64Data) continue;
+        const { uri, mime: finalMime } = await geminiUploadBase64({ name: file?.name || "unnamed_file", mimeType: mime, base64: base64Data });
+        userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
     }
+    if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
+    
+    const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block. **CRITICAL RULES:**
+1.  **DO NOT SUMMARIZE.** Transcribe everything.
+2.  List all patient details, diagnoses, and every single lab test, medication, and procedure mentioned.
+3.  **For medications, transcribe the name, then on the same line, clearly state the dosage, frequency, and duration exactly as written (e.g., Amlopine 10 - 1x1x90).**
+4.  Present the information in a clear, structured manner.`;
+    
+    const body = {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: userParts }],
+    };
+    const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const data = await parseJsonSafe(response);
+    if (!response.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
+    return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
+}
 
-    function renderCards() {
-        cardsBox.innerHTML = '';
-        filesState.forEach((f, i) => {
-            const isImg = (f.mimeType||'').startsWith('image/');
-            const thumb = isImg ? f.data : `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="%23f1f5f9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18" fill="%2364748b">${f.name}</text></svg>`;
-            const el = document.createElement('div');
-            el.className = 'fileCard avoid-break';
-            el.innerHTML = `<button class="remove" data-index="${i}">×</button><img class="thumb" src="${thumb}" alt="${f.name}"><div class="meta">${f.name}</div>`;
-            cardsBox.appendChild(el);
-        });
-        cardsBox.querySelectorAll('.remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const i = +e.currentTarget.dataset.index;
-                filesState.splice(i, 1);
-                renderCards();
-            });
-        });
-    }
-
-    document.getElementById('analyzeBtn').addEventListener('click', async () => {
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const busy = document.getElementById('busy');
-        analyzeBtn.disabled = true;
-        busy.style.display = 'inline';
-
-        try {
-            const textParts = [
-                `التشخيصات المبدئية: ${document.getElementById('initialDx').value.trim()}`,
-                `وصف الحالة: ${document.getElementById('freeText').value.trim()}`,
-                `تحاليل/أشعة: ${document.getElementById('labsImaging').value.trim()}`
-            ];
-
-            const payload = {
-                text: textParts.filter(p => p.split(':')[1].trim()).join('\n'),
-                patientInfo: {
-                    ageYears: +document.getElementById('age').value || null,
-                    gender: document.getElementById('gender').value || null,
-                    pregnant: { isPregnant: document.getElementById('pregnant').value === 'yes' },
-                    smoking: { status: document.getElementById('smoking').value || null }
-                },
-                files: filesState.map(f => ({ name: f.name, mimeType: f.mimeType, data: f.data.split(',')[1] })),
-                lang: document.documentElement.lang || 'ar'
-            };
-
-            const resp = await fetch('/api/gpt', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await resp.json();
-            if (!resp.ok) {
-                throw new Error(data.error || 'Unknown server error');
+// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o ---
+function getExpertAuditorInstructions(lang = 'ar') {
+    const langConfig = {
+        ar: {
+            rule: "**قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.**",
+            schema: {
+                patientSummary: {"text": "ملخص تفصيلي لحالة المريض الحالية والتشخيصات."},
+                overallAssessment: {"text": "رأيك الخبير الشامل حول جودة الرعاية، مع تسليط الضوء على القرارات الصحيحة والإغفالات والإجراءات الخاطئة."},
+                table: [
+                    {
+                        "name": "string", "dosage_written": "string", "itemType": "lab|medication|procedure",
+                        "status": "تم إجراؤه|مفقود ولكنه ضروري",
+                        "analysisCategory": "صحيح ومبرر|إجراء مكرر|غير مبرر طبياً|إجراء يتعارض مع التشخيص|إغفال خطير|خطأ في الجرعة أو التكرار|الكمية تحتاج لمراجعة",
+                        "insuranceDecision": {"label": "مقبول|مرفوض|لا ينطبق", "justification": "string"}
+                    }
+                ],
+                recommendations: [ { "priority": "عاجلة|أفضل ممارسة", "description": "string", "relatedItems": ["string"] } ]
             }
+        },
+    };
+    const selectedLang = langConfig[lang] || langConfig['ar'];
 
-            document.getElementById('reportWrap').style.display = 'block';
-            document.getElementById('reportHTML').innerHTML = `<div id="reportContent">${data.html || ''}</div>`;
-            document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
+    return `You are an expert, evidence-based clinical pharmacist and medical auditor. Respond with a valid JSON object.
 
-        } catch (err) {
-            alert(`خطأ: ${err.message}`);
-        } finally {
-            analyzeBtn.disabled = false;
-            busy.style.display = 'none';
-        }
+**Primary Knowledge Base:**
+* **Cardiology:** AHA/ACC/ESC Guidelines. For patients with risk factors (Age > 50, DM, HTN), ECG and Troponin are mandatory for relevant symptoms.
+* **Endocrinology:** ADA Standards. Annual fundus exam is mandatory for Type 2 diabetics. **Diamicron MR (Gliclazide MR)** is dosed **once daily**. Twice daily is a major dosing error.
+* **Reimbursement:** Focus on Medical Necessity, Duplication, Contraindications, and unusual quantities.
+
+**Mandatory Analysis Rules:**
+
+**Rule 0: Comprehensive Listing (MOST IMPORTANT):**
+The final JSON \`table\` **MUST** contain one entry for **EVERY SINGLE** medication, lab, and procedure from the clinical data. **DO NOT OMIT ANY ITEM.**
+* **For correct items:** List them with \`analysisCategory\` as "صحيح ومبرر" (Correct and Justified).
+* **For each medication:** You **MUST** populate the \`dosage_written\` field with the exact text transcribed from the source (e.g., "10 1x1x90", "30 1x2x90").
+
+**Rule 1: Clinical Validity Analysis:**
+* **Dosing/Frequency Error:** Flag incorrect dosages (e.g., Diamicron MR twice daily). Justification: "خطأ في الجرعة/التكرار. الجرعة القياسية هي مرة واحدة يومياً."
+* **Medical Unnecessity:** Flag items without supporting symptoms or diagnosis.
+* **Contraindication:** Flag items that conflict with the patient's conditions.
+
+**Rule 2: Prescription Duration Analysis (90-Day Rule):**
+* If a medication is prescribed for a duration of 90 days, you must analyze its appropriateness.
+* If the patient's condition is chronic and stable, this can be "صحيح ومبرر".
+* However, if stability is not documented or for a first-time prescription, set the \`analysisCategory\` to **"الكمية تحتاج لمراجعة"** (Quantity Requires Review). Justification: "وصفة لمدة 90 يوماً تتطلب مبرراً واضحاً للاستقرار السريري، وهو غير متوفر."
+
+**Rule 3: Proactive Standard of Care Analysis (Omissions):**
+* Identify and list **Critical Omissions** (like missing ECG/Troponin/Fundus Exam).
+
+${selectedLang.rule}
+
+**Your response must be ONLY the valid JSON object conforming to this exact schema. Do not include any other text.**
+\`\`\`json
+${JSON.stringify(selectedLang.schema, null, 2)}
+\`\`\``;
+}
+
+// دالة للتواصل مع OpenAI
+async function getAuditFromOpenAI(bundle, lang) {
+    const response = await fetch(OPENAI_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
+        body: JSON.stringify({
+            model: OPENAI_MODEL,
+            messages: [
+                { role: "system", content: getExpertAuditorInstructions(lang) },
+                { role: "user", content: "Clinical Data for Audit:\n" + JSON.stringify(bundle, null, 2) },
+            ],
+            response_format: { type: "json_object" },
+        }),
     });
+    const data = await response.json();
+    if (!response.ok) throw new Error(`OpenAI error: ${JSON.stringify(data)}`);
+    return JSON.parse(data?.choices?.[0]?.message?.content || "{}");
+}
 
-    document.getElementById('exportHqBtn').addEventListener('click', async () => {
-        const busy = document.getElementById('busy');
-        busy.style.display = 'inline';
-        try {
-            const html = document.getElementById('reportContent')?.innerHTML || '';
-            if (!html) throw new Error('التقرير غير جاهز للتصدير.');
+// --- عارض التقرير المتقدم (HTML Renderer) ---
+function renderHtmlReport(structuredData, files, lang = 'ar') {
+    const s = structuredData;
+    const isArabic = lang === 'ar';
+    const text = {
+        sourceDocsTitle: isArabic ? "المستندات المصدرية" : "Source Documents",
+        summaryTitle: isArabic ? "ملخص الحالة والتقييم العام" : "Case Summary & Overall Assessment",
+        detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات" : "Detailed Analysis of Procedures",
+        recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
+        itemHeader: isArabic ? "الإجراء" : "Item",
+        dosageHeader: isArabic ? "الجرعة المكتوبة" : "Written Dosage",
+        statusHeader: isArabic ? "الحالة" : "Status",
+        decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
+        justificationHeader: isArabic ? "التبرير" : "Justification",
+        relatedTo: isArabic ? "مرتبط بـ" : "Related to",
+        notAvailable: isArabic ? "غير متوفر." : "Not available."
+    };
 
-            const resp = await fetch('/api/pdf', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ html })
-            });
+    const getDecisionStyle = (label) => {
+        const normalizedLabel = (label || '').toLowerCase();
+        if (normalizedLabel.includes('مقبول') || normalizedLabel.includes('accepted')) return 'background-color: #e6f4ea; color: #1e8e3e;';
+        if (normalizedLabel.includes('مرفوض') || normalizedLabel.includes('rejected')) return 'background-color: #fce8e6; color: #d93025;';
+        if (normalizedLabel.includes('لا ينطبق') || normalizedLabel.includes('not applicable')) return 'background-color: #e8eaed; color: #5f6368;';
+        return 'background-color: #e8eaed; color: #3c4043;';
+    };
+   
+    const getRiskClass = (category) => {
+        const normalizedCategory = (category || '').toLowerCase();
+        if (normalizedCategory.includes('إغفال') || normalizedCategory.includes('omission') || normalizedCategory.includes('يتعارض') || normalizedCategory.includes('contradicts') || normalizedCategory.includes('خطأ في الجرعة') || normalizedCategory.includes('dosing error')) return 'risk-critical';
+        if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate') || normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified') || normalizedCategory.includes('تحتاج لمراجعة') || normalizedCategory.includes('requires review')) return 'risk-warning';
+        if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) return 'risk-ok';
+        return '';
+    };
 
-            if (!resp.ok) {
-                const errData = await resp.json();
-                throw new Error(errData.error || `HTTP Error ${resp.status}`);
-            }
+    const sourceDocsHtml = (files || []).map(f => {
+        const isImg = (f.mimeType || '').startsWith('image/');
+        const src = `data:${f.mimeType};base64,${f.data}`;
+        const filePreview = isImg ? `<img src="${src}" alt="${f.name}" />` : `<div style="padding:20px; border:1px dashed #e5e7eb; border-radius:8px; background:#f9fbfc; color:#6b7280; text-align:center;">${f.name}</div>`;
+        return `<div class="source-doc-card"><h3>${f.name}</h3>${filePreview}</div>`;
+    }).join('');
 
-            const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'Medical_Audit_Report-HQ.pdf';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-        } catch (e) {
-            alert(`خطأ في التصدير عالي الجودة: ${e.message}`);
-        } finally {
-            busy.style.display = 'none';
+    // --- تعديل: تم تبسيط بنية الخلية الأولى لتجنب الانحراف ---
+    const tableRows = (s.table || []).map(r =>        `<tr class="${getRiskClass(r.analysisCategory)}">
+        <td class="item-cell">
+            <div class="item-name">${r.name || '-'}</div>
+            <small class="item-category">${r.analysisCategory || ''}</small>
+        </td>
+        <td class="dosage-cell">${r.dosage_written || '-'}</td>
+        <td>${r.status || '-'}</td>
+        <td><span class="decision-badge">${r.insuranceDecision?.label || '-'}</span></td>
+        <td>${r.insuranceDecision?.justification || '-'}</td>
+        </tr>`
+    ).join("");
+
+    const recommendationsList = (s.recommendations || []).map(rec => {
+        const priorityClass = (rec.priority || '').toLowerCase();
+        let borderClass = 'best-practice-border';
+        if (priorityClass.includes('عاجلة') || priorityClass.includes('urgent')) borderClass = 'urgent-border';
+        return `<div class="rec-item ${borderClass}">
+        <span class="rec-priority ${priorityClass}">${rec.priority}</span>
+        <div class="rec-content">
+            <div class="rec-desc">${rec.description}</div>
+            ${rec.relatedItems && rec.relatedItems.length > 0 ? `<div class="rec-related">${text.relatedTo}: ${rec.relatedItems.join(', ')}</div>` : ''}
+        </div>
+        </div>`;
+    }).join("");
+
+    // --- تعديل: تم إعادة كتابة CSS الجدول بالكامل لضمان ثبات التصدير ---
+    return `
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+        body { direction: ${isArabic ? 'rtl' : 'ltr'}; font-family: 'Tajawal', sans-serif; background-color: #f8f9fa; color: #3c4043; line-height: 1.6; }
+        .report-section { border: 1px solid #dee2e6; border-radius: 12px; margin-bottom: 24px; padding: 24px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); page-break-inside: avoid; }
+        .report-section h2 { font-size: 22px; font-weight: 700; color: #0d47a1; margin: 0 0 20px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #1a73e8; padding-bottom: 12px; }
+        
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 14px;
         }
-    });
-</script>
-</body>
-</html>
+        .audit-table th, .audit-table td {
+            padding: 12px;
+            text-align: ${isArabic ? 'right' : 'left'};
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: top;
+            word-wrap: break-word;
+        }
+        .audit-table th {
+            background-color: #f8f9fa;
+            font-weight: 700;
+        }
+        .audit-table tr { page-break-inside: avoid; }
+
+        .item-cell .item-name {
+            font-weight: 700;
+            color: #202124;
+            font-size: 15px;
+            margin: 0 0 4px 0;
+        }
+        .item-cell .item-category {
+            font-size: 12px;
+            font-weight: 500;
+            color: #5f6368;
+            display: block;
+        }
+        .dosage-cell {
+            font-family: monospace, sans-serif;
+            color: #3d3d3d;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .decision-badge {
+            font-weight: 700;
+            padding: 5px 10px;
+            border-radius: 16px;
+            font-size: 13px;
+            display: inline-block;
+            border: 1px solid transparent;
+        }
+        
+        .rec-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; padding: 14px; border-radius: 8px; background: #f8f9fa; border-${isArabic ? 'right' : 'left'}: 4px solid; page-break-inside: avoid; }
+        .rec-priority { flex-shrink: 0; font-weight: 700; padding: 5px 12px; border-radius: 8px; font-size: 12px; color: #fff; }
+        .rec-priority.urgent, .rec-priority.عاجلة { background: #d93025; }
+        .rec-priority.best-practice, .rec-priority.أفضل { background: #1e8e3e; }
+        .rec-item.urgent-border { border-color: #d93025; }
+        .rec-item.best-practice-border { border-color: #1e8e3e; }
+        .rec-content { display: flex; flex-direction: column; }
+        .rec-desc { color: #202124; font-size: 15px; }
+        .rec-related { font-size: 12px; color: #5f6368; margin-top: 6px; }
+
+        .audit-table tr.risk-critical td { background-color: #fce8e6 !important; }
+        .audit-table tr.risk-warning td { background-color: #fff0e1 !important; }
+        .audit-table tr.risk-ok td { background-color: #e6f4ea !important; }
+        .audit-table tr td .decision-badge {
+             background-color: #e8eaed; color: #5f6368;
+        }
+        .audit-table tr.risk-ok td .decision-badge {
+             background-color: #e6f4ea; color: #1e8e3e;
+        }
+        .audit-table tr.risk-critical td .decision-badge {
+             background-color: #fce8e6; color: #d93025;
+        }
+    </style>
+    <div class="report-section">
+        <h2>${text.sourceDocsTitle}</h2>
+        <div class="source-docs-grid">${sourceDocsHtml}</div>
+    </div>
+    <div class="report-section">
+        <h2>${text.summaryTitle}</h2>
+        <p class="summary-text">${s.patientSummary?.text || text.notAvailable}</p>
+        <p class="summary-text">${s.overallAssessment?.text || text.notAvailable}</p>
+    </div>
+    <div class="report-section">
+        <h2>${text.detailsTitle}</h2>
+        <div style="overflow-x: auto;">
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th style="width: 28%;">${text.itemHeader}</th>
+                        <th style="width: 15%;">${text.dosageHeader}</th>
+                        <th style="width: 15%;">${text.statusHeader}</th>
+                        <th style="width: 15%;">${text.decisionHeader}</th>
+                        <th style="width: 27%;">${text.justificationHeader}</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        </div>
+    </div>
+    <div class="report-section">
+        <h2>${text.recommendationsTitle}</h2>
+        ${recommendationsList}
+    </div>
+    `;
+}
+
+// --- معالج الطلبات الرئيسي (API Handler) ---
+export default async function handler(req, res) {
+    console.log("--- New Request Received ---");
+    try {
+        if (req.method !== "POST") {
+            return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
+        }
+        if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
+            console.error("CRITICAL ERROR: API Key is missing.");
+            return bad(res, 500, "Server Configuration Error: API Key is missing.");
+        }
+
+        const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
+        console.log(`Processing request with language: ${lang}`);
+
+        console.log("Step 1: Starting data aggregation with Gemini...");
+        const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
+        console.log("Step 1: Gemini aggregation successful.");
+        
+        const auditBundle = { patientInfo, aggregatedClinicalText, originalUserText: text };
+
+        console.log("Step 2: Starting expert audit with OpenAI...");
+        const structuredAudit = await getAuditFromOpenAI(auditBundle, lang);
+        console.log("Step 2: OpenAI audit successful.");
+        
+        console.log("Step 3: Rendering HTML report...");
+        const htmlReport = renderHtmlReport(structuredAudit, files, lang);
+        console.log("Step 3: HTML rendering successful.");
+
+        console.log("--- Request Processed Successfully ---");
+        return ok(res, { html: htmlReport, structured: structuredAudit });
+    } catch (err) {
+        console.error("---!!!--- An error occurred during the process ---!!!---");
+        console.error("Error Message:", err.message);
+        console.error("Error Stack:", err.stack);
+        return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
+    }
+}
 
