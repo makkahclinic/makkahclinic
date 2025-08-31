@@ -1,205 +1,297 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>منصة التدقيق السريري V8 (محرك المستشار)</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.107/pdf.min.js"></script>
-  <script>
-    // التأكد من أن مسار الـ worker صحيح
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.107/pdf.worker.min.js`;
-    }
-  </script>
-  <style>
-    :root{--bg:#f8f9fc;--card:#fff;--border:#eef2f6;--text:#1e293b;--muted:#64748b;--brand:#2563eb;--brand-light:#eff6ff;--red:#dc2626;--yellow:#f59e0b;--green:#16a34a;--font-main:'Tajawal',system-ui,sans-serif;}
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
-    body{font-family:var(--font-main);background:var(--bg);margin:0;color:var(--text);line-height:1.6;}
-    .container{display:grid;grid-template-columns:380px 1fr;gap:24px;max-width:1600px;margin:24px auto;padding:0 24px}
-    .sidebar{display:flex;flex-direction:column;gap:16px}
-    .main-content{display:flex;flex-direction:column;gap:16px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;box-shadow:0 4px 6px -1px rgba(0,0,0,.03),0 2px 4px -2px rgba(0,0,0,.03)}
-    .card h3{margin:0 0 16px;font-size:18px;color:#0f172a;border-bottom:1px solid var(--border);padding-bottom:12px}
-    label{font-size:14px;font-weight:500;color:var(--muted);margin-bottom:6px;display:block}
-    input,select,textarea{width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;font-size:14px;font-family:inherit;box-sizing:border-box;}
-    button{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:8px;border:none;background:var(--brand);color:#fff;cursor:pointer;font-size:16px;font-weight:700;transition:all .2s}
-    button:hover{background:#1d4ed8}
-    button:disabled{background:#94a3b8;cursor:not-allowed}
-    #file-drop-area{border:2px dashed #d0d5dd;border-radius:12px;padding:20px;text-align:center;transition:all .2s;background:#fcfdff}
-    #file-drop-area.drag-over{border-color:var(--brand);background:var(--brand-light)}
-    #file-previews{margin-top:16px;display:flex;flex-direction:column;gap:8px}
-    .file-preview-item{display:flex;align-items:center;gap:10px;padding:8px;background:#f8f9fa;border-radius:6px;font-size:13px}
-    .file-preview-item i{color:var(--muted)}
-    .file-preview-item button{width:auto;padding:2px 6px;font-size:12px;background:var(--red);border-radius:50%}
-    #progress-area{display:none;margin-top:16px}
-    .progress-bar{width:100%;height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden}
-    .progress-bar-inner{width:0%;height:100%;background:var(--brand);transition:width .3s}
-    #status-log{font-family:monospace;font-size:13px;color:var(--muted);margin-top:8px}
-    .report-placeholder{text-align:center;padding:60px 20px;color:var(--muted)}
-    .report-placeholder i{font-size:48px;margin-bottom:16px;display:block}
-    @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
-    .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.stat-card{background:var(--brand-light);padding:16px;border-radius:12px;text-align:center}.stat-card .value{font-size:28px;font-weight:700;color:var(--brand)}.stat-card.red .value{color:var(--red)}.stat-card.yellow .value{color:var(--yellow)}.stat-card .label{font-size:14px;color:var(--muted)}.report-section h4{margin:24px 0 12px;font-size:16px;color:#0f172a;display:flex;align-items:center;gap:8px}.med-table{width:100%;border-collapse:collapse;font-size:14px}.med-table th,.med-table td{border:1px solid var(--border);padding:10px;text-align:right;vertical-align:top}.med-table th{background:#f1f5f9;font-weight:600}.risk-Critical,.status-RED{background:#fef2f2}.risk-High{background:#fff1f2}.risk-Medium,.status-YELLOW{background:#fefce8}.status-GREEN{background:#f0fdf4}.recommendation-list{list-style:none;padding:0}.recommendation-list li{padding:10px;border-radius:8px;margin-bottom:8px}.recommendation-list .red{background:#fef2f2;border-left:4px solid var(--red)}.recommendation-list .yellow{background:#fefce8;border-left:4px solid var(--yellow)}.recommendation-list .green{background:#f0fdf4;border-left:4px solid var(--green)}.recommendation-list b{display:block;margin-bottom:4px;color:#1e293b}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحليل المستندات الطبية للتأمين</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e9ecef;
+        }
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .file-input-wrapper {
+            position: relative;
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        .file-input-wrapper:hover {
+            background-color: #f0f8ff;
+            border-color: #0056b3;
+        }
+        #file-input {
+            display: none;
+        }
+        #file-name {
+            margin-top: 10px;
+            color: #555;
+            font-weight: 500;
+        }
+        button {
+            padding: 12px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        button:disabled {
+            background-color: #a0cfff;
+            cursor: not-allowed;
+        }
+        button:not(:disabled):hover {
+            background-color: #0056b3;
+        }
+        .loader {
+            display: none;
+            margin: 20px auto;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #results {
+            margin-top: 20px;
+            border-top: 1px solid #dee2e6;
+            padding-top: 20px;
+        }
+        .result-section {
+            margin-bottom: 25px;
+        }
+        h2 {
+            color: #0056b3;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+        p, li {
+            line-height: 1.7;
+        }
+        strong {
+            color: #343a40;
+        }
+        .insurance-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .insurance-table th, .insurance-table td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: right;
+        }
+        .insurance-table th {
+            background-color: #f2f2f2;
+        }
+        .status-accepted { background-color: #d4edda; color: #155724; }
+        .status-rejected { background-color: #f8d7da; color: #721c24; }
+        .status-needs-justification { background-color: #fff3cd; color: #856404; }
+        .emoji {
+            font-size: 1.2em;
+            margin-left: 8px;
+        }
+    </style>
 </head>
 <body>
 
-<div class="container">
-  <aside class="sidebar">
-    <div class="card">
-        <h3><i class="fa-solid fa-file-medical"></i> 1. رفع الملفات</h3>
-        <div id="file-drop-area">
-            <i class="fa-solid fa-cloud-arrow-up" style="font-size:24px; color:#9ca3af; margin-bottom:8px;"></i>
-            <p>اسحب الملفات هنا أو انقر للاختيار</p>
-            <input id="fileInput" type="file" multiple accept="image/*,.pdf" style="display:none;" />
-        </div>
-        <div id="file-previews"></div>
+    <div class="container">
+        <h1>نظام التحقق من المطالبات التأمينية</h1>
+        <form id="upload-form">
+            <label for="file-input" class="file-input-wrapper">
+                <span>📂 انقر هنا أو اسحب الملف لرفعه</span>
+                <p id="file-name">لم يتم اختيار أي ملف</p>
+            </label>
+            <input type="file" id="file-input" accept="image/*,application/pdf" required>
+            <button type="submit" id="submit-btn">تحليل المستند</button>
+        </form>
+
+        <div class="loader" id="loader"></div>
+        <div id="results"></div>
     </div>
-    <div class="card">
-        <h3><i class="fa-solid fa-sliders"></i> 2. خيارات التحليل</h3>
-        <div><label for="lang">لغة التقرير:</label><select id="lang"><option value="ar" selected>العربية</option><option value="en">English</option></select></div>
-        <div style="margin-top:12px"><label for="model">النموذج:</label><select id="model"><option value="both" selected>Gemini + GPT-4o (الأفضل)</option><option value="gpt">GPT-4o فقط</option><option value="gemini">Gemini فقط</option></select></div>
-        <div style="margin-top:12px"><label for="context">سياق المراجعة (اختياري):</label><textarea id="context" placeholder="مثال: مراجعة أدوية مريض (75 عامًا) يعاني من السكري والضغط." rows="3"></textarea></div>
-    </div>
-    <div class="card">
-        <h3><i class="fa-solid fa-rocket"></i> 3. بدء التحليل</h3>
-        <button id="analyzeBtn"><i class="fa-solid fa-play"></i> بدء تحليل الحالة</button>
-        <div id="progress-area">
-            <div class="progress-bar"><div id="progress-bar-inner" class="progress-bar-inner"></div></div>
-            <div id="status-log"></div>
-        </div>
-    </div>
-  </aside>
 
-  <main class="main-content">
-    <div class="card">
-      <h3><i class="fa-solid fa-clipboard-list"></i> تقرير التدقيق السريري الشامل (V8)</h3>
-      <div id="report-output">
-        <div class="report-placeholder">
-          <i class="fa-regular fa-file-lines"></i>
-          <p>النتائج ستظهر هنا بعد اكتمال التحليل.<br>يرجى رفع الملفات واختيار الخيارات ثم الضغط على "بدء التحليل".</p>
-        </div>
-      </div>
-    </div>
-     <div class="card">
-      <details>
-        <summary style="cursor: pointer; color: var(--brand);">عرض بيانات JSON الخام ومخرجات النماذج</summary>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap: 16px; margin-top: 16px;">
-            <section><h4>GPT-4o (Raw)</h4><pre id="gpt" dir="ltr" style="max-height: 300px; overflow:auto; background:#f1f5f9; padding:8px; border-radius: 8px;"></pre></section>
-            <section><h4>Gemini (Raw)</h4><pre id="gemini" dir="ltr" style="max-height: 300px; overflow:auto; background:#f1f5f9; padding:8px; border-radius: 8px;"></pre></section>
-        </div>
-        <h4>Merged JSON (V8)</h4>
-        <pre id="merged" dir="ltr" style="background:#f1f5f9; padding:8px; border-radius: 8px;"></pre>
-      </details>
-    </div>
-  </main>
-</div>
+    <script>
+        const uploadForm = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const submitBtn = document.getElementById('submit-btn');
+        const loader = document.getElementById('loader');
+        const resultsDiv = document.getElementById('results');
 
-<script>
-// *** الحل النهائي: ننتظر حتى يتم تحميل الصفحة بالكامل قبل تشغيل الكود ***
-document.addEventListener('DOMContentLoaded', function() {
-    
-    const fileInput = document.getElementById('fileInput');
-    const fileDropArea = document.getElementById('file-drop-area');
-    const filePreviews = document.getElementById('file-previews');
-    const analyzeBtn = document.getElementById('analyzeBtn');
-    const progressArea = document.getElementById('progress-area');
-    const progressBarInner = document.getElementById('progress-bar-inner');
-    const statusLog = document.getElementById('status-log');
-    const reportOutput = document.getElementById('report-output');
-    const preMerged = document.getElementById('merged');
-    const preGPT = document.getElementById('gpt');
-    const preGemini = document.getElementById('gemini');
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = fileInput.files[0].name;
+            } else {
+                fileNameDisplay.textContent = 'لم يتم اختيار أي ملف';
+            }
+        });
 
-    let uploadedFiles = [];
-
-    function updateStatus(message, progress) { statusLog.textContent = message; if (progress !== undefined) { progressBarInner.style.width = `${progress}%`; } }
-    function renderFilePreviews() { filePreviews.innerHTML = ''; uploadedFiles.forEach((file, index) => { const item = document.createElement('div'); item.className = 'file-preview-item'; const icon = file.type === 'application/pdf' ? 'fa-file-pdf' : 'fa-file-image'; item.innerHTML = `<i class="fa-solid ${icon}"></i> <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${file.name}</span> <button onclick="removeFile(${index})">&times;</button>`; filePreviews.appendChild(item); }); }
-    
-    // جعل الدالة عامة لكي يمكن الوصول إليها من HTML
-    window.removeFile = function(index) {
-        uploadedFiles.splice(index, 1);
-        renderFilePreviews();
-    }
-
-    fileDropArea.addEventListener('click', () => fileInput.click());
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => { fileDropArea.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false); });
-    ['dragenter', 'dragover'].forEach(eventName => { fileDropArea.addEventListener(eventName, () => fileDropArea.classList.add('drag-over'), false); });
-    ['dragleave', 'drop'].forEach(eventName => { fileDropArea.addEventListener(eventName, () => fileDropArea.classList.remove('drag-over'), false); });
-    fileDropArea.addEventListener('drop', (e) => { const dt = e.dataTransfer; const files = Array.from(dt.files); uploadedFiles.push(...files); renderFilePreviews(); });
-    fileInput.addEventListener('change', (e) => { const files = Array.from(e.target.files); uploadedFiles.push(...files); renderFilePreviews(); fileInput.value = ''; });
-
-    async function b64FromCanvas(canvas, mime = "image/jpeg", quality = 0.85, maxW = 2000) {
-        const scale = Math.min(1, maxW / canvas.width);
-        let targetCanvas = canvas;
-        if (scale < 1) {
-            const tmp = document.createElement('canvas');
-            tmp.width = Math.round(canvas.width * scale);
-            tmp.height = Math.round(canvas.height * scale);
-            const ctx = tmp.getContext('2d');
-            ctx.drawImage(canvas, 0, 0, tmp.width, tmp.height);
-            targetCanvas = tmp;
-        }
-        return targetCanvas.toDataURL(mime, quality).split(',')[1];
-    }
-
-    async function imageFileToB64(file){
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        try {
-            await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            return await b64FromCanvas(canvas, file.type);
-        } finally {
-            URL.revokeObjectURL(url);
-        }
-    }
-
-    async function prepareFiles(files, L){
-        const images = [];
-        updateStatus(L('بدء تحضير الملفات...', 'Preparing files...'), 5);
-
-        for (let i = 0; i < files.length; i++) {
-            const f = files[i];
-            const progress = 5 + (i / files.length) * 45;
-            updateStatus(`${L('... معالجة', '... Processing')} ${f.name}`, progress);
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
             
-            if (f.type.startsWith('image/')) {
-                const imgData = await imageFileToB64(f);
-                images.push(imgData);
-            } else if (f.type === 'application/pdf') {
-                const fileReader = new FileReader();
-                const pdfData = await new Promise((resolve, reject) => {
-                    fileReader.onload = (e) => resolve(new Uint8Array(e.target.result));
-                    fileReader.onerror = reject;
-                    fileReader.readAsArrayBuffer(f);
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('الرجاء اختيار ملف أولاً.');
+                return;
+            }
+
+            // Reset UI
+            resultsDiv.innerHTML = '';
+            loader.style.display = 'block';
+            submitBtn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/gpt', {
+                    method: 'POST',
+                    body: formData,
                 });
 
-                const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                    const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 2.0 });
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    await page.render({ canvasContext: context, viewport: viewport }).promise;
-                    images.push(await b64FromCanvas(canvas));
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `خطأ في الخادم: ${response.status}`);
                 }
+
+                const data = await response.json();
+                displayResults(data);
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<p style="color: red; text-align: center;">حدث خطأ: ${error.message}</p>`;
+            } finally {
+                loader.style.display = 'none';
+                submitBtn.disabled = false;
             }
+        });
+
+        function displayResults(data) {
+            resultsDiv.innerHTML = ''; // Clear previous results
+
+            // Basic Info Section
+            const summarySection = document.createElement('div');
+            summarySection.className = 'result-section';
+            summarySection.innerHTML = `
+                <h2><i class="emoji">📝</i> ملخص الحالة</h2>
+                <p>${data.summary || 'غير متوفر'}</p>
+                <h2><i class="emoji">ℹ️</i> المعلومات الأساسية</h2>
+                <ul>
+                    <li><strong>اسم المريض:</strong> ${data.patientInfo?.name || 'غير محدد'}</li>
+                    <li><strong>العمر:</strong> ${data.patientInfo?.age || 'غير محدد'}</li>
+                    <li><strong>الجنس:</strong> ${data.patientInfo?.gender || 'غير محدد'}</li>
+                    <hr>
+                    <li><strong>اسم الطبيب:</strong> ${data.physicianInfo?.name || 'غير محدد'}</li>
+                    <li><strong>التخصص:</strong> ${data.physicianInfo?.specialty || 'غير محدد'}</li>
+                </ul>
+            `;
+            resultsDiv.appendChild(summarySection);
+
+            // Analysis Section
+            const analysisSection = document.createElement('div');
+            analysisSection.className = 'result-section';
+            analysisSection.innerHTML = `
+                <h2><i class="emoji">🩺</i> التحليل الطبي والسريري</h2>
+                <p><strong>التشخيصات الرئيسية:</strong> ${data.analysis?.diagnoses?.join(', ') || 'لا يوجد'}</p>
+                <p><strong>الأدوية الموصوفة:</strong> ${data.analysis?.medications?.join(', ') || 'لا يوجد'}</p>
+                <p><strong>الإجراءات المنفذة:</strong> ${data.analysis?.procedures?.join(', ') || 'لا يوجد'}</p>
+            `;
+            resultsDiv.appendChild(analysisSection);
+
+            // Errors and Contradictions Section
+            if (data.errorDetection?.hasErrors) {
+                const errorSection = document.createElement('div');
+                errorSection.className = 'result-section';
+                errorSection.innerHTML = `
+                    <h2><i class="emoji">⚠️</i> الأخطاء والتناقضات المكتشفة</h2>
+                    <ul>
+                        ${data.errorDetection.details.map(detail => `<li>${detail}</li>`).join('')}
+                    </ul>
+                `;
+                resultsDiv.appendChild(errorSection);
+            }
+
+            // Insurance Evaluation Table
+            const insuranceSection = document.createElement('div');
+            insuranceSection.className = 'result-section';
+            let tableHTML = `
+                <h2><i class="emoji">📊</i> تقييم المطالبة التأمينية</h2>
+                <table class="insurance-table">
+                    <thead>
+                        <tr>
+                            <th>البند (دواء أو إجراء)</th>
+                            <th>الحالة</th>
+                            <th>السبب / ملاحظات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            const statusMap = {
+                'Accepted': { className: 'status-accepted', emoji: '✅' },
+                'Rejected': { className: 'status-rejected', emoji: '❌' },
+                'Needs Justification': { className: 'status-needs-justification', emoji: '⚠️' }
+            };
+            data.insuranceEvaluation.forEach(item => {
+                const statusInfo = statusMap[item.status] || { className: '', emoji: '' };
+                tableHTML += `
+                    <tr class="${statusInfo.className}">
+                        <td>${item.item}</td>
+                        <td>${statusInfo.emoji} ${item.status}</td>
+                        <td>${item.reason}</td>
+                    </tr>
+                `;
+            });
+            tableHTML += `</tbody></table>`;
+            insuranceSection.innerHTML = tableHTML;
+            resultsDiv.appendChild(insuranceSection);
+
+            // Final Recommendations
+            const recommendationSection = document.createElement('div');
+            recommendationSection.className = 'result-section';
+            recommendationSection.innerHTML = `
+                <h2><i class="emoji">💡</i> التوصيات النهائية للطبيب</h2>
+                <p><strong>ما يجب فعله (To-Do):</strong> ${data.recommendations?.todo || 'لا توجد توصيات.'}</p>
+                <p><strong>ما يجب تجنبه (To-Avoid):</strong> ${data.recommendations?.toAvoid || 'لا توجد توصيات.'}</p>
+            `;
+            resultsDiv.appendChild(recommendationSection);
         }
-        updateStatus(L('اكتمل تحضير الملفات.', 'File preparation complete.'), 50);
-        return { images, text: '' };
-    }
-
-    function escapeHtml(unsafe) { if (typeof unsafe !== 'string') return String(unsafe || ''); return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-    function renderReportV8(report) { const lang = document.getElementById('lang').value || 'ar'; const L = (ar, en) => lang === 'ar' ? ar : en; if (!report || Object.keys(report).length === 0) { reportOutput.innerHTML = `<div class="report-placeholder"><i class="fa-regular fa-circle-xmark"></i><p>${L('فشل توليد التقرير.', 'Failed to generate report.')}</p></div>`; return; } const { patient_info: patient = {}, physician_info: physician = {}, diagnoses = [], medication_review: meds = [], consultative_analysis: analysis = {}, gap_analysis_missing_interventions: gaps = [], executive_summary = '', patient_safety_note = '' } = report; const redFlags = analysis.red_flags_immediate_action || []; const yellowFlags = analysis.yellow_flags_monitoring_needed || []; const renderRecList = (items, type) => { if (!items || items.length === 0) return `<li>${L('لا يوجد', 'None')}</li>`; return items.map(item => `<li class="${type}"><b>${escapeHtml(item.issue || item.gap || item.item)}</b><em>${L('التوصية:', 'Recommendation:')}</em> ${escapeHtml(item.recommendation || item.note)}</li>`).join(''); }; let medTableHtml = meds.length > 0 ? `<div style="overflow-x: auto;"><table class="med-table"><thead><tr><th>${L('الدواء', 'Medication')}</th><th>${L('الجرعة', 'Dose')}</th><th>${L('الحالة', 'Status')}</th><th>${L('مستوى الخطورة', 'Risk Level')}</th><th>${L('التعليل', 'Justification')}</th><th>${L('الإجراء', 'Action')}</th></tr></thead><tbody>${meds.map(m => `<tr class="risk-${escapeHtml(m.clinical_risk_level)} status-${escapeHtml(m.insurance_status_code)}"><td><b>${escapeHtml(m.medication)}</b></td><td>${escapeHtml(m.dose_frequency)}</td><td>${escapeHtml(m.status_emoji || '')} ${escapeHtml(m.insurance_status_code)}</td><td><span class="chip">${escapeHtml(m.clinical_risk_level)}</span></td><td>${escapeHtml(m.justification)}</td><td><b>${escapeHtml(m.action_required)}</b></td></tr>`).join('')}</tbody></table></div>` : `<p>${L('لم يتم العثور على أدوية.', 'No medications found.')}</p>`; reportOutput.innerHTML = `<div class="report-grid"><div class="stat-card red"><div class="value">${redFlags.length}</div><div class="label">${L('أخطار حرجة (Red Flags)', 'Critical Flags')}</div></div><div class="stat-card yellow"><div class="value">${yellowFlags.length}</div><div class="label">${L('تنبيهات للمتابعة (Yellow Flags)', 'Warning Flags')}</div></div><div class="stat-card"><div class="value">${gaps.length}</div><div class="label">${L('فجوات علاجية (Gaps)', 'Therapeutic Gaps')}</div></div></div><div class="report-section"><h4><i class="fa-solid fa-user-doctor"></i> ${L('الملخص التنفيذي وبيانات الحالة', 'Executive Summary & Case Data')}</h4><p><b>${L('الملخص:', 'Summary:')}</b> ${escapeHtml(executive_summary)}</p><p><b>${L('المريض:', 'Patient:')}</b> ${escapeHtml(patient.name)} (${escapeHtml(patient.age)}, ${escapeHtml(patient.gender)})<br><b>${L('الطبيب:', 'Physician:')}</b> ${escapeHtml(physician.name)} (${escapeHtml(physician.specialty)})<br><b>${L('التشخيصات:', 'Diagnoses:')}</b> ${diagnoses.map(d => escapeHtml(d)).join(', ')}</p></div><div class="report-section"><h4><i class="fa-solid fa-pills"></i> ${L('جدول مراجعة الأدوية', 'Medication Review Table')}</h4>${medTableHtml}</div><div class="report-section"><h4><i class="fa-solid fa-flag"></i> ${L('التوصيات الاستشارية', 'Consultative Recommendations')}</h4><ul class="recommendation-list"><p><b>${L('🔴 إجراءات حرجة (Red Flags):', '🔴 Critical Actions (Red Flags):')}</b></p>${renderRecList(redFlags, 'red')}<p style="margin-top:16px"><b>${L('🟡 ملاحظات للمتابعة (Yellow Flags):', '🟡 Monitoring Notes (Yellow Flags):')}</b></p>${renderRecList(yellowFlags, 'yellow')}</ul></div><div class="report-section"><h4><i class="fa-solid fa-magnifying-glass-chart"></i> ${L('تحليل الفجوات والتدخلات الناقصة', 'Gap Analysis & Missing Interventions')}</h4><ul class="recommendation-list">${renderRecList(gaps, 'yellow')}</ul></div><small style="display:block; text-align:center; margin-top:24px; color:var(--muted);">${escapeHtml(patient_safety_note)}</small>`;}
-    analyzeBtn.addEventListener('click', async () => { const lang = document.getElementById('lang').value || 'ar'; const L = (ar, en) => lang === 'ar' ? ar : en; if (uploadedFiles.length === 0) { alert(L('الرجاء اختيار ملف واحد على الأقل.', 'Please select at least one file.')); return; } analyzeBtn.disabled = true; analyzeBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${L('جاري التحليل...', 'Analyzing...')}`; progressArea.style.display = 'block'; reportOutput.innerHTML = `<div class="report-placeholder"><i class="fa-solid fa-cog fa-spin"></i><p>${L('جاري تحليل الحالة، قد يستغرق الأمر دقيقة...', 'Analyzing case, this may take a moment...')}</p></div>`; try { const prep = await prepareFiles(uploadedFiles, L); const payload = { lang: lang, modelChoice: document.getElementById('model').value, context: document.getElementById('context').value, images: prep.images, text: prep.text, apiVersion: 'v8.1.0-ui' }; updateStatus(L('إرسال البيانات للتحليل...', 'Sending for analysis...'), 55); const res = await fetch('/api/gpt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); updateStatus(L('... استلام النتائج النهائية', 'Receiving final results...'), 90); if (!res.ok) { const errTxt = await res.text(); throw new Error(`Server Error (${res.status}): ${errTxt}`); } const data = await res.json(); if (!data.ok) throw new Error(data.error || 'API returned an error'); updateStatus(L('اكتمل التحليل بنجاح!', 'Analysis complete!'), 100); renderReportV8(data.merged); preMerged.textContent = JSON.stringify(data.merged, null, 2); preGPT.textContent = data.gpt.raw || `Error: ${data.gpt.error || 'N/A'}`; preGemini.textContent = data.gemini.raw || `Error: ${data.gemini.error || 'N/A'}`; } catch (err) { const errMsg = err.message || String(err); reportOutput.innerHTML = `<div class="report-placeholder err"><i class="fa-solid fa-bomb"></i><p>${L('حدث خطأ فادح:', 'A critical error occurred:')}<br><small>${escapeHtml(errMsg)}</small></p></div>`; updateStatus(`${L('فشل:', 'Failed:')} ${errMsg}`, 100); progressBarInner.style.backgroundColor = 'var(--red)'; } finally { analyzeBtn.disabled = false; analyzeBtn.innerHTML = `<i class="fa-solid fa-play"></i> ${L('بدء تحليل الحالة', 'Analyze Case')}`; setTimeout(() => { progressArea.style.display = 'none'; progressBarInner.style.width = '0%'; progressBarInner.style.backgroundColor = 'var(--brand)'; }, 4000); } });
-
-});
-</script>
+    </script>
 </body>
 </html>
