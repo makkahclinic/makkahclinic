@@ -1,4 +1,13 @@
+// هذا الإعداد مخصص لـ Next.js لزيادة حجم الطلب المسموح به
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "50mb",
+    },
+  },
+};
 
+// --- الإعدادات الرئيسية ---
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
