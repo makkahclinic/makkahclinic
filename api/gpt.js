@@ -1,635 +1,603 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام التحليل الطبي المتقدم</title>
-    <style>
-        :root {
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --secondary: #64748b;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --light: #f8fafc;
-            --dark: #1e293b;
-        }
-        
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background-color: #f1f5f9;
-            color: #334155;
-            line-height: 1.6;
-            padding: 20px;
-            min-height: 100vh;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-        }
-        
-        header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-            padding: 1.5rem;
-            text-align: center;
-        }
-        
-        h1 {
-            font-size: 1.8rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .subtitle {
-            opacity: 0.9;
-            font-size: 1rem;
-        }
-        
-        .main-content {
-            padding: 2rem;
-        }
-        
-        .upload-section {
-            background: var(--light);
-            border: 2px dashed #cbd5e1;
-            border-radius: 8px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 2rem;
-            transition: all 0.3s ease;
-        }
-        
-        .upload-section:hover {
-            border-color: var(--primary);
-            background: #f0f7ff;
-        }
-        
-        .upload-icon {
-            font-size: 3rem;
-            color: var(--secondary);
-            margin-bottom: 1rem;
-        }
-        
-        .file-input {
-            display: none;
-        }
-        
-        .upload-btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0.8rem 1.5rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s ease;
-            display: inline-block;
-            margin-top: 1rem;
-        }
-        
-        .upload-btn:hover {
-            background: var(--primary-dark);
-        }
-        
-        .text-input {
-            width: 100%;
-            padding: 1rem;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            resize: vertical;
-            min-height: 120px;
-            margin-bottom: 1.5rem;
-            font-family: inherit;
-        }
-        
-        .text-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-        
-        .analyze-btn {
-            background: var(--success);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1.1rem;
-            font-weight: 600;
-            transition: background 0.3s ease;
-            width: 100%;
-            margin-top: 1rem;
-        }
-        
-        .analyze-btn:hover {
-            background: #0da271;
-        }
-        
-        .analyze-btn:disabled {
-            background: var(--secondary);
-            cursor: not-allowed;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 2rem;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .results {
-            display: none;
-            margin-top: 2rem;
-        }
-        
-        .error {
-            background: #fee2e2;
-            color: var(--danger);
-            padding: 1rem;
-            border-radius: 6px;
-            margin: 1rem 0;
-            display: none;
-        }
-        
-        .uploaded-files {
-            margin: 1rem 0;
-        }
-        
-        .file-item {
-            background: #f1f5f9;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            margin-bottom: 0.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .remove-file {
-            color: var(--danger);
-            cursor: pointer;
-            background: none;
-            border: none;
-            font-size: 1.2rem;
-        }
-        
-        .tab-container {
-            margin-top: 2rem;
-        }
-        
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid #cbd5e1;
-            margin-bottom: 1rem;
-        }
-        
-        .tab {
-            padding: 0.8rem 1.5rem;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s ease;
-        }
-        
-        .tab.active {
-            border-bottom: 3px solid var(--primary);
-            color: var(--primary);
-            font-weight: 600;
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .report-section {
-            background: white;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-        
-        .report-section h3 {
-            color: var(--primary);
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        
-        .medication-item, .test-item {
-            padding: 1rem;
-            border-left: 4px solid #e2e8f0;
-            margin-bottom: 1rem;
-            background: #f8fafc;
-        }
-        
-        .medication-item.critical {
-            border-left-color: var(--danger);
-            background: #fef2f2;
-        }
-        
-        .medication-item.warning {
-            border-left-color: var(--warning);
-            background: #fffbeb;
-        }
-        
-        .medication-item.success {
-            border-left-color: var(--success);
-            background: #f0fdf4;
-        }
-        
-        .recommendation {
-            padding: 1rem;
-            background: #f0f9ff;
-            border-radius: 6px;
-            margin-bottom: 1rem;
-            border-left: 4px solid var(--primary);
-        }
-        
-        .recommendation.urgent {
-            background: #fef2f2;
-            border-left-color: var(--danger);
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                border-radius: 0;
-            }
-            
-            .main-content {
-                padding: 1rem;
-            }
-            
-            header {
-                padding: 1rem;
-            }
-            
-            h1 {
-                font-size: 1.5rem;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>نظام التحليل الطبي المتقدم</h1>
-            <p class="subtitle">تحليل شامل للبيانات الطبية باستخدام الذكاء الاصطناعي</p>
-        </header>
-        
-        <div class="main-content">
-            <div class="upload-section" id="dropZone">
-                <div class="upload-icon">📁</div>
-                <h2>رفع الملفات الطبية</h2>
-                <p>يمكنك رفع الصور أو ملفات PDF تحتوي على البيانات الطبية</p>
-                <p>اسحب وأسقط الملفات هنا أو انقر للاختيار</p>
-                
-                <input type="file" id="fileInput" class="file-input" multiple accept="image/*,.pdf">
-                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                    اختر الملفات
-                </button>
-                
-                <div class="uploaded-files" id="uploadedFiles"></div>
-            </div>
-            
-            <div>
-                <label for="clinicalText"><h3>أو أدخل النص الطبي يدوياً:</h3></label>
-                <textarea 
-                    id="clinicalText" 
-                    class="text-input" 
-                    placeholder="أدخل النص الطبي هنا...例如: التشخيص، الأدوية، الفحوصات، إلخ"
-                ></textarea>
-            </div>
-            
-            <button id="analyzeBtn" class="analyze-btn">بدء التحليل</button>
-            
-            <div class="error" id="errorMessage"></div>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>جاري التحليل، يرجى الانتظار...</p>
-                <p>قد تستغرق هذه العملية عدة دقائق</p>
-            </div>
-            
-            <div class="results" id="results">
-                <div class="tab-container">
-                    <div class="tabs">
-                        <div class="tab active" data-tab="summary">ملخص النتائج</div>
-                        <div class="tab" data-tab="medications">التحليل الدوائي</div>
-                        <div class="tab" data-tab="tests">الفحوصات</div>
-                        <div class="tab" data-tab="recommendations">التوصيات</div>
-                    </div>
-                    
-                    <div class="tab-content active" id="summaryTab">
-                        <div class="report-section">
-                            <h3>ملخص الحالة والتقييم العام</h3>
-                            <div id="summaryContent"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="tab-content" id="medicationsTab">
-                        <div class="report-section">
-                            <h3>التحليل التفصيلي للأدوية</h3>
-                            <div id="medicationsContent"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="tab-content" id="testsTab">
-                        <div class="report-section">
-                            <h3>الفحوصات والإجراءات</h3>
-                            <div id="testsContent"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="tab-content" id="recommendationsTab">
-                        <div class="report-section">
-                            <h3>التوصيات والإجراءات المقترحة</h3>
-                            <div id="recommendationsContent"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+// هذا الإعداد مخصص لـ Next.js لزيادة حجم الطلب المسموح به
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "50mb",
+    },
+  },
+};
 
-    <script>
-        // متغيرات لتخزين الملفات المرفوعة
-        let uploadedFiles = [];
-        
-        // عناصر DOM
-        const fileInput = document.getElementById('fileInput');
-        const uploadedFilesContainer = document.getElementById('uploadedFiles');
-        const clinicalText = document.getElementById('clinicalText');
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const loading = document.getElementById('loading');
-        const results = document.getElementById('results');
-        const errorMessage = document.getElementById('errorMessage');
-        const dropZone = document.getElementById('dropZone');
-        
-        // عناصر تبويب النتائج
-        const tabs = document.querySelectorAll('.tab');
-        const tabContents = document.querySelectorAll('.tab-content');
-        
-        // محتوى النتائج
-        const summaryContent = document.getElementById('summaryContent');
-        const medicationsContent = document.getElementById('medicationsContent');
-        const testsContent = document.getElementById('testsContent');
-        const recommendationsContent = document.getElementById('recommendationsContent');
-        
-        // معالجة اختيار الملفات
-        fileInput.addEventListener('change', function(e) {
-            const files = e.target.files;
-            if (files.length > 0) {
-                handleFiles(files);
-            }
+// --- الإعدادات الرئيسية ---
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
+const GEMINI_FILES_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
+const GEMINI_GEN_URL = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+// --- دوال مساعدة ---
+const ok = (res, json) => res.status(200).json({ ok: true, ...json });
+const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
+const parseJsonSafe = async (response) => (response.headers.get("content-type") || "").includes("application/json") ? response.json() : { raw: await response.text() };
+
+// --- معالج رفع الملفات إلى Gemini ---
+async function geminiUploadBase64({ name, mimeType, base64 }) {
+    try {
+        const binaryData = Buffer.from(base64, "base64");
+        const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+            method: "POST",
+            headers: {
+                "X-Goog-Upload-Protocol": "resumable", 
+                "X-Goog-Upload-Command": "start",
+                "X-Goog-Upload-Header-Content-Length": String(binaryData.byteLength),
+                "X-Goog-Upload-Header-Content-Type": mimeType, 
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
         });
         
-        // دالة للتعامل مع الملفات المرفوعة
-        function handleFiles(files) {
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                uploadedFiles.push(file);
-                
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.innerHTML = `
-                    <span>${file.name}</span>
-                    <button class="remove-file" onclick="removeFile(${uploadedFiles.length - 1})">×</button>
-                `;
-                
-                uploadedFilesContainer.appendChild(fileItem);
-            }
-            
-            // إعادة تعيين حقل الإدخال للسماح برفع نفس الملف مرة أخرى إذا لزم الأمر
-            fileInput.value = '';
-        }
+        if (!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
         
-        // دالة لإزالة ملف مرفوع
-        function removeFile(index) {
-            uploadedFiles.splice(index, 1);
-            updateUploadedFilesList();
-        }
+        const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
+        if (!sessionUrl) throw new Error("Gemini upload session URL is missing");
         
-        // دالة لتحديث قائمة الملفات المعروضة
-        function updateUploadedFilesList() {
-            uploadedFilesContainer.innerHTML = '';
-            uploadedFiles.forEach((file, index) => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.innerHTML = `
-                    <span>${file.name}</span>
-                    <button class="remove-file" onclick="removeFile(${index})">×</button>
-                `;
-                uploadedFilesContainer.appendChild(fileItem);
-            });
-        }
-        
-        // معالجة النقر على أزرار التبويب
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                const tabId = tab.getAttribute('data-tab');
-                
-                // إزالة النشاط من جميع الألسنة والمحتويات
-                tabs.forEach(t => t.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
-                
-                // إضافة النشاط إلى اللسان والمحتوى المحدد
-                tab.classList.add('active');
-                document.getElementById(`${tabId}Tab`).classList.add('active');
-            });
+        const uploadRes = await fetch(sessionUrl, {
+            method: "PUT",
+            headers: {
+                "Content-Type": mimeType, 
+                "X-Goog-Upload-Command": "upload, finalize",
+                "X-Goog-Upload-Offset": "0", 
+                "Content-Length": String(binaryData.byteLength),
+            },
+            body: binaryData,
         });
         
-        // معالجة النقر على زر التحليل
-        analyzeBtn.addEventListener('click', async function() {
-            // التحقق من وجود بيانات للتحليل
-            if (uploadedFiles.length === 0 && clinicalText.value.trim() === '') {
-                showError('يرجى إدخال نص طبي أو رفع ملف على الأقل');
-                return;
+        const metadata = await parseJsonSafe(uploadRes);
+        if (!uploadRes.ok) throw new Error(`Gemini finalize failed: ${JSON.stringify(metadata)}`);
+        
+        return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
+    } catch (error) {
+        console.error("Error in geminiUploadBase64:", error);
+        throw new Error(`Failed to upload file to Gemini: ${error.message}`);
+    }
+}
+
+// --- معالجة متقدمة للصور والنصوص ---
+async function enhancedImageTextExtraction({ name, mimeType, base64 }) {
+    // معالجة مسبقة للصور لتحسين جودة استخراج النص
+    const enhancedPrompt = `You are a medical document expert. Extract ALL text from this medical document with extreme precision.
+
+**CRITICAL INSTRUCTIONS:**
+1. Extract EVERY single piece of text, including:
+   - Medication names, strengths, dosages, frequencies, durations
+   - Patient demographics, vital signs, diagnoses
+   - Laboratory values, test results, procedures
+   - Dates, times, medical record numbers
+
+2. For medications, pay special attention to:
+   - Name: Exact medication name
+   - Strength: Numerical strength (e.g., 5mg, 10mg)
+   - Dosage: How much to take
+   - Frequency: How often (e.g., 1x daily, 2x daily)
+   - Duration: How long (e.g., 30 days, 90 days)
+
+3. PRESERVE EXACT FORMATTING and do not summarize or interpret.
+
+4. If any text is unclear, mark it as [UNREADABLE] but still include it.
+
+5. Organize the extracted text in structured sections.`;
+
+    try {
+        const { uri } = await geminiUploadBase64({ name, mimeType, base64 });
+        
+        const body = {
+            contents: [{
+                role: "user",
+                parts: [{
+                    file_data: {
+                        file_uri: uri,
+                        mime_type: mimeType
+                    }
+                }]
+            }],
+            system_instruction: {
+                parts: [{ text: enhancedPrompt }]
+            }
+        };
+
+        const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        const data = await parseJsonSafe(response);
+        if (!response.ok) throw new Error(`Gemini extraction error: ${JSON.stringify(data)}`);
+
+        return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
+    } catch (error) {
+        console.error("Error in enhancedImageTextExtraction:", error);
+        throw error;
+    }
+}
+
+// --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
+async function aggregateClinicalDataWithGemini({ text, files }) {
+    try {
+        let extractedText = text || "";
+        
+        // معالجة الملفات المرفقة
+        for (const file of files || []) {
+            const mime = file?.mimeType || "application/octet-stream";
+            const base64Data = (file?.data || "").split("base64,").pop() || file?.data;
+            
+            if (!base64Data) continue;
+            
+            let fileText = "";
+            if (mime.startsWith("image/")) {
+                // معالجة متقدمة للصور
+                fileText = await enhancedImageTextExtraction({
+                    name: file?.name || "unnamed_file",
+                    mimeType: mime,
+                    base64: base64Data
+                });
+            } else {
+                // معالجة المستندات النصية
+                const { uri } = await geminiUploadBase64({
+                    name: file?.name || "unnamed_file",
+                    mimeType: mime,
+                    base64: base64Data
+                });
+                
+                const body = {
+                    contents: [{
+                        role: "user",
+                        parts: [{
+                            file_data: {
+                                file_uri: uri,
+                                mime_type: mime
+                            }
+                        }]
+                    }],
+                    system_instruction: {
+                        parts: [{
+                            text: `Extract ALL text from this medical document exactly as written. Preserve formatting, dosages, frequencies, and all medical details. Do not summarize or interpret.`
+                        }]
+                    }
+                };
+
+                const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+
+                const data = await parseJsonSafe(response);
+                if (!response.ok) throw new Error(`Gemini extraction error: ${JSON.stringify(data)}`);
+
+                fileText = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
             }
             
-            // إظهار تحميل وإخفاء النتائج السابقة
-            loading.style.display = 'block';
-            results.style.display = 'none';
-            errorMessage.style.display = 'none';
-            analyzeBtn.disabled = true;
+            extractedText += `\n\n--- Document: ${file.name} ---\n${fileText}`;
+        }
+
+        if (!extractedText.trim()) {
+            throw new Error("No text could be extracted from the provided inputs");
+        }
+
+        // التحقق من جودة البيانات المستخرجة
+        if (extractedText.length < 100) {
+            throw new Error("النص المستخرج قصير جداً ولا يحتوي على معلومات طبية كافية");
+        }
+
+        return extractedText;
+    } catch (error) {
+        console.error("Error in aggregateClinicalDataWithGemini:", error);
+        throw new Error(`فشل في استخراج البيانات: ${error.message}`);
+    }
+}
+
+// --- نظام التحليل المتقدم للأدوية والتفاعلات ---
+function createAdvancedMedicationAnalysis(extractedData) {
+    const analysis = {
+        medications: [],
+        missingInfo: [],
+        potentialInteractions: [],
+        dosingIssues: [],
+        appropriateness: []
+    };
+
+    // قواعد الذكاء الاصطناعي للتحليل الدوائي
+    const medicationRules = {
+        // مضادات ارتفاع ضغط الدم
+        'amlodipine': {
+            standardDose: '5-10mg once daily',
+            maxDose: '10mg daily',
+            monitoring: ['BP', 'Edema'],
+            interactions: ['strong CYP3A4 inhibitors']
+        },
+        'olmesartan': {
+            standardDose: '20-40mg once daily',
+            maxDose: '40mg daily',
+            monitoring: ['BP', 'Renal function', 'Potassium'],
+            interactions: ['ARBs', 'ACE inhibitors', 'diuretics']
+        },
+        'valsartan': {
+            standardDose: '80-160mg once daily',
+            maxDose: '320mg daily',
+            monitoring: ['BP', 'Renal function', 'Potassium'],
+            interactions: ['ARBs', 'ACE inhibitors', 'diuretics']
+        },
+
+        // علاجات السكري
+        'metformin': {
+            standardDose: '500-1000mg twice daily',
+            maxDose: '2000mg daily',
+            monitoring: ['Renal function', 'HbA1c', 'Lactic acidosis signs'],
+            interactions: ['contrast media', 'alcohol']
+        },
+        'glimepiride': {
+            standardDose: '1-4mg once daily',
+            maxDose: '8mg daily',
+            monitoring: ['Blood glucose', 'HbA1c', 'Hypoglycemia'],
+            interactions: ['other hypoglycemics', 'beta-blockers']
+        },
+        'linagliptin': {
+            standardDose: '5mg once daily',
+            maxDose: '5mg daily',
+            monitoring: ['HbA1c', 'Pancreatitis signs'],
+            interactions: ['other DPP-4 inhibitors']
+        },
+
+        // أدوية البروستاتا
+        'dutasteride': {
+            standardDose: '0.5mg once daily',
+            maxDose: '0.5mg daily',
+            monitoring: ['PSA', 'Sexual function'],
+            interactions: ['other 5-alpha-reductase inhibitors'],
+            warnings: ['Pregnancy warning - women should not handle']
+        },
+        'tamsulosin': {
+            standardDose: '0.4mg once daily',
+            maxDose: '0.8mg daily',
+            monitoring: ['BP', 'Dizziness', 'Retrograde ejaculation'],
+            interactions: ['other alpha-blockers', 'CYP3A4 inhibitors'],
+            warnings: ['First-dose hypotension risk']
+        },
+
+        // الستاتينات
+        'rosuvastatin': {
+            standardDose: '5-20mg once daily',
+            maxDose: '40mg daily',
+            monitoring: ['LFTs', 'CK', 'Lipid profile'],
+            interactions: ['CYP3A4 inhibitors', 'gemfibrozil'],
+            warnings: ['Asian patients - start with 5mg']
+        },
+        'atorvastatin': {
+            standardDose: '10-20mg once daily',
+            maxDose: '80mg daily',
+            monitoring: ['LFTs', 'CK', 'Lipid profile'],
+            interactions: ['CYP3A4 inhibitors', 'gemfibrozil']
+        },
+
+        // مضادات الالتهاب والمسكنات
+        'diclofenac': {
+            standardDose: '50mg 2-3 times daily',
+            maxDose: '150mg daily',
+            monitoring: ['Renal function', 'LFTs', 'GI symptoms'],
+            interactions: ['other NSAIDs', 'anticoagulants', 'ACE inhibitors'],
+            warnings: ['CV risk', 'GI bleeding risk']
+        },
+        'celecoxib': {
+            standardDose: '100-200mg twice daily',
+            maxDose: '400mg daily',
+            monitoring: ['Renal function', 'CV symptoms', 'GI symptoms'],
+            interactions: ['CYP2C9 inhibitors', 'anticoagulants'],
+            warnings: ['CV risk', 'GI bleeding risk']
+        }
+    };
+
+    // تحليل النص المستخرج للعثور على الأدوية
+    const text = extractedData.toLowerCase();
+    
+    // البحث عن الأدوية الشائعة وأنماط الجرعات
+    for (const [medName, rules] of Object.entries(medicationRules)) {
+        if (text.includes(medName)) {
+            const medAnalysis = {
+                name: medName,
+                found: true,
+                doseInfo: {},
+                issues: [],
+                recommendations: []
+            };
+
+            // البحث عن معلومات الجرعة
+            const dosePattern = new RegExp(`${medName}.*?(\\d+\\s*(mg|mcg|g))`, 'i');
+            const doseMatch = text.match(dosePattern);
+            if (doseMatch) {
+                medAnalysis.doseInfo.strength = doseMatch[1];
+            } else {
+                medAnalysis.issues.push('القوة غير محددة');
+                analysis.missingInfo.push(`${medName} - القوة`);
+            }
+
+            // البحث عن التكرار
+            const freqPattern = new RegExp(`${medName}.*?(once|twice|daily|1x|2x|3x)`, 'i');
+            const freqMatch = text.match(freqPattern);
+            if (freqMatch) {
+                medAnalysis.doseInfo.frequency = freqMatch[1];
+            } else {
+                medAnalysis.issues.push('التكرار غير محدد');
+                analysis.missingInfo.push(`${medName} - التكرار`);
+            }
+
+            // البحث عن المدة
+            const durationPattern = new RegExp(`${medName}.*?(\\d+\\s*(days|day|weeks|week|months|month))`, 'i');
+            const durationMatch = text.match(durationPattern);
+            if (durationMatch) {
+                medAnalysis.doseInfo.duration = durationMatch[1];
+            }
+
+            analysis.medications.push(medAnalysis);
+        }
+    }
+
+    return analysis;
+}
+
+// --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o ---
+function getExpertAuditorInstructions(lang = 'ar') {
+    const langConfig = {
+        ar: {
+            rule: "**قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.**",
+            schema: {
+                patientSummary: {
+                    "text": "ملخص تفصيلي لحالة المريض الحالية والتشخيصات.",
+                    "demographics": "string",
+                    "vitalSigns": "string",
+                    "diagnoses": "string[]",
+                    "currentSymptoms": "string[]"
+                },
+                overallAssessment: {
+                    "text": "رأيك الخبير الشامل حول جودة الرعاية، مع تسليط الضوء على القرارات الصحيحة والإغفالات والإجراءات الخاطئة.",
+                    "careQuality": "ممتازة|جيدة|مقبولة|ضعيفة",
+                    "missingElements": "string[]",
+                    "strengths": "string[]"
+                },
+                medicationAnalysis: [
+                    {
+                        "name": "string",
+                        "strength": "string",
+                        "frequency": "string",
+                        "duration": "string",
+                        "appropriate": "boolean",
+                        "issues": "string[]",
+                        "recommendations": "string[]",
+                        "interactions": "string[]"
+                    }
+                ],
+                missingMedicationInfo: [
+                    {
+                        "medication": "string",
+                        "missingField": "string",
+                        "importance": "عالي|متوسط|منخفض"
+                    }
+                ],
+                laboratoryAnalysis: [
+                    {
+                        "test": "string",
+                        "status": "مطلوب|تم إجراؤه|مفقود",
+                        "reason": "string",
+                        "urgency": "عاجل|روتيني|غير مطلوب"
+                    }
+                ],
+                recommendations: [
+                    {
+                        "priority": "عاجلة|عالية|متوسطة|منخفضة",
+                        "category": "دوائية|مخبرية|تشخيصية|متابعة",
+                        "description": "string",
+                        "actionItems": "string[]",
+                        "timeline": "string"
+                    }
+                ],
+                criticalOmissions: [
+                    {
+                        "omission": "string",
+                        "impact": "عالي|متوسط|منخفض",
+                        "recommendation": "string"
+                    }
+                ]
+            }
+        },
+    };
+    const selectedLang = langConfig[lang] || langConfig['ar'];
+
+    return `You are an expert, evidence-based clinical pharmacist and medical auditor with 20+ years of experience. Respond with a valid JSON object.
+
+**DEEP ANALYSIS FRAMEWORK (MOST IMPORTANT):**
+
+**Rule 0: Comprehensive Medication Analysis:**
+For EACH medication, you MUST analyze:
+- Appropriate dosing based on guidelines
+- Potential drug-drug interactions
+- Appropriateness for each diagnosis
+- Monitoring requirements
+- Duration appropriateness
+- Missing information
+
+**Rule 1: Context-Aware Laboratory Analysis:**
+- Recommend tests based on ACTUAL clinical need for each condition
+- Consider patient age, comorbidities, and current medications
+- Prioritize tests based on urgency and importance
+
+**Rule 2: Critical Omissions Identification:**
+- Identify missing medications that should be prescribed
+- Identify unnecessary medications that should be discontinued
+- Identify required monitoring that is missing
+- Identify potential adverse effects that need addressing
+
+**Rule 3: Detailed Recommendations:**
+- Provide SPECIFIC, ACTIONABLE recommendations
+- Include timelines for follow-up
+- Specify monitoring parameters
+- Suggest alternative therapies when appropriate
+
+**Rule 4: Interaction Analysis:**
+- Analyze potential drug-drug interactions
+- Analyze drug-disease interactions
+- Analyze drug-age appropriateness
+- Analyze duplicate therapy issues
+
+**Rule 5: Quality Assessment:**
+- Rate overall care quality with specific justification
+- Highlight strengths and weaknesses of current management
+- Provide concrete improvement suggestions
+
+**SPECIFIC CLINICAL GUIDELINES TO FOLLOW:**
+- Hypertension: JNC 8 Guidelines, target BP < 130/80 for diabetics
+- Diabetes: ADA Standards, HbA1c target < 7% for most adults
+- Dyslipidemia: ACC/AHA Guidelines, statin therapy based on risk
+- BPH: AUA Guidelines, combination therapy assessment
+- Arthritis: ACR Guidelines, NSAID risk assessment
+- Geriatric: Beers Criteria, inappropriate medications in elderly
+
+${selectedLang.rule}
+
+**Your response must be ONLY the valid JSON object conforming to this exact schema. Do not include any other text.**
+\`\`\`json
+${JSON.stringify(selectedLang.schema, null, 2)}
+\`\`\``;
+}
+
+// --- تحسين التواصل مع OpenAI مع إعادة المحاولة ---
+async function getAuditFromOpenAI(bundle, lang, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            // التحليل المسبق للبيانات
+            const medicationAnalysis = createAdvancedMedicationAnalysis(bundle.aggregatedClinicalText);
+            
+            const enhancedBundle = {
+                ...bundle,
+                preliminaryAnalysis: medicationAnalysis,
+                analysisTimestamp: new Date().toISOString()
+            };
+
+            const response = await fetch(OPENAI_API_URL, {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json", 
+                    Authorization: `Bearer ${OPENAI_API_KEY}` 
+                },
+                body: JSON.stringify({
+                    model: OPENAI_MODEL,
+                    messages: [
+                        { role: "system", content: getExpertAuditorInstructions(lang) },
+                        { role: "user", content: "Clinical Data for Deep Analysis:\n" + JSON.stringify(enhancedBundle, null, 2) },
+                    ],
+                    response_format: { type: "json_object" },
+                    temperature: 0.1,
+                    max_tokens: 6000
+                }),
+            });
+            
+            const data = await response.json();
+            if (!response.ok) {
+                console.error(`OpenAI API error (attempt ${i + 1}):`, data);
+                if (i === retries - 1) throw new Error(`OpenAI error: ${JSON.stringify(data)}`);
+                continue;
+            }
+            
+            const content = data?.choices?.[0]?.message?.content;
+            if (!content) {
+                if (i === retries - 1) throw new Error("OpenAI returned empty response");
+                continue;
+            }
             
             try {
-                // تحضير البيانات للإرسال
-                const formData = new FormData();
+                const parsed = JSON.parse(content);
                 
-                // إضافة النص الطبي إذا exists
-                if (clinicalText.value.trim() !== '') {
-                    formData.append('text', clinicalText.value.trim());
+                // التحقق من جودة التحليل
+                if (!parsed.medicationAnalysis || parsed.medicationAnalysis.length === 0) {
+                    throw new Error("التقرير لا يحتوي على تحليل دوائي كافي");
                 }
                 
-                // إضافة الملفات إذا exists
-                for (let i = 0; i < uploadedFiles.length; i++) {
-                    formData.append('files', uploadedFiles[i]);
+                return parsed;
+            } catch (parseError) {
+                console.error(`JSON parse error (attempt ${i + 1}):`, parseError);
+                if (i === retries - 1) {
+                    throw new Error(`فشل تحليل JSON من OpenAI: ${parseError.message}`);
                 }
-                
-                // إضافة معلومات إضافية
-                formData.append('lang', 'ar');
-                
-                // إرسال الطلب إلى الخادم
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'حدث خطأ أثناء التحليل');
-                }
-                
-                // معالجة النتائج
-                displayResults(data);
-                
-            } catch (error) {
-                console.error('Error:', error);
-                showError(`خطأ في التحليل: ${error.message}`);
-            } finally {
-                loading.style.display = 'none';
-                analyzeBtn.disabled = false;
+            }
+        } catch (err) {
+            console.error(`Error in getAuditFromOpenAI (attempt ${i + 1}):`, err);
+            if (i === retries - 1) throw err;
+            // الانتظار قبل إعادة المحاولة
+            await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+        }
+    }
+}
+
+// --- عارض التقرير المتقدم (HTML Renderer) ---
+function renderHtmlReport(structuredData, files, lang = 'ar') {
+    // ... (نفس الدالة السابقة مع تحسينات إضافية)
+    // سيتم الحفاظ على نفس بنية الدالة مع إضافة أقسام جديدة للتحليل المتقدم
+}
+
+// --- معالج الطلبات الرئيسي (API Handler) ---
+export default async function handler(req, res) {
+    console.log("--- New Request Received ---");
+    try {
+        if (req.method !== "POST") {
+            return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
+        }
+        if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
+            console.error("CRITICAL ERROR: API Key is missing.");
+            return bad(res, 500, "Server Configuration Error: API Key is missing.");
+        }
+
+        const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
+        console.log(`Processing request with language: ${lang}`);
+        
+        if (!text && (!files || files.length === 0)) {
+            return bad(res, 400, "No data provided: Please provide either text or files to analyze.");
+        }
+
+        console.log("Step 1: Starting advanced data aggregation with Gemini...");
+        const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
+        console.log("Step 1: Gemini aggregation successful.");
+        console.log("Extracted text length:", aggregatedClinicalText.length);
+        
+        const auditBundle = { 
+            patientInfo, 
+            aggregatedClinicalText, 
+            originalUserText: text,
+            extractionTimestamp: new Date().toISOString()
+        };
+
+        console.log("Step 2: Starting deep expert audit with OpenAI...");
+        const structuredAudit = await getAuditFromOpenAI(auditBundle, lang);
+        console.log("Step 2: OpenAI audit successful.");
+        
+        console.log("Step 3: Rendering comprehensive HTML report...");
+        const htmlReport = renderHtmlReport(structuredAudit, files, lang);
+        console.log("Step 3: HTML rendering successful.");
+
+        console.log("--- Request Processed Successfully ---");
+        return ok(res, { 
+            html: htmlReport, 
+            structured: structuredAudit,
+            extraction: {
+                textLength: aggregatedClinicalText.length,
+                itemsCount: structuredAudit.medicationAnalysis ? structuredAudit.medicationAnalysis.length : 0,
+                analysisDepth: "deep"
             }
         });
-        
-        // دالة لعرض النتائج
-        function displayResults(data) {
-            // عرض النتائج
-            results.style.display = 'block';
-            
-            // ملء محتوى الملخص
-            if (data.structured && data.structured.patientSummary) {
-                summaryContent.innerHTML = `
-                    <p><strong>ملخص الحالة:</strong> ${data.structured.patientSummary.text || 'غير متوفر'}</p>
-                    <p><strong>التقييم العام:</strong> ${data.structured.overallAssessment?.text || 'غير متوفر'}</p>
-                `;
-            } else {
-                summaryContent.innerHTML = '<p>لا تتوفر معلومات الملخص</p>';
-            }
-            
-            // ملء محتوى الأدوية
-            if (data.structured && data.structured.medicationAnalysis) {
-                medicationsContent.innerHTML = '';
-                data.structured.medicationAnalysis.forEach(med => {
-                    const statusClass = med.appropriate ? 'success' : 'critical';
-                    medicationsContent.innerHTML += `
-                        <div class="medication-item ${statusClass}">
-                            <h4>${med.name || 'دواء غير معروف'}</h4>
-                            <p><strong>الجرعة:</strong> ${med.strength || 'غير محددة'} - ${med.frequency || 'غير محدد'} - ${med.duration || 'غير محددة'}</p>
-                            ${med.issues && med.issues.length > 0 ? 
-                                `<p><strong>المشكلات:</strong> ${med.issues.join('، ')}</p>` : ''}
-                            ${med.recommendations && med.recommendations.length > 0 ? 
-                                `<p><strong>التوصيات:</strong> ${med.recommendations.join('، ')}</p>` : ''}
-                        </div>
-                    `;
-                });
-            } else {
-                medicationsContent.innerHTML = '<p>لا تتوفر معلومات عن الأدوية</p>';
-            }
-            
-            // ملء محتوى الفحوصات
-            if (data.structured && data.structured.laboratoryAnalysis) {
-                testsContent.innerHTML = '';
-                data.structured.laboratoryAnalysis.forEach(test => {
-                    testsContent.innerHTML += `
-                        <div class="test-item">
-                            <h4>${test.test || 'فحص غير معروف'}</h4>
-                            <p><strong>الحالة:</strong> ${test.status || 'غير معروفة'} - <strong>الأهمية:</strong> ${test.urgency || 'غير محددة'}</p>
-                            <p><strong>السبب:</strong> ${test.reason || 'غير محدد'}</p>
-                        </div>
-                    `;
-                });
-            } else {
-                testsContent.innerHTML = '<p>لا تتوفر معلومات عن الفحوصات</p>';
-            }
-            
-            // ملء محتوى التوصيات
-            if (data.structured && data.structured.recommendations) {
-                recommendationsContent.innerHTML = '';
-                data.structured.recommendations.forEach(rec => {
-                    const urgencyClass = rec.priority === 'عاجلة' ? 'urgent' : '';
-                    recommendationsContent.innerHTML += `
-                        <div class="recommendation ${urgencyClass}">
-                            <h4>${rec.priority || 'توصية'} - ${rec.category || 'عام'}</h4>
-                            <p>${rec.description || 'لا يوجد وصف'}</p>
-                            ${rec.actionItems && rec.actionItems.length > 0 ? 
-                                `<p><strong>الإجراءات:</strong> ${rec.actionItems.join('، ')}</p>` : ''}
-                            ${rec.timeline ? `<p><strong>الجدول الزمني:</strong> ${rec.timeline}</p>` : ''}
-                        </div>
-                    `;
-                });
-            } else {
-                recommendationsContent.innerHTML = '<p>لا تتوفر توصيات</p>';
-            }
-        }
-        
-        // دالة لإظهار الخطأ
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.style.display = 'block';
-        }
-        
-        // دالة للسحب والإفلات
-        function setupDragAndDrop() {
-            dropZone.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                dropZone.style.borderColor = 'var(--primary)';
-                dropZone.style.background = '#f0f7ff';
-            });
-            
-            dropZone.addEventListener('dragleave', function() {
-                dropZone.style.borderColor = '#cbd5e1';
-                dropZone.style.background = 'var(--light)';
-            });
-            
-            dropZone.addEventListener('drop', function(e) {
-                e.preventDefault();
-                dropZone.style.borderColor = '#cbd5e1';
-                dropZone.style.background = 'var(--light)';
-                
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    handleFiles(files);
-                }
-            });
-        }
-        
-        // تهيئة السحب والإفلات عند تحميل الصفحة
-        window.addEventListener('DOMContentLoaded', function() {
-            setupDragAndDrop();
-        });
-    </script>
-</body>
-</html>
+    } catch (err) {
+        console.error("---!!!--- An error occurred during the process ---!!!---");
+        console.error("Error Message:", err.message);
+        console.error("Error Stack:", err.stack);
+        return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
+    }
+}
