@@ -437,10 +437,22 @@
                 body: JSON.stringify(payload)
             });
 
-            const data = await resp.json();
+            // --- START: Improved Error Handling ---
             if (!resp.ok) {
-                throw new Error(data.error || 'Unknown server error');
+                let errorMessage = 'An unknown server error occurred.';
+                try {
+                    // Try to parse the error as JSON first
+                    const errorData = await resp.json();
+                    errorMessage = errorData.error || JSON.stringify(errorData);
+                } catch (e) {
+                    // If it's not JSON, it's likely a text error from the server
+                    errorMessage = await resp.text();
+                }
+                throw new Error(errorMessage);
             }
+
+            const data = await resp.json();
+            // --- END: Improved Error Handling ---
 
             document.getElementById('reportWrap').style.display = 'block';
             document.getElementById('reportHTML').innerHTML = `<div id="reportContent" class="card">${data.html || ''}</div>`;
@@ -483,6 +495,7 @@
 </script>
 </body>
 </html>
+
 
 
 
