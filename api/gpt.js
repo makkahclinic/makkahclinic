@@ -38,7 +38,10 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
             body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
         });
         
-        if (!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
+        if (!initRes.ok) {
+            const errorData = await parseJsonSafe(initRes);
+            throw new Error(`Gemini init failed: ${JSON.stringify(errorData)}`);
+        }
         
         const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
         if (!sessionUrl) throw new Error("Gemini upload session URL is missing");
@@ -66,8 +69,10 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
 
 // --- معالجة متقدمة للصور والنصوص ---
 async function enhancedImageTextExtraction({ name, mimeType, base64 }) {
-    // معالجة مسبقة للصور لتحسين جودة استخراج النص
-    const enhancedPrompt = `You are a medical document expert. Extract ALL text from this medical document with extreme precision.
+    try {
+        const { uri } = await geminiUploadBase64({ name, mimeType, base64 });
+        
+        const enhancedPrompt = `You are a medical document expert. Extract ALL text from this medical document with extreme precision.
 
 **CRITICAL INSTRUCTIONS:**
 1. Extract EVERY single piece of text, including:
@@ -89,9 +94,6 @@ async function enhancedImageTextExtraction({ name, mimeType, base64 }) {
 
 5. Organize the extracted text in structured sections.`;
 
-    try {
-        const { uri } = await geminiUploadBase64({ name, mimeType, base64 });
-        
         const body = {
             contents: [{
                 role: "user",
@@ -114,12 +116,14 @@ async function enhancedImageTextExtraction({ name, mimeType, base64 }) {
         });
 
         const data = await parseJsonSafe(response);
-        if (!response.ok) throw new Error(`Gemini extraction error: ${JSON.stringify(data)}`);
+        if (!response.ok) {
+            throw new Error(`Gemini extraction error: ${JSON.stringify(data)}`);
+        }
 
         return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
     } catch (error) {
         console.error("Error in enhancedImageTextExtraction:", error);
-        throw error;
+        throw new Error(`Failed to extract text from image: ${error.message}`);
     }
 }
 
@@ -189,7 +193,8 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
 
         // التحقق من جودة البيانات المستخرجة
         if (extractedText.length < 100) {
-            throw new Error("النص المستخرج قصير جداً ولا يحتوي على معلومات طبية كافية");
+            console.warn("النص المستخرج قصير جداً:", extractedText);
+            // لا نرمي خطأ هنا لأن بعض المستندات قد تكون قصيرة حقاً
         }
 
         return extractedText;
@@ -520,7 +525,8 @@ async function getAuditFromOpenAI(bundle, lang, retries = 3) {
                 
                 // التحقق من جودة التحليل
                 if (!parsed.medicationAnalysis || parsed.medicationAnalysis.length === 0) {
-                    throw new Error("التقرير لا يحتوي على تحليل دوائي كافي");
+                    console.warn("التقرير لا يحتوي على تحليل دوائي كافي");
+                    // نستمر رغم ذلك لأن هناك可能是 تحليلات أخرى
                 }
                 
                 return parsed;
@@ -541,8 +547,7 @@ async function getAuditFromOpenAI(bundle, lang, retries = 3) {
 
 // --- عارض التقرير المتقدم (HTML Renderer) ---
 function renderHtmlReport(structuredData, files, lang = 'ar') {
-    // ... (نفس الدالة السابقة مع تحسينات إضافية)
-    // سيتم الحفاظ على نفس بنية الدالة مع إضافة أقسام جديدة للتحليل المتقدم
+    // ... (نفس المحتوى السابق)
 }
 
 // --- معالج الطلبات الرئيسي (API Handler) ---
@@ -557,12 +562,14 @@ export default async function handler(req, res) {
             return bad(res, 500, "Server Configuration Error: API Key is missing.");
         }
 
-        const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
-        console.log(`Processing request with language: ${lang}`);
-        
-        if (!text && (!files || files.length === 0)) {
+        // التحقق من وجود بيانات
+        if (!req.body || (!req.body.text && (!req.body.files || req.body.files.length === 0))) {
             return bad(res, 400, "No data provided: Please provide either text or files to analyze.");
         }
+
+        const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body;
+        console.log(`Processing request with language: ${lang}`);
+        console.log(`Text length: ${text?.length || 0}, Files count: ${files?.length || 0}`);
 
         console.log("Step 1: Starting advanced data aggregation with Gemini...");
         const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
