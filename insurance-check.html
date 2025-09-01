@@ -76,10 +76,10 @@
     </div>
     <div class="section">
       <h2>٣) رفع ملفات (صور/PDF) — اختياري</h2>
-      <label class="uploader" for="fileInput" id="dropZone">
-        اضغط هنا لرفع ملف واحد أو أكثر
-        <input id="fileInput" type="file" multiple accept="image/*,application/pdf" />
-      </label>
+      <div id="dropZone" class="uploader" tabindex="0">
+        اضغط هنا أو اسحب الملفات هنا للرفع
+        <input id="fileInput" type="file" multiple accept="image/*,application/pdf" style="display:none;" />
+      </div>
       <div id="uploadMsg" class="upload-msg"></div>
       <div id="cards" class="cards" aria-live="polite"></div>
     </div>
@@ -99,30 +99,50 @@
     </div>
   </div>
 <script>
-    // تخزين الملفات المرفوعة
+    // لا يوجد أي form في الصفحة، كل الأحداث تمنع السلوك الافتراضي
     const filesState = [];
     const fileInput = document.getElementById('fileInput');
     const dropZone  = document.getElementById('dropZone');
     const cardsBox  = document.getElementById('cards');
     const uploadMsg = document.getElementById('uploadMsg');
 
-    // أحداث السحب والإفلات + الضغط
-    dropZone.addEventListener('click', () => fileInput.click());
-    ['dragenter','dragover','dragleave','drop'].forEach(evName => {
+    // فتح input عند الضغط على dropZone
+    dropZone.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fileInput.click();
+    });
+
+    // دعم enter للرفع
+    dropZone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInput.click();
+        }
+    });
+
+    // معالجة السحب والإفلات بشكل آمن
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evName => {
         dropZone.addEventListener(evName, e => {
             e.preventDefault();
             e.stopPropagation();
+            if (evName === 'dragenter') dropZone.classList.add('drag');
+            if (evName === 'dragleave' || evName === 'drop') dropZone.classList.remove('drag');
         });
     });
-    dropZone.addEventListener('dragenter', () => dropZone.classList.add('drag'));
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+
     dropZone.addEventListener('drop', e => {
-        dropZone.classList.remove('drag');
+        e.preventDefault();
+        e.stopPropagation();
         handleFiles(Array.from(e.dataTransfer.files));
     });
-    fileInput.addEventListener('change', () => handleFiles(Array.from(fileInput.files)));
 
-    // دالة التعامل مع الملفات
+    fileInput.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleFiles(Array.from(fileInput.files));
+    });
+
     async function handleFiles(files) {
         let successCount = 0, errorCount = 0;
         for(const f of files){
@@ -166,7 +186,6 @@
         }
     }
 
-    // عرض البطاقات للملفات المرفوعة
     function renderCards() {
         cardsBox.innerHTML = '';
         filesState.forEach((f, i) => {
@@ -186,7 +205,6 @@
         });
     }
 
-    // زر تحليل الحالة
     document.getElementById('analyzeBtn').addEventListener('click', async () => {
         const analyzeBtn = document.getElementById('analyzeBtn');
         const busy = document.getElementById('busy');
@@ -210,7 +228,6 @@
                 files: filesState.map(f => ({ name: f.name, mimeType: f.mimeType, data: f.data.split(',')[1] })),
                 lang: document.documentElement.lang || 'ar'
             };
-            // تنبيه إذا لم تدخل بيانات أو ملفات
             if (!payload.text.trim() && payload.files.length === 0) {
                 alert('يرجى إدخال بيانات أو رفع ملفات قبل التحليل.');
                 analyzeBtn.disabled = false;
@@ -237,7 +254,6 @@
         }
     });
 
-    // زر تصدير PDF عالي الجودة
     document.getElementById('exportHqBtn').addEventListener('click', async () => {
         const busy = document.getElementById('busy');
         busy.style.display = 'inline';
