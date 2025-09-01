@@ -75,6 +75,111 @@ function validateExtractedData(clinicalText) {
     return { isValid: true };
 }
 
+// --- تحليل التشخيص لتحديد الفحوصات المناسبة ---
+function analyzeDiagnosisForRelevantTests(diagnosis, vitalSigns, age, symptoms) {
+    const diagnosisLower = diagnosis.toLowerCase();
+    const symptomsLower = symptoms.toLowerCase();
+    const tests = [];
+    
+    // تحليل التشخيص لتحديد الفحوصات المناسبة
+    const isDermatological = diagnosisLower.includes('dermatitis') || 
+                            diagnosisLower.includes('جلد') || 
+                            diagnosisLower.includes('طفح') ||
+                            diagnosisLower.includes('eczema') ||
+                            diagnosisLower.includes('atopic');
+    
+    const isCardiac = diagnosisLower.includes('cardiac') || 
+                     diagnosisLower.includes('heart') || 
+                     diagnosisLower.includes('chest pain') || 
+                     diagnosisLower.includes('قلب') ||
+                     diagnosisLower.includes('myocardial') ||
+                     diagnosisLower.includes('angina');
+    
+    const hasCardiacSymptoms = symptomsLower.includes('chest pain') ||
+                              symptomsLower.includes('palpitation') ||
+                              symptomsLower.includes('shortness of breath') ||
+                              symptomsLower.includes('ألم صدر') ||
+                              symptomsLower.includes('خفقان') ||
+                              symptomsLower.includes('ضيق نفس');
+    
+    const bpSystolic = vitalSigns?.bp ? parseInt(vitalSigns.bp.split('/')[0]) : null;
+    const bpDiastolic = vitalSigns?.bp ? parseInt(vitalSigns.bp.split('/')[1]) : null;
+    
+    if (isDermatological) {
+        // حالات جلدية - فحوصات جلدية محددة
+        tests.push({
+            name: "Complete Blood Count (CBC)",
+            relevant: true,
+            reason: "مطلوب لتقييم الالتهاب في الحالات الجلدية"
+        });
+        
+        tests.push({
+            name: "Inflammatory Markers (CRP, ESR)",
+            relevant: true,
+            reason: "مفيد في تقييم شدة الالتهاب الجلدي"
+        });
+        
+        tests.push({
+            name: "ECG",
+            relevant: false,
+            reason: "غير مطلوب للحالات الجلدية بدون أعراض قلبية"
+        });
+        
+        tests.push({
+            name: "Troponin",
+            relevant: false,
+            reason: "غير مطلوب للحالات الجلدية بدون أعراض قلبية"
+        });
+    } 
+    else if (isCardiac || hasCardiacSymptoms || (bpSystolic > 160 && bpDiastolic > 100)) {
+        // حالات قلبية - تحتاج تخطيط قلب وتروبونين
+        tests.push({
+            name: "ECG",
+            relevant: true,
+            reason: "إجباري لأي مريض مع أعراض قلبية أو ارتفاع ضغط شديد"
+        });
+        
+        tests.push({
+            name: "Troponin",
+            relevant: true,
+            reason: "إجباري لتقييم احتشاء العضلة القلبية"
+        });
+    }
+    else {
+        // حالات عامة - تقييم حسب العوامل
+        const needsCardiacTesting = (bpSystolic > 160 && bpDiastolic > 100) || 
+                                  (age > 50 && bpSystolic > 140 && hasCardiacSymptoms);
+        
+        if (needsCardiacTesting) {
+            tests.push({
+                name: "ECG",
+                relevant: true,
+                reason: "مطلوب بسبب ارتفاع ضغط الدم وعمر المريض مع وجود أعراض قلبية"
+            });
+            
+            tests.push({
+                name: "Troponin",
+                relevant: true,
+                reason: "مطلوب لتقييم القلب مع وجود أعراض قلبية"
+            });
+        } else {
+            tests.push({
+                name: "ECG",
+                relevant: false,
+                reason: "غير مطلوب لعدم وجود مؤشرات قلبية واضحة"
+            });
+            
+            tests.push({
+                name: "Troponin",
+                relevant: false,
+                reason: "غير مطلوب لعدم وجود مؤشرات قلبية واضحة"
+            });
+        }
+    }
+    
+    return tests;
+}
+
 // --- المرحلة الأولى: تجميع البيانات السريرية باستخدام Gemini ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
     const userParts = [];
@@ -138,64 +243,6 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
     return extractedText;
 }
 
-// --- تحليل التشخيص لتحديد الفحوصات المناسبة ---
-function analyzeDiagnosisForRelevantTests(diagnosis, vitalSigns, age) {
-    const diagnosisLower = diagnosis.toLowerCase();
-    const tests = [];
-    
-    // تحليل التشخيص لتحديد الفحوصات المناسبة
-    if (diagnosisLower.includes('dermatitis') || diagnosisLower.includes('جلد') || diagnosisLower.includes('طفح')) {
-        // حالات جلدية - لا تحتاج تخطيط قلب أو تروبونين
-        tests.push({
-            name: "Complete Blood Count (CBC)",
-            relevant: true,
-            reason: "مطلوب لتقييم الالتهاب في الحالات الجلدية"
-        });
-        
-        tests.push({
-            name: "Inflammatory Markers (CRP, ESR)",
-            relevant: true,
-            reason: "مفيد في تقييم شدة الالتهاب الجلدي"
-        });
-    } 
-    else if (diagnosisLower.includes('cardiac') || diagnosisLower.includes('heart') || 
-             diagnosisLower.includes('chest pain') || diagnosisLower.includes('قلب')) {
-        // حالات قلبية - تحتاج تخطيط قلب وتروبونين
-        tests.push({
-            name: "ECG",
-            relevant: true,
-            reason: "إجباري لأي مريض مع أعراض قلبية"
-        });
-        
-        tests.push({
-            name: "Troponin",
-            relevant: true,
-            reason: "إجباري لتقييم احتشاء العضلة القلبية"
-        });
-    }
-    else {
-        // حالات عامة - تقييم حسب العوامل
-        const needsCardiacTesting = (vitalSigns?.bp && parseInt(vitalSigns.bp.split('/')[0]) > 160) || 
-                                  (age > 50 && vitalSigns?.bp && parseInt(vitalSigns.bp.split('/')[0]) > 140);
-        
-        if (needsCardiacTesting) {
-            tests.push({
-                name: "ECG",
-                relevant: true,
-                reason: "مطلوب بسبب ارتفاع ضغط الدم وعمر المريض"
-            });
-        } else {
-            tests.push({
-                name: "ECG",
-                relevant: false,
-                reason: "غير مطلوب لعدم وجود مؤشرات قلبية"
-            });
-        }
-    }
-    
-    return tests;
-}
-
 // --- المرحلة الثانية: تعليمات المدقق الخبير لـ GPT-4o ---
 function getExpertAuditorInstructions(lang = 'ar') {
     const langConfig = {
@@ -213,7 +260,7 @@ function getExpertAuditorInstructions(lang = 'ar') {
                         "duration": "string",
                         "itemType": "lab|medication|procedure",
                         "status": "تم إجراؤه|مفقود ولكنه ضروري",
-                        "analysisCategory": "صحيح ومبرر|إجراء مكرر|غير مبرر طبياً|إجراء يتعارض مع التشخيص|إغفال خطير|خطأ في الجرعة أو التكرار|الكمية تحتاج لمراجعة",
+                        "analysisCategory": "صحيح ومبرر|إجراء مكرر|غير مبرر طبياً|إجراء يتعارض مع التشخيص|إغفال خطير|خطأ في الجرعة أو التكرار|معلومات ناقصة|الكمية تحتاج لمراجعة",
                         "insuranceDecision": {"label": "مقبول|مرفوض|لا ينطبق", "justification": "string"}
                     }
                 ],
@@ -241,22 +288,26 @@ You MUST analyze the clinical context before recommending tests. NOT all patient
 - Severe hypertension (BP > 160/100) WITH symptoms
 - History of cardiac disease WITH current symptoms
 
-**Rule 1: Comprehensive Listing:**
+**Rule 1: Dermatological Cases Special Handling:**
+- For skin conditions (dermatitis, eczema, rash): DO NOT recommend cardiac tests unless cardiac symptoms are present
+- Focus on dermatological-relevant tests: CBC, inflammatory markers, allergy tests
+
+**Rule 2: Missing Information Analysis:**
+- If dosage, frequency, or duration are missing: use "معلومات ناقصة" NOT "الكمية تحتاج لمراجعة"
+- "الكمية تحتاج لمراجعة" is ONLY for inappropriate quantities (e.g., 90-day supply without justification)
+
+**Rule 3: Comprehensive Listing:**
 The final JSON \`table\` MUST contain one entry for EVERY SINGLE medication, lab, and procedure from the clinical data.
 
-**Rule 2: Clinical Validity Analysis:**
+**Rule 4: Clinical Validity Analysis:**
 * **Dosing/Frequency Error:** Flag incorrect dosages.
 * **Medical Unnecessity:** Flag items without supporting symptoms or diagnosis.
 * **Contraindication:** Flag items that conflict with the patient's conditions.
 
-**Rule 3: Context-Aware Omissions Analysis:**
+**Rule 5: Context-Aware Omissions Analysis:**
 * Identify omissions based on ACTUAL clinical need, not just protocols
 * For dermatological cases: focus on skin-related tests, not cardiac
 * For cardiac cases: emphasize cardiac workup
-
-**Rule 4: Medication Specific Analysis:**
-* For each medication, verify: strength, dosage form, frequency, and duration
-* Cross-check with known standard dosing guidelines
 
 ${selectedLang.rule}
 
@@ -329,6 +380,7 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         summaryTitle: isArabic ? "ملخص الحالة والتقييم العام" : "Case Summary & Overall Assessment",
         detailsTitle: isArabic ? "التحليل التفصيلي للإجراءات" : "Detailed Analysis of Procedures",
         recommendationsTitle: isArabic ? "التوصيات والإجراءات المقترحة" : "Recommendations & Proposed Actions",
+        relevantTestsTitle: isArabic ? "الفحوصات المناسبة للحالة" : "Relevant Tests for This Case",
         itemHeader: isArabic ? "الإجراء" : "Item",
         dosageHeader: isArabic ? "الجرعة المكتوبة" : "Written Dosage",
         strengthHeader: isArabic ? "القوة" : "Strength",
@@ -337,6 +389,9 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         statusHeader: isArabic ? "الحالة" : "Status",
         decisionHeader: isArabic ? "قرار التأمين" : "Insurance Decision",
         justificationHeader: isArabic ? "التبرير" : "Justification",
+        testNameHeader: isArabic ? "اسم الفحص" : "Test Name",
+        relevanceHeader: isArabic ? "ملاءمة" : "Relevance",
+        testReasonHeader: isArabic ? "السبب" : "Reason",
         relatedTo: isArabic ? "مرتبط بـ" : "Related to",
         notAvailable: isArabic ? "غير متوفر." : "Not available."
     };
@@ -358,7 +413,8 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         }
         if (normalizedCategory.includes('مكرر') || normalizedCategory.includes('duplicate') || 
             normalizedCategory.includes('غير مبرر') || normalizedCategory.includes('not justified') || 
-            normalizedCategory.includes('تحتاج لمراجعة') || normalizedCategory.includes('requires review')) {
+            normalizedCategory.includes('تحتاج لمراجعة') || normalizedCategory.includes('requires review') ||
+            normalizedCategory.includes('معلومات ناقصة')) {
             return 'risk-warning';
         }
         if (normalizedCategory.includes('صحيح') || normalizedCategory.includes('correct')) {
@@ -406,6 +462,14 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
         </div>`;
     }).join("");
 
+    const relevantTestsList = (s.relevantTests || []).map(test => 
+        `<tr class="${test.relevant ? 'test-relevant' : 'test-not-relevant'}">
+            <td>${test.name || '-'}</td>
+            <td><span class="relevance-badge">${test.relevant ? 'نعم' : 'لا'}</span></td>
+            <td>${test.reason || '-'}</td>
+        </tr>`
+    ).join("");
+
     return `
     <!DOCTYPE html>
     <html dir="${isArabic ? 'rtl' : 'ltr'}">
@@ -449,22 +513,22 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
             .source-doc-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; }
             .source-doc-card h3 { margin: 0 0 10px; font-size: 16px; }
             
-            .audit-table {
+            .audit-table, .tests-table {
                 width: 100%;
                 border-collapse: collapse;
                 font-size: 14px;
             }
-            .audit-table th, .audit-table td {
+            .audit-table th, .audit-table td, .tests-table th, .tests-table td {
                 padding: 12px;
                 text-align: ${isArabic ? 'right' : 'left'};
                 border-bottom: 1px solid #e9ecef;
                 vertical-align: top;
             }
-            .audit-table th {
+            .audit-table th, .tests-table th {
                 background-color: #f8f9fa;
                 font-weight: 700;
             }
-            .audit-table tr { page-break-inside: avoid; }
+            .audit-table tr, .tests-table tr { page-break-inside: avoid; }
 
             .item-cell .item-name {
                 font-weight: 700;
@@ -483,13 +547,23 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
                 color: #3d3d3d;
                 font-size: 14px;
             }
-            .decision-badge {
+            .decision-badge, .relevance-badge {
                 font-weight: 700;
                 padding: 5px 10px;
                 border-radius: 16px;
                 font-size: 13px;
                 display: inline-block;
                 border: 1px solid transparent;
+            }
+            .relevance-badge {
+                background-color: #e6f4ea; 
+                color: #1e8e3e;
+            }
+            .test-relevant td {
+                background-color: #e6f4ea !important;
+            }
+            .test-not-relevant td {
+                background-color: #fef7e0 !important;
             }
             
             .rec-item { 
@@ -543,6 +617,21 @@ function renderHtmlReport(structuredData, files, lang = 'ar') {
                 <h2>${text.summaryTitle}</h2>
                 <p class="summary-text">${s.patientSummary?.text || text.notAvailable}</p>
                 <p class="summary-text">${s.overallAssessment?.text || text.notAvailable}</p>
+            </div>
+            <div class="report-section">
+                <h2>${text.relevantTestsTitle}</h2>
+                <div style="overflow-x: auto;">
+                    <table class="tests-table">
+                        <thead>
+                            <tr>
+                                <th>${text.testNameHeader}</th>
+                                <th>${text.relevanceHeader}</th>
+                                <th>${text.testReasonHeader}</th>
+                            </tr>
+                        </thead>
+                        <tbody>${relevantTestsList}</tbody>
+                    </table>
+                </div>
             </div>
             <div class="report-section">
                 <h2>${text.detailsTitle}</h2>
