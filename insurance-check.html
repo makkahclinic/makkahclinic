@@ -278,7 +278,7 @@
       </div>
       <div id="reportHTML" class="avoid-break"></div>
       <details style="margin-top:16px" class="no-print">
-        <summary>إظهار البيانات المنظمة (JSON)</summary>
+        <summary>إظهار البيانات المستخرجة (للمراجعة)</summary>
         <pre id="jsonOut" style="white-space:pre-wrap; background:var(--gray-100); padding:16px; border-radius:12px; border:1px solid var(--border-color)"></pre>
       </details>
     </div>
@@ -343,54 +343,48 @@
       const busy = document.getElementById('busy');
       analyzeBtn.disabled = true;
       busy.style.display = 'inline';
+      document.getElementById('reportWrap').style.display = 'none';
+      document.getElementById('reportHTML').innerHTML = '';
+
 
       try {
-        const textParts = [
-          `التشخيصات المبدئية: ${document.getElementById('initialDx').value.trim()}`,
-          `وصف الحالة: ${document.getElementById('freeText').value.trim()}`,
-          `تحاليل/أشعة: ${document.getElementById('labsImaging').value.trim()}`
-        ];
-
         const payload = {
-          text: textParts.filter(p => p.split(':')[1].trim()).join('\n'),
           patientInfo: {
             ageYears: +document.getElementById('age').value || null,
             gender: document.getElementById('gender').value || null,
-            pregnant: { isPregnant: document.getElementById('pregnant').value === 'yes' },
-            smoking: { status: document.getElementById('smoking').value || null }
           },
-          files: filesState.map(f => ({ name: f.name, mimeType: f.mimeType, data: f.data.split(',')[1] })),
+          files: filesState.map(f => ({ 
+              name: f.name, 
+              mimeType: f.mimeType, 
+              data: f.data // Sending the full base64 URL
+          })),
           lang: document.documentElement.lang || 'ar'
         };
 
-        const resp = await fetch('/api/gpt-open', {
+        const resp = await fetch('/api/gpt-professional-analysis', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         
-        // --- START: CORRECTED RESPONSE HANDLING ---
         if (resp.ok) {
             const data = await resp.json();
             document.getElementById('reportWrap').style.display = 'block';
             document.getElementById('reportHTML').innerHTML = `<div id="reportContent" class="card">${data.html || ''}</div>`;
-            document.getElementById('jsonOut').textContent = JSON.stringify(data.structured || {}, null, 2);
+            document.getElementById('jsonOut').textContent = data.structured?.extractedText || "No extracted data to show.";
         } else {
             const errorText = await resp.text();
             let errorMessage = errorText;
             try {
-                // Check if the server sent a structured JSON error
                 const errorJson = JSON.parse(errorText);
                 errorMessage = errorJson.error || errorText;
             } catch (e) {
-                // It wasn't JSON, so it's probably a plain text error (like a server crash page)
+                // Not a JSON error, use the raw text
             }
             throw new Error(errorMessage);
         }
-        // --- END: CORRECTED RESPONSE HANDLING ---
 
       } catch (err) {
-        // Use a more user-friendly modal for errors instead of alert()
         const errorHtml = `<strong>حدث خطأ في التحليل:</strong><br><p style="font-family: monospace; background: #fee2e2; padding: 10px; border-radius: 8px; margin-top: 10px; color: #7f1d1d; font-size: 12px; text-align: left; direction: ltr;">${err.message}</p>`;
         document.getElementById('reportHTML').innerHTML = errorHtml;
         document.getElementById('reportWrap').style.display = 'block';
@@ -406,15 +400,15 @@
             alert('لا يوجد تقرير لتصديره.');
             return;
         }
-        const opt = {
-          margin:       1,
-          filename:     'Medical_Audit_Report-HQ.pdf',
-          image:        { type: 'jpeg', quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true },
-          jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-        };
         // Using html2pdf library if available
         if (window.html2pdf) {
+            const opt = {
+              margin:       0.5,
+              filename:     'Professional_Medical_Report.pdf',
+              image:        { type: 'jpeg', quality: 0.98 },
+              html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+              jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
             html2pdf().from(element).set(opt).save();
         } else {
             alert('مكتبة تصدير PDF غير متاحة.');
