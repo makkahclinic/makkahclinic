@@ -1,7 +1,6 @@
-// --- START OF FINAL CORRECTED CODE ---
-import fetch from 'node-fetch'; // <-- هذا هو السطر المهم الذي تم إضافته
+// --- START OF UPGRADED CODE ---
+import fetch from 'node-fetch';
 
-// This configuration is for Next.js to increase the allowed request size
 export const config = {
   api: {
     bodyParser: {
@@ -37,38 +36,29 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
     method: "POST",
     headers: {
-      "X-Goog-Upload-Protocol": "resumable",
-      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start",
       "X-Goog-Upload-Header-Content-Length": String(binaryData.byteLength),
-      "X-Goog-Upload-Header-Content-Type": mimeType,
-      "Content-Type": "application/json",
+      "X-Goog-Upload-Header-Content-Type": mimeType, "Content-Type": "application/json",
     },
     body: JSON.stringify({ file: { display_name: name, mime_type: mimeType } }),
   });
-
   if (!initRes.ok) throw new Error(`Gemini init failed: ${JSON.stringify(await parseJsonSafe(initRes))}`);
-
   const sessionUrl = initRes.headers.get("X-Goog-Upload-URL");
   if (!sessionUrl) throw new Error("Gemini upload session URL is missing");
-
   const uploadRes = await fetch(sessionUrl, {
     method: "PUT",
     headers: {
-      "Content-Type": mimeType,
-      "X-Goog-Upload-Command": "upload, finalize",
-      "X-Goog-Upload-Offset": "0",
-      "Content-Length": String(binaryData.byteLength),
+      "Content-Type": mimeType, "X-Goog-Upload-Command": "upload, finalize",
+      "X-Goog-Upload-Offset": "0", "Content-Length": String(binaryData.byteLength),
     },
     body: binaryData,
   });
-
   const metadata = await parseJsonSafe(uploadRes);
   if (!uploadRes.ok) throw new Error(`Gemini finalize failed: ${JSON.stringify(metadata)}`);
-
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- Stage 1: Aggregate Clinical Data with Gemini ---
+// --- UPGRADED: Stage 1: More Accurate Data Aggregation with Gemini ---
 async function aggregateClinicalDataWithGemini({ text, files }) {
   const userParts = [];
   if (text) userParts.push({ text });
@@ -83,11 +73,19 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
 
   if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
 
-  const systemPrompt = `You are a meticulous medical data transcriptionist. Your ONLY job is to read all provided inputs (text, PDFs, images) and extract every single piece of clinical information into a clean, comprehensive text block. CRITICAL RULES:
-1. DO NOT SUMMARIZE. Transcribe everything.
-2. List all patient details, diagnoses, and every single lab test, medication, and procedure mentioned.
-3. For medications, transcribe the name, then on the same line, clearly state the dosage, frequency, and duration exactly as written (e.g., Amlopine 10 - 1x1x90).
-4. Present the information in a clear, structured manner.`;
+  // --- NEW IMPROVED PROMPT ---
+  const systemPrompt = `You are an expert medical transcriptionist with advanced OCR capabilities for handwritten notes. Your primary job is to extract ALL clinical information from the provided text and images with extreme precision.
+
+**CRITICAL RULES:**
+1.  **Exhaustive Transcription:** Transcribe EVERYTHING. Do not summarize or omit any detail, no matter how small. Pay close attention to handwritten text which may be difficult to read.
+2.  **Medication Format:** For every medication, you MUST transcribe it in the following format on a new line: \`- [Medication Name] [Dosage] [Frequency] x [Duration]\`.
+    * Example: \`- Amlopine 10 1x1x90\`
+    * If any part is unclear, use your best judgment or mark it as \`[unclear]\`.
+3.  **Comprehensive Lists:** Create distinct lists for:
+    * **Diagnoses:** (e.g., HTN, DM, DPH)
+    * **Medications:** (using the format above)
+    * **Labs/Tests:** (if any are mentioned)
+4.  **Structure:** Present the final output as a single, clean text block. Start with diagnoses, then medications, then any other findings.`;
 
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -95,9 +93,7 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   };
 
   const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
 
   const data = await parseJsonSafe(response);
@@ -105,23 +101,39 @@ async function aggregateClinicalDataWithGemini({ text, files }) {
   return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
 }
 
-// --- MODIFIED: Stage 2: Instructions for the "Open-Ended Analyst" for GPT-4o ---
+// --- UPGRADED: Stage 2: More Detailed Analysis Instructions for GPT-4o ---
 function getOpenEndedAuditorInstructions(lang = 'ar') {
-  const langRule = "قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية.";
-  return `You are an expert, evidence-based clinical pharmacist and medical auditor with decades of experience. Your task is to write a comprehensive, detailed, multi-paragraph narrative report based on the clinical data provided.
+  const langRule = "قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية، مع استخدام مصطلحات طبية دقيقة.";
+  return `You are a world-class clinical pharmacist and medical auditor, reviewing a case for a major insurance provider. Your analysis must be evidence-based, meticulous, and professionally formatted as a narrative report.
 
-Primary Knowledge Base:
-- Cardiology: AHA/ACC/ESC Guidelines. For patients with risk factors (Age > 50, DM, HTN), ECG and Troponin are mandatory for relevant symptoms.
-- Endocrinology: ADA Standards. Annual fundus exam is mandatory for Type 2 diabetics. Diamicron MR (Gliclazide MR) is dosed once daily. Twice daily is a major dosing error.
-- Reimbursement: Focus on Medical Necessity, Duplication, Contraindications, and unusual quantities.
+**Primary Knowledge Base:**
+- Cardiology: AHA/ACC/ESC Guidelines.
+- Endocrinology: ADA Standards.
+- Drug Interactions: Check for common and critical drug-drug interactions (e.g., risk of bleeding, electrolyte imbalance).
+- Standard Dosing: Diamicron MR (Gliclazide MR) is dosed ONCE daily.
 
-Report Structure:
-1.  **Patient Summary:** Begin with a detailed paragraph summarizing the patient's condition, diagnoses, and key clinical findings.
-2.  **Overall Assessment:** Provide your expert opinion on the quality of care. Highlight correct decisions, critical omissions, and any incorrect procedures. Explain your reasoning in detail.
-3.  **Detailed Analysis:** Discuss each significant medication, lab, and procedure. For each item, explain its justification (or lack thereof), potential risks, and alignment with the standard of care. If there are dosing errors or unnecessary prescriptions, explain why in detail.
-4.  **Recommendations:** Conclude with a clear list of actionable recommendations, categorizing them by priority (e.g., Urgent, Best Practice).
+**Mandatory Report Structure (Follow this exactly):**
 
-CRITICAL RULE: Your response must be a well-written, narrative text report. DO NOT USE JSON or any structured format. Write as if you are explaining your findings to another medical professional.
+**1. ملخص المريض (Patient Summary):**
+   - Start with a concise paragraph detailing the patient's age, gender, and all listed diagnoses.
+
+**2. التقييم العام لجودة الرعاية (Overall Assessment of Care Quality):**
+   - Provide your expert opinion.
+   - What was done correctly? (e.g., appropriate medication for a diagnosis).
+   - What are the major and minor gaps or errors in care? (e.g., dosing errors, missing standard tests, potential contraindications).
+
+**3. التحليل التفصيلي (Detailed Item-by-Item Analysis):**
+   - Create a list for every single medication transcribed.
+   - For each medication, provide a sub-analysis covering:
+     - **مبرر الاستخدام (Justification):** Is it appropriate for the patient's diagnoses?
+     - **الجرعة والتكرار (Dosage & Frequency):** Is the prescribed dose correct according to standards? Highlight any errors clearly.
+     - **مخاطر محتملة (Potential Risks):** Mention any significant side effects or potential drug interactions with other medications on the list.
+
+**4. الإغفالات والتوصيات (Omissions & Recommendations):**
+   - Based on the diagnoses, what standard-of-care tests or treatments are missing? (e.g., Annual fundus exam for a diabetic patient).
+   - Conclude with a prioritized list of actionable recommendations (e.g., Urgent, Important, Best Practice).
+
+**CRITICAL RULE:** Your entire response must be a single, well-written narrative text report. Do not use JSON. Write with the authority and clarity of a leading medical expert.
 ${lang === 'ar' ? langRule : ''}`;
 }
 
@@ -148,7 +160,7 @@ async function getAuditFromOpenAI(bundle, lang) {
 
 // --- Main API Handler ---
 export default async function handler(req, res) {
-  console.log("--- New OPEN-ENDED Request Received ---");
+  console.log("--- New UPGRADED Request Received ---");
   try {
     if (req.method !== "POST") {
       return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
@@ -161,21 +173,20 @@ export default async function handler(req, res) {
     const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
     console.log(`Processing request with language: ${lang}`);
 
-    console.log("Step 1: Starting data aggregation with Gemini...");
+    console.log("Step 1: Starting ACCURATE data aggregation with Gemini...");
     const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
-    console.log("Step 1: Gemini aggregation successful.");
+    console.log("Step 1: Gemini aggregation successful. Text extracted:\n", aggregatedClinicalText);
 
     const auditBundle = { patientInfo, aggregatedClinicalText, originalUserText: text };
 
-    console.log("Step 2: Starting expert audit with OpenAI (Open-Ended)...");
+    console.log("Step 2: Starting DEEP expert audit with OpenAI...");
     const openEndedAnalysis = await getAuditFromOpenAI(auditBundle, lang);
     console.log("Step 2: OpenAI audit successful.");
 
-    // We will format the plain text into basic HTML for display
     const htmlReport = `<div style="white-space: pre-wrap; line-height: 1.7;">${openEndedAnalysis}</div>`;
 
     console.log("--- Request Processed Successfully ---");
-    return ok(res, { html: htmlReport, structured: { analysis: openEndedAnalysis } });
+    return ok(res, { html: htmlReport, structured: { analysis: openEndedAnalysis, extractedText: aggregatedClinicalText } });
 
   } catch (err) {
     console.error("---!!!--- An error occurred during the process ---!!!---");
@@ -184,5 +195,4 @@ export default async function handler(req, res) {
     return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
   }
 }
-// --- END OF FINAL CORRECTED CODE ---
-
+// --- END OF UPGRADED CODE ---
