@@ -1,4 +1,4 @@
-// --- START OF CHIEF MEDICAL OFFICER (CMO) EDITION ---
+// --- START OF EXPERT WORKSHOP CODE ---
 import fetch from 'node-fetch';
 
 export const config = {
@@ -28,7 +28,7 @@ const parseJsonSafe = async (response) => {
   return { raw: await response.text() };
 };
 
-// --- Gemini File Uploader ---
+// --- Gemini File Uploader (No changes) ---
 async function geminiUploadBase64({ name, mimeType, base64 }) {
     const binaryData = Buffer.from(base64.split(',')[1], "base64");
     const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
@@ -77,22 +77,24 @@ If a field is missing, write "غير متوفر".`;
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts: userParts }],
     };
+
     const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
+
     const data = await parseJsonSafe(response);
     if (!response.ok) throw new Error(`Gemini extraction error: ${JSON.stringify(data)}`);
     return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || `Error processing ${file.name}.`;
 }
 
-// --- STAGE 2A: Clinical Consultant Analysis (CMO LEVEL) ---
+// --- STAGE 2A: Clinical Consultant Analysis ---
 async function getClinicalAnalysis(fullExtractedText) {
-    const systemPrompt = `You are a Senior Clinical Physician and a master of clinical governance. Analyze the provided patient history ("Visit Cards") and write a **deeply insightful clinical analysis**. Your tone must be authoritative and evidence-based.
+    const systemPrompt = `You are a Senior Clinical Physician. Your task is to analyze the provided patient history (a series of "Visit Cards") and write a **purely clinical** analysis. Focus ONLY on medical patterns, quality of care, and clinical recommendations.
 
 **Your analysis MUST cover:**
-1.  **Clinical Patterns:** Go beyond a simple list. Connect the dots. Reference international guidelines (e.g., NICE, IDSA) to critique the treatment plans. *Example: "The recurrent use of broad-spectrum antibiotics for pharyngitis without documented Centor/FeverPAIN scores violates NICE NG84 guidelines and represents a failure in antibiotic stewardship."*
-2.  **Quality of Care:** What were the critical gaps in care? Were there missed opportunities for better diagnosis or preventative measures?
-3.  **Actionable Clinical Recommendations:** Provide a prioritized list of **specific** medical recommendations.`;
+1.  **Clinical Patterns:** Go beyond a simple list. Connect the dots. Why are conditions recurring? What does the timeline reveal about the patient's health trajectory?
+2.  **Quality of Care:** Critique the treatment plans. Were they appropriate? Were there missed opportunities for better diagnosis or treatment? Reference clinical guidelines (like NICE for pharyngitis) where applicable.
+3.  **Actionable Clinical Recommendations:** Provide a prioritized list of purely medical recommendations for the patient's future care.`;
 
     const response = await fetch(OPENAI_API_URL, {
         method: "POST",
@@ -111,15 +113,15 @@ async function getClinicalAnalysis(fullExtractedText) {
     return data?.choices?.[0]?.message?.content || "No clinical analysis.";
 }
 
-// --- STAGE 2B: Insurance Auditor Analysis (CMO LEVEL) ---
+// --- STAGE 2B: Insurance Auditor Analysis ---
 async function getInsuranceAnalysis(fullExtractedText) {
-    const systemPrompt = `You are a ruthless but precise Insurance Auditor and Medical Biller. Analyze the provided patient history ("Visit Cards") to identify all **financial and administrative vulnerabilities and opportunities**.
+    const systemPrompt = `You are a ruthless Insurance Auditor and Medical Biller. Analyze the provided patient history ("Visit Cards") to identify all **financial and administrative issues**.
 
 **Your report MUST cover:**
-1.  **High-Impact Documentation Gaps:** Pinpoint specific missing documents (e.g., panoramic x-ray, lab justifications) and state their direct financial consequence (e.g., "high risk of claim rejection for a 250 SAR procedure").
-2.  **Missed Revenue Opportunities:** Identify specific, medically justifiable services that could have been billed. **Quantify the estimated missed revenue.** *Example: "A KUB Ultrasound for renal colic could have justifiably added approximately 380 SAR to the visit's revenue."*
-3.  **Coding Errors:** List all items marked "WRONG CODE" and explicitly state they are a direct cause for claim rejection.
-4.  **Actionable Administrative Recommendations:** Provide a prioritized list of recommendations for the billing/admin team to maximize revenue and eliminate rejections.`;
+1.  **High-Impact Documentation Gaps:** What specific documentation (e.g., panoramic x-ray, lab results) is missing that will cause claim rejection?
+2.  **Missed Revenue Opportunities:** What medically necessary services could have been performed and billed for? Be specific and estimate potential revenue.
+3.  **Coding Errors:** List all items marked "WRONG CODE" and explain that they are a direct cause for rejection.
+4.  **Actionable Administrative Recommendations:** Provide a prioritized list of recommendations for the billing/admin team to increase revenue and reduce rejections.`;
 
     const response = await fetch(OPENAI_API_URL, {
         method: "POST",
@@ -138,10 +140,9 @@ async function getInsuranceAnalysis(fullExtractedText) {
     return data?.choices?.[0]?.message?.content || "No insurance analysis.";
 }
 
-// --- STAGE 3: Final CMO Synthesis (CMO LEVEL) ---
+// --- STAGE 3: Final CMO Synthesis ---
 async function getFinalReport(clinicalAnalysis, insuranceAnalysis, patientName, lang) {
-    const langRule = "اللغة: يجب أن يكون التقرير بالكامل باللغة العربية الفصحى والمهنية.";
-    const systemPrompt = `You are the Chief Medical Officer (CMO). You have received two detailed reports: one from your top physician and one from your best insurance auditor. Your task is to **synthesize** these into a single, cohesive, high-level professional report for the management team, formatted beautifully in Markdown. **Your final output must be in Arabic.**
+    const systemPrompt = `You are the Chief Medical Officer (CMO). You have received two detailed reports: one from your top physician and one from your best insurance auditor. Your task is to **synthesize** these into a single, cohesive, and highly professional final report for the management team, formatted beautifully in Markdown. **Your final output must be in Arabic.**
 
 **Mandatory Final Report Structure:**
 1.  **ملخص استشاري للحالة (Executive Case Summary):**
@@ -152,12 +153,12 @@ async function getFinalReport(clinicalAnalysis, insuranceAnalysis, patientName, 
     - [Integrate, rephrase, and present the full clinical analysis in Arabic. Ensure it flows naturally and uses expert terminology.]
 
 3.  **التحليل الإداري والتأميني (Administrative & Insurance Analysis):**
-    - [Integrate, rephrase, and present the full insurance analysis in Arabic. Ensure it is sharp, quantitative, and to the point.]
+    - [Integrate, rephrase, and present the full insurance analysis in Arabic. Ensure it is sharp and to the point.]
 
 4.  **التوصيات النهائية المتكاملة (Final Integrated Recommendations):**
     - [Combine the recommendations from both reports into a final, prioritized list in Arabic for both the **الفريق الطبي** and the **الفريق الإداري**.]
 
-${lang === 'ar' ? langRule : 'Language: The entire report must be in professional English.'}`;
+**CRITICAL RULE:** Your entire response must be in Arabic.`;
 
     const response = await fetch(OPENAI_API_URL, {
         method: "POST",
@@ -176,9 +177,10 @@ ${lang === 'ar' ? langRule : 'Language: The entire report must be in professiona
     return data?.choices?.[0]?.message?.content || "The final report could not be generated.";
 }
 
+
 // --- Main API Handler ---
 export default async function handler(req, res) {
-  console.log("--- New CMO Edition Request Received ---");
+  console.log("--- New EXPERT WORKSHOP Request Received ---");
   try {
     if (req.method !== "POST") { return bad(res, 405, "Method Not Allowed."); }
     if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
@@ -186,7 +188,7 @@ export default async function handler(req, res) {
       return bad(res, 500, "Server Configuration Error.");
     }
 
-    const { files = [], lang = 'ar' } = req.body || {};
+    const { files = [] } = req.body || {};
     
     // Stage 1
     const allPromises = files.map(file => extractRichDataFromSingleFile(file));
@@ -202,18 +204,18 @@ export default async function handler(req, res) {
     ]);
     
     // Stage 3
-    const finalReport = await getFinalReport(clinicalAnalysis, insuranceAnalysis, patientName, lang);
+    const finalReport = await getFinalReport(clinicalAnalysis, insuranceAnalysis, patientName);
 
     const htmlReport = `<div style="white-space: pre-wrap; line-height: 1.7;">${finalReport}</div>`;
 
     return ok(res, { html: htmlReport, structured: { analysis: finalReport, extractedText: fullExtractedText } });
 
   } catch (err) {
-    console.error("---!!!--- An error occurred during the CMO edition process ---!!!---");
+    console.error("---!!!--- An error occurred during the expert workshop process ---!!!---");
     console.error("Error Message:", err.message);
     console.error("Error Stack:", err.stack);
     return bad(res, 500, `An internal server error occurred: ${err.message}`);
   }
 }
-// --- END OF CHIEF MEDICAL OFFICER (CMO) EDITION ---
+// --- END OF EXPERT WORKSHOP CODE ---
 
