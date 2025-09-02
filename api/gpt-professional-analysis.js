@@ -1,4 +1,4 @@
-// --- START OF PROFESSIONAL ANALYSIS CODE V2 ---
+// --- START OF FINAL CONSULTATION CODE ---
 import fetch from 'node-fetch';
 
 export const config = {
@@ -53,7 +53,7 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- PROFESSIONAL EXTRACTION (STAGE 1) ---
+// --- FINAL EXTRACTION (STAGE 1) ---
 async function extractRichDataFromSingleFile(file) {
     const userParts = [];
     if (!file.data) return `Error processing ${file.name}: No data.`;
@@ -61,20 +61,17 @@ async function extractRichDataFromSingleFile(file) {
     const { uri, mime: finalMime } = await geminiUploadBase64({ name: file.name, mimeType: file.mimeType, base64: file.data });
     userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
 
-    const systemPrompt = `You are a highly precise medical OCR and data extraction agent. From the single document page provided, you MUST extract the following details and format them exactly as specified below using Markdown.
+    const systemPrompt = `You are a meticulous medical data extractor. From the single document provided, extract the following information and format it exactly as a Markdown block.
 
-# Visit Details for ${file.name}
+### Visit Card: ${file.name}
+- **Patient Name:** [Extract Full Name, e.g., KAMAL MANSOUR MANSI]
+- **Date of Visit:** [Extract Date, e.g., 19/10/2020]
+- **Diagnoses:**
+    - [List each diagnosis on a new line]
+- **Medications & Services:**
+    - [List each item on a new line]
 
-**Patient Name:** [Extract Patient Name, e.g., KAMAL MANSOUR MANSI]
-**Date of Visit:** [Extract Date of Visit, e.g., 19/10/2020]
-
-**Diagnoses:**
-- [List each diagnosis on a new line]
-
-**Medications & Services:**
-- [List each medication or service on a new line]
-
-If any field is not present, write "غير متوفر". Do not add any other text.`;
+If a field is missing, write "غير متوفر".`;
     
     const body = {
         system_instruction: { parts: [{ text: systemPrompt }] },
@@ -86,44 +83,44 @@ If any field is not present, write "غير متوفر". Do not add any other tex
     });
 
     const data = await parseJsonSafe(response);
-    if (!response.ok) throw new Error(`Gemini single file error: ${JSON.stringify(data)}`);
+    if (!response.ok) throw new Error(`Gemini extraction error: ${JSON.stringify(data)}`);
     return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || `Error processing ${file.name}.`;
 }
 
-// --- UPGRADED PROFESSIONAL ANALYSIS (STAGE 2) ---
-async function getFinalProfessionalAnalysis(fullExtractedText, patientInfo, lang) {
+// --- FINAL ANALYSIS (STAGE 2) ---
+async function getFinalConsultationReport(fullExtractedText, patientInfo, lang) {
   const langRule = "اللغة: يجب أن يكون التقرير بالكامل باللغة العربية الفصحى والمهنية.";
-  const systemPrompt = `You are a dual-role expert: a senior clinical consultant AND a shrewd medical-biller/insurance auditor. Your analysis of the provided patient history must be exceptionally deep, covering both clinical excellence and the practicalities of billing and insurance.
+  const systemPrompt = `You are a senior clinical consultant with a secondary expertise in medical billing and insurance auditing. You are reviewing a patient's full medical history, provided as a series of "Visit Cards". Your task is to synthesize this information into a single, high-level, professional consultation report that provides deep insights for both clinical and administrative teams.
 
-**Mandatory Professional Report Structure:**
+**Mandatory Report Structure (Follow this precisely):**
 
-**1. معلومات المريض (Patient Information):**
-   - **الاسم:** [Extract and state the patient's full name]
-   - **العمر عند أول زيارة:** [Calculate age based on D.O.B and first visit date if available]
-   - **ملخص التشخيصات الرئيسية:** [List the most significant and recurring diagnoses]
+**1. ملخص شامل للحالة (Comprehensive Case Summary):**
+   - **الاسم:** [Extract the patient's full name]
+   - **العمر (عند أول زيارة موثقة):** [State age if available]
+   - **الأمراض الرئيسية والمتكررة:** [Synthesize all diagnoses into a clear list of the patient's main health issues, noting which are chronic or recurrent]
 
-**2. الخط الزمني السريري (Clinical Timeline):**
-   - Create a clear, chronological list of all visits. For each, list the **Date**, **Diagnoses**, and **Treatments**.
+**2. التحليل الزمني والأنماط السريرية (Timeline and Clinical Pattern Analysis):**
+   - Provide a brief chronological summary of key visits.
+   - **Crucially, analyze the patterns.** Don't just list facts. Connect the dots.
+   - *Example:* "نلاحظ نمطًا واضحًا من التهابات الجهاز التنفسي العلوي المتكررة (5 زيارات خلال عام 2025)، والتي غالبًا ما تعالج بمضادات حيوية واسعة الطيف. هذا التكرار قد يشير إلى حساسية كامنة أو مقاومة بكتيرية، ويتطلب تحقيقًا أعمق بدلاً من العلاج العرضي المتكرر."
+   - Comment on the management of chronic conditions like hypertension. Is there a clear, consistent treatment plan?
 
-**3. التحليل السريري المتعمق (In-Depth Clinical Analysis):**
-   - Analyze the timeline for clinical patterns. Why are conditions recurring? Is the treatment plan evolving correctly?
-   - Discuss the management of chronic conditions. Is there evidence of consistent monitoring (e.g., regular BP checks for hypertension)?
+**3. تحليل فرص تحسين الدخل وتقليل الرفض (Analysis for Revenue Optimization & Rejection Reduction):**
+   - **This is the most critical section.** Based on the extracted data, identify specific, actionable opportunities for the clinic.
+   - **توثيق ناقص (Missing Documentation):** What standard documentation is missing that is required for insurance claims?
+     - *Example:* "في زيارة خلع الضرس بتاريخ 19/10/2020، عدم وجود أشعة بانورامية (OPG) قبل الجراحة يمثل خطر رفض عالٍ للمطالبة. توصية: يجب جعل الأشعة إجراءً قياسيًا قبل جميع عمليات الخلع الجراحي."
+   - **خدمات مقترحة (Suggested Services):** What additional, medically necessary tests or services could have been performed and billed for?
+     - *Example:* "نظرًا لتكرار المغص الكلوي، كان من الممكن إجراء فحص بالموجات فوق الصوتية (KUB Ultrasound) وتبرير تكلفته بسهولة، مما يزيد من دقة التشخيص ودخل الزيارة."
+   - **أخطاء الترميز (Coding Errors):** Point out any services with "WRONG CODE" mentioned in the extraction.
 
-**4. تحليل إداري وتأميني (Administrative & Insurance Analysis):**
-   - **This is a CRITICAL section.** Based on the treatments, what documentation is likely missing for insurance claims?
-   - **Example:** "For the surgical tooth extraction on 19/10/2020, a pre-operative panoramic x-ray is standard documentation required by most insurance providers. Its absence in the record could lead to claim rejection. The clinic should ensure this is documented for future similar procedures to guarantee reimbursement."
-   - Are there opportunities to improve clinic revenue through proper documentation and coding? (e.g., recommending necessary but undocumented procedures).
-   - Were there any potentially unnecessary services prescribed that could be flagged by an insurer?
-
-**5. توصيات الخبراء (Expert Recommendations):**
-   - Provide a final, prioritized list of recommendations covering BOTH clinical and administrative aspects.
-   - **Clinical Example:** "**عاجل:** إحالة المريض إلى أخصائي أنف وأذن وحنجرة للتحقيق في سبب التهابات البلعوم المتكررة."
-   - **Administrative Example:** "**ممارسة مثلى:** توثيق جميع الإجراءات التشخيصية (مثل الأشعة) قبل الإجراءات الجراحية لضمان قبول مطالبات التأمين."
+**4. توصيات استشارية نهائية (Final Consultant Recommendations):**
+   - Provide a prioritized list of recommendations.
+   - **للفريق الطبي (For the Clinical Team):** e.g., "إحالة المريض إلى أخصائي حساسية..."
+   - **للفريق الإداري (For the Admin/Billing Team):** e.g., "تطبيق بروتوكول توثيق إلزامي للأشعة قبل الإجراءات الجراحية..."
 
 **CRITICAL RULES:**
-- Your entire response must be a single, narrative text report formatted with Markdown.
-- Use the patient's name throughout the report.
-- Your tone must be authoritative and expert-level.
+- Your response must be a single, professional report in Markdown.
+- Your analysis must be insightful, connecting different visits to form a coherent narrative.
 - ${lang === 'ar' ? langRule : 'Language: The entire report must be in professional English.'}`;
 
   const response = await fetch(OPENAI_API_URL, {
@@ -133,18 +130,18 @@ async function getFinalProfessionalAnalysis(fullExtractedText, patientInfo, lang
       model: OPENAI_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Full Transcribed History:\n\n${fullExtractedText}` },
+        { role: "user", content: `Patient History (Series of Visit Cards):\n\n${fullExtractedText}` },
       ],
     }),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(`OpenAI Final Analysis error: ${JSON.stringify(data)}`);
-  return data?.choices?.[0]?.message?.content || "No final analysis was returned.";
+  if (!response.ok) throw new Error(`OpenAI Final Consultation error: ${JSON.stringify(data)}`);
+  return data?.choices?.[0]?.message?.content || "No final consultation was returned.";
 }
 
 // --- Main API Handler ---
 export default async function handler(req, res) {
-  console.log("--- New PROFESSIONAL ANALYSIS V2 Request Received ---");
+  console.log("--- New FINAL CONSULTATION Request Received ---");
   try {
     if (req.method !== "POST") { return bad(res, 405, "Method Not Allowed."); }
     if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
@@ -158,17 +155,17 @@ export default async function handler(req, res) {
     const extractedTexts = await Promise.all(allPromises);
     const fullExtractedText = extractedTexts.join("\n\n---\n\n");
     
-    const finalAnalysis = await getFinalProfessionalAnalysis(fullExtractedText, patientInfo, lang);
+    const finalAnalysis = await getFinalConsultationReport(fullExtractedText, patientInfo, lang);
 
     const htmlReport = `<div style="white-space: pre-wrap; line-height: 1.7;">${finalAnalysis}</div>`;
 
     return ok(res, { html: htmlReport, structured: { analysis: finalAnalysis, extractedText: fullExtractedText } });
 
   } catch (err) {
-    console.error("---!!!--- An error occurred during the professional analysis process ---!!!---");
+    console.error("---!!!--- An error occurred during the final consultation process ---!!!---");
     console.error("Error Message:", err.message);
     console.error("Error Stack:", err.stack);
     return bad(res, 500, `An internal server error occurred: ${err.message}`);
   }
 }
-// --- END OF PROFESSIONAL ANALYSIS CODE V2 ---
+// --- END OF FINAL CONSULTATION CODE ---
