@@ -1,4 +1,4 @@
-// --- START OF FINAL CONSULTATION CODE ---
+// --- START OF CHIEF MEDICAL OFFICER (CMO) LEVEL CODE ---
 import fetch from 'node-fetch';
 
 export const config = {
@@ -67,9 +67,9 @@ async function extractRichDataFromSingleFile(file) {
 - **Patient Name:** [Extract Full Name, e.g., KAMAL MANSOUR MANSI]
 - **Date of Visit:** [Extract Date, e.g., 19/10/2020]
 - **Diagnoses:**
-    - [List each diagnosis on a new line]
+    - [List each diagnosis on a new line, include codes like J02.9 if available]
 - **Medications & Services:**
-    - [List each item on a new line]
+    - [List each item on a new line, noting any "WRONG CODE" remarks]
 
 If a field is missing, write "غير متوفر".`;
     
@@ -87,40 +87,38 @@ If a field is missing, write "غير متوفر".`;
     return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || `Error processing ${file.name}.`;
 }
 
-// --- FINAL ANALYSIS (STAGE 2) ---
+// --- FINAL ANALYSIS (STAGE 2 - CMO LEVEL) ---
 async function getFinalConsultationReport(fullExtractedText, patientInfo, lang) {
   const langRule = "اللغة: يجب أن يكون التقرير بالكامل باللغة العربية الفصحى والمهنية.";
-  const systemPrompt = `You are a senior clinical consultant with a secondary expertise in medical billing and insurance auditing. You are reviewing a patient's full medical history, provided as a series of "Visit Cards". Your task is to synthesize this information into a single, high-level, professional consultation report that provides deep insights for both clinical and administrative teams.
+  const systemPrompt = `You are a Chief Medical Officer (CMO) with deep expertise in clinical governance and insurance auditing. You are reviewing a patient's full medical history from a series of "Visit Cards". Your report must be a masterclass in deep, actionable analysis.
 
 **Mandatory Report Structure (Follow this precisely):**
 
-**1. ملخص شامل للحالة (Comprehensive Case Summary):**
-   - **الاسم:** [Extract the patient's full name]
-   - **العمر (عند أول زيارة موثقة):** [State age if available]
-   - **الأمراض الرئيسية والمتكررة:** [Synthesize all diagnoses into a clear list of the patient's main health issues, noting which are chronic or recurrent]
+**1. ملخص استشاري للحالة (Executive Case Summary):**
+   - **الاسم:** [Extract Patient's Name]
+   - **الأمراض الرئيسية والمتكررة:** [Synthesize all diagnoses into a professional summary of the patient's main health issues.]
 
 **2. التحليل الزمني والأنماط السريرية (Timeline and Clinical Pattern Analysis):**
    - Provide a brief chronological summary of key visits.
-   - **Crucially, analyze the patterns.** Don't just list facts. Connect the dots.
-   - *Example:* "نلاحظ نمطًا واضحًا من التهابات الجهاز التنفسي العلوي المتكررة (5 زيارات خلال عام 2025)، والتي غالبًا ما تعالج بمضادات حيوية واسعة الطيف. هذا التكرار قد يشير إلى حساسية كامنة أو مقاومة بكتيرية، ويتطلب تحقيقًا أعمق بدلاً من العلاج العرضي المتكرر."
-   - Comment on the management of chronic conditions like hypertension. Is there a clear, consistent treatment plan?
+   - **Crucially, provide deep analysis of the patterns.** Go beyond simple observation.
+   - *Example:* "نلاحظ نمطًا واضحًا من التهابات الجهاز التنفسي العلوي المتكررة (5 زيارات خلال عام 2025). العلاج المتكرر بمضادات حيوية واسعة الطيف (Cefixime, Gloclav) دون توثيق لمعايير (FeverPAIN/Centor) أو اختبار مستضد سريع (RADT) يخالف إرشادات NICE NG84 ويمثل فرصة مهدرة لـ 'حوكمة المضادات الحيوية' (antibiotic stewardship)، كما يعرض المريض لمخاطر المقاومة البكتيرية."
 
-**3. تحليل فرص تحسين الدخل وتقليل الرفض (Analysis for Revenue Optimization & Rejection Reduction):**
-   - **This is the most critical section.** Based on the extracted data, identify specific, actionable opportunities for the clinic.
-   - **توثيق ناقص (Missing Documentation):** What standard documentation is missing that is required for insurance claims?
-     - *Example:* "في زيارة خلع الضرس بتاريخ 19/10/2020، عدم وجود أشعة بانورامية (OPG) قبل الجراحة يمثل خطر رفض عالٍ للمطالبة. توصية: يجب جعل الأشعة إجراءً قياسيًا قبل جميع عمليات الخلع الجراحي."
-   - **خدمات مقترحة (Suggested Services):** What additional, medically necessary tests or services could have been performed and billed for?
-     - *Example:* "نظرًا لتكرار المغص الكلوي، كان من الممكن إجراء فحص بالموجات فوق الصوتية (KUB Ultrasound) وتبرير تكلفته بسهولة، مما يزيد من دقة التشخيص ودخل الزيارة."
-   - **أخطاء الترميز (Coding Errors):** Point out any services with "WRONG CODE" mentioned in the extraction.
+**3. تحليل استراتيجي للدخل والتأمين (Strategic Revenue & Insurance Analysis):**
+   - **This section must be sharp and actionable.**
+   - **توثيق ناقص ذو أثر مالي (High-Impact Missing Documentation):** What documentation is missing that directly leads to claim rejection? Be specific.
+     - *Example:* "غياب أشعة بانورامية (OPG) قبل الخلع الجراحي في 19/10/2020 هو سبب مباشر لرفض مطالبة بقيمة 250 ريال. يجب تطبيق سياسة إلزامية للتوثيق الإشعاعي."
+   - **فرص الدخل المهدرة (Missed Revenue Opportunities):** What additional, medically justifiable services could have been billed?
+     - *Example:* "في زيارة المغص الكلوي (N23)، كان من الممكن إجراء فحص بول (Urinalysis) وأشعة (KUB Ultrasound)، مما يضيف حوالي 380 ريال للدخل المبرر للزيارة."
+   - **أخطاء الترميز (Coding Errors):** Explicitly list the medications with "WRONG CODE" and state that this is a direct cause for rejection.
 
-**4. توصيات استشارية نهائية (Final Consultant Recommendations):**
-   - Provide a prioritized list of recommendations.
-   - **للفريق الطبي (For the Clinical Team):** e.g., "إحالة المريض إلى أخصائي حساسية..."
-   - **للفريق الإداري (For the Admin/Billing Team):** e.g., "تطبيق بروتوكول توثيق إلزامي للأشعة قبل الإجراءات الجراحية..."
+**4. توصيات تنفيذية (Actionable Recommendations):**
+   - Provide a prioritized list for both clinical and admin teams.
+   - **للفريق الطبي (Clinical Team):** e.g., "**إجراء عاجل:** تطبيق بروتوكول NICE NG84 لعلاج التهاب الحلق، يبدأ بالعلاج العرضي واختبار RADT قبل وصف المضادات الحيوية."
+   - **للفريق الإداري (Admin/Billing Team):** e.g., "**تحسين فوري:** مراجعة وتصحيح جميع أكواد الأدوية التي تم الإبلاغ عنها كـ 'WRONG CODE' في نظام الفوترة."
 
 **CRITICAL RULES:**
 - Your response must be a single, professional report in Markdown.
-- Your analysis must be insightful, connecting different visits to form a coherent narrative.
+- Use an authoritative, expert tone. Your language should reflect deep knowledge of both medicine and medical billing (e.g., use terms like "clinical governance", "NICE guidelines", "claim rejection").
 - ${lang === 'ar' ? langRule : 'Language: The entire report must be in professional English.'}`;
 
   const response = await fetch(OPENAI_API_URL, {
@@ -141,7 +139,7 @@ async function getFinalConsultationReport(fullExtractedText, patientInfo, lang) 
 
 // --- Main API Handler ---
 export default async function handler(req, res) {
-  console.log("--- New FINAL CONSULTATION Request Received ---");
+  console.log("--- New CMO LEVEL Request Received ---");
   try {
     if (req.method !== "POST") { return bad(res, 405, "Method Not Allowed."); }
     if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
@@ -162,10 +160,11 @@ export default async function handler(req, res) {
     return ok(res, { html: htmlReport, structured: { analysis: finalAnalysis, extractedText: fullExtractedText } });
 
   } catch (err) {
-    console.error("---!!!--- An error occurred during the final consultation process ---!!!---");
+    console.error("---!!!--- An error occurred during the CMO level analysis ---!!!---");
     console.error("Error Message:", err.message);
     console.error("Error Stack:", err.stack);
     return bad(res, 500, `An internal server error occurred: ${err.message}`);
   }
 }
-// --- END OF FINAL CONSULTATION CODE ---
+// --- END OF CHIEF MEDICAL OFFICER (CMO) LEVEL CODE ---
+
