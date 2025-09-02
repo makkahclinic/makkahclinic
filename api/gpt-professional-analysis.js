@@ -1,4 +1,4 @@
-// --- START OF PROFESSIONAL ANALYSIS CODE ---
+// --- START OF PROFESSIONAL ANALYSIS CODE V2 ---
 import fetch from 'node-fetch';
 
 export const config = {
@@ -30,7 +30,7 @@ const parseJsonSafe = async (response) => {
 
 // --- Gemini File Uploader ---
 async function geminiUploadBase64({ name, mimeType, base64 }) {
-  const binaryData = Buffer.from(base64.split(',')[1], "base64"); // Ensure we only get the data part
+  const binaryData = Buffer.from(base64.split(',')[1], "base64");
   const initRes = await fetch(`${GEMINI_FILES_URL}?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
     method: "POST",
     headers: {
@@ -90,31 +90,35 @@ If any field is not present, write "غير متوفر". Do not add any other tex
     return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || `Error processing ${file.name}.`;
 }
 
-// --- PROFESSIONAL ANALYSIS (STAGE 2) ---
+// --- UPGRADED PROFESSIONAL ANALYSIS (STAGE 2) ---
 async function getFinalProfessionalAnalysis(fullExtractedText, patientInfo, lang) {
   const langRule = "اللغة: يجب أن يكون التقرير بالكامل باللغة العربية الفصحى والمهنية.";
-  const systemPrompt = `You are a senior clinical consultant providing a definitive audit of a patient's medical history for a high-stakes insurance review. You have been provided with a Markdown-formatted text containing transcriptions from multiple medical visits. Your analysis must be exceptionally deep, structured, and insightful.
+  const systemPrompt = `You are a dual-role expert: a senior clinical consultant AND a shrewd medical-biller/insurance auditor. Your analysis of the provided patient history must be exceptionally deep, covering both clinical excellence and the practicalities of billing and insurance.
 
 **Mandatory Professional Report Structure:**
 
 **1. معلومات المريض (Patient Information):**
-   - **الاسم:** [Extract and state the patient's full name from the text]
-   - **العمر عند أول زيارة:** [Calculate and state the age based on D.O.B and first visit date]
-   - **ملخص التشخيصات الرئيسية:** [List the most significant and recurring diagnoses from all visits]
+   - **الاسم:** [Extract and state the patient's full name]
+   - **العمر عند أول زيارة:** [Calculate age based on D.O.B and first visit date if available]
+   - **ملخص التشخيصات الرئيسية:** [List the most significant and recurring diagnoses]
 
-**2. الخط الزمني للأحداث الطبية (Timeline of Medical Events):**
-   - Create a chronological list of all visits.
-   - For each visit, list the **Date** and the key **Diagnoses** and **Treatments**. This must be a clear, date-ordered summary of the patient's journey.
+**2. الخط الزمني السريري (Clinical Timeline):**
+   - Create a clear, chronological list of all visits. For each, list the **Date**, **Diagnoses**, and **Treatments**.
 
-**3. تحليل الأنماط والقضايا المتكررة (Analysis of Patterns & Recurring Issues):**
-   - Go beyond a simple summary. Analyze the timeline. What are the patterns?
-   - Example: "نلاحظ تكرار التهابات الجهاز التنفسي الحادة كل 3-4 أشهر، مما قد يشير إلى ضعف المناعة أو تعرض بيئي يتطلب تحقيقًا أعمق."
-   - Discuss the management of chronic conditions like Hypertension. Is the treatment consistent? Is there evidence of monitoring?
+**3. التحليل السريري المتعمق (In-Depth Clinical Analysis):**
+   - Analyze the timeline for clinical patterns. Why are conditions recurring? Is the treatment plan evolving correctly?
+   - Discuss the management of chronic conditions. Is there evidence of consistent monitoring (e.g., regular BP checks for hypertension)?
 
-**4. توصيات الخبراء (Expert Recommendations):**
-   - Provide a final, prioritized list of recommendations based on your deep analysis.
-   - Recommendations must be specific, actionable, and justified by the patterns you identified.
-   - Example: "**عاجل:** مراجعة خطة علاج ارتفاع ضغط الدم لعدم وجود دليل على المتابعة المنتظمة."
+**4. تحليل إداري وتأميني (Administrative & Insurance Analysis):**
+   - **This is a CRITICAL section.** Based on the treatments, what documentation is likely missing for insurance claims?
+   - **Example:** "For the surgical tooth extraction on 19/10/2020, a pre-operative panoramic x-ray is standard documentation required by most insurance providers. Its absence in the record could lead to claim rejection. The clinic should ensure this is documented for future similar procedures to guarantee reimbursement."
+   - Are there opportunities to improve clinic revenue through proper documentation and coding? (e.g., recommending necessary but undocumented procedures).
+   - Were there any potentially unnecessary services prescribed that could be flagged by an insurer?
+
+**5. توصيات الخبراء (Expert Recommendations):**
+   - Provide a final, prioritized list of recommendations covering BOTH clinical and administrative aspects.
+   - **Clinical Example:** "**عاجل:** إحالة المريض إلى أخصائي أنف وأذن وحنجرة للتحقيق في سبب التهابات البلعوم المتكررة."
+   - **Administrative Example:** "**ممارسة مثلى:** توثيق جميع الإجراءات التشخيصية (مثل الأشعة) قبل الإجراءات الجراحية لضمان قبول مطالبات التأمين."
 
 **CRITICAL RULES:**
 - Your entire response must be a single, narrative text report formatted with Markdown.
@@ -140,7 +144,7 @@ async function getFinalProfessionalAnalysis(fullExtractedText, patientInfo, lang
 
 // --- Main API Handler ---
 export default async function handler(req, res) {
-  console.log("--- New PROFESSIONAL ANALYSIS Request Received ---");
+  console.log("--- New PROFESSIONAL ANALYSIS V2 Request Received ---");
   try {
     if (req.method !== "POST") { return bad(res, 405, "Method Not Allowed."); }
     if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
@@ -167,5 +171,4 @@ export default async function handler(req, res) {
     return bad(res, 500, `An internal server error occurred: ${err.message}`);
   }
 }
-// --- END OF PROFESSIONAL ANALYSIS CODE ---
-
+// --- END OF PROFESSIONAL ANALYSIS CODE V2 ---
