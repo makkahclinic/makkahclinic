@@ -1,3 +1,4 @@
+// --- START OF CORRECT CODE ---
 // This configuration is for Next.js to increase the allowed request size
 export const config = {
 api: {
@@ -192,4 +193,4 @@ console.error("Error Stack:", err.stack);
 return bad(res, 500, An internal server error occurred. Check the server logs for details. Error: ${err.message});
 }
 }
-Check the server logs for details. Error: ${err.message}`);ولكن الكود ينقصه قوسان}في النهاية: واحد لإغلاق جملةcatch (err) { ... }والثاني لإغلاق الدالة الرئيسيةexport default async function handler(req, res) { ... }`.
+// --- END OF CORRECT CODE ---
