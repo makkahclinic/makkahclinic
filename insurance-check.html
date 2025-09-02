@@ -71,7 +71,6 @@
       border-radius: 12px; background-color: var(--card-bg); outline: none; transition: all 0.2s;
     }
     input:focus, select:focus, textarea:focus { border-color: var(--primary-500); box-shadow: 0 0 0 4px var(--ring-color); }
-    textarea { min-height: 100px; resize: vertical; }
     .uploader {
       border: 2px dashed var(--primary-300); border-radius: 16px; padding: 32px; text-align: center;
       color: var(--gray-500); background-color: var(--primary-50); cursor: pointer; transition: background-color 0.2s, border-color 0.2s;
@@ -83,7 +82,7 @@
       position: relative; background-color: var(--card-bg); border: 1px solid var(--border-color);
       border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(148, 163, 184, 0.1);
     }
-    .thumb { width: 100%; height: 160px; object-fit: cover; display: block; background-color: var(--gray-100); }
+    .thumb { width: 100%; height: 160px; object-fit: contain; display: block; background-color: var(--gray-100); }
     .meta { padding: 12px; font-size: 14px; color: var(--gray-700); }
     .remove {
       position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 50%;
@@ -97,11 +96,7 @@
     }
     .btn:hover:not(:disabled) { background-color: var(--primary-700); transform: translateY(-1px); }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-secondary { background-color: var(--primary-800); }
-    .btn-secondary:hover:not(:disabled) { background-color: var(--primary-900); }
     #reportWrap { margin-top: 32px; }
-    .report-toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-    .muted { color: var(--muted-text); }
   </style>
 </head>
 <body>
@@ -124,14 +119,13 @@
       <p class="subtitle">واجهة إدخال سريرية سهلة — تحليل عميق متناغم مع احتياجات التأمين</p>
     </div>
 
-    <!-- User input sections remain the same -->
     <div class="section">
         <h2>1) معلومات المريض</h2>
         <div class="card">
           <div class="grid">
-            <div class="col-4"><label for="name">الاسم (اختياري)</label><input id="name" placeholder="مثال: أحمد خالد" /></div>
+            <div class="col-4"><label for="name">الاسم (اختياري)</label><input id="name" placeholder="مثال: كمال منصور" /></div>
             <div class="col-4"><label for="gender">الجنس</label><select id="gender"><option value="">اختر</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
-            <div class="col-4"><label for="age">العمر (بالسنوات)</label><input id="age" type="number" min="0" placeholder="مثال: 63" /></div>
+            <div class="col-4"><label for="age">العمر (بالسنوات)</label><input id="age" type="number" min="0" placeholder="مثال: 57" /></div>
           </div>
         </div>
       </div>
@@ -160,7 +154,6 @@
   </div>
 
 <script>
-    // Set the workerSrc for pdf.js
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js`;
 
     const filesState = [];
@@ -186,7 +179,6 @@
 
       for (const f of files) {
         if (f.type === 'application/pdf') {
-          // --- PDF Splitting Logic ---
           try {
             const fileReader = new FileReader();
             fileReader.onload = async function() {
@@ -196,7 +188,8 @@
               for (let i = 1; i <= pdf.numPages; i++) {
                 busy.textContent = `جاري معالجة صفحة ${i} من ${pdf.numPages}...`;
                 const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 1.5 });
+                // --- MODIFICATION 1: Reduced scale for smaller canvas ---
+                const viewport = page.getViewport({ scale: 1.0 });
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
                 canvas.height = viewport.height;
@@ -204,13 +197,15 @@
                 
                 await page.render({ canvasContext: context, viewport: viewport }).promise;
                 
-                const base64Url = canvas.toDataURL('image/jpeg');
+                // --- MODIFICATION 2: Reduced JPEG quality for smaller file size ---
+                const base64Url = canvas.toDataURL('image/jpeg', 0.7); // 70% quality
+                
                 filesState.push({ 
                   name: `${f.name} - Page ${i}`, 
                   mimeType: 'image/jpeg', 
                   data: base64Url 
                 });
-                renderCards(); // Update UI after each page
+                renderCards();
               }
               busy.style.display = 'none';
             };
@@ -221,7 +216,6 @@
               busy.style.display = 'none';
           }
         } else {
-          // --- Image Handling Logic ---
           const base64Url = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onerror = reject;
@@ -241,7 +235,7 @@
     function renderCards() {
       cardsBox.innerHTML = '';
       filesState.forEach((f, i) => {
-        const thumb = f.data; // All items are now images
+        const thumb = f.data;
         const el = document.createElement('div');
         el.className = 'fileCard';
         el.innerHTML = `<button class="remove" data-index="${i}" title="إزالة الملف">×</button><img class="thumb" src="${thumb}" alt="${f.name}"><div class="meta">${f.name}</div>`;
@@ -271,7 +265,7 @@
             ageYears: +document.getElementById('age').value || null,
             gender: document.getElementById('gender').value || null,
           },
-          files: filesState, // Send the full state, now containing individual pages
+          files: filesState,
           lang: document.documentElement.lang || 'ar'
         };
 
@@ -292,7 +286,7 @@
             try {
                 const errorJson = JSON.parse(errorText);
                 errorMessage = errorJson.error || errorText;
-            } catch (e) { /* Not JSON, use raw text */ }
+            } catch (e) { /* Not JSON */ }
             throw new Error(errorMessage);
         }
 
@@ -305,7 +299,6 @@
         busy.style.display = 'none';
       }
     });
-
 </script>
 </body>
 </html>
