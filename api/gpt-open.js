@@ -1,4 +1,4 @@
-// --- START OF UPGRADED CODE ---
+// --- START OF FINAL BATCH PROCESSING CODE ---
 import fetch from 'node-fetch';
 
 export const config = {
@@ -24,9 +24,7 @@ const ok = (res, json) => res.status(200).json({ ok: true, ...json });
 const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg });
 const parseJsonSafe = async (response) => {
   const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    return response.json();
-  }
+  if (contentType.includes("application/json")) { return response.json(); }
   return { raw: await response.text() };
 };
 
@@ -58,142 +56,98 @@ async function geminiUploadBase64({ name, mimeType, base64 }) {
   return { uri: metadata?.file?.uri, mime: metadata?.file?.mime_type || mimeType };
 }
 
-// --- UPGRADED: Stage 1: More Accurate Data Aggregation with Gemini ---
-async function aggregateClinicalDataWithGemini({ text, files }) {
-  const userParts = [];
-  if (text) userParts.push({ text });
-
-  for (const file of files || []) {
+// --- BATCH PROCESSING STAGE 1: Extract data from a SINGLE file/page ---
+async function extractDataFromSingleFile(file) {
+    const userParts = [];
     const mime = file?.mimeType || "application/octet-stream";
     const base64Data = (file?.data || "").split("base64,").pop() || file?.data;
-    if (!base64Data) continue;
-    const { uri, mime: finalMime } = await geminiUploadBase64({ name: file?.name || "unnamed_file", mimeType: mime, base64: base64Data });
+    if (!base64Data) return "";
+
+    const { uri, mime: finalMime } = await geminiUploadBase64({ name: file.name, mimeType: mime, base64: base64Data });
     userParts.push({ file_data: { file_uri: uri, mime_type: finalMime } });
-  }
 
-  if (userParts.length === 0) userParts.push({ text: "No text or files to analyze." });
+    const systemPrompt = `You are an OCR expert. Transcribe all text from the single document page provided. Focus on diagnoses and medications. Format medications as: "- [Name] [Dosage] [Frequency] x [Duration]".`;
+    
+    const body = {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: userParts }],
+    };
 
-  // --- NEW IMPROVED PROMPT ---
-  const systemPrompt = `You are an expert medical transcriptionist with advanced OCR capabilities for handwritten notes. Your primary job is to extract ALL clinical information from the provided text and images with extreme precision.
+    const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
 
-**CRITICAL RULES:**
-1.  **Exhaustive Transcription:** Transcribe EVERYTHING. Do not summarize or omit any detail, no matter how small. Pay close attention to handwritten text which may be difficult to read.
-2.  **Medication Format:** For every medication, you MUST transcribe it in the following format on a new line: \`- [Medication Name] [Dosage] [Frequency] x [Duration]\`.
-    * Example: \`- Amlopine 10 1x1x90\`
-    * If any part is unclear, use your best judgment or mark it as \`[unclear]\`.
-3.  **Comprehensive Lists:** Create distinct lists for:
-    * **Diagnoses:** (e.g., HTN, DM, DPH)
-    * **Medications:** (using the format above)
-    * **Labs/Tests:** (if any are mentioned)
-4.  **Structure:** Present the final output as a single, clean text block. Start with diagnoses, then medications, then any other findings.`;
-
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: "user", parts: userParts }],
-  };
-
-  const response = await fetch(GEMINI_GEN_URL(GEMINI_MODEL), {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
-
-  const data = await parseJsonSafe(response);
-  if (!response.ok) throw new Error(`Gemini generateContent error: ${JSON.stringify(data)}`);
-  return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
+    const data = await parseJsonSafe(response);
+    if (!response.ok) throw new Error(`Gemini single file error: ${JSON.stringify(data)}`);
+    return `--- Visit Analysis for ${file.name} ---\n${data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || ""}`;
 }
 
-// --- UPGRADED: Stage 2: More Detailed Analysis Instructions for GPT-4o ---
-function getOpenEndedAuditorInstructions(lang = 'ar') {
-  const langRule = "قاعدة اللغة: يجب أن تكون جميع المخرجات باللغة العربية الفصحى الواضحة والمهنية، مع استخدام مصطلحات طبية دقيقة.";
-  return `You are a world-class clinical pharmacist and medical auditor, reviewing a case for a major insurance provider. Your analysis must be evidence-based, meticulous, and professionally formatted as a narrative report.
 
-**Primary Knowledge Base:**
-- Cardiology: AHA/ACC/ESC Guidelines.
-- Endocrinology: ADA Standards.
-- Drug Interactions: Check for common and critical drug-drug interactions (e.g., risk of bleeding, electrolyte imbalance).
-- Standard Dosing: Diamicron MR (Gliclazide MR) is dosed ONCE daily.
+// --- BATCH PROCESSING STAGE 2: Get a final summary analysis from GPT-4o ---
+async function getFinalComprehensiveAnalysis(fullExtractedText, patientInfo, lang) {
+  const systemPrompt = `You are a world-class clinical auditor. You have been provided with a series of transcribed medical visits for a single patient. Your task is to synthesize ALL of this information into one final, comprehensive clinical audit report.
 
-**Mandatory Report Structure (Follow this exactly):**
+**Mandatory Report Structure:**
+1.  **ملخص المريض (Patient Summary):** Synthesize all diagnoses from all visits to create a complete picture of the patient's health.
+2.  **التقييم العام (Overall Assessment):** Comment on the patient's journey. Are there recurring issues? Is the care consistent? Are there major errors or good practices across the visits?
+3.  **تحليل الزيارات الرئيسية (Key Visit Analysis):** Instead of listing all medications, highlight 3-5 of the MOST significant visits or findings. For each, explain the clinical reasoning, any errors, and the outcome.
+4.  **التوصيات النهائية (Final Recommendations):** Provide a final, prioritized list of recommendations for the patient's future care.
 
-**1. ملخص المريض (Patient Summary):**
-   - Start with a concise paragraph detailing the patient's age, gender, and all listed diagnoses.
+**CRITICAL RULE:** Your entire response must be a single, well-written narrative text report in ${lang === 'ar' ? 'Arabic' : 'English'}.`;
 
-**2. التقييم العام لجودة الرعاية (Overall Assessment of Care Quality):**
-   - Provide your expert opinion.
-   - What was done correctly? (e.g., appropriate medication for a diagnosis).
-   - What are the major and minor gaps or errors in care? (e.g., dosing errors, missing standard tests, potential contraindications).
-
-**3. التحليل التفصيلي (Detailed Item-by-Item Analysis):**
-   - Create a list for every single medication transcribed.
-   - For each medication, provide a sub-analysis covering:
-     - **مبرر الاستخدام (Justification):** Is it appropriate for the patient's diagnoses?
-     - **الجرعة والتكرار (Dosage & Frequency):** Is the prescribed dose correct according to standards? Highlight any errors clearly.
-     - **مخاطر محتملة (Potential Risks):** Mention any significant side effects or potential drug interactions with other medications on the list.
-
-**4. الإغفالات والتوصيات (Omissions & Recommendations):**
-   - Based on the diagnoses, what standard-of-care tests or treatments are missing? (e.g., Annual fundus exam for a diabetic patient).
-   - Conclude with a prioritized list of actionable recommendations (e.g., Urgent, Important, Best Practice).
-
-**CRITICAL RULE:** Your entire response must be a single, well-written narrative text report. Do not use JSON. Write with the authority and clarity of a leading medical expert.
-${lang === 'ar' ? langRule : ''}`;
-}
-
-// --- MODIFIED: Function to communicate with OpenAI for open-ended text ---
-async function getAuditFromOpenAI(bundle, lang) {
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: JSON.stringify({
       model: OPENAI_MODEL,
       messages: [
-        { role: "system", content: getOpenEndedAuditorInstructions(lang) },
-        { role: "user", content: "Clinical Data for Audit:\n" + JSON.stringify(bundle, null, 2) },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Patient Info: ${JSON.stringify(patientInfo)}\n\nFull Transcribed History:\n${fullExtractedText}` },
       ],
     }),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(`OpenAI error: ${JSON.stringify(data)}`);
-  return data?.choices?.[0]?.message?.content || "No analysis was returned.";
+  if (!response.ok) throw new Error(`OpenAI Final Analysis error: ${JSON.stringify(data)}`);
+  return data?.choices?.[0]?.message?.content || "No final analysis was returned.";
 }
+
 
 // --- Main API Handler ---
 export default async function handler(req, res) {
-  console.log("--- New UPGRADED Request Received ---");
+  console.log("--- New BATCH PROCESSING Request Received ---");
   try {
     if (req.method !== "POST") {
-      return bad(res, 405, "Method Not Allowed: Only POST is accepted.");
+      return bad(res, 405, "Method Not Allowed.");
     }
     if (!OPENAI_API_KEY || !GEMINI_API_KEY) {
       console.error("CRITICAL ERROR: API Key is missing.");
       return bad(res, 500, "Server Configuration Error: API Key is missing.");
     }
 
-    const { text = "", files = [], patientInfo = null, lang = 'ar' } = req.body || {};
-    console.log(`Processing request with language: ${lang}`);
+    const { files = [], patientInfo = null, lang = 'ar' } = req.body || {};
+    
+    // Step 1: Process each file individually to extract text
+    console.log(`Starting batch processing for ${files.length} files...`);
+    const allPromises = files.map(file => extractDataFromSingleFile(file));
+    const extractedTexts = await Promise.all(allPromises);
+    const fullExtractedText = extractedTexts.join("\n\n");
+    console.log("All files processed. Full extracted text is ready.");
 
-    console.log("Step 1: Starting ACCURATE data aggregation with Gemini...");
-    const aggregatedClinicalText = await aggregateClinicalDataWithGemini({ text, files });
-    console.log("Step 1: Gemini aggregation successful. Text extracted:\n", aggregatedClinicalText);
+    // Step 2: Send the complete text to OpenAI for the final analysis
+    console.log("Starting final comprehensive analysis with OpenAI...");
+    const finalAnalysis = await getFinalComprehensiveAnalysis(fullExtractedText, patientInfo, lang);
+    console.log("Final analysis successful.");
 
-    const auditBundle = { patientInfo, aggregatedClinicalText, originalUserText: text };
-
-    console.log("Step 2: Starting DEEP expert audit with OpenAI...");
-    const openEndedAnalysis = await getAuditFromOpenAI(auditBundle, lang);
-    console.log("Step 2: OpenAI audit successful.");
-
-    const htmlReport = `<div style="white-space: pre-wrap; line-height: 1.7;">${openEndedAnalysis}</div>`;
+    const htmlReport = `<div style="white-space: pre-wrap; line-height: 1.7;">${finalAnalysis}</div>`;
 
     console.log("--- Request Processed Successfully ---");
-    return ok(res, { html: htmlReport, structured: { analysis: openEndedAnalysis, extractedText: aggregatedClinicalText } });
+    return ok(res, { html: htmlReport, structured: { analysis: finalAnalysis, extractedText: fullExtractedText } });
 
   } catch (err) {
-    console.error("---!!!--- An error occurred during the process ---!!!---");
+    console.error("---!!!--- An error occurred during the batch process ---!!!---");
     console.error("Error Message:", err.message);
     console.error("Error Stack:", err.stack);
-    return bad(res, 500, `An internal server error occurred. Check the server logs for details. Error: ${err.message}`);
+    return bad(res, 500, `An internal server error occurred: ${err.message}`);
   }
 }
-// --- END OF UPGRADED CODE ---
-
+// --- END OF FINAL BATCH PROCESSING CODE ---
