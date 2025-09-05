@@ -1,6 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GoogleAIFileManager } from "@google/generative-ai/server";
-
 export const config = {
   api: {
     bodyParser: { sizeLimit: "50mb" },
@@ -8,24 +5,13 @@ export const config = {
   },
 };
 
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro-latest";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);
 
-function ok(res, data) {
-  return res.status(200).json(data);
-}
-
-function bad(res, status, message) {
-  return res.status(status).json({ error: message });
-}
-
-// إصلاح استخراج البيانات من Base64
 function extractBase64Data(dataUrl) {
   if (!dataUrl || !dataUrl.includes(',')) {
     throw new Error('صيغة البيانات غير صحيحة');
@@ -33,114 +19,82 @@ function extractBase64Data(dataUrl) {
   return dataUrl.split(',')[1];
 }
 
-async function uploadToGemini(name, mimeType, dataUrl) {
+async function analyzeMedicalContent(files) {
   try {
-    const base64Data = extractBase64Data(dataUrl);
-    const buffer = Buffer.from(base64Data, 'base64');
-    
-    // إنشاء ملف مؤقت
-    const tempFile = {
-      inlineData: {
-        data: base64Data,
-        mimeType: mimeType
-      }
-    };
-    
-    return tempFile;
-  } catch (error) {
-    console.error("خطأ في معالجة الملف:", error);
-    throw new Error(`فشل في معالجة الملف: ${error.message}`);
-  }
-}
-
-async function comprehensiveMedicalExtraction(file) {
-  try {
-    console.log(`بدء استخراج البيانات من: ${file.name}`);
-    
-    const fileData = await uploadToGemini(file.name, file.mimeType, file.data);
-
     const model = genAI.getGenerativeModel({ 
-      model: GEMINI_MODEL,
+      model: "gemini-1.5-pro-latest",
       generationConfig: {
-        responseMimeType: "application/json",
         temperature: 0.1,
       }
     });
 
     const prompt = `
-أنت طبيب خبير في استخراج البيانات الطبية. استخرج جميع المعلومات من هذا المستند:
+أنت طبيب استشاري خبير في التحليل الطبي. قم بتحليل هذه الملفات الطبية واستخرج المعلومات التالية وقدمها في تقرير طبي شامل بالعربية:
 
-{
-  "patientInfo": {
-    "name": "اسم المريض",
-    "age": "العمر", 
-    "gender": "الجنس",
-    "visitDate": "تاريخ الزيارة",
-    "sourceFile": "${file.name}"
-  },
-  "chiefComplaint": "الشكوى الرئيسية",
-  "diagnoses": ["التشخيصات"],
-  "medications": ["الأدوية"],
-  "vitalSigns": {
-    "bloodPressure": "ضغط الدم",
-    "heartRate": "النبض",
-    "temperature": "الحرارة"
-  },
-  "investigations": ["الفحوصات والنتائج"],
-  "treatmentPlan": ["خطة العلاج"]
-}
+## المطلوب استخراجه:
+1. **معلومات المريض**: الاسم، العمر، الجنس، تاريخ الزيارة
+2. **الشكوى الرئيسية والأعراض**: الأعراض المذكورة والمشاكل الصحية
+3. **التشخيص الطبي**: التشخيص الأولي والثانوي إن وجد
+4. **الأدوية والعلاجات**: الأدوية المقررة والجرعات
+5. **الفحوصات والنتائج**: التحاليل والأشعة والنتائج
+6. **التوصيات الطبية**: تعليمات المتابعة والنصائح
+
+## التنسيق المطلوب:
+اكتب التقرير باستخدام تنسيق HTML مع العناوين المناسبة وقوائم منظمة. استخدم الألوان والتنسيق لجعل التقرير واضحاً ومهنياً.
+
+## التحليل والتقييم:
+- قدم تحليلاً شاملاً للحالة الطبية
+- اربط بين الأعراض والتشخيص والعلاج
+- قدم تقييماً لخطة العلاج المقترحة
+- اذكر أي ملاحظات مهمة أو تحذيرات
 `;
 
-    const result = await model.generateContent([fileData, { text: prompt }]);
+    const imageParts = files.map(file => ({
+      inlineData: {
+        data: extractBase64Data(file.data),
+        mimeType: file.mimeType
+      }
+    }));
+
+    const result = await model.generateContent([prompt, ...imageParts]);
     const response = await result.response;
-    const text = response.text();
     
-    try {
-      return JSON.parse(text);
-    } catch (parseError) {
-      return {
-        error: "فشل في تحليل البيانات",
-        rawText: text,
-        fileName: file.name
-      };
-    }
+    return response.text();
 
   } catch (error) {
-    console.error(`خطأ في معالجة ${file.name}:`, error);
-    return {
-      error: `خطأ: ${error.message}`,
-      fileName: file.name
-    };
+    console.error('خطأ في التحليل:', error);
+    throw new Error(`خطأ في التحليل: ${error.message}`);
   }
 }
 
-async function generateMedicalReport(extractedData) {
-  try {
-    const systemPrompt = `
-أنت طبيب استشاري خبير. اكتب تقريراً طبياً شاملاً بالعربية يتضمن:
+async function generateEnhancedReport(analysisResult, patientInfo) {
+  const systemPrompt = `
+أنت طبيب استشاري خبير في كتابة التقارير الطبية. قم بتحسين وإثراء التقرير المقدم مع إضافة:
 
-1. ملخص الحالة
-2. التشخيص والتقييم
-3. خطة العلاج
-4. التوصيات والمتابعة
-5. تقييم المخاطر
+1. رأس تقرير مهني مع معلومات المريض
+2. ملخص تنفيذي للحالة
+3. تحليل معمق للأعراض والعلامات
+4. تقييم خطة العلاج الحالية
+5. توصيات إضافية للمتابعة
+6. تقييم المخاطر والتنبؤات
 
-استخدم HTML للتنسيق مع العناوين والقوائم المناسبة.
+استخدم تنسيق HTML احترافي مع ألوان وتخطيط مناسب للطباعة.
 `;
 
-    const response = await fetch(OPENAI_API_URL, {
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `البيانات الطبية:\n${JSON.stringify(extractedData, null, 2)}` 
+            content: `التحليل الأولي: ${analysisResult}\n\nمعلومات إضافية: ${JSON.stringify(patientInfo)}` 
           },
         ],
         max_tokens: 4000,
@@ -149,61 +103,79 @@ async function generateMedicalReport(extractedData) {
     });
 
     if (!response.ok) {
-      throw new Error(`خطأ في API: ${response.status}`);
+      throw new Error(`خطأ في OpenAI API: ${response.status}`);
     }
 
     const data = await response.json();
-    return data?.choices?.[0]?.message?.content || "فشل في إنتاج التقرير";
+    return data?.choices?.[0]?.message?.content || analysisResult;
 
   } catch (error) {
-    return `خطأ في إنتاج التقرير: ${error.message}`;
+    console.warn(`فشل في التحسين عبر OpenAI: ${error.message}`);
+    return analysisResult; // إرجاع التحليل الأولي في حالة فشل التحسين
   }
 }
 
 export default async function handler(req, res) {
+  // التحقق من طريقة الطلب
   if (req.method !== "POST") {
-    return bad(res, 405, "Method not allowed");
+    return res.status(405).json({ error: "الطريقة غير مسموحة - استخدم POST فقط" });
   }
 
   try {
-    const { files } = req.body;
+    const { files, lang = 'ar' } = req.body;
 
-    if (!files || files.length === 0) {
-      return bad(res, 400, "لم يتم رفع أي ملفات");
+    // التحقق من وجود الملفات
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: "لم يتم رفع أي ملفات أو البيانات غير صحيحة" });
     }
 
-    console.log(`بدء معالجة ${files.length} ملف(ات)`);
-
-    // استخراج البيانات من جميع الملفات
-    const extractionResults = [];
-    for (const file of files) {
-      const result = await comprehensiveMedicalExtraction(file);
-      extractionResults.push(result);
+    // التحقق من صحة مفاتيح API
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: "مفتاح Gemini API غير متوفر" });
     }
 
-    // دمج البيانات المستخرجة
-    const combinedData = {
-      files: extractionResults,
-      summary: {
-        totalFiles: files.length,
-        successfulExtractions: extractionResults.filter(r => !r.error).length,
-        errors: extractionResults.filter(r => r.error).length
+    console.log(`بدء تحليل ${files.length} ملف(ات)`);
+
+    // تحليل المحتوى الطبي
+    const analysisResult = await analyzeMedicalContent(files);
+
+    // محاولة تحسين التقرير باستخدام OpenAI (اختياري)
+    let finalReport = analysisResult;
+    if (OPENAI_API_KEY) {
+      try {
+        finalReport = await generateEnhancedReport(analysisResult, {
+          filesCount: files.length,
+          language: lang
+        });
+      } catch (enhancementError) {
+        console.warn('فشل في تحسين التقرير:', enhancementError.message);
+        // الاستمرار مع التحليل الأساسي
+      }
+    }
+
+    // إعداد الاستجابة النهائية
+    const responseData = {
+      success: true,
+      html: finalReport,
+      structured: {
+        extractedText: `تم تحليل ${files.length} ملف(ات) بنجاح في ${new Date().toLocaleString('ar')}\n\nالملفات المحللة:\n${files.map((f, i) => `${i + 1}. ${f.name}`).join('\n')}`,
+        filesAnalyzed: files.length,
+        timestamp: new Date().toISOString(),
+        model: "gemini-1.5-pro-latest",
+        enhanced: !!OPENAI_API_KEY
       }
     };
 
-    // إنتاج التقرير الطبي
-    const medicalReport = await generateMedicalReport(combinedData);
-
-    return ok(res, {
-      success: true,
-      html: medicalReport,
-      structured: {
-        extractedText: JSON.stringify(combinedData, null, 2)
-      }
-    });
+    return res.status(200).json(responseData);
 
   } catch (error) {
-    console.error("خطأ عام:", error);
-    return bad(res, 500, `خطأ في الخادم: ${error.message}`);
+    console.error("خطأ في الخادم:", error);
+    
+    // إرسال رسالة خطأ مفصلة
+    return res.status(500).json({ 
+      error: `خطأ في الخادم: ${error.message}`,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    });
   }
 }
