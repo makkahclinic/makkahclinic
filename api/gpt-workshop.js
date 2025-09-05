@@ -21,10 +21,14 @@ function extractBase64Data(dataUrl) {
 
 async function analyzeMedicalContent(files) {
   try {
+    // استخدام النموذج المتاح والمدعوم
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro-latest",
+      model: "gemini-1.5-pro", // تم تغيير اسم النموذج
       generationConfig: {
         temperature: 0.1,
+        topP: 0.8,
+        topK: 40,
+        maxOutputTokens: 8192,
       }
     });
 
@@ -33,7 +37,7 @@ async function analyzeMedicalContent(files) {
 
 ## المطلوب استخراجه:
 1. **معلومات المريض**: الاسم، العمر، الجنس، تاريخ الزيارة
-2. **الشكوى الرئيسية والأعراض**: الأعراض المذكورة والمشاكل الصحية
+2. **الشكوى الرئيسية والأعراض**: الأعراض المذكورة والمشاكل الصحية  
 3. **التشخيص الطبي**: التشخيص الأولي والثانوي إن وجد
 4. **الأدوية والعلاجات**: الأدوية المقررة والجرعات
 5. **الفحوصات والنتائج**: التحاليل والأشعة والنتائج
@@ -42,11 +46,11 @@ async function analyzeMedicalContent(files) {
 ## التنسيق المطلوب:
 اكتب التقرير باستخدام تنسيق HTML مع العناوين المناسبة وقوائم منظمة. استخدم الألوان والتنسيق لجعل التقرير واضحاً ومهنياً.
 
-## التحليل والتقييم:
-- قدم تحليلاً شاملاً للحالة الطبية
+## تعليمات مهمة:
+- اقرأ النصوص العربية والإنجليزية بعناية
+- استخرج كل المعلومات المتاحة
 - اربط بين الأعراض والتشخيص والعلاج
-- قدم تقييماً لخطة العلاج المقترحة
-- اذكر أي ملاحظات مهمة أو تحذيرات
+- قدم تقييماً شاملاً للحالة
 `;
 
     const imageParts = files.map(file => ({
@@ -63,11 +67,50 @@ async function analyzeMedicalContent(files) {
 
   } catch (error) {
     console.error('خطأ في التحليل:', error);
-    throw new Error(`خطأ في التحليل: ${error.message}`);
+    
+    // محاولة استخدام نموذج بديل في حالة فشل النموذج الأول
+    try {
+      const fallbackModel = genAI.getGenerativeModel({ 
+        model: "gemini-pro-vision",
+        generationConfig: {
+          temperature: 0.1,
+        }
+      });
+      
+      const simplifiedPrompt = `
+قم بتحليل هذه الوثائق الطبية واستخرج:
+1. معلومات المريض
+2. الأعراض والشكاوى  
+3. التشخيص
+4. الأدوية والعلاج
+5. النتائج والتوصيات
+
+اكتب التقرير بالعربية في تنسيق HTML منظم.
+`;
+
+      const imageParts = files.map(file => ({
+        inlineData: {
+          data: extractBase64Data(file.data),
+          mimeType: file.mimeType
+        }
+      }));
+
+      const fallbackResult = await fallbackModel.generateContent([simplifiedPrompt, ...imageParts]);
+      const fallbackResponse = await fallbackResult.response;
+      
+      return fallbackResponse.text();
+      
+    } catch (fallbackError) {
+      throw new Error(`فشل في التحليل: ${error.message} | النموذج البديل: ${fallbackError.message}`);
+    }
   }
 }
 
 async function generateEnhancedReport(analysisResult, patientInfo) {
+  if (!OPENAI_API_KEY) {
+    return analysisResult;
+  }
+
   const systemPrompt = `
 أنت طبيب استشاري خبير في كتابة التقارير الطبية. قم بتحسين وإثراء التقرير المقدم مع إضافة:
 
@@ -103,7 +146,8 @@ async function generateEnhancedReport(analysisResult, patientInfo) {
     });
 
     if (!response.ok) {
-      throw new Error(`خطأ في OpenAI API: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`خطأ في OpenAI API: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -111,45 +155,65 @@ async function generateEnhancedReport(analysisResult, patientInfo) {
 
   } catch (error) {
     console.warn(`فشل في التحسين عبر OpenAI: ${error.message}`);
-    return analysisResult; // إرجاع التحليل الأولي في حالة فشل التحسين
+    return analysisResult;
   }
 }
 
 export default async function handler(req, res) {
-  // التحقق من طريقة الطلب
+  // إعداد CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "الطريقة غير مسموحة - استخدم POST فقط" });
+    return res.status(405).json({ 
+      error: "الطريقة غير مسموحة - استخدم POST فقط",
+      allowedMethods: ["POST"]
+    });
   }
 
   try {
     const { files, lang = 'ar' } = req.body;
 
-    // التحقق من وجود الملفات
+    // التحقق من وجود البيانات
     if (!files || !Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({ error: "لم يتم رفع أي ملفات أو البيانات غير صحيحة" });
+      return res.status(400).json({ 
+        error: "لم يتم رفع أي ملفات أو البيانات غير صحيحة",
+        received: typeof files,
+        filesCount: Array.isArray(files) ? files.length : 0
+      });
     }
 
-    // التحقق من صحة مفاتيح API
+    // التحقق من مفتاح Gemini API
     if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: "مفتاح Gemini API غير متوفر" });
+      return res.status(500).json({ 
+        error: "مفتاح Gemini API غير متوفر",
+        solution: "تأكد من إضافة GEMINI_API_KEY في ملف .env.local"
+      });
     }
 
     console.log(`بدء تحليل ${files.length} ملف(ات)`);
+    console.log('أسماء الملفات:', files.map(f => f.name));
 
     // تحليل المحتوى الطبي
     const analysisResult = await analyzeMedicalContent(files);
 
-    // محاولة تحسين التقرير باستخدام OpenAI (اختياري)
+    // محاولة تحسين التقرير
     let finalReport = analysisResult;
     if (OPENAI_API_KEY) {
       try {
         finalReport = await generateEnhancedReport(analysisResult, {
           filesCount: files.length,
-          language: lang
+          language: lang,
+          timestamp: new Date().toISOString()
         });
       } catch (enhancementError) {
         console.warn('فشل في تحسين التقرير:', enhancementError.message);
-        // الاستمرار مع التحليل الأساسي
       }
     }
 
@@ -158,11 +222,12 @@ export default async function handler(req, res) {
       success: true,
       html: finalReport,
       structured: {
-        extractedText: `تم تحليل ${files.length} ملف(ات) بنجاح في ${new Date().toLocaleString('ar')}\n\nالملفات المحللة:\n${files.map((f, i) => `${i + 1}. ${f.name}`).join('\n')}`,
+        extractedText: `تم تحليل ${files.length} ملف(ات) بنجاح في ${new Date().toLocaleString('ar-SA')}\n\nالملفات المحللة:\n${files.map((f, i) => `${i + 1}. ${f.name}`).join('\n')}`,
         filesAnalyzed: files.length,
         timestamp: new Date().toISOString(),
-        model: "gemini-1.5-pro-latest",
-        enhanced: !!OPENAI_API_KEY
+        model: "gemini-1.5-pro",
+        enhanced: !!OPENAI_API_KEY,
+        processingTime: Date.now()
       }
     };
 
@@ -171,11 +236,12 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("خطأ في الخادم:", error);
     
-    // إرسال رسالة خطأ مفصلة
     return res.status(500).json({ 
       error: `خطأ في الخادم: ${error.message}`,
+      type: error.constructor.name,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      suggestion: "تحقق من صحة مفاتيح API والاتصال بالإنترنت"
     });
   }
 }
