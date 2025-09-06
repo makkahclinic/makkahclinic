@@ -1,306 +1,413 @@
 import json
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
-from typing import Dict, List, Any
-import numpy as np
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
-from collections import defaultdict
+import logging
 
 @dataclass
+class PatientInfo:
+    name: str
+    id_number: str
+    birth_date: Optional[str] = None
+    gender: Optional[str] = None
+    nationality: Optional[str] = None
+
+@dataclass 
 class MedicalVisit:
     date: str
     doctor: str
-    specialty: str
-    diagnosis: str
-    symptoms: List[str]
+    diagnosis_code: str
+    diagnosis_description: str
     medications: List[str]
     procedures: List[str]
     cost: float
-    insurance_status: str
     visit_type: str
 
-class AdvancedMedicalAnalyzer:
+class MedicalFileAnalyzer:
     def __init__(self):
-        self.visits = []
-        self.patient_info = {}
-        self.clinical_guidelines = self._load_guidelines()
-        self.medication_codes = self._load_medication_database()
-        self.red_flags = self._initialize_red_flags()
+        self.setup_logging()
+        self.medical_guidelines = self._load_medical_guidelines()
+        self.medication_database = self._load_medication_database()
         
-    def _load_guidelines(self) -> Dict:
-        """تحميل الإرشادات الطبية المعيارية"""
+    def setup_logging(self):
+        """إعداد نظام السجلات لتتبع الأخطاء"""
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
+        self.logger = logging.getLogger(__name__)
+    
+    def _load_medical_guidelines(self) -> Dict:
+        """تحميل الإرشادات الطبية المحدثة"""
         return {
-            'throat_infection': {
-                'J02': {'protocol': 'NICE NG84', 'requires': ['FeverPAIN_score', 'RADT'], 'first_line': 'Penicillin/Amoxicillin'},
-                'J03': {'protocol': 'IDSA 2012', 'avoid': 'IV_antibiotics_outpatient', 'documentation': 'Centor_criteria'}
+            'throat_infections': {
+                'codes': ['J02', 'J03', 'J06'],
+                'first_line_treatment': 'Penicillin/Amoxicillin',
+                'avoid': ['IV_antibiotics_outpatient', 'broad_spectrum_unnecessary'],
+                'required_assessment': ['FeverPAIN_score', 'Centor_criteria']
             },
             'back_pain': {
-                'M54.5': {'protocol': 'NICE NG59', 'avoid_routine_imaging': True, 'focus': 'education_exercise_NSAIDs'},
-                'red_flags': ['neurological_deficit', 'fever', 'trauma']
+                'codes': ['M54.5', 'M54.9'],
+                'avoid_routine_imaging': True,
+                'red_flags': ['neurological_deficit', 'fever', 'trauma', 'bladder_dysfunction'],
+                'first_line': ['NSAIDs', 'physiotherapy', 'patient_education']
             },
             'hypertension': {
-                'I10': {'protocol': 'NICE NG136', 'requires': ['ABPM', 'HBPM', 'baseline_tests'], 'tests': ['CBC', 'U&E', 'LFT', 'ECG']}
+                'codes': ['I10', 'I15'],
+                'required_workup': ['ABPM', 'HBPM', 'baseline_investigations'],
+                'baseline_tests': ['FBC', 'U&E', 'LFTs', 'ECG', 'urinalysis']
             },
             'renal_colic': {
-                'N23': {'protocol': 'NICE NG118', 'imaging_within': '24_hours', 'first_line': 'NSAIDs', 'requires': 'urinalysis'}
+                'codes': ['N23', 'N20'],
+                'imaging_required': 'CT_KUB_within_24h',
+                'first_line_analgesia': 'NSAIDs',
+                'required_tests': ['urinalysis', 'FBC', 'U&E']
             }
-        } [AI KNOWLEDGE]({})
+        }
     
     def _load_medication_database(self) -> Dict:
         """قاعدة بيانات الأدوية والأكواد الصحيحة"""
         return {
-            'wrong_codes': {
-                'Meva': 'Mebeverine_correct_code',
-                'Rofenac': 'Diclofenac_correct_code',
-                'Neurovit': 'B_Complex_correct_code',
-                'Diclomax': 'Diclofenac_gel_correct_code',
-                'Diva-D': 'Vitamin_D_correct_code'
+            'incorrect_codes': {
+                'Meva': {'correct': 'Mebeverine 135mg', 'code': 'A03AA04'},
+                'Rofenac': {'correct': 'Diclofenac 50mg', 'code': 'M01AB05'},
+                'Neurovit': {'correct': 'Vitamin B Complex', 'code': 'A11EA'},
+                'Diclomax': {'correct': 'Diclofenac Gel 1%', 'code': 'M02AA15'},
+                'Diva-D': {'correct': 'Vitamin D3', 'code': 'A11CC05'}
             },
-            'contraindications': {
-                'IV_antibiotics': ['mild_outpatient_cases', 'viral_infections'],
-                'broad_spectrum': ['uncomplicated_throat_infection', 'viral_URTI']
+            'antibiotic_classes': {
+                'broad_spectrum': ['Azithromycin', 'Ceftriaxone', 'Amoxiclav', 'Cefixime'],
+                'narrow_spectrum': ['Penicillin', 'Amoxicillin', 'Erythromycin']
             }
-        } [AI KNOWLEDGE]({})
-    
-    def analyze_comprehensive_medical_file(self, medical_data: str) -> Dict[str, Any]:
-        """التحليل الشامل للملف الطبي"""
-        
-        # استخراج البيانات من النص
-        parsed_data = self._parse_medical_text(medical_data)
-        
-        # التحليل المتقدم
-        analysis_result = {
-            'patient_summary': self._extract_patient_info(parsed_data),
-            'visit_analysis': self._analyze_visits_chronologically(parsed_data),
-            'pattern_detection': self._detect_suspicious_patterns(parsed_data),
-            'clinical_violations': self._identify_clinical_violations(parsed_data),
-            'financial_impact': self._calculate_financial_impact(parsed_data),
-            'guideline_compliance': self._assess_guideline_compliance(parsed_data),
-            'risk_scoring': self._calculate_risk_scores(parsed_data),
-            'recommendations': self._generate_recommendations(parsed_data),
-            'comparative_analysis': self._compare_with_standards(parsed_data)
         }
-        
-        return self._format_comprehensive_report(analysis_result)
     
-    def _parse_medical_text(self, text: str) -> Dict:
-        """استخراج وتحليل البيانات من النص الطبي"""
+    def analyze_medical_file(self, file_content: str) -> Dict[str, Any]:
+        """التحليل الرئيسي للملف الطبي مع معالجة الأخطاء"""
         
-        patterns = {
-            'patient_name': r'المريض\s*:?\s*([^\n]+)',
-            'patient_id': r'رقم\s*الهوية\s*:?\s*(\d+)',
-            'visit_date': r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{4})',
-            'diagnosis': r'([JKMINLjkm]\d{1,3}\.?\d?)',
-            'medications': r'([A-Za-z]+(?:\s*-?\s*[A-Za-z0-9]+)*)\s*(?:\+|$)',
-            'doctors': r'Dr\.\s*([A-Za-z\s]+)',
-            'costs': r'(\d+\.?\d*)\s*ريال'
-        }
-        
-        extracted_data = {}
-        for key, pattern in patterns.items():
-            matches = re.findall(pattern, text, re.MULTILINE | re.IGNORECASE)
-            extracted_data[key] = matches
+        try:
+            self.logger.info("بدء تحليل الملف الطبي...")
             
-        return self._structure_extracted_data(extracted_data, text)
-    
-    def _detect_suspicious_patterns(self, data: Dict) -> Dict[str, Any]:
-        """كشف الأنماط المشبوهة بناءً على التحليل المقدم"""
-        
-        suspicious_patterns = {
-            'antibiotic_overuse': self._detect_antibiotic_overuse(data),
-            'same_day_multiple_prescriptions': self._detect_same_day_duplicates(data),
-            'wrong_medication_codes': self._detect_coding_errors(data),
-            'inappropriate_iv_therapy': self._detect_inappropriate_iv_usage(data),
-            'missing_documentation': self._detect_documentation_gaps(data),
-            'guideline_violations': self._detect_guideline_violations(data)
-        }
-        
-        return suspicious_patterns
-    
-    def _detect_antibiotic_overuse(self, data: Dict) -> Dict:
-        """كشف الإفراط في استخدام المضادات الحيوية"""
-        
-        # تحليل البيانات المستخرجة من النص المقدم
-        same_day_antibiotics = []
-        iv_antibiotics_outpatient = []
-        broad_spectrum_misuse = []
-        
-        # استخراج حالات تكرار المضادات في نفس اليوم
-        date_pattern = r'28/08/2025'  # التاريخ المتكرر في البيانات
-        antibiotic_pattern = r'(Azithromycin|Cefixime|Amoxiclav|Ceftriaxone|Azimac|Gloclav|Cefodox)'
-        
-        # تحليل النص للعثور على التكرارات
-        for entry in data.get('medical_entries', []):
-            if date_pattern in entry and any(ab in entry for ab in ['Azimac', 'Gloclav', 'Cefixime', 'Ceftriaxone']):
-                same_day_antibiotics.append({
-                    'date': date_pattern,
-                    'antibiotics': re.findall(antibiotic_pattern, entry),
-                    'indication': self._extract_indication(entry),
-                    'severity': 'high' if 'Ceftriaxone IV' in entry else 'medium'
-                })
-        
-        return {
-            'same_day_count': len(same_day_antibiotics),
-            'iv_outpatient_cases': self._count_iv_outpatient_cases(data),
-            'broad_spectrum_misuse': self._analyze_broad_spectrum_usage(data),
-            'guideline_violations': self._count_antibiotic_guideline_violations(data),
-            'risk_level': 'critical' if len(same_day_antibiotics) > 5 else 'high'
-        }
-    
-    def _calculate_financial_impact(self, data: Dict) -> Dict[str, float]:
-        """حساب التأثير المالي كما ورد في التحليل"""
-        
-        # البيانات المالية المستخرجة من التحليل المقدم
-        financial_data = {
-            'total_expected_revenue': 2561.0,  # [T6](1)
-            'total_lost_revenue': 2120.0,     # [T6](1)
-            'loss_percentage': 45.0,          # [T6](1)
-            'potential_additional_revenue': 1015.0,  # [T17](2)
-            'missed_opportunities': {
-                'OPG_imaging': 150.0,         # [T17](2)
-                'HTN_protocols': 700.0,       # [T17](2) (350+350)
-                'renal_colic_workup': 65.0,   # [T17](2)
-                'h_pylori_testing': 100.0     # [T17](2)
+            # استخراج البيانات الأساسية
+            patient_info = self._extract_patient_info(file_content)
+            visits = self._extract_visits(file_content)
+            
+            # التحليل المتقدم
+            analysis_results = {
+                'patient_summary': self._create_patient_summary(patient_info),
+                'visits_analysis': self._analyze_visits(visits),
+                'clinical_issues': self._identify_clinical_issues(visits),
+                'medication_analysis': self._analyze_medications(visits),
+                'financial_impact': self._calculate_financial_impact(visits),
+                'quality_indicators': self._assess_quality_indicators(visits),
+                'recommendations': self._generate_recommendations(visits)
             }
-        }
-        
-        # حساب التحسينات المقترحة
-        improvements = {
-            'documentation_improvement': financial_data['total_expected_revenue'] * 0.3,
-            'guideline_compliance': financial_data['total_expected_revenue'] * 0.4,
-            'coding_accuracy': financial_data['total_lost_revenue'] * 0.2
-        }
-        
-        return {
-            **financial_data,
-            'improvement_potential': improvements,
-            'total_recoverable': sum(improvements.values())
-        }
+            
+            # تنسيق التقرير النهائي
+            final_report = self._format_comprehensive_report(analysis_results)
+            
+            self.logger.info("تم إكمال التحليل بنجاح")
+            return final_report
+            
+        except Exception as e:
+            self.logger.error(f"خطأ في التحليل: {str(e)}")
+            return self._create_error_report(str(e))
     
-    def _assess_guideline_compliance(self, data: Dict) -> Dict[str, Any]:
-        """تقييم الامتثال للإرشادات الطبية"""
+    def _extract_patient_info(self, content: str) -> PatientInfo:
+        """استخراج معلومات المريض الأساسية"""
         
-        compliance_assessment = {
-            'throat_infections': {
-                'total_cases': self._count_throat_infection_cases(data),
-                'guideline_compliant': self._count_compliant_throat_cases(data),
-                'violations': [
-                    'Missing FeverPAIN/Centor scoring',  # [T18](3)
-                    'No RADT testing before antibiotics',  # [T18](3)
-                    'IV antibiotics for outpatient cases',  # [T19](4)
-                    'Broad spectrum without indication'     # [T19](4)
-                ],
-                'compliance_rate': 15.0  # Based on analysis showing high rejection rate
-            },
-            'back_pain': {
-                'total_cases': self._count_back_pain_cases(data),
-                'appropriate_management': self._count_appropriate_back_pain_mgmt(data),
-                'violations': [
-                    'Routine imaging without red flags',  # [T9](5)
-                    'Missing exercise prescription',      # [T9](5)
-                    'No red flag assessment documented'   # [T9](5)
-                ]
-            },
-            'hypertension': {
-                'total_cases': self._count_hypertension_cases(data),
-                'proper_workup': self._count_proper_htn_workup(data),
-                'violations': [
-                    'No ABPM/HBPM confirmation',  # [T11](6)
-                    'Missing baseline investigations',  # [T11](6)
-                    'No ECG documentation'  # [T11](6)
-                ]
-            }
-        }
-        
-        return compliance_assessment
-    
-    def _generate_advanced_recommendations(self, analysis: Dict) -> Dict[str, List[str]]:
-        """توليد التوصيات المتقدمة بناءً على التحليل"""
-        
-        recommendations = {
-            'immediate_actions': [
-                'تصحيح أكواد الأدوية الخاطئة فوراً',  # [T14](7) [T15](8)
-                'وقف صرف المضادات الحيوية المتعددة في نفس اليوم',  # [T15](8)
-                'تطبيق بروتوكول NICE/IDSA للالتهابات',  # [T3](9)
-                'توثيق الفحوص الأساسية لجميع الحالات الجهازية'  # [T3](9)
-            ],
-            'protocol_improvements': [
-                'تطبيق درجات FeverPAIN/Centor قبل المضادات',  # [T22](10) [T23](11)
-                'إجراء RADT للحالات المشتبهة',  # [T22](10) [T23](11)
-                'تقييم Red Flags لآلام الظهر',  # [T9](5)
-                'تأكيد تشخيص الضغط بـ ABPM/HBPM'  # [T11](6)
-            ],
-            'financial_optimization': [
-                'إضافة الفحوصات المبررة لزيادة الإيراد',  # [T3](9)
-                'تحويل الحالات المزمنة للمتخصصين',  # [T4](12)
-                'برامج الفحص الدوري السنوي للعمال',  # [T5](13)
-                f'استرداد {2120} ريال من الإيراد المفقود'  # [T6](1)
-            ],
-            'quality_measures': [
-                'تدريب الأطباء على التوثيق الطبي',
-                'نظام مراجعة دورية للملفات',
-                'تطبيق معايير الجودة الدولية',
-                'متابعة مؤشرات الأداء شهرياً'
+        try:
+            # البحث عن اسم المريض
+            name_patterns = [
+                r'اسم المريض[:\s]+([^\n]+)',
+                r'المريض[:\s]+([^\n]+)',
+                r'Patient[:\s]+([^\n]+)'
             ]
+            
+            name = "غير محدد"
+            for pattern in name_patterns:
+                match = re.search(pattern, content, re.IGNORECASE)
+                if match:
+                    name = match.group(1).strip()
+                    break
+            
+            # البحث عن رقم الهوية
+            id_patterns = [
+                r'رقم الهوية[:\s]+(\d+)',
+                r'ID[:\s]+(\d+)',
+                r'الهوية[:\s]+(\d+)'
+            ]
+            
+            id_number = "غير محدد"
+            for pattern in id_patterns:
+                match = re.search(pattern, content)
+                if match:
+                    id_number = match.group(1)
+                    break
+            
+            return PatientInfo(
+                name=name,
+                id_number=id_number
+            )
+            
+        except Exception as e:
+            self.logger.error(f"خطأ في استخراج معلومات المريض: {e}")
+            return PatientInfo(name="خطأ في الاستخراج", id_number="خطأ")
+    
+    def _extract_visits(self, content: str) -> List[MedicalVisit]:
+        """استخراج تفاصيل الزيارات الطبية"""
+        
+        visits = []
+        try:
+            # تقسيم المحتوى حسب التواريخ
+            date_pattern = r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{4})'
+            date_matches = re.finditer(date_pattern, content)
+            
+            sections = []
+            last_pos = 0
+            
+            for match in date_matches:
+                if last_pos > 0:
+                    sections.append(content[last_pos:match.start()])
+                last_pos = match.start()
+            
+            if last_pos < len(content):
+                sections.append(content[last_pos:])
+            
+            # تحليل كل قسم
+            for i, section in enumerate(sections):
+                visit = self._parse_visit_section(section)
+                if visit:
+                    visits.append(visit)
+            
+            return visits
+            
+        except Exception as e:
+            self.logger.error(f"خطأ في استخراج الزيارات: {e}")
+            return []
+    
+    def _parse_visit_section(self, section: str) -> Optional[MedicalVisit]:
+        """تحليل قسم زيارة واحدة"""
+        
+        try:
+            # استخراج التاريخ
+            date_match = re.search(r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{4})', section)
+            visit_date = date_match.group(1) if date_match else "غير محدد"
+            
+            # استخراج اسم الطبيب
+            doctor_patterns = [
+                r'Dr\.?\s+([A-Za-z\s]+)',
+                r'الطبيب[:\s]+([^\n]+)'
+            ]
+            doctor = "غير محدد"
+            for pattern in doctor_patterns:
+                match = re.search(pattern, section)
+                if match:
+                    doctor = match.group(1).strip()
+                    break
+            
+            # استخراج كود التشخيص
+            diagnosis_match = re.search(r'([A-Z]\d{2}\.?\d?)', section)
+            diagnosis_code = diagnosis_match.group(1) if diagnosis_match else "غير محدد"
+            
+            # استخراج الأدوية
+            medication_patterns = [
+                r'([A-Za-z]+(?:\s*-?\s*[A-Za-z0-9]+)*)\s*(?:\+|$)',
+                r'([A-Z][a-z]+(?:[A-Z][a-z]*)*)'
+            ]
+            medications = []
+            for pattern in medication_patterns:
+                meds = re.findall(pattern, section)
+                medications.extend([med.strip() for med in meds if len(med.strip()) > 2])
+            
+            # استخراج التكلفة
+            cost_match = re.search(r'(\d+\.?\d*)\s*ريال', section)
+            cost = float(cost_match.group(1)) if cost_match else 0.0
+            
+            return MedicalVisit(
+                date=visit_date,
+                doctor=doctor,
+                diagnosis_code=diagnosis_code,
+                diagnosis_description=self._get_diagnosis_description(diagnosis_code),
+                medications=list(set(medications)),  # إزالة التكرارات
+                procedures=[],
+                cost=cost,
+                visit_type="عيادة خارجية"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"خطأ في تحليل قسم الزيارة: {e}")
+            return None
+    
+    def _identify_clinical_issues(self, visits: List[MedicalVisit]) -> Dict[str, Any]:
+        """تحديد المشاكل السريرية"""
+        
+        issues = {
+            'antibiotic_overuse': [],
+            'inappropriate_prescriptions': [],
+            'missing_documentation': [],
+            'guideline_violations': []
         }
         
-        return recommendations
+        try:
+            # تحليل استخدام المضادات الحيوية
+            same_day_visits = self._group_visits_by_date(visits)
+            
+            for date, day_visits in same_day_visits.items():
+                if len(day_visits) > 1:
+                    antibiotics_count = 0
+                    antibiotics_used = []
+                    
+                    for visit in day_visits:
+                        for med in visit.medications:
+                            if self._is_antibiotic(med):
+                                antibiotics_count += 1
+                                antibiotics_used.append(med)
+                    
+                    if antibiotics_count > 1:
+                        issues['antibiotic_overuse'].append({
+                            'date': date,
+                            'count': antibiotics_count,
+                            'antibiotics': antibiotics_used,
+                            'severity': 'critical' if antibiotics_count > 3 else 'high'
+                        })
+            
+            # تحديد الأدوية ذات الأكواد الخاطئة
+            for visit in visits:
+                for med in visit.medications:
+                    if med in self.medication_database['incorrect_codes']:
+                        issues['inappropriate_prescriptions'].append({
+                            'date': visit.date,
+                            'wrong_medication': med,
+                            'correct_medication': self.medication_database['incorrect_codes'][med]['correct'],
+                            'impact': 'financial_rejection'
+                        })
+            
+            return issues
+            
+        except Exception as e:
+            self.logger.error(f"خطأ في تحديد المشاكل السريرية: {e}")
+            return issues
     
-    def _format_comprehensive_report(self, analysis: Dict) -> str:
+    def _calculate_financial_impact(self, visits: List[MedicalVisit]) -> Dict[str, float]:
+        """حساب التأثير المالي"""
+        
+        try:
+            total_cost = sum(visit.cost for visit in visits)
+            rejected_amount = 0
+            potential_additional = 0
+            
+            # حساب المبالغ المرفوضة بسبب الأخطاء
+            for visit in visits:
+                for med in visit.medications:
+                    if med in self.medication_database['incorrect_codes']:
+                        rejected_amount += visit.cost * 0.3  # افتراض رفض 30% من التكلفة
+            
+            # حساب الإيرادات الإضافية المحتملة
+            missing_procedures = self._identify_missing_procedures(visits)
+            potential_additional = len(missing_procedures) * 150  # متوسط تكلفة الإجراء
+            
+            return {
+                'total_revenue': total_cost,
+                'rejected_amount': rejected_amount,
+                'loss_percentage': (rejected_amount / total_cost * 100) if total_cost > 0 else 0,
+                'potential_additional': potential_additional,
+                'net_impact': total_cost - rejected_amount + potential_additional
+            }
+            
+        except Exception as e:
+            self.logger.error(f"خطأ في حساب التأثير المالي: {e}")
+            return {'error': str(e)}
+    
+    def _format_comprehensive_report(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """تنسيق التقرير الشامل"""
         
-        report = f"""
-# تحليل متقدم للممارسات الطبية - {analysis['patient_summary'].get('name', 'غير محدد')}
+        try:
+            report = {
+                'status': 'success',
+                'timestamp': datetime.now().isoformat(),
+                'patient_info': analysis.get('patient_summary', {}),
+                'summary_statistics': {
+                    'total_visits': len(analysis.get('visits_analysis', [])),
+                    'total_medications': sum(len(visit.get('medications', [])) for visit in analysis.get('visits_analysis', [])),
+                    'financial_impact': analysis.get('financial_impact', {}),
+                    'critical_issues': len(analysis.get('clinical_issues', {}).get('antibiotic_overuse', []))
+                },
+                'detailed_analysis': analysis,
+                'recommendations': analysis.get('recommendations', []),
+                'risk_score': self._calculate_risk_score(analysis)
+            }
+            
+            return report
+            
+        except Exception as e:
+            self.logger.error(f"خطأ في تنسيق التقرير: {e}")
+            return self._create_error_report(str(e))
+    
+    def _create_error_report(self, error_message: str) -> Dict[str, Any]:
+        """إنشاء تقرير خطأ"""
+        return {
+            'status': 'error',
+            'timestamp': datetime.now().isoformat(),
+            'error_message': error_message,
+            'recommendations': [
+                'تحقق من صحة البيانات المدخلة',
+                'تأكد من تنسيق الملف',
+                'راجع سجل الأخطاء للمزيد من التفاصيل'
+            ]
+        }
+    
+    # دوال مساعدة
+    def _group_visits_by_date(self, visits: List[MedicalVisit]) -> Dict[str, List[MedicalVisit]]:
+        grouped = {}
+        for visit in visits:
+            if visit.date not in grouped:
+                grouped[visit.date] = []
+            grouped[visit.date].append(visit)
+        return grouped
+    
+    def _is_antibiotic(self, medication: str) -> bool:
+        antibiotic_keywords = ['mycin', 'cillin', 'cef', 'clav', 'dox', 'floxacin']
+        return any(keyword in medication.lower() for keyword in antibiotic_keywords)
+    
+    def _get_diagnosis_description(self, code: str) -> str:
+        descriptions = {
+            'J02': 'التهاب البلعوم الحاد',
+            'J03': 'التهاب اللوزتين الحاد', 
+            'M54.5': 'ألم أسفل الظهر',
+            'I10': 'ارتفاع ضغط الدم الأساسي',
+            'N23': 'مغص كلوي غير محدد'
+        }
+        return descriptions.get(code, 'تشخيص غير محدد')
+    
+    def _identify_missing_procedures(self, visits: List[MedicalVisit]) -> List[str]:
+        # تحديد الإجراءات المفقودة بناءً على التشخيص
+        missing = []
+        for visit in visits:
+            if visit.diagnosis_code == 'I10' and not any('ECG' in str(visit.procedures) for visit in visits):
+                missing.append('ECG')
+            if visit.diagnosis_code == 'N23' and not any('CT' in str(visit.procedures) for visit in visits):
+                missing.append('CT KUB')
+        return missing
+    
+    def _calculate_risk_score(self, analysis: Dict) -> int:
+        score = 0
+        clinical_issues = analysis.get('clinical_issues', {})
+        score += len(clinical_issues.get('antibiotic_overuse', [])) * 20
+        score += len(clinical_issues.get('inappropriate_prescriptions', [])) * 10
+        return min(score, 100)
 
-## 📊 الملخص التنفيذي
-- **إجمالي الزيارات**: {analysis.get('total_visits', 'غير محدد')}
-- **الفترة الزمنية**: {analysis.get('date_range', '2020-2025')}
-- **مؤشر المخاطر**: {analysis.get('risk_score', 85)}/100
-- **معدل الامتثال للإرشادات**: {analysis.get('compliance_rate', 25)}%
-
-## 🚨 المخالفات الحرجة المكتشفة
-
-### تكرار المضادات الحيوية في نفس اليوم
-- **عدد الحالات**: {analysis['pattern_detection']['antibiotic_overuse']['same_day_count']}
-- **التاريخ المتكرر**: 28/08/2025
-- **المضادات المتكررة**: Azimac, Gloclav, Cefixime, Ceftriaxone IV
-- **مستوى الخطر**: حرج
-
-### أخطاء ترميز الأدوية
-- **الأدوية الخاطئة**: Meva, Rofenac, Neurovit, Diclomax, Diva-D
-- **التأثير المالي**: رفض جزئي أو كامل للمطالبات
-
-## 💰 التحليل المالي التفصيلي
-- **الإيراد المتوقع**: {analysis['financial_impact']['total_expected_revenue']} ريال
-- **الإيراد المفقود**: {analysis['financial_impact']['total_lost_revenue']} ريال
-- **نسبة الخسارة**: {analysis['financial_impact']['loss_percentage']}%
-- **الإيراد القابل للاسترداد**: {analysis['financial_impact']['potential_additional_revenue']} ريال
-
-## 📋 التوصيات الفورية
-{chr(10).join([f"- {rec}" for rec in analysis['recommendations']['immediate_actions']])}
-
-## 🎯 خطة التحسين
-{chr(10).join([f"- {rec}" for rec in analysis['recommendations']['protocol_improvements']])}
-
----
-*تم إنتاج هذا التقرير بواسطة نظام التحليل الطبي المتقدم*
-        """
+# استخدام الكود المحسن
+def analyze_medical_case(file_content: str) -> Dict[str, Any]:
+    """دالة رئيسية لتحليل الحالة الطبية"""
+    
+    try:
+        analyzer = MedicalFileAnalyzer()
+        result = analyzer.analyze_medical_file(file_content)
+        return result
         
-        return report
-
-# استخدام الكود
-def main():
-    analyzer = AdvancedMedicalAnalyzer()
-    
-    # تحليل البيانات الطبية المقدمة
-    medical_text = """[النص الطبي المستخرج من المصدر]"""
-    
-    comprehensive_analysis = analyzer.analyze_comprehensive_medical_file(medical_text)
-    
-    return comprehensive_analysis
-
-# تشغيل التحليل
-if __name__ == "__main__":
-    result = main()
-    print(result)
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': f'فشل في
