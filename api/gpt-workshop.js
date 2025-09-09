@@ -7,420 +7,393 @@ from dataclasses import dataclass, asdict
 import logging
 from collections import defaultdict, Counter
 import warnings
-import traceback
 warnings.filterwarnings('ignore')
 
-# إعداد الترميز للعربية
-import locale
-try:
-    locale.setlocale(locale.LC_ALL, 'ar_SA.UTF-8')
-except:
-    pass
-
-@dataclass
-class PatientInfo:
-    name: str
-    id_number: str
-    birth_date: Optional[str] = None
-    age: Optional[int] = None
-    gender: Optional[str] = None
-    nationality: Optional[str] = None
-    insurance_type: Optional[str] = None
-    phone: Optional[str] = None
-    medical_record_number: Optional[str] = None
-
-@dataclass
-class MedicalVisit:
-    date: str
-    doctor_name: str
-    doctor_specialty: Optional[str]
-    department: Optional[str]
-    visit_type: str
-    chief_complaint: Optional[str]
-    diagnosis_primary: str
-    diagnosis_secondary: List[str]
-    icd_codes: List[str]
-    medications_prescribed: List[Dict]
-    procedures_performed: List[str]
-    lab_tests_ordered: List[str]
-    imaging_ordered: List[str]
-    follow_up_required: bool
-    follow_up_period: Optional[str]
-    total_cost: float
-    visit_duration: Optional[str]
-    vital_signs: Dict
-    clinical_notes: str
-
-class ComprehensiveMedicalAnalyzer:
+class DeepMedicalAnalyzer:
     def __init__(self):
-        self.setup_logging()
-        self.medical_knowledge = self._initialize_medical_knowledge()
-        self.cost_database = self._initialize_cost_database()
-        self.quality_indicators = self._initialize_quality_indicators()
+        self.setup_medical_knowledge()
         
-    def setup_logging(self):
-        """إعداد نظام السجلات"""
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.StreamHandler(),
-                logging.FileHandler('medical_analysis.log', encoding='utf-8')
-            ]
-        )
-        self.logger = logging.getLogger('MedicalAnalyzer')
-
-    def _initialize_medical_knowledge(self):
-        """تهيئة قاعدة المعرفة الطبية"""
-        return {
-            'specialties': {
-                'internal_medicine': ['باطنية', 'Internal Medicine', 'Internal Med'],
-                'cardiology': ['قلبية', 'Cardiology', 'Heart'],
-                'orthopedics': ['عظام', 'Orthopedics', 'Ortho'],
-                'emergency': ['طوارئ', 'Emergency', 'ER'],
-                'family_medicine': ['طب أسرة', 'Family Medicine', 'GP'],
-                'dermatology': ['جلدية', 'Dermatology', 'Skin'],
-                'neurology': ['أعصاب', 'Neurology', 'Neuro']
-            },
-            'medications': {
-                'antibiotics': ['Augmentin', 'Amoxicillin', 'Azithromycin', 'Ceftriaxone'],
-                'analgesics': ['Paracetamol', 'Ibuprofen', 'Diclofenac', 'Tramadol'],
-                'antihypertensives': ['Amlodipine', 'Lisinopril', 'Metoprolol'],
-                'diabetes': ['Metformin', 'Insulin', 'Glibenclamide'],
-                'vitamins': ['Vitamin D', 'Vitamin B12', 'Folic Acid', 'Iron']
-            },
-            'procedures': {
-                'diagnostic': ['X-Ray', 'CT Scan', 'MRI', 'Ultrasound', 'ECG', 'Echo'],
-                'therapeutic': ['Injection', 'Dressing', 'Suturing', 'Physiotherapy'],
-                'laboratory': ['CBC', 'CRP', 'ESR', 'Glucose', 'HbA1c', 'Lipid Profile']
-            }
-        }
-
-    def _initialize_cost_database(self):
-        """تهيئة قاعدة بيانات التكاليف"""
-        return {
-            'consultations': {
-                'emergency': 500,
-                'specialist': 350,
-                'gp': 200,
-                'follow_up': 150
-            },
-            'procedures': {
-                'x_ray': 150,
-                'ct_scan': 800,
-                'mri': 1500,
-                'ultrasound': 300,
-                'ecg': 100,
-                'blood_test': 80
-            },
-            'medications': {
-                'antibiotic_course': 60,
-                'pain_killer': 25,
-                'chronic_medication': 100
-            }
-        }
-
-    def _initialize_quality_indicators(self):
-        """تهيئة مؤشرات الجودة"""
-        return {
-            'appropriate_antibiotic_use': {
-                'viral_conditions': ['J06', 'B34'],
-                'avoid_antibiotics': True
-            },
-            'follow_up_compliance': {
-                'chronic_conditions': ['I10', 'E11', 'J44'],
-                'required_interval_weeks': 4
-            },
-            'cost_effectiveness': {
-                'routine_imaging_back_pain': False,
-                'max_acceptable_cost_per_visit': 1000
-            }
-        }
-
-    def analyze_medical_case(self, file_content: str) -> Dict[str, Any]:
-        """التحليل الشامل للحالة الطبية"""
-        
-        try:
-            self.logger.info("🔍 بدء التحليل الطبي المتقدم...")
-            
-            # 1. استخراج المعلومات الأساسية
-            patient_info = self._extract_patient_information(file_content)
-            visits = self._extract_all_visits(file_content)
-            
-            if not visits:
-                return self._generate_no_data_report()
-            
-            # 2. التحليل المتعمق
-            analysis_results = {
-                'patient_summary': self._create_patient_summary(patient_info, visits),
-                'chronological_analysis': self._analyze_visit_timeline(visits),
-                'clinical_pattern_analysis': self._analyze_clinical_patterns(visits),
-                'medication_review': self._comprehensive_medication_review(visits),
-                'cost_analysis': self._detailed_cost_analysis(visits),
-                'quality_assessment': self._assess_care_quality(visits),
-                'red_flags': self._identify_medical_red_flags(visits),
-                'efficiency_metrics': self._calculate_efficiency_metrics(visits),
-                'recommendations': self._generate_clinical_recommendations(visits)
-            }
-            
-            # 3. تجميع التقرير النهائي
-            final_report = self._compile_comprehensive_report(
-                patient_info, visits, analysis_results
-            )
-            
-            self.logger.info("✅ تم إكمال التحليل بنجاح")
-            return final_report
-            
-        except Exception as e:
-            self.logger.error(f"❌ خطأ في التحليل: {str(e)}")
-            self.logger.error(traceback.format_exc())
-            return self._generate_error_report(str(e))
-
-    def _extract_patient_information(self, content: str) -> PatientInfo:
-        """استخراج معلومات المريض بدقة عالية"""
-        
-        # تنظيف النص
-        content = re.sub(r'\s+', ' ', content)
-        
-        # أنماط البحث المحسنة
-        extraction_patterns = {
-            'name': [
-                r'(?:اسم المريض|Patient Name|المريض)[:\s]*([^\n\r,]{3,50})',
-                r'Name[:\s]*([A-Za-z\u0600-\u06FF\s]{3,50})',
-                r'([A-Za-z\u0600-\u06FF]+\s+[A-Za-z\u0600-\u06FF]+\s+[A-Za-z\u0600-\u06FF]+)'
-            ],
-            'id_number': [
-                r'(?:رقم الهوية|ID Number|الهوية الوطنية)[:\s]*(\d{10})',
-                r'National ID[:\s]*(\d{10})',
-                r'\b(\d{10})\b'
-            ],
-            'birth_date': [
-                r'(?:تاريخ الميلاد|Date of Birth|DOB)[:\s]*(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})',
-                r'Born[:\s]*(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})'
-            ],
-            'gender': [
-                r'(?:الجنس|Gender)[:\s]*(ذكر|أنثى|Male|Female)',
-                r'\b(Male|Female|ذكر|أنثى)\b'
-            ],
-            'phone': [
-                r'(?:رقم الجوال|Phone|Mobile)[:\s]*(\+?966\d{9}|\d{10})',
-                r'(\+966\d{9}|05\d{8})'
-            ]
+    def setup_medical_knowledge(self):
+        """إعداد قاعدة المعرفة الطبية المتقدمة"""
+        self.drug_interactions = {
+            'warfarin': ['aspirin', 'ibuprofen', 'amiodarone'],
+            'metformin': ['contrast_agents'],
+            'ace_inhibitors': ['potassium_supplements', 'spironolactone']
         }
         
-        extracted = {}
-        for field, patterns in extraction_patterns.items():
-            for pattern in patterns:
-                match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
-                if match:
-                    extracted[field] = match.group(1).strip()
-                    break
+        self.unnecessary_tests = {
+            'back_pain_acute': ['mri', 'ct_scan'],
+            'viral_infection': ['antibiotics', 'chest_xray'],
+            'headache_primary': ['ct_scan', 'mri']
+        }
         
-        # حساب العمر من تاريخ الميلاد
-        age = None
-        if extracted.get('birth_date'):
-            try:
-                birth_date = datetime.strptime(extracted['birth_date'], '%d/%m/%Y')
-                age = (datetime.now() - birth_date).days // 365
-            except:
-                pass
-        
-        return PatientInfo(
-            name=extracted.get('name', 'غير محدد'),
-            id_number=extracted.get('id_number', 'غير محدد'),
-            birth_date=extracted.get('birth_date'),
-            age=age,
-            gender=extracted.get('gender'),
-            phone=extracted.get('phone')
-        )
+        self.cost_guidelines = {
+            'consultation_emergency': 500,
+            'consultation_specialist': 350,
+            'xray': 150,
+            'ct_scan': 800,
+            'mri': 1500,
+            'blood_test_basic': 80,
+            'antibiotic_course': 60
+        }
 
-    def _extract_all_visits(self, content: str) -> List[MedicalVisit]:
-        """استخراج جميع الزيارات الطبية"""
+    def analyze_medical_case(self, content: str) -> Dict[str, Any]:
+        """التحليل الطبي العميق والشامل"""
+        
+        print("🔍 بدء التحليل الطبي المتقدم...")
+        
+        # 1. استخراج البيانات الأساسية
+        patient_data = self.extract_comprehensive_patient_data(content)
+        visits_data = self.extract_detailed_visits(content)
+        
+        if not visits_data:
+            return {"error": "لم يتم العثور على بيانات زيارات طبية قابلة للتحليل"}
+        
+        # 2. التحليل العميق
+        analysis = {
+            "patient_profile": patient_data,
+            "visits_summary": self.create_visits_summary(visits_data),
+            "clinical_timeline": self.analyze_clinical_progression(visits_data),
+            "medication_analysis": self.deep_medication_analysis(visits_data),
+            "procedures_evaluation": self.evaluate_procedures_necessity(visits_data),
+            "cost_analysis": self.comprehensive_cost_analysis(visits_data),
+            "quality_assessment": self.assess_care_quality(visits_data),
+            "red_flags": self.identify_clinical_red_flags(visits_data),
+            "efficiency_report": self.calculate_care_efficiency(visits_data),
+            "recommendations": self.generate_expert_recommendations(visits_data)
+        }
+        
+        # 3. تقرير التحليل النهائي
+        final_report = self.compile_final_medical_report(analysis)
+        
+        print("✅ تم إكمال التحليل بنجاح")
+        return final_report
+
+    def extract_comprehensive_patient_data(self, content: str) -> Dict:
+        """استخراج بيانات المريض الشاملة"""
+        
+        patient_info = {
+            "name": "غير محدد",
+            "id_number": "غير محدد", 
+            "age": None,
+            "gender": "غير محدد",
+            "medical_history": [],
+            "chronic_conditions": [],
+            "allergies": [],
+            "insurance_info": "غير محدد"
+        }
+        
+        # استخراج الاسم
+        name_patterns = [
+            r'(?:اسم المريض|Patient Name|الاسم)[:\s]*([^\n\r,]{3,50})',
+            r'Name[:\s]*([A-Za-z\u0600-\u06FF\s]{3,50})'
+        ]
+        
+        for pattern in name_patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                patient_info["name"] = match.group(1).strip()
+                break
+        
+        # استخراج رقم الهوية
+        id_match = re.search(r'(?:رقم الهوية|ID)[:\s]*(\d{10})', content)
+        if id_match:
+            patient_info["id_number"] = id_match.group(1)
+        
+        # استخراج العمر
+        age_match = re.search(r'(?:العمر|Age)[:\s]*(\d{1,3})', content)
+        if age_match:
+            patient_info["age"] = int(age_match.group(1))
+        
+        # استخراج الجنس
+        gender_match = re.search(r'(?:الجنس|Gender)[:\s]*(ذكر|أنثى|Male|Female)', content)
+        if gender_match:
+            patient_info["gender"] = gender_match.group(1)
+        
+        # استخراج التاريخ المرضي
+        history_section = re.search(r'(?:التاريخ المرضي|Medical History)[:\s]*([^\n\r]{10,200})', content)
+        if history_section:
+            patient_info["medical_history"] = [h.strip() for h in history_section.group(1).split(',')]
+        
+        return patient_info
+
+    def extract_detailed_visits(self, content: str) -> List[Dict]:
+        """استخراج تفاصيل الزيارات الطبية بعمق"""
         
         visits = []
         
-        # البحث عن التواريخ كنقاط فصل
+        # البحث عن التواريخ كمؤشرات للزيارات
         date_pattern = r'(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})'
-        date_matches = list(re.finditer(date_pattern, content))
+        dates = re.findall(date_pattern, content)
         
-        if not date_matches:
+        if not dates:
             return []
         
         # تقسيم المحتوى حسب التواريخ
-        for i, date_match in enumerate(date_matches):
-            visit_date = date_match.group(1)
-            start_pos = date_match.start()
-            
-            # تحديد نهاية هذه الزيارة
-            if i + 1 < len(date_matches):
-                end_pos = date_matches[i + 1].start()
-            else:
-                end_pos = len(content)
-            
-            visit_content = content[start_pos:end_pos]
-            
-            # استخراج تفاصيل الزيارة
-            visit = self._parse_single_visit(visit_date, visit_content)
-            if visit:
-                visits.append(visit)
+        sections = re.split(date_pattern, content)
         
-        # ترتيب الزيارات حسب التاريخ
-        visits.sort(key=lambda x: self._parse_date(x.date))
+        for i in range(1, len(sections), 2):
+            if i + 1 < len(sections):
+                visit_date = sections[i]
+                visit_content = sections[i + 1]
+                
+                visit_data = self.parse_single_visit_detailed(visit_date, visit_content)
+                if visit_data:
+                    visits.append(visit_data)
         
-        return visits
+        return sorted(visits, key=lambda x: datetime.strptime(x['date'], '%d/%m/%Y'))
 
-    def _parse_single_visit(self, visit_date: str, content: str) -> Optional[MedicalVisit]:
-        """تحليل زيارة واحدة بالتفصيل"""
+    def parse_single_visit_detailed(self, date: str, content: str) -> Dict:
+        """تحليل زيارة واحدة بالتفصيل الكامل"""
         
-        try:
-            # استخراج اسم الطبيب
-            doctor_patterns = [
-                r'(?:Dr\.?|د\.?|الطبيب)[:\s]*([A-Za-z\u0600-\u06FF\s\.]{3,40})',
-                r'Physician[:\s]*([A-Za-z\s\.]{3,40})'
-            ]
-            
-            doctor_name = "غير محدد"
-            for pattern in doctor_patterns:
-                match = re.search(pattern, content, re.IGNORECASE)
-                if match:
-                    doctor_name = match.group(1).strip()
-                    break
-            
-            # استخراج التخصص
-            specialty = self._identify_doctor_specialty(content)
-            
-            # استخراج الشكوى الرئيسية
-            chief_complaint = self._extract_chief_complaint(content)
-            
-            # استخراج التشخيص
-            diagnosis = self._extract_diagnosis(content)
-            
-            # استخراج الأدوية
-            medications = self._extract_medications_detailed(content)
-            
-            # استخراج الإجراءات
-            procedures = self._extract_procedures_detailed(content)
-            
-            # استخراج التحاليل والأشعة
-            lab_tests = self._extract_lab_tests(content)
-            imaging = self._extract_imaging_studies(content)
-            
-            # حساب التكلفة
-            total_cost = self._calculate_visit_cost(procedures, medications, lab_tests, imaging)
-            
-            # تحديد نوع الزيارة
-            visit_type = self._determine_visit_type(content, procedures)
-            
-            return MedicalVisit(
-                date=visit_date,
-                doctor_name=doctor_name,
-                doctor_specialty=specialty,
-                department=None,
-                visit_type=visit_type,
-                chief_complaint=chief_complaint,
-                diagnosis_primary=diagnosis.get('primary', 'غير محدد'),
-                diagnosis_secondary=diagnosis.get('secondary', []),
-                icd_codes=diagnosis.get('icd_codes', []),
-                medications_prescribed=medications,
-                procedures_performed=procedures,
-                lab_tests_ordered=lab_tests,
-                imaging_ordered=imaging,
-                follow_up_required=self._check_follow_up_needed(content),
-                follow_up_period=None,
-                total_cost=total_cost,
-                visit_duration=None,
-                vital_signs={},
-                clinical_notes=content[:200] + "..." if len(content) > 200 else content
-            )
-            
-        except Exception as e:
-            self.logger.error(f"خطأ في تحليل الزيارة: {e}")
-            return None
-
-    def _identify_doctor_specialty(self, content: str) -> Optional[str]:
-        """تحديد تخصص الطبيب"""
-        for specialty, keywords in self.medical_knowledge['specialties'].items():
-            for keyword in keywords:
-                if keyword.lower() in content.lower():
-                    return specialty.replace('_', ' ').title()
-        return None
-
-    def _extract_chief_complaint(self, content: str) -> Optional[str]:
-        """استخراج الشكوى الرئيسية"""
-        patterns = [
-            r'(?:الشكوى|Chief Complaint|CC)[:\s]*([^\n\r]{10,100})',
-            r'(?:يشكو من|complains of)[:\s]*([^\n\r]{10,100})',
-            r'(?:السبب|Reason)[:\s]*([^\n\r]{10,100})'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
-        return None
-
-    def _extract_diagnosis(self, content: str) -> Dict:
-        """استخراج التشخيص والأكواد"""
-        diagnosis_info = {
-            'primary': 'غير محدد',
-            'secondary': [],
-            'icd_codes': []
+        visit = {
+            "date": date,
+            "doctor": self.extract_doctor_info(content),
+            "department": self.extract_department(content),
+            "chief_complaint": self.extract_chief_complaint(content),
+            "diagnosis": self.extract_diagnosis_detailed(content),
+            "medications": self.extract_medications_comprehensive(content),
+            "procedures": self.extract_procedures_comprehensive(content),
+            "lab_tests": self.extract_lab_tests_detailed(content),
+            "imaging": self.extract_imaging_detailed(content),
+            "vital_signs": self.extract_vital_signs(content),
+            "follow_up": self.extract_follow_up_info(content),
+            "visit_cost": 0,
+            "clinical_notes": content.strip()[:300]
         }
         
-        # البحث عن أكواد ICD
-        icd_pattern = r'\b([A-Z]\d{2}\.?\d?)\b'
-        icd_matches = re.findall(icd_pattern, content)
-        diagnosis_info['icd_codes'] = list(set(icd_matches))
+        # حساب تكلفة الزيارة
+        visit["visit_cost"] = self.calculate_visit_cost_detailed(visit)
         
-        # البحث عن التشخيص النصي
-        diagnosis_patterns = [
+        return visit
+
+    def extract_doctor_info(self, content: str) -> Dict:
+        """استخراج معلومات الطبيب"""
+        doctor_info = {"name": "غير محدد", "specialty": "غير محدد"}
+        
+        # اسم الطبيب
+        doctor_patterns = [
+            r'(?:د\.|Dr\.?|الطبيب)[:\s]*([A-Za-z\u0600-\u06FF\s\.]{3,40})',
+            r'(?:الطبيب المعالج|Attending)[:\s]*([A-Za-z\u0600-\u06FF\s\.]{3,40})'
+        ]
+        
+        for pattern in doctor_patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                doctor_info["name"] = match.group(1).strip()
+                break
+        
+        # التخصص
+        specialties = {
+            'باطنية': 'Internal Medicine',
+            'قلبية': 'Cardiology', 
+            'عظام': 'Orthopedics',
+            'طوارئ': 'Emergency Medicine',
+            'جراحة': 'Surgery',
+            'أطفال': 'Pediatrics',
+            'نساء': 'Gynecology'
+        }
+        
+        for arabic, english in specialties.items():
+            if arabic in content or english.lower() in content.lower():
+                doctor_info["specialty"] = english
+                break
+                
+        return doctor_info
+
+    def extract_diagnosis_detailed(self, content: str) -> Dict:
+        """استخراج التشخيص بالتفصيل"""
+        
+        diagnosis_info = {
+            "primary": "غير محدد",
+            "secondary": [],
+            "icd_codes": [],
+            "severity": "غير محدد",
+            "certainty": "غير محدد"
+        }
+        
+        # التشخيص الأساسي
+        diag_patterns = [
             r'(?:التشخيص|Diagnosis)[:\s]*([^\n\r]{5,100})',
             r'(?:تشخيص|Dx)[:\s]*([^\n\r]{5,100})'
         ]
         
-        for pattern in diagnosis_patterns:
+        for pattern in diag_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
-                diagnosis_info['primary'] = match.group(1).strip()
+                diagnosis_info["primary"] = match.group(1).strip()
                 break
         
+        # أكواد ICD
+        icd_pattern = r'\b([A-Z]\d{2}\.?\d?)\b'
+        diagnosis_info["icd_codes"] = re.findall(icd_pattern, content)
+        
+        # درجة الشدة
+        if any(word in content.lower() for word in ['حاد', 'شديد', 'acute', 'severe']):
+            diagnosis_info["severity"] = "حاد"
+        elif any(word in content.lower() for word in ['مزمن', 'chronic', 'متوسط', 'moderate']):
+            diagnosis_info["severity"] = "مزمن"
+        else:
+            diagnosis_info["severity"] = "خفيف"
+            
         return diagnosis_info
 
-    def _extract_medications_detailed(self, content: str) -> List[Dict]:
-        """استخراج الأدوية بالتفصيل"""
+    def extract_medications_comprehensive(self, content: str) -> List[Dict]:
+        """استخراج الأدوية بشكل شامل ومفصل"""
+        
         medications = []
         
-        # أنماط البحث عن الأدوية
-        med_patterns = [
-            r'(?:الأدوية|Medications?|Drugs?)[:\s]*([^\n\r]+)',
-            r'(?:العلاج|Treatment)[:\s]*([^\n\r]+)',
-            r'(?:وصف|Prescribed)[:\s]*([^\n\r]+)'
+        # البحث عن قسم الأدوية
+        med_section_patterns = [
+            r'(?:الأدوية|Medications?|العلاج|Treatment)[:\s]*([^\n\r]+(?:\n[^\n\r]*)*)',
+            r'(?:وصف|Prescribed)[:\s]*([^\n\r]+(?:\n[^\n\r]*)*)'
         ]
         
         med_text = ""
-        for pattern in med_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
+        for pattern in med_section_patterns:
+            match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
             if match:
                 med_text = match.group(1)
                 break
         
         if med_text:
             # تقسيم الأدوية
-            med_list = re.split(r'[,،\n\r]+', med_text)
-            for med in med_list:
-                med = med.strip()
-                if len(med) > 2:
-                    med_info = {
-                        'name': med,
-                        'dosage': self._extract_dosage(med),
-                        'frequency': self._extract_frequency(med),
-                        'duration': self._extract_duration(med),
-                        'category': self._categorize_medication(med)
-                    }
-                    medications.append(med_info)
+            med_lines = re.split(r'[\n\r]+|(?:\d+[\.\-])', med_text)
+            
+            for line in med_lines:
+                line = line.strip()
+                if len(line) > 3:
+                    med_info = self.parse_medication_line(line)
+                    if med_info:
+                        medications.append(med_info)
         
         return medications
 
-    def _extract_dosage(self, medication: str) -> Optional[str]:
-        """استخراج الجرعة من نص الدواء"""
-        dosage_pattern = r'(\d+(?:\.\d+)?\s*(?:mg|
+    def parse_medication_line(self, line: str) -> Dict:
+        """تحليل سطر دواء واحد"""
+        
+        med_info = {
+            "name": line.strip(),
+            "dosage": "غير محدد",
+            "frequency": "غير محدد", 
+            "duration": "غير محدد",
+            "route": "فموي",
+            "category": self.categorize_medication(line),
+            "cost_estimate": 0
+        }
+        
+        # استخراج الجرعة
+        dosage_pattern = r'(\d+(?:\.\d+)?\s*(?:mg|g|ml|units?))'
+        dosage_match = re.search(dosage_pattern, line, re.IGNORECASE)
+        if dosage_match:
+            med_info["dosage"] = dosage_match.group(1)
+        
+        # استخراج التكرار
+        frequency_patterns = [
+            r'(\d+)\s*(?:times?|مرات?)\s*(?:daily|يومياً|per day)',
+            r'(?:مرة|once|twice|ثلاث مرات|three times)',
+            r'(?:كل|every)\s*(\d+)\s*(?:hours?|ساعات?)'
+        ]
+        
+        for pattern in frequency_patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                med_info["frequency"] = match.group(0)
+                break
+        
+        # استخراج المدة
+        duration_pattern = r'(?:لمدة|for)\s*(\d+)\s*(?:days?|أيام|weeks?|أسابيع)'
+        duration_match = re.search(duration_pattern, line, re.IGNORECASE)
+        if duration_match:
+            med_info["duration"] = duration_match.group(0)
+        
+        # تقدير التكلفة
+        med_info["cost_estimate"] = self.estimate_medication_cost(med_info)
+        
+        return med_info
+
+    def categorize_medication(self, medication: str) -> str:
+        """تصنيف الدواء حسب الفئة"""
+        
+        categories = {
+            'مضاد حيوي': ['amoxicillin', 'augmentin', 'azithromycin', 'ceftriaxone', 'ciprofloxacin'],
+            'مسكن ألم': ['paracetamol', 'ibuprofen', 'diclofenac', 'tramadol', 'aspirin'],
+            'مضاد التهاب': ['prednisolone', 'dexamethasone', 'ibuprofen', 'diclofenac'],
+            'أدوية القلب': ['amlodipine', 'lisinopril', 'metoprolol', 'atorvastatin'],
+            'أدوية السكري': ['metformin', 'insulin', 'glibenclamide', 'glimepiride'],
+            'فيتامينات': ['vitamin d', 'vitamin b12', 'folic acid', 'iron', 'calcium']
+        }
+        
+        med_lower = medication.lower()
+        for category, drugs in categories.items():
+            if any(drug in med_lower for drug in drugs):
+                return category
+                
+        return 'أخرى'
+
+    def deep_medication_analysis(self, visits: List[Dict]) -> Dict:
+        """تحليل عميق للأدوية عبر الزيارات"""
+        
+        analysis = {
+            "total_medications": 0,
+            "medication_categories": Counter(),
+            "repeated_medications": [],
+            "potential_interactions": [],
+            "inappropriate_prescriptions": [],
+            "cost_analysis": {"total": 0, "by_category": {}},
+            "adherence_concerns": [],
+            "recommendations": []
+        }
+        
+        all_medications = []
+        medication_timeline = defaultdict(list)
+        
+        # جمع جميع الأدوية من كل الزيارات
+        for visit in visits:
+            visit_date = visit['date']
+            for med in visit.get('medications', []):
+                all_medications.append(med)
+                medication_timeline[med['name']].append({
+                    'date': visit_date,
+                    'details': med
+                })
+                analysis["medication_categories"][med['category']] += 1
+                analysis["cost_analysis"]["total"] += med.get('cost_estimate', 0)
+        
+        analysis["total_medications"] = len(all_medications)
+        
+        # تحليل الأدوية المتكررة
+        for med_name, occurrences in medication_timeline.items():
+            if len(occurrences) > 1:
+                analysis["repeated_medications"].append({
+                    "medication": med_name,
+                    "frequency": len(occurrences),
+                    "dates": [occ['date'] for occ in occurrences],
+                    "concern_level": "عالي" if len(occurrences) > 3 else "متوسط"
+                })
+        
+        # فحص التفاعلات الدوائية المحتملة
+        med_names = [med['name'].lower() for med in all_medications]
+        for med1, interactions in self.drug_interactions.items():
+            if med1 in ' '.join(med_names):
+                for interaction in interactions:
+                    if interaction in ' '.join(med_names):
+                        analysis["potential_interactions"].append({
+                            "drug1": med1,
+                            "drug2": interaction,
+                            "risk_level": "عالي",
+                            "recommendation": f"يجب مراجعة تفاعل {med1} مع {interaction}"
+                        })
+        
+        # فحص الوصفات غير المناسبة
+        for visit in visits:
+            diagnosis = visit.get('diagnosis', {}).get('primary', '').lower()
+            
+            # فحص المضادات الحيوية للعدوى الفيروسية
+            if any(viral_term in diagnosis for viral_term in ['viral', 'فيروسي', 'flu', 'انفلونزا']):
+                antibiotics = [med for med in visit.get('medications', []) 
+                             if med['category'] == 'مضاد حيوي']
+                if antibiotics:
+                    analysis["inappropriate_prescriptions"].append({
+                        "visit_date": visit['date'],
+                        "issue": "مضاد حيوي للعدوى الفيروسية
