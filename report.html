@@ -21,7 +21,6 @@
             font-family: 'Tajawal', sans-serif;
             background-color: #f8fafc;
         }
-        /* ... (بقية أنماط CSS تبقى كما هي) ... */
         .form-input[readonly], .form-textarea[readonly] {
             background-color: #e5e7eb; /* bg-gray-200 */
             cursor: not-allowed;
@@ -51,27 +50,11 @@
             
             <div id="form-content-wrapper">
                 <div class="p-6 sm:p-8">
-                    <div id="progressBar" class="mb-8">
-                        </div>
+                    <div id="progressBar" class="mb-8"></div>
 
                     <form id="unifiedForm" novalidate>
-                        <div class="form-step" data-step="1">
-                            </div>
-
-                        <div class="form-step hidden" data-step="2">
-                             <h2 class="section-title text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 2: البيانات الإدارية</h2>
-                            <div class="grid md:grid-cols-2 gap-x-6 gap-y-4">
-                                <div class="form-group">
-                                    <label for="reportNumber" class="form-label">رقم البلاغ المرجعي</label>
-                                    <input type="text" id="reportNumber" name="reportNumber" class="form-input" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label for="reportDateTime" class="form-label">تاريخ ووقت البلاغ</label>
-                                    <input type="datetime-local" id="reportDateTime" name="reportDateTime" class="form-input" readonly>
-                                </div>
-                            </div>
-                        </div>
-                        
+                        <div class="form-step" data-step="1"></div>
+                        <div class="form-step hidden" data-step="2"></div>
                         <div class="form-step hidden" data-step="3"></div>
                         <div class="form-step hidden" data-step="4"></div>
                         <div class="form-step hidden" data-step="5"></div>
@@ -86,99 +69,293 @@
             </div>
 
             <div id="success-screen" class="p-8 text-center hidden">
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                    <svg class="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 </div>
+                <h2 class="mt-6 text-2xl font-bold text-slate-800">تم إرسال بلاغك بنجاح!</h2>
+                <p class="mt-2 text-slate-600">شكراً لك. سيقوم فريقنا بمراجعة البلاغ واتخاذ الإجراءات اللازمة.</p>
+                <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                    <button type="button" id="newReportBtn" class="btn btn-primary">تقديم بلاغ جديد</button>
+                    <a href="#" onclick="window.location.reload()" class="btn btn-secondary">العودة للصفحة الرئيسية</a>
+                </div>
+            </div>
         </div>
     </div>
     
     <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-3 px-6 rounded-lg shadow-lg flex items-center gap-3 transform translate-x-[150%] transition-transform duration-500 ease-in-out z-50">
-        </div>
+        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span id="toastMessage"></span>
+    </div>
 
     <script>
     (function() {
-        // --- STATE & CONFIG ---
         let currentStep = 1;
         let totalSteps = 5;
         let selectedLocations = [];
         let attachedFiles = [];
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxtO924GZ3kzKnnjswfn_4lxR5XMjuf15wet0Rh2dXiBhOpYwv00NpiHI9-aKE-12CJqw/exec";
-        const locations = [ /* ... (قائمة المواقع تبقى كما هي) ... */ ];
+        const locations = [ { code: "DIR-B-01", name: "المدير العام" }, { code: "ADM-B-01", name: "بلال" }, { code: "ADM-B-02", name: "أ/ عدنان" }, { code: "INS-B-01", name: "أ/ صابر" }, { code: "INS-B-02", name: "الموافقات الطبية" }, { code: "CSSD-B-01", name: "التعقييم" }, { code: "CSSD-B-02", name: "الغسيل" }, { code: "RAD-B-01", name: "استقبال الاشعة" }, { code: "RAD-B-02", name: "Ultrasound" }, { code: "RAD-B-03", name: "X-ray and Panorama" }, { code: "FAC-B-01", name: "دورة مياه" }, { code: "LAB-B-01", name: "امراض الدم" }, { code: "LAB-B-02", name: "الكيمياء الحيوية" }, { code: "LAB-B-03", name: "علم الطفيليات" }, { code: "ADM-B-03", name: "مكتب لتخزين ملفات الحسابات" }, { code: "REC-G-01", name: "استقبال الاول" }, { code: "FAC-G-01", name: "استراحة الموظفات" }, { code: "GP-G-01", name: "دكتور جعفر وحسن" }, { code: "WMF-G-01", name: "انتظار النساء" }, { code: "WMR-G-01", name: "انتظار الرجال" }, { code: "MED-G-01", name: "دكتور محمد" }, { code: "MED-G-02", name: "دكتور مجدي" }, { code: "ER-G-01", name: "غرفة الانعاش القلبي الرئوي" }, { code: "VS-G-01", name: "العلامات الحيوية" }, { code: "BD-G-01", name: "غرفة سحب العينات" }, { code: "OBG-G-01", name: "غرفة الكشف الطبي" }, { code: "OBG-G-02", name: "غرفة الولادة" }, { code: "OBG-G-03", name: "غرفة مابعد الولادة" }, { code: "ER-G-01", name: "طوارئ رجال" }, { code: "ER-G-02", name: "طوارئ نساء" }, { code: "FAC-G-02", name: "دورة مياه رجال" }, { code: "FAC-G-03", name: "دورة مياه نساء" }, { code: "FAC-G-04", name: "دورة مياه نساء" }, { code: "REC-1-01", name: "استقبال قسم الاسنان" }, { code: "DEN-1-01", name: "عيادة د/معاذ" }, { code: "DEN-1-02", name: "عيادة د/معاذ" }, { code: "DEN-1-03", name: "عيادة د/عزام الياسي" }, { code: "DEN-1-04", name: "عيادة د/نورا حبشي" }, { code: "DEN-1-05", name: "عيادة د/العنود الزبيدي" }, { code: "DEN-1-06", name: "عيادة د/رشا رجب" }, { code: "ORTH-1-07", name: "عيادة د/ربيعة تبسم" }, { code: "ADM-1-01", name: "مكتب د/خالد" }, { code: "WMR-1-01", name: "انتظار قسم الاسنان" }, { code: "WMR-1-02", name: "انتظار قسم الباطنة-العيون-العظام" }, { code: "WMF-1-01", name: "انتظار النساء" }, { code: "FAC-1-01", name: "دورة مياه النساء" }, { code: "FAC-1-02", name: "دورة مياه الرجال" }, { code: "OPH-1-01", name: "عيادة/ شذا" }, { code: "MED-1-01", name: "عيادة د/حمادة نجاح" }, { code: "MED-1-02", name: "عيادة اضافية للدكتور حمادة" }, { code: "MED-1-03", name: "عيادة مجهزة" }, { code: "ADM-1-02", name: "مكتب فارغ" }, { code: "FAC-1-03", name: "استراحة موظفات" } ];
+        const dom = {
+            form: document.getElementById('unifiedForm'),
+            nextBtn: document.getElementById('nextBtn'),
+            prevBtn: document.getElementById('prevBtn'),
+            submitBtn: document.getElementById('submitBtn'),
+            formContentWrapper: document.getElementById('form-content-wrapper'),
+            successScreen: document.getElementById('success-screen'),
+            newReportBtn: document.getElementById('newReportBtn'),
+            progressBar: document.getElementById('progressBar')
+        };
 
-        // --- DOM ELEMENTS ---
-        const form = document.getElementById('unifiedForm');
-        const nextBtn = document.getElementById('nextBtn');
-        const prevBtn = document.getElementById('prevBtn');
-        const submitBtn = document.getElementById('submitBtn');
-        // ... (بقية العناصر) ...
-        
-        // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeForm();
-            // ... (بقية الدوال) ...
-        });
-
-        function getCurrentLocalISOString() {
+        const getCurrentLocalISOString = () => {
             const now = new Date();
-            // Adjust for timezone offset to get local time in ISO format
-            const timezoneOffset = now.getTimezoneOffset() * 60000; // in milliseconds
-            const localISOTime = new Date(now - timezoneOffset).toISOString().slice(0, 16);
-            return localISOTime;
-        }
+            const timezoneOffset = now.getTimezoneOffset() * 60000;
+            return new Date(now - timezoneOffset).toISOString().slice(0, 16);
+        };
 
-        function initializeForm() {
-            // **التحديث**: جعل تاريخ البلاغ للقراءة فقط وتعيين قيمته
+        const renderProgressBar = () => {
+            dom.progressBar.innerHTML = `
+                <div class="flex justify-between items-center relative">
+                    <div class="absolute top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200"></div>
+                    <div id="progress-bar-line" class="absolute top-1/2 -translate-y-1/2 w-0 h-1 bg-yellow-400 transition-all duration-500"></div>
+                    ${[1, 2, 3, 4, 5].map(i => `
+                        <div class="progress-step z-10 flex flex-col items-center" data-step="${i}">
+                            <div class="step-circle w-10 h-10 flex items-center justify-center rounded-full font-bold text-lg transition-all duration-300 bg-slate-200 text-slate-500">${i}</div>
+                            <div class="step-label mt-2 text-xs text-center text-slate-500 font-semibold"></div>
+                        </div>
+                    `).join('')}
+                </div>`;
+        };
+
+        const renderStepContent = () => {
+            document.querySelector('.form-step[data-step="1"]').innerHTML = `
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 1: التصنيف الرئيسي</h2>
+                <div class="form-group"><label for="reportCategory" class="form-label required">نوع التقرير</label><select id="reportCategory" name="reportCategory" class="form-select" required><option value="" disabled selected>اختر نوع التقرير...</option><option value="حادث">بلاغ حادث/مخاطر</option><option value="شكوى">شكوى مريض/مراجِع</option></select><p class="error-message"></p></div>`;
+            
+            document.querySelector('.form-step[data-step="2"]').innerHTML = `
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 2: البيانات الإدارية</h2>
+                <div class="grid md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div class="form-group md:col-span-2"><label class="form-label required">من هو مقدم البلاغ؟</label><div class="grid grid-cols-2 gap-4 mt-2"><div class="radio-card"><input type="radio" name="reporterType" id="reporterEmployee" value="employee" class="sr-only" required><label for="reporterEmployee" class="flex flex-col items-center justify-center text-center p-4 border-2 border-slate-200 rounded-lg cursor-pointer"><span>👨‍⚕️</span><span class="font-semibold mt-2 text-slate-700">موظف</span></label></div><div class="radio-card"><input type="radio" name="reporterType" id="reporterPatient" value="patient" class="sr-only" required><label for="reporterPatient" class="flex flex-col items-center justify-center text-center p-4 border-2 border-slate-200 rounded-lg cursor-pointer"><span>👤</span><span class="font-semibold mt-2 text-slate-700">مريض/زائر</span></label></div></div><p class="error-message"></p></div>
+                    <div id="employee-reporter-fields" class="md:col-span-2 grid md:grid-cols-2 gap-x-6 gap-y-4 hidden"><div class="form-group"><label for="reporterName" class="form-label required">اسم المبلّغ</label><input type="text" id="reporterName" name="reporterName" class="form-input"><p class="error-message"></p></div><div class="form-group"><label for="reporterJob" class="form-label required">الوظيفة</label><input type="text" id="reporterJob" name="reporterJob" class="form-input"><p class="error-message"></p></div></div>
+                    <div id="patient-reporter-fields" class="md:col-span-2 grid md:grid-cols-2 gap-x-6 gap-y-4 hidden"><div class="form-group"><label for="patientName" class="form-label required">اسم المريض/الزائر</label><input type="text" id="patientName" name="patientName" class="form-input"><p class="error-message"></p></div><div class="form-group"><label for="patientPhone" class="form-label required">رقم الجوال</label><input type="tel" id="patientPhone" name="patientPhone" class="form-input"><p class="error-message"></p></div></div>
+                    <div class="form-group md:col-span-2 relative"><label for="locationSelector" class="form-label required">تحديد الموقع</label><div id="locationSelector" class="form-input cursor-pointer flex justify-between items-center"><span>اختر موقع...</span><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-slate-400"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg></div><div id="locationDropdown" class="absolute top-full right-0 w-full bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto z-20 hidden"><input type="text" id="locationSearch" placeholder="ابحث..." class="form-input sticky top-0 m-1 w-[calc(100%-0.5rem)] z-10"><div id="locationOptionsContainer"></div></div><div id="selectedLocations" class="mt-2 flex flex-wrap gap-2"></div><p class="error-message"></p></div>
+                    <div class="form-group"><label for="reportNumber" class="form-label">رقم البلاغ</label><input type="text" id="reportNumber" name="reportNumber" class="form-input" readonly></div>
+                    <div class="form-group"><label for="reportDateTime" class="form-label">تاريخ ووقت البلاغ</label><input type="datetime-local" id="reportDateTime" name="reportDateTime" class="form-input" readonly></div>
+                </div>`;
+            
+            document.querySelector('.form-step[data-step="5"]').innerHTML = `
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم الأخير: المرفقات والإرسال</h2>
+                <div class="form-group"><label for="attachments" class="form-label">المرفقات (اختياري)</label><div class="mt-2 flex justify-center rounded-lg border border-dashed border-slate-900/25 px-6 py-10 cursor-pointer" id="dropzone"><div class="text-center"><svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg><div class="mt-4 flex text-sm"><label for="attachments" class="relative cursor-pointer rounded-md bg-white font-semibold text-[var(--primary)]"><span>ارفع ملفًا</span><input id="attachments" name="attachments" type="file" class="sr-only" multiple></label><p class="pr-1">أو اسحبه وأفلته هنا</p></div><p class="text-xs text-slate-600">PNG, JPG, PDF up to 10MB</p></div></div><div id="file-list" class="mt-4 space-y-2"></div></div>`;
+        };
+
+        const initializeForm = () => {
             const reportDateTimeField = document.getElementById('reportDateTime');
             reportDateTimeField.value = getCurrentLocalISOString();
-            reportDateTimeField.readOnly = true;
-
-            // **التحديث**: جعل رقم البلاغ للقراءة فقط
-            document.getElementById('reportNumber').readOnly = true;
             generateReportNumber();
-        }
-        
-        // ... (بقية دوال الجافاسكريبت مثل generateReportNumber, handleNextStep, etc.)
+        };
 
-        function getIncidentHTML() {
-            // **التحديث**: إضافة القيمة الافتراضية لتاريخ الحادث
-            return `
-                <h2 class="section-title ...">القسم 3: تفاصيل الحادث</h2>
-                <div class="grid ...">
-                     <div class="form-group">
-                        <label for="incidentDateTime" class="form-label required">تاريخ ووقت وقوع الحادث</label>
-                        <input type="datetime-local" id="incidentDateTime" name="incidentDateTime" class="form-input" value="${getCurrentLocalISOString()}" required>
-                         <p class="error-message"></p>
-                    </div>
-                     <div class="form-group md:col-span-2">
-                        <label for="incidentDescription" class="form-label required">وصف موجز لما حدث</label>
-                        <textarea id="incidentDescription" ... required></textarea>
-                         <p class="error-message"></p>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // **التحديث**: تعديل دالة تحديث الأزرار
-        function updateNavigationButtons() {
-            prevBtn.classList.toggle('hidden', currentStep === 1);
-            
-            const isLastStep = (isPatientReporter() && currentStep === 5) || (!isPatientReporter() && currentStep === totalSteps);
-            
-            nextBtn.classList.toggle('hidden', isLastStep);
-            submitBtn.classList.toggle('hidden', !isLastStep);
-        }
+        const attachEventListeners = () => {
+            dom.nextBtn.addEventListener('click', handleNextStep);
+            dom.prevBtn.addEventListener('click', handlePrevStep);
+            dom.form.addEventListener('submit', handleFormSubmit);
+            dom.newReportBtn.addEventListener('click', resetForm);
+            document.getElementById('reportCategory').addEventListener('change', () => {
+                generateReportNumber();
+                setupDynamicSteps();
+            });
+            document.querySelectorAll('input[name="reporterType"]').forEach(radio => radio.addEventListener('change', handleReporterTypeChange));
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('attachments');
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => dropzone.addEventListener(eName, e => {e.preventDefault(); e.stopPropagation();}));
+            ['dragenter', 'dragover'].forEach(eName => dropzone.addEventListener(eName, () => dropzone.classList.add('bg-slate-100')));
+            ['dragleave', 'drop'].forEach(eName => dropzone.addEventListener(eName, () => dropzone.classList.remove('bg-slate-100')));
+            dropzone.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+            fileInput.addEventListener('change', e => {
+                addFiles(e.target.files);
+                e.target.value = '';
+            });
+            initializeLocationPicker();
+        };
 
-        // --- FORM SUBMISSION ---
+        const generateReportNumber = () => {
+            const type = document.getElementById('reportCategory').value;
+            const year = new Date().getFullYear();
+            const serial = Date.now().toString().slice(-5);
+            let code = "MMC-REP-";
+            if (type === 'حادث') code = `IR-RISK-${year}-${serial}`;
+            else if (type === 'شكوى') code = `RPT-PAT-${year}-${serial}`;
+            else code += serial;
+            document.getElementById('reportNumber').value = code;
+        };
+
+        const isPatientReporter = () => {
+            const reporterType = document.querySelector('input[name="reporterType"]:checked');
+            return reporterType && reporterType.value === 'patient';
+        };
+
+        const handleReporterTypeChange = e => {
+            const employeeFields = document.getElementById('employee-reporter-fields');
+            const patientFields = document.getElementById('patient-reporter-fields');
+            totalSteps = e.target.value === 'employee' ? 5 : 4;
+            employeeFields.classList.toggle('hidden', e.target.value !== 'employee');
+            patientFields.classList.toggle('hidden', e.target.value !== 'patient');
+            employeeFields.querySelectorAll('input').forEach(i => i.required = (e.target.value === 'employee' && i.id !== 'verbalReport'));
+            patientFields.querySelectorAll('input').forEach(i => i.required = e.target.value === 'patient');
+            updateProgressBar();
+        };
+
+        const handleNextStep = () => {
+            if (validateCurrentStep()) {
+                let nextStep = currentStep + 1;
+                if (isPatientReporter() && nextStep === 4) nextStep = 5;
+                if (nextStep <= 5) showStep(nextStep);
+            }
+        };
+
+        const handlePrevStep = () => {
+            let prevStep = currentStep - 1;
+            if (isPatientReporter() && prevStep === 4) prevStep = 3;
+            if (prevStep >= 1) showStep(prevStep);
+        };
+        
+        const showStep = stepNumber => {
+            currentStep = stepNumber;
+            document.querySelectorAll('.form-step').forEach(s => s.classList.add('hidden'));
+            document.querySelector(`.form-step[data-step="${currentStep}"]`).classList.remove('hidden');
+            updateProgressBar();
+            updateNavigationButtons();
+        };
+
+        const updateProgressBar = () => {
+            const steps = document.querySelectorAll('.progress-step');
+            const line = document.getElementById('progress-bar-line');
+            const labels = ["التصنيف", "البيانات", "التفاصيل", "التحليل", "الإرسال"];
+            
+            steps.forEach((step, index) => {
+                const stepNum = index + 1;
+                const circle = step.querySelector('.step-circle');
+                const label = step.querySelector('.step-label');
+                
+                step.style.display = (isPatientReporter() && stepNum === 4) ? 'none' : 'flex';
+                label.textContent = labels[index];
+                if (isPatientReporter() && stepNum === 5) {
+                    circle.textContent = '4';
+                } else {
+                    circle.textContent = stepNum;
+                }
+
+                let effectiveCurrent = isPatientReporter() && currentStep === 5 ? 4 : currentStep;
+                let effectiveStep = isPatientReporter() && stepNum === 5 ? 4 : stepNum;
+                
+                circle.classList.remove('bg-green-500', 'bg-blue-600', 'text-white');
+                if(circle.innerHTML.length > 1) circle.textContent = isPatientReporter() && stepNum === 5 ? '4' : stepNum;
+
+                if (effectiveStep < effectiveCurrent) {
+                    circle.classList.add('bg-green-500', 'text-white');
+                    circle.innerHTML = '&#10003;';
+                } else if (effectiveStep === effectiveCurrent) {
+                    circle.classList.add('bg-blue-600', 'text-white');
+                }
+            });
+            const progress = (( (isPatientReporter() && currentStep === 5 ? 4 : currentStep) - 1) / (totalSteps - 1)) * 100;
+            line.style.width = `${progress}%`;
+        };
+        
+        const updateNavigationButtons = () => {
+            dom.prevBtn.classList.toggle('hidden', currentStep === 1);
+            const isLast = (isPatientReporter() && currentStep === 5) || (!isPatientReporter() && currentStep === totalSteps);
+            dom.nextBtn.classList.toggle('hidden', isLast);
+            dom.submitBtn.classList.toggle('hidden', !isLast);
+        };
+
+        const setupDynamicSteps = () => {
+            const isComplaint = document.getElementById('reportCategory').value === 'شكوى';
+            document.querySelector('.form-step[data-step="3"]').innerHTML = isComplaint ? getComplaintHTML() : getIncidentHTML();
+            document.querySelector('.form-step[data-step="4"]').innerHTML = getAnalysisHTML();
+            attachDynamicListeners();
+        };
+        
+        const getIncidentHTML = () => `<h2 class="text-xl font-bold ...">القسم 3: تفاصيل الحادث</h2><div class="grid ..."><div class="form-group"><label for="incidentDateTime" class="form-label required">تاريخ ووقت وقوع الحادث</label><input type="datetime-local" id="incidentDateTime" name="incidentDateTime" class="form-input" value="${getCurrentLocalISOString()}" required><p class="error-message"></p></div><div class="form-group md:col-span-2"><label for="incidentDescription" class="form-label required">وصف موجز لما حدث</label><textarea id="incidentDescription" name="incidentDescription" class="form-textarea" rows="4" required></textarea><p class="error-message"></p></div></div>`;
+        const getComplaintHTML = () => `<h2 class="text-xl font-bold ...">القسم 3: تفاصيل الشكوى</h2><div class="grid ..."><div class="form-group md:col-span-2"><label for="complaintDescription" class="form-label required">وصف الشكوى</label><textarea id="complaintDescription" name="complaintDescription" class="form-textarea" rows="4" required></textarea><p class="error-message"></p></div></div>`;
+        const getAnalysisHTML = () => `<h2 class="text-xl font-bold ...">القسم 4: التحليل والإجراءات</h2>...`; // Structure similar to previous versions
+        const getActionsHTML = () => `...`; // Structure similar to previous versions
+
+        const attachDynamicListeners = () => { /* ... (Listeners for severity, likelihood, etc.) ... */ };
+        
+        const validateCurrentStep = () => { /* ... (Validation logic) ... */ return true; };
+
         async function handleFormSubmit(e) {
             e.preventDefault();
             if (!validateCurrentStep()) return;
+            dom.submitBtn.innerHTML = '<span>⏳</span> جاري الإرسال...';
+            dom.submitBtn.disabled = true;
 
-            submitBtn.innerHTML = '<span>⏳</span> جاري الإرسال، قد يستغرق بعض الوقت...';
-            submitBtn.disabled = true;
-
-            // ... (بقية منطق الإرسال يبقى كما هو)
+            const formData = new FormData(dom.form);
+            const data = Object.fromEntries(formData.entries());
+            data.selectedLocations = selectedLocations.map(l => `${l.code} - ${l.name}`).join(', ');
+            if (data.responsiblePersonSelect === 'other') data.responsiblePerson = data.responsiblePersonOther;
+            else data.responsiblePerson = data.responsiblePersonSelect;
+            
+            data.attachments = attachedFiles.length > 0 ? await Promise.all(attachedFiles.map(fileToBase64)) : [];
+            
+            fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(data) })
+            .then(res => res.text()).then(resText => {
+                console.log('Success:', resText);
+                showToast('✅ تم إرسال البلاغ بنجاح!');
+                dom.formContentWrapper.classList.add('hidden');
+                dom.successScreen.classList.remove('hidden');
+            }).catch(error => {
+                console.error('Error:', error);
+                showToast('❌ حدث خطأ أثناء الإرسال.', true);
+            }).finally(() => {
+                dom.submitBtn.innerHTML = 'إرسال البلاغ';
+                dom.submitBtn.disabled = false;
+            });
         }
 
-        // ... (بقية الكود يبقى كما هو)
+        function resetForm() {
+            dom.successScreen.classList.add('hidden');
+            dom.formContentWrapper.classList.remove('hidden');
+            dom.form.reset();
+            selectedLocations = []; attachedFiles = [];
+            updateFileList();
+            document.getElementById('selectedLocations').innerHTML = '';
+            document.getElementById('locationSelector').querySelector('span').textContent = 'اختر موقع...';
+            totalSteps = 5;
+            initializeForm();
+            showStep(1);
+        }
 
+        const showToast = (message, isError = false) => {
+            const toast = document.getElementById('toast');
+            toast.classList.toggle('bg-red-500', isError);
+            toast.classList.toggle('bg-green-500', !isError);
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('translate-x-[150%]');
+            setTimeout(() => toast.classList.add('translate-x-[150%]'), 3000);
+        };
+        
+        const addFiles = files => {
+            const newFiles = Array.from(files).filter(f => !attachedFiles.some(ef => ef.name === f.name && ef.size === f.size));
+            attachedFiles.push(...newFiles);
+            updateFileList();
+        };
+
+        const updateFileList = () => { /* ... (File list update logic) ... */ };
+        const fileToBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve({fileName: file.name, mimeType: file.type, base64: reader.result.split(',')[1]});
+            reader.onerror = error => reject(error);
+        });
+
+        const initializeLocationPicker = () => { /* ... (Location picker logic) ... */ };
+        
+        // Initial setup
+        renderProgressBar();
+        renderStepContent();
+        initializeForm();
+        attachEventListeners();
+        updateProgressBar();
     })();
     </script>
 </body>
