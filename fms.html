@@ -117,19 +117,30 @@
       document.documentElement.classList.toggle('dark');
     });
 
-    // بيانات مؤقتة (لاحقاً تجلب من Google Sheet)
-    const dashboardData = {
-      roundsRate: 92,
-      maintenanceRate: 87,
-      trainingRate: 78,
-      meetingCount: 12,
-      fireTests: 95,
-      photoCount: 44
-    };
+  <!-- JavaScript -->
+  <script>
+    // تفعيل الوضع الليلي
+    document.getElementById('darkModeBtn').addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+    });
 
-    for (const key in dashboardData) {
-      document.getElementById(key).textContent = dashboardData[key] + (key.includes('Rate') || key === 'fireTests' ? '%' : '');
-    }
+    // 🔗 جلب البيانات الحقيقية من Google Sheet عبر Google Script
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyECw5N9TioHpaDLUl7YdIuzOpHJBRxQmRLtnvqsgNTolb9guSdMcJlwnEEaTO9Dy_6JQ/exec";
+
+    fetch(WEB_APP_URL + "?action=getDashboard")
+      .then(r => r.json())
+      .then(data => {
+        const format = (k, v) => (k.includes('Rate') || k === 'fireTests') ? v + '%' : v;
+        ["roundsRate","maintenanceRate","trainingRate","meetingCount","fireTests","photoCount"]
+          .forEach(k => {
+            document.getElementById(k).textContent = format(k, data[k] ?? '--');
+          });
+      })
+      .catch(err => console.error("Dashboard fetch error:", err));
+  </script>
+</body>
+</html>
+
   </script>
 </body>
 </html>
