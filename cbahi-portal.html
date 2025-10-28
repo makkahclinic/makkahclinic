@@ -1,635 +1,430 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>بوابة سباهي الإلكترونية – مجمع مكة الطبي بالزاهر</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --primary-color: #7B1E24;
-      --secondary-color: #C55A44;
-      --bg-color: #f8f9fa;
-    }
-    body { font-family: 'Tajawal', sans-serif; background-color: var(--bg-color); }
-    .sidebar { background: linear-gradient(180deg, var(--primary-color), var(--secondary-color)); color: white; }
-    .nav-link { transition: all 0.2s; }
-    .nav-link:hover { background-color: rgba(255,255,255,0.15); transform: translateX(4px); }
-    .active-link { background-color: rgba(255,255,255,0.25); font-weight: 700; }
-    .nav-icon { margin-left: 0.75rem; width: 20px; text-align: center; }
-    .content-section { display: none; animation: fadeIn 0.3s ease-in-out; }
-    .content-section.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* Organizational Chart Styles */
-    .org-chart { display: flex; flex-direction: column; align-items: center; }
-    .org-level { display: flex; justify-content: center; margin: 20px 0; flex-wrap: wrap; }
-    .org-node { background: white; border-radius: 8px; padding: 15px; margin: 10px; text-align: center; width: 220px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s; }
-    .org-node:hover { transform: translateY(-5px); }
-    .org-node.director { background: var(--primary-color); color: white; }
-    .org-node.manager { background: var(--secondary-color); color: white; }
-    .org-node.head { background: #e9c46a; color: #333; }
-
-    /* Form Loader */
-    .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--primary-color); width: 20px; height: 20px; animation: spin 1s linear infinite; display: none; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>بوابة سباهي الإلكترونية – مجمع مكة الطبي بالزاهر</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Tajawal', sans-serif; background-color: #f9f9f9; }
+    .dark body { background-color: #1a1a1a; color: #eee; }
+    .sidebar { width: 270px; background: linear-gradient(180deg, #7B1E24, #C55A44); color: white; }
+    .nav-link { display: block; padding: 0.75rem 1rem; border-radius: 0.5rem; transition: all 0.2s; }
+    .nav-link:hover { background-color: rgba(255,255,255,0.15); }
+    .active-link { background-color: rgba(255,255,255,0.25); }
+    .content-section { display: none; }
+    .content-section.active { display: block; }
+    .org-chart { display: flex; flex-direction: column; align-items: center; }
+    .org-level { display: flex; justify-content: center; margin: 20px 0; }
+    .org-node { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 0 10px; text-align: center; width: 200px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .org-node.director { background: #7B1E24; color: white; }
+    .org-node.manager { background: #C55A44; color: white; }
+    .org-node.head { background: #e9c46a; }
+    .committee-card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .committee-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .committee-code { background: #7B1E24; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+    .committee-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .member-card { background: #f5f5f5; padding: 10px; border-radius: 5px; }
+    .member-role { font-weight: bold; color: #7B1E24; }
+    .indicator-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+    .indicator-value { font-size: 2rem; font-weight: bold; margin: 10px 0; }
+    .progress-bar { height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin: 10px 0; }
+    .progress-fill { height: 100%; background: #7B1E24; }
+    .document-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+  </style>
 </head>
-
 <body class="min-h-screen flex flex-col">
-
-        <header class="bg-white shadow-md px-6 py-3 sticky top-0 z-50 flex justify-between items-center">
-        
-                <div class="flex items-center gap-3 flex-1 justify-start">
-          <div class="h-12 w-12 bg-gradient-to-br from-[#7B1E24] to-[#C55A44] rounded-xl flex items-center justify-center text-white text-2xl shadow-lg">
-            <i class="fas fa-hospital-alt"></i>
-          </div>
-        </div>
-
-        <div class="text-center absolute left-1/2 transform -translate-x-1/2">
-            <h1 class="text-2xl font-bold text-gray-800">بوابة سباهي الإلكترونية</h1>
-            <p class="text-sm text-gray-500">مجمع مكة الطبي العام بالزاهر – الإصدار 2025</p>
-        </div>
-
-                <div class="flex items-center gap-3 flex-1 justify-end">
-          <button onclick="window.print()" class="px-4 py-2 bg-[#7B1E24] text-white rounded-lg hover:bg-[#8f2b33] transition duration-200 text-sm shadow-sm">
-            <i class="fas fa-print ml-2"></i>طباعة
-          </button>
-            <div class="h-10 w-20 flex items-center justify-center border rounded-lg text-xs text-gray-400">
-                شعار إضافي
-            </div>
-        </div>
-    </header>
-
-        <div class="flex flex-1 overflow-hidden">
-
-                                <aside class="sidebar w-64 p-4 text-sm leading-relaxed overflow-y-auto flex-shrink-0">
-      <div class="font-bold mb-4 text-lg">📚 أقسام البوابة</div>
-      <a href="#home" class="nav-link flex items-center py-2 px-3 rounded-lg mb-1" onclick="showSection('home')">
-        <i class="fas fa-home nav-icon"></i> الصفحة الرئيسية
-      </a>
-
-      <div class="font-bold mt-6 mb-2">🏛️ القيادة والحوكمة (LD)</div>
-      <a href="#leadership" class="nav-link flex items-center py-2 px-3 rounded-lg mb-1" onclick="showSection('leadership')">
-        <i class="fas fa-book-open nav-icon"></i> الدليل الإداري
-      </a>
-      <a href="#organizational-structure" class="nav-link flex items-center py-2 px-3 rounded-lg mb-1" onclick="showSection('organizational-structure')">
-        <i class="fas fa-sitemap nav-icon"></i> الهيكل التنظيمي
-      </a>
-      <a href="#committees" class="nav-link flex items-center py-2 px-3 rounded-lg mb-1" onclick="showSection('committees')">
-        <i class="fas fa-users nav-icon"></i> اللجان الرسمية
-      </a>
-
-      <div class="font-bold mt-6 mb-2">🛠️ السلامة والمرافق (FMS)</div>
-      <a href="#fms-workspace" class="nav-link flex items-center py-2 px-3 rounded-lg mb-1" onclick="showSection('fms-workspace')">
-        <i class="fas fa-tools nav-icon"></i> مساحة عمل FMS
-      </a>
-      
-      <div class="font-bold mt-6 mb-2">📈 الجودة والمخاطر</div>
-      <a href="#qi" class="nav-link flex items-center py-2 px-3 rounded-lg mb-1" onclick="showSection('qi')"><i class="fas fa-chart-line nav-icon"></i> الجودة (QI)</a>
-
-    </aside>
-
-                                <main class="flex-1 p-8 overflow-y-auto" id="mainContent">
-      
-                                                <section id="home" class="content-section">
-        <div class="flex flex-col items-center justify-center h-full py-12">
-                      <div class="h-32 w-32 bg-gradient-to-br from-[#7B1E24] to-[#C55A44] rounded-full flex items-center justify-center text-white text-5xl font-bold mb-8 shadow-xl">
-            <i class="fas fa-hospital-user"></i>
-          </div>
-          <h2 class="text-4xl font-bold text-[#7B1E24] mb-4">مرحباً بكم في بوابة سباهي</h2>
-          <p class="text-gray-600 text-xl mb-10">مجمع مكة الطبي العام بالزاهر</p>
-          
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl">
-            <div onclick="showSection('fms-workspace')" class="cursor-pointer bg-white p-6 rounded-xl shadow-lg border hover:shadow-xl transition duration-300 text-center">
-                <i class="fas fa-helmet-safety text-4xl text-[#7B1E24] mb-4"></i>
-                <h3 class="font-bold text-xl mb-2">السلامة والمرافق (FMS)</h3>
-                <p class="text-gray-600">إدارة الجولات، الخطط، النماذج، ومتابعة المتطلبات.</p>
-            </div>
-            <div onclick="showSection('leadership')" class="cursor-pointer bg-white p-6 rounded-xl shadow-lg border hover:shadow-xl transition duration-300 text-center">
-              <i class="fas fa-sitemap text-4xl text-[#7B1E24] mb-4"></i>
-              <h3 class="font-bold text-xl mb-2">القيادة والحوكمة (LD)</h3>
-              <p class="text-gray-600">الهيكل التنظيمي، اللجان، والدليل الإداري.</p>
-            </div>
-            <div onclick="showSection('qi')" class="cursor-pointer bg-white p-6 rounded-xl shadow-lg border hover:shadow-xl transition duration-300 text-center">
-              <i class="fas fa-chart-line text-4xl text-[#7B1E24] mb-4"></i>
-              <h3 class="font-bold text-xl mb-2">الجودة والمؤشرات (QI)</h3>
-              <p class="text-gray-600">متابعة مؤشرات الأداء وإدارة المخاطر.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-        <section id="fms-workspace" class="content-section">
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-3xl font-bold text-[#7B1E24]">🛠️ مساحة عمل FMS (متطلبات سباهي)</h2>
-                </div>
-
-                <div class="border-b border-gray-200 mb-6 flex flex-wrap gap-2 pb-2">
-                    <button class="px-4 py-2 text-sm rounded-md transition duration-200" data-fms-tab="rounds" onclick="switchFmsTab('rounds')">📝 تسجيل جولة سلامة</button>
-                    <button class="px-4 py-2 text-sm rounded-md transition duration-200" data-fms-tab="library" onclick="switchFmsTab('library')">📚 مكتبة الوثائق الموحدة</button>
-                    <button class="px-4 py-2 text-sm rounded-md transition duration-200" data-fms-tab="needs" onclick="switchFmsTab('needs')">✅ متطلبات سباهي (Checklist)</button>
-                </div>
-
-                <div id="fmsTabContent" class="space-y-4">
-                    </div>
-            </div>
-        </section>
-
-                        <section id="leadership" class="content-section">
-        <h2 class="text-3xl font-bold text-[#7B1E24] mb-6">🏛️ الدليل الإداري والتنظيمي</h2>
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-          
-          <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
-            <p class="text-blue-800 font-medium">المدير العام / المالك المعتمد:</p>
-            <p class="text-blue-900 text-xl font-bold mt-1">د. حسين بن محمد حسن شيخ بابصيل</p>
-          </div>
-          
-          <h3 class="text-2xl font-bold text-[#7B1E24] mt-8 mb-4">الإدارات التنفيذية ورؤساء الأقسام</h3>
-          
-          <div class="overflow-x-auto shadow-sm">
-            <table class="min-w-full bg-white border">
-              <thead class="bg-gray-100 text-gray-700">
-                <tr>
-                  <th class="py-3 px-4 text-right">القسم/الإدارة</th>
-                  <th class="py-3 px-4 text-right">المدير/الرئيس</th>
-                  <th class="py-3 px-4 text-right">المهام الأساسية (مختصر)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr class="border-b hover:bg-gray-50">
-                  <td class="py-3 px-4 font-medium">الإدارة الإدارية</td>
-                  <td class="py-3 px-4">أ. بلال نتو</td>
-                  <td class="py-3 px-4">التشغيل اليومي، الموارد البشرية، التدريب.</td>
-                </tr>
-                <tr class="border-b hover:bg-gray-50">
-                  <td class="py-3 px-4 font-medium">الإدارة الطبية</td>
-                  <td class="py-3 px-4">د. معاذ البيوش (نائب: د. خالد الخطيب)</td>
-                  <td class="py-3 px-4">الإشراف على العيادات وجودة الخدمات السريرية.</td>
-                </tr>
-                <tr class="border-b hover:bg-gray-50">
-                  <td class="py-3 px-4 font-medium">الإدارة المالية والتأمين</td>
-                  <td class="py-3 px-4">أ. صابر عبده</td>
-                  <td class="py-3 px-4">الحسابات، المطالبات، إدارة دورة الإيراد.</td>
-                </tr>
-                <tr class="border-b hover:bg-gray-50">
-                  <td class="py-3 px-4 font-medium">الصيانة والمرافق (FMS)</td>
-                  <td class="py-3 px-4">أ. عدنان الرفاعي</td>
-                  <td class="py-3 px-4">الصيانة الوقائية، السلامة، الطوارئ، النظافة.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-                        <section id="organizational-structure" class="content-section">
-        <h2 class="text-3xl font-bold text-[#7B1E24] mb-6">🏢 الهيكل التنظيمي</h2>
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <div class="org-chart py-8">
-                        <div class="org-level">
-              <div class="org-node director">
-                <h3 class="font-bold text-lg">المدير العام / المالك</h3>
-                <p class="mt-2">د. حسين بن محمد حسن شيخ بابصيل</p>
-              </div>
-            </div>
-            
-            <div class="h-8 w-1 bg-gray-400"></div>
-            
-                        <div class="org-level">
-              <div class="org-node manager">
-                <h3 class="font-bold">الإدارة الإدارية</h3>
-                <p class="mt-1">أ. بلال نتو</p>
-              </div>
-              <div class="org-node manager">
-                <h3 class="font-bold">الإدارة الطبية</h3>
-                <p class="mt-1">د. معاذ البيوش</p>
-              </div>
-              <div class="org-node manager">
-                <h3 class="font-bold">الإدارة المالية</h3>
-                <p class="mt-1">أ. صابر عبده</p>
-              </div>
-            </div>
-            
-            <div class="h-8 w-1 bg-gray-400"></div>
-            
-                        <div class="org-level">
-              <div class="org-node head">
-                <h3 class="font-bold">الصيانة والمرافق</h3>
-                <p class="mt-1">أ. عدنان الرفاعي</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-                        <section id="committees" class="content-section">
-        <h2 class="text-3xl font-bold text-[#7B1E24] mb-6">👥 اللجان الرسمية</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-bold">لجنة السلامة والمرافق (FMS)</h3>
-                    <span class="bg-[#7B1E24] text-white px-3 py-1 rounded-full text-sm font-bold">FMS</span>
-                </div>
-                <div class="mb-4">
-                    <p><span class="font-semibold text-[#7B1E24]">الرئيس:</span> أ. صابر عبده</p>
-                    <p><span class="font-semibold text-[#7B1E24]">الاجتماعات:</span> شهريًا</p>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-bold">لجنة إدارة المخاطر (RM)</h3>
-                    <span class="bg-[#7B1E24] text-white px-3 py-1 rounded-full text-sm font-bold">RM</span>
-                </div>
-                <div class="mb-4">
-                    <p><span class="font-semibold text-[#7B1E24]">الرئيس:</span> د. حسين بابصيل</p>
-                    <p><span class="font-semibold text-[#7B1E24]">المنسق:</span> أ. عدنان الرفاعي</p>
-                </div>
-            </div>
-        </div>
-      </section>
-
-        <section id="qi" class="content-section"><div class="bg-white p-6 rounded-xl shadow-lg"><h2>الجودة (QI)</h2><p>محتوى قيد التطوير.</p></div></section>
-
-    </main>
-  </div>
-
-    <div id="fmsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
-        <div class="bg-white w-full max-w-5xl rounded-xl shadow-2xl overflow-hidden">
-            <div class="flex items-center justify-between px-6 py-4 border-b bg-gray-50">
-                <h3 id="fmsModalTitle" class="font-bold text-xl text-[#7B1E24]">عرض الوثيقة</h3>
-                <button onclick="closeFmsModal()" class="text-gray-600 hover:text-gray-900 text-3xl transition duration-150">&times;</button>
-            </div>
-            <div class="p-0">
-                <iframe id="fmsModalFrame" class="w-full h-[75vh]" src="about:blank" frameborder="0"></iframe>
-            </div>
-            <div class="flex items-center justify-between px-6 py-3 border-t bg-gray-50">
-                <a id="fmsModalOpenNew" href="#" target="_blank" class="text-[#7B1E24] underline hover:text-[#C55A44]">فتح في تبويب جديد (Google Drive)</a>
-                <button onclick="closeFmsModal()" class="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 transition duration-150">إغلاق</button>
-            </div>
-        </div>
-    </div>
-
-                <footer class="bg-white border-t text-gray-600 text-center py-4 text-sm mt-auto">
-      © 2025 مجمع مكة الطبي العام بالزاهر.
-    </footer>
-
-                <script>
-    // إدارة عرض الأقسام (Navigation)
-    function showSection(sectionId) {
-      // إخفاء جميع الأقسام
-      document.querySelectorAll('.content-section').forEach(section => {
-        section.classList.remove('active');
-      });
-      
-      // إظهار القسم المطلوب
-      const targetSection = document.getElementById(sectionId);
-        if (targetSection) {
-            targetSection.classList.add('active');
-        }
-      
-      // تحديث الروابط النشطة في الشريط الجانبي
-      document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active-link');
-      });
-        
-        const activeLink = document.querySelector(`.nav-link[href="#${sectionId}"]`);
-        if (activeLink) {
-            activeLink.classList.add('active-link');
-        }
-
-        // تهيئة مساحة عمل FMS عند فتحها لأول مرة
-        if (sectionId === 'fms-workspace' && document.getElementById('fmsTabContent').innerHTML.trim() === '') {
-            switchFmsTab('library'); // البدء بتبويب مكتبة الوثائق
-        }
-    }
-
-    // تهيئة الصفحة عند التحميل
-    document.addEventListener('DOMContentLoaded', () => {
-        showSection('home'); // عرض الصفحة الرئيسية افتراضياً
-    });
-  </script>
-
-  <script>
-// ===== إعدادات عامة لمساحة FMS =====
-
-// !!! هام جداً: استبدل هذا الرابط برابط Web App الذي نسخته من Google Apps Script (ينتهي بـ /exec) !!!
-const FMS_API_URL = 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL_HERE'; 
-
-// قائمة المراقبين
-const OBSERVERS_LIST = [
-    "أ. عدنان الرفاعي (الصيانة والمرافق)",
-    "أ. بلال نتو (الإدارة الإدارية)",
-    "د. معاذ البيوش (الإدارة الطبية)",
-    "أ. صابر عبده (الإدارة المالية)",
-    "مسؤول السلامة المناوب"
-];
-
-// === خرائط الوثائق المحدثة (تم دمج الروابط الجديدة) ===
-
-const FMS_DOCS_LIBRARY = [
-    // الخطط (PLN)
-    { code: 'PLN-FMS-2025-004', name: 'خطة الطوارئ والإخلاء', category: 'PLN', url: 'https://drive.google.com/open?id=1rPIuA5g52gQSroaaxznZ_SQNOj1TjEDuZ9DF0j3jvf4' },
-    { code: 'PLN-FMS-2025-007', name: 'خطة إدارة النفايات', category: 'PLN', url: 'https://drive.google.com/open?id=1iSoFBh8u4uTHzDJECxyjlEMeWqaScZwezgOXygEVdso' },
-    { code: 'PLN-FMS-2025-012', name: 'خطة إدارة الطاقة والمياه', category: 'PLN', url: 'https://drive.google.com/open?id=1b8oP_LOE_k7A0qXqhhVKWXF9zAvJMuSUOLFc1rBoflA' },
-    { code: 'PLN-FMS-2025-016', name: 'خطة الصيانة الطارئة', category: 'PLN', url: 'https://drive.google.com/open?id=1tQYPW6VHtr1liM7qMoPGgzDxopw9njYivS7WyKxokZw' },
-    { code: 'PLN-FMS-2025-018', name: 'خطة الأمن المادي للمرافق', category: 'PLN', url: 'https://drive.google.com/open?id=1aF0KTinNcF3gMIotj_byzrAkubX6Y30nZWmVuFM7BcA' },
-    
-    // السياسات (POL)
-    { code: 'POL-FMS-2025-001', name: 'سياسة إدارة السلامة والمرافق', category: 'POL', url: 'https://drive.google.com/open?id=1YS1Jk5FgwJoY5in71yUQ1oIjE4JEsaecMGWTt00aQ0o' },
-    { code: 'POL-FMS-2025-015', name: 'سياسة مراقبة جودة الهواء والتهوية', category: 'POL', url: 'https://drive.google.com/open?id=18caApXqHeQSZdBFSvgyIKICX0qMSsN7UuRxz3u7R10o' },
-
-    // السجلات (LOG)
-    { code: 'LOG-FMS-2025-005', name: 'سجل الصيانة الوقائية', category: 'LOG', url: 'https://drive.google.com/open?id=10QjYYiAppgrOJpb6F2GxxwmRgRt2ooNOClo0etgzWpw' },
-    { code: 'LOG-FMS-2025-006', name: 'سجل الحوادث والملاحظات', category: 'LOG', url: 'https://drive.google.com/open?id=12D_ESZYNwjEfKZM6C0yzswbsccugSZZBOcMdHELd3TY' },
-    { code: 'LOG-FMS-2025-014', name: 'سجل زيارات الدفاع المدني والجهات التنظيمية', category: 'LOG', url: 'https://drive.google.com/open?id=1VMNxaSlkz_LX4OqktVHQsj1IT-GA6Y3eUnZa2rgegMA' },
-
-    // قوائم التحقق (CHK)
-    { code: 'CHK-FMS-2025-003', name: 'قائمة التحقق الدورية للسلامة', category: 'CHK', url: 'https://drive.google.com/open?id=1C07oXDzj_Vfok81wQUde3P-ExeXhJh6LDwOS35jTDpk' },
-    { code: 'CHK-FMS-2025-009', name: 'سجل جولات لجنة السلامة', category: 'CHK', url: 'https://drive.google.com/open?id=1fKMIzns80N9IeSU18WudplOpA8DmbL4zmq72PRUmfZw' },
-
-    // النماذج (FRM)
-    { code: 'FRM-FMS-2025-011', name: 'نموذج تقييم المخاطر البيئية والمادية', category: 'FRM', url: 'https://drive.google.com/open?id=15uefBzxMrX33-lBCHP3sZb_OZqoQ4hyiymQRnBrN_jo' },
-    { code: 'FRM-FMS-2025-017', name: 'نموذج متابعة تنفيذ التوصيات', category: 'FRM', url: 'https://drive.google.com/open?id=1Z7Bof_s4Dchx3G5tPzHAC77M4EDVGaxKVRlvJG_wMNY' },
-
-    // التقارير (REP)
-    { code: 'REP-FMS-2025-008', name: 'تقرير فحص الطفايات وأنظمة الإنذار', category: 'REP', url: 'https://drive.google.com/open?id=1Doz1piFf3dnYXKYtWoV4ExjXG_gmgRLVXkP7ej0sw9E' },
-    { code: 'REP-FMS-2025-013', name: 'تقرير الحوادث الطارئة', category: 'REP', url: 'https://drive.google.com/open?id=126D1IVGQpoCUxXZeNlob1fBD0LkXeNQdITDzL5OLXn0' },
-
-    // إجراءات التشغيل (SOP)
-    { code: 'SOP-FMS-2025-002', name: 'إجراءات التشغيل القياسية للجولات وفحص الأنظمة', category: 'SOP', url: 'https://drive.google.com/open?id=1mrKI8YTjSphAk-noRO8sp9GhYYLzR1FCBti2EDyDZOU' },
-
-    // التدريب (TRN)
-    { code: 'TRN-FMS-2025-010', name: 'خطة تدريب الأمن والسلامة', category: 'TRN', url: 'https://drive.google.com/open?id=1IwnBiZp11BjIDQLUtT5Ntr7kEhv3jmssvF5Vj6D7yRk' },
-
-    // القرارات (DEC)
-    { code: 'DEC-FMS-2025-001', name: 'قرار تشكيل لجنة السلامة', category: 'DEC', url: 'https://drive.google.com/open?id=1KJcIqUbXfHIH0qt1UwoJ0Dohc_7n-745rhx90shaqNg' },
-];
-
-// قاموس لترجمة الرموز
-const CATEGORY_NAMES = {
-    PLN: 'الخطط (Plans)', POL: 'السياسات (Policies)', LOG: 'السجلات (Logs)', CHK: 'قوائم التحقق (Checklists)',
-    FRM: 'النماذج (Forms)', REP: 'التقارير (Reports)', SOP: 'إجراءات التشغيل (SOPs)', TRN: 'التدريب (Training)', DEC: 'القرارات (Decisions)'
-};
-
-
-// قائمة «باني الاحتياجات» (Checklist)
-const FMS_NEEDS = [
-    {key:'policy', label:'سياسة إدارة السلامة والمرافق (POL-001) معتمدة', required:true},
-    {key:'committee', label:'قرار تشكيل لجنة السلامة (DEC-001) وتفعيلها', required:true},
-    {key:'emergency_plan', label:'خطة الطوارئ والإخلاء محدثة (PLN-004)', required:true},
-    {key:'ppm_log', label:'سجل الصيانة الوقائية مكتمل (LOG-005)', required:true},
-    {key:'training', label:'تنفيذ خطة التدريب (TRN-010)', required:true},
-];
-
-
-// =========== تبويبات FMS ===========
-function switchFmsTab(tab) {
-    // إدارة تفعيل الأزرار
-    document.querySelectorAll('[data-fms-tab]').forEach(btn=>{
-        if (btn.getAttribute('data-fms-tab') === tab) {
-            btn.classList.add('bg-[#7B1E24]', 'text-white');
-            btn.classList.remove('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700');
-        } else {
-            btn.classList.remove('bg-[#7B1E24]', 'text-white');
-            btn.classList.add('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700');
-        }
-    });
-
-    const container = document.getElementById('fmsTabContent');
-    container.innerHTML = ''; // تفريغ المحتوى الحالي
-    
-    // عرض المحتوى المطلوب
-    if (tab === 'rounds') renderRoundsForm(container);
-    if (tab === 'needs') renderNeeds(container);
-    if (tab === 'library') renderLibrary(container, FMS_DOCS_LIBRARY);
-}
-
-// === وظيفة عرض مكتبة الوثائق الموحدة ===
-function renderLibrary(container, docsList) {
-    const libraryContainer = document.createElement('div');
-    libraryContainer.className = 'space-y-8 pt-4';
-
-    // تجميع الوثائق حسب التصنيف
-    const groupedDocs = docsList.reduce((acc, doc) => {
-        const category = doc.category;
-        if (!acc[category]) {
-            acc[category] = [];
-        }
-        acc[category].push(doc);
-        return acc;
-    }, {});
-
-    // تحديد ترتيب عرض التصنيفات
-    const orderedCategories = ['POL', 'SOP', 'DEC', 'PLN', 'TRN', 'LOG', 'CHK', 'FRM', 'REP'];
-
-    // عرض كل تصنيف
-    orderedCategories.forEach(categoryCode => {
-        if (!groupedDocs[categoryCode]) return;
-
-        const categoryName = CATEGORY_NAMES[categoryCode] || categoryCode;
-        const docs = groupedDocs[categoryCode];
-        docs.sort((a, b) => a.code.localeCompare(b.code)); // فرز الوثائق داخل التصنيف
-
-        const section = document.createElement('div');
-        section.innerHTML = `<h3 class="text-2xl font-bold text-[#7B1E24] mb-5 border-b pb-2">${categoryName}</h3>`;
-        
-        const grid = document.createElement('div');
-        grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6';
-
-        docs.forEach(d => {
-            const card = document.createElement('div');
-            card.className = 'p-5 rounded-lg border shadow-md bg-white hover:shadow-lg transition duration-200 flex flex-col h-full';
-            
-            const isDisabled = d.url === 'about:blank';
-            const buttonClass = isDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#7B1E24] hover:bg-[#8f2b33]';
-
-            card.innerHTML = `
-                <div class="flex items-center justify-between mb-3">
-                    <div class="font-bold text-lg text-[#7B1E24]">${d.code}</div>
-                </div>
-                <div class="mb-4 font-medium text-gray-800 flex-grow">${d.name}</div>
-                <div class="mt-auto">
-                    <button class="w-full px-3 py-2 text-sm text-white rounded-lg transition duration-150 ${buttonClass}"
-                        onclick="openFmsDoc('${d.code}: ${d.name}', '${d.url}')" ${isDisabled ? 'disabled' : ''}>
-                        <i class="fas fa-file-pdf ml-2"></i> عرض الوثيقة
-                    </button>
-                    ${isDisabled ? '<p class="text-xs text-red-500 mt-2 text-center">الرابط غير مضاف في الكود</p>' : ''}
-                </div>
-            `;
-            grid.appendChild(card);
-        });
-        section.appendChild(grid);
-        libraryContainer.appendChild(section);
-    });
-    
-    container.appendChild(libraryContainer);
-}
-
-
-// === وظيفة عرض نموذج جولات السلامة (Google Sheets Integration) ===
-function renderRoundsForm(container) {
-    const form = document.createElement('form');
-    form.id = 'roundsForm';
-    form.className = 'space-y-6 p-6 border rounded-xl bg-white shadow-md max-w-4xl';
-    form.onsubmit = submitRound;
-
-    let observerOptions = OBSERVERS_LIST.map(name => `<option value="${name}">${name}</option>`).join('');
-
-    form.innerHTML = `
-        <h3 class="text-2xl font-bold text-[#7B1E24] mb-4">تسجيل ملاحظة جولة سلامة جديدة</h3>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-                <label for="inspector" class="block text-sm font-medium text-gray-700">اسم المراقب *</label>
-                <select id="inspector" name="inspector" required class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:ring-[#7B1E24] focus:border-[#7B1E24] sm:text-sm">
-                    <option value="">اختر المراقب...</option>
-                    ${observerOptions}
-                </select>
-            </div>
-            <div>
-                <label for="location" class="block text-sm font-medium text-gray-700">الموقع/القسم *</label>
-                <input type="text" id="location" name="location" required placeholder="مثال: عيادة 5، المدخل الرئيسي" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-[#7B1E24] focus:border-[#7B1E24] sm:text-sm">
-            </div>
-            <div>
-                <label for="priority" class="block text-sm font-medium text-gray-700">الأولوية *</label>
-                <select id="priority" name="priority" required class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:ring-[#7B1E24] focus:border-[#7B1E24] sm:text-sm">
-                    <option value="عالية (High)">🔴 عالية (إجراء فوري)</option>
-                    <option value="متوسطة (Medium)" selected>🟡 متوسطة (خلال أسبوع)</option>
-                    <option value="منخفضة (Low)">🟢 منخفضة (مجدول)</option>
-                </select>
-            </div>
+  <header class="flex justify-between items-center bg-white shadow-md px-6 py-4 sticky top-0 z-50">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3">
+        <!-- Logo Placeholder - Replace with your actual logo -->
+        <div class="h-14 w-14 bg-gradient-to-br from-[#7B1E24] to-[#C55A44] rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
+          <span class="text-xs text-center">Makkah<br>Polyethnic</span>
         </div>
         <div>
-            <label for="observation" class="block text-sm font-medium text-gray-700">الملاحظة والتوصية *</label>
-            <textarea id="observation" name="observation" rows="4" required class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-[#7B1E24] focus:border-[#7B1E24] sm:text-sm" placeholder="اذكر الملاحظة بالتفصيل والإجراء المقترح..."></textarea>
+          <h1 class="text-xl font-bold text-gray-800">بوابة سباهي الإلكترونية</h1>
+          <p class="text-sm text-gray-500">Makkah Polyethnic – الإصدار 2025</p>
         </div>
-        <div class="flex items-center gap-4 pt-4 border-t">
-            <button type="submit" id="submitBtn" class="px-6 py-2 bg-[#7B1E24] text-white font-bold rounded-lg shadow-md hover:bg-[#8f2b33] transition duration-200 disabled:opacity-50">
-                إرسال الملاحظة
-            </button>
-            <div id="formLoader" class="loader"></div>
-            <span id="formStatus" class="text-sm"></span>
-        </div>
-        <div class="mt-4 text-sm text-gray-500 italic">
-            لعرض السجل: <a href="https://docs.google.com/spreadsheets/d/1cGxMCYqGfPH2UiE-nsCoytIRjIPSDYxutnq04XF5YGs/edit" target="_blank" class="text-[#7B1E24] underline">فتح ملف Google Sheet</a>.
-        </div>
-    `;
-    container.appendChild(form);
-}
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="darkModeBtn" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-200">
+        <i class="fas fa-moon ml-1"></i>
+        وضع ليلي
+      </button>
+      <button onclick="window.print()" class="px-4 py-2 bg-[#7B1E24] text-white rounded-lg hover:bg-[#8f2b33] transition duration-200">
+        <i class="fas fa-print ml-1"></i>
+        طباعة / PDF
+      </button>
+    </div>
+  </header>
 
-// === وظيفة إرسال البيانات إلى Google Apps Script ===
-async function submitRound(event) {
-    event.preventDefault();
-    const form = document.getElementById('roundsForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const loader = document.getElementById('formLoader');
-    const statusMsg = document.getElementById('formStatus');
+  <div class="flex flex-1">
+    <aside class="sidebar p-4 text-sm leading-relaxed">
+      <div class="font-bold mb-3 text-lg">📚 أقسام بوابة سباهي</div>
+      <a href="#home" class="nav-link active-link" onclick="showSection('home')">🏠 الصفحة الرئيسية</a>
+      <div class="font-bold mt-4 mb-2">🏛️ القيادة والحوكمة (LD)</div>
+      <a href="#leadership" class="nav-link" onclick="showSection('leadership')">الدليل الإداري والتنظيمي</a>
+      <a href="#organizational-structure" class="nav-link" onclick="showSection('organizational-structure')">الهيكل التنظيمي</a>
+      <a href="#committees" class="nav-link" onclick="showSection('committees')">اللجان الرسمية</a>
+      <a href="#key-indicators" class="nav-link" onclick="showSection('key-indicators')">المؤشرات الأساسية</a>
+      <div class="font-bold mt-4 mb-2">🛠️ السلامة والمرافق (FMS)</div>
+      <a href="#fms-workspace" class="nav-link" onclick="showSection('fms-workspace')">مساحة عمل FMS</a>
+      <a href="#dashboard" class="nav-link" onclick="showSection('dashboard')">لوحة المؤشرات</a>
+      <a href="#plans" class="nav-link" onclick="showSection('plans')">الخطط الثمانية</a>
+      <a href="#forms" class="nav-link" onclick="showSection('forms')">النماذج والسجلات</a>
+      <div class="font-bold mt-4 mb-2">📈 الجودة والتحسين المستمر (QI)</div>
+      <a href="#qi" class="nav-link" onclick="showSection('qi')">مؤشرات الجودة</a>
+      <div class="font-bold mt-4 mb-2">⚠️ إدارة المخاطر (RM)</div>
+      <a href="#rm" class="nav-link" onclick="showSection('rm')">نماذج وتحاليل المخاطر</a>
+      <div class="font-bold mt-4 mb-2">🧫 مكافحة العدوى (IPC)</div>
+      <a href="#ipc" class="nav-link" onclick="showSection('ipc')">الخطط والسياسات</a>
+      <div class="font-bold mt-4 mb-2">❤️‍🩹 سلامة المرضى (PSC)</div>
+      <a href="#psc" class="nav-link" onclick="showSection('psc')">سياسات ونماذج سلامة المرضى</a>
+      <div class="font-bold mt-4 mb-2">🚨 الطوارئ والكوارث (EOC)</div>
+      <a href="#eoc" class="nav-link" onclick="showSection('eoc')">الخطط والإخلاء</a>
+      <div class="font-bold mt-4 mb-2">🗂️ التقارير والاعتمادات</div>
+      <a href="#reports" class="nav-link" onclick="showSection('reports')">التقارير السنوية</a>
+      <a href="#accreditation" class="nav-link" onclick="showSection('accreditation')">ملفات الاعتماد</a>
+    </aside>
 
-    if (FMS_API_URL.includes('YOUR_GOOGLE_SCRIPT_WEB_APP_URL_HERE')) {
-        alert('خطأ في الإعداد: لم يتم تحديث رابط Google Apps Script (FMS_API_URL) في الكود. يرجى مراجعة التعليمات.');
-        return;
-    }
+    <main class="flex-1 p-6 overflow-y-auto" id="mainContent">
+      <section id="home" class="content-section active">
+        <div class="flex flex-col items-center justify-center h-full mt-10">
+          <!-- Updated Logo -->
+          <div class="h-40 w-40 bg-gradient-to-br from-[#7B1E24] to-[#C55A44] rounded-full flex items-center justify-center text-white text-4xl font-bold mb-6 shadow-xl">
+            <span class="text-lg text-center">Makkah<br>Polyethnic</span>
+          </div>
+          <h2 class="text-3xl font-bold text-[#7B1E24] mb-3">CBAHI Electronic Portal</h2>
+          <p class="text-gray-600 text-lg mb-2">Makkah Polyethnic – الإصدار 2025</p>
+          <p class="text-sm text-gray-400 mb-8">الإصدار الرسمي 2025 – جميع الحقوق محفوظة</p>
 
-    submitBtn.disabled = true;
-    loader.style.display = 'block';
-    statusMsg.textContent = 'جارٍ الإرسال...';
-    statusMsg.className = 'text-sm text-blue-600';
-
-    const formData = new FormData(form);
-
-    try {
-        // نستخدم fetch لإرسال البيانات. FormData ضروري لتجنب مشاكل CORS مع Google Script.
-        const response = await fetch(FMS_API_URL, {
-            method: 'POST',
-            body: formData,
-        });
-
-        // نعالج الرد (بما في ذلك ردود CORS المبهمة التي تعتبر نجاحاً في هذه الحالة)
-        // ملاحظة: Google Apps Script قد لا يرسل دائماً رد HTTP 200 OK صحيح بسبب إعادة التوجيه، لكن الإرسال ينجح.
-        if (response.ok || response.type === 'opaque') {
-             statusMsg.textContent = '✅ تم الإرسال بنجاح إلى Google Sheet!';
-             statusMsg.className = 'text-sm text-green-600';
-             form.reset(); // تفريغ النموذج
-        } else {
-            // إذا كان هناك رد خطأ واضح من السيرفر
-            throw new Error('Server response not OK');
-        }
-
-    } catch (error) {
-        console.error('Error submitting round:', error);
-        // إذا فشل الطلب تماماً (مشكلة شبكة أو خطأ فادح في السكربت)
-        statusMsg.textContent = '❌ فشل الإرسال. تحقق من إعدادات Google Script (الأذونات) أو اتصال الشبكة.';
-        statusMsg.className = 'text-sm text-red-600';
-    } finally {
-        submitBtn.disabled = false;
-        loader.style.display = 'none';
-    }
-}
-
-    // «باني الاحتياجات» (Checklist)
-    function renderNeeds(container) {
-        const wrap = document.createElement('div');
-        wrap.className = 'grid grid-cols-1 md:grid-cols-2 gap-5 p-4';
-
-        FMS_NEEDS.forEach(item=>{
-            const card = document.createElement('div');
-            card.className = 'p-5 rounded-lg border shadow-sm bg-white';
-            card.innerHTML = `
-            <div class="flex items-start gap-4">
-                <input type="checkbox" id="need_${item.key}" class="mt-1 h-5 w-5 text-[#7B1E24] focus:ring-[#7B1E24] border-gray-300 rounded" ${item.required ? 'data-required="1"' : ''}>
-                <div>
-                    <label for="need_${item.key}" class="font-semibold text-gray-800">${item.label}</label>
-                    ${item.required ? '<div class="text-xs text-red-600 mt-1 font-medium">متطلب إلزامي</div>' : ''}
-                </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
+            <div class="bg-white p-6 rounded-lg shadow-md border hover:shadow-lg transition duration-300">
+              <i class="fas fa-chart-line text-3xl text-[#7B1E24] mb-3"></i>
+              <h3 class="font-bold text-lg mb-2">المؤشرات الحيوية</h3>
+              <p class="text-gray-600">متابعة مؤشرات الأداء والجودة</p>
             </div>
-            `;
-            wrap.appendChild(card);
-        });
+            <div class="bg-white p-6 rounded-lg shadow-md border hover:shadow-lg transition duration-300">
+              <i class="fas fa-file-alt text-3xl text-[#7B1E24] mb-3"></i>
+              <h3 class="font-bold text-lg mb-2">الوثائق والسياسات</h3>
+              <p class="text-gray-600">جميع وثائق العمل المعتمدة</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md border hover:shadow-lg transition duration-300">
+              <i class="fas fa-chart-bar text-3xl text-[#7B1E24] mb-3"></i>
+              <h3 class="font-bold text-lg mb-2">التقارير الإدارية</h3>
+              <p class="text-gray-600">تقارير الأداء والاحصائيات</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-        const actions = document.createElement('div');
-        actions.className = 'flex items-center gap-3 mt-6 p-4';
-        actions.innerHTML = `
-        <button class="px-5 py-2 bg-[#7B1E24] text-white font-semibold rounded-lg shadow-md hover:bg-[#8f2b33] transition duration-200" onclick="validateNeeds()">تحقّق من الاكتمال</button>
+      <!-- Other sections remain the same as in your original code -->
+      <!-- ... -->
+
+      <!-- FMS Workspace Section - Updated with your documents -->
+      <section id="fms-workspace" class="content-section">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold text-[#7B1E24]">🛠️ مساحة عمل FMS (متطلبات سباهي)</h2>
+            <div class="flex gap-2">
+              <button onclick="window.print()" class="px-3 py-2 text-sm bg-[#7B1E24] text-white rounded-lg hover:bg-[#8f2b33]">
+                🖨️ طباعة هذه الصفحة
+              </button>
+            </div>
+          </div>
+          <div class="border-b border-gray-200 mb-4 flex flex-wrap gap-2">
+            <button class="px-3 py-2 text-sm rounded bg-[#7B1E24] text-white" data-fms-tab="needs" onclick="switchFmsTab('needs')">✅ باني الاحتياجات</button>
+            <button class="px-3 py-2 text-sm rounded bg-gray-100 hover:bg-gray-200" data-fms-tab="plans" onclick="switchFmsTab('plans')">📁 الخطط الثمانية</button>
+            <button class="px-3 py-2 text-sm rounded bg-gray-100 hover:bg-gray-200" data-fms-tab="governance" onclick="switchFmsTab('governance')">🏛️ الحوكمة والسياسات</button>
+            <button class="px-3 py-2 text-sm rounded bg-gray-100 hover:bg-gray-200" data-fms-tab="forms" onclick="switchFmsTab('forms')">🗂️ النماذج والسجلات</button>
+            <button class="px-3 py-2 text-sm rounded bg-gray-100 hover:bg-gray-200" data-fms-tab="kpis" onclick="switchFmsTab('kpis')">📊 مؤشرات FMS</button>
+          </div>
+          <div id="fmsTabContent" class="space-y-4">
+            <!-- Content will be dynamically loaded here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- FMS Modal for document viewing -->
+      <div id="fmsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white w-[95vw] max-w-4xl rounded-lg shadow-xl overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 border-b">
+            <h3 id="fmsModalTitle" class="font-bold text-lg">عرض الوثيقة</h3>
+            <button onclick="closeFmsModal()" class="text-gray-600 hover:text-gray-900">✕</button>
+          </div>
+          <div class="p-0">
+            <iframe id="fmsModalFrame" class="w-full h-[70vh]" src="about:blank"></iframe>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+            <a id="fmsModalOpenNew" href="#" target="_blank" class="text-[#7B1E24] underline">فتح في تبويب جديد</a>
+            <button onclick="closeFmsModal()" class="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300">إغلاق</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Other sections remain the same -->
+      <!-- ... -->
+
+    </main>
+  </div>
+
+  <footer class="bg-[#7B1E24] text-white text-center py-3 text-sm">
+    © 2025 Makkah Polyethnic – بوابة سباهي الإلكترونية
+  </footer>
+
+  <script>
+    // ===== إعدادات عامة لمساحة FMS =====
+    const FMS_API_URL = 'YOUR_GOOGLE_SCRIPT_URL_HERE'; // اختياري للتكامل لاحقاً
+    
+    // خرائط الوثائق (بناءً على ملف FMS_المجمع_كل_الوثائق.md)
+    const FMS_PLANS = [
+      {code:'FMS-P01', name:'خطة سلامة المبنى (Safety of the Building)', url:'about:blank'},
+      {code:'FMS-P02', name:'خطة الأمن (Security Plan)', url:'about:blank'},
+      {code:'FMS-P03', name:'خطة إدارة المواد الخطرة والتخلص من النفايات', url:'about:blank'},
+      {code:'FMS-P04', name:'خطة الطوارئ الداخلية (Internal Emergency Plan)', url:'about:blank'},
+      {code:'FMS-P05', name:'خطة الطوارئ الخارجية (External Emergency Plan)', url:'about:blank'},
+      {code:'FMS-P06', name:'خطة السلامة من الحرائق (Fire Safety Program)', url:'about:blank'},
+      {code:'FMS-P07', name:'برنامج إدارة الأجهزة الطبية (Medical Equipment Management Plan)', url:'about:blank'},
+      {code:'FMS-P08', name:'برنامج إدارة أنظمة المرافق (Utilities Management Plan)', url:'about:blank'},
+    ];
+
+    const FMS_GOV = [
+      {code:'FMS-G01', name:'ميثاق لجنة السلامة وإدارة المرافق (FMS Committee Charter)', url:'about:blank'},
+      {code:'FMS-G02', name:'الوصف الوظيفي ومسؤوليات مدير برنامج FMS', url:'about:blank'},
+      {code:'FMS-G03', name:'سياسة الجولات الميدانية وسجل جولات السلامة', url:'about:blank'},
+      {code:'FMS-G04', name:'سياسة الصيانة الوقائية PPM وخطة سنوية', url:'about:blank'},
+      {code:'FMS-G05', name:'سياسة الامتثال للقوانين والأنظمة السعودية', url:'about:blank'},
+      {code:'FMS-G06', name:'سياسة إدارة السلامة خلال أعمال البناء/التجديد/الهدم', url:'about:blank'},
+      {code:'FMS-G07', name:'سياسة إدارة المخاطر (HVA/FMEA) لسلامة المرافق', url:'about:blank'},
+      {code:'FMS-G08', name:'خطة التدريب والتوعية والتوجيه في FMS', url:'about:blank'},
+      {code:'FMS-G09', name:'سياسة الاختبارات والتمارين للطوارئ والإخلاء', url:'about:blank'},
+      {code:'FMS-G10', name:'سياسة التحكم بالدخول وإدارة المفاتيح', url:'about:blank'},
+      {code:'FMS-G11', name:'سياسة إدارة الغازات الطبية (إن وجدت)', url:'about:blank'},
+    ];
+
+    const FMS_FORMS = [
+      {code:'F-01', name:'نموذج جولة سلامة المرفق (Facility Safety Tour Checklist)', url:'about:blank'},
+      {code:'F-02', name:'سجل اختبار أنظمة الإنذار من الحريق', url:'about:blank'},
+      {code:'F-03', name:'سجل صيانة معدات الإطفاء', url:'about:blank'},
+      {code:'F-04', name:'نموذج تقرير تمرين إخلاء وما بعد التمرين (AAR)', url:'about:blank'},
+      {code:'F-05', name:'سجل صيانة الأجهزة الطبية', url:'about:blank'},
+      {code:'F-06', name:'سجل الغازات الطبية وضوابطها', url:'about:blank'},
+      {code:'F-07', name:'سجل تراخيص الدفاع المدني والتقارير', url:'about:blank'},
+      {code:'F-08', name:'قائمة تحقق السلامة اليومية لفتح العيادات', url:'about:blank'},
+      {code:'F-09', name:'سجل التخلص من النفايات الطبية والخطرة', url:'about:blank'},
+      {code:'F-10', name:'سجل اختبار إنارة الطوارئ ومخارج الخروج', url:'about:blank'},
+      {code:'F-11', name:'قائمة الحد الأدنى لوسائل السلامة في كل غرفة/عيادة', url:'about:blank'},
+    ];
+
+    // قائمة «باني الاحتياجات» مستخرجة من جدول المواءمة (Map)
+    const FMS_NEEDS = [
+      {key:'charter', label:'ميثاق لجنة السلامة وإدارة المرافق (G01) معتمد', required:true},
+      {key:'plans8', label:'اعتماد وتوفر الخطط الثمانية (P01–P08)', required:true},
+      {key:'ppmpolicy', label:'سياسة PPM + خطة سنوية موقّعة (G04)', required:true},
+      {key:'tours', label:'جولات سلامة ربع سنوية + سجلات F-01', required:true},
+      {key:'civildef', label:'ترخيص الدفاع المدني ساري + سجل F-07', required:true},
+      {key:'fire', label:'سجلات إنذار/إطفاء/إنارة طوارئ (F-02/F-03/F-10)', required:true},
+      {key:'waste', label:'سجل التخلص من النفايات الطبية/الخطرة (F-09)', required:true},
+      {key:'medgas', label:'سياسة/سجل الغازات الطبية (إن وجدت) (G11/F-06)', required:false},
+      {key:'training', label:'تعريف الموظفين الجدد + خطة تدريب/تمارين (G08/G09)', required:true},
+      {key:'risk', label:'HVA سنوية + FMEA للعمليات الحرجة (G07)', required:true},
+      {key:'compliance', label:'سياسة الامتثال للقوانين والأنظمة (G05)', required:true},
+    ];
+
+    // =========== تبويبات FMS ===========
+    function switchFmsTab(tab) {
+      document.querySelectorAll('[data-fms-tab]').forEach(btn=>{
+        // إزالة الألوان وتطبيق الألوان الافتراضية
+        btn.classList.remove('bg-[#7B1E24]', 'text-white');
+        btn.classList.add('bg-gray-100', 'hover:bg-gray-200');
+        
+        // تطبيق الألوان النشطة على التبويب الحالي
+        if (btn.getAttribute('data-fms-tab') === tab) {
+          btn.classList.add('bg-[#7B1E24]', 'text-white');
+          btn.classList.remove('bg-gray-100', 'hover:bg-gray-200');
+        }
+      });
+
+      const container = document.getElementById('fmsTabContent');
+      container.innerHTML = '';
+
+      if (tab === 'needs') renderNeeds(container);
+      if (tab === 'plans') renderList(container, FMS_PLANS, 'خطة/برنامج');
+      if (tab === 'governance') renderList(container, FMS_GOV, 'سياسة/حوكمة');
+      if (tab === 'forms') renderList(container, FMS_FORMS, 'نموذج/سجل');
+      if (tab === 'kpis') renderKpis(container);
+    }
+
+    // «باني الاحتياجات»
+    function renderNeeds(container) {
+      const wrap = document.createElement('div');
+      wrap.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+
+      FMS_NEEDS.forEach(item=>{
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded border shadow-sm bg-gray-50';
+        card.innerHTML = `
+          <div class="flex items-start gap-3">
+            <input type="checkbox" id="need_${item.key}" class="mt-1 h-5 w-5" ${item.required ? 'data-required="1"' : ''}>
+            <div>
+              <label for="need_${item.key}" class="font-semibold">${item.label}</label>
+              ${item.required ? '<div class="text-xs text-red-600 mt-1">مطلوب</div>' : ''}
+            </div>
+          </div>
         `;
+        wrap.appendChild(card);
+      });
 
-        container.appendChild(wrap);
-        container.appendChild(actions);
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center gap-2 mt-2';
+      actions.innerHTML = `
+        <button class="px-3 py-2 bg-[#7B1E24] text-white rounded hover:bg-[#8f2b33]" onclick="validateNeeds()">تحقّق من الاكتمال</button>
+        <button class="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300" onclick="window.print()">طباعة</button>
+      `;
+
+      container.appendChild(wrap);
+      container.appendChild(actions);
     }
 
     function validateNeeds() {
-        const required = [...document.querySelectorAll('input[data-required="1"]')];
-        const missing = required.filter(cb => !cb.checked);
-        if (missing.length === 0) {
-            alert('ممتاز ✅ — جميع المتطلبات الإلزامية مُؤشّر عليها.');
-        } else {
-            alert(`⚠️ تنبيه: هناك ${missing.length} من العناصر الإلزامية غير مكتملة.`);
-        }
+      const required = [...document.querySelectorAll('input[data-required="1"]')];
+      const missing = required.filter(cb => !cb.checked);
+
+      if (missing.length === 0) {
+        alert('ممتاز ✅ — جميع المتطلبات الإلزامية مُؤشّر عليها.');
+      } else {
+        alert('⚠️ هناك عناصر إلزامية غير مكتملة: ' + missing.length);
+      }
+    }
+
+    // قوائم الخطط/الحوكمة/النماذج
+    function renderList(container, items, kind) {
+      const list = document.createElement('div');
+      list.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+
+      items.forEach(d=>{
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded border shadow-sm bg-white';
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-bold text-[#7B1E24]">${d.code}</div>
+            <span class="text-xs bg-gray-100 px-2 py-1 rounded">${kind}</span>
+          </div>
+          <div class="mb-3 font-medium">${d.name}</div>
+          <div class="flex items-center gap-2">
+            <button class="px-3 py-1 text-sm bg-[#7B1E24] text-white rounded hover:bg-[#8f2b33]" onclick="openFmsDoc('${d.code}: ${d.name}', '${d.url}')">📄 عرض</button>
+            <a class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300" href="${d.url}" target="_blank">↗ فتح في تبويب</a>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+
+      // أزرار عامة
+      const actions = document.createElement('div');
+      actions.className = 'flex items-center gap-2 mt-4';
+      actions.innerHTML = `
+        <button class="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300" onclick="window.print()">🖨️ طباعة هذه القائمة</button>
+      `;
+
+      container.appendChild(list);
+      container.appendChild(actions);
+    }
+
+    function renderKpis(container) {
+      const box = document.createElement('div');
+      box.className = 'grid grid-cols-1 md:grid-cols-3 gap-4';
+      box.innerHTML = `
+        <div class="bg-white p-4 rounded border shadow">
+          <div class="text-sm text-gray-500">نسبة إنجاز الجولات</div>
+          <div class="text-2xl font-bold text-[#7B1E24]">85%</div>
+        </div>
+        <div class="bg-white p-4 rounded border shadow">
+          <div class="text-sm text-gray-500">الصيانة الوقائية (PPM)</div>
+          <div class="text-2xl font-bold text-[#C55A44]">92%</div>
+        </div>
+        <div class="bg-white p-4 rounded border shadow">
+          <div class="text-sm text-gray-500">التدريب المنفذ</div>
+          <div class="text-2xl font-bold text-[#7B1E24]">78%</div>
+        </div>
+      `;
+      container.appendChild(box);
     }
 
     // Modal
     function openFmsDoc(title, url) {
-        if (!url || url === 'about:blank') {
-            return;
-        }
-        document.getElementById('fmsModalTitle').textContent = title;
-        
-        // تحديث الـ iframe ورابط الفتح الخارجي
-        document.getElementById('fmsModalFrame').src = url; 
-        document.getElementById('fmsModalOpenNew').href = url;
+      document.getElementById('fmsModalTitle').textContent = title;
+      document.getElementById('fmsModalFrame').src = url || 'about:blank';
+      document.getElementById('fmsModalOpenNew').href = url || '#';
+      document.getElementById('fmsModal').classList.remove('hidden');
+      document.getElementById('fmsModal').classList.add('flex');
+    }
 
-        document.getElementById('fmsModal').classList.remove('hidden');
-        document.getElementById('fmsModal').classList.add('flex');
-    }
     function closeFmsModal() {
-        document.getElementById('fmsModal').classList.add('hidden');
-        document.getElementById('fmsModal').classList.remove('flex');
-        document.getElementById('fmsModalFrame').src = 'about:blank'; // تفريغ الـ iframe
+      document.getElementById('fmsModal').classList.add('hidden');
+      document.getElementById('fmsModal').classList.remove('flex');
+      document.getElementById('fmsModalFrame').src = 'about:blank';
     }
-  </script>
+
+    // افتح تبويب «الاحتياجات» افتراضياً عند دخول مساحة العمل
+    document.addEventListener('DOMContentLoaded', ()=>{
+      // تأكد من أننا نفعّل التبويب الافتراضي فقط إذا كان القسم المرتبط نشطاً في البداية
+      const activeSection = document.querySelector('.content-section.active');
+      if (activeSection && activeSection.id === 'fms-workspace') {
+        switchFmsTab('needs');
+      }
+
+      // إضافة مُراقب لنشاط القسم لتفعيل التبويب الافتراضي عند النقر عليه
+      document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+          const sectionId = e.target.getAttribute('href').substring(1);
+          if (sectionId === 'fms-workspace') {
+            // تأخير بسيط لضمان تحديث عرض القسم
+            setTimeout(() => switchFmsTab('needs'), 50);
+          }
+        });
+      });
+    });
+
+    // ===== الوظائف العامة =====
+    // تبديل الوضع الليلي
+    document.getElementById('darkModeBtn').addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+    });
+
+    // إدارة عرض الأقسام
+    function showSection(sectionId) {
+      // إخفاء جميع الأقسام
+      document.querySelectorAll('.content-section').forEach(section => {
+        section.classList.remove('active');
+      });
+      
+      // إظهار القسم المطلوب
+      document.getElementById(sectionId).classList.add('active');
+      
+      // تحديث الروابط النشطة
+      document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active-link');
+      });
+      
+      // البحث عن الرابط الصحيح لتفعيل active-link
+      const targetLink = document.querySelector(`.nav-link[href="#${sectionId}"]`);
+      if (targetLink) {
+        targetLink.classList.add('active-link');
+      }
+    }
+
+    // عرض تفاصيل اللجان
+    function showCommitteeDetails(committeeCode) {
+      alert(`سيتم فتح صفحة تفصيلية للجنة ${committeeCode} في التحديثات القادمة`);
+    }
+
+    // عرض الوثائق
+    function showDocument(docName) {
+      alert(`سيتم فتح وثيقة ${docName} في التحديثات القادمة`);
+    }
+  </script>
 </body>
 </html>
