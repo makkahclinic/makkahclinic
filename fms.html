@@ -5,53 +5,154 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام إدارة سلامة المرافق - مكة كلينك</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-        body { background: #f5f5f5; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { color: #1a5f7a; text-align: center; margin-bottom: 20px; }
-        .status { background: #27ae60; color: white; padding: 10px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
-        .btn { background: #1a5f7a; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f5f7fa; padding: 20px; color: #333; }
+        .container { max-width: 1300px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 25px rgba(0,0,0,0.08); }
+        h1 { color: #1a5f7a; text-align: center; margin-bottom: 25px; font-size: 2.2rem; }
+        .status { padding: 12px 20px; border-radius: 8px; margin-bottom: 25px; text-align: center; font-weight: 600; }
+        .status.success { background: #27ae60; color: white; }
+        .status.warning { background: #f39c12; color: white; }
+        .status.error { background: #e74c3c; color: white; }
+        .btn { background: #1a5f7a; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; margin: 8px; font-size: 1rem; font-weight: 600; transition: all 0.3s; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         .btn-success { background: #27ae60; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; text-align: right; border-bottom: 1px solid #ddd; }
-        th { background: #f8f9fa; color: #1a5f7a; }
-        .badge { padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .btn-danger { background: #e74c3c; }
+        .btn-warning { background: #f39c12; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        th, td { padding: 15px; text-align: right; border-bottom: 1px solid #eaeaea; }
+        th { background: #f8f9fa; color: #1a5f7a; font-weight: 700; font-size: 1.05rem; }
+        tr:hover { background: #f8f9fa; }
+        .badge { padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; }
         .badge-danger { background: #e74c3c; color: white; }
         .badge-warning { background: #f39c12; color: white; }
         .badge-success { background: #27ae60; color: white; }
+        .badge-info { background: #3498db; color: white; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 700; color: #2c3e50; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem; transition: border 0.3s; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #1a5f7a; outline: none; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: center; border-left: 5px solid #1a5f7a; }
+        .stat-card h3 { font-size: 2.5rem; margin-bottom: 10px; color: #1a5f7a; }
+        .stat-card p { color: #7f8c8d; font-weight: 600; }
+        .urgent { border-left-color: #e74c3c !important; }
+        .completed { border-left-color: #27ae60 !important; }
+        .compliance { border-left-color: #3498db !important; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { background: white; margin: 5% auto; padding: 30px; border-radius: 12px; width: 90%; max-width: 600px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+        .task-details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0; }
+        .task-details p { margin: 10px 0; padding: 8px 0; border-bottom: 1px solid #e0e0e0; }
+        .loading { text-align: center; padding: 30px; color: #7f8c8d; }
+        .loading::after { content: '...'; animation: dots 1.5s steps(4, end) infinite; }
+        @keyframes dots { 0%, 20% { color: rgba(0,0,0,0); text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); } 40% { color: #7f8c8d; text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); } 60% { text-shadow: .25em 0 0 #7f8c8d, .5em 0 0 rgba(0,0,0,0); } 80%, 100% { text-shadow: .25em 0 0 #7f8c8d, .5em 0 0 #7f8c8d; } }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>نظام إدارة سلامة المرافق (FMS)</h1>
+        <h1>🏥 نظام إدارة سلامة المرافق (FMS) - مكة كلينك</h1>
         
-        <div class="status" id="connection-status">✅ جاهز للتشغيل</div>
+        <div class="status success" id="connection-status">✅ النظام جاهز للتشغيل</div>
         
-        <div style="text-align: center; margin-bottom: 20px;">
-            <button class="btn" onclick="loadData()">🔄 تحديث البيانات</button>
-            <button class="btn btn-success" onclick="addTask()">➕ إضافة مهمة</button>
+        <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #1a5f7a 0%, #159895 100%); border-radius: 12px;">
+            <button class="btn" style="background: white; color: #1a5f7a;" onclick="loadData()">🔄 تحديث البيانات</button>
+            <button class="btn btn-success" onclick="showAddTaskForm()">➕ إضافة مهمة جديدة</button>
+            <button class="btn" style="background: #3498db;" onclick="testConnection()">🔗 اختبار الاتصال</button>
+            <button class="btn btn-warning" onclick="showHelp()">❓ المساعدة</button>
         </div>
 
-        <div id="stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; text-align: center;">
+        <!-- الإحصائيات -->
+        <div class="stats-grid">
+            <div class="stat-card">
                 <h3 id="pending-tasks">0</h3>
-                <p>مهمة معلقة</p>
+                <p>📋 المهام المعلقة</p>
             </div>
-            <div style="background: #ffeaa7; padding: 15px; border-radius: 8px; text-align: center;">
+            <div class="stat-card urgent">
                 <h3 id="high-priority">0</h3>
-                <p>مهمة عاجلة</p>
+                <p>🚨 المهام العاجلة</p>
             </div>
-            <div style="background: #d4edda; padding: 15px; border-radius: 8px; text-align: center;">
+            <div class="stat-card completed">
                 <h3 id="completed-tasks">0</h3>
-                <p>مهمة مكتملة</p>
+                <p>✅ المهام المكتملة</p>
             </div>
-            <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; text-align: center;">
+            <div class="stat-card compliance">
                 <h3 id="compliance-rate">0%</h3>
-                <p>مستوى الامتثال</p>
+                <p>📊 مستوى الامتثال</p>
             </div>
         </div>
 
-        <h2>المهام العاجلة <span class="badge badge-danger" id="urgent-count">0 عاجل</span></h2>
+        <!-- نموذج إضافة مهمة -->
+        <div id="add-task-form" style="display: none; background: #f8f9fa; padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 2px dashed #1a5f7a;">
+            <h3 style="color: #1a5f7a; margin-bottom: 20px;">📝 إضافة مهمة جديدة</h3>
+            <form onsubmit="addTask(event)">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label for="task-title">عنوان المهمة:</label>
+                        <input type="text" id="task-title" required placeholder="أدخل عنوان المهمة">
+                    </div>
+                    <div class="form-group">
+                        <label for="task-assignedTo">المسؤول:</label>
+                        <input type="text" id="task-assignedTo" value="مدير النظام">
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label for="task-department">القسم:</label>
+                        <select id="task-department">
+                            <option value="الإدارة">الإدارة</option>
+                            <option value="شؤون التراخيص">شؤون التراخيص</option>
+                            <option value="قسم الصيانة">قسم الصيانة</option>
+                            <option value="إدارة المخاطر">إدارة المخاطر</option>
+                            <option value="الموارد البشرية">الموارد البشرية</option>
+                            <option value="المالية">المالية</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-priority">الأولوية:</label>
+                        <select id="task-priority">
+                            <option value="high">🚨 عالي (عاجل)</option>
+                            <option value="medium" selected>⚠️ متوسط</option>
+                            <option value="low">✅ منخفض</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label for="task-dueDate">تاريخ الاستحقاق:</label>
+                        <input type="date" id="task-dueDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-category">التصنيف:</label>
+                        <select id="task-category">
+                            <option value="تراخيص">تراخيص</option>
+                            <option value="سلامة">سلامة</option>
+                            <option value="صيانة">صيانة</option>
+                            <option value="تدريب">تدريب</option>
+                            <option value="مشتريات">مشتريات</option>
+                            <option value="أخرى">أخرى</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="task-location">المكان:</label>
+                    <input type="text" id="task-location" value="المبنى الرئيسي" placeholder="أدخل مكان المهمة">
+                </div>
+
+                <div class="form-group">
+                    <label for="task-description">وصف المهمة (اختياري):</label>
+                    <textarea id="task-description" rows="3" placeholder="أدخل وصفاً تفصيلياً للمهمة"></textarea>
+                </div>
+
+                <div style="text-align: center; margin-top: 25px;">
+                    <button type="submit" class="btn btn-success">💾 حفظ المهمة في النظام</button>
+                    <button type="button" class="btn btn-danger" onclick="hideAddTaskForm()">❌ إلغاء</button>
+                </div>
+            </form>
+        </div>
+
+        <h2 style="color: #e74c3c; margin-bottom: 20px;">🚨 المهام العاجلة <span class="badge badge-danger" id="urgent-count">0 عاجل</span></h2>
         <table>
             <thead>
                 <tr>
@@ -64,11 +165,11 @@
                 </tr>
             </thead>
             <tbody id="urgent-tasks-table">
-                <!-- سيتم ملؤها بالبيانات -->
+                <tr><td colspan="6" class="loading">جاري تحميل المهام العاجلة</td></tr>
             </tbody>
         </table>
 
-        <h2 style="margin-top: 30px;">جميع المهام</h2>
+        <h2 style="color: #1a5f7a; margin: 40px 0 20px 0;">📋 جميع المهام</h2>
         <table>
             <thead>
                 <tr>
@@ -82,61 +183,108 @@
                 </tr>
             </thead>
             <tbody id="tasks-table">
-                <!-- سيتم ملؤها بالبيانات -->
+                <tr><td colspan="7" class="loading">جاري تحميل جميع المهام</td></tr>
             </tbody>
         </table>
+
+        <!-- نافذة المساعدة -->
+        <div id="help-modal" class="modal">
+            <div class="modal-content">
+                <h3 style="color: #1a5f7a; margin-bottom: 20px;">❓ تعليمات استخدام النظام</h3>
+                <div class="task-details">
+                    <p><strong>🔄 تحديث البيانات:</strong> لجلب أحدث البيانات من الجوجل شيت</p>
+                    <p><strong>➕ إضافة مهمة جديدة:</strong> لإضافة مهمة جديدة إلى النظام والجوجل شيت</p>
+                    <p><strong>🔗 اختبار الاتصال:</strong> للتحقق من اتصال النظام بالخادم</p>
+                    <p><strong>✅ إكمال المهمة:</strong> لتغيير حالة المهمة إلى مكتمل</p>
+                    <p><strong>👁️ تفاصيل:</strong> لعرض كافة معلومات المهمة</p>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn" onclick="hideHelp()">حسناً</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // ضع هنا الرابط الجديد الذي نسخته من الخطوة 1
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz2iYcfg2G1BIFUDcx6Daf19B564dLFwUAV3lE4TdIG7zYp3-htHk3AsJE5-vkRYi5Obw/exec';
+        // 🔗 الرابط الجديد - الإصدار 3
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzq08BtHcIXGCke7j5UTckgFzixfYaPxvVS2QePiBdO5UQWLzqx09n74jAlCbV5DBjXXg/exec';
         
         let tasks = [];
 
+        // 🚀 تحميل البيانات عند فتح الصفحة
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            // تعيين تاريخ الاستحقاق ليوم بعد أسبوع
+            const nextWeek = new Date();
+            nextWeek.setDate(nextWeek.getDate() + 7);
+            document.getElementById('task-dueDate').value = nextWeek.toISOString().split('T')[0];
+        });
+
+        // 📊 تحميل البيانات من الجوجل شيت
         async function loadData() {
             try {
-                document.getElementById('connection-status').textContent = '🔄 جاري تحميل البيانات...';
+                updateStatus('🔄 جاري تحميل البيانات من الجوجل شيت...', 'warning');
                 
                 const response = await fetch(`${WEB_APP_URL}?action=getFMSData`);
                 const data = await response.json();
                 
                 if (data.success) {
-                    tasks = data.tasks || getSampleTasks();
-                    document.getElementById('connection-status').textContent = '✅ تم تحميل البيانات بنجاح';
+                    tasks = data.tasks || [];
+                    updateStatus(`✅ تم تحميل ${tasks.length} مهمة من الجوجل شيت - ${new Date().toLocaleTimeString()}`, 'success');
                     updateDisplay();
                 } else {
-                    throw new Error('فشل في تحميل البيانات');
+                    throw new Error(data.error || 'فشل في تحميل البيانات');
                 }
             } catch (error) {
                 tasks = getSampleTasks();
-                document.getElementById('connection-status').textContent = '⚠️ استخدام بيانات تجريبية';
+                updateStatus(`⚠️ استخدام بيانات تجريبية - ${error.message}`, 'warning');
                 updateDisplay();
             }
         }
 
+        // 🧪 بيانات تجريبية للاختبار
         function getSampleTasks() {
             return [
                 {
                     id: '1',
-                    title: 'تجديد ترخيص الدفاع المدني',
+                    title: 'تجديد ترخيص الدفاع المدني للمبنى الرئيسي',
                     assignedTo: 'أحمد محمد',
                     department: 'شؤون التراخيص',
                     priority: 'high',
                     dueDate: '2025-11-15',
-                    status: 'pending'
+                    status: 'pending',
+                    category: 'تراخيص',
+                    location: 'المبنى الرئيسي',
+                    createdAt: new Date().toISOString()
                 },
                 {
-                    id: '2',
-                    title: 'صيانة أنظمة الإنذار',
+                    id: '2', 
+                    title: 'الصيانة الدورية لأنظمة الإنذار',
                     assignedTo: 'خالد إبراهيم',
                     department: 'قسم الصيانة',
                     priority: 'high',
                     dueDate: '2025-11-10',
-                    status: 'in_progress'
+                    status: 'in_progress',
+                    category: 'سلامة',
+                    location: 'جميع الأقسام',
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    id: '3',
+                    title: 'مراجعة خطة الطوارئ',
+                    assignedTo: 'فاطمة عبدالله',
+                    department: 'إدارة المخاطر',
+                    priority: 'medium',
+                    dueDate: '2025-11-01',
+                    status: 'completed',
+                    category: 'خطط',
+                    location: 'المبنى الرئيسي',
+                    createdAt: new Date().toISOString()
                 }
             ];
         }
 
+        // 🔄 تحديث العرض
         function updateDisplay() {
             // تحديث الإحصائيات
             const pendingTasks = tasks.filter(t => t.status === 'pending').length;
@@ -156,71 +304,217 @@
             updateTasksTable();
         }
 
+        // 🚨 تحديث جدول المهام العاجلة
         function updateUrgentTasksTable() {
             const urgentTasks = tasks.filter(task => task.priority === 'high' && task.status !== 'completed');
             const tbody = document.getElementById('urgent-tasks-table');
             
-            tbody.innerHTML = urgentTasks.map(task => `
-                <tr>
-                    <td>${task.title}</td>
-                    <td>${task.assignedTo}</td>
-                    <td>${task.department}</td>
-                    <td><span class="badge badge-danger">عالي</span></td>
-                    <td>${task.dueDate}</td>
-                    <td><button class="btn btn-success" onclick="completeTask('${task.id}')">إكمال</button></td>
-                </tr>
-            `).join('');
+            if (urgentTasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 30px;">لا توجد مهام عاجلة 🎉</td></tr>';
+            } else {
+                tbody.innerHTML = urgentTasks.map(task => `
+                    <tr>
+                        <td><strong>${task.title}</strong></td>
+                        <td>${task.assignedTo}</td>
+                        <td>${task.department}</td>
+                        <td><span class="badge badge-danger">🚨 عالي</span></td>
+                        <td style="color: ${isOverdue(task.dueDate) ? '#e74c3c' : '#2c3e50'}; font-weight: ${isOverdue(task.dueDate) ? 'bold' : 'normal'}">
+                            ${task.dueDate} ${isOverdue(task.dueDate) ? '⏰' : ''}
+                        </td>
+                        <td>
+                            <button class="btn btn-success" onclick="completeTask('${task.id}')">✅ إكمال</button>
+                            <button class="btn" style="background: #3498db;" onclick="viewTaskDetails('${task.id}')">👁️ تفاصيل</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
         }
 
+        // 📋 تحديث جدول جميع المهام
         function updateTasksTable() {
             const tbody = document.getElementById('tasks-table');
             
-            tbody.innerHTML = tasks.map(task => `
-                <tr>
-                    <td>${task.title}</td>
-                    <td>${task.assignedTo}</td>
-                    <td>${task.department}</td>
-                    <td><span class="badge ${task.priority === 'high' ? 'badge-danger' : 'badge-warning'}">
-                        ${task.priority === 'high' ? 'عالي' : 'متوسط'}
-                    </span></td>
-                    <td>${task.dueDate}</td>
-                    <td><span class="badge ${task.status === 'completed' ? 'badge-success' : 'badge-warning'}">
-                        ${task.status === 'completed' ? 'مكتمل' : 'معلق'}
-                    </span></td>
-                    <td><button class="btn btn-success" onclick="completeTask('${task.id}')">إكمال</button></td>
-                </tr>
-            `).join('');
-        }
-
-        function addTask() {
-            const title = prompt('أدخل اسم المهمة الجديدة:');
-            if (title) {
-                const newTask = {
-                    id: 'task_' + Date.now(),
-                    title: title,
-                    assignedTo: 'مدير النظام',
-                    department: 'الإدارة',
-                    priority: 'medium',
-                    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    status: 'pending'
-                };
-                tasks.push(newTask);
-                updateDisplay();
-                alert('تم إضافة المهمة بنجاح!');
+            if (tasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #7f8c8d; padding: 30px;">لا توجد مهام في النظام</td></tr>';
+            } else {
+                tbody.innerHTML = tasks.map(task => `
+                    <tr>
+                        <td><strong>${task.title}</strong>${task.category ? `<br><small style="color: #7f8c8d;">${task.category}</small>` : ''}</td>
+                        <td>${task.assignedTo}</td>
+                        <td>${task.department}</td>
+                        <td><span class="badge ${task.priority === 'high' ? 'badge-danger' : task.priority === 'medium' ? 'badge-warning' : 'badge-success'}">
+                            ${task.priority === 'high' ? '🚨 عالي' : task.priority === 'medium' ? '⚠️ متوسط' : '✅ منخفض'}
+                        </span></td>
+                        <td style="color: ${isOverdue(task.dueDate) && task.status !== 'completed' ? '#e74c3c' : '#2c3e50'}; font-weight: ${isOverdue(task.dueDate) && task.status !== 'completed' ? 'bold' : 'normal'}">
+                            ${task.dueDate} ${isOverdue(task.dueDate) && task.status !== 'completed' ? '⏰' : ''}
+                        </td>
+                        <td><span class="badge ${task.status === 'completed' ? 'badge-success' : 'badge-warning'}">
+                            ${task.status === 'completed' ? '✅ مكتمل' : '🕒 معلق'}
+                        </span></td>
+                        <td>
+                            <button class="btn btn-success" onclick="completeTask('${task.id}')" ${task.status === 'completed' ? 'disabled style="background: #95a5a6;"' : ''}>✅ إكمال</button>
+                            <button class="btn" style="background: #3498db;" onclick="viewTaskDetails('${task.id}')">👁️ تفاصيل</button>
+                        </td>
+                    </tr>
+                `).join('');
             }
         }
 
-        function completeTask(taskId) {
+        // ⏰ التحقق من تأخر المهمة
+        function isOverdue(dueDate) {
+            if (!dueDate) return false;
+            const today = new Date().toISOString().split('T')[0];
+            return dueDate < today;
+        }
+
+        // ➕ إظهار نموذج إضافة مهمة
+        function showAddTaskForm() {
+            document.getElementById('add-task-form').style.display = 'block';
+        }
+
+        function hideAddTaskForm() {
+            document.getElementById('add-task-form').style.display = 'none';
+        }
+
+        // 💾 إضافة مهمة جديدة إلى الجوجل شيت
+        async function addTask(event) {
+            event.preventDefault();
+            
+            const newTask = {
+                title: document.getElementById('task-title').value,
+                assignedTo: document.getElementById('task-assignedTo').value,
+                department: document.getElementById('task-department').value,
+                priority: document.getElementById('task-priority').value,
+                dueDate: document.getElementById('task-dueDate').value,
+                status: 'pending',
+                category: document.getElementById('task-category').value,
+                location: document.getElementById('task-location').value,
+                description: document.getElementById('task-description').value
+            };
+
+            try {
+                updateStatus('🔄 جاري إضافة المهمة إلى الجوجل شيت...', 'warning');
+                
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'addTask',
+                        taskData: newTask
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateStatus(`✅ ${result.message} - رقم المهمة: ${result.taskId}`, 'success');
+                    // أضف المهمة للمصفوفة المحلية
+                    newTask.id = result.taskId;
+                    newTask.createdAt = new Date().toISOString();
+                    tasks.push(newTask);
+                    updateDisplay();
+                    hideAddTaskForm();
+                    // امسح الحقول
+                    document.getElementById('task-title').value = '';
+                    document.getElementById('task-description').value = '';
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                updateStatus(`❌ فشل في إضافة المهمة: ${error.message}`, 'error');
+            }
+        }
+
+        // ✅ إكمال المهمة
+        async function completeTask(taskId) {
             const task = tasks.find(t => t.id === taskId);
             if (task && confirm(`هل تريد إكمال المهمة: ${task.title}؟`)) {
+                const originalStatus = task.status;
                 task.status = 'completed';
-                updateDisplay();
-                alert('تم إكمال المهمة بنجاح!');
+                
+                try {
+                    const response = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            action: 'updateTask',
+                            taskData: task
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        updateStatus('✅ تم تحديث المهمة في الجوجل شيت', 'success');
+                        updateDisplay();
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    task.status = originalStatus; // تراجع عن التغيير
+                    updateStatus(`❌ فشل في تحديث المهمة: ${error.message}`, 'error');
+                }
             }
         }
 
-        // تحميل البيانات عند فتح الصفحة
-        loadData();
+        // 👁️ عرض تفاصيل المهمة
+        function viewTaskDetails(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            if (task) {
+                const details = `
+📋 تفاصيل المهمة:
+
+🏷️ العنوان: ${task.title}
+👤 المسؤول: ${task.assignedTo}
+🏢 القسم: ${task.department}
+🚨 الأولوية: ${task.priority === 'high' ? 'عالي' : task.priority === 'medium' ? 'متوسط' : 'منخفض'}
+📅 تاريخ الاستحقاق: ${task.dueDate}
+📊 الحالة: ${task.status === 'completed' ? 'مكتمل' : 'معلق'}
+📂 التصنيف: ${task.category || 'غير محدد'}
+📍 المكان: ${task.location || 'غير محدد'}
+⏰ تاريخ الإنشاء: ${new Date(task.createdAt).toLocaleString('ar-SA')}
+${task.description ? `📝 الوصف: ${task.description}` : ''}
+                `.trim();
+                
+                alert(details);
+            }
+        }
+
+        // 🔗 اختبار الاتصال
+        async function testConnection() {
+            try {
+                updateStatus('🔄 جاري اختبار الاتصال بالخادم...', 'warning');
+                const response = await fetch(`${WEB_APP_URL}?action=test`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateStatus(`✅ ${data.message} - الاتصال يعمل perfectly`, 'success');
+                } else {
+                    throw new Error('فشل اختبار الاتصال');
+                }
+            } catch (error) {
+                updateStatus(`❌ فشل اختبار الاتصال: ${error.message}`, 'error');
+            }
+        }
+
+        // ❓ المساعدة
+        function showHelp() {
+            document.getElementById('help-modal').style.display = 'block';
+        }
+
+        function hideHelp() {
+            document.getElementById('help-modal').style.display = 'none';
+        }
+
+        // 📝 تحديث حالة النظام
+        function updateStatus(message, type) {
+            const statusElement = document.getElementById('connection-status');
+            statusElement.textContent = message;
+            statusElement.className = 'status ' + type;
+        }
     </script>
 </body>
 </html>
