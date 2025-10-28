@@ -112,35 +112,39 @@
 
   <!-- JavaScript -->
   <script>
-    // تفعيل الوضع الليلي
+    // زر الوضع الليلي
     document.getElementById('darkModeBtn').addEventListener('click', () => {
       document.documentElement.classList.toggle('dark');
     });
 
-  <!-- JavaScript -->
-  <script>
-    // تفعيل الوضع الليلي
-    document.getElementById('darkModeBtn').addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-    });
-
-    // 🔗 جلب البيانات الحقيقية من Google Sheet عبر Google Script
+    // رابط Google Script
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyECw5N9TioHpaDLUl7YdIuzOpHJBRxQmRLtnvqsgNTolb9guSdMcJlwnEEaTO9Dy_6JQ/exec";
 
-    fetch(WEB_APP_URL + "?action=getDashboard")
-      .then(r => r.json())
-      .then(data => {
-        const format = (k, v) => (k.includes('Rate') || k === 'fireTests') ? v + '%' : v;
+    // جلب البيانات الفعلية من الشيت
+    async function loadDashboard() {
+      try {
+        const res = await fetch(WEB_APP_URL + "?action=getDashboard", {
+          method: "GET",
+          mode: "cors",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        const format = (k, v) => (k.includes("Rate") || k === "fireTests") ? v + "%" : v;
+
         ["roundsRate","maintenanceRate","trainingRate","meetingCount","fireTests","photoCount"]
           .forEach(k => {
-            document.getElementById(k).textContent = format(k, data[k] ?? '--');
+            const el = document.getElementById(k);
+            if (el) el.textContent = format(k, data[k] ?? "--");
           });
-      })
-      .catch(err => console.error("Dashboard fetch error:", err));
-  </script>
-</body>
-</html>
 
+        console.log("✅ تم تحميل بيانات FMS:", data);
+      } catch (err) {
+        console.error("❌ خطأ في جلب بيانات FMS:", err);
+      }
+    }
+
+    // تشغيل عند تحميل الصفحة
+    loadDashboard();
   </script>
 </body>
 </html>
