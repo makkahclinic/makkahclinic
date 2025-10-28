@@ -465,10 +465,10 @@
     </div>
 
     <script>
-        // نظام FMS المتكامل
+        // نظام FMS المتكامل مع الرابط الجديد
         class FMSApplication {
             constructor() {
-                this.WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyyWK0tXrviF5dT03nho9x-enJF6jlXCj5bdkpfYhzBtTO10JX3-uCAgHYZQvn0Fid_Q/exec';
+                this.WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwNJ0CyUWvln1c5kXgxGYw-wB5X0eGQ14gMPKLz7Ye3P12FobHls5FSMT197URUbyWugg/exec';
                 this.tasks = [];
                 this.init();
             }
@@ -488,13 +488,16 @@
                     if (data.success) {
                         this.tasks = data.tasks || [];
                         console.log('✅ تم تحميل البيانات:', this.tasks);
+                        document.getElementById('connection-status').textContent = '✅ متصل بالبيانات الحقيقية';
                     } else {
                         this.tasks = this.getSampleTasks();
                         console.log('⚠️ استخدام بيانات تجريبية');
+                        document.getElementById('connection-status').textContent = '⚠️ استخدام بيانات تجريبية';
                     }
                 } catch (error) {
                     this.tasks = this.getSampleTasks();
                     console.log('❌ استخدام بيانات محلية');
+                    document.getElementById('connection-status').textContent = '❌ اتصال محلي فقط';
                 }
             }
 
@@ -507,7 +510,9 @@
                         department: 'شؤون التراخيص',
                         priority: 'high',
                         dueDate: '2025-11-15',
-                        status: 'pending'
+                        status: 'pending',
+                        category: 'تراخيص',
+                        location: 'المبنى الرئيسي'
                     },
                     {
                         id: '2', 
@@ -516,7 +521,20 @@
                         department: 'قسم الصيانة',
                         priority: 'high',
                         dueDate: '2025-11-10',
-                        status: 'in_progress'
+                        status: 'in_progress',
+                        category: 'سلامة',
+                        location: 'جميع الأقسام'
+                    },
+                    {
+                        id: '3',
+                        title: 'مراجعة خطة الطوارئ',
+                        assignedTo: 'فاطمة عبدالله',
+                        department: 'إدارة المخاطر',
+                        priority: 'medium',
+                        dueDate: '2025-11-01',
+                        status: 'pending',
+                        category: 'خطط',
+                        location: 'المبنى الرئيسي'
                     }
                 ];
             }
@@ -625,6 +643,9 @@
                             <button class="btn btn-success" onclick="app.completeTask('${task.id}')">
                                 إكمال
                             </button>
+                            <button class="btn" onclick="app.viewTaskDetails('${task.id}')">
+                                تفاصيل
+                            </button>
                         </td>
                     </tr>
                 `).join('');
@@ -646,7 +667,9 @@
                         department: 'الإدارة',
                         priority: 'medium',
                         dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                        status: 'pending'
+                        status: 'pending',
+                        category: 'عام',
+                        location: 'المبنى الرئيسي'
                     };
                     
                     this.tasks.push(newTask);
@@ -661,6 +684,24 @@
                     task.status = 'completed';
                     this.updateAllDisplays();
                     alert('تم إكمال المهمة بنجاح!');
+                }
+            }
+
+            viewTaskDetails(taskId) {
+                const task = this.tasks.find(t => t.id === taskId);
+                if (task) {
+                    alert(`
+تفاصيل المهمة:
+--------------
+المهمة: ${task.title}
+المسؤول: ${task.assignedTo}
+القسم: ${task.department}
+الأولوية: ${task.priority === 'high' ? 'عالي' : 'متوسط'}
+تاريخ الاستحقاق: ${task.dueDate}
+الحالة: ${task.status === 'completed' ? 'مكتمل' : 'معلق'}
+التصنيف: ${task.category}
+المكان: ${task.location}
+                    `);
                 }
             }
 
