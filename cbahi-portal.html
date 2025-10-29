@@ -276,7 +276,7 @@
 <header>
   <div class="container flex items-center justify-between px-4 py-3">
     <div class="flex items-center gap-3">
-      <img id="logoSmall" class="h-12 w-auto rounded bg-white p-1 shadow" alt="شعار المجمع">
+      <img id="logoSmall" class="h-12 w-auto rounded bg-white p-1 shadow" alt="شعار المجمع" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDE1MCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxNTAiIGhlaWdodD0iMTUwIiByeD0iMTIiIGZpbGw9IiM3QjFFMjQiLz4KPHRleHQgeD0iNzUiIHk9Ijc1IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U3BhYWg8L3RleHQ+Cjx0ZXh0IHg9Ijc1IiB5PSI5NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk1ha2thaCBDbGluaWM8L3RleHQ+Cjwvc3ZnPgo=">
       <button id="btnSetLogo" class="text-[var(--maroon)] text-sm underline underline-offset-4 hover:text-[var(--burgundy)]">
         تغيير/تحديث الشعار
       </button>
@@ -292,6 +292,7 @@
     </div>
   </div>
 </header>
+
 <!-- Hero -->
 <section class="hero">
   <div class="hero-inner container">
@@ -617,6 +618,67 @@
   const LOGO_B64 = "";
   const FMS_API_URL = 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL_HERE';
   const TRAIN_API_URL = 'YOUR_GAS_TRAINING_WEB_APP_URL_HERE';
+
+  // ====== دوال إدارة الشعار ======
+  function setupLogoChange() {
+    const logoPicker = document.getElementById('logoPicker');
+    const btnSetLogo = document.getElementById('btnSetLogo');
+    
+    if (btnSetLogo && logoPicker) {
+      // عند النقر على زر تغيير الشعار، فتح نافذة اختيار الملف
+      btnSetLogo.addEventListener('click', function() {
+        logoPicker.click();
+      });
+      
+      // عند اختيار ملف صورة، تحديث الشعار
+      logoPicker.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          
+          reader.onload = function(e) {
+            const imageDataUrl = e.target.result;
+            
+            // تحديث الشعار في الهيدر
+            const logoSmall = document.getElementById('logoSmall');
+            if (logoSmall) {
+              logoSmall.src = imageDataUrl;
+            }
+            
+            // تحديث الشعار في الهيرو
+            const logoHero = document.getElementById('logoHero');
+            if (logoHero) {
+              logoHero.src = imageDataUrl;
+            }
+            
+            // حفظ الشعار في localStorage للاستخدام المستقبلي
+            try {
+              localStorage.setItem('customLogo', imageDataUrl);
+            } catch (error) {
+              console.log('لا يمكن حفظ الشعار في التخزين المحلي');
+            }
+          };
+          
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+  }
+  
+  function loadSavedLogo() {
+    try {
+      const savedLogo = localStorage.getItem('customLogo');
+      if (savedLogo) {
+        const logoSmall = document.getElementById('logoSmall');
+        const logoHero = document.getElementById('logoHero');
+        
+        if (logoSmall) logoSmall.src = savedLogo;
+        if (logoHero) logoHero.src = savedLogo;
+      }
+    } catch (error) {
+      console.log('لا يمكن تحميل الشعار المحفوظ');
+    }
+  }
 
   // ====== دوال التنقل ======
   function navTo(sectionId) {
@@ -1016,6 +1078,10 @@
 
   // ====== تهيئة الصفحة ======
   document.addEventListener('DOMContentLoaded', () => {
+    // تهيئة إدارة الشعار
+    setupLogoChange();
+    loadSavedLogo();
+    
     // تهيئة مكتبة RM
     renderRMLibrary();
     
@@ -1061,16 +1127,6 @@
           messageElement.className = 'text-sm text-red-600';
         }
       });
-    }
-    
-    // تحميل الشعار إذا كان موجودًا
-    if (LOGO_B64 && LOGO_B64.length > 0) {
-      const logoSrc = `data:image/jpeg;base64,${LOGO_B64}`;
-      const logoHero = document.getElementById('logoHero');
-      const logoSmall = document.getElementById('logoSmall');
-      
-      if (logoHero) logoHero.src = logoSrc;
-      if (logoSmall) logoSmall.src = logoSrc;
     }
   });
 
