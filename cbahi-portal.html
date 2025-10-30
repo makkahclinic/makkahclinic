@@ -268,6 +268,43 @@
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     overflow: hidden;
   }
+  
+  .kpi-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  
+  .kpi-table th, .kpi-table td {
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    text-align: center;
+  }
+  
+  .kpi-table th {
+    background-color: var(--maroon);
+    color: white;
+    font-weight: 600;
+  }
+  
+  .kpi-table tr:nth-child(even) {
+    background-color: #f9fafb;
+  }
+  
+  .good {
+    background-color: #dcfce7 !important;
+    color: #166534;
+  }
+  
+  .warning {
+    background-color: #fef9c3 !important;
+    color: #854d0e;
+  }
+  
+  .critical {
+    background-color: #fee2e2 !important;
+    color: #991b1b;
+  }
 </style>
 </head>
 <body class="min-h-screen">
@@ -316,7 +353,7 @@
     <a class="nav-link" href="#committees" onclick="navTo('committees')">👥 اللجان الرسمية</a>
     <a class="nav-link" href="#rm" onclick="navTo('rm')">⚠️ إدارة المخاطر (RM)</a>
     <a class="nav-link" href="#fms" onclick="navTo('fms')">🛠️ السلامة والمرافق (FMS)</a>
-    <a class="nav-link" href="#psc" onclick="navTo('psc')">🧯 سلامة المرضى (PSC)</a>
+    <a class="nav-link" href="#psc" onclick="navTo('psc')">❤️ سلامة المرضى (PSC)</a>
     <a class="nav-link" href="#ipc" onclick="navTo('ipc')">🧼 مكافحة العدوى (IPC)</a>
     <a class="nav-link" href="#qi" onclick="navTo('qi')">📈 الجودة والتحسين (QI)</a>
     <a class="nav-link" href="#eoc" onclick="navTo('eoc')">🚨 الطوارئ والكوارث (EOC)</a>
@@ -564,14 +601,32 @@
       </div>
     </section>
 
-    <!-- بقية اللجان -->
+    <!-- سلامة المرضى (PSC) - القسم المحدث بالكامل -->
     <section id="psc" class="content-section">
-      <div class="bg-white rounded-xl shadow p-6">
-        <h2 class="text-2xl font-extrabold text-[var(--brand1)]">❤️ سلامة المرضى (PSC)</h2>
-        <p class="text-gray-700">سيتم تغذية هذا القسم لاحقًا بسياسات سلامة المرضى ونماذج M&M وتقارير تحسين السلامة.</p>
+      <div class="bg-white rounded-xl shadow p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-2xl font-extrabold text-[var(--brand1)]">❤️ سلامة المرضى (PSC)</h2>
+          <div class="flex gap-2">
+            <a href="https://www.m2020m.org/report.html" target="_blank" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)] transition">
+              <i class="fas fa-bullhorn ml-2"></i> الإبلاغ عن حادث
+            </a>
+          </div>
+        </div>
+
+        <!-- تبويبات PSC -->
+        <div class="flex flex-wrap gap-2 border-b pb-3">
+          <button class="px-3 py-1.5 rounded-md bg-[var(--brand1)] text-white" data-psc-tab="library" onclick="switchPscTab('library')">📚 مكتبة الوثائق</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-psc-tab="indicators" onclick="switchPscTab('indicators')">📊 مؤشرات الأداء</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-psc-tab="reporting" onclick="switchPscTab('reporting')">📝 نماذج الإبلاغ</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-psc-tab="needs" onclick="switchPscTab('needs')">✅ متطلبات سباهي</button>
+        </div>
+
+        <!-- محتوى تبويبات PSC -->
+        <div id="pscTabContent"></div>
       </div>
     </section>
 
+    <!-- بقية اللجان -->
     <section id="ipc" class="content-section">
       <div class="bg-white rounded-xl shadow p-6">
         <h2 class="text-2xl font-extrabold text-[var(--brand1)]">🧼 مكافحة العدوى (IPC)</h2>
@@ -711,6 +766,14 @@
         switchFmsTab('library');
       }
     }
+    
+    // تهيئة PSC إذا لزم الأمر
+    if (sectionId === 'psc') {
+      const pscContent = document.getElementById('pscTabContent');
+      if (pscContent && pscContent.innerHTML.trim() === '') {
+        switchPscTab('library');
+      }
+    }
   }
 
   // ====== دوال النافذة المنبثقة ======
@@ -723,6 +786,464 @@
   function closeDocModal() {
     document.getElementById('docFrame').src = 'about:blank';
     document.getElementById('docModal').style.display = 'none';
+  }
+
+  // ====== مكتبة وثائق PSC ======
+  const PSC_DOCS_LIBRARY = [
+    { code:'POL-PSC-2025-001', name:'سياسة برنامج سلامة المرضى', category:'POL', url:'https://drive.google.com/file/d/1FEdKvutCYqWXYwnp70OsjRO-CIzzmZU2CAFstiFVmMw/preview' },
+    { code:'DEC-PSC-2025-001', name:'قرار تشكيل لجنة سلامة المرضى', category:'DEC', url:'https://drive.google.com/file/d/1Qz7s61wIuWh1RbSLbMyrzWB_GwoPnfwqhZQHMKpgeyc/preview' },
+    { code:'CHT-PSC-2025-001', name:'ميثاق لجنة سلامة المرضى', category:'CHT', url:'https://drive.google.com/file/d/1pDDwB4Y-l7EQbwJpLH5o9PpCbdhTFQleai7PvU2Ltjg/preview' },
+    { code:'POL-PSC-2025-003', name:'سياسة التعرف المزدوج على المريض', category:'POL', url:'https://drive.google.com/file/d/1yNGDW_yLN9OrguG-_lJzXKxk6y0rJfjfc7aONgQiNqQ/preview' },
+    { code:'POL-PSC-2025-002', name:'سياسة الإبلاغ والتعلم من الأخطاء الدوائية', category:'POL', url:'https://drive.google.com/file/d/1VRoEZjXxeIoHlDvtmmus-NM-zNK-oARCh_8_u74S7c0/preview' },
+    { code:'FRM-PSC-2025-001', name:'نموذج محضر اجتماع لجنة سلامة المرضى', category:'FRM', url:'https://drive.google.com/file/d/1KVTIutS3sdWTYhc1ZB-p9J3fXDjEu-CajxwlYyocz44/preview' },
+    { code:'CHK-PSC-2025-001', name:'نموذج مراجعة تعريف المريض', category:'CHK', url:'https://drive.google.com/file/d/1oS_fO9mBIggmaXbPfaXB3H1YKyTlwgGfT8Hwbs9qi7E/preview' },
+    { code:'CHK-PSC-2025-002', name:'مراجعة أدوية عالية الخطورة', category:'CHK', url:'https://drive.google.com/file/d/1t4Pt6bkxp9ER5mnc3lcDqy_E5z3eMm9WTqilWIPAIBM/preview' },
+    { code:'LOG-PSC-2025-001', name:'سجل الحوادث وسلامة المرضى', category:'LOG', url:'https://drive.google.com/file/d/12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI/preview' },
+    { code:'FRM-PSC-2025-002', name:'نموذج SBAR للتسليم', category:'FRM', url:'https://drive.google.com/file/d/1JgEPxYvK6X_cQ7eroNCkymfUzbTCbzljqvrOKYKBw1g/preview' },
+    { code:'FRM-PSC-2025-003', name:'نموذج PDSA لتحسين الجودة', category:'FRM', url:'https://drive.google.com/file/d/1XE45nGctQGK3WIFnUxE5CqsIZu8BdBLZuqOLgsZaPXk/preview' },
+    { code:'FRM-PSC-2025-004', name:'نموذج إحالة للجنة M&M', category:'FRM', url:'https://drive.google.com/file/d/1LbD4aaIcyIDPJi2Cn_J69OEnpeCF3XTFCjjDstr2ny8/preview' },
+    { code:'REP-PSC-2025-001', name:'تقرير مؤشرات سلامة المرضى', category:'REP', url:'https://drive.google.com/file/d/1wZGnfGcj1O-329jBUXfPHXqA09k6VS58mpu4rNELS20/preview' },
+    { code:'TRN-PSC-2025-001', name:'خطة التوعية والتدريب', category:'TRN', url:'https://drive.google.com/file/d/1Ohj-mB-Jk3mmdrW9Lm6GNSojRJaT__GQpjO7aFG4twY/preview' },
+    { code:'TRN-PSC-2025-002', name:'سجل حضور تدريب', category:'TRN', url:'https://drive.google.com/file/d/1Sgj_Qps21a3GoalpZAf-08b43UmL30GLUvY8UQqyxjg/preview' },
+  ];
+
+  const PSC_CATEGORY_NAMES = {
+    POL:'السياسات', 
+    DEC:'القرارات', 
+    CHT:'الميثاق',
+    FRM:'النماذج', 
+    CHK:'قوائم التحقق', 
+    LOG:'السجلات', 
+    REP:'التقارير', 
+    TRN:'التدريب'
+  };
+
+  // ====== مؤشرات PSC ======
+  const PSC_KPI_DATA = [
+    { الشهر: 'يناير', تعريف_المريض: 98, التزام_غسل_اليدين: 85, أخطاء_دواء: 5.2, سقوط: 3.1, بلاغات_قريبة: 12 },
+    { الشهر: 'فبراير', تعريف_المريض: 99, التزام_غسل_اليدين: 82, أخطاء_دواء: 6.1, سقوط: 3.5, بلاغات_قريبة: 8 },
+    { الشهر: 'مارس', تعريف_المريض: 92, التزام_غسل_اليدين: 88, أخطاء_دواء: 8.5, سقوط: 4.8, بلاغات_قريبة: 15 },
+    { الشهر: 'أبريل', تعريف_المريض: 99, التزام_غسل_اليدين: 95, أخطاء_دواء: 4.0, سقوط: 3.0, بلاغات_قريبة: 35 },
+    { الشهر: 'مايو', تعريف_المريض: 100, التزام_غسل_اليدين: 96, أخطاء_دواء: 3.5, سقوط: 2.9, بلاغات_قريبة: 28 },
+  ];
+
+  // ====== دوال PSC ======
+  function switchPscTab(tab) {
+    // تحديث أزرار التبويب
+    document.querySelectorAll('[data-psc-tab]').forEach(button => {
+      if (button.getAttribute('data-psc-tab') === tab) {
+        button.classList.add('bg-[var(--brand1)]', 'text-white');
+        button.classList.remove('bg-gray-100');
+      } else {
+        button.classList.remove('bg-[var(--brand1)]', 'text-white');
+        button.classList.add('bg-gray-100');
+      }
+    });
+    
+    const container = document.getElementById('pscTabContent');
+    container.innerHTML = '';
+    
+    if (tab === 'library') {
+      renderPscLibrary(container, PSC_DOCS_LIBRARY);
+    } else if (tab === 'indicators') {
+      renderPscIndicators(container);
+    } else if (tab === 'reporting') {
+      renderPscReporting(container);
+    } else if (tab === 'needs') {
+      renderPscNeeds(container);
+    }
+  }
+
+  function renderPscLibrary(container, docs) {
+    // عناصر التحكم
+    const categories = [...new Set(docs.map(doc => doc.category))];
+    const controls = document.createElement('div');
+    controls.className = 'flex flex-wrap items-center gap-2 mb-4';
+    controls.innerHTML = `
+      <div class="flex flex-wrap gap-2">
+        <button data-psc-filter="ALL" class="px-3 py-1 rounded-full bg-[var(--brand1)] text-white text-sm">الكل</button>
+        ${categories.map(cat => 
+          `<button data-psc-filter="${cat}" class="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 text-sm">${PSC_CATEGORY_NAMES[cat] || cat}</button>`
+        ).join('')}
+      </div>
+      <div class="ml-auto w-full md:w-64">
+        <input id="pscSearch" type="text" placeholder="ابحث بالرمز أو العنوان..." class="w-full border rounded-lg px-3 py-2">
+      </div>
+    `;
+    
+    const grid = document.createElement('div');
+    grid.className = 'grid-cards';
+    grid.id = 'pscGrid';
+    
+    container.appendChild(controls);
+    container.appendChild(grid);
+    
+    // دالة التصفية والعرض
+    function renderFilteredDocs(filter = 'ALL', query = '') {
+      grid.innerHTML = '';
+      const searchQuery = query.toLowerCase();
+      
+      const filteredDocs = docs.filter(doc => {
+        const matchesFilter = filter === 'ALL' || doc.category === filter;
+        const matchesQuery = !searchQuery || 
+          doc.code.toLowerCase().includes(searchQuery) || 
+          doc.name.toLowerCase().includes(searchQuery);
+        return matchesFilter && matchesQuery;
+      });
+      
+      filteredDocs.forEach(doc => {
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded-xl border bg-white shadow-sm hover:shadow-md transition flex flex-col';
+        card.innerHTML = `
+          <div class="text-xs text-gray-500 mb-1">${PSC_CATEGORY_NAMES[doc.category] || doc.category}</div>
+          <div class="font-extrabold text-[var(--brand1)]">${doc.code}</div>
+          <div class="text-gray-800 mt-1 flex-1">${doc.name}</div>
+          <div class="mt-3 flex gap-2">
+            <button class="px-3 py-2 text-sm text-white rounded-lg bg-[var(--brand1)] hover:bg-[var(--brand2)]" 
+                    onclick="openDocModal('${doc.code}: ${doc.name}', '${doc.url}')">
+              <i class="fas fa-eye ml-1"></i> عرض
+            </button>
+            <a class="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50" 
+               target="_blank" href="${doc.url.replace('/preview', '/view')}">
+              <i class="fas fa-up-right-from-square ml-1"></i> فتح في تبويب
+            </a>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+    
+    // إضافة مستمعي الأحداث
+    controls.querySelectorAll('button[data-psc-filter]').forEach(button => {
+      button.addEventListener('click', () => {
+        controls.querySelectorAll('button[data-psc-filter]').forEach(btn => {
+          btn.classList.remove('bg-[var(--brand1)]', 'text-white');
+        });
+        button.classList.add('bg-[var(--brand1)]', 'text-white');
+        renderFilteredDocs(button.getAttribute('data-psc-filter'), document.getElementById('pscSearch').value);
+      });
+    });
+    
+    document.getElementById('pscSearch').addEventListener('input', (e) => {
+      const activeFilter = controls.querySelector('button[data-psc-filter].bg-[var(--brand1)]') || 
+                          { getAttribute: () => 'ALL' };
+      renderFilteredDocs(activeFilter.getAttribute('data-psc-filter'), e.target.value);
+    });
+    
+    // التهيئة الأولية
+    renderFilteredDocs('ALL', '');
+  }
+
+  function renderPscIndicators(container) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'space-y-6';
+    
+    // جدول المؤشرات
+    const tableSection = document.createElement('div');
+    tableSection.innerHTML = `
+      <h3 class="text-xl font-bold text-[var(--brand1)] mb-4">📊 مؤشرات سلامة المرضى الشهرية</h3>
+      <div class="overflow-auto">
+        <table class="kpi-table">
+          <thead>
+            <tr>
+              <th>الشهر</th>
+              <th>تعريف المريض %</th>
+              <th>التزام غسل اليدين %</th>
+              <th>أخطاء دوائية لكل 1000 وصفة</th>
+              <th>سقوط لكل 1000 زيارة</th>
+              <th>بلاغات قريبة من الوقوع</th>
+            </tr>
+          </thead>
+          <tbody id="kpiTableBody"></tbody>
+        </table>
+      </div>
+    `;
+    
+    // مخطط بياني مبسط
+    const chartSection = document.createElement('div');
+    chartSection.innerHTML = `
+      <h3 class="text-xl font-bold text-[var(--brand1)] mb-4">📈 تطور مؤشرات السلامة</h3>
+      <div class="border rounded-xl p-4 bg-white">
+        <div class="flex flex-wrap gap-4 mb-4">
+          <button class="px-3 py-1 rounded-full bg-[var(--brand1)] text-white text-sm" onclick="renderPscChart('تعريف_المريض')">تعريف المريض</button>
+          <button class="px-3 py-1 rounded-full bg-gray-200 text-sm" onclick="renderPscChart('التزام_غسل_اليدين')">غسل اليدين</button>
+          <button class="px-3 py-1 rounded-full bg-gray-200 text-sm" onclick="renderPscChart('أخطاء_دواء')">الأخطاء الدوائية</button>
+          <button class="px-3 py-1 rounded-full bg-gray-200 text-sm" onclick="renderPscChart('سقوط')">معدل السقوط</button>
+        </div>
+        <div id="pscChart" class="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
+          <p class="text-gray-500">اختر مؤشراً لعرض الرسم البياني</p>
+        </div>
+      </div>
+    `;
+    
+    wrapper.appendChild(tableSection);
+    wrapper.appendChild(chartSection);
+    container.appendChild(wrapper);
+    
+    // ملء جدول المؤشرات
+    renderPscKpiTable();
+  }
+
+  function renderPscKpiTable() {
+    const tableBody = document.getElementById('kpiTableBody');
+    tableBody.innerHTML = '';
+    
+    PSC_KPI_DATA.forEach(row => {
+      const tr = document.createElement('tr');
+      
+      // تحديد فئات الألوان بناءً على القيم
+      const patientIdClass = row.تعريف_المريض >= 95 ? 'good' : row.تعريف_المريض >= 90 ? 'warning' : 'critical';
+      const handHygieneClass = row.التزام_غسل_اليدين >= 90 ? 'good' : row.التزام_غسل_اليدين >= 80 ? 'warning' : 'critical';
+      const medErrorsClass = row.أخطاء_دواء <= 4 ? 'good' : row.أخطاء_دواء <= 6 ? 'warning' : 'critical';
+      const fallsClass = row.سقوط <= 3 ? 'good' : row.سقوط <= 4 ? 'warning' : 'critical';
+      const nearMissClass = row.بلاغات_قريبة >= 20 ? 'good' : row.بلاغات_قريبة >= 10 ? 'warning' : 'critical';
+      
+      tr.innerHTML = `
+        <td class="font-semibold">${row.الشهر}</td>
+        <td class="${patientIdClass}">${row.تعريف_المريض}%</td>
+        <td class="${handHygieneClass}">${row.التزام_غسل_اليدين}%</td>
+        <td class="${medErrorsClass}">${row.أخطاء_دواء}</td>
+        <td class="${fallsClass}">${row.سقوط}</td>
+        <td class="${nearMissClass}">${row.بلاغات_قريبة}</td>
+      `;
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function renderPscChart(indicator) {
+    const chartContainer = document.getElementById('pscChart');
+    const indicatorName = {
+      'تعريف_المريض': 'تعريف المريض %',
+      'التزام_غسل_اليدين': 'التزام غسل اليدين %', 
+      'أخطاء_دواء': 'الأخطاء الدوائية',
+      'سقوط': 'معدل السقوط'
+    }[indicator];
+    
+    // رسم بياني مبسط باستخدام HTML وCSS
+    const maxValue = Math.max(...PSC_KPI_DATA.map(row => row[indicator]));
+    const minValue = Math.min(...PSC_KPI_DATA.map(row => row[indicator]));
+    
+    let chartHTML = `
+      <div class="w-full h-full p-4">
+        <h4 class="text-center font-bold mb-4">${indicatorName}</h4>
+        <div class="flex items-end justify-between h-40 gap-2">
+    `;
+    
+    PSC_KPI_DATA.forEach((row, index) => {
+      const value = row[indicator];
+      const percentage = ((value - minValue) / (maxValue - minValue)) * 80 + 20;
+      
+      chartHTML += `
+        <div class="flex flex-col items-center flex-1">
+          <div class="text-xs mb-1">${row.الشهر}</div>
+          <div class="w-full bg-[var(--brand1)] rounded-t transition-all" style="height: ${percentage}%"></div>
+          <div class="text-xs mt-1">${value}</div>
+        </div>
+      `;
+    });
+    
+    chartHTML += `</div></div>`;
+    chartContainer.innerHTML = chartHTML;
+    
+    // تحديث أزرار المؤشرات النشطة
+    document.querySelectorAll('#pscChart').closest('.border').querySelectorAll('button').forEach(btn => {
+      btn.classList.remove('bg-[var(--brand1)]', 'text-white');
+      btn.classList.add('bg-gray-200');
+    });
+    
+    const activeButton = document.querySelector(`[onclick="renderPscChart('${indicator}')"]`);
+    if (activeButton) {
+      activeButton.classList.add('bg-[var(--brand1)]', 'text-white');
+      activeButton.classList.remove('bg-gray-200');
+    }
+  }
+
+  function renderPscReporting(container) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'space-y-6';
+    
+    // نماذج الإبلاغ السريع
+    const quickReports = document.createElement('div');
+    quickReports.innerHTML = `
+      <h3 class="text-xl font-bold text-[var(--brand1)] mb-4">📝 نماذج الإبلاغ السريع</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a href="https://drive.google.com/file/d/1rFQjcCWP010zLNb4FfRtT1aTmrbY9fyjGcMeYIXSQqQ/view" target="_blank" class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
+          <div class="h-12 w-12 rounded-full bg-red-100 grid place-items-center text-red-600">
+            <i class="fas fa-exclamation-triangle"></i>
+          </div>
+          <div>
+            <div class="font-bold">بلاغ حادث</div>
+            <div class="text-sm text-gray-600">للبطالات عن الأحداث السلبية التي وقعت</div>
+          </div>
+        </a>
+        
+        <a href="https://drive.google.com/file/d/1DhGR9WtVrM2LxITiv8WBMSCKs407Kb-vUZXg0mZVwD0/view" target="_blank" class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
+          <div class="h-12 w-12 rounded-full bg-yellow-100 grid place-items-center text-yellow-600">
+            <i class="fas fa-bullseye"></i>
+          </div>
+          <div>
+            <div class="font-bold">بلاغ قريب من الوقوع</div>
+            <div class="text-sm text-gray-600">للبطالات عن الأحداث التي كادت تقع</div>
+          </div>
+        </a>
+        
+        <a href="https://drive.google.com/file/d/1Yw7CFRvzssAWU0JYFkNz1Z9o0fQoMKCqoqrRhEHWZ_I/view" target="_blank" class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
+          <div class="h-12 w-12 rounded-full bg-orange-100 grid place-items-center text-orange-600">
+            <i class="fas fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <div class="font-bold">بلاغ خطر/شرط غير آمن</div>
+            <div class="text-sm text-gray-600">للبطالات عن المخاطر المحتملة</div>
+          </div>
+        </a>
+        
+        <a href="https://drive.google.com/file/d/17tZnAvhWCvPbb5Bp3UymLxzEz-IciEjxV4Tn97tIWwQ/view" target="_blank" class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
+          <div class="h-12 w-12 rounded-full bg-blue-100 grid place-items-center text-blue-600">
+            <i class="fas fa-toolbox"></i>
+          </div>
+          <div>
+            <div class="font-bold">بلاغ عطل جهاز/تجهيز</div>
+            <div class="text-sm text-gray-600">للبطالات عن الأعطال في الأجهزة الطبية</div>
+          </div>
+        </a>
+      </div>
+    `;
+    
+    // نموذج إدخال بيانات المؤشرات
+    const dataEntry = document.createElement('div');
+    dataEntry.className = 'border rounded-xl p-4 bg-white';
+    dataEntry.innerHTML = `
+      <h3 class="text-xl font-bold text-[var(--brand1)] mb-4">➕ إدخال بيانات مؤشر جديد</h3>
+      <form id="kpiForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-1">الشهر *</label>
+          <select name="month" required class="w-full border rounded-lg px-3 py-2">
+            <option value="">اختر الشهر</option>
+            <option value="يناير">يناير</option>
+            <option value="فبراير">فبراير</option>
+            <option value="مارس">مارس</option>
+            <option value="أبريل">أبريل</option>
+            <option value="مايو">مايو</option>
+            <option value="يونيو">يونيو</option>
+            <option value="يوليو">يوليو</option>
+            <option value="أغسطس">أغسطس</option>
+            <option value="سبتمبر">سبتمبر</option>
+            <option value="أكتوبر">أكتوبر</option>
+            <option value="نوفمبر">نوفمبر</option>
+            <option value="ديسمبر">ديسمبر</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">تعريف المريض % *</label>
+          <input type="number" min="0" max="100" name="patient_id" required class="w-full border rounded-lg px-3 py-2" placeholder="النسبة المئوية">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">التزام غسل اليدين % *</label>
+          <input type="number" min="0" max="100" name="hand_hygiene" required class="w-full border rounded-lg px-3 py-2" placeholder="النسبة المئوية">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">الأخطاء الدوائية *</label>
+          <input type="number" step="0.1" min="0" name="med_errors" required class="w-full border rounded-lg px-3 py-2" placeholder="لكل 1000 وصفة">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">معدل السقوط *</label>
+          <input type="number" step="0.1" min="0" name="falls" required class="w-full border rounded-lg px-3 py-2" placeholder="لكل 1000 زيارة">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">البلاغات قريبة الوقوع *</label>
+          <input type="number" min="0" name="near_miss" required class="w-full border rounded-lg px-3 py-2" placeholder="العدد">
+        </div>
+        <div class="md:col-span-2 flex items-center gap-3 pt-2">
+          <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">حفظ البيانات</button>
+          <span id="kpiMsg" class="text-sm"></span>
+        </div>
+      </form>
+    `;
+    
+    wrapper.appendChild(quickReports);
+    wrapper.appendChild(dataEntry);
+    container.appendChild(wrapper);
+    
+    // معالجة نموذج إدخال البيانات
+    const kpiForm = document.getElementById('kpiForm');
+    if (kpiForm) {
+      kpiForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const messageElement = document.getElementById('kpiMsg');
+        messageElement.textContent = 'جارٍ حفظ البيانات...';
+        messageElement.className = 'text-sm text-blue-600';
+        
+        // في بيئة حقيقية، هنا سيتم إرسال البيانات لخادم
+        setTimeout(() => {
+          messageElement.textContent = '✅ تم حفظ البيانات بنجاح (في بيئة حقيقية سيتم حفظها في قاعدة البيانات)';
+          messageElement.className = 'text-sm text-green-600';
+          kpiForm.reset();
+        }, 1000);
+      });
+    }
+  }
+
+  function renderPscNeeds(container) {
+    const needs = [
+      { key: 'charter', text: 'ميثاق لجنة سلامة المرضى معتمد (CHT-PSC-2025-001)', required: true },
+      { key: 'policy', text: 'سياسة برنامج سلامة المرضى معتمدة (POL-PSC-2025-001)', required: true },
+      { key: 'committee', text: 'قرار تشكيل اللجنة مفعل (DEC-PSC-2025-001)', required: true },
+      { key: 'patient_id', text: 'سياسة التعرف المزدوج على المريض معتمدة (POL-PSC-2025-003)', required: true },
+      { key: 'med_errors', text: 'سياسة الإبلاغ عن الأخطاء الدوائية معتمدة (POL-PSC-2025-002)', required: true },
+      { key: 'meetings', text: 'محاضر اجتماعات اللجنة مسجلة ومنظمة', required: true },
+      { key: 'indicators', text: 'نظام متابعة مؤشرات السلامة مفعل', required: true },
+      { key: 'training', text: 'خطة تدريب سلامة المرضى منفذة', required: true },
+    ];
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'grid-cards';
+    
+    needs.forEach(need => {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-xl border bg-white shadow-sm';
+      card.innerHTML = `
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" class="mt-1 h-5 w-5" data-required="${need.required ? 1 : 0}">
+          <span class="font-semibold">${need.text}</span>
+        </label>
+        ${need.required ? '<div class="text-xs text-red-600 mt-1">متطلب إلزامي</div>' : ''}
+      `;
+      wrapper.appendChild(card);
+    });
+    
+    const actions = document.createElement('div');
+    actions.className = 'pt-4 flex gap-3';
+    actions.innerHTML = `
+      <button class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]" onclick="validatePscNeeds()">
+        تحقّق من الاكتمال
+      </button>
+      <button class="px-4 py-2 rounded-lg border hover:bg-gray-50" onclick="generatePscReport()">
+        إنشاء تقرير الجاهزية
+      </button>
+    `;
+    
+    container.appendChild(wrapper);
+    container.appendChild(actions);
+  }
+
+  function validatePscNeeds() {
+    const requiredCheckboxes = [...document.querySelectorAll('#pscTabContent input[data-required="1"]')];
+    const missingCount = requiredCheckboxes.filter(checkbox => !checkbox.checked).length;
+    
+    if (missingCount === 0) {
+      alert('ممتاز ✅ — جميع متطلبات سلامة المرضى الإلزامية مكتملة.');
+    } else {
+      alert(`⚠️ تنبيه: يوجد ${missingCount} متطلب(ات) إلزامي غير مكتمل في قسم سلامة المرضى.`);
+    }
+  }
+
+  function generatePscReport() {
+    const checkboxes = [...document.querySelectorAll('#pscTabContent input[type="checkbox"]')];
+    const checkedCount = checkboxes.filter(checkbox => checkbox.checked).length;
+    const totalCount = checkboxes.length;
+    const percentage = Math.round((checkedCount / totalCount) * 100);
+    
+    alert(`📋 تقرير جاهزية سلامة المرضى:\n\n✅ ${checkedCount} من ${totalCount} بند مكتمل\n📊 نسبة الإكمال: ${percentage}%\n\n${percentage >= 80 ? 'مستوى جيد ✓' : 'يحتاج إلى تحسين ⚠️'}`);
   }
 
   // ====== دوال FMS ======
@@ -1134,7 +1655,11 @@
   window.openDocModal = openDocModal;
   window.closeDocModal = closeDocModal;
   window.switchFmsTab = switchFmsTab;
+  window.switchPscTab = switchPscTab;
   window.validateNeeds = validateNeeds;
+  window.renderPscChart = renderPscChart;
+  window.validatePscNeeds = validatePscNeeds;
+  window.generatePscReport = generatePscReport;
 </script>
 </body>
 </html>
