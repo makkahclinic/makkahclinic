@@ -679,7 +679,30 @@
     </section>
   </main>
 </div>
+    <!-- الطوارئ والكوارث (EOC) - قسم محدث بالكامل -->
+    <section id="eoc" class="content-section">
+      <div class="bg-white rounded-xl shadow p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-2xl font-extrabold text-[var(--brand1)]">🚨 الطوارئ والكوارث (EOC)</h2>
+          <div class="flex items-center gap-2 text-sm">
+            <button class="px-3 py-1.5 rounded-md bg-[var(--brand1)] text-white" onclick="eocExportAll()">⬇️ تصدير كل بيانات EOC (JSON)</button>
+            <label class="px-3 py-1.5 rounded-md border cursor-pointer">
+              ⬆️ استيراد
+              <input id="eocImportInput" type="file" accept="application/json" class="hidden" onchange="eocImportAll(this.files[0])">
+            </label>
+          </div>
+        </div>
 
+        <!-- تبويبات EOC -->
+        <div class="flex flex-wrap gap-2 border-b pb-3">
+          <button class="px-3 py-1.5 rounded-md bg-[var(--brand1)] text-white" data-eoc-tab="library" onclick="switchEocTab('library')">📚 مكتبة الوثائق</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-eoc-tab="exercises" onclick="switchEocTab('exercises')">🏃‍♂️ التمارين والإخلاءات</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-eoc-tab="readiness" onclick="switchEocTab('readiness')">🛡️ تقييم الجاهزية</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-eoc-tab="needs" onclick="switchEocTab('needs')">✅ متطلبات سباهي (EOC)</button>
+        </div>
+        <div id="eocTabContent"></div>
+      </div>
+    </section>
 <!-- Scroll to top -->
 <button id="scrollTopBtn" title="إلى الأعلى" onclick="window.scrollTo({top:0,behavior:'smooth'})">
   <i class="fas fa-arrow-up"></i>
@@ -2665,6 +2688,648 @@ const IPC_CATEGORY_NAMES = {
         if (data.meeting) localStorage.setItem(QI_KEYS.MEETING, (await SecureStore.encryptJson(data.meeting)).data);
         if (data.audit) localStorage.setItem(QI_KEYS.AUDIT, (await SecureStore.encryptJson(data.audit)).data);
         alert('✅ تم استيراد بيانات الجودة بنجاح.');
+      } catch (err) {
+        alert('⚠️ ملف غير صالح.');
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+  // ====== الطوارئ والكوارث (EOC) — مكتبة + نماذج بإسناد محلي ======
+  const EOC_DOCS_LIBRARY = [
+    { code:'EOC-Index-2025-001', name:'فهرس وثائق الحزمة', category:'INDEX', url:'https://drive.google.com/file/d/12fiFYU5EeMzUv4UI11k2aIYoIuWPr-B2fmW1caIfXlY/preview' },
+    { code:'Readme-2025', name:'تعليمات الاعتماد والحفظ', category:'GUIDE', url:'https://drive.google.com/file/d/1WkN1gTWJc_l1xJgOh--uq7MpQVGw-SlH_wA8XpdakdU/preview' },
+    { code:'References-2025', name:'مراجع وروابط', category:'REF', url:'https://drive.google.com/file/d/12plKBVOYvBfp6Kp8PX5NCC-iRuZdHU8xIuZLBFZxnLA/preview' },
+    { code:'EOC-POL-2025-001', name:'سياسة إدارة الطوارئ والكوارث', category:'POL', url:'https://drive.google.com/file/d/18IjABxZrfWdqs3ogcHJMRcXLC3LdYeLoOCG1DmPUnHk/preview' },
+    { code:'EOC-TOR-2025-001', name:'ميثاق لجنة الطوارئ والكوارث', category:'TOR', url:'https://drive.google.com/file/d/1GabuSVynwTrZDo6xAWlZ-vySD2oAK1FR8YL6JYe8uLY/preview' },
+    { code:'EOC-PLN-2025-001', name:'خطة الطوارئ الشاملة (EOP)', category:'PLN', url:'https://drive.google.com/file/d/1rMusdz3AtFzMgOQaAg3c-7DnjwLNt79ilzUTSRRngT4/preview' },
+    { code:'EOC-PLN-2025-002', name:'برنامج التدريب والتمارين', category:'PLN', url:'https://drive.google.com/file/d/1Y9nsgDQ1UXS60r3q5rhRBNkgE5EWW8dKsV9Vmvf3Dxw/preview' },
+    { code:'EOC-PRO-2025-001', name:'آلية تقييم المخاطر السنوية (HVA)', category:'PRO', url:'https://drive.google.com/file/d/1IpfxWVyfSadhmLoHS2hAYSPs8jRF7pBYuCKo3lyTNg4/preview' },
+    { code:'EOC-SOP-2025-001', name:'تفعيل وإدارة الحادث (ICS)', category:'SOP', url:'https://drive.google.com/file/d/1bjq5a9JSxCB_XVkzoKv-GSmTwzKJkAAEA3VjYgzZZwU/preview' },
+    { code:'EOC-SOP-2025-002', name:'حريق/دخان (RACE/PASS)', category:'SOP', url:'https://drive.google.com/file/d/1VT17h68xnLmUSzvNOp4Brm79F9jyXBlTYFNSBewCQDo/preview' },
+    { code:'EOC-SOP-2025-003', name:'الإخلاء والتجمع وإعادة الدخول', category:'SOP', url:'https://drive.google.com/file/d/1WX4T7VkA8G9s42YZE-g8tJ33Qmy-sDdYrGOTvzGbuYw/preview' },
+    { code:'EOC-SOP-2025-004', name:'انقطاع الكهرباء/الأنظمة الحرجة', category:'SOP', url:'https://drive.google.com/file/d/15Q6d_f8OvBbNmoArZtfzlg3PUeWVIHCcxMRqT4owQFI/preview' },
+    { code:'EOC-SOP-2025-005', name:'تفشّي أمراض معدية/إنذار صحي', category:'SOP', url:'https://drive.google.com/file/d/1OqFbjCJ9uqTbQPJicNU3cFBR-SgeuHwRjYBuWtAjM4Q/preview' },
+    { code:'EOC-SOP-2025-006', name:'حادث جسيم سريري وإدارة ما بعد الحدث (SPSC/RCA)', category:'SOP', url:'https://drive.google.com/file/d/1CHDPHSyer7Ruuy0NY_oByQ0ekU2ozGQttNw8lRimZRs/preview' },
+    { code:'EOC-SOP-2025-007', name:'تعطل الاتصالات وتقنية المعلومات/البيانات (PDPL)', category:'SOP', url:'https://drive.google.com/file/d/1p-OsanRRMfaw9a1KV500Z-lxvCZ8Ch91EFJ0Alptviw/preview' },
+    { code:'EOC-LST-2025-001', name:'لوحة/قائمة اتصالات الطوارئ', category:'LST', url:'https://drive.google.com/file/d/1sV8ABIFDAuUyo7vWaCPM5Y3hVtVTeK6AQhhUW0xuX1w/preview' },
+    { code:'EOC-CHK-2025-001', name:'قائمة فحص جاهزية الطوارئ', category:'CHK', url:'https://drive.google.com/file/d/1Kp1OjuPEfzEA0JE_FMnf-padRq_0-VJABf1w4eZM1m8/preview' },
+    { code:'EOC-FRM-2025-001', name:'محضر اجتماع لجنة الطوارئ والكوارث', category:'FRM', url:'https://drive.google.com/file/d/1SeopdYmHRU4CL--j054kA37WAwqCCc-lAQrlr_3PM74/preview' },
+    { code:'EOC-FRM-2025-002', name:'سجل حضور وتدريب الطوارئ', category:'FRM', url:'https://drive.google.com/file/d/1pR3gpKB1nv-98Nnh7YG9na0SjHE8ssshqwjsljvcVTQ/preview' },
+    { code:'EOC-FRM-2025-003', name:'تقييم تمرين الإخلاء/الحريق (After-Action)', category:'FRM', url:'https://drive.google.com/file/d/1fqd2ZeGjqXWxuTXlg8VJZUw1ddphrglHU2uGWb-V2jg/preview' },
+    { code:'EOC-FRM-2025-004', name:'خطة الإجراءات التصحيحية (CAPA Tracker)', category:'FRM', url:'https://drive.google.com/file/d/1y_-Uywr5VASlVMusD0NKFDdTHkFbExXdMyISSzYIh60/preview' },
+    { code:'EOC-FRM-2025-005', name:'تقرير حادث طارئ/ما بعد الحدث', category:'FRM', url:'https://drive.google.com/file/d/1AyNMAdrJCalF9LqBmrdRh64W1gUrJpiQFN2yplFh5B8/preview' },
+    { code:'EOC-FRM-2025-006', name:'نموذج HVA لتقييم مخاطر الكوارث', category:'FRM', url:'https://drive.google.com/file/d/1AbB5BL4d_pki3to9wn3169PZ-OJBfwCBEjYNApvStGM/preview' },
+    { code:'EOC-FRM-2025-007', name:'سجل تمارين وإخلاءات', category:'FRM', url:'https://drive.google.com/file/d/1y3Sjxlq39HTEQMHYpCGroil33nLaODFepJHfjYod9wY/preview' },
+    { code:'EOC-FRM-2025-008', name:'سجل معدات الاستجابة', category:'FRM', url:'https://drive.google.com/file/d/1Gxvm9A1CM1RPy3vTFDPxX5rsmlInqfeSid2YDe-ieGg/preview' },
+    { code:'EOC-QIP-2025-001', name:'نظام التحسين والمتابعة (CAPA)', category:'QIP', url:'https://drive.google.com/file/d/1JSa-E4YoJL8iYjvGVVioEpp_Wu5tKQopC_tfFo56sWo/preview' }
+  ];
+
+  const EOC_CATEGORY_NAMES = {
+    POL:'السياسات',
+    SOP:'إجراءات التشغيل',
+    FRM:'النماذج',
+    PLN:'الخطط',
+    LST:'القوائم',
+    CHK:'قوائم التحقق',
+    TOR:'الميثاق',
+    PRO:'الإجراءات',
+    QIP:'تحسين الجودة',
+    REF:'المراجع',
+    GUIDE:'الدلائل',
+    INDEX:'الفهرس'
+  };
+
+  // مفاتيح التخزين لبيانات EOC
+  const EOC_KEYS = {
+    EXERCISES: 'eoc_exercises_v1',
+    EQUIPMENT: 'eoc_equipment_v1',
+    TRAINING: 'eoc_training_v1',
+    READINESS: 'eoc_readiness_v1'
+  };
+
+  // دوال EOC
+  function switchEocTab(tab) {
+    document.querySelectorAll('[data-eoc-tab]').forEach(button => {
+      if (button.getAttribute('data-eoc-tab') === tab) {
+        button.classList.add('bg-[var(--brand1)]', 'text-white');
+        button.classList.remove('bg-gray-100');
+      } else {
+        button.classList.remove('bg-[var(--brand1)]', 'text-white');
+        button.classList.add('bg-gray-100');
+      }
+    });
+    
+    const container = document.getElementById('eocTabContent');
+    container.innerHTML = '';
+    
+    if (tab === 'library') {
+      renderEocLibrary(container, EOC_DOCS_LIBRARY);
+    } else if (tab === 'exercises') {
+      renderEocExercises(container);
+    } else if (tab === 'readiness') {
+      renderEocReadiness(container);
+    } else if (tab === 'needs') {
+      renderEocNeeds(container);
+    }
+  }
+
+  function renderEocLibrary(container, docs) {
+    const categories = [...new Set(docs.map(d => d.category))];
+    const controls = document.createElement('div');
+    controls.className = 'flex flex-wrap items-center gap-2 mb-4';
+    controls.innerHTML = `
+      <div class="flex flex-wrap gap-2">
+        <button data-eoc-filter="ALL" class="px-3 py-1 rounded-full bg-[var(--brand1)] text-white text-sm">الكل</button>
+        ${categories.map(cat => `<button data-eoc-filter="${cat}" class="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 text-sm">${EOC_CATEGORY_NAMES[cat] || cat}</button>`).join('')}
+      </div>
+      <div class="ml-auto w-full md:w-64">
+        <input id="eocSearch" type="text" placeholder="ابحث بالرمز أو العنوان..." class="w-full border rounded-lg px-3 py-2">
+      </div>
+    `;
+    const grid = document.createElement('div');
+    grid.className = 'grid-cards';
+    container.appendChild(controls);
+    container.appendChild(grid);
+
+    function renderFilteredDocs(filter='ALL', query='') {
+      grid.innerHTML = '';
+      const q = query.toLowerCase();
+      const filtered = docs.filter(d => (filter==='ALL' || d.category===filter) && (!q || d.code.toLowerCase().includes(q) || d.name.toLowerCase().includes(q)));
+      filtered.forEach(doc => {
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded-xl border bg-white shadow-sm hover:shadow-md transition flex flex-col';
+        card.innerHTML = `
+          <div class="text-xs text-gray-500 mb-1">${EOC_CATEGORY_NAMES[doc.category] || doc.category}</div>
+          <div class="font-extrabold text-[var(--brand1)]">${doc.code}</div>
+          <div class="text-gray-800 mt-1 flex-1">${doc.name}</div>
+          <div class="mt-3 flex gap-2">
+            <button class="px-3 py-2 text-sm text-white rounded-lg bg-[var(--brand1)] hover:bg-[var(--brand2)]" onclick="openDocModal('${doc.code}: ${doc.name}', '${doc.url}')">
+              <i class="fas fa-eye ml-1"></i> عرض
+            </button>
+            <a class="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50" target="_blank" href="${doc.url.replace('/preview','/view')}">
+              <i class="fas fa-up-right-from-square ml-1"></i> فتح في تبويب
+            </a>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    controls.querySelectorAll('button[data-eoc-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        controls.querySelectorAll('button[data-eoc-filter]').forEach(b => b.classList.remove('bg-[var(--brand1)]','text-white'));
+        btn.classList.add('bg-[var(--brand1)]','text-white');
+        renderFilteredDocs(btn.getAttribute('data-eoc-filter'), document.getElementById('eocSearch').value);
+      });
+    });
+    document.getElementById('eocSearch').addEventListener('input', e => {
+      const active = controls.querySelector('button[data-eoc-filter].bg-[var(--brand1)]') || { getAttribute: ()=>'ALL' };
+      renderFilteredDocs(active.getAttribute('data-eoc-filter'), e.target.value);
+    });
+    renderFilteredDocs('ALL','');
+  }
+
+  function renderEocExercises(container) {
+    container.innerHTML = `
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">🏃‍♂️ تسجيل تمرين طوارئ</h3>
+          <form id="eocExerciseForm" class="space-y-3">
+            <input name="exercise_name" required class="w-full border rounded-lg px-3 py-2" placeholder="اسم التمرين">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input type="date" name="exercise_date" required class="border rounded-lg px-3 py-2">
+              <select name="exercise_type" required class="border rounded-lg px-3 py-2">
+                <option value="">نوع التمرين</option>
+                <option value="إخلاء">إخلاء</option>
+                <option value="حريق">حريق</option>
+                <option value="تمريض">تمريض</option>
+                <option value="اتصالات">اتصالات</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="participants" type="number" required class="border rounded-lg px-3 py-2" placeholder="عدد المشاركين">
+              <input name="duration" required class="border rounded-lg px-3 py-2" placeholder="المدة (دقائق)">
+            </div>
+            <textarea name="results" rows="3" class="w-full border rounded-lg px-3 py-2" placeholder="النتائج والملاحظات"></textarea>
+            <div class="flex gap-3">
+              <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">تسجيل التمرين</button>
+              <span id="eocExerciseMsg" class="text-sm"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">📋 التمارين المسجلة</h3>
+          <div class="overflow-auto">
+            <table class="table text-sm">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>التمرين</th>
+                  <th>النوع</th>
+                  <th>المشاركون</th>
+                </tr>
+              </thead>
+              <tbody id="eocExerciseTable">
+                <!-- سيتم ملؤها بالبيانات -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="box p-4 mt-6">
+        <h3 class="text-lg font-bold mb-3">📊 سجل معدات الاستجابة</h3>
+        <form id="eocEquipmentForm" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <input name="equipment_name" required class="border rounded-lg px-3 py-2" placeholder="اسم المعدة">
+          <input name="location" required class="border rounded-lg px-3 py-2" placeholder="الموقع">
+          <input name="last_check" type="date" required class="border rounded-lg px-3 py-2">
+          <select name="status" required class="border rounded-lg px-3 py-2">
+            <option value="جيد">جيد</option>
+            <option value="يحتاج صيانة">يحتاج صيانة</option>
+            <option value="معطل">معطل</option>
+          </select>
+          <div class="md:col-span-4 flex gap-3">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">تسجيل المعدة</button>
+            <span id="eocEquipmentMsg" class="text-sm"></span>
+          </div>
+        </form>
+        <div class="mt-3 overflow-auto">
+          <table id="eocEquipmentTable" class="table text-sm"></table>
+        </div>
+      </div>
+    `;
+
+    // معالجة نموذج التمارين
+    const exerciseForm = document.getElementById('eocExerciseForm');
+    if (exerciseForm) {
+      exerciseForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('eocExerciseMsg');
+        msg.textContent = 'جارٍ الحفظ...';
+        
+        const fd = new FormData(exerciseForm);
+        const record = {};
+        fd.forEach((v,k) => record[k] = v);
+        record._ts = new Date().toISOString();
+        
+        try {
+          await ipcSaveRecord(EOC_KEYS.EXERCISES, record);
+          msg.textContent = '✅ تم تسجيل التمرين';
+          msg.className = 'text-sm text-green-600';
+          exerciseForm.reset();
+          loadExerciseTable();
+        } catch (err) {
+          msg.textContent = '⚠️ تعذر الحفظ';
+          msg.className = 'text-sm text-red-600';
+        }
+      });
+    }
+
+    // معالجة نموذج المعدات
+    const equipmentForm = document.getElementById('eocEquipmentForm');
+    if (equipmentForm) {
+      equipmentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('eocEquipmentMsg');
+        msg.textContent = 'جارٍ الحفظ...';
+        
+        const fd = new FormData(equipmentForm);
+        const record = {};
+        fd.forEach((v,k) => record[k] = v);
+        record._ts = new Date().toISOString();
+        
+        try {
+          await ipcSaveRecord(EOC_KEYS.EQUIPMENT, record);
+          msg.textContent = '✅ تم تسجيل المعدة';
+          msg.className = 'text-sm text-green-600';
+          equipmentForm.reset();
+          loadEquipmentTable();
+        } catch (err) {
+          msg.textContent = '⚠️ تعذر الحفظ';
+          msg.className = 'text-sm text-red-600';
+        }
+      });
+    }
+
+    // تحميل جدول التمارين
+    async function loadExerciseTable() {
+      const exercises = await ipcLoadAll(EOC_KEYS.EXERCISES);
+      const table = document.getElementById('eocExerciseTable');
+      table.innerHTML = exercises.slice(-10).reverse().map(item => `
+        <tr>
+          <td>${item.exercise_date}</td>
+          <td>${item.exercise_name}</td>
+          <td>${item.exercise_type}</td>
+          <td>${item.participants}</td>
+        </tr>
+      `).join('');
+    }
+
+    // تحميل جدول المعدات
+    async function loadEquipmentTable() {
+      const equipment = await ipcLoadAll(EOC_KEYS.EQUIPMENT);
+      const table = document.getElementById('eocEquipmentTable');
+      const thead = '<thead><tr><th>المعدة</th><th>الموقع</th><th>آخر فحص</th><th>الحالة</th></tr></thead>';
+      const tbody = '<tbody>' + equipment.slice(-20).reverse().map(item => `
+        <tr>
+          <td>${item.equipment_name}</td>
+          <td>${item.location}</td>
+          <td>${item.last_check}</td>
+          <td><span class="chip ${item.status === 'جيد' ? 'good' : item.status === 'يحتاج صيانة' ? 'warning' : 'critical'}">${item.status}</span></td>
+        </tr>
+      `).join('') + '</tbody>';
+      table.innerHTML = thead + tbody;
+    }
+
+    loadExerciseTable();
+    loadEquipmentTable();
+  }
+
+  function renderEocReadiness(container) {
+    container.innerHTML = `
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">🛡️ تقييم جاهزية الطوارئ</h3>
+          <form id="eocReadinessForm" class="space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="assessor" required class="border rounded-lg px-3 py-2" placeholder="اسم المقيم">
+              <input type="date" name="assessment_date" required class="border rounded-lg px-3 py-2">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select name="readiness_level" required class="border rounded-lg px-3 py-2">
+                <option value="">اختر مستوى الجاهزية</option>
+                <option value="ممتاز">ممتاز (90-100%)</option>
+                <option value="جيد">جيد (75-89%)</option>
+                <option value="مقبول">مقبول (60-74%)</option>
+                <option value="غير كافي">غير كافي (أقل من 60%)</option>
+              </select>
+              <input name="score" type="number" min="0" max="100" required class="border rounded-lg px-3 py-2" placeholder="النسبة المئوية %">
+            </div>
+            <textarea name="notes" rows="3" class="w-full border rounded-lg px-3 py-2" placeholder="ملاحظات التقييم"></textarea>
+            <div class="flex gap-3">
+              <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">حفظ التقييم</button>
+              <span id="eocReadinessMsg" class="text-sm"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">📈 سجل التقييمات</h3>
+          <div class="overflow-auto">
+            <table class="table text-sm">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>المقيم</th>
+                  <th>المستوى</th>
+                  <th>النسبة</th>
+                </tr>
+              </thead>
+              <tbody id="eocReadinessTable">
+                <!-- سيتم ملؤها بالبيانات -->
+              </tbody>
+            </table>
+          </div>
+          <button class="mt-3 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700" onclick="generateEocCertificate()">
+            🖨️ إنشاء شهادة الجاهزية
+          </button>
+        </div>
+      </div>
+    `;
+
+    // معالجة نموذج التقييم
+    const readinessForm = document.getElementById('eocReadinessForm');
+    if (readinessForm) {
+      readinessForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('eocReadinessMsg');
+        msg.textContent = 'جارٍ الحفظ...';
+        
+        const fd = new FormData(readinessForm);
+        const record = {};
+        fd.forEach((v,k) => record[k] = v);
+        record._ts = new Date().toISOString();
+        
+        try {
+          await ipcSaveRecord(EOC_KEYS.READINESS, record);
+          msg.textContent = '✅ تم حفظ التقييم';
+          msg.className = 'text-sm text-green-600';
+          readinessForm.reset();
+          loadReadinessTable();
+        } catch (err) {
+          msg.textContent = '⚠️ تعذر الحفظ';
+          msg.className = 'text-sm text-red-600';
+        }
+      });
+    }
+
+    // تحميل جدول التقييمات
+    async function loadReadinessTable() {
+      const assessments = await ipcLoadAll(EOC_KEYS.READINESS);
+      const table = document.getElementById('eocReadinessTable');
+      table.innerHTML = assessments.slice(-10).reverse().map(item => `
+        <tr>
+          <td>${item.assessment_date}</td>
+          <td>${item.assessor}</td>
+          <td><span class="chip ${getReadinessClass(item.readiness_level)}">${item.readiness_level}</span></td>
+          <td>${item.score}%</td>
+        </tr>
+      `).join('');
+    }
+
+    function getReadinessClass(level) {
+      const classes = {
+        'ممتاز': 'good',
+        'جيد': 'good',
+        'مقبول': 'warning',
+        'غير كافي': 'critical'
+      };
+      return classes[level] || '';
+    }
+
+    loadReadinessTable();
+  }
+
+  function renderEocNeeds(container) {
+    const needs = [
+      { key:'policy', text:'سياسة إدارة الطوارئ والكوارث (EOC-POL-2025-001)', required:true },
+      { key:'charter', text:'ميثاق لجنة الطوارئ والكوارث (EOC-TOR-2025-001)', required:true },
+      { key:'plan', text:'خطة الطوارئ الشاملة (EOC-PLN-2025-001)', required:true },
+      { key:'hva', text:'تقييم مخاطر الكوارث السنوي (HVA) منفذ', required:true },
+      { key:'training', text:'برنامج التدريب والتمارين مفعل (EOC-PLN-2025-002)', required:true },
+      { key:'exercises', text:'تمارين طوارئ دورية منفذة ومؤرشفة', required:true },
+      { key:'equipment', text:'معدات الاستجابة للطوارئ متوفرة وصالحة', required:true },
+      { key:'contacts', text:'لوحة اتصالات الطوارئ محدثة (EOC-LST-2025-001)', required:true },
+    ];
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'grid-cards';
+    needs.forEach(n => {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-xl border bg-white shadow-sm';
+      card.innerHTML = `
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" class="mt-1 h-5 w-5" data-required="${n.required?1:0}">
+          <span class="font-semibold">${n.text}</span>
+        </label>
+        ${n.required ? '<div class="text-xs text-red-600 mt-1">متطلب إلزامي</div>' : ''}
+      `;
+      wrapper.appendChild(card);
+    });
+    
+    const actions = document.createElement('div');
+    actions.className = 'pt-4 flex gap-3';
+    actions.innerHTML = `
+      <button class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]" onclick="validateEocNeeds()">تحقّق من الاكتمال</button>
+      <button class="px-4 py-2 rounded-lg border hover:bg-gray-50" onclick="generateEocComplianceReport()">إنشاء تقرير الالتزام</button>
+      <button class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700" onclick="generateSbahiCertificate()">
+        🏆 شهادة استيفاء سباهي
+      </button>
+    `;
+    
+    container.appendChild(wrapper);
+    container.appendChild(actions);
+  }
+
+  function validateEocNeeds() {
+    const requiredCheckboxes = [...document.querySelectorAll('#eocTabContent input[data-required="1"]')];
+    const missing = requiredCheckboxes.filter(x => !x.checked).length;
+    if (missing === 0) {
+      alert('ممتاز ✅ — جميع متطلبات الطوارئ والكوارث الإلزامية مكتملة.');
+    } else {
+      alert(`⚠️ يوجد ${missing} متطلب(ات) إلزامي غير مكتمل في قسم الطوارئ والكوارث.`);
+    }
+  }
+
+  function generateEocComplianceReport() {
+    const checkboxes = [...document.querySelectorAll('#eocTabContent input[type="checkbox"]')];
+    const checkedCount = checkboxes.filter(cb => cb.checked).length;
+    const totalCount = checkboxes.length;
+    const percentage = Math.round((checkedCount / totalCount) * 100);
+    
+    alert(`📋 تقرير الالتزام بمتطلبات الطوارئ:\n\n✅ ${checkedCount} من ${totalCount} بند مكتمل\n📊 نسبة الإكمال: ${percentage}%\n\n${percentage >= 80 ? 'مستوى جيد ✓' : 'يحتاج إلى تحسين ⚠️'}`);
+  }
+
+  function generateEocCertificate() {
+    const certificateContent = `
+      <div style="padding: 40px; font-family: 'Tajawal', sans-serif; text-align: center; border: 3px solid #7B1E24; max-width: 800px; margin: 20px auto; background: linear-gradient(135deg, #fff, #f9f9f9);">
+        <div style="border-bottom: 2px solid #E9C46A; padding-bottom: 20px; margin-bottom: 30px;">
+          <h1 style="color: #7B1E24; font-size: 32px; margin: 0;">شهادة جاهزية الطوارئ</h1>
+          <h2 style="color: #C55A44; font-size: 24px; margin: 10px 0;">مجمع مكة الطبي بالزاهر</h2>
+        </div>
+        
+        <div style="font-size: 18px; line-height: 2; text-align: right; margin: 30px 0;">
+          <p>يُشهد بأن <strong>مجمع مكة الطبي بالزاهر</strong> قد استوفى متطلبات</p>
+          <p>جاهزية الطوارئ والكوارث وفق معايير سباهي</p>
+          <p>وذلك بناءً على التقييم الشامل لنظام إدارة الطوارئ</p>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 30px 0;">
+          <h3 style="color: #7B1E24; margin-bottom: 15px;">نتائج التقييم</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: right;">
+            <div>مستوى الجاهزية: <strong>ممتاز</strong></div>
+            <div>نسبة الالتزام: <strong>95%</strong></div>
+            <div>تاريخ التقييم: <strong>${new Date().toLocaleDateString('ar-SA')}</strong></div>
+            <div>صلاحية الشهادة: <strong>لمدة سنة</strong></div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd;">
+          <div style="text-align: center;">
+            <div style="height: 80px; width: 150px; background: #f0f0f0; border: 1px dashed #999; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px;">
+              [ختم المجمع]
+            </div>
+            <div>ختم المجمع</div>
+          </div>
+          
+          <div style="text-align: center;">
+            <div style="height: 80px; width: 150px; background: #f0f0f0; border: 1px dashed #999; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px;">
+              [توقيع المدير]
+            </div>
+            <div>المدير العام</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; color: #666; font-size: 14px;">
+          <p>هذه الشهادة صادرة من نظام بوابة سباهي الإلكترونية - الإصدار 2025</p>
+        </div>
+      </div>
+    `;
+    
+    const newWindow = window.open('', '_blank', 'width=900,height=700');
+    newWindow.document.write(`
+      <html>
+        <head>
+          <title>شهادة جاهزية الطوارئ - مجمع مكة الطبي</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          ${certificateContent}
+          <div style="text-align: center; margin: 20px;">
+            <button onclick="window.print()" style="padding: 10px 20px; background: #7B1E24; color: white; border: none; border-radius: 5px; cursor: pointer;">🖨️ طباعة الشهادة</button>
+          </div>
+        </body>
+      </html>
+    `);
+    newWindow.document.close();
+  }
+
+  function generateSbahiCertificate() {
+    const certificateContent = `
+      <div style="padding: 40px; font-family: 'Tajawal', sans-serif; text-align: center; border: 3px solid #7B1E24; max-width: 800px; margin: 20px auto; background: linear-gradient(135deg, #fff, #f9f9f9);">
+        <div style="border-bottom: 2px solid #E9C46A; padding-bottom: 20px; margin-bottom: 30px;">
+          <h1 style="color: #7B1E24; font-size: 36px; margin: 0;">شهادة استيفاء متطلبات سباهي</h1>
+          <h2 style="color: #C55A44; font-size: 28px; margin: 10px 0;">مجمع مكة الطبي بالزاهر</h2>
+          <p style="color: #666; font-size: 18px;">البوابة الإلكترونية - الإصدار 2025</p>
+        </div>
+        
+        <div style="font-size: 20px; line-height: 2; text-align: right; margin: 40px 0;">
+          <p>يُشهد بأن <strong style="color: #7B1E24;">مجمع مكة الطبي بالزاهر</strong></p>
+          <p>قد استوفى جميع متطلبات الاعتماد الخاصة بـ</p>
+          <p><strong style="color: #C55A44;">الطوارئ والكوارث (EOC)</strong> وفق معايير سباهي</p>
+          <p>وذلك بناءً على المراجعة الشاملة للوثائق والنظم</p>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 25px; border-radius: 15px; margin: 40px 0; border-right: 4px solid #E9C46A;">
+          <h3 style="color: #7B1E24; margin-bottom: 20px; font-size: 24px;">ملخص الالتزام</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: right; font-size: 18px;">
+            <div>نسبة الالتزام الكلية: <strong style="color: green;">98%</strong></div>
+            <div>المتطلبات المكتملة: <strong>8/8</strong></div>
+            <div>تاريخ المراجعة: <strong>${new Date().toLocaleDateString('ar-SA')}</strong></div>
+            <div>حالة الاعتماد: <strong style="color: green;">مستوفي ✓</strong></div>
+          </div>
+        </div>
+
+        <div style="background: #fff9e6; padding: 20px; border-radius: 10px; margin: 30px 0; border: 1px solid #E9C46A;">
+          <h4 style="color: #7B1E24; margin: 0;">✔️ جميع متطلبات الطوارئ والكوارث مستوفاة بالكامل</h4>
+        </div>
+
+        <div style="display: flex; justify-content: space-around; align-items: center; margin-top: 50px; padding-top: 30px; border-top: 2px solid #ddd;">
+          <div style="text-align: center;">
+            <div style="height: 100px; width: 180px; background: #f0f0f0; border: 2px dashed #999; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 14px; color: #666;">
+              [ختم المجمع الرسمي]
+            </div>
+            <div style="font-weight: bold;">ختم المجمع</div>
+          </div>
+          
+          <div style="text-align: center;">
+            <div style="height: 100px; width: 180px; background: #f0f0f0; border: 2px dashed #999; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 14px; color: #666;">
+              [توقيع المدير العام]
+            </div>
+            <div style="font-weight: bold;">د. حسين بابصيل</div>
+            <div>المدير العام</div>
+          </div>
+
+          <div style="text-align: center;">
+            <div style="height: 100px; width: 180px; background: #f0f0f0; border: 2px dashed #999; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 14px; color: #666;">
+              [ختم اللجنة]
+            </div>
+            <div style="font-weight: bold;">لجنة الطوارئ والكوارث</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 30px; color: #666; font-size: 14px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+          <p>هذه الشهادة إلكترونية معتمدة - رقم المرجع: EOC-CERT-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}</p>
+        </div>
+      </div>
+    `;
+    
+    const newWindow = window.open('', '_blank', 'width=1000,height=800');
+    newWindow.document.write(`
+      <html>
+        <head>
+          <title>شهادة استيفاء سباهي - مجمع مكة الطبي</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          ${certificateContent}
+          <div style="text-align: center; margin: 30px;">
+            <button onclick="window.print()" style="padding: 12px 25px; background: #7B1E24; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px;">🖨️ طباعة الشهادة</button>
+            <button onclick="window.close()" style="padding: 12px 25px; background: #666; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px;">إغلاق</button>
+          </div>
+        </body>
+      </html>
+    `);
+    newWindow.document.close();
+  }
+
+  async function eocExportAll() {
+    const data = {
+      exercises: await ipcLoadAll(EOC_KEYS.EXERCISES),
+      equipment: await ipcLoadAll(EOC_KEYS.EQUIPMENT),
+      training: await ipcLoadAll(EOC_KEYS.TRAINING),
+      readiness: await ipcLoadAll(EOC_KEYS.READINESS)
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'eoc_data_backup.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function eocImportAll(file) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.exercises) localStorage.setItem(EOC_KEYS.EXERCISES, (await SecureStore.encryptJson(data.exercises)).data);
+        if (data.equipment) localStorage.setItem(EOC_KEYS.EQUIPMENT, (await SecureStore.encryptJson(data.equipment)).data);
+        if (data.training) localStorage.setItem(EOC_KEYS.TRAINING, (await SecureStore.encryptJson(data.training)).data);
+        if (data.readiness) localStorage.setItem(EOC_KEYS.READINESS, (await SecureStore.encryptJson(data.readiness)).data);
+        alert('✅ تم استيراد بيانات الطوارئ بنجاح.');
       } catch (err) {
         alert('⚠️ ملف غير صالح.');
       }
