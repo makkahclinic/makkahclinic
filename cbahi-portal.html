@@ -653,17 +653,28 @@
       </div>
     </section>
 
+      <!-- الجودة والتحسين المستمر (QI) - قسم محدث بالكامل -->
     <section id="qi" class="content-section">
-      <div class="bg-white rounded-xl shadow p-6">
-        <h2 class="text-2xl font-extrabold text-[var(--brand1)]">📈 الجودة والتحسين المستمر (QI)</h2>
-        <p class="text-gray-700">سيتم إضافة مؤشرات الأداء وخطط التحسين لاحقًا.</p>
-      </div>
-    </section>
+      <div class="bg-white rounded-xl shadow p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-2xl font-extrabold text-[var(--brand1)]">📈 الجودة والتحسين المستمر (QI)</h2>
+          <div class="flex items-center gap-2 text-sm">
+            <button class="px-3 py-1.5 rounded-md bg-[var(--brand1)] text-white" onclick="qiExportAll()">⬇️ تصدير كل بيانات QI (JSON)</button>
+            <label class="px-3 py-1.5 rounded-md border cursor-pointer">
+              ⬆️ استيراد
+              <input id="qiImportInput" type="file" accept="application/json" class="hidden" onchange="qiImportAll(this.files[0])">
+            </label>
+          </div>
+        </div>
 
-    <section id="eoc" class="content-section">
-      <div class="bg-white rounded-xl shadow p-6">
-        <h2 class="text-2xl font-extrabold text-[var(--brand1)]">🚨 الطوارئ والكوارث (EOC)</h2>
-        <p class="text-gray-700">سيتم إضافة خطط الطوارئ وجداول الإخلاء والتمارين لاحقًا.</p>
+        <!-- تبويبات QI -->
+        <div class="flex flex-wrap gap-2 border-b pb-3">
+          <button class="px-3 py-1.5 rounded-md bg-[var(--brand1)] text-white" data-qi-tab="library" onclick="switchQiTab('library')">📚 مكتبة الوثائق</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-qi-tab="dashboard" onclick="switchQiTab('dashboard')">📊 لوحة المؤشرات</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-qi-tab="projects" onclick="switchQiTab('projects')">🔄 مشاريع التحسين</button>
+          <button class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200" data-qi-tab="needs" onclick="switchQiTab('needs')">✅ متطلبات سباهي (QI)</button>
+        </div>
+        <div id="qiTabContent"></div>
       </div>
     </section>
   </main>
@@ -2248,6 +2259,418 @@ const IPC_CATEGORY_NAMES = {
   window.renderPscChart = renderPscChart;
   window.validatePscNeeds = validatePscNeeds;
   window.generatePscReport = generatePscReport;
+  // ====== الجودة والتحسين المستمر (QI) — مكتبة + نماذج بإسناد محلي ======
+  const QI_DOCS_LIBRARY = [
+    { code:'QI_Package_Index', name:'فهرس وثائق لجنة الجودة والتحسين المستمر (QI)', category:'INDEX', url:'https://drive.google.com/file/d/11nHPWSHeMVDPhpmIIY1mQfr3xWBhyMeXQL4m8rCkFE4/preview' },
+    { code:'LD.QI.FRM.004', name:'نموذج الإبلاغ عن حادث/حدث', category:'FRM', url:'https://drive.google.com/file/d/1mBTZexeL6dRFW-WiSqLoYTnYJakG3jiGrZTtvhgIzsk/preview' },
+    { code:'LD.QI.AGN.001', name:'نموذج جدول أعمال اجتماع لجنة الجودة', category:'FRM', url:'https://drive.google.com/file/d/1Fz3V5L9JuP0gOGvdLcPRMIZWNBo_WjpvAhrpOxM4zko/preview' },
+    { code:'LD.QI.FRM.002', name:'نموذج مشروع تحسين — PDSA', category:'FRM', url:'https://drive.google.com/file/d/13w_V3iUq74n0xBJ3Rzh9uhPZs8cNY4MmGN528tO0eus/preview' },
+    { code:'LD.QI.SOP.003', name:'إجراء قياس مؤشرات الأداء ولوحة المتابعة', category:'SOP', url:'https://drive.google.com/file/d/1lu-IQSVouIX0PO3TWSHbGSvcOU41XcZpZZr8TyCkh_0/preview' },
+    { code:'LD.QI.POL.001', name:'سياسة الجودة والتحسين المستمر', category:'POL', url:'https://drive.google.com/file/d/1Bef5OQKyeY707CBjpXgLZgvCDUHwn36XLMvOmkpHHEk/preview' },
+    { code:'LD.QI.SOP.001', name:'إجراء إدارة اجتماعات لجنة الجودة والتحسين', category:'SOP', url:'https://drive.google.com/file/d/1eQhsEZ5PoKTJtwbYevkXblDhnpDV_-9vKdbLq1qPxOc/preview' },
+    { code:'LD.QI.MIN.001', name:'نموذج محضر اجتماع لجنة الجودة', category:'FRM', url:'https://drive.google.com/file/d/1psbjSnOnk-W8CowyvRCFo5psR9Wxt7x9dOKcR6xm_zs/preview' },
+    { code:'LD.QI.SOP.002', name:'إجراء اختيار وتنفيذ مشاريع التحسين (PDSA)', category:'SOP', url:'https://drive.google.com/file/d/1i8P4re1TT8PnGyA0ElTvmloEMnkz5LPwnGqBC90ds9w/preview' },
+    { code:'LD.QI.PLN.001', name:'الخطة السنوية للجودة والتحسين', category:'PLN', url:'https://drive.google.com/file/d/1GZg0RwBCbP-eM2SK35_eQtXR67miAnFJtoF39NhvC4I/preview' },
+    { code:'LD.QI.AUD.001', name:'خطة/سجل التدقيق الداخلي', category:'LOG', url:'https://drive.google.com/file/d/1pg3m4jBax8plRxY-jlwMhc9skIopkhdy4h1DYEfKmSI/preview' },
+    { code:'LD.QI.FRM.003', name:'سجل الإجراءات التصحيحية والوقائية (CAPA)', category:'LOG', url:'https://drive.google.com/file/d/13PdXpCyaXb62NRXffoinW3EkLj7mltPUf4m6OWNaPeY/preview' },
+    { code:'LD.QI.FRM.001', name:'بطاقة تعريف مؤشر أداء (KPI)', category:'FRM', url:'https://drive.google.com/file/d/1C6Dx0M7E7Z4PME0guCOIDZGmImciMclkL0dBS7KyJtA/preview' },
+    { code:'LD.QI.SOP.004', name:'إجراء التدقيق الداخلي وإدارة CAPA', category:'SOP', url:'https://drive.google.com/file/d/1v1pFDX2Yo7To9oCTVaIgVQfF83xNZu64K0BxmEAchTs/preview' },
+    { code:'LD.QI.TOR.001', name:'لائحة/ميثاق لجنة الجودة والتحسين المستمر', category:'TOR', url:'https://drive.google.com/file/d/1obups6Wt5ERePM5qzmzQQhYZn_CTxHbGRUBMWE2jpaM/preview' }
+  ];
+
+  const QI_CATEGORY_NAMES = {
+    POL:'السياسات',
+    SOP:'إجراءات التشغيل',
+    FRM:'النماذج',
+    PLN:'الخطط',
+    LOG:'السجلات',
+    TOR:'الميثاق',
+    INDEX:'الفهرس'
+  };
+
+  // مفاتيح التخزين لبيانات QI
+  const QI_KEYS = {
+    KPI: 'qi_kpi_v1',
+    PDSA: 'qi_pdsa_v1',
+    CAPA: 'qi_capa_v1',
+    MEETING: 'qi_meeting_v1',
+    AUDIT: 'qi_audit_v1'
+  };
+
+  // دوال QI
+  function switchQiTab(tab) {
+    document.querySelectorAll('[data-qi-tab]').forEach(button => {
+      if (button.getAttribute('data-qi-tab') === tab) {
+        button.classList.add('bg-[var(--brand1)]', 'text-white');
+        button.classList.remove('bg-gray-100');
+      } else {
+        button.classList.remove('bg-[var(--brand1)]', 'text-white');
+        button.classList.add('bg-gray-100');
+      }
+    });
+    
+    const container = document.getElementById('qiTabContent');
+    container.innerHTML = '';
+    
+    if (tab === 'library') {
+      renderQiLibrary(container, QI_DOCS_LIBRARY);
+    } else if (tab === 'dashboard') {
+      renderQiDashboard(container);
+    } else if (tab === 'projects') {
+      renderQiProjects(container);
+    } else if (tab === 'needs') {
+      renderQiNeeds(container);
+    }
+  }
+
+  function renderQiLibrary(container, docs) {
+    const categories = [...new Set(docs.map(d => d.category))];
+    const controls = document.createElement('div');
+    controls.className = 'flex flex-wrap items-center gap-2 mb-4';
+    controls.innerHTML = `
+      <div class="flex flex-wrap gap-2">
+        <button data-qi-filter="ALL" class="px-3 py-1 rounded-full bg-[var(--brand1)] text-white text-sm">الكل</button>
+        ${categories.map(cat => `<button data-qi-filter="${cat}" class="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 text-sm">${QI_CATEGORY_NAMES[cat] || cat}</button>`).join('')}
+      </div>
+      <div class="ml-auto w-full md:w-64">
+        <input id="qiSearch" type="text" placeholder="ابحث بالرمز أو العنوان..." class="w-full border rounded-lg px-3 py-2">
+      </div>
+    `;
+    const grid = document.createElement('div');
+    grid.className = 'grid-cards';
+    container.appendChild(controls);
+    container.appendChild(grid);
+
+    function renderFilteredDocs(filter='ALL', query='') {
+      grid.innerHTML = '';
+      const q = query.toLowerCase();
+      const filtered = docs.filter(d => (filter==='ALL' || d.category===filter) && (!q || d.code.toLowerCase().includes(q) || d.name.toLowerCase().includes(q)));
+      filtered.forEach(doc => {
+        const hasUrl = doc.url && doc.url !== '#';
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded-xl border bg-white shadow-sm hover:shadow-md transition flex flex-col';
+        card.innerHTML = `
+          <div class="text-xs text-gray-500 mb-1">${QI_CATEGORY_NAMES[doc.category] || doc.category}</div>
+          <div class="font-extrabold text-[var(--brand1)]">${doc.code}</div>
+          <div class="text-gray-800 mt-1 flex-1">${doc.name}</div>
+          <div class="mt-3 flex gap-2">
+            <button class="px-3 py-2 text-sm text-white rounded-lg bg-[var(--brand1)] hover:bg-[var(--brand2)]" onclick="openDocModal('${doc.code}: ${doc.name}', '${doc.url}')">
+              <i class="fas fa-eye ml-1"></i> عرض
+            </button>
+            <a class="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50" target="_blank" href="${doc.url.replace('/preview','/view')}">
+              <i class="fas fa-up-right-from-square ml-1"></i> فتح في تبويب
+            </a>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    controls.querySelectorAll('button[data-qi-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        controls.querySelectorAll('button[data-qi-filter]').forEach(b => b.classList.remove('bg-[var(--brand1)]','text-white'));
+        btn.classList.add('bg-[var(--brand1)]','text-white');
+        renderFilteredDocs(btn.getAttribute('data-qi-filter'), document.getElementById('qiSearch').value);
+      });
+    });
+    document.getElementById('qiSearch').addEventListener('input', e => {
+      const active = controls.querySelector('button[data-qi-filter].bg-[var(--brand1)]') || { getAttribute: ()=>'ALL' };
+      renderFilteredDocs(active.getAttribute('data-qi-filter'), e.target.value);
+    });
+    renderFilteredDocs('ALL','');
+  }
+
+  async function renderQiDashboard(container) {
+    const [kpi, pdsa, capa] = await Promise.all([
+      ipcLoadAll(QI_KEYS.KPI),
+      ipcLoadAll(QI_KEYS.PDSA),
+      ipcLoadAll(QI_KEYS.CAPA)
+    ]);
+
+    // حساب الإحصائيات
+    const activeProjects = pdsa.filter(p => p.status === 'نشط').length;
+    const completedProjects = pdsa.filter(p => p.status === 'مكتمل').length;
+    const openCAPA = capa.filter(c => c.status === 'مفتوح').length;
+    const closedCAPA = capa.filter(c => c.status === 'مغلق').length;
+
+    container.innerHTML = `
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="box p-4 text-center">
+          <div class="text-sm text-gray-500 mb-1">مشاريع التحسين النشطة</div>
+          <div class="text-3xl font-extrabold text-[var(--brand1)]">${activeProjects}</div>
+        </div>
+        <div class="box p-4 text-center">
+          <div class="text-sm text-gray-500 mb-1">المشاريع المكتملة</div>
+          <div class="text-3xl font-extrabold text-green-600">${completedProjects}</div>
+        </div>
+        <div class="box p-4 text-center">
+          <div class="text-sm text-gray-500 mb-1">إجراءات CAPA المفتوحة</div>
+          <div class="text-3xl font-extrabold text-orange-600">${openCAPA}</div>
+        </div>
+        <div class="box p-4 text-center">
+          <div class="text-sm text-gray-500 mb-1">إجراءات CAPA المغلقة</div>
+          <div class="text-3xl font-extrabold text-green-600">${closedCAPA}</div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">➕ تسجيل مؤشر أداء جديد</h3>
+          <form id="qiKpiForm" class="space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="name" required class="border rounded-lg px-3 py-2" placeholder="اسم المؤشر">
+              <input name="target" required class="border rounded-lg px-3 py-2" placeholder="الهدف %">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="current" required class="border rounded-lg px-3 py-2" placeholder="القيمة الحالية %">
+              <input name="period" required class="border rounded-lg px-3 py-2" placeholder="الفترة (شهر/ربع سنوي)">
+            </div>
+            <div class="flex gap-3">
+              <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">حفظ المؤشر</button>
+              <span id="qiKpiMsg" class="text-sm"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">📊 مؤشرات الأداء الحالية</h3>
+          <div class="overflow-auto">
+            <table class="table text-sm">
+              <thead>
+                <tr>
+                  <th>المؤشر</th>
+                  <th>القيمة</th>
+                  <th>الهدف</th>
+                  <th>الحالة</th>
+                </tr>
+              </thead>
+              <tbody id="qiKpiTable">
+                ${kpi.slice(-5).reverse().map(item => `
+                  <tr>
+                    <td>${item.name}</td>
+                    <td>${item.current}%</td>
+                    <td>${item.target}%</td>
+                    <td><span class="chip ${item.current >= item.target ? 'good' : 'warning'}">${item.current >= item.target ? 'محقق' : 'تحت الهدف'}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // معالجة نموذج مؤشرات الأداء
+    const kpiForm = document.getElementById('qiKpiForm');
+    if (kpiForm) {
+      kpiForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('qiKpiMsg');
+        msg.textContent = 'جارٍ الحفظ...';
+        msg.className = 'text-sm text-blue-600';
+        
+        const fd = new FormData(kpiForm);
+        const record = {};
+        fd.forEach((v,k) => record[k] = v);
+        record._ts = new Date().toISOString();
+        
+        try {
+          await ipcSaveRecord(QI_KEYS.KPI, record);
+          msg.textContent = '✅ تم حفظ المؤشر';
+          msg.className = 'text-sm text-green-600';
+          kpiForm.reset();
+          renderQiDashboard(container); // إعادة تحميل البيانات
+        } catch (err) {
+          msg.textContent = '⚠️ تعذر الحفظ';
+          msg.className = 'text-sm text-red-600';
+        }
+      });
+    }
+  }
+
+  function renderQiProjects(container) {
+    container.innerHTML = `
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">🔄 بدء مشروع تحسين جديد (PDSA)</h3>
+          <form id="qiPdsaForm" class="space-y-3">
+            <input name="title" required class="w-full border rounded-lg px-3 py-2" placeholder="عنوان المشروع">
+            <textarea name="description" rows="3" class="w-full border rounded-lg px-3 py-2" placeholder="وصف المشروع"></textarea>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="owner" required class="border rounded-lg px-3 py-2" placeholder="مالك المشروع">
+              <select name="priority" class="border rounded-lg px-3 py-2">
+                <option value="عالي">عالي</option>
+                <option value="متوسط" selected>متوسط</option>
+                <option value="منخفض">منخفض</option>
+              </select>
+            </div>
+            <div class="flex gap-3">
+              <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">بدء المشروع</button>
+              <span id="qiPdsaMsg" class="text-sm"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="box p-4">
+          <h3 class="text-lg font-bold mb-3">✅ تسجيل إجراء تصحيحي (CAPA)</h3>
+          <form id="qiCapaForm" class="space-y-3">
+            <input name="issue" required class="w-full border rounded-lg px-3 py-2" placeholder="وصف المشكلة">
+            <textarea name="action" rows="2" class="w-full border rounded-lg px-3 py-2" placeholder="الإجراء التصحيحي"></textarea>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input name="responsible" required class="border rounded-lg px-3 py-2" placeholder="المسؤول">
+              <input type="date" name="deadline" required class="border rounded-lg px-3 py-2">
+            </div>
+            <div class="flex gap-3">
+              <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">تسجيل CAPA</button>
+              <span id="qiCapaMsg" class="text-sm"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    // معالجة نموذج PDSA
+    const pdsaForm = document.getElementById('qiPdsaForm');
+    if (pdsaForm) {
+      pdsaForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('qiPdsaMsg');
+        msg.textContent = 'جارٍ الحفظ...';
+        
+        const fd = new FormData(pdsaForm);
+        const record = { status: 'نشط' };
+        fd.forEach((v,k) => record[k] = v);
+        record._ts = new Date().toISOString();
+        
+        try {
+          await ipcSaveRecord(QI_KEYS.PDSA, record);
+          msg.textContent = '✅ تم بدء المشروع';
+          msg.className = 'text-sm text-green-600';
+          pdsaForm.reset();
+        } catch (err) {
+          msg.textContent = '⚠️ تعذر الحفظ';
+          msg.className = 'text-sm text-red-600';
+        }
+      });
+    }
+
+    // معالجة نموذج CAPA
+    const capaForm = document.getElementById('qiCapaForm');
+    if (capaForm) {
+      capaForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('qiCapaMsg');
+        msg.textContent = 'جارٍ الحفظ...';
+        
+        const fd = new FormData(capaForm);
+        const record = { status: 'مفتوح' };
+        fd.forEach((v,k) => record[k] = v);
+        record._ts = new Date().toISOString();
+        
+        try {
+          await ipcSaveRecord(QI_KEYS.CAPA, record);
+          msg.textContent = '✅ تم تسجيل CAPA';
+          msg.className = 'text-sm text-green-600';
+          capaForm.reset();
+        } catch (err) {
+          msg.textContent = '⚠️ تعذر الحفظ';
+          msg.className = 'text-sm text-red-600';
+        }
+      });
+    }
+  }
+
+  function renderQiNeeds(container) {
+    const needs = [
+      { key:'charter', text:'ميثاق لجنة الجودة والتحسين المستمر (LD.QI.TOR.001)', required:true },
+      { key:'policy', text:'سياسة الجودة والتحسين المستمر (LD.QI.POL.001)', required:true },
+      { key:'plan', text:'الخطة السنوية للجودة والتحسين (LD.QI.PLN.001)', required:true },
+      { key:'kpi', text:'نظام متابعة مؤشرات الأداء مفعل', required:true },
+      { key:'pdsa', text:'تنفيذ مشاريع تحسين باستخدام PDSA', required:true },
+      { key:'capa', text:'نظام إدارة الإجراءات التصحيحية والوقائية (CAPA)', required:true },
+      { key:'audit', text:'برنامج التدقيق الداخلي مفعل', required:true },
+      { key:'meetings', text:'محاضر اجتماعات اللجنة مسجلة ومنظمة', required:true },
+    ];
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'grid-cards';
+    needs.forEach(n => {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-xl border bg-white shadow-sm';
+      card.innerHTML = `
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" class="mt-1 h-5 w-5" data-required="${n.required?1:0}">
+          <span class="font-semibold">${n.text}</span>
+        </label>
+        ${n.required ? '<div class="text-xs text-red-600 mt-1">متطلب إلزامي</div>' : ''}
+      `;
+      wrapper.appendChild(card);
+    });
+    
+    const actions = document.createElement('div');
+    actions.className = 'pt-4 flex gap-3';
+    actions.innerHTML = `
+      <button class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]" onclick="validateQiNeeds()">تحقّق من الاكتمال</button>
+      <button class="px-4 py-2 rounded-lg border hover:bg-gray-50" onclick="generateQiReport()">إنشاء تقرير الجاهزية</button>
+    `;
+    
+    container.appendChild(wrapper);
+    container.appendChild(actions);
+  }
+
+  function validateQiNeeds() {
+    const requiredCheckboxes = [...document.querySelectorAll('#qiTabContent input[data-required="1"]')];
+    const missing = requiredCheckboxes.filter(x => !x.checked).length;
+    if (missing === 0) {
+      alert('ممتاز ✅ — جميع متطلبات الجودة الإلزامية مكتملة.');
+    } else {
+      alert(`⚠️ يوجد ${missing} متطلب(ات) إلزامي غير مكتمل في قسم الجودة.`);
+    }
+  }
+
+  function generateQiReport() {
+    const checkboxes = [...document.querySelectorAll('#qiTabContent input[type="checkbox"]')];
+    const checkedCount = checkboxes.filter(cb => cb.checked).length;
+    const totalCount = checkboxes.length;
+    const percentage = Math.round((checkedCount / totalCount) * 100);
+    
+    alert(`📋 تقرير جاهزية الجودة والتحسين:\n\n✅ ${checkedCount} من ${totalCount} بند مكتمل\n📊 نسبة الإكمال: ${percentage}%\n\n${percentage >= 80 ? 'مستوى جيد ✓' : 'يحتاج إلى تحسين ⚠️'}`);
+  }
+
+  async function qiExportAll() {
+    const data = {
+      kpi: await ipcLoadAll(QI_KEYS.KPI),
+      pdsa: await ipcLoadAll(QI_KEYS.PDSA),
+      capa: await ipcLoadAll(QI_KEYS.CAPA),
+      meeting: await ipcLoadAll(QI_KEYS.MEETING),
+      audit: await ipcLoadAll(QI_KEYS.AUDIT)
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'qi_data_backup.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function qiImportAll(file) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.kpi) localStorage.setItem(QI_KEYS.KPI, (await SecureStore.encryptJson(data.kpi)).data);
+        if (data.pdsa) localStorage.setItem(QI_KEYS.PDSA, (await SecureStore.encryptJson(data.pdsa)).data);
+        if (data.capa) localStorage.setItem(QI_KEYS.CAPA, (await SecureStore.encryptJson(data.capa)).data);
+        if (data.meeting) localStorage.setItem(QI_KEYS.MEETING, (await SecureStore.encryptJson(data.meeting)).data);
+        if (data.audit) localStorage.setItem(QI_KEYS.AUDIT, (await SecureStore.encryptJson(data.audit)).data);
+        alert('✅ تم استيراد بيانات الجودة بنجاح.');
+      } catch (err) {
+        alert('⚠️ ملف غير صالح.');
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  }
 </script>
 </body>
 </html>
