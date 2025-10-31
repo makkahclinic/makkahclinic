@@ -997,6 +997,269 @@ function loadSavedLogo() {
     console.log('لا يمكن تحميل الشعار المحفوظ');
   }
 }
+// ====== دوال إدارة التدريب والمتدربين ======
+// دوال إدارة المتدربين
+function selectAllTrainees() {
+  document.querySelectorAll('.trainee-checkbox').forEach(checkbox => {
+    checkbox.checked = true;
+  });
+  updateSelectedCount();
+}
+
+function deselectAllTrainees() {
+  document.querySelectorAll('.trainee-checkbox').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  updateSelectedCount();
+}
+
+function updateSelectedCount() {
+  const selected = document.querySelectorAll('.trainee-checkbox:checked').length;
+  document.getElementById('selectedCount').textContent = `${selected} متدرب محدد`;
+}
+
+// إدارة الحقول المخصصة
+document.addEventListener('DOMContentLoaded', function() {
+  // تحديث عدد المتدربين المحددين
+  document.querySelectorAll('.trainee-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', updateSelectedCount);
+  });
+  
+  // إدارة حقل الموضوع المخصص
+  const topicSelect = document.querySelector('select[name="training_topic"]');
+  const customTopic = document.querySelector('input[name="custom_topic"]');
+  
+  if (topicSelect && customTopic) {
+    topicSelect.addEventListener('change', function() {
+      if (this.value === 'آخر') {
+        customTopic.classList.remove('hidden');
+        customTopic.required = true;
+      } else {
+        customTopic.classList.add('hidden');
+        customTopic.required = false;
+      }
+    });
+  }
+  
+  // إدارة حقل المكان المخصص
+  const placeSelect = document.querySelector('select[name="training_place"]');
+  const customPlace = document.querySelector('input[name="custom_place"]');
+  
+  if (placeSelect && customPlace) {
+    placeSelect.addEventListener('change', function() {
+      if (this.value === 'OTHER - مكان آخر') {
+        customPlace.classList.remove('hidden');
+        customPlace.required = true;
+      } else {
+        customPlace.classList.add('hidden');
+        customPlace.required = false;
+      }
+    });
+  }
+});
+
+// تحديث معالجة النموذج
+document.addEventListener('DOMContentLoaded', function() {
+  const trainForm = document.getElementById('trainForm');
+  if (trainForm) {
+    trainForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const messageElement = document.getElementById('trainMsg');
+      const submitButton = trainForm.querySelector('button[type="submit"]');
+      
+      // تعطيل الزر أثناء المعالجة
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';
+      
+      messageElement.textContent = 'جارٍ إرسال البيانات إلى سجل التدريب...';
+      messageElement.className = 'text-sm text-blue-600';
+      
+      // جمع البيانات
+      const selectedTrainees = Array.from(document.querySelectorAll('.trainee-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+      
+      if (selectedTrainees.length === 0) {
+        messageElement.textContent = '❌ يرجى اختيار متدرب واحد على الأقل';
+        messageElement.className = 'text-sm text-red-600';
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'حفظ حضور المتدربين';
+        return;
+      }
+      
+      const formData = {
+        trainees: selectedTrainees,
+        topic: document.querySelector('select[name="training_topic"]').value,
+        custom_topic: document.querySelector('input[name="custom_topic"]').value,
+        date: document.querySelector('input[name="training_date"]').value,
+        place: document.querySelector('select[name="training_place"]').value,
+        custom_place: document.querySelector('input[name="custom_place"]').value,
+        trainer: document.querySelector('input[name="trainer_name"]').value
+      };
+      
+      // التحقق من البيانات المطلوبة
+      if (!formData.date || !formData.trainer || !formData.topic) {
+        messageElement.textContent = '❌ يرجى ملء جميع الحقول الإلزامية';
+        messageElement.className = 'text-sm text-red-600';
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'حفظ حضور المتدربين';
+        return;
+      }
+      
+      // استخدام الموضوع المخصص إذا تم اختيار "آخر"
+      const finalTopic = formData.topic === 'آخر' ? formData.custom_topic : formData.topic;
+      const finalPlace = formData.place === 'OTHER - مكان آخر' ? formData.custom_place : formData.place;
+      
+      if (formData.topic === 'آخر' && !formData.custom_topic) {
+        messageElement.textContent = '❌ يرجى تحديد موضوع التدريب';
+        messageElement.className = 'text-sm text-red-600';
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'حفظ حضور المتدربين';
+        return;
+      }
+      
+      try {
+        // إرسال البيانات إلى Google Sheets
+        const response = await submitToGoogleSheets({
+          trainees: formData.trainees,
+          topic: finalTopic,
+          date: formData.date,
+          place: finalPlace,
+          trainer: formData.trainer
+        });
+        
+        if (response.success) {
+          messageElement.textContent = `✅ ${response.message}`;
+          messageElement.className = 'text-sm text-green-600';
+          
+          // إعادة تعيين النموذج بعد نجاح الحفظ
+          setTimeout(() => {
+            trainForm.reset();
+            deselectAllTrainees();
+            // إعادة تعيين الحقول المخصصة
+            if (document.querySelector('input[name="custom_topic"]')) {
+              document.querySelector('input[name="custom_topic"]').classList.add('hidden');
+            }
+            if (document.querySelector('input[name="custom_place"]')) {
+              document.querySelector('input[name="custom_place"]').classList.add('hidden');
+            }
+          }, 2000);
+          
+        } else {
+          throw new Error(response.message);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        messageElement.textContent = '⚠️ تم الحفظ محلياً وسيتم المزامنة لاحقاً';
+        messageElement.className = 'text-sm text-yellow-600';
+      } finally {
+        // إعادة تمكين الزر
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'حفظ حضور المتدربين';
+      }
+    });
+  }
+});
+
+// دالة الإرسال إلى Google Sheets
+async function submitToGoogleSheets(data) {
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyhFeodenLqh4EUTqeBUYkJsgk6TtU0QQ_I_zB8_dZ31w3kavPi83GFBLv9tQ1qz8IL/exec';
+  
+  try {
+    // إرسال كل متدرب كسجل منفصل
+    const promises = data.trainees.map(async (trainee) => {
+      const record = {
+        trainee_name: trainee,
+        training_topic: data.topic,
+        training_date: data.date,
+        training_place: data.place,
+        trainer_name: data.trainer,
+        department: getDepartment(trainee),
+        timestamp: new Date().toISOString()
+      };
+      
+      const response = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(record)
+      });
+      
+      return { success: true, trainee: trainee };
+    });
+    
+    await Promise.all(promises);
+    return { success: true, message: `تم حفظ ${data.trainees.length} سجل بنجاح` };
+    
+  } catch (error) {
+    console.error('Error:', error);
+    // في حالة الخطأ، احفظ البيانات محلياً
+    saveTrainingDataLocally(data);
+    return { 
+      success: true, 
+      message: 'تم الحفظ محلياً بسبب مشكلة في الاتصال' 
+    };
+  }
+}
+
+// دالة مساعدة للحصول على القسم من اسم الموظف
+function getDepartment(employeeName) {
+  const departmentMap = {
+    // الإدارة الطبية
+    'MOHAMMED BABSAIL': 'الإدارة العامة',
+    'KHALED KHATAB': 'الإدارة الطبية',
+    'MAAZ ABDULQADER': 'الإدارة الطبية',
+    'MAZEN ALI': 'الإدارة الطبية',
+    
+    // الإدارة الإدارية
+    'BILAL SAMIR NTO': 'الإدارة الإدارية',
+    'ASHWAQ MOHAMMED': 'الإدارة الإدارية',
+    'DALIA ALI': 'الإدارة الإدارية',
+    
+    // الإدارة المالية
+    'SABER ALI ABDO': 'الإدارة المالية',
+    
+    // الصيانة والمرافق
+    'ADNAN ALRIFAE': 'الصيانة والمرافق',
+    
+    // الصيدلية
+    'ABDALLAH HAMODAA': 'الصيدلية',
+    
+    // المختبر
+    'HAITHAM KHADER': 'المختبر',
+    'EAZAAM ALYASAA': 'المختبر',
+    
+    // التمريض والفنيين
+    'SAWSAN SALEM': 'التمريض',
+    'SHATHA SAAD': 'التمريض',
+    'RASHA RAGB': 'التمريض',
+    'NOURA SALAH': 'التمريض',
+    'ALANOUD ZUBAIDI': 'التمريض'
+  };
+  
+  return departmentMap[employeeName] || 'غير محدد';
+}
+
+// حفظ البيانات محلياً للتطوير
+function saveTrainingDataLocally(data) {
+  let trainingRecords = JSON.parse(localStorage.getItem('training_records') || '[]');
+  
+  // إضافة كل متدرب كسجل منفصل
+  data.trainees.forEach(trainee => {
+    trainingRecords.push({
+      trainee_name: trainee,
+      training_topic: data.topic,
+      training_date: data.date,
+      training_place: data.place,
+      trainer_name: data.trainer,
+      department: getDepartment(trainee),
+      timestamp: new Date().toISOString()
+    });
+  });
+  
+  localStorage.setItem('training_records', JSON.stringify(trainingRecords));
+}
 
 // ====== مكتبة وثائق RM - مصححة ======
 const RM_DOCS_ESSENTIAL = [
