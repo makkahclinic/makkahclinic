@@ -1014,394 +1014,160 @@ function loadSavedLogo() {
 }
 
 // ====== مكتبة وثائق RM - مصححة ======
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>بوابة إدارة المخاطر والجودة - المجمع الطبي 2025</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
+// ====== مكتبة RM الأساسية (نسخة محدثة ومنظمة) ======
+function renderRMLibrary() {
+  const mount = document.getElementById('rmLib');
+  if (!mount) return;
 
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
-            min-height: 100vh;
-        }
+  // --- (1) تعريف التصنيفات للترجمة والترتيب ---
+  const RM_CATEGORIES = {
+    'DEC': { name: 'القرارات', icon: '📋' },
+    'POL': { name: 'السياسات', icon: '📜' },
+    'FRM': { name: 'النماذج', icon: '📝' },
+    'TOOL': { name: 'الأدوات', icon: '🔍' },
+    'LOG': { name: 'السجلات', icon: '📒' },
+    'DASH': { name: 'لوحات القيادة', icon: '📈' },
+    'REF': { name: 'المراجع', icon: '📞' },
+    'REP': { name: 'التقارير', icon: '📑' }
+  };
+  // الحفاظ على الترتيب الموجود في مصفوفتك
+  const RM_CATEGORY_ORDER = [...new Set(RM_DOCS_ESSENTIAL.map(d => d.category))];
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+  // --- (2) بناء هيكل الفلاتر والبحث ---
+  mount.innerHTML = `
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+      <div id="rmFilterButtons" class="flex flex-wrap gap-2">
+        <button data-rm-filter="ALL" class="px-3 py-1 rounded-full bg-[var(--brand1)] text-white text-sm font-semibold">
+          الكل
+        </button>
+        ${RM_CATEGORY_ORDER.map(cat => `
+          <button data-rm-filter="${cat}" class="px-3 py-1 rounded-full bg-gray-200 hover:bg-gray-300 text-sm font-semibold">
+            ${RM_CATEGORIES[cat] ? RM_CATEGORIES[cat].name : cat}
+          </button>
+        `).join('')}
+      </div>
+      <div class="ml-auto w-full md:w-64">
+        <input id="rmSearch" type="text" placeholder="ابحث بالاسم أو الكود..." class="w-full border rounded-lg px-3 py-2">
+      </div>
+    </div>
+    <div id="rmGridContainer" class="space-y-6">
+          </div>
+  `;
 
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            text-align: center;
-            border-right: 5px solid #4CAF50;
-        }
+  const gridContainer = mount.querySelector('#rmGridContainer');
+  const searchInput = mount.querySelector('#rmSearch');
+  const filterButtons = mount.querySelectorAll('button[data-rm-filter]');
 
-        .header h1 {
-            color: #2c3e50;
-            font-size: 2.2em;
-            margin-bottom: 10px;
-        }
+  // --- (3) دالة رسم المحتوى (القلب النابض) ---
+  function renderRMItems(filter = 'ALL', query = '') {
+    gridContainer.innerHTML = '';
+    const searchQuery = query.toLowerCase().trim();
 
-        .header h2 {
-            color: #7f8c8d;
-            font-weight: normal;
-            font-size: 1.2em;
-        }
+    // 1. فلترة المستندات (حسب البحث)
+    const searchedDocs = RM_DOCS_ESSENTIAL.filter(item => {
+      const matchesQuery = !searchQuery ||
+        item.code.toLowerCase().includes(searchQuery) ||
+        item.name.toLowerCase().includes(searchQuery);
+      return matchesQuery;
+    });
 
-        .main-layout {
-            display: grid;
-            grid-template-columns: 250px 1fr;
-            gap: 20px;
-        }
+    // 2. فلترة المستندات (حسب الفلتر)
+    const filteredDocs = (filter === 'ALL')
+      ? searchedDocs
+      : searchedDocs.filter(item => item.category === filter);
 
-        .sidebar {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            height: fit-content;
-        }
+    // 3. تجميع المستندات حسب التصنيف
+    const groupedDocs = {};
+    RM_CATEGORY_ORDER.forEach(catId => {
+      const docsInCategory = filteredDocs.filter(doc => doc.category === catId);
+      if (docsInCategory.length > 0) {
+        groupedDocs[catId] = {
+          name: RM_CATEGORIES[catId] ? RM_CATEGORIES[catId].name : catId,
+          icon: RM_CATEGORIES[catId] ? RM_CATEGORIES[catId].icon : '📚',
+          docs: docsInCategory
+        };
+      }
+    });
+    
+    if (Object.keys(groupedDocs).length === 0) {
+      gridContainer.innerHTML = '<p class="text-gray-600 text-center py-4">لا توجد مستندات تطابق البحث.</p>';
+      return;
+    }
 
-        .sidebar h3 {
-            color: #2c3e50;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #ecf0f1;
-        }
+    // 4. بناء الـ HTML النهائي (بالتصميم المنظم)
+    let finalHTML = '';
+    for (const categoryId in groupedDocs) {
+      const group = groupedDocs[categoryId];
 
-        .category-list {
-            list-style: none;
-        }
+      // -- رأس القسم --
+      finalHTML += `
+        <section class="category-section mb-6">
+          <h3 class="text-xl font-extrabold text-[var(--brand1)] mb-3 border-b pb-2 flex items-center gap-2">
+            <span class="text-2xl">${group.icon}</span>
+            ${group.name} (${group.docs.length})
+          </h3>
+          
+                    <div class="grid-cards"> 
+        `;
 
-        .category-list li {
-            padding: 12px 15px;
-            margin: 8px 0;
-            background: #f8f9fa;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border-right: 4px solid transparent;
-        }
+      // -- البطاقات --
+      group.docs.forEach(item => {
+        // (استخدام نفس تصميم البطاقة من الأقسام الأخرى)
+        finalHTML += `
+          <div class="p-4 rounded-xl border bg-white shadow-sm hover:shadow-md transition flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <div class="font-extrabold text-[var(--brand1)]">${item.code}</div>
+                <div class="text-xs text-gray-500">${item.categoryName}</div>
+              </div>
+              <div class="text-gray-800 mt-1 font-semibold">${item.name}</div>
+            </div>
+            <div class="mt-3 flex gap-2">
+              <button class="px-3 py-2 text-sm text-white rounded-lg bg-[var(--brand1)] hover:bg-[var(--brand2)] flex-1" 
+                    onclick="openDocModal('${item.code}: ${item.name}', '${item.url}')">
+                <i class="fas fa-eye ml-1"></i> عرض
+              </button>
+              <a class="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50 flex-1 text-center" 
+                   target="_blank" href="${item.url.replace('/preview', '/view')}">
+                <i class="fas fa-up-right-from-square ml-1"></i> فتح
+              </a>
+            </div>
+          </div>
+        `;
+      });
 
-        .category-list li:hover {
-            background: #e3f2fd;
-            border-right-color: #2196F3;
-            transform: translateX(-5px);
-        }
+      finalHTML += `
+          </div>         </section>
+      `;
+    }
 
-        .category-list li.active {
-            background: #e8f5e9;
-            border-right-color: #4CAF50;
-            font-weight: bold;
-        }
+    gridContainer.innerHTML = finalHTML;
+  }
 
-        .content {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
+  // --- (4) ربط الأحداث ---
+  function updateFilters() {
+    const activeFilter = mount.querySelector('button[data-rm-filter].bg-[var(--brand1)]')?.getAttribute('data-rm-filter') || 'ALL';
+    const query = searchInput.value;
+    renderRMItems(activeFilter, query);
+  }
 
-        .section-title {
-            color: #2c3e50;
-            font-size: 1.8em;
-            margin-bottom: 25px;
-            padding-bottom: 10px;
-            border-bottom: 3px solid #ecf0f1;
-        }
+  filterButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      filterButtons.forEach(btn => {
+        btn.classList.remove('bg-[var(--brand1)]', 'text-white');
+        btn.classList.add('bg-gray-200', 'hover:bg-gray-300');
+      });
+      button.classList.add('bg-[var(--brand1)]', 'text-white');
+      button.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+      updateFilters();
+    });
+  });
 
-        .documents-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
+  searchInput.addEventListener('input', updateFilters);
 
-        .document-card {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            border-right: 4px solid #3498db;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .document-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            border-right-color: #e74c3c;
-        }
-
-        .doc-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15px;
-        }
-
-        .doc-code {
-            background: #3498db;
-            color: white;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: bold;
-        }
-
-        .doc-category {
-            background: #ecf0f1;
-            color: #7f8c8d;
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.8em;
-        }
-
-        .doc-name {
-            color: #2c3e50;
-            font-size: 1.1em;
-            line-height: 1.4;
-            margin-bottom: 15px;
-            min-height: 60px;
-        }
-
-        .doc-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s ease;
-            flex: 1;
-            text-align: center;
-            text-decoration: none;
-        }
-
-        .btn-view {
-            background: #27ae60;
-            color: white;
-        }
-
-        .btn-view:hover {
-            background: #219a52;
-        }
-
-        .btn-category {
-            background: #e67e22;
-            color: white;
-        }
-
-        .btn-category:hover {
-            background: #d35400;
-        }
-
-        .nav-sections {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 25px;
-            padding-top: 20px;
-            border-top: 2px solid #ecf0f1;
-        }
-
-        .nav-item {
-            background: #34495e;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 0.9em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .nav-item:hover {
-            background: #2c3e50;
-            transform: translateY(-2px);
-        }
-
-        @media (max-width: 768px) {
-            .main-layout {
-                grid-template-columns: 1fr;
-            }
-            
-            .documents-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>بوابة إدارة المخاطر والجودة</h1>
-            <h2>صفحة 2025 - موقع المجمع الطبي</h2>
-        </div>
-
-        <div class="main-layout">
-            <div class="sidebar">
-                <h3>📚 مكتبة الأدلة الأساسية</h3>
-                <ul class="category-list" id="categoryList">
-                    <!-- سيتم ملؤها بالجافاسكريبت -->
-                </ul>
-
-                <div class="nav-sections">
-                    <div class="nav-item">الصفحة الرئيسية</div>
-                    <div class="nav-item">الدليل الإداري</div>
-                    <div class="nav-item">القيادة والحوكمة (LD)</div>
-                    <div class="nav-item">اللجان الرسمية</div>
-                    <div class="nav-item">إدارة المخاطر (RM)</div>
-                    <div class="nav-item">السلامة والمرافق (FMS)</div>
-                    <div class="nav-item">سلامة المرضى (PSC)</div>
-                    <div class="nav-item">مكافحة العدوى (IPC)</div>
-                    <div class="nav-item">الجودة والتطوير (QI)</div>
-                    <div class="nav-item">الطوارئ والكوارث (ECOC)</div>
-                    <div class="nav-item">التسجيل الإلكتروني</div>
-                </div>
-            </div>
-
-            <div class="content">
-                <h2 class="section-title" id="currentCategory">جميع المستندات</h2>
-                <div class="documents-grid" id="documentsGrid">
-                    <!-- سيتم ملؤها بالجافاسكريبت -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // البيانات الأساسية للمستندات
-        const RM_DOCS_ESSENTIAL = [
-            { code:'LD.31', name:'قرار اعتماد برنامج إدارة المخاطر (LD.31)', category:'DEC', categoryName:'قرارات', icon:'📋', url:'https://drive.google.com/file/d/1TYH87_v6rC2twWOZig2P5YDegRv6ir2dlYEU-v6KXwg/preview' },
-            { code:'LD.31/32', name:'قرار تشكيل لجنة إدارة المخاطر وسلامة المرضى', category:'DEC', categoryName:'قرارات', icon:'👥', url:'https://drive.google.com/file/d/1yN0wiHu-mmNqFHF5XeEQIqOeMElIFSXn-xCz1AzAfco/preview' },
-            { code:'LD.32', name:'قرار إداري باعتماد سياسة الإبلاغ عن الحوادث/الشكاوى', category:'POL', categoryName:'سياسات', icon:'📜', url:'https://drive.google.com/file/d/1irNRM1ovqwQEaEEj5gv9rmAuoV8O5aY-m0hSNykZDUk/preview' },
-            { code:'IR', name:'نموذج بلاغ حادث (Incident Report)', category:'FRM', categoryName:'نماذج', icon:'📝', url:'https://drive.google.com/file/d/1rFQjcCWP010zLNb4FfRtT1aTmrbY9fyjGcMeYIXSQqQ/preview' },
-            { code:'NM', name:'نموذج بلاغ قريب من الوقوع (Near Miss)', category:'FRM', categoryName:'نماذج', icon:'⚠️', url:'https://drive.google.com/file/d/1DhGR9WtVrM2LxITiv8WBMSCKs407Kb-vUZXg0mZVwD0/preview' },
-            { code:'UNSAFE', name:'بلاغ خطر/شرط غير آمن', category:'FRM', categoryName:'نماذج', icon:'🚨', url:'https://drive.google.com/file/d/1Yw7CFRvzssAWU0JYFkNz1Z9o0fQoMKCqoqrRhEHWZ_I/preview' },
-            { code:'DEVICE', name:'بلاغ عطل جهاز/تجهيز', category:'FRM', categoryName:'نماذج', icon:'🔧', url:'https://drive.google.com/file/d/17tZnAvhWCvPbb5Bp3UymLxzEz-IciEjxV4Tn97tIWwQ/preview' },
-            { code:'SE', name:'إخطار حدث جسيم (Sentinel Event)', category:'FRM', categoryName:'نماذج', icon:'🚑', url:'https://drive.google.com/file/d/1LrOlWxfECxyzF77DnerV15RjS-ElSTbIEa1UuKG3rD0/preview' },
-            { code:'RCA/CAP', name:'تحليل السبب الجذري وخطة الإجراءات التصحيحية', category:'TOOL', categoryName:'أدوات', icon:'🔍', url:'https://drive.google.com/file/d/1lDKsjgPDCdwXNV935kB_DfAm-ZsdzLPK8p4Pn7hgJJ0/preview' },
-            { code:'HFMEA', name:'HFMEA (تحليل مسبق للمخاطر)', category:'TOOL', categoryName:'أدوات', icon:'📊', url:'https://drive.google.com/file/d/15ZjKLJYhe3HCUWbAO2Iw96IY1GOn1VNCWIjzdi9U4x8/preview' },
-            { code:'REGISTER', name:'سجل المخاطر المؤسسي', category:'LOG', categoryName:'سجلات', icon:'📒', url:'https://drive.google.com/file/d/1XVMRWRZKoTpmXPzrPdXJA7PWf9r88YwLYv_tptdiZAA/preview' },
-            { code:'KPI', name:'لوحة المؤشرات الشهرية لإدارة المخاطر', category:'DASH', categoryName:'لوحات القيادة', icon:'📈', url:'https://drive.google.com/file/d/1pj8P8rf4TZj_wVKgLrO8ayP9WNUBc1yTWeAy8r0xGOY/preview' },
-            { code:'ESCALATION', name:'لوحة اتصالات وسلسلة التصعيد', category:'REF', categoryName:'مراجع', icon:'📞', url:'https://drive.google.com/file/d/1dZrkUB_d1XblN3QonWxPt9F1LQ6xQIbyNFT4ixI2m64/preview' },
-            { code:'LD.31-ALT', name:'LD31 (نسخة إضافية)', category:'DEC', categoryName:'قرارات', icon:'📋', url:'https://drive.google.com/file/d/1AEtBJgibYuSxVD_bSZgAlFgODnadZcDMTZaKle3pnYg/preview' },
-            { code:'LD.32-ALT', name:'LD32 (نسخة إضافية)', category:'POL', categoryName:'سياسات', icon:'📜', url:'https://drive.google.com/file/d/1x6R5DKODJ1MKghpPEnaR-1GIohAEILzmY6VNgAPgzAE/preview' },
-            { code:'ACT-RM-2025-001', name:'عرض المشاكل وخطة الحلول (Risk Issues & CAP)', category:'REP', categoryName:'تقارير', icon:'📑', url:'https://drive.google.com/file/d/1ZUBOoQgVbf41pcBxmU5iyoJzddd9e8JJDJ1Z2dekLfY/preview' }
-        ];
-
-        // الحصول على جميع التصنيفات الفريدة
-        const categories = [...new Set(RM_DOCS_ESSENTIAL.map(doc => doc.category))];
-        const categoryNames = {
-            'DEC': 'قرارات',
-            'POL': 'سياسات', 
-            'FRM': 'نماذج',
-            'TOOL': 'أدوات',
-            'LOG': 'سجلات',
-            'DASH': 'لوحات القيادة',
-            'REF': 'مراجع',
-            'REP': 'تقارير'
-        };
-
-        // تهيئة القائمة الجانبية للتصنيفات
-        function initCategoryList() {
-            const categoryList = document.getElementById('categoryList');
-            
-            // إضافة عنصر "الكل"
-            const allItem = document.createElement('li');
-            allItem.textContent = 'الكل';
-            allItem.classList.add('active');
-            allItem.addEventListener('click', () => filterDocuments('all'));
-            categoryList.appendChild(allItem);
-
-            // إضافة التصنيفات
-            categories.forEach(category => {
-                const li = document.createElement('li');
-                li.textContent = categoryNames[category] || category;
-                li.setAttribute('data-category', category);
-                li.addEventListener('click', () => filterDocuments(category));
-                categoryList.appendChild(li);
-            });
-        }
-
-        // عرض المستندات
-        function displayDocuments(documents) {
-            const grid = document.getElementById('documentsGrid');
-            grid.innerHTML = '';
-
-            documents.forEach(doc => {
-                const card = document.createElement('div');
-                card.className = 'document-card';
-                
-                card.innerHTML = `
-                    <div class="doc-header">
-                        <span class="doc-code">${doc.icon} ${doc.code}</span>
-                        <span class="doc-category">${doc.categoryName}</span>
-                    </div>
-                    <div class="doc-name">${doc.name}</div>
-                    <div class="doc-actions">
-                        <a href="${doc.url}" target="_blank" class="btn btn-view">عرض</a>
-                        <button class="btn btn-category" onclick="filterDocuments('${doc.category}')">فئة في تويب</button>
-                    </div>
-                `;
-                
-                grid.appendChild(card);
-            });
-        }
-
-        // تصفية المستندات حسب التصنيف
-        function filterDocuments(category) {
-            const currentCategory = document.getElementById('currentCategory');
-            const categoryItems = document.querySelectorAll('#categoryList li');
-            
-            // تحديث التصنيف النشط
-            categoryItems.forEach(item => {
-                item.classList.remove('active');
-                if (category === 'all' && item.textContent === 'الكل') {
-                    item.classList.add('active');
-                } else if (item.getAttribute('data-category') === category) {
-                    item.classList.add('active');
-                }
-            });
-
-            // تصفية المستندات
-            let filteredDocs;
-            if (category === 'all') {
-                filteredDocs = RM_DOCS_ESSENTIAL;
-                currentCategory.textContent = 'جميع المستندات';
-            } else {
-                filteredDocs = RM_DOCS_ESSENTIAL.filter(doc => doc.category === category);
-                currentCategory.textContent = `${categoryNames[category]} - ${filteredDocs.length} مستند`;
-            }
-
-            displayDocuments(filteredDocs);
-        }
-
-        // تهيئة الصفحة
-        document.addEventListener('DOMContentLoaded', () => {
-            initCategoryList();
-            displayDocuments(RM_DOCS_ESSENTIAL);
-        });
-    </script>
-</body>
-</html>
+  // --- (5) العرض الأولي ---
+  renderRMItems('ALL', '');
+}
 // ====== مؤشرات PSC ======
 const PSC_KPI_DATA = [
   { الشهر: 'يناير', تعريف_المريض: 98, التزام_غسل_اليدين: 85, أخطاء_دواء: 5.2, سقوط: 3.1, بلاغات_قريبة: 12 },
