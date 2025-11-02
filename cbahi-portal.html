@@ -3424,51 +3424,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     data.places.forEach(place => datalistPlaces.innerHTML += `<option value="${place}">`);
     placeInput.after(datalistPlaces);
 
-    // ✅ تحميل البرامج التدريبية حسب اللجنة إلى datalist للـ input "training_topic"
-    const committeeSel = form.querySelector('select[name="committee_code"]');
-    const topicInput   = form.querySelector('input[name="training_topic"]');
+  // ✅ تحميل البرامج التدريبية حسب اللجنة إلى datalist للـ input "training_topic"
+const committeeSel = form.querySelector('select[name="committee_code"]');
+const topicInput   = form.querySelector('input[name="training_topic"]');
 
-    // أنشئ datalist واحد فقط لمواضيع البرامج
-    let topicsDL = document.getElementById('topics-list');
-    if (!topicsDL) {
-      topicsDL = document.createElement('datalist');
-      topicsDL.id = 'topics-list';
-      topicInput.setAttribute('list', 'topics-list');
-      topicInput.after(topicsDL);
-    }
+// أنشئ datalist واحد فقط لمواضيع البرامج
+let topicsDL = document.getElementById('topics-list');
+if (!topicsDL) {
+  topicsDL = document.createElement('datalist');
+  topicsDL.id = 'topics-list';
+  topicInput.setAttribute('list', 'topics-list');
+  topicInput.after(topicsDL);
+}
 
-    async function loadProgramsForCommittee(code) {
-      topicsDL.innerHTML = '';
-      topicInput.value = '';
-      if (!code) return;
-      try {
-        const url = `${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const payload = await res.json();
-        console.log('Programs payload:', payload);
-
-        if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
-        if (!Array.isArray(payload.programs)) throw new Error('قائمة البرامج غير صحيحة');
-
-        payload.programs.forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p.program_name;
-          topicsDL.appendChild(opt);
-        });
-      } catch (err) {
-        console.error('⚠️ فشل تحميل البرامج:', err.message);
-      }
-    }
-    async function loadProgramsForCommittee(code) {
+// ✅ دالة واحدة فقط لتحميل البرامج
+async function loadProgramsForCommittee(code) {
   topicsDL.innerHTML = '';
   topicInput.value = '';
   if (!code) return;
+
   try {
     const url = `${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const payload = await res.json();
+
+    console.log('Programs payload:', payload); // ✅ للتشخيص في المتصفح
 
     if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
     if (!Array.isArray(payload.programs)) throw new Error('قائمة البرامج غير صحيحة');
@@ -3477,10 +3458,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       // إنشاء العنصر داخل datalist
       const opt = document.createElement('option');
       opt.value = p.program_name;
-
-      // 🟨 تلميح عند المرور بالفأرة
-      opt.title = `📅 ${p.frequency}\n📝 ${p.description}\n📁 ${p.file_type}`;
-
+      opt.title = `📅 ${p.frequency}\n📝 ${p.description}\n📁 ${p.file_type}`; // 🟨 Tooltip جميل
       topicsDL.appendChild(opt);
     });
 
@@ -3491,7 +3469,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error('⚠️ فشل تحميل البرامج:', err.message);
   }
 }
-    function showProgramHintArea(programs) {
+
+// ✅ صندوق عرض التفاصيل أسفل خانة "موضوع التدريب"
+function showProgramHintArea(programs) {
   let hintBox = document.getElementById('programHintBox');
   if (!hintBox) {
     hintBox = document.createElement('div');
@@ -3515,9 +3495,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 }
 
+// ✅ تحميل البرامج عند اختيار اللجنة
+committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
+if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
 
-    // تحميل البرامج عند تغيير اللجنة أو عند الفتح
-    committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
+
+
     if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
 
     // ✅ تحديث عداد المتدربين
