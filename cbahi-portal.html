@@ -952,21 +952,22 @@ function openDocModal(title, previewUrl) {
   const titleEl = document.getElementById('docTitle');
   const frame = document.getElementById('docFrame');
 
-  // تعيين العنوان
   titleEl.textContent = title;
 
-  // نستخدم الرابط الأصلي بشكل مباشر مع حماية sandbox
   let safeUrl = previewUrl;
-  if (!safeUrl.startsWith("https://drive.google.com/")) {
-    safeUrl = safeUrl.replace("http://", "https://");
+
+  // ✅ استخراج ID وإنشاء رابط embed رسمي آمن
+  let fileId = '';
+  const match1 = previewUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const match2 = previewUrl.match(/id=([a-zA-Z0-9_-]+)/);
+  if (match1) fileId = match1[1];
+  else if (match2) fileId = match2[1];
+
+  if (fileId) {
+    safeUrl = `https://drive.google.com/file/d/${fileId}/preview`;
   }
 
-  // إعداد iframe لتفادي طلب الكوكيز
-  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups");
-  frame.setAttribute("allowfullscreen", "true");
   frame.src = safeUrl;
-
-  // فتح المودال
   modal.style.display = 'flex';
 }
 
