@@ -3385,42 +3385,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!form) return;
   const msg = document.getElementById("trainMsg");
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyhFeodenLqh4EUTqeBUYkJsgk6TtU0QQ_I_zB8_dZ31w3kavPi83GFBLv9tQ1qz8IL/exec";
-// تحميل البرامج التدريبية من Training_Programs_List حسب اللجنة
-const committeeSel = form.querySelector('select[name="committee_code"]');
-const topicInput = form.querySelector('input[name="training_topic"]');
 
-// إعداد datalist جديد للبرامج
-let topicsDL = document.createElement('datalist');
-topicsDL.id = 'topics-list';
-topicInput.setAttribute('list', 'topics-list');
-topicInput.after(topicsDL);
-
-// دالة تحميل البرامج حسب اللجنة
-async function loadProgramsForCommittee(code){
-  topicsDL.innerHTML = '';
-  topicInput.value = '';
-  if (!code) return;
-  try {
-    const res = await fetch(`${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const payload = await res.json();
-    if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
-    payload.programs.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.program_name;
-      topicsDL.appendChild(opt);
-    });
-  } catch (err) {
-    console.error('⚠️ فشل تحميل البرامج:', err.message);
-  }
-}
-
-// عند تغيير اللجنة — حمّل برامجها
-committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
-
-// تحميل البرامج المبدئية عند الفتح
-if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
-  // تحميل القوائم من Google Sheet (أسماء الموظفين + المواضيع + الأماكن)
+  // تحميل القوائم الأساسية (الموظفين + الأماكن)
   try {
     msg.textContent = "⏳ جارِ تحميل البيانات...";
     const res = await fetch(WEB_APP_URL);
@@ -3428,7 +3394,7 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
     const data = await res.json();
     msg.textContent = "";
 
-    // تعبئة قائمة أسماء الموظفين
+    // ✅ تعبئة قائمة أسماء الموظفين
     const traineeBox = document.createElement("div");
     traineeBox.className = "md:col-span-2";
     traineeBox.innerHTML = `
@@ -3447,7 +3413,7 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
       .map(name => `<label class="block"><input type="checkbox" name="trainees" value="${name}" class="trainee-checkbox mr-2">${name}</label>`)
       .join("");
 
-    // تعبئة الأماكن
+    // ✅ تعبئة الأماكن
     const placeInput = form.querySelector('input[name="training_place"]');
     placeInput.setAttribute("list", "places-list");
     const datalistPlaces = document.createElement("datalist");
@@ -3455,7 +3421,40 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
     data.places.forEach(place => datalistPlaces.innerHTML += `<option value="${place}">`);
     placeInput.after(datalistPlaces);
 
-    // تحديث العداد
+    // ✅ تحميل البرامج التدريبية حسب اللجنة
+    const committeeSel = form.querySelector('select[name="committee_code"]');
+    const topicInput = form.querySelector('input[name="training_topic"]');
+
+    // إنشاء datalist للمواضيع
+    let topicsDL = document.createElement('datalist');
+    topicsDL.id = 'topics-list';
+    topicInput.setAttribute('list', 'topics-list');
+    topicInput.after(topicsDL);
+
+    async function loadProgramsForCommittee(code){
+      topicsDL.innerHTML = '';
+      topicInput.value = '';
+      if (!code) return;
+      try {
+        const res = await fetch(`${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
+        payload.programs.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.program_name;
+          topicsDL.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('⚠️ فشل تحميل البرامج:', err.message);
+      }
+    }
+
+    // تحميل البرامج عند تغيير اللجنة أو عند الفتح
+    committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
+    if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
+
+    // ✅ تحديث عداد المتدربين
     const countEl = document.getElementById("selectedCount");
     function updateCount() {
       const count = document.querySelectorAll(".trainee-checkbox:checked").length;
@@ -3470,12 +3469,13 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
       document.querySelectorAll(".trainee-checkbox").forEach(cb => cb.checked = false);
       updateCount();
     });
+
   } catch (err) {
     msg.textContent = "⚠️ فشل تحميل القوائم: " + err.message;
     msg.className = "text-sm text-red-600";
   }
 
-  // إرسال البيانات
+  // إرسال البيانات إلى Google Apps Script
   form.addEventListener("submit", async e => {
     e.preventDefault();
     msg.textContent = "⏳ جاري الإرسال...";
@@ -3490,7 +3490,7 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
 
     const payload = Object.fromEntries(new FormData(form).entries());
     payload.trainees = selectedTrainees;
-    payload.department = payload.committee_code; // يربطها بالكود مثل RM / QI / EOC
+    payload.department = payload.committee_code;
 
     try {
       const res = await fetch(WEB_APP_URL, {
@@ -3503,11 +3503,9 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
         msg.textContent = "✅ تم حفظ سجل التدريب بنجاح";
         msg.className = "text-sm text-green-600";
         form.reset();
-        document.getElementById("traineeList").querySelectorAll("input").forEach(cb => cb.checked = false);
+        document.querySelectorAll(".trainee-checkbox").forEach(cb => cb.checked = false);
         document.getElementById("selectedCount").textContent = "0 متدرب محدد";
-      } else {
-        throw new Error(data.message);
-      }
+      } else throw new Error(data.message);
     } catch (err) {
       msg.textContent = "❌ فشل الحفظ: " + err.message;
       msg.className = "text-sm text-red-600";
