@@ -946,11 +946,30 @@ function navTo(sectionId){
   }
   return false;
 }
+// ====== عرض الوثيقة في المودال مع إصلاح مشكلة Google Cookies ======
 function openDocModal(title, previewUrl) {
-  document.getElementById('docTitle').textContent = title;
-  document.getElementById('docFrame').src = previewUrl;
-  document.getElementById('docModal').style.display = 'flex';
+  const modal = document.getElementById('docModal');
+  const titleEl = document.getElementById('docTitle');
+  const frame = document.getElementById('docFrame');
+
+  // عنوان النافذة
+  titleEl.textContent = title;
+
+  // ✅ تحويل الرابط إلى رابط آمن من Google Viewer لتفادي رسالة Allow Cookies
+  let safeUrl = previewUrl;
+  if (previewUrl.includes('drive.google.com/file/d/')) {
+    const match = previewUrl.match(/\/d\/(.*?)\//);
+    if (match && match[1]) {
+      const fileId = match[1];
+      safeUrl = `https://docs.google.com/viewer?embedded=true&src=https://drive.google.com/uc?id=${fileId}`;
+    }
+  }
+
+  // تحميل الرابط داخل الـ iframe
+  frame.src = safeUrl;
+  modal.style.display = 'flex';
 }
+
 
 function closeDocModal() {
   document.getElementById('docFrame').src = 'about:blank';
