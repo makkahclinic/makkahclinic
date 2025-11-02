@@ -3376,6 +3376,116 @@ document.addEventListener("DOMContentLoaded",()=>{
   });
 });
 </script>
+<!-- سكربت سجل التدريب (نهائي وذكي) -->
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const form = document.getElementById("trainingForm");
+  if (!form) return;
+  const msg = document.getElementById("trainMsg");
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyhFeodenLqh4EUTqeBUYkJsgk6TtU0QQ_I_zB8_dZ31w3kavPi83GFBLv9tQ1qz8IL/exec";
 
+  // تحميل القوائم من Google Sheet (أسماء الموظفين + المواضيع + الأماكن)
+  try {
+    msg.textContent = "⏳ جارِ تحميل البيانات...";
+    const res = await fetch(WEB_APP_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    msg.textContent = "";
+
+    // تعبئة قائمة أسماء الموظفين
+    const traineeBox = document.createElement("div");
+    traineeBox.className = "md:col-span-2";
+    traineeBox.innerHTML = `
+      <label class="block text-sm font-semibold mb-1">اختر المتدربين *</label>
+      <div id="traineeList" class="max-h-60 overflow-y-auto border rounded-lg p-3 bg-gray-50"></div>
+      <div class="flex justify-between items-center mt-2 text-sm">
+        <button type="button" id="selectAll" class="text-[var(--brand1)] hover:underline">تحديد الكل</button>
+        <button type="button" id="deselectAll" class="text-gray-600 hover:underline">إلغاء التحديد</button>
+      </div>
+      <div id="selectedCount" class="text-xs text-gray-600 mt-1">0 متدرب محدد</div>
+    `;
+    form.insertBefore(traineeBox, form.querySelector(".md\\:col-span-2.flex"));
+
+    const traineeList = document.getElementById("traineeList");
+    traineeList.innerHTML = data.trainees
+      .map(name => `<label class="block"><input type="checkbox" name="trainees" value="${name}" class="trainee-checkbox mr-2">${name}</label>`)
+      .join("");
+
+    // تعبئة المواضيع
+    const topicInput = form.querySelector('input[name="training_topic"]');
+    topicInput.setAttribute("list", "topics-list");
+    const datalistTopics = document.createElement("datalist");
+    datalistTopics.id = "topics-list";
+    data.topics.forEach(topic => datalistTopics.innerHTML += `<option value="${topic}">`);
+    topicInput.after(datalistTopics);
+
+    // تعبئة الأماكن
+    const placeInput = form.querySelector('input[name="training_place"]');
+    placeInput.setAttribute("list", "places-list");
+    const datalistPlaces = document.createElement("datalist");
+    datalistPlaces.id = "places-list";
+    data.places.forEach(place => datalistPlaces.innerHTML += `<option value="${place}">`);
+    placeInput.after(datalistPlaces);
+
+    // تحديث العداد
+    const countEl = document.getElementById("selectedCount");
+    function updateCount() {
+      const count = document.querySelectorAll(".trainee-checkbox:checked").length;
+      countEl.textContent = `${count} متدرب محدد`;
+    }
+    traineeList.addEventListener("change", updateCount);
+    document.getElementById("selectAll").addEventListener("click", () => {
+      document.querySelectorAll(".trainee-checkbox").forEach(cb => cb.checked = true);
+      updateCount();
+    });
+    document.getElementById("deselectAll").addEventListener("click", () => {
+      document.querySelectorAll(".trainee-checkbox").forEach(cb => cb.checked = false);
+      updateCount();
+    });
+  } catch (err) {
+    msg.textContent = "⚠️ فشل تحميل القوائم: " + err.message;
+    msg.className = "text-sm text-red-600";
+  }
+
+  // إرسال البيانات
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    msg.textContent = "⏳ جاري الإرسال...";
+    msg.className = "text-sm text-blue-600";
+
+    const selectedTrainees = Array.from(form.querySelectorAll(".trainee-checkbox:checked")).map(cb => cb.value);
+    if (selectedTrainees.length === 0) {
+      msg.textContent = "❌ اختر متدرب واحد على الأقل.";
+      msg.className = "text-sm text-red-600";
+      return;
+    }
+
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.trainees = selectedTrainees;
+    payload.department = payload.committee_code; // يربطها بالكود مثل RM / QI / EOC
+
+    try {
+      const res = await fetch(WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "text/plain;charset=utf-8" }
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        msg.textContent = "✅ تم حفظ سجل التدريب بنجاح";
+        msg.className = "text-sm text-green-600";
+        form.reset();
+        document.getElementById("traineeList").querySelectorAll("input").forEach(cb => cb.checked = false);
+        document.getElementById("selectedCount").textContent = "0 متدرب محدد";
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (err) {
+      msg.textContent = "❌ فشل الحفظ: " + err.message;
+      msg.className = "text-sm text-red-600";
+    }
+  });
+});
+</script>
 </body>
 </html>
