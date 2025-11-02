@@ -3381,7 +3381,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   });
 });
 </script>
-<!-- سكربت سجل التدريب (نهائي وذكي) -->
+<!-- سكربت سجل التدريب (نهائي ونظيف) -->
 <script>
 document.addEventListener("DOMContentLoaded", async () => {
   const form = document.getElementById("trainingForm");
@@ -3424,137 +3424,84 @@ document.addEventListener("DOMContentLoaded", async () => {
     data.places.forEach(place => datalistPlaces.innerHTML += `<option value="${place}">`);
     placeInput.after(datalistPlaces);
 
-  // ✅ تحميل البرامج التدريبية حسب اللجنة إلى datalist للـ input "training_topic"
-const committeeSel = form.querySelector('select[name="committee_code"]');
-const topicInput   = form.querySelector('input[name="training_topic"]');
+    // ✅ تحميل البرامج التدريبية حسب اللجنة
+    const committeeSel = form.querySelector('select[name="committee_code"]');
+    const topicInput = form.querySelector('input[name="training_topic"]');
 
-// أنشئ datalist واحد فقط لمواضيع البرامج
-let topicsDL = document.getElementById('topics-list');
-if (!topicsDL) {
-  topicsDL = document.createElement('datalist');
-  topicsDL.id = 'topics-list';
-  topicInput.setAttribute('list', 'topics-list');
-  topicInput.after(topicsDL);
-}
+    let topicsDL = document.getElementById('topics-list');
+    if (!topicsDL) {
+      topicsDL = document.createElement('datalist');
+      topicsDL.id = 'topics-list';
+      topicInput.setAttribute('list', 'topics-list');
+      topicInput.after(topicsDL);
+    }
 
-// ✅ دالة واحدة فقط لتحميل البرامج
-async function loadProgramsForCommittee(code) {
-  topicsDL.innerHTML = '';
-  topicInput.value = '';
-  if (!code) return;
+    async function loadProgramsForCommittee(code) {
+      topicsDL.innerHTML = '';
+      topicInput.value = '';
+      if (!code) return;
 
-  try {
-    const url = `${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const payload = await res.json();
+      try {
+        const url = `${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
 
-    console.log('Programs payload:', payload); // ✅ للتشخيص في المتصفح
+        console.log('Programs payload:', payload);
 
-    if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
-    if (!Array.isArray(payload.programs)) throw new Error('قائمة البرامج غير صحيحة');
+        if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
+        if (!Array.isArray(payload.programs)) throw new Error('قائمة البرامج غير صحيحة');
 
-    payload.programs.forEach(p => {
-      // إنشاء العنصر داخل datalist
-      const opt = document.createElement('option');
-      opt.value = p.program_name;
-      opt.title = `📅 ${p.frequency}\n📝 ${p.description}\n📁 ${p.file_type}`; // 🟨 Tooltip جميل
-      topicsDL.appendChild(opt);
-    });
+        payload.programs.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.program_name;
+          opt.title = `📅 ${p.frequency}\n📝 ${p.description}\n📁 ${p.file_type}`;
+          topicsDL.appendChild(opt);
+        });
 
-    // 💡 عرض معاينة مختصرة أسفل خانة الموضوع
-    showProgramHintArea(payload.programs);
+        showProgramHintArea(payload.programs);
+      } catch (err) {
+        console.error('⚠️ فشل تحميل البرامج:', err.message);
+      }
+    }
 
-  } catch (err) {
-    console.error('⚠️ فشل تحميل البرامج:', err.message);
-  }
-} // ✅ ← نهاية دالة loadProgramsForCommittee
+    // ✅ عرض تفاصيل البرنامج أسفل خانة الموضوع
+    function showProgramHintArea(programs) {
+      let hintBox = document.getElementById('programHintBox');
+      if (!hintBox) {
+        hintBox = document.createElement('div');
+        hintBox.id = 'programHintBox';
+        hintBox.className = 'mt-3 text-sm bg-gray-50 border rounded-lg p-4';
+        topicInput.after(hintBox);
+      }
 
-
-// ✅ صندوق عرض التفاصيل أسفل خانة "موضوع التدريب"
-function showProgramHintArea(programs) {
-  let hintBox = document.getElementById('programHintBox');
-  if (!hintBox) {
-    hintBox = document.createElement('div');
-    hintBox.id = 'programHintBox';
-    hintBox.className = 'mt-3 text-sm bg-gray-50 border rounded-lg p-4';
-    topicInput.after(hintBox);
-  }
-
-  topicInput.addEventListener('input', () => {
-    const selected = programs.find(p => p.program_name === topicInput.value.trim());
-    if (selected) {
-      // ✅ بناء بطاقة التفاصيل مع الزر
-      hintBox.innerHTML = `
-        <div class="font-bold text-[var(--brand1)] text-lg mb-1">${selected.program_name}</div>
-        <div class="text-gray-700 mb-1"><strong>📅 التكرار:</strong> ${selected.frequency}</div>
-        <div class="text-gray-700 mb-1"><strong>📝 الوصف:</strong> ${selected.description}</div>
-        <div class="text-gray-700 mb-2"><strong>📁 نوع الملف:</strong> ${selected.file_type}</div>
-
-        ${
-          selected.drive_link && selected.drive_link !== "(رابط العرض هنا لاحقًا)"
-            ? `<a href="${selected.drive_link}" target="_blank"
-                class="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)] transition">
-                <i class="fas fa-chalkboard-teacher"></i> فتح العرض التدريبي
-              </a>`
-            : `<div class="text-xs text-gray-500 italic">لم يتم رفع رابط العرض بعد.</div>`
+      topicInput.addEventListener('input', () => {
+        const selected = programs.find(p => p.program_name === topicInput.value.trim());
+        if (selected) {
+          hintBox.innerHTML = `
+            <div class="font-bold text-[var(--brand1)] text-lg mb-1">${selected.program_name}</div>
+            <div class="text-gray-700 mb-1"><strong>📅 التكرار:</strong> ${selected.frequency}</div>
+            <div class="text-gray-700 mb-1"><strong>📝 الوصف:</strong> ${selected.description}</div>
+            <div class="text-gray-700 mb-2"><strong>📁 نوع الملف:</strong> ${selected.file_type}</div>
+            ${
+              selected.drive_link && selected.drive_link !== "(رابط العرض هنا لاحقًا)"
+                ? `<a href="${selected.drive_link}" target="_blank"
+                    class="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)] transition">
+                    <i class="fas fa-chalkboard-teacher"></i> فتح العرض التدريبي
+                  </a>`
+                : `<div class="text-xs text-gray-500 italic">لم يتم رفع رابط العرض بعد.</div>`
+            }
+          `;
+        } else {
+          hintBox.innerHTML = `<span class="text-gray-500">اختر أو اكتب اسم البرنامج لعرض التفاصيل...</span>`;
         }
-      `;
-    } else {
-      hintBox.innerHTML = `<span class="text-gray-500">اختر أو اكتب اسم البرنامج لعرض التفاصيل...</span>`;
+      });
     }
-  });
-}
 
-
-  topicInput.addEventListener('input', () => {
-    const selected = programs.find(p => p.program_name === topicInput.value.trim());
-    if (selected) {
-      // ✅ بناء بطاقة التفاصيل مع الزر
-      hintBox.innerHTML = `
-        <div class="font-bold text-[var(--brand1)] text-lg mb-1">${selected.program_name}</div>
-        <div class="text-gray-700 mb-1"><strong>📅 التكرار:</strong> ${selected.frequency}</div>
-        <div class="text-gray-700 mb-1"><strong>📝 الوصف:</strong> ${selected.description}</div>
-        <div class="text-gray-700 mb-2"><strong>📁 نوع الملف:</strong> ${selected.file_type}</div>
-
-        ${
-          selected.drive_link && selected.drive_link !== "(رابط العرض هنا لاحقًا)"
-            ? `<a href="${selected.drive_link}" target="_blank"
-                class="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)] transition">
-                <i class="fas fa-chalkboard-teacher"></i> فتح العرض التدريبي
-              </a>`
-            : `<div class="text-xs text-gray-500 italic">لم يتم رفع رابط العرض بعد.</div>`
-        }
-      `;
-    } else {
-      hintBox.innerHTML = `<span class="text-gray-500">اختر أو اكتب اسم البرنامج لعرض التفاصيل...</span>`;
-    }
-  });
-}
-  topicInput.addEventListener('input', () => {
-    const selected = programs.find(p => p.program_name === topicInput.value.trim());
-    if (selected) {
-      hintBox.innerHTML = `
-        <div class="font-semibold text-[var(--brand1)]">${selected.program_name}</div>
-        <div class="text-gray-700"><strong>📅 التكرار:</strong> ${selected.frequency}</div>
-        <div class="text-gray-700"><strong>📝 الوصف:</strong> ${selected.description}</div>
-        <div class="text-gray-700"><strong>📁 نوع الملف:</strong> ${selected.file_type}</div>
-      `;
-    } else {
-      hintBox.innerHTML = `<span class="text-gray-500">اختر أو اكتب اسم البرنامج لعرض التفاصيل...</span>`;
-    }
-  });
-}
-
-// ✅ تحميل البرامج عند اختيار اللجنة
-committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
-if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
-
-
-
+    committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
     if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
 
-    // ✅ تحديث عداد المتدربين
+    // ✅ عداد المتدربين
     const countEl = document.getElementById("selectedCount");
     function updateCount() {
       const count = document.querySelectorAll(".trainee-checkbox:checked").length;
@@ -3575,7 +3522,7 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
     msg.className = "text-sm text-red-600";
   }
 
-  // ✅ إرسال البيانات إلى Google Apps Script
+  // ✅ إرسال البيانات
   form.addEventListener("submit", async e => {
     e.preventDefault();
     msg.textContent = "⏳ جاري الإرسال...";
@@ -3613,6 +3560,7 @@ if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
   });
 });
 </script>
+
 
 <!-- 🖨️ سكربت تصدير البرنامج كـ PDF -->
 <script>
