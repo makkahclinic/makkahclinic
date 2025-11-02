@@ -3385,7 +3385,41 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!form) return;
   const msg = document.getElementById("trainMsg");
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyhFeodenLqh4EUTqeBUYkJsgk6TtU0QQ_I_zB8_dZ31w3kavPi83GFBLv9tQ1qz8IL/exec";
+// تحميل البرامج التدريبية من Training_Programs_List حسب اللجنة
+const committeeSel = form.querySelector('select[name="committee_code"]');
+const topicInput = form.querySelector('input[name="training_topic"]');
 
+// إعداد datalist جديد للبرامج
+let topicsDL = document.createElement('datalist');
+topicsDL.id = 'topics-list';
+topicInput.setAttribute('list', 'topics-list');
+topicInput.after(topicsDL);
+
+// دالة تحميل البرامج حسب اللجنة
+async function loadProgramsForCommittee(code){
+  topicsDL.innerHTML = '';
+  topicInput.value = '';
+  if (!code) return;
+  try {
+    const res = await fetch(`${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
+    payload.programs.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.program_name;
+      topicsDL.appendChild(opt);
+    });
+  } catch (err) {
+    console.error('⚠️ فشل تحميل البرامج:', err.message);
+  }
+}
+
+// عند تغيير اللجنة — حمّل برامجها
+committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
+
+// تحميل البرامج المبدئية عند الفتح
+if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
   // تحميل القوائم من Google Sheet (أسماء الموظفين + المواضيع + الأماكن)
   try {
     msg.textContent = "⏳ جارِ تحميل البيانات...";
