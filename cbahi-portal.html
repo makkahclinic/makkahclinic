@@ -946,30 +946,29 @@ function navTo(sectionId){
   }
   return false;
 }
-// ====== عرض الوثيقة في المودال مع إصلاح مشكلة Google Cookies ======
+// ====== عرض الوثيقة في المودال بدون مشاكل Google Cookies ======
 function openDocModal(title, previewUrl) {
   const modal = document.getElementById('docModal');
   const titleEl = document.getElementById('docTitle');
   const frame = document.getElementById('docFrame');
 
-  // عنوان النافذة
+  // تعيين العنوان
   titleEl.textContent = title;
 
-  // ✅ تحويل الرابط إلى رابط آمن من Google Viewer لتفادي رسالة Allow Cookies
+  // نستخدم الرابط الأصلي بشكل مباشر مع حماية sandbox
   let safeUrl = previewUrl;
-  if (previewUrl.includes('drive.google.com/file/d/')) {
-    const match = previewUrl.match(/\/d\/(.*?)\//);
-    if (match && match[1]) {
-      const fileId = match[1];
-      safeUrl = `https://docs.google.com/viewer?embedded=true&src=https://drive.google.com/uc?id=${fileId}`;
-    }
+  if (!safeUrl.startsWith("https://drive.google.com/")) {
+    safeUrl = safeUrl.replace("http://", "https://");
   }
 
-  // تحميل الرابط داخل الـ iframe
+  // إعداد iframe لتفادي طلب الكوكيز
+  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups");
+  frame.setAttribute("allowfullscreen", "true");
   frame.src = safeUrl;
+
+  // فتح المودال
   modal.style.display = 'flex';
 }
-
 
 function closeDocModal() {
   document.getElementById('docFrame').src = 'about:blank';
