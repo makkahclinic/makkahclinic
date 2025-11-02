@@ -3468,7 +3468,8 @@ async function loadProgramsForCommittee(code) {
   } catch (err) {
     console.error('⚠️ فشل تحميل البرامج:', err.message);
   }
-}
+} // ✅ ← نهاية دالة loadProgramsForCommittee
+
 
 // ✅ صندوق عرض التفاصيل أسفل خانة "موضوع التدريب"
 function showProgramHintArea(programs) {
@@ -3479,6 +3480,32 @@ function showProgramHintArea(programs) {
     hintBox.className = 'mt-3 text-sm bg-gray-50 border rounded-lg p-4';
     topicInput.after(hintBox);
   }
+
+  topicInput.addEventListener('input', () => {
+    const selected = programs.find(p => p.program_name === topicInput.value.trim());
+    if (selected) {
+      // ✅ بناء بطاقة التفاصيل مع الزر
+      hintBox.innerHTML = `
+        <div class="font-bold text-[var(--brand1)] text-lg mb-1">${selected.program_name}</div>
+        <div class="text-gray-700 mb-1"><strong>📅 التكرار:</strong> ${selected.frequency}</div>
+        <div class="text-gray-700 mb-1"><strong>📝 الوصف:</strong> ${selected.description}</div>
+        <div class="text-gray-700 mb-2"><strong>📁 نوع الملف:</strong> ${selected.file_type}</div>
+
+        ${
+          selected.drive_link && selected.drive_link !== "(رابط العرض هنا لاحقًا)"
+            ? `<a href="${selected.drive_link}" target="_blank"
+                class="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)] transition">
+                <i class="fas fa-chalkboard-teacher"></i> فتح العرض التدريبي
+              </a>`
+            : `<div class="text-xs text-gray-500 italic">لم يتم رفع رابط العرض بعد.</div>`
+        }
+      `;
+    } else {
+      hintBox.innerHTML = `<span class="text-gray-500">اختر أو اكتب اسم البرنامج لعرض التفاصيل...</span>`;
+    }
+  });
+}
+
 
   topicInput.addEventListener('input', () => {
     const selected = programs.find(p => p.program_name === topicInput.value.trim());
