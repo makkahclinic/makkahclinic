@@ -146,96 +146,101 @@
       📊 عرض سجل الإصابات
     </button>
   </div>
-
   <script>
-    // عناصر DOM
-    const exposureType = document.getElementById('exposureType');
-    const needleSection = document.getElementById('needleSection');
-    const bloodSection  = document.getElementById('bloodSection');
-    const submitBtn = document.getElementById('submitBtn');
-    const statusMsg = document.getElementById('statusMsg');
+  // عناصر DOM
+  const exposureType = document.getElementById('exposureType');
+  const needleSection = document.getElementById('needleSection');
+  const bloodSection  = document.getElementById('bloodSection');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusMsg = document.getElementById('statusMsg');
 
-    // تبديل الحقول المطلوبة حسب نوع التعرض
-    function setRequired(el, req) { if (el) el.toggleAttribute('required', req); }
-    function handleExposureTypeChange() {
-      // إخفاء/إظهار الأقسام
-      needleSection.classList.add('hidden');
-      bloodSection.classList.add('hidden');
-      // إلغاء required عن الكل أولًا
-      ['instrument','contaminated','injury_site','contact_area','fluid_type','fluid_amount'].forEach(id => {
-        const el = document.getElementById(id);
-        setRequired(el, false);
+  // تبديل الحقول المطلوبة حسب نوع التعرض
+  function setRequired(el, req) { if (el) el.toggleAttribute('required', req); }
+  function handleExposureTypeChange() {
+    needleSection.classList.add('hidden');
+    bloodSection.classList.add('hidden');
+    
+    ['instrument','contaminated','injury_site','contact_area','fluid_type','fluid_amount'].forEach(id => {
+      const el = document.getElementById(id);
+      setRequired(el, false);
+    });
+
+    if (exposureType.value === 'needle') {
+      needleSection.classList.remove('hidden');
+      setRequired(document.getElementById('instrument'), true);
+      setRequired(document.getElementById('injury_site'), true);
+    } else if (exposureType.value === 'blood' || exposureType.value === 'mucosal') {
+      bloodSection.classList.remove('hidden');
+      setRequired(document.getElementById('contact_area'), true);
+      setRequired(document.getElementById('fluid_type'), true);
+    }
+  }
+  exposureType.addEventListener('change', handleExposureTypeChange);
+
+  // إرسال النموذج إلى Google Sheets
+  document.getElementById('exposureForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    statusMsg.textContent = "";
+    submitBtn.disabled = true;
+    submitBtn.textContent = "يتم الإرسال ...";
+
+    try {
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      
+      // تنظيف البيانات
+      Object.keys(data).forEach(key => {
+        if (data[key] === '') delete data[key];
       });
 
-      // تفعيل المطلوب
-      if (exposureType.value === 'needle') {
-        needleSection.classList.remove('hidden');
-        setRequired(document.getElementById('instrument'), true);
-        setRequired(document.getElementById('injury_site'), true);
-      } else if (exposureType.value === 'blood' || exposureType.value === 'mucosal') {
-        bloodSection.classList.remove('hidden');
-        setRequired(document.getElementById('contact_area'), true);
-        setRequired(document.getElementById('fluid_type'), true);
-      }
-    }
-    exposureType.addEventListener('change', handleExposureTypeChange);
-
-    // إرسال النموذج إلى Google Sheets عبر Apps Script
-    document.getElementById('exposureForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      statusMsg.textContent = "";
-      submitBtn.disabled = true;
-      submitBtn.textContent = "يتم الإرسال ...";
-
-      try {
-        const data = Object.fromEntries(new FormData(e.target).entries());
-
-        const resp = await fetch(
-          "https://script.google.com/macros/s/AKfycbwYr9Ox2jZc2MWsGCmTPxe_TKCQ8F9eyp-GXcOzC0BVsDc8iGkGNWXKSdLZYSwgPiV8/exec",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data)
-          }
-        );
-
-        const ok = resp.ok;
-        const text = await resp.text().catch(() => "");
-        if (ok && /success/i.test(text)) {
-          statusMsg.textContent = "✅ تم الإرسال بنجاح. ستتابع لجنة مكافحة العدوى معك.";
-          e.target.reset();
-          handleExposureTypeChange(); // لإعادة ضبط required بعد reset
-        } else if (ok) {
-          // بعض نُسخ Apps Script تُرجع نصًا غير موحّد — نعتبر الاستجابة ok نجاحًا
-          statusMsg.textContent = "✅ تم الإرسال بنجاح.";
-          e.target.reset();
-          handleExposureTypeChange();
-        } else {
-          statusMsg.textContent = "❌ لم يتم الإرسال. الرجاء المحاولة لاحقًا.";
+      const response = await fetch(
+        "https://script.google.com/macros/s/AKfycbwYr9Ox2jZc2MWsGCmTPxe_TKCQ8F9eyp-GXcOzC0BVsDc8iGkGNWXKSdLZYSwgPiV8/exec",
+        {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify(data)
         }
-      } catch (err) {
-        statusMsg.textContent = "❌ خطأ بالشبكة أو الخادم. أعد المحاولة.";
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "📤 إرسال البلاغ";
-      }
-    });
+      );
 
-    // زر فتح السجل المحمي
-    document.getElementById('openLogBtn').addEventListener('click', function () {
-      const pass = prompt("🔐 الرجاء إدخال كلمة السر للوصول إلى سجل الإصابات:");
-      if (pass === "BostonYYYY2025") {
-        window.open(
-          "https://docs.google.com/spreadsheets/d/11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw/edit#gid=0",
-          "_blank"
-        );
-      } else if (pass !== null) {
-        alert("❌ كلمة السر غير صحيحة.");
+      const result = await response.json();
+      
+      if (result.status === "success") {
+        statusMsg.textContent = "✅ تم الإرسال بنجاح. ستتابع لجنة مكافحة العدوى معك.";
+        statusMsg.style.color = "green";
+        e.target.reset();
+        handleExposureTypeChange();
+      } else {
+        throw new Error(result.message || "خطأ غير معروف");
       }
-    });
 
-    // ضبط أولي
-    handleExposureTypeChange();
+    } catch (error) {
+      console.error('خطأ:', error);
+      statusMsg.textContent = "❌ حدث خطأ: " + error.message;
+      statusMsg.style.color = "red";
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "📤 إرسال البلاغ";
+    }
+  });
+
+  // زر فتح السجل المحمي
+  document.getElementById('openLogBtn').addEventListener('click', function () {
+    const pass = prompt("🔐 الرجاء إدخال كلمة السر للوصول إلى سجل الإصابات:");
+    if (pass === "BostonYYYY2025") {
+      window.open(
+        "https://docs.google.com/spreadsheets/d/11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw/edit#gid=0",
+        "_blank"
+      );
+    } else if (pass !== null) {
+      alert("❌ كلمة السر غير صحيحة.");
+    }
+  });
+
+  // ضبط أولي
+  handleExposureTypeChange();
   </script>
 </body>
 </html>
