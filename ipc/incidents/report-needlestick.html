@@ -1,256 +1,59 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>نموذج الإبلاغ عن التعرض المهني – مجمع مكة الطبي بالزاهر</title>
-  <!-- Tailwind (مناسب لنسخة الويب؛ يمكن استبداله بملف مُجمّع للإنتاج لاحقًا) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root {
-      --maroon: #7B1E24;
-      --gold: #E9C46A;
-      --sand: #FDF8F5;
+const SHEET_NAME = "NEEDEL";
+
+function doPost(e) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      throw new Error("لم يتم العثور على الورقة: " + SHEET_NAME);
     }
-    body {
-      font-family: 'Tajawal', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: var(--sand);
-      background-image: radial-gradient(circle at top left, #fff 20%, #fdf6f4 70%);
-    }
-    .header {
-      background: linear-gradient(to right, var(--maroon), #9e2b2b);
-      color: white;
-      border-bottom: 6px solid var(--gold);
-    }
-    .card {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-    .label { color: var(--maroon); font-weight: 600; }
-    .btn {
-      background-color: var(--maroon);
-      color: white;
-      padding: 12px 28px;
-      border-radius: 10px;
-      font-weight: 700;
-      transition: all 0.2s ease;
-    }
-    .btn:hover { background-color: var(--gold); color: #3b2f2f; }
-    .hidden { display: none; }
-  </style>
-</head>
-<body class="p-4">
 
-  <!-- Header -->
-  <header class="header py-6 text-center rounded-b-xl shadow">
-    <h1 class="text-3xl font-bold">🩺 نموذج الإبلاغ عن التعرض المهني</h1>
-    <p class="text-lg mt-2" style="color: var(--gold)">(وخزي – دموي – رذاذ مخاطي)</p>
-    <p class="text-sm text-gray-100 mt-1">لجنة مكافحة العدوى – مجمع مكة الطبي بالزاهر</p>
-  </header>
-
-  <!-- Form -->
-  <section class="max-w-4xl mx-auto mt-8 card p-8 space-y-6">
-    <form id="exposureForm" class="space-y-4" autocomplete="off" novalidate>
-      <h2 class="text-xl font-bold text-[var(--maroon)] border-b-2 border-[var(--gold)] pb-2">البيانات الأساسية</h2>
-      <div class="grid md:grid-cols-2 gap-4">
-        <div>
-          <label class="label" for="fullname">الاسم الكامل</label>
-          <input id="fullname" name="fullname" class="w-full border p-2 rounded" required>
-        </div>
-        <div>
-          <label class="label" for="department">القسم / الوحدة</label>
-          <input id="department" name="department" class="w-full border p-2 rounded" required>
-        </div>
-        <div>
-          <label class="label" for="position">الوظيفة</label>
-          <input id="position" name="position" class="w-full border p-2 rounded">
-        </div>
-        <div>
-          <label class="label" for="date">تاريخ الحادث</label>
-          <input id="date" type="date" name="date" class="w-full border p-2 rounded" required>
-        </div>
-        <div>
-          <label class="label" for="time">الوقت</label>
-          <input id="time" type="time" name="time" class="w-full border p-2 rounded" required>
-        </div>
-      </div>
-
-      <h2 class="text-xl font-bold text-[var(--maroon)] border-b-2 border-[var(--gold)] pb-2">نوع التعرض</h2>
-      <select id="exposureType" name="exposure_type" class="w-full border p-2 rounded" required>
-        <option value="">اختر نوع التعرض</option>
-        <option value="needle">تعرض وخزي (إبرة أو أداة حادة)</option>
-        <option value="blood">تعرض دموي / سوائل جسدية</option>
-        <option value="mucosal">تلامس الأغشية المخاطية (العين، الأنف، الفم)</option>
-      </select>
-
-      <!-- Needle Injury Section -->
-      <div id="needleSection" class="hidden space-y-2 mt-2">
-        <label class="label" for="instrument">نوع الأداة</label>
-        <select id="instrument" name="instrument" class="w-full border p-2 rounded">
-          <option value="">اختر</option>
-          <option>إبرة</option><option>مشرط</option><option>أداة أخرى</option>
-        </select>
-
-        <label class="label" for="contaminated">هل كانت الأداة ملوثة بدم/سوائل؟</label>
-        <select id="contaminated" name="contaminated" class="w-full border p-2 rounded">
-          <option value="">اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
-        </select>
-
-        <label class="label" for="injury_site">موضع الإصابة</label>
-        <input id="injury_site" name="injury_site" class="w-full border p-2 rounded" placeholder="مثال: إصبع اليد اليمنى">
-      </div>
-
-      <!-- Blood/Mucosal Section -->
-      <div id="bloodSection" class="hidden space-y-2 mt-2">
-        <label class="label" for="contact_area">مكان التلامس</label>
-        <input id="contact_area" name="contact_area" class="w-full border p-2 rounded" placeholder="مثل: جرح مفتوح / جلد متشقق">
-
-        <label class="label" for="fluid_type">نوع السائل</label>
-        <input id="fluid_type" name="fluid_type" class="w-full border p-2 rounded" placeholder="دم / سوائل جسدية">
-
-        <label class="label" for="fluid_amount">كمية السائل التقريبية</label>
-        <input id="fluid_amount" name="fluid_amount" class="w-full border p-2 rounded" placeholder="قليلة / متوسطة / كثيرة">
-      </div>
-
-      <h2 class="text-xl font-bold text-[var(--maroon)] border-b-2 border-[var(--gold)] pb-2 mt-6">بيانات المريض المصدر</h2>
-      <label class="label" for="patient_id">رقم الملف الطبي (إن وجد)</label>
-      <input id="patient_id" name="patient_id" class="w-full border p-2 rounded" inputmode="numeric" pattern="[0-9A-Za-z-]*">
-
-      <label class="label" for="lab_results">نتائج الفحوص (HBsAg / HCV / HIV)</label>
-      <textarea id="lab_results" name="lab_results" class="w-full border p-2 rounded" placeholder="HBsAg: سلبي..."></textarea>
-
-      <h2 class="text-xl font-bold text-[var(--maroon)] border-b-2 border-[var(--gold)] pb-2 mt-6">الإجراءات الفورية</h2>
-      <div class="space-y-1">
-        <label><input type="checkbox" name="washed" value="yes"> تم غسل المنطقة بالماء والصابون</label><br>
-        <label><input type="checkbox" name="reported" value="yes"> تم الإبلاغ للجنة مكافحة العدوى</label><br>
-        <label><input type="checkbox" name="medical_eval" value="yes"> تم تقييم الحالة من قبل الطبيب المناوب</label><br>
-        <label><input type="checkbox" name="pep" value="yes"> تم البدء بالعلاج الوقائي (PEP)</label>
-      </div>
-
-      <label class="label mt-4 block" for="notes">ملاحظات إضافية</label>
-      <textarea id="notes" name="notes" class="w-full border p-2 rounded" rows="3" placeholder="أي تفاصيل إضافية..."></textarea>
-
-      <div class="flex items-center justify-center gap-3 mt-6">
-        <button id="submitBtn" type="submit" class="btn">📤 إرسال البلاغ</button>
-        <span id="statusMsg" class="text-sm text-gray-500"></span>
-      </div>
-    </form>
-  </section>
-
-  <!-- زر عرض السجل (خارج الفورم ليكون نشط) -->
-  <div class="text-center mt-10">
-    <button id="openLogBtn" type="button" class="btn bg-[var(--gold)] text-black hover:bg-[#f3cf73]">
-      📊 عرض سجل الإصابات
-    </button>
-  </div>
-<script>
-  // عناصر DOM
-  const exposureType = document.getElementById('exposureType');
-  const needleSection = document.getElementById('needleSection');
-  const bloodSection  = document.getElementById('bloodSection');
-  const submitBtn = document.getElementById('submitBtn');
-  const statusMsg = document.getElementById('statusMsg');
-
-  // تبديل الحقول المطلوبة حسب نوع التعرض
-  function setRequired(el, req) { if (el) el.toggleAttribute('required', req); }
-  function handleExposureTypeChange() {
-    needleSection.classList.add('hidden');
-    bloodSection.classList.add('hidden');
+    const data = JSON.parse(e.postData.contents);
     
-    ['instrument','contaminated','injury_site','contact_area','fluid_type','fluid_amount'].forEach(id => {
-      const el = document.getElementById(id);
-      setRequired(el, false);
-    });
+    const timestamp = new Date();
+    const row = [
+      timestamp,
+      data.fullname || "",
+      data.department || "",
+      data.position || "",
+      data.date || "",
+      data.time || "",
+      data.exposure_type || "",
+      data.instrument || "",
+      data.contaminated || "",
+      data.injury_site || "",
+      data.contact_area || "",
+      data.fluid_type || "",
+      data.fluid_amount || "",
+      data.patient_id || "",
+      data.lab_results || "",
+      data.washed || "لا",
+      data.reported || "لا", 
+      data.medical_eval || "لا",
+      data.pep || "لا",
+      data.notes || ""
+    ];
 
-    if (exposureType.value === 'needle') {
-      needleSection.classList.remove('hidden');
-      setRequired(document.getElementById('instrument'), true);
-      setRequired(document.getElementById('injury_site'), true);
-    } else if (exposureType.value === 'blood' || exposureType.value === 'mucosal') {
-      bloodSection.classList.remove('hidden');
-      setRequired(document.getElementById('contact_area'), true);
-      setRequired(document.getElementById('fluid_type'), true);
-    }
+    sheet.appendRow(row);
+    SpreadsheetApp.flush();
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: "تم حفظ البيانات بنجاح",
+      timestamp: timestamp.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    console.error('خطأ في السكريبت:', error);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error", 
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
   }
-  exposureType.addEventListener('change', handleExposureTypeChange);
+}
 
-  // إرسال النموذج إلى Google Sheets
-  document.getElementById('exposureForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    statusMsg.textContent = "";
-    submitBtn.disabled = true;
-    submitBtn.textContent = "يتم الإرسال ...";
-
-    try {
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData.entries());
-      
-      // تنظيف البيانات
-      Object.keys(data).forEach(key => {
-        if (data[key] === '') delete data[key];
-      });
-
-      // استخدم الرابط الجديد بعد إعادة النشر
-      const response = await fetch(
-        "https://script.google.com/macros/s/https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec/exec",
-        {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(data)
-        }
-      );
-
-      const result = await response.json();
-      
-      if (result.status === "success") {
-        statusMsg.textContent = "✅ تم الإرسال بنجاح. ستتابع لجنة مكافحة العدوى معك.";
-        statusMsg.style.color = "green";
-        e.target.reset();
-        handleExposureTypeChange();
-        
-        // إظهار رسالة نجاح لمدة 5 ثوانٍ
-        setTimeout(() => {
-          statusMsg.textContent = "";
-        }, 5000);
-      } else {
-        throw new Error(result.message || "خطأ غير معروف");
-      }
-
-    } catch (error) {
-      console.error('خطأ:', error);
-      statusMsg.textContent = "❌ حدث خطأ: " + error.message;
-      statusMsg.style.color = "red";
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "📤 إرسال البلاغ";
-    }
-  });
-
-  // زر فتح السجل المحمي
-  document.getElementById('openLogBtn').addEventListener('click', function () {
-    const pass = prompt("🔐 الرجاء إدخال كلمة السر للوصول إلى سجل الإصابات:");
-    if (pass === "BostonYYYY2025") {
-      window.open(
-        "https://docs.google.com/spreadsheets/d/11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw/edit#gid=0",
-        "_blank"
-      );
-    } else if (pass !== null) {
-      alert("❌ كلمة السر غير صحيحة.");
-    }
-  });
-
-  // ضبط أولي
-  handleExposureTypeChange();
-  
-  // اختبار الاتصال عند التحميل
-  window.addEventListener('load', function() {
-    console.log('الصفحة محملة - جاهزة للإرسال');
-  });
-</script>
-</body>
-</html>
+function doGet() {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "active",
+    message: "الخدمة تعمل بشكل صحيح"
+  })).setMimeType(ContentService.MimeType.JSON);
+}
