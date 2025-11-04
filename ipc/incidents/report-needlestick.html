@@ -6,6 +6,7 @@
   <title>نموذج الإبلاغ عن التعرض المهني – مجمع مكة الطبي بالزاهر</title>
     <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    /* التنسيقات المخصصة والألوان - هذا ضروري للجماليات */
     :root {
       --maroon: #7B1E24;
       --gold: #E9C46A;
@@ -91,8 +92,8 @@
         <label class="label" for="contaminated">هل كانت الأداة ملوثة بدم/سوائل؟</label>
         <select id="contaminated" name="contaminated" class="w-full border p-2 rounded">
           <option value="">اختر</option>
-          <option value="yes">نعم</option>
-          <option value="no">لا</option>
+          <option value="نعم">نعم</option>
+          <option value="لا">لا</option>
         </select>
 
         <label class="label" for="injury_site">موضع الإصابة</label>
@@ -148,9 +149,9 @@
     const bloodSection  = document.getElementById('bloodSection');
     const submitBtn = document.getElementById('submitBtn');
     const statusMsg = document.getElementById('statusMsg');
-    const form = document.getElementById('exposureForm'); // تعريف النموذج
+    const form = document.getElementById('exposureForm');
 
-    // تبديل الحقول المطلوبة حسب نوع التعرض
+    // تبديل الحقول المطلوبة
     function setRequired(el, req) { if (el) el.toggleAttribute('required', req); }
     function handleExposureTypeChange() {
       needleSection.classList.add('hidden');
@@ -164,6 +165,7 @@
       if (exposureType.value === 'needle') {
         needleSection.classList.remove('hidden');
         setRequired(document.getElementById('instrument'), true);
+            setRequired(document.getElementById('contaminated'), true);
         setRequired(document.getElementById('injury_site'), true);
       } else if (exposureType.value === 'blood' || exposureType.value === 'mucosal') {
         bloodSection.classList.remove('hidden');
@@ -173,29 +175,26 @@
     }
     exposureType.addEventListener('change', handleExposureTypeChange);
 
-    // *** الكود المصحح لحل مشكلة CORS ***
+    // الكود المصحح لإرسال النموذج (حل مشكلة CORS)
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       statusMsg.textContent = "";
       submitBtn.disabled = true;
       submitBtn.textContent = "يتم الإرسال ...";
 
+      // تأكد من استخدام الرابط الصحيح المنشور (Deploy URL)
       const scriptURL = "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec";
 
       try {
-        // 1. التعديل الأساسي: إرسال FormData مباشرة.
-        // 2. لا نحدد Content-Type يدوياً (المتصفح سيفعل ذلك تلقائياً).
-        // 3. لا نحول البيانات إلى JSON.
+        // إرسال كـ FormData لتجنب CORS
         const response = await fetch(scriptURL,
           {
             method: "POST",
-            // 4. هام جداً: إضافة redirect: 'follow' لضمان التعامل الصحيح مع إعادة التوجيه التي تقوم بها Google Apps Script وتجنب أخطاء CORS.
-            redirect: 'follow',
+            redirect: 'follow', // ضروري لـ Google Apps Script
             body: new FormData(form)
           }
         );
 
-        // قراءة الرد من السكربت (الذي يجب أن يكون JSON)
         const result = await response.json();
         
         if (response.ok && result.status === "success") {
@@ -214,9 +213,8 @@
       } catch (error) {
         console.error('خطأ:', error);
         let errorMessage = error.message;
-        // التعامل مع أخطاء الشبكة (TypeError) أو أخطاء قراءة الرد (SyntaxError)
         if (error.name === 'TypeError' || error instanceof SyntaxError) {
-             errorMessage = "حدث خطأ في الاتصال بالخادم أو الشبكة (قد يكون بسبب مشكلة CORS أو فشل في معالجة الرد). يرجى المحاولة مرة أخرى.";
+             errorMessage = "حدث خطأ في الاتصال بالخادم أو الشبكة. يرجى المحاولة مرة أخرى.";
         }
         statusMsg.textContent = "❌ حدث خطأ: " + errorMessage;
         statusMsg.style.color = "red";
