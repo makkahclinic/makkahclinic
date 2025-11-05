@@ -1043,11 +1043,51 @@ function closeDocModal() {
 // ====== الإعدادات ======
 
 
-const CAL_API_URL = 'https://script.google.com/macros/s/AKfycbxh3AAYclkqfqvOpBlJmitOseL8WJECjUZxWordKasTxvITVUOhMZLWQj5xzOEqdOlVFw/exec';
+const CAL_API_URL = 'https://script.google.com/macros/s/AKfycbxYuiybzxcZ-KEVnkN6dPXZ8qfGb7TYA2wI1uVviyMWc8Rjx6st9yDT-tPU9EjxDnefZQ/exec';
 const CAL_API_TOKEN = 'Makkah7321@'; // 👈 ضع هنا نفس التوكن الموجود في Script Properties داخل Apps Script
 const CAL_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1HPQIlhnvynNKctQLgINtVc3OK8Ey4RX52dYdmlIT9F8/edit?gid=1186914285#gid=1186914285'; // “سجل معايرة الأجهزة”
 const FMS_API_URL = CAL_API_URL;  // يمكن استخدامه مؤقتًا لنفس العنوان
 const TRAIN_API_URL = 'https://script.google.com/macros/s/AKfycbyhFeodenLqh4EUTqeBUYkJsgk6TtU0QQ_I_zB8_dZ31w3kavPi83GFBLv9tQ1qz8IL/exec';
+// ==================== تحميل قائمة الغرف ====================
+async function loadRooms() {
+  try {
+    const res = await fetch(`${CAL_API_URL}?action=bootstrap&token=${CAL_API_TOKEN}`);
+    const data = await res.json();
+
+    if (data.status === 'success' && data.rooms) {
+      const sel = document.getElementById('roomSelect'); // تأكد أن الـ id يطابق في HTML
+      sel.innerHTML = '<option value="">اختر الغرفة / الموقع</option>';
+      data.rooms.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.code;
+        opt.textContent = `${r.code} — ${r.name}`;
+        sel.appendChild(opt);
+      });
+    } else {
+      console.error('⚠️ لم يتم جلب الغرف', data);
+    }
+  } catch (err) {
+    console.error('🚨 خطأ أثناء تحميل الغرف:', err);
+  }
+}
+// ==================== إرسال البيانات (حفظ السجل) ====================
+async function saveCalibration() {
+  try {
+    const body = {
+      token: CAL_API_TOKEN,
+      action: 'createCalibration',
+      // باقي البيانات هنا...
+    };
+    const res = await fetch(CAL_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    });
+    // معالجة النتيجة...
+  } catch (err) {
+    console.error('خطأ أثناء حفظ السجل:', err);
+  }
+}
 
 // ====== دوال إدارة الشعار ======
 function setupLogoChange() {
