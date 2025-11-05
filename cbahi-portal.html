@@ -3446,12 +3446,38 @@ function renderFmsNeeds(container) {
   container.appendChild(actions);
 }
 
-<script>
-// ============ معايرة الأجهزة (CAL) – نسخة متكاملة مرتبطة بالشيت ============
-
+// ============ معايرة الأجهزة (CAL) – نسخة محلية مع إحصاءات + جدول ثابت + نموذج ============
 function renderFmsCalibration(container) {
-  // إعدادات مساعدة
+  // أقسام / أجهزة / اختبارات افتراضية (يمكن لاحقًا تحميلها من الـ API إن رغبت)
   const DEPT_LABEL = { RAD:'🩻 قسم الأشعة', LAB:'🧪 قسم المختبر', CSSD:'🧴 قسم التعقيم (CSSD)', ER:'⚡ قسم الطوارئ (ER)' };
+  const ASSETS_MAP = {
+    RAD: ['X-Ray','Portable X-Ray','Dental X-Ray','Mammogram','Ultrasound'],
+    LAB: ['Biochemistry Analyzer','Hematology Analyzer','Centrifuge','Micropipettes','Incubator','Refrigerator'],
+    CSSD: ['Autoclave (Steam)','Dry Heat Sterilizer','Sealing Machine','Ultrasonic Cleaner'],
+    ER: ['Defibrillator (DC Shock)','ECG Monitor','Suction Machine','Oxygen Flowmeter','Pulse Oximeter']
+  };
+  const TESTS_BY_ASSET = {
+    'X-Ray': ['kVp Accuracy','mAs Linearity','Exposure Reproducibility'],
+    'Portable X-Ray': ['Output Consistency','Timer Accuracy'],
+    'Dental X-Ray': ['Beam Alignment','kVp Accuracy'],
+    'Mammogram': ['AEC Performance','Contrast Resolution'],
+    'Ultrasound': ['Axial Resolution','Depth Calibration'],
+    'Biochemistry Analyzer': ['Precision (CV%)','Accuracy (Bias)'],
+    'Hematology Analyzer': ['Background Count','Linearity'],
+    'Centrifuge': ['RPM Accuracy','Timer Accuracy'],
+    'Micropipettes': ['Volume Accuracy','Leak Test'],
+    'Incubator': ['Temperature Stability','Uniformity'],
+    'Refrigerator': ['Temperature Mapping','Alarm Check'],
+    'Autoclave (Steam)': ['Bowie-Dick Test','Biological Indicator'],
+    'Dry Heat Sterilizer': ['Temp Uniformity','Timer Accuracy'],
+    'Sealing Machine': ['Seal Integrity','Temp Setting'],
+    'Ultrasonic Cleaner': ['Cavitation Test','Timer Accuracy'],
+    'Defibrillator (DC Shock):':['Energy Output','Charging Time'],
+    'ECG Monitor': ['Heart Rate Accuracy','Alarm Function'],
+    'Suction Machine': ['Vacuum Pressure','Flow Rate'],
+    'Oxygen Flowmeter': ['Flow Accuracy','Leak Test'],
+    'Pulse Oximeter': ['SpO2 Accuracy','Probe Check']
+  };
   const FREQ_OPTIONS = [
     {label:'أسبوعي', months:0, days:7},
     {label:'شهري', months:1, days:0},
@@ -3460,64 +3486,93 @@ function renderFmsCalibration(container) {
     {label:'سنوي', months:12, days:0}
   ];
   const KEY = 'fms_calibration_records';
-  const toISO = d => new Date(d).toISOString().slice(0,10);
-  const safeParseLocal = k => { try { return JSON.parse(localStorage.getItem(k)||'[]'); } catch { return []; } };
-  const daysLeftStr = iso => {
-    if(!iso) return '—';
-    const d=new Date(iso), dl=Math.floor((d - new Date())/86400000);
-    return isNaN(dl)?'—':(dl>=0?`${dl} يوم`:`متأخر ${Math.abs(dl)} يوم`);
-  };
 
-  // إحصاءات أولية من الكاش المحلي
+  // كاش محلي
+  function safeParseLocal(k){ try{ return JSON.parse(localStorage.getItem(k)||'[]'); } catch(_){ return []; } }
+  function toISO(d){ return new Date(d).toISOString().slice(0,10); }
+  function daysLeftStr(iso){
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const dl = Math.floor((d - new Date())/(1000*3600*24));
+    if (isNaN(dl)) return '—';
+    return dl >= 0 ? `${dl} يوم` : `متأخر ${Math.abs(dl)} يوم`;
+  }
+
+  // إحصاءات من الكاش
   const cache = safeParseLocal(KEY);
+  const counters = { pass:0, fail:0, upcoming:0, overdue:0, nosched:0 };
   const now = new Date();
-  const counters = cache.reduce((acc,r)=>{
-    const res=(r.result||'').toLowerCase();
-    if(res==='pass') acc.pass++; else if(res==='fail') acc.fail++;
-    const nd=r.next_due?new Date(r.next_due):null;
-    if(!nd) acc.nosched++;
-    else { const dl=Math.floor((nd-now)/86400000); if(dl<0) acc.overdue++; else if(dl<=30) acc.upcoming++; }
-    return acc;
-  }, {pass:0,fail:0,upcoming:0,overdue:0,nosched:0});
+  cache.forEach(r=>{
+    const res = (r.result||'').toLowerCase();
+    if (res==='pass') counters.pass++;
+    else if (res==='fail') counters.fail++;
+    const nd = r.next_due ? new Date(r.next_due) : null;
+    if (!nd) counters.nosched++;
+    else {
+      const dl = Math.floor((nd - now)/(1000*3600*24));
+      if (dl<0) counters.overdue++;
+      else if (dl<=30) counters.upcoming++;
+    }
+  });
 
-  // واجهة المستخدم
   container.innerHTML = `
     <div class="space-y-6">
+
+      <!-- شريط علوي: زر فتح سجل Google وشرح مختصر -->
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         <div class="text-sm text-gray-700">
           عند الحفظ: تُنشأ شهادة PDF تلقائيًا وتُرفع إلى مجلد القسم الصحيح في Google Drive، ويُسجل السجل في Google Sheet.
         </div>
-        <a href="${CAL_SHEET_URL}" target="_blank" rel="noopener" class="px-3 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">📄 فتح “سجل معايرة الأجهزة”</a>
+        <a href="${CAL_SHEET_URL}" target="_blank" rel="noopener noreferrer"
+           class="px-3 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">
+          📄 فتح “سجل معايرة الأجهزة”
+        </a>
       </div>
 
+      <!-- لوحة الإحصاءات -->
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div class="p-4 rounded-xl border bg-white"><div class="text-sm text-gray-600 mb-1">✅ Pass</div><div id="calStatPass" class="text-3xl font-extrabold text-green-600">${counters.pass}</div></div>
-        <div class="p-4 rounded-xl border bg-white"><div class="text-sm text-gray-600 mb-1">❌ Fail</div><div id="calStatFail" class="text-3xl font-extrabold text-red-600">${counters.fail}</div></div>
-        <div class="p-4 rounded-xl border bg-white"><div class="text-sm text-gray-600 mb-1">⏳ خلال 30 يوم</div><div id="calStatUpcoming" class="text-3xl font-extrabold text-amber-600">${counters.upcoming}</div></div>
-        <div class="p-4 rounded-xl border bg-white"><div class="text-sm text-gray-600 mb-1">⚠️ متأخر</div><div id="calStatOverdue" class="text-3xl font-extrabold text-rose-600">${counters.overdue}</div></div>
-        <div class="p-4 rounded-xl border bg-white"><div class="text-sm text-gray-600 mb-1">— بلا موعد</div><div id="calStatNosched" class="text-3xl font-extrabold text-gray-800">${counters.nosched}</div></div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">✅ Pass</div>
+          <div class="text-3xl font-extrabold text-green-600" id="calStatPass">${counters.pass}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">❌ Fail</div>
+          <div class="text-3xl font-extrabold text-red-600" id="calStatFail">${counters.fail}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">⏳ خلال 30 يوم</div>
+          <div class="text-3xl font-extrabold text-amber-600" id="calStatUpcoming">${counters.upcoming}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">⚠️ متأخر</div>
+          <div class="text-3xl font-extrabold text-rose-600" id="calStatOverdue">${counters.overdue}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">— بلا موعد</div>
+          <div class="text-3xl font-extrabold text-gray-800" id="calStatNosched">${counters.nosched}</div>
+        </div>
       </div>
 
-      <!-- جدول تعريفي ثابت (اختياري) -->
+      <!-- جدول ثابت للأقسام -->
       <div class="calibration-table-wrapper" dir="rtl" style="background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 10px rgba(0,0,0,0.08);max-width:1100px;margin:0 auto;">
         <h2 style="text-align:center;color:#7B1E24;font-weight:700;margin-bottom:20px;border-bottom:3px solid #E9C46A;display:inline-block;padding-bottom:6px;">
           🧾 جدول معايرة الأجهزة الطبية – مجمع مكة الطبي بالزاهر (الإصدار 2025)
         </h2>
-        <table class="calibration-table w-full text-center">
+        <table class="calibration-table" style="width:100%;border-collapse:collapse;text-align:center;direction:rtl;">
           <thead>
             <tr>
-              <th class="bg-[var(--brand1)] text-[var(--gold)] py-3">القسم</th>
-              <th class="bg-[var(--brand1)] text-[var(--gold)] py-3">الأجهزة (وصفي)</th>
-              <th class="bg-[var(--brand1)] text-[var(--gold)] py-3">التكرار</th>
-              <th class="bg-[var(--brand1)] text-[var(--gold)] py-3">المسؤول</th>
-              <th class="bg-[var(--brand1)] text-[var(--gold)] py-3">الجهة/التوثيق</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">القسم</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">الأجهزة</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">التكرار</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">المسؤول</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">الجهة/التوثيق</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td class="bg-[#faf7f6] font-bold text-[var(--brand1)] py-2">🩻 الأشعة</td><td class="bg-[#faf7f6]">X-Ray / Mammogram / Ultrasound ...</td><td class="bg-[#faf7f6]">سنوي</td><td class="bg-[#faf7f6]">—</td><td class="bg-[#faf7f6]">NRRC</td></tr>
-            <tr><td class="bg-[#fdf9f7] font-bold text-[var(--brand1)] py-2">🧪 المختبر</td><td class="bg-[#fdf9f7]">Biochem / Heme / Centrifuge ...</td><td class="bg-[#fdf9f7]">6–12 شهر</td><td class="bg-[#fdf9f7]">—</td><td class="bg-[#fdf9ف7]">Vendors</td></tr>
-            <tr><td class="bg-[#faf7f6] font-bold text-[var(--brand1)] py-2">🧴 CSSD</td><td class="bg-[#faf7f6]">Autoclave / Sealer / Ultrasonic ...</td><td class="bg-[#faf7f6]">سنوي</td><td class="bg-[#faf7f6]">—</td><td class="bg-[#faf7f6]">Indicators</td></tr>
-            <tr><td class="bg-[#fdf9f7] font-bold text-[var(--brand1)] py-2">⚡ الطوارئ</td><td class="bg-[#fdf9f7]">Defib / ECG / Suction ...</td><td class="bg-[#fdf9f7]">سنوي + يومي</td><td class="bg-[#fdf9f7]">—</td><td class="bg-[#fdf9f7]">FMS+EOC</td></tr>
+            <tr><td style="background:#faf7f6;padding:10px;font-weight:bold;color:#7B1E24;">🩻 الأشعة</td><td style="background:#faf7f6;padding:10px;">X-Ray / Portable / Dental / Mammogram / Ultrasound</td><td style="background:#faf7f6;padding:10px;">سنويًا</td><td style="background:#faf7f6;padding:10px;">أ. بلال نتو</td><td style="background:#faf7ف6;padding:10px;">NRRC – LOG-FMS-2025-021</td></tr>
+            <tr><td style="background:#fdf9f7;padding:10px;font-weight:bold;color:#7B1E24;">🧪 المختبر</td><td style="background:#fdf9f7;padding:10px;">Biochem / Heme / Centrifuge / Micropipettes / Incubator / Refrigerator</td><td style="background:#fdf9f7;padding:10px;">نصف سنوي/سنوي</td><td style="background:#fdf9f7;padding:10px;">أ. هيثم الجعلي</td><td style="background:#fdf9f7;padding:10px;">FMS Approved Vendors – LOG-FMS-2025-020</td></tr>
+            <tr><td style="background:#faf7f6;padding:10px;font-weight:bold;color:#7B1E24;">🧴 CSSD</td><td style="background:#faf7f6;padding:10px;">Autoclave / Dry Heat / Sealer / Ultrasonic</td><td style="background:#faf7f6;padding:10px;">سنويًا</td><td style="background:#faf7f6;padding:10px;">د. مجدي عسكر</td><td style="background:#faf7f6;padding:10px;">Indicators – LOG-FMS-2025-022</td></tr>
+            <tr><td style="background:#fdf9f7;padding:10px;font-weight:bold;color:#7B1E24;">⚡ الطوارئ</td><td style="background:#fdf9f7;padding:10px;">Defib / ECG / Suction / O2 Flow / PulseOx</td><td style="background:#fdf9f7;padding:10px;">سنوي + يومي</td><td style="background:#fdf9f7;padding:10px;">د. معاذ البيوش</td><td style="background:#fdf9f7;padding:10px;">FMS+EOC – LOG-FMS-2025-023</td></tr>
           </tbody>
         </table>
       </div>
@@ -3538,40 +3593,40 @@ function renderFmsCalibration(container) {
           </div>
 
           <div>
-            <label class="block text-sm font-semibold mb-1">الطبيب/الموظف *</label>
-            <input id="calStaff" list="staffList" name="staff" required class="w-full border rounded-lg px-3 py-2" placeholder="اختر/اكتب الاسم">
+            <label class="block text-sm font-semibold mb-1">اسم المسؤول *</label>
+            <input name="staff" id="calStaff" list="staffList" required class="w-full border rounded-lg px-3 py-2" placeholder="اختر/اكتب الاسم">
             <datalist id="staffList"></datalist>
           </div>
 
           <div>
             <label class="block text-sm font-semibold mb-1">الجهاز *</label>
-            <select id="calAsset" name="asset" required class="w-full border rounded-lg px-3 py-2">
+            <select name="asset" id="calAsset" required class="w-full border rounded-lg px-3 py-2">
               <option value="">اختر الجهاز</option>
             </select>
           </div>
 
           <div>
             <label class="block text-sm font-semibold mb-1">نوع الاختبار *</label>
-            <select id="calTest" name="test_name" required class="w-full border rounded-lg px-3 py-2">
+            <select name="test_name" id="calTest" required class="w-full border rounded-lg px-3 py-2">
               <option value="">اختر نوع الاختبار</option>
             </select>
           </div>
 
           <div>
             <label class="block text-sm font-semibold mb-1">تاريخ المعايرة *</label>
-            <input type="date" id="calDate" name="date" required class="w-full border rounded-lg px-3 py-2">
+            <input type="date" name="date" id="calDate" required class="w-full border rounded-lg px-3 py-2">
           </div>
 
           <div>
             <label class="block text-sm font-semibold mb-1">التكرار *</label>
-            <select id="calFreq" name="frequency" required class="w-full border rounded-lg px-3 py-2">
+            <select name="frequency" id="calFreq" required class="w-full border rounded-lg px-3 py-2">
               ${FREQ_OPTIONS.map((f,i)=>`<option value="${i}">${f.label}</option>`).join('')}
             </select>
           </div>
 
           <div>
             <label class="block text-sm font-semibold mb-1">النتيجة *</label>
-            <select id="calResult" name="result" required class="w-full border rounded-lg px-3 py-2">
+            <select name="result" id="calResult" required class="w-full border rounded-lg px-3 py-2">
               <option value="Pass">Pass (مطابق)</option>
               <option value="Fail">Fail (غير مطابق)</option>
             </select>
@@ -3579,7 +3634,7 @@ function renderFmsCalibration(container) {
 
           <div class="md:col-span-2">
             <label class="block text-sm font-semibold mb-1">الموقع (غرفة/رمز)</label>
-            <input id="calLocation" name="location" list="roomList" class="w-full border rounded-lg px-3 py-2" placeholder="مثال: XR01 / LAB01">
+            <input name="location" id="calLocation" list="roomList" class="w-full border rounded-lg px-3 py-2" placeholder="مثال: XR-01 / LAB-INC-02">
             <datalist id="roomList"></datalist>
           </div>
 
@@ -3590,7 +3645,7 @@ function renderFmsCalibration(container) {
 
           <div class="md:col-span-2">
             <label class="block text-sm font-semibold mb-1">ملاحظات</label>
-            <textarea id="calNotes" name="notes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
+            <textarea name="notes" id="calNotes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
           </div>
 
           <div class="md:col-span-2 flex items-center gap-3">
@@ -3600,21 +3655,29 @@ function renderFmsCalibration(container) {
         </form>
       </div>
 
-      <!-- السجلات -->
+      <!-- آخر السجلات -->
       <div class="border rounded-xl p-4 bg-white">
         <div class="flex items-center justify-between mb-3">
           <h4 class="font-bold">🗂️ آخر السجلات</h4>
           <div class="flex items-center gap-2">
             <label class="text-sm text-gray-700">تصفية حسب القسم:</label>
             <select id="calFilterDept" class="border rounded-lg px-2 py-1">
-              <option value="">الكل</option><option value="RAD">الأشعة</option><option value="LAB">المختبر</option><option value="CSSD">التعقيم</option><option value="ER">الطوارئ</option>
+              <option value="">الكل</option>
+              <option value="RAD">الأشعة</option>
+              <option value="LAB">المختبر</option>
+              <option value="CSSD">التعقيم</option>
+              <option value="ER">الطوارئ</option>
             </select>
             <button id="calPrint" class="px-3 py-1 rounded bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">🖨️ طباعة</button>
           </div>
         </div>
         <div class="overflow-auto">
           <table class="table w-full" id="calTable">
-            <thead><tr><th>القسم</th><th>الجهاز</th><th>الاختبار</th><th>التاريخ</th><th>النتيجة</th><th>الموعد القادم</th><th>الشهادة</th></tr></thead>
+            <thead>
+              <tr>
+                <th>القسم</th><th>الجهاز</th><th>الاختبار</th><th>التاريخ</th><th>النتيجة</th><th>الموعد القادم</th><th>الشهادة</th>
+              </tr>
+            </thead>
             <tbody id="calTbody"></tbody>
           </table>
         </div>
@@ -3622,38 +3685,59 @@ function renderFmsCalibration(container) {
     </div>
   `;
 
-  // مراجع عناصر
+  // تعبئة Staff/Rooms (اختياريًا يمكنك لاحقًا جلبها من API bootstrap)
+  // هنا نحافظ على المرونة: تقدر تكتب الاسم يدويًا أو تختاره من datalist
   const staffList = container.querySelector('#staffList');
-  const roomList  = container.querySelector('#roomList');
-  const deptSel   = container.querySelector('#calDept');
-  const assetSel  = container.querySelector('#calAsset');
-  const testSel   = container.querySelector('#calTest');
-  const form      = container.querySelector('#fmsCalForm');
-  const photoInput= container.querySelector('#calPhoto');
-  const msg       = container.querySelector('#fmsCalMsg');
+  ['أ. بلال نتو','أ. هيثم الجعلي','د. مجدي عسكر','د. معاذ البيوش','د. خالد الخطيب','أ. عدنان الرفاعي'].forEach(n=>{
+    const o=document.createElement('option'); o.value=n; staffList.appendChild(o);
+  });
 
-  // تحديث عدادات وإظهار جدول
-  const refreshCalStats = root => {
+  const roomList = container.querySelector('#roomList');
+  // خيارين: أ) إدخال يدوي، ب) استدعاء غرف من شيت (لو لاحقًا فعّلنا bootstrap rooms)
+  ['XR-01','XR-02','LAB-INC-01','LAB-HEM-01','CSSD-AUTO-01','ER-TRIAGE-01'].forEach(r=>{
+    const o=document.createElement('option'); o.value=r; roomList.appendChild(o);
+  });
+
+  // ربط قوائم الأجهزة/الاختبارات
+  const deptSel = container.querySelector('#calDept');
+  const assetSel = container.querySelector('#calAsset');
+  const testSel  = container.querySelector('#calTest');
+
+  deptSel.addEventListener('change', ()=>{
+    const d = deptSel.value;
+    assetSel.innerHTML = `<option value="">اختر الجهاز</option>` + (ASSETS_MAP[d]||[]).map(a=>`<option value="${a}">${a}</option>`).join('');
+    testSel.innerHTML = `<option value="">اختر نوع الاختبار</option>`;
+  });
+  assetSel.addEventListener('change', ()=>{
+    const a = assetSel.value;
+    const tests = TESTS_BY_ASSET[a] || ['وظائف أساسية','اختبار عام'];
+    testSel.innerHTML = `<option value="">اختر نوع الاختبار</option>` + tests.map(t=>`<option value="${t}">${t}</option>`).join('');
+  });
+
+  // أدوات داخلية
+  function refreshCalStats(root){
     const all = safeParseLocal(KEY);
-    const now = new Date();
-    let pass=0,fail=0,up=0,od=0,ns=0;
+    const now  = new Date();
+    let pass=0, fail=0, up=0, od=0, ns=0;
     all.forEach(r=>{
-      const res=(r.result||'').toLowerCase(); if(res==='pass') pass++; else if(res==='fail') fail++;
+      const res=(r.result||'').toLowerCase();
+      if (res==='pass') pass++; else if (res==='fail') fail++;
       const nd=r.next_due?new Date(r.next_due):null;
-      if(!nd) ns++; else { const dl=Math.floor((nd-now)/86400000); if(dl<0) od++; else if(dl<=30) up++; }
+      if (!nd) ns++;
+      else { const dl=Math.floor((nd-now)/(1000*3600*24)); if(dl<0) od++; else if(dl<=30) up++; }
     });
-    root.querySelector('#calStatPass').textContent=pass;
-    root.querySelector('#calStatFail').textContent=fail;
-    root.querySelector('#calStatUpcoming').textContent=up;
-    root.querySelector('#calStatOverdue').textContent=od;
-    root.querySelector('#calStatNosched').textContent=ns;
-  };
-  const fillCalTable = (root,data)=>{
-    const tb=root.querySelector('#calTbody'); tb.innerHTML='';
-    if(!data.length){ tb.innerHTML=`<tr><td colspan="7" class="text-center text-gray-500 py-3">لا توجد سجلات.</td></tr>`; return; }
+    root.querySelector('#calStatPass').textContent = pass;
+    root.querySelector('#calStatFail').textContent = fail;
+    root.querySelector('#calStatUpcoming').textContent = up;
+    root.querySelector('#calStatOverdue').textContent = od;
+    root.querySelector('#calStatNosched').textContent = ns;
+  }
+  function fillCalTable(root, data){
+    const tb = root.querySelector('#calTbody'); tb.innerHTML='';
+    if (!data.length){ tb.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-3">لا توجد سجلات.</td></tr>`; return; }
     data.slice().reverse().forEach(r=>{
       const tr=document.createElement('tr');
-      tr.innerHTML = `
+      tr.innerHTML=`
         <td>${DEPT_LABEL[r.department]||r.department||'—'}</td>
         <td>${r.asset||'—'}</td>
         <td>${r.test_name||'—'}</td>
@@ -3663,103 +3747,113 @@ function renderFmsCalibration(container) {
         <td>${r.certificate_name?`<span class="px-2 py-1 rounded bg-gray-100">${r.certificate_name}</span>`:'—'}</td>`;
       tb.appendChild(tr);
     });
-  };
-  fillCalTable(container, cache);
+  }
 
-  // ========= تحميل البيانات من الشيت (bootstrap) =========
-  // ملاحظة: يعتمد على ثوابت CAL_API_URL و CAL_API_TOKEN و CAL_SHEET_URL الموجودة لديك
-  let BOOT = { staff:[], rooms:[], devices:[], tests:[] };
+  // حفظ السجل (يرسل لـ Apps Script + يحفَظ ككاش)
+  const form = container.querySelector('#fmsCalForm');
+  const msg  = container.querySelector('#fmsCalMsg');
+  const photoInput = container.querySelector('#calPhoto');
 
-  (async () => {
-    try {
-      const res = await fetch(`${CAL_API_URL}?action=bootstrap&token=${CAL_API_TOKEN}`);
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    msg.textContent='⏳ جارٍ الحفظ...'; msg.className='text-sm text-blue-600';
+
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+
+    // حساب NextDue
+    const date = payload.date ? new Date(payload.date) : new Date();
+    const freq = FREQ_OPTIONS[ Number(payload.frequency) ] || FREQ_OPTIONS[4];
+    const next = new Date(date);
+    if (freq.months) next.setMonth(next.getMonth()+freq.months);
+    if (freq.days)   next.setDate(next.getDate()+freq.days);
+
+    // تجهيز مرفق الشهادة (اختياري) → base64
+    let certificate = null;
+    const f = photoInput.files[0];
+    if (f){
+      certificate = await new Promise((resolve,reject)=>{
+        const fr=new FileReader();
+        fr.onload=()=>resolve({
+          filename:f.name, mime:f.type,
+          base64: String(fr.result).split(',')[1]
+        });
+        fr.onerror=reject; fr.readAsDataURL(f);
+      });
+    }
+
+    // تحويل القسم إلى Category لغرض توجيه الشهادة لمجلد القسم في Apps Script
+    // NOTE: Apps Script يستخدم FOLDER_MAP = {RAD,LAB,ER,CSSD}
+    const Category = payload.department; // RAD/LAB/ER/CSSD
+
+    // بناء الجسم لنداء Apps Script
+    const body = {
+      action: 'createCalibration',
+      token:  CAL_API_TOKEN,
+      // حقول الأجهزة (لو عندك AssetID/Subtype/RoomCode من Devices Sheet يمكنك إلحاقها)
+      Department: DEPT_LABEL[payload.department] || payload.department,
+      Staff:      payload.staff,
+      AssetID:    '',               // إن توفر لديك رقم أصل من Devices Sheet
+      DeviceName: payload.asset,
+      Category:   Category,         // مهم لتوجيه المجلد الصحيح
+      Subtype:    '',               // إن رغبت مستقبلاً
+      RoomCode:   payload.location, // أو رمز الغرفة
+      RoomName:   '',
+      Date:       toISO(date),
+      TestName:   payload.test_name,
+      Result:     payload.result,
+      Notes:      payload.notes || '',
+      CalibrationFreqMonths: freq.months? (freq.months) : (freq.days? Math.round(freq.days/30) : 12),
+      certificate // {filename,mime,base64} أو null
+    };
+
+    // النداء
+    try{
+    // ❗ مهم: استخدم text/plain لتفادي CORS preflight
+const res = await fetch(CAL_API_URL, {
+  method: 'POST',
+  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  body: JSON.stringify(body)
+});
+
       const data = await res.json();
-      if (data.status!=='success') throw new Error('فشل bootstrap');
 
-      BOOT = data;
+      if (data.status!=='success') throw new Error(data.message||'فشل غير معروف');
 
-      // الموظفون
-      staffList.innerHTML = '';
-      (data.staff||[]).forEach(({StaffName,DepartmentCode})=>{
-        if(!StaffName) return;
-        const o=document.createElement('option');
-        o.value = StaffName;
-        o.textContent = `${StaffName}${DepartmentCode?` (${DepartmentCode})`:''}`;
-        staffList.appendChild(o);
-      });
+      // خزّن نسخة كاش محليًا لعرضها فورًا
+      const rec = {
+        department: payload.department,
+        staff: payload.staff,
+        asset: payload.asset,
+        test_name: payload.test_name,
+        date: toISO(date),
+        result: payload.result,
+        certificate_name: (f && f.name) ? f.name : '',
+        location: payload.location || '',
+        notes: payload.notes || '',
+        next_due: data.nextDue || toISO(next),
+        frequency: freq.label,
+        timestamp: new Date().toISOString()
+      };
+      const all = safeParseLocal(KEY); all.push(rec);
+      localStorage.setItem(KEY, JSON.stringify(all));
 
-      // الغرف
-      roomList.innerHTML = '';
-      (data.rooms||[]).forEach(({code,name})=>{
-        const o=document.createElement('option');
-        o.value = code;
-        o.label = name;
-        o.textContent = `${code} — ${name}`;
-        roomList.appendChild(o);
-      });
+      // تحديث الواجهة
+      refreshCalStats(container);
+      fillCalTable(container, all);
 
-      // الأجهزة (يتم تهيئتها لاحقًا عند اختيار القسم)
-      assetSel.innerHTML = `<option value="">اختر الجهاز</option>`;
-
-    } catch (err) {
-      console.error('خطأ bootstrap:', err);
-      // احتياطي: إبقِ القوائم فارغة مع رسالة ضمنية عبر placeholder
+      msg.textContent = '✅ تم الحفظ وإنشاء الشهادة وكتابة السجل في Google Sheet';
+      msg.className   = 'text-sm text-green-600';
+      form.reset(); photoInput.value='';
+      assetSel.innerHTML=`<option value="">اختر الجهاز</option>`; testSel.innerHTML=`<option value="">اختر نوع الاختبار</option>`;
+    }catch(err){
+      msg.textContent='❌ '+err.message;
+      msg.className='text-sm text-red-600';
     }
-  })();
-
-  // عند اختيار قسم: اعرض الأجهزة التابعة له من Devices
-  deptSel.addEventListener('change', ()=>{
-    const d = deptSel.value;
-    assetSel.innerHTML = `<option value="">اختر الجهاز</option>`;
-    if(!d) return;
-
-    (BOOT.devices||[])
-      .filter(dev => (dev.Category||'').toUpperCase()===d)
-      .forEach(dev=>{
-        const opt = document.createElement('option');
-        // القيمة = AssetID، ونحفظ بيانات إضافية بالـ dataset
-        opt.value = dev.AssetID || dev.DeviceName;
-        opt.textContent = `${dev.DeviceName} ${dev.AssetID?`(${dev.AssetID})`:''}`;
-        opt.dataset.assetId  = dev.AssetID || '';
-        opt.dataset.devName  = dev.DeviceName || '';
-        opt.dataset.category = (dev.Category||'').toUpperCase();
-        opt.dataset.subtype  = dev.Subtype || '';
-        opt.dataset.roomCode = dev.RoomCode || '';
-        opt.dataset.roomName = dev.RoomName || '';
-        assetSel.appendChild(opt);
-      });
-
-    // إعادة ضبط قائمة الاختبارات
-    testSel.innerHTML = `<option value="">اختر نوع الاختبار</option>`;
   });
 
-  // عند اختيار جهاز: استخرج الاختبارات المطابقة من TestCatalog
-  assetSel.addEventListener('change', ()=>{
-    const opt = assetSel.selectedOptions[0];
-    testSel.innerHTML = `<option value="">اختر نوع الاختبار</option>`;
-    if(!opt) return;
-
-    const cat = opt.dataset.category || '';
-    const sub = opt.dataset.subtype  || '';
-    const tests = (BOOT.tests||[]).filter(t =>
-      (t.Category||'').toUpperCase() === cat &&
-      (!sub || (t.Subtype||'').toLowerCase() === sub.toLowerCase())
-    );
-
-    const unique = new Set();
-    tests.forEach(t => { if(t.TestName) unique.add(t.TestName); });
-
-    if(unique.size===0){ // احتياطي
-      ['وظائف أساسية','اختبار عام'].forEach(n=>{
-        const o=document.createElement('option'); o.value=n; o.textContent=n; testSel.appendChild(o);
-      });
-      return;
-    }
-
-    [...unique].forEach(n=>{
-      const o=document.createElement('option'); o.value=n; o.textContent=n; testSel.appendChild(o);
-    });
-  });
+  // تعبئة جدول السجلات من الكاش الحالي
+  fillCalTable(container, cache);
 
   // فلترة + طباعة
   container.querySelector('#calFilterDept').addEventListener('change', (e)=>{
@@ -3768,94 +3862,189 @@ function renderFmsCalibration(container) {
     fillCalTable(container, filtered);
   });
   container.querySelector('#calPrint').addEventListener('click', ()=>window.print());
-
-  // ======== حفظ السجل (إرسال لـ Apps Script + كاش محلي) ========
-  form.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    msg.textContent='⏳ جارٍ الحفظ...'; msg.className='text-sm text-blue-600';
-
-    const fd = new FormData(form);
-    const payload = Object.fromEntries(fd.entries());
-
-    // تواريخ
-    const date = payload.date ? new Date(payload.date) : new Date();
-    const freq = FREQ_OPTIONS[ Number(payload.frequency) ] || FREQ_OPTIONS[4];
-    const next = new Date(date);
-    if (freq.months) next.setMonth(next.getMonth()+freq.months);
-    if (freq.days)   next.setDate(next.getDate()+freq.days);
-
-    // تجهيز مرفق (اختياري)
-    let certificate = null;
-    const f = photoInput.files[0];
-    if (f){
-      certificate = await new Promise((resolve,reject)=>{
-        const fr = new FileReader();
-        fr.onload = () => resolve({ filename:f.name, mime:f.type, base64:String(fr.result).split(',')[1] });
-        fr.onerror = reject; fr.readAsDataURL(f);
-      });
-    }
-
-    // قراءة بيانات الجهاز المختار
-    const devOpt = assetSel.selectedOptions[0] || {};
-    const assetId  = devOpt.dataset?.assetId  || '';
-    const devName  = devOpt.dataset?.devName  || payload.asset || '';
-    const category = (devOpt.dataset?.category || payload.department || '').toUpperCase();
-    const subtype  = devOpt.dataset?.subtype  || '';
-
-    const body = {
-      action: 'createCalibration',
-      token:  CAL_API_TOKEN,
-      Department: DEPT_LABEL[payload.department] || payload.department,
-      Staff:      payload.staff,
-      AssetID:    assetId,
-      DeviceName: devName,
-      Category:   category,            // يحدد مجلد الشهادة في Apps Script
-      Subtype:    subtype,
-      RoomCode:   payload.location || devOpt.dataset?.roomCode || '',
-      RoomName:   devOpt.dataset?.roomName || '',
-      Date:       toISO(date),
-      TestName:   payload.test_name,
-      Result:     payload.result,
-      Notes:      payload.notes || '',
-      CalibrationFreqMonths: freq.months ? freq.months : (freq.days ? Math.round(freq.days/30) : 12),
-      certificate
-    };
-
-    try {
-      // مهم: text/plain يقلل احتمالات preflight
-      const res  = await fetch(CAL_API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (data.status!=='success') throw new Error(data.message || 'فشل غير معروف');
-
-      // كاش محلي للعرض الفوري
-      const rec = {
-        department: payload.department, staff: payload.staff,
-        asset: devName, test_name: payload.test_name,
-        date: toISO(date), result: payload.result,
-        certificate_name: (f && f.name) ? f.name : '',
-        location: payload.location || '', notes: payload.notes || '',
-        next_due: data.nextDue || toISO(next), frequency: freq.label,
-        timestamp: new Date().toISOString()
-      };
-      const all = safeParseLocal(KEY); all.push(rec);
-      localStorage.setItem(KEY, JSON.stringify(all));
-
-      refreshCalStats(container);
-      fillCalTable(container, all);
-
-      msg.textContent = '✅ تم الحفظ وإنشاء الشهادة وكتابة السجل في Google Sheet';
-      msg.className   = 'text-sm text-green-600';
-      form.reset(); photoInput.value='';
-      assetSel.innerHTML=`<option value="">اختر الجهاز</option>`;
-      testSel.innerHTML =`<option value="">اختر نوع الاختبار</option>`;
-    } catch (err) {
-      msg.textContent='❌ '+err.message;
-      msg.className='text-sm text-red-600';
-    }
-  });
 }
 </script>
 
+
+<!-- سكربت سجل التدريب (نهائي ونظيف) -->
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const form = document.getElementById("trainingForm");
+  if (!form) return;
+  const msg = document.getElementById("trainMsg");
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyhFeodenLqh4EUTqeBUYkJsgk6TtU0QQ_I_zB8_dZ31w3kavPi83GFBLv9tQ1qz8IL/exec";
+
+  // تحميل القوائم الأساسية (الموظفين + الأماكن)
+  try {
+    msg.textContent = "⏳ جارِ تحميل البيانات...";
+    const res = await fetch(WEB_APP_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    msg.textContent = "";
+
+    // ✅ تعبئة قائمة أسماء الموظفين
+    const traineeBox = document.createElement("div");
+    traineeBox.className = "md:col-span-2";
+    traineeBox.innerHTML = `
+      <label class="block text-sm font-semibold mb-1">اختر المتدربين *</label>
+      <div id="traineeList" class="max-h-60 overflow-y-auto border rounded-lg p-3 bg-gray-50"></div>
+      <div class="flex justify-between items-center mt-2 text-sm">
+        <button type="button" id="selectAll" class="text-[var(--brand1)] hover:underline">تحديد الكل</button>
+        <button type="button" id="deselectAll" class="text-gray-600 hover:underline">إلغاء التحديد</button>
+      </div>
+      <div id="selectedCount" class="text-xs text-gray-600 mt-1">0 متدرب محدد</div>
+    `;
+    form.insertBefore(traineeBox, form.querySelector(".md\\:col-span-2.flex"));
+
+    const traineeList = document.getElementById("traineeList");
+    traineeList.innerHTML = data.trainees
+      .map(name => `<label class="block"><input type="checkbox" name="trainees" value="${name}" class="trainee-checkbox mr-2">${name}</label>`)
+      .join("");
+
+    // ✅ تعبئة الأماكن
+    const placeInput = form.querySelector('input[name="training_place"]');
+    placeInput.setAttribute("list", "places-list");
+    const datalistPlaces = document.createElement("datalist");
+    datalistPlaces.id = "places-list";
+    data.places.forEach(place => datalistPlaces.innerHTML += `<option value="${place}">`);
+    placeInput.after(datalistPlaces);
+
+    // ✅ تحميل البرامج التدريبية حسب اللجنة
+    const committeeSel = form.querySelector('select[name="committee_code"]');
+    const topicInput = form.querySelector('input[name="training_topic"]');
+
+    let topicsDL = document.getElementById('topics-list');
+    if (!topicsDL) {
+      topicsDL = document.createElement('datalist');
+      topicsDL.id = 'topics-list';
+      topicInput.setAttribute('list', 'topics-list');
+      topicInput.after(topicsDL);
+    }
+
+    async function loadProgramsForCommittee(code) {
+      topicsDL.innerHTML = '';
+      topicInput.value = '';
+      if (!code) return;
+
+      try {
+        const url = `${WEB_APP_URL}?action=programs&code=${encodeURIComponent(code)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+
+        console.log('Programs payload:', payload);
+
+        if (payload.status !== 'success') throw new Error(payload.message || 'فشل تحميل البرامج');
+        if (!Array.isArray(payload.programs)) throw new Error('قائمة البرامج غير صحيحة');
+
+        payload.programs.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.program_name;
+          opt.title = `📅 ${p.frequency}\n📝 ${p.description}\n📁 ${p.file_type}`;
+          topicsDL.appendChild(opt);
+        });
+
+        showProgramHintArea(payload.programs);
+      } catch (err) {
+        console.error('⚠️ فشل تحميل البرامج:', err.message);
+      }
+    }
+
+    // ✅ عرض تفاصيل البرنامج أسفل خانة الموضوع
+    function showProgramHintArea(programs) {
+      let hintBox = document.getElementById('programHintBox');
+      if (!hintBox) {
+        hintBox = document.createElement('div');
+        hintBox.id = 'programHintBox';
+        hintBox.className = 'mt-3 text-sm bg-gray-50 border rounded-lg p-4';
+        topicInput.after(hintBox);
+      }
+
+      topicInput.addEventListener('input', () => {
+        const selected = programs.find(p => p.program_name === topicInput.value.trim());
+        if (selected) {
+          hintBox.innerHTML = `
+            <div class="font-bold text-[var(--brand1)] text-lg mb-1">${selected.program_name}</div>
+            <div class="text-gray-700 mb-1"><strong>📅 التكرار:</strong> ${selected.frequency}</div>
+            <div class="text-gray-700 mb-1"><strong>📝 الوصف:</strong> ${selected.description}</div>
+            <div class="text-gray-700 mb-2"><strong>📁 نوع الملف:</strong> ${selected.file_type}</div>
+            ${
+              selected.drive_link && selected.drive_link !== "(رابط العرض هنا لاحقًا)"
+                ? `<a href="${selected.drive_link}" target="_blank"
+                    class="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)] transition">
+                    <i class="fas fa-chalkboard-teacher"></i> فتح العرض التدريبي
+                  </a>`
+                : `<div class="text-xs text-gray-500 italic">لم يتم رفع رابط العرض بعد.</div>`
+            }
+          `;
+        } else {
+          hintBox.innerHTML = `<span class="text-gray-500">اختر أو اكتب اسم البرنامج لعرض التفاصيل...</span>`;
+        }
+      });
+    }
+
+    committeeSel.addEventListener('change', () => loadProgramsForCommittee(committeeSel.value));
+    if (committeeSel.value) loadProgramsForCommittee(committeeSel.value);
+
+    // ✅ عداد المتدربين
+    const countEl = document.getElementById("selectedCount");
+    function updateCount() {
+      const count = document.querySelectorAll(".trainee-checkbox:checked").length;
+      countEl.textContent = `${count} متدرب محدد`;
+    }
+    traineeList.addEventListener("change", updateCount);
+    document.getElementById("selectAll").addEventListener("click", () => {
+      document.querySelectorAll(".trainee-checkbox").forEach(cb => cb.checked = true);
+      updateCount();
+    });
+    document.getElementById("deselectAll").addEventListener("click", () => {
+      document.querySelectorAll(".trainee-checkbox").forEach(cb => cb.checked = false);
+      updateCount();
+    });
+
+  } catch (err) {
+    msg.textContent = "⚠️ فشل تحميل القوائم: " + err.message;
+    msg.className = "text-sm text-red-600";
+  }
+
+  // ✅ إرسال البيانات
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    msg.textContent = "⏳ جاري الإرسال...";
+    msg.className = "text-sm text-blue-600";
+
+    const selectedTrainees = Array.from(form.querySelectorAll(".trainee-checkbox:checked")).map(cb => cb.value);
+    if (selectedTrainees.length === 0) {
+      msg.textContent = "❌ اختر متدرب واحد على الأقل.";
+      msg.className = "text-sm text-red-600";
+      return;
+    }
+
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.trainees = selectedTrainees;
+    payload.department = payload.committee_code;
+
+    try {
+      const res = await fetch(WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "text/plain;charset=utf-8" }
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        msg.textContent = "✅ تم حفظ سجل التدريب بنجاح";
+        msg.className = "text-sm text-green-600";
+        form.reset();
+        document.querySelectorAll(".trainee-checkbox").forEach(cb => cb.checked = false);
+        document.getElementById("selectedCount").textContent = "0 متدرب محدد";
+      } else throw new Error(data.message);
+    } catch (err) {
+      msg.textContent = "❌ فشل الحفظ: " + err.message;
+      msg.className = "text-sm text-red-600";
+    }
+  });
+});
+</script>
 
 
 <!-- 🖨️ سكربت تصدير البرنامج كـ PDF -->
