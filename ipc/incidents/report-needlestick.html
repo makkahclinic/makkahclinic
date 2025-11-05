@@ -20,6 +20,9 @@
     footer{margin-top:40px;text-align:center;color:#777;font-size:.85rem}
     @keyframes pulse {0%{transform:scale(1)}50%{transform:scale(1.03)}100%{transform:scale(1)}}
     canvas.pulse {animation:pulse 1.5s ease;}
+    .gold-counter{background:var(--gold);color:#7B1E24;font-weight:800;
+      padding:10px 20px;border-radius:12px;display:inline-block;
+      box-shadow:0 2px 6px rgba(0,0,0,.15);animation:pulse 2s infinite ease-in-out;}
   </style>
 </head>
 
@@ -39,7 +42,6 @@
     </h2>
 
     <form id="exposureForm" class="space-y-6" autocomplete="off" novalidate>
-      <!-- البيانات الأساسية -->
       <div>
         <h3 class="text-xl font-bold text-[var(--maroon)] mb-3">البيانات الأساسية</h3>
         <div class="grid md:grid-cols-2 gap-4">
@@ -56,7 +58,6 @@
         </div>
       </div>
 
-      <!-- نوع التعرض -->
       <div>
         <h3 class="text-xl font-bold text-[var(--maroon)] mb-3">نوع التعرض</h3>
         <select id="exposureType" name="exposure_type" class="w-full border p-2 rounded" required>
@@ -78,7 +79,6 @@
           <label class="label">موضع الإصابة</label>
           <input name="injury_site" class="w-full border p-2 rounded" placeholder="مثال: إصبع اليد اليمنى">
         </div>
-
         <div id="bloodSection" class="hidden space-y-2 mt-3">
           <label class="label">مكان التلامس</label>
           <input name="contact_area" class="w-full border p-2 rounded" placeholder="جرح / جلد متشقق">
@@ -89,7 +89,6 @@
         </div>
       </div>
 
-      <!-- الإجراءات الفورية -->
       <div>
         <h3 class="text-xl font-bold text-[var(--maroon)] mb-3">الإجراءات الفورية</h3>
         <div class="space-y-2">
@@ -100,13 +99,11 @@
         </div>
       </div>
 
-      <!-- ملاحظات -->
       <div>
         <label class="label block mb-1">ملاحظات إضافية</label>
         <textarea name="notes" class="w-full border p-2 rounded" rows="3" placeholder="أي تفاصيل إضافية..."></textarea>
       </div>
 
-      <!-- زر الإرسال -->
       <div class="text-center mt-6">
         <button type="submit" id="submitBtn" class="btn">📤 إرسال البلاغ</button>
         <div id="statusMsg" class="text-sm mt-3 text-gray-600"></div>
@@ -114,14 +111,13 @@
     </form>
   </section>
 
-  <!-- زر السجل -->
   <div class="text-center mt-10">
     <button id="openLogBtn" class="btn bg-[var(--gold)] text-black hover:bg-[#f3cf73]">📊 عرض سجل الإصابات</button>
   </div>
 
-  <!-- قسم الإحصائيات -->
-  <section class="max-w-6xl mx-auto mt-12 card p-8">
-    <h2 class="text-2xl font-extrabold text-[var(--maroon)] mb-4 text-center">📈 الإحصائيات الحية</h2>
+  <section class="max-w-6xl mx-auto mt-12 card p-8 text-center">
+    <h2 class="text-2xl font-extrabold text-[var(--maroon)] mb-4">📈 الإحصائيات الحية</h2>
+    <div id="goldCounter" class="gold-counter mb-6">📊 إجمالي البلاغات: 0 | الحالات الخطيرة: 0</div>
     <canvas id="chart" class="mx-auto pulse" height="160"></canvas>
     <div id="dataTable" class="mt-6"></div>
   </section>
@@ -129,9 +125,10 @@
   <footer>© 2025 مجمع مكة الطبي بالزاهر – لجنة مكافحة العدوى</footer>
 
   <script>
-    const exposureType = document.getElementById('exposureType');
-    const needleSection = document.getElementById('needleSection');
-    const bloodSection = document.getElementById('bloodSection');
+    const WEB_APP_URL = "ضع_رابط_WebApp_هنا";
+    const exposureType=document.getElementById('exposureType');
+    const needleSection=document.getElementById('needleSection');
+    const bloodSection=document.getElementById('bloodSection');
 
     function handleExposureTypeChange(){
       needleSection.classList.add('hidden');
@@ -139,26 +136,17 @@
       if(exposureType.value==='needle') needleSection.classList.remove('hidden');
       else if(['blood','mucosal'].includes(exposureType.value)) bloodSection.classList.remove('hidden');
     }
-    exposureType.addEventListener('change', handleExposureTypeChange);
+    exposureType.addEventListener('change',handleExposureTypeChange);
 
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec";
-
-    function formToParams(form){
-      const fd=new FormData(form);
-      ['washed','reported','medical_eval','pep'].forEach(n=>{if(!fd.has(n))fd.append(n,'لا');});
-      return new URLSearchParams(fd);
-    }
-
-    document.getElementById('exposureForm').addEventListener('submit', e=>{
+    document.getElementById('exposureForm').addEventListener('submit',e=>{
       e.preventDefault();
-      const btn=document.getElementById('submitBtn');
-      const msg=document.getElementById('statusMsg');
+      const btn=document.getElementById('submitBtn'),msg=document.getElementById('statusMsg');
       btn.disabled=true;btn.textContent='⏳ جاري الإرسال...';
-      const params=formToParams(e.target);
-      const cb="__gs_cb_"+Date.now();
-      params.append('callback',cb);
-      const s=document.createElement('script');
-      s.src=WEB_APP_URL+"?"+params.toString();
+      const fd=new FormData(e.target);
+      ['washed','reported','medical_eval','pep'].forEach(n=>{if(!fd.has(n))fd.append(n,'لا');});
+      const params=new URLSearchParams(fd);
+      const cb="__gs_cb_"+Date.now();params.append('callback',cb);
+      const s=document.createElement('script');s.src=WEB_APP_URL+"?"+params.toString();
       const timeout=setTimeout(()=>{msg.textContent='❌ لم يصل ردّ من الخادم';msg.style.color='red';btn.disabled=false;btn.textContent='📤 إرسال البلاغ';document.body.removeChild(s);delete window[cb];},15000);
       window[cb]=(json)=>{clearTimeout(timeout);
         if(json&&json.status==='success'){msg.textContent='✅ تم الإرسال بنجاح';msg.style.color='green';e.target.reset();handleExposureTypeChange();loadData();}
@@ -167,116 +155,54 @@
       document.body.appendChild(s);
     });
 
-    document.getElementById('openLogBtn').addEventListener('click', ()=>{
+    document.getElementById('openLogBtn').addEventListener('click',()=>{
       const pass=prompt('🔐 الرجاء إدخال كلمة السر للوصول إلى سجل الإصابات:');
       if(pass==='BostonYYYY2025'){window.open('https://docs.google.com/spreadsheets/d/11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw/edit#gid=0','_blank');}
       else if(pass!==null){alert('❌ كلمة السر غير صحيحة.');}
     });
 
-    // === تحميل البيانات من Google Sheet ===
-async function loadData() {
-  try {
-    const res = await fetch(`${WEB_APP_URL}?action=data&callback=cb_${Date.now()}`);
-    const text = await res.text();
-    const jsonMatch = text.match(/\((.*)\)$/);
-    if (!jsonMatch) throw new Error("ردّ غير صالح من الخادم");
-    const data = JSON.parse(jsonMatch[1]);
-    if (data.status === "success" && Array.isArray(data.rows)) {
-      console.log("✅ البيانات وصلت:", data.rows.length);
-      renderChart(data.rows);
-      renderTable(data.rows);
-    } else {
-      console.warn("⚠️ لا توجد بيانات صالحة للعرض");
+    let chart;
+
+    async function loadData(){
+      try{
+        const res=await fetch(`${WEB_APP_URL}?action=data&callback=cb_${Date.now()}`);
+        const text=await res.text();
+        const match=text.match(/\((.*)\)$/);
+        if(!match)return;
+        const data=JSON.parse(match[1]);
+        if(data.status==='success'){renderChart(data.rows);renderTable(data.rows);}
+      }catch(err){console.error('🚨 خطأ أثناء تحميل البيانات:',err);}
     }
-  } catch (err) {
-    console.error("🚨 خطأ أثناء تحميل البيانات:", err);
-  }
-}
-
-// === رسم المخطط العمودي ===
-function renderChart(rows) {
-  if (!rows.length) return;
-  const ctx = document.getElementById('chart').getContext('2d');
-  const types = { needle: 0, blood: 0, mucosal: 0 };
-  let severe = 0;
-
-  rows.forEach(r => {
-    const type = (r["نوع التعرض"] || "").trim().toLowerCase();
-    const contaminated = (r["هل كانت ملوثة؟"] || "").trim();
-    if (type && types.hasOwnProperty(type)) types[type]++;
-    if (contaminated === "نعم") severe++;
-  });
-if (window.chart && typeof window.chart.destroy === "function") {
-  window.chart.destroy();
-}
-  window.chart = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: ["وخزي", "دموي", "مخاطي"],
-      datasets: [
-        {
-          label: "عدد الحالات",
-          data: Object.values(types),
-          backgroundColor: ["#7B1E24", "#C55A44", "#E9C46A"],
-          borderWidth: 1
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        title: {
-          display: true,
-          text: `إجمالي ${rows.length} بلاغ منها ${severe} خطيرة`,
-          color: "#7B1E24",
-          font: { size: 18 }
-        },
-        legend: { display: false }
-      },
-      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-    }
-  });
-
-  // حركة نبض
-  const canvas = document.getElementById("chart");
-  canvas.classList.remove("pulse");
-  void canvas.offsetWidth;
-  canvas.classList.add("pulse");
-}
-
-// === عرض الجدول ===
-function renderTable(rows) {
-  const container = document.getElementById("dataTable");
-  if (!rows.length) {
-    container.innerHTML = "<p class='text-center text-gray-600'>لا توجد بيانات حالياً</p>";
-    return;
-  }
-  const headers = Object.keys(rows[0]);
-  let html = `<div class="overflow-x-auto"><table class="min-w-full border text-sm text-center">
-    <thead><tr>${headers.map(h=>`<th class="border bg-[var(--gold)] text-[var(--maroon)] p-2">${h}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td class="border p-1">${r[h]||""}</td>`).join('')}</tr>`).join('')}</tbody>
-  </table></div>`;
-  container.innerHTML = html;
-}
-
 
     function renderChart(rows){
+      if(!rows.length)return;
       const ctx=document.getElementById('chart').getContext('2d');
       const types={needle:0,blood:0,mucosal:0};
-      const severe=rows.filter(r=>r["هل كانت ملوثة؟"]==="نعم").length;
-      rows.forEach(r=>{if(types[r["نوع التعرض"]]!==undefined)types[r["نوع التعرض"]]++;});
-      if(window.chart)window.chart.destroy();
-      window.chart=new Chart(ctx,{
+      let severe=0;
+      rows.forEach(r=>{
+        const type=(r["نوع التعرض"]||"").trim().toLowerCase();
+        const contaminated=(r["هل كانت ملوثة؟"]||"").trim();
+        if(types.hasOwnProperty(type))types[type]++;
+        if(contaminated==="نعم")severe++;
+      });
+
+      // تحديث العداد الذهبي
+      const counter=document.getElementById('goldCounter');
+      counter.textContent=`📊 إجمالي البلاغات: ${rows.length} | الحالات الخطيرة: ${severe}`;
+
+      if(chart&&typeof chart.destroy==="function")chart.destroy();
+      chart=new Chart(ctx,{
         type:'bar',
         data:{labels:['وخزي','دموي','مخاطي'],
           datasets:[{label:'عدد الحالات',data:Object.values(types),
             backgroundColor:['#7B1E24','#C55A44','#E9C46A'],borderWidth:1}]},
         options:{
           responsive:true,
-          plugins:{title:{display:true,text:`إجمالي ${rows.length} بلاغ منها ${severe} خطيرة`,color:'#7B1E24',font:{size:18}}},
+          plugins:{title:{display:false},legend:{display:false}},
           scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}
         }});
-      const c=document.getElementById('chart');c.classList.remove('pulse');void c.offsetWidth;c.classList.add('pulse');
+      const canvas=document.getElementById('chart');
+      canvas.classList.remove('pulse');void canvas.offsetWidth;canvas.classList.add('pulse');
     }
 
     function renderTable(rows){
@@ -284,8 +210,8 @@ function renderTable(rows) {
       if(!rows.length){c.innerHTML='<p class="text-gray-600 text-center">لا توجد بيانات حالياً</p>';return;}
       const headers=Object.keys(rows[0]);
       c.innerHTML=`<div class="overflow-x-auto"><table class="min-w-full border text-sm text-center">
-      <thead><tr>${headers.map(h=>`<th class="border bg-[var(--gold)] text-[var(--maroon)] p-2">${h}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td class="border p-1">${r[h]||''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+        <thead><tr>${headers.map(h=>`<th class="border bg-[var(--gold)] text-[var(--maroon)] p-2">${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td class="border p-1">${r[h]||''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     }
 
     window.addEventListener('DOMContentLoaded',()=>{loadData();setInterval(loadData,60000);});
