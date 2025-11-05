@@ -753,7 +753,8 @@
     <h2 class="text-2xl font-extrabold text-[var(--brand1)]">🛠️ السلامة والمرافق (FMS)</h2>
 
     <!-- تبويبات -->
-    <div id="fmsTabs" class="flex flex-wrap gap-2 border-b pb-3" role="tablist" aria-label="تبويبات FMS">
+<!-- تبويبات (ترتيب جديد) -->
+<div id="fmsTabs" class="flex flex-wrap gap-2 border-b pb-3" role="tablist" aria-label="تبويبات FMS">
   <button type="button"
           id="fms-tab-library"
           aria-controls="fmsTabContent"
@@ -771,6 +772,14 @@
           role="tab" aria-selected="false">📝 تسجيل جولة سلامة</button>
 
   <button type="button"
+          id="fms-tab-calibration"
+          aria-controls="fmsTabContent"
+          class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200"
+          data-fms-tab="calibration"
+          onclick="switchFmsTab('calibration')"
+          role="tab" aria-selected="false">🧪 معايرة الأجهزة (CAL)</button>
+
+  <button type="button"
           id="fms-tab-needs"
           aria-controls="fmsTabContent"
           class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200"
@@ -778,13 +787,6 @@
           onclick="switchFmsTab('needs')"
           role="tab" aria-selected="false">✅ متطلبات سباهي</button>
 
-  <button type="button"
-          id="fms-tab-calibration"
-          aria-controls="fmsTabContent"
-          class="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200"
-          data-fms-tab="calibration"
-          onclick="switchFmsTab('calibration')"
-          role="tab" aria-selected="false">🧪 معايرة الأجهزة (CAL)</button>
 </div>
 
 
@@ -986,6 +988,13 @@ const activeLink = document.querySelector(`.nav-link[href="#${sectionId}"]`);
       switchEocTab('library');
     }
   }
+if (sectionId === 'rm') {
+  const rmLib = document.getElementById('rmLib');
+  if (rmLib && rmLib.innerHTML.trim() === '') {
+    renderRMLibrary();
+  }
+}
+
   return false;
 }
 // ====== عرض الوثيقة في المودال بدون مشاكل Google Cookies ======
@@ -1032,8 +1041,14 @@ function closeDocModal() {
 }
 
 // ====== الإعدادات ======
-const FMS_API_URL = 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL_HERE';
-const TRAIN_API_URL = 'YOUR_GAS_TRAINING_WEB_APP_URL_HERE';
+
+
+const CAL_API_URL = 'https://script.google.com/macros/s/AKfycbx9HEbtU9_lpshSkOEf5DZRQfOyYogi2NSDboqe4vGGlGsxbyiB1Fp46x_WoW7C-SPOhg/exec';
+const CAL_API_TOKEN = 'Makkah7321@'; // 👈 ضع هنا نفس التوكن الموجود في Script Properties داخل Apps Script
+const CAL_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1HPQIlhnvynNKctQLgINtVc3OK8Ey4RX52dYdmlIT9F8/edit?gid=1186914285#gid=1186914285'; // “سجل معايرة الأجهزة”
+const FMS_API_URL = CAL_API_URL;  // يمكن استخدامه مؤقتًا لنفس العنوان
+const TRAIN_API_URL = 'https://script.google.com/macros/s/AKfycbyhFeodenLqh4EUTqeBUYkJsgk6TtU0QQ_I_zB8_dZ31w3kavPi83GFBLv9tQ1qz8IL/exec';
+
 // ====== دوال إدارة الشعار ======
 function setupLogoChange() {
   const logoPicker = document.getElementById('logoPicker');
@@ -3079,19 +3094,19 @@ function switchFmsTab(tab) {
     btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     btn.setAttribute('aria-controls', 'fmsTabContent');
   });
+// لوح التبويب
+container.innerHTML = '';
+container.setAttribute('role', 'tabpanel');
+const activeBtn = section.querySelector(`[data-fms-tab="${tab}"]`);
+if (activeBtn && activeBtn.id) container.setAttribute('aria-labelledby', activeBtn.id);
 
-  // لوح التبويب
-  container.innerHTML = '';
-  container.setAttribute('role', 'tabpanel');
-  const activeBtn = section.querySelector(`[data-fms-tab="${tab}"]`);
-  if (activeBtn && activeBtn.id) container.setAttribute('aria-labelledby', activeBtn.id);
-
-  if (tab === 'library')       renderFmsLibrary(container);
-  else if (tab === 'rounds')   renderFmsRounds(container);
-  else if (tab === 'needs')    renderFmsNeeds(container);
-  else if (tab === 'calibration') renderFmsCalibration(container);
-  else container.innerHTML = `<div class="p-4 rounded-lg bg-amber-50 text-amber-800">تبويب غير معروف: ${tab}</div>`;
+if (tab === 'library')       renderFmsLibrary(container);
+else if (tab === 'rounds')   renderFmsRounds(container);
+else if (tab === 'needs')    renderFmsNeeds(container);
+else if (tab === 'calibration') renderFmsCalibration(container);
+else container.innerHTML = `<div class="p-4 rounded-lg bg-amber-50 text-amber-800">تبويب غير معروف: ${tab}</div>`;
 }
+
 function renderFmsLibrary(container) {
   // عناصر التحكم
   const categories = [...new Set(FMS_DOCS_LIBRARY.map(doc => doc.category))];
@@ -3142,7 +3157,7 @@ function renderFmsLibrary(container) {
             <i class="fas fa-eye ml-1"></i> عرض
           </button>
           <a class="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50" 
-             target="_blank" href="${doc.url.replace('/preview', '/view')}">
+             target="_blank" href="${doc.url.replace('/preview','/view')}">
             <i class="fas fa-up-right-from-square ml-1"></i> فتح في تبويب
           </a>
         </div>
@@ -3306,12 +3321,9 @@ function renderFmsRounds(container) {
       // حفظ البيانات محلياً
       const formData = new FormData(safetyRoundFormElement);
       const roundData = {};
-      formData.forEach((value, key) => {
-        roundData[key] = value;
-      });
+      formData.forEach((value, key) => { roundData[key] = value; });
       roundData.timestamp = new Date().toISOString();
       
-      // حفظ في localStorage
       let rounds = JSON.parse(localStorage.getItem('fms_safety_rounds') || '[]');
       rounds.push(roundData);
       localStorage.setItem('fms_safety_rounds', JSON.stringify(rounds));
@@ -3334,12 +3346,9 @@ function renderFmsRounds(container) {
       // حفظ البيانات محلياً
       const formData = new FormData(maintenanceFormElement);
       const maintenanceData = {};
-      formData.forEach((value, key) => {
-        maintenanceData[key] = value;
-      });
+      formData.forEach((value, key) => { maintenanceData[key] = value; });
       maintenanceData.timestamp = new Date().toISOString();
       
-      // حفظ في localStorage
       let maintenanceRecords = JSON.parse(localStorage.getItem('fms_maintenance_records') || '[]');
       maintenanceRecords.push(maintenanceData);
       localStorage.setItem('fms_maintenance_records', JSON.stringify(maintenanceRecords));
@@ -3350,105 +3359,6 @@ function renderFmsRounds(container) {
     });
   }
 }
-function renderFmsCalibration(container) {
-  container.innerHTML = `
-    <div class="space-y-6">
-      <!-- مقدمة -->
-      <div class="border rounded-xl p-4 bg-white">
-        <h3 class="text-xl font-bold text-[var(--brand1)] mb-2">🧪 سجل معايرة الأجهزة (CAL)</h3>
-        <p class="text-gray-700">
-          هذا اللوح (role="tabpanel") يُدار من أزرار التبويب أعلى القسم (role="tablist").
-        </p>
-      </div>
-
-      <!-- روابط/وثائق (حدّث الروابط الفعلية لديك) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <a href="https://drive.google.com/file/d/xxxxxxxxxxxxxxxxx/view" target="_blank" rel="noopener noreferrer"
-           class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
-          <div class="h-12 w-12 rounded-full bg-blue-100 grid place-items-center text-blue-600"><i class="fas fa-file"></i></div>
-          <div>
-            <div class="font-bold">سياسة/إجراء المعايرة</div>
-            <div class="text-sm text-gray-600">المستند المرجعي</div>
-          </div>
-        </a>
-        <a href="https://drive.google.com/file/d/yyyyyyyyyyyyyyyyy/view" target="_blank" rel="noopener noreferrer"
-           class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
-          <div class="h-12 w-12 rounded-full bg-green-100 grid place-items-center text-green-600"><i class="fas fa-clipboard-check"></i></div>
-          <div>
-            <div class="font-bold">نموذج شهادة المعايرة</div>
-            <div class="text-sm text-gray-600">قالب جاهز</div>
-          </div>
-        </a>
-      </div>
-
-      <!-- نموذج إدخال سجل معايرة -->
-      <div class="border rounded-xl p-4 bg-white">
-        <h4 class="font-bold mb-3">➕ إضافة سجل معايرة</h4>
-        <form id="fmsCalForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-semibold mb-1">تاريخ المعايرة *</label>
-            <input type="date" name="cal_date" required class="w-full border rounded-lg px-3 py-2">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">اسم/رقم الجهاز *</label>
-            <input name="device_name" required class="w-full border rounded-lg px-3 py-2" placeholder="مثال: BP-Unit-03">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">الموقع *</label>
-            <input name="device_location" required class="w-full border rounded-lg px-3 py-2" placeholder="العيادات/المختبر...">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">الجهة المنفذة *</label>
-            <input name="provider" required class="w-full border rounded-lg px-3 py-2" placeholder="اسم الفني/الشركة">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">النتيجة</label>
-            <select name="result" class="w-full border rounded-lg px-3 py-2">
-              <option value="Pass">مطابق (Pass)</option>
-              <option value="Fail">غير مطابق (Fail)</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">موعد المعايرة القادمة</label>
-            <input type="date" name="next_due" class="w-full border rounded-lg px-3 py-2">
-          </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-1">ملاحظات</label>
-            <textarea name="notes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
-          </div>
-          <div class="md:col-span-2 flex items-center gap-3 pt-2">
-            <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">حفظ السجل</button>
-            <span id="fmsCalMsg" class="text-sm"></span>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-
-  // حفظ محلي (يمكن استبداله لاحقًا بواجهة برمجية)
-  const form = document.getElementById('fmsCalForm');
-  if (form) {
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('fmsCalMsg');
-      msg.textContent = 'جارٍ الحفظ...';
-      msg.className = 'text-sm text-blue-600';
-
-      const data = Object.fromEntries(new FormData(form).entries());
-      data.timestamp = new Date().toISOString();
-
-      const key = 'fms_calibration_records';
-      const all = JSON.parse(localStorage.getItem(key) || '[]');
-      all.push(data);
-      localStorage.setItem(key, JSON.stringify(all));
-
-      msg.textContent = '✅ تم حفظ السجل';
-      msg.className = 'text-sm text-green-600';
-      form.reset();
-    });
-  }
-}
-
 
 function renderFmsNeeds(container) {
   const needs = [
@@ -3463,105 +3373,6 @@ function renderFmsNeeds(container) {
     { key: 'maintenance_logs', text: 'سجل الصيانة الوقائية محدث (LOG-FMS-2025-005)', required: true },
     { key: 'incident_logs', text: 'سجل الحوادث والملاحظات محدث (LOG-FMS-2025-006)', required: true },
   ];
-function renderFmsCalibration(container) {
-  container.innerHTML = `
-    <div class="space-y-6">
-      <!-- مقدمة -->
-      <div class="border rounded-xl p-4 bg-white">
-        <h3 class="text-xl font-bold text-[var(--brand1)] mb-2">🧪 سجل معايرة الأجهزة (CAL)</h3>
-        <p class="text-gray-700">
-          هذا اللوح (role="tabpanel") يُدار من أزرار التبويب أعلى القسم (role="tablist").
-        </p>
-      </div>
-
-      <!-- روابط/وثائق معايرة (أمثلة؛ حدِّث الروابط حسب ملفاتك) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <a href="https://drive.google.com/file/d/xxxxxxxxxxxxxxxxx/view" target="_blank" rel="noopener noreferrer"
-           class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
-          <div class="h-12 w-12 rounded-full bg-blue-100 grid place-items-center text-blue-600"><i class="fas fa-file"></i></div>
-          <div>
-            <div class="font-bold">سياسة/إجراء المعايرة</div>
-            <div class="text-sm text-gray-600">المستند المرجعي</div>
-          </div>
-        </a>
-        <a href="https://drive.google.com/file/d/yyyyyyyyyyyyyyyyy/view" target="_blank" rel="noopener noreferrer"
-           class="p-4 border rounded-xl bg-white hover:shadow-md transition flex items-center gap-3">
-          <div class="h-12 w-12 rounded-full bg-green-100 grid place-items-center text-green-600"><i class="fas fa-clipboard-check"></i></div>
-          <div>
-            <div class="font-bold">نموذج شهادة المعايرة</div>
-            <div class="text-sm text-gray-600">قالب جاهز</div>
-          </div>
-        </a>
-      </div>
-
-      <!-- نموذج إدخال سجل معايرة -->
-      <div class="border rounded-xl p-4 bg-white">
-        <h4 class="font-bold mb-3">➕ إضافة سجل معايرة</h4>
-        <form id="fmsCalForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-semibold mb-1">تاريخ المعايرة *</label>
-            <input type="date" name="cal_date" required class="w-full border rounded-lg px-3 py-2">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">اسم/رقم الجهاز *</label>
-            <input name="device_name" required class="w-full border rounded-lg px-3 py-2" placeholder="مثال: BP-Unit-03">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">الموقع *</label>
-            <input name="device_location" required class="w-full border rounded-lg px-3 py-2" placeholder="العيادات/المختبر...">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">الجهة المنفذة *</label>
-            <input name="provider" required class="w-full border rounded-lg px-3 py-2" placeholder="اسم الفني/الشركة">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">النتيجة</label>
-            <select name="result" class="w-full border rounded-lg px-3 py-2">
-              <option value="Pass">مطابق (Pass)</option>
-              <option value="Fail">غير مطابق (Fail)</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-1">موعد المعايرة القادمة</label>
-            <input type="date" name="next_due" class="w-full border rounded-lg px-3 py-2">
-          </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-1">ملاحظات</label>
-            <textarea name="notes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
-          </div>
-          <div class="md:col-span-2 flex items-center gap-3 pt-2">
-            <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">حفظ السجل</button>
-            <span id="fmsCalMsg" class="text-sm"></span>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-
-  // حفظ محلي للسجلات (يمكن استبداله لاحقًا بواجهة برمجية)
-  const form = document.getElementById('fmsCalForm');
-  if (form) {
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('fmsCalMsg');
-      msg.textContent = 'جارٍ الحفظ...';
-      msg.className = 'text-sm text-blue-600';
-
-      const data = Object.fromEntries(new FormData(form).entries());
-      data.timestamp = new Date().toISOString();
-
-      const key = 'fms_calibration_records';
-      const all = JSON.parse(localStorage.getItem(key) || '[]');
-      all.push(data);
-      localStorage.setItem(key, JSON.stringify(all));
-
-      msg.textContent = '✅ تم حفظ السجل';
-      msg.className = 'text-sm text-green-600';
-      form.reset();
-    });
-  }
-}
-
 
   const wrapper = document.createElement('div');
   wrapper.className = 'grid-cards';
@@ -3576,6 +3387,7 @@ function renderFmsCalibration(container) {
       </label>
       ${need.required ? '<div class="text-xs text-red-600 mt-1">متطلب إلزامي</div>' : ''}
     `;
+    card.querySelector('input').addEventListener('change', ()=>{/* placeholder for future persistence */});
     wrapper.appendChild(card);
   });
   
@@ -3594,64 +3406,424 @@ function renderFmsCalibration(container) {
   container.appendChild(actions);
 }
 
-function validateFmsNeeds() {
-  const requiredCheckboxes = [...document.querySelectorAll('#fmsTabContent input[data-required="1"]')];
-  const missingCount = requiredCheckboxes.filter(checkbox => !checkbox.checked).length;
-  
-  if (missingCount === 0) {
-    alert('ممتاز ✅ — جميع متطلبات السلامة والمرافق الإلزامية مكتملة.');
-  } else {
-    alert(`⚠️ تنبيه: يوجد ${missingCount} متطلب(ات) إلزامي غير مكتمل في قسم السلامة والمرافق.`);
+// ============ معايرة الأجهزة (CAL) – نسخة محلية مع إحصاءات + جدول ثابت + نموذج ============
+function renderFmsCalibration(container) {
+  // أقسام / أجهزة / اختبارات افتراضية (يمكن لاحقًا تحميلها من الـ API إن رغبت)
+  const DEPT_LABEL = { RAD:'🩻 قسم الأشعة', LAB:'🧪 قسم المختبر', CSSD:'🧴 قسم التعقيم (CSSD)', ER:'⚡ قسم الطوارئ (ER)' };
+  const ASSETS_MAP = {
+    RAD: ['X-Ray','Portable X-Ray','Dental X-Ray','Mammogram','Ultrasound'],
+    LAB: ['Biochemistry Analyzer','Hematology Analyzer','Centrifuge','Micropipettes','Incubator','Refrigerator'],
+    CSSD: ['Autoclave (Steam)','Dry Heat Sterilizer','Sealing Machine','Ultrasonic Cleaner'],
+    ER: ['Defibrillator (DC Shock)','ECG Monitor','Suction Machine','Oxygen Flowmeter','Pulse Oximeter']
+  };
+  const TESTS_BY_ASSET = {
+    'X-Ray': ['kVp Accuracy','mAs Linearity','Exposure Reproducibility'],
+    'Portable X-Ray': ['Output Consistency','Timer Accuracy'],
+    'Dental X-Ray': ['Beam Alignment','kVp Accuracy'],
+    'Mammogram': ['AEC Performance','Contrast Resolution'],
+    'Ultrasound': ['Axial Resolution','Depth Calibration'],
+    'Biochemistry Analyzer': ['Precision (CV%)','Accuracy (Bias)'],
+    'Hematology Analyzer': ['Background Count','Linearity'],
+    'Centrifuge': ['RPM Accuracy','Timer Accuracy'],
+    'Micropipettes': ['Volume Accuracy','Leak Test'],
+    'Incubator': ['Temperature Stability','Uniformity'],
+    'Refrigerator': ['Temperature Mapping','Alarm Check'],
+    'Autoclave (Steam)': ['Bowie-Dick Test','Biological Indicator'],
+    'Dry Heat Sterilizer': ['Temp Uniformity','Timer Accuracy'],
+    'Sealing Machine': ['Seal Integrity','Temp Setting'],
+    'Ultrasonic Cleaner': ['Cavitation Test','Timer Accuracy'],
+    'Defibrillator (DC Shock):':['Energy Output','Charging Time'],
+    'ECG Monitor': ['Heart Rate Accuracy','Alarm Function'],
+    'Suction Machine': ['Vacuum Pressure','Flow Rate'],
+    'Oxygen Flowmeter': ['Flow Accuracy','Leak Test'],
+    'Pulse Oximeter': ['SpO2 Accuracy','Probe Check']
+  };
+  const FREQ_OPTIONS = [
+    {label:'أسبوعي', months:0, days:7},
+    {label:'شهري', months:1, days:0},
+    {label:'ربع سنوي (3 أشهر)', months:3, days:0},
+    {label:'نصف سنوي (6 أشهر)', months:6, days:0},
+    {label:'سنوي', months:12, days:0}
+  ];
+  const KEY = 'fms_calibration_records';
+
+  // كاش محلي
+  function safeParseLocal(k){ try{ return JSON.parse(localStorage.getItem(k)||'[]'); } catch(_){ return []; } }
+  function toISO(d){ return new Date(d).toISOString().slice(0,10); }
+  function daysLeftStr(iso){
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const dl = Math.floor((d - new Date())/(1000*3600*24));
+    if (isNaN(dl)) return '—';
+    return dl >= 0 ? `${dl} يوم` : `متأخر ${Math.abs(dl)} يوم`;
   }
-}
 
-function generateFmsReport() {
-  const checkboxes = [...document.querySelectorAll('#fmsTabContent input[type="checkbox"]')];
-  const checkedCount = checkboxes.filter(checkbox => checkbox.checked).length;
-  const totalCount = checkboxes.length;
-  const percentage = Math.round((checkedCount / totalCount) * 100);
-  
-  alert(`📋 تقرير جاهزية السلامة والمرافق:\n\n✅ ${checkedCount} من ${totalCount} بند مكتمل\n📊 نسبة الإكمال: ${percentage}%\n\n${percentage >= 80 ? 'مستوى جيد ✓' : 'يحتاج إلى تحسين ⚠️'}`);
-}
+  // إحصاءات من الكاش
+  const cache = safeParseLocal(KEY);
+  const counters = { pass:0, fail:0, upcoming:0, overdue:0, nosched:0 };
+  const now = new Date();
+  cache.forEach(r=>{
+    const res = (r.result||'').toLowerCase();
+    if (res==='pass') counters.pass++;
+    else if (res==='fail') counters.fail++;
+    const nd = r.next_due ? new Date(r.next_due) : null;
+    if (!nd) counters.nosched++;
+    else {
+      const dl = Math.floor((nd - now)/(1000*3600*24));
+      if (dl<0) counters.overdue++;
+      else if (dl<=30) counters.upcoming++;
+    }
+  });
 
-  // ====== إدارة التمرير ======
-  function setupScrollTop() {
-    const scrollBtn = document.getElementById('scrollTopBtn');
-    window.addEventListener('scroll', () => {
-      scrollBtn.style.display = window.scrollY > 300 ? 'grid' : 'none';
+  container.innerHTML = `
+    <div class="space-y-6">
+
+      <!-- شريط علوي: زر فتح سجل Google وشرح مختصر -->
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div class="text-sm text-gray-700">
+          عند الحفظ: تُنشأ شهادة PDF تلقائيًا وتُرفع إلى مجلد القسم الصحيح في Google Drive، ويُسجل السجل في Google Sheet.
+        </div>
+        <a href="${CAL_SHEET_URL}" target="_blank" rel="noopener noreferrer"
+           class="px-3 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">
+          📄 فتح “سجل معايرة الأجهزة”
+        </a>
+      </div>
+
+      <!-- لوحة الإحصاءات -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">✅ Pass</div>
+          <div class="text-3xl font-extrabold text-green-600" id="calStatPass">${counters.pass}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">❌ Fail</div>
+          <div class="text-3xl font-extrabold text-red-600" id="calStatFail">${counters.fail}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">⏳ خلال 30 يوم</div>
+          <div class="text-3xl font-extrabold text-amber-600" id="calStatUpcoming">${counters.upcoming}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">⚠️ متأخر</div>
+          <div class="text-3xl font-extrabold text-rose-600" id="calStatOverdue">${counters.overdue}</div>
+        </div>
+        <div class="p-4 rounded-xl border bg-white">
+          <div class="text-sm text-gray-600 mb-1">— بلا موعد</div>
+          <div class="text-3xl font-extrabold text-gray-800" id="calStatNosched">${counters.nosched}</div>
+        </div>
+      </div>
+
+      <!-- جدول ثابت للأقسام -->
+      <div class="calibration-table-wrapper" dir="rtl" style="background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 10px rgba(0,0,0,0.08);max-width:1100px;margin:0 auto;">
+        <h2 style="text-align:center;color:#7B1E24;font-weight:700;margin-bottom:20px;border-bottom:3px solid #E9C46A;display:inline-block;padding-bottom:6px;">
+          🧾 جدول معايرة الأجهزة الطبية – مجمع مكة الطبي بالزاهر (الإصدار 2025)
+        </h2>
+        <table class="calibration-table" style="width:100%;border-collapse:collapse;text-align:center;direction:rtl;">
+          <thead>
+            <tr>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">القسم</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">الأجهزة</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">التكرار</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">المسؤول</th>
+              <th style="background:#7B1E24;color:#E9C46A;padding:12px;border-bottom:2px solid #E9C46A;">الجهة/التوثيق</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="background:#faf7f6;padding:10px;font-weight:bold;color:#7B1E24;">🩻 الأشعة</td><td style="background:#faf7f6;padding:10px;">X-Ray / Portable / Dental / Mammogram / Ultrasound</td><td style="background:#faf7f6;padding:10px;">سنويًا</td><td style="background:#faf7f6;padding:10px;">أ. بلال نتو</td><td style="background:#faf7ف6;padding:10px;">NRRC – LOG-FMS-2025-021</td></tr>
+            <tr><td style="background:#fdf9f7;padding:10px;font-weight:bold;color:#7B1E24;">🧪 المختبر</td><td style="background:#fdf9f7;padding:10px;">Biochem / Heme / Centrifuge / Micropipettes / Incubator / Refrigerator</td><td style="background:#fdf9f7;padding:10px;">نصف سنوي/سنوي</td><td style="background:#fdf9f7;padding:10px;">أ. هيثم الجعلي</td><td style="background:#fdf9f7;padding:10px;">FMS Approved Vendors – LOG-FMS-2025-020</td></tr>
+            <tr><td style="background:#faf7f6;padding:10px;font-weight:bold;color:#7B1E24;">🧴 CSSD</td><td style="background:#faf7f6;padding:10px;">Autoclave / Dry Heat / Sealer / Ultrasonic</td><td style="background:#faf7f6;padding:10px;">سنويًا</td><td style="background:#faf7f6;padding:10px;">د. مجدي عسكر</td><td style="background:#faf7f6;padding:10px;">Indicators – LOG-FMS-2025-022</td></tr>
+            <tr><td style="background:#fdf9f7;padding:10px;font-weight:bold;color:#7B1E24;">⚡ الطوارئ</td><td style="background:#fdf9f7;padding:10px;">Defib / ECG / Suction / O2 Flow / PulseOx</td><td style="background:#fdf9f7;padding:10px;">سنوي + يومي</td><td style="background:#fdf9f7;padding:10px;">د. معاذ البيوش</td><td style="background:#fdf9f7;padding:10px;">FMS+EOC – LOG-FMS-2025-023</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- النموذج -->
+      <div class="border rounded-xl p-4 bg-white">
+        <h4 class="font-bold mb-3">➕ إضافة سجل معايرة</h4>
+        <form id="fmsCalForm" class="grid grid-cols-1 md:grid-cols-2 gap-4" novalidate>
+          <div>
+            <label class="block text-sm font-semibold mb-1">القسم *</label>
+            <select name="department" id="calDept" required class="w-full border rounded-lg px-3 py-2">
+              <option value="">اختر القسم</option>
+              <option value="RAD">🩻 قسم الأشعة</option>
+              <option value="LAB">🧪 قسم المختبر</option>
+              <option value="CSSD">🧴 قسم التعقيم (CSSD)</option>
+              <option value="ER">⚡ قسم الطوارئ (ER)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1">اسم المسؤول *</label>
+            <input name="staff" id="calStaff" list="staffList" required class="w-full border rounded-lg px-3 py-2" placeholder="اختر/اكتب الاسم">
+            <datalist id="staffList"></datalist>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1">الجهاز *</label>
+            <select name="asset" id="calAsset" required class="w-full border rounded-lg px-3 py-2">
+              <option value="">اختر الجهاز</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1">نوع الاختبار *</label>
+            <select name="test_name" id="calTest" required class="w-full border rounded-lg px-3 py-2">
+              <option value="">اختر نوع الاختبار</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1">تاريخ المعايرة *</label>
+            <input type="date" name="date" id="calDate" required class="w-full border rounded-lg px-3 py-2">
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1">التكرار *</label>
+            <select name="frequency" id="calFreq" required class="w-full border rounded-lg px-3 py-2">
+              ${FREQ_OPTIONS.map((f,i)=>`<option value="${i}">${f.label}</option>`).join('')}
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-1">النتيجة *</label>
+            <select name="result" id="calResult" required class="w-full border rounded-lg px-3 py-2">
+              <option value="Pass">Pass (مطابق)</option>
+              <option value="Fail">Fail (غير مطابق)</option>
+            </select>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-sm font-semibold mb-1">الموقع (غرفة/رمز)</label>
+            <input name="location" id="calLocation" list="roomList" class="w-full border rounded-lg px-3 py-2" placeholder="مثال: XR-01 / LAB-INC-02">
+            <datalist id="roomList"></datalist>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-sm font-semibold mb-1">رفع صورة/ملف الشهادة (اختياري)</label>
+            <input type="file" id="calPhoto" accept=".pdf,image/*" class="w-full">
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-sm font-semibold mb-1">ملاحظات</label>
+            <textarea name="notes" id="calNotes" rows="2" class="w-full border rounded-lg px-3 py-2"></textarea>
+          </div>
+
+          <div class="md:col-span-2 flex items-center gap-3">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">💾 حفظ السجل</button>
+            <span id="fmsCalMsg" class="text-sm"></span>
+          </div>
+        </form>
+      </div>
+
+      <!-- آخر السجلات -->
+      <div class="border rounded-xl p-4 bg-white">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-bold">🗂️ آخر السجلات</h4>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-700">تصفية حسب القسم:</label>
+            <select id="calFilterDept" class="border rounded-lg px-2 py-1">
+              <option value="">الكل</option>
+              <option value="RAD">الأشعة</option>
+              <option value="LAB">المختبر</option>
+              <option value="CSSD">التعقيم</option>
+              <option value="ER">الطوارئ</option>
+            </select>
+            <button id="calPrint" class="px-3 py-1 rounded bg-[var(--brand1)] text-white hover:bg-[var(--brand2)]">🖨️ طباعة</button>
+          </div>
+        </div>
+        <div class="overflow-auto">
+          <table class="table w-full" id="calTable">
+            <thead>
+              <tr>
+                <th>القسم</th><th>الجهاز</th><th>الاختبار</th><th>التاريخ</th><th>النتيجة</th><th>الموعد القادم</th><th>الشهادة</th>
+              </tr>
+            </thead>
+            <tbody id="calTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // تعبئة Staff/Rooms (اختياريًا يمكنك لاحقًا جلبها من API bootstrap)
+  // هنا نحافظ على المرونة: تقدر تكتب الاسم يدويًا أو تختاره من datalist
+  const staffList = container.querySelector('#staffList');
+  ['أ. بلال نتو','أ. هيثم الجعلي','د. مجدي عسكر','د. معاذ البيوش','أ. عدنان الرفاعي'].forEach(n=>{
+    const o=document.createElement('option'); o.value=n; staffList.appendChild(o);
+  });
+
+  const roomList = container.querySelector('#roomList');
+  // خيارين: أ) إدخال يدوي، ب) استدعاء غرف من شيت (لو لاحقًا فعّلنا bootstrap rooms)
+  ['XR-01','XR-02','LAB-INC-01','LAB-HEM-01','CSSD-AUTO-01','ER-TRIAGE-01'].forEach(r=>{
+    const o=document.createElement('option'); o.value=r; roomList.appendChild(o);
+  });
+
+  // ربط قوائم الأجهزة/الاختبارات
+  const deptSel = container.querySelector('#calDept');
+  const assetSel = container.querySelector('#calAsset');
+  const testSel  = container.querySelector('#calTest');
+
+  deptSel.addEventListener('change', ()=>{
+    const d = deptSel.value;
+    assetSel.innerHTML = `<option value="">اختر الجهاز</option>` + (ASSETS_MAP[d]||[]).map(a=>`<option value="${a}">${a}</option>`).join('');
+    testSel.innerHTML = `<option value="">اختر نوع الاختبار</option>`;
+  });
+  assetSel.addEventListener('change', ()=>{
+    const a = assetSel.value;
+    const tests = TESTS_BY_ASSET[a] || ['وظائف أساسية','اختبار عام'];
+    testSel.innerHTML = `<option value="">اختر نوع الاختبار</option>` + tests.map(t=>`<option value="${t}">${t}</option>`).join('');
+  });
+
+  // أدوات داخلية
+  function refreshCalStats(root){
+    const all = safeParseLocal(KEY);
+    const now  = new Date();
+    let pass=0, fail=0, up=0, od=0, ns=0;
+    all.forEach(r=>{
+      const res=(r.result||'').toLowerCase();
+      if (res==='pass') pass++; else if (res==='fail') fail++;
+      const nd=r.next_due?new Date(r.next_due):null;
+      if (!nd) ns++;
+      else { const dl=Math.floor((nd-now)/(1000*3600*24)); if(dl<0) od++; else if(dl<=30) up++; }
+    });
+    root.querySelector('#calStatPass').textContent = pass;
+    root.querySelector('#calStatFail').textContent = fail;
+    root.querySelector('#calStatUpcoming').textContent = up;
+    root.querySelector('#calStatOverdue').textContent = od;
+    root.querySelector('#calStatNosched').textContent = ns;
+  }
+  function fillCalTable(root, data){
+    const tb = root.querySelector('#calTbody'); tb.innerHTML='';
+    if (!data.length){ tb.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-3">لا توجد سجلات.</td></tr>`; return; }
+    data.slice().reverse().forEach(r=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td>${DEPT_LABEL[r.department]||r.department||'—'}</td>
+        <td>${r.asset||'—'}</td>
+        <td>${r.test_name||'—'}</td>
+        <td>${r.date||'—'}</td>
+        <td class="${(r.result||'').toLowerCase()==='pass'?'good':'critical'}">${r.result||'—'}</td>
+        <td>${r.next_due||'—'} <div class="text-xs text-gray-500">${daysLeftStr(r.next_due)}</div></td>
+        <td>${r.certificate_name?`<span class="px-2 py-1 rounded bg-gray-100">${r.certificate_name}</span>`:'—'}</td>`;
+      tb.appendChild(tr);
     });
   }
 
-  // ====== تهيئة الصفحة عند التحميل ======
-  document.addEventListener('DOMContentLoaded', () => {
-    // تهيئة مكتبة RM عند التحميل
-    try { 
-      if (document.getElementById('rmLib')) { renderRMLibrary(); } 
-    } catch (e) { console.warn('RM init skipped:', e); }
-    
-    // تهيئة إدارة الشعار
-    setupLogoChange();
-    loadSavedLogo();
-    
-    // تهيئة التمرير للأعلى
-    setupScrollTop();
-// تهيئة التنقل (نسخة محسنة)
-    if (window.location.hash) {
-      const targetSection = window.location.hash.substring(1);
-      // التحقق أن الرابط صحيح وموجود
-      if (document.getElementById(targetSection)) {
-        navTo(targetSection);
-      } else {
-        // إذا كان الرابط خطأ، اذهب للرئيسية
-        window.location.hash = '#home'; // تعديل الرابط
-        navTo('home');
-      }
-    } else {
-      // إذا لا يوجد رابط، اذهب للرئيسية
-      navTo('home');
-    }
+  // حفظ السجل (يرسل لـ Apps Script + يحفَظ ككاش)
+  const form = container.querySelector('#fmsCalForm');
+  const msg  = container.querySelector('#fmsCalMsg');
+  const photoInput = container.querySelector('#calPhoto');
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    msg.textContent='⏳ جارٍ الحفظ...'; msg.className='text-sm text-blue-600';
+
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+
+    // حساب NextDue
+    const date = payload.date ? new Date(payload.date) : new Date();
+    const freq = FREQ_OPTIONS[ Number(payload.frequency) ] || FREQ_OPTIONS[4];
+    const next = new Date(date);
+    if (freq.months) next.setMonth(next.getMonth()+freq.months);
+    if (freq.days)   next.setDate(next.getDate()+freq.days);
+
+    // تجهيز مرفق الشهادة (اختياري) → base64
+    let certificate = null;
+    const f = photoInput.files[0];
+    if (f){
+      certificate = await new Promise((resolve,reject)=>{
+        const fr=new FileReader();
+        fr.onload=()=>resolve({
+          filename:f.name, mime:f.type,
+          base64: String(fr.result).split(',')[1]
+        });
+        fr.onerror=reject; fr.readAsDataURL(f);
+      });
+    }
+
+    // تحويل القسم إلى Category لغرض توجيه الشهادة لمجلد القسم في Apps Script
+    // NOTE: Apps Script يستخدم FOLDER_MAP = {RAD,LAB,ER,CSSD}
+    const Category = payload.department; // RAD/LAB/ER/CSSD
+
+    // بناء الجسم لنداء Apps Script
+    const body = {
+      action: 'createCalibration',
+      token:  CAL_API_TOKEN,
+      // حقول الأجهزة (لو عندك AssetID/Subtype/RoomCode من Devices Sheet يمكنك إلحاقها)
+      Department: DEPT_LABEL[payload.department] || payload.department,
+      Staff:      payload.staff,
+      AssetID:    '',               // إن توفر لديك رقم أصل من Devices Sheet
+      DeviceName: payload.asset,
+      Category:   Category,         // مهم لتوجيه المجلد الصحيح
+      Subtype:    '',               // إن رغبت مستقبلاً
+      RoomCode:   payload.location, // أو رمز الغرفة
+      RoomName:   '',
+      Date:       toISO(date),
+      TestName:   payload.test_name,
+      Result:     payload.result,
+      Notes:      payload.notes || '',
+      CalibrationFreqMonths: freq.months? (freq.months) : (freq.days? Math.round(freq.days/30) : 12),
+      certificate // {filename,mime,base64} أو null
+    };
+
+    // النداء
+    try{
+      const res = await fetch(CAL_API_URL, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      if (data.status!=='success') throw new Error(data.message||'فشل غير معروف');
+
+      // خزّن نسخة كاش محليًا لعرضها فورًا
+      const rec = {
+        department: payload.department,
+        staff: payload.staff,
+        asset: payload.asset,
+        test_name: payload.test_name,
+        date: toISO(date),
+        result: payload.result,
+        certificate_name: (f && f.name) ? f.name : '',
+        location: payload.location || '',
+        notes: payload.notes || '',
+        next_due: data.nextDue || toISO(next),
+        frequency: freq.label,
+        timestamp: new Date().toISOString()
+      };
+      const all = safeParseLocal(KEY); all.push(rec);
+      localStorage.setItem(KEY, JSON.stringify(all));
+
+      // تحديث الواجهة
+      refreshCalStats(container);
+      fillCalTable(container, all);
+
+      msg.textContent = '✅ تم الحفظ وإنشاء الشهادة وكتابة السجل في Google Sheet';
+      msg.className   = 'text-sm text-green-600';
+      form.reset(); photoInput.value='';
+      assetSel.innerHTML=`<option value="">اختر الجهاز</option>`; testSel.innerHTML=`<option value="">اختر نوع الاختبار</option>`;
+    }catch(err){
+      msg.textContent='❌ '+err.message;
+      msg.className='text-sm text-red-600';
+    }
   });
+
+  // تعبئة جدول السجلات من الكاش الحالي
+  fillCalTable(container, cache);
+
+  // فلترة + طباعة
+  container.querySelector('#calFilterDept').addEventListener('change', (e)=>{
+    const v=e.target.value; const all=safeParseLocal(KEY);
+    const filtered = v ? all.filter(r=>r.department===v) : all;
+    fillCalTable(container, filtered);
+  });
+  container.querySelector('#calPrint').addEventListener('click', ()=>window.print());
+}
 </script>
+
+
 <!-- سكربت سجل التدريب (نهائي ونظيف) -->
 <script>
 document.addEventListener("DOMContentLoaded", async () => {
