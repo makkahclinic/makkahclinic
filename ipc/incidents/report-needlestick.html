@@ -173,14 +173,92 @@
       else if(pass!==null){alert('❌ كلمة السر غير صحيحة.');}
     });
 
-    async function loadData(){
-      const res=await fetch(`${WEB_APP_URL}?action=data&callback=cb_${Date.now()}`);
-      const txt=await res.text();
-      const m=txt.match(/\((.*)\)$/);
-      if(!m)return;
-      const data=JSON.parse(m[1]);
-      if(data.status==='success'){renderChart(data.rows);renderTable(data.rows);}
+    // === تحميل البيانات من Google Sheet ===
+async function loadData() {
+  try {
+    const res = await fetch(`${WEB_APP_URL}?action=data&callback=cb_${Date.now()}`);
+    const text = await res.text();
+    const jsonMatch = text.match(/\((.*)\)$/);
+    if (!jsonMatch) throw new Error("ردّ غير صالح من الخادم");
+    const data = JSON.parse(jsonMatch[1]);
+    if (data.status === "success" && Array.isArray(data.rows)) {
+      console.log("✅ البيانات وصلت:", data.rows.length);
+      renderChart(data.rows);
+      renderTable(data.rows);
+    } else {
+      console.warn("⚠️ لا توجد بيانات صالحة للعرض");
     }
+  } catch (err) {
+    console.error("🚨 خطأ أثناء تحميل البيانات:", err);
+  }
+}
+
+// === رسم المخطط العمودي ===
+function renderChart(rows) {
+  if (!rows.length) return;
+  const ctx = document.getElementById('chart').getContext('2d');
+  const types = { needle: 0, blood: 0, mucosal: 0 };
+  let severe = 0;
+
+  rows.forEach(r => {
+    const type = (r["نوع التعرض"] || "").trim().toLowerCase();
+    const contaminated = (r["هل كانت ملوثة؟"] || "").trim();
+    if (type && types.hasOwnProperty(type)) types[type]++;
+    if (contaminated === "نعم") severe++;
+  });
+
+  if (window.chart) window.chart.destroy();
+
+  window.chart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["وخزي", "دموي", "مخاطي"],
+      datasets: [
+        {
+          label: "عدد الحالات",
+          data: Object.values(types),
+          backgroundColor: ["#7B1E24", "#C55A44", "#E9C46A"],
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: {
+          display: true,
+          text: `إجمالي ${rows.length} بلاغ منها ${severe} خطيرة`,
+          color: "#7B1E24",
+          font: { size: 18 }
+        },
+        legend: { display: false }
+      },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
+
+  // حركة نبض
+  const canvas = document.getElementById("chart");
+  canvas.classList.remove("pulse");
+  void canvas.offsetWidth;
+  canvas.classList.add("pulse");
+}
+
+// === عرض الجدول ===
+function renderTable(rows) {
+  const container = document.getElementById("dataTable");
+  if (!rows.length) {
+    container.innerHTML = "<p class='text-center text-gray-600'>لا توجد بيانات حالياً</p>";
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  let html = `<div class="overflow-x-auto"><table class="min-w-full border text-sm text-center">
+    <thead><tr>${headers.map(h=>`<th class="border bg-[var(--gold)] text-[var(--maroon)] p-2">${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td class="border p-1">${r[h]||""}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+  container.innerHTML = html;
+}
+
 
     function renderChart(rows){
       const ctx=document.getElementById('chart').getContext('2d');
