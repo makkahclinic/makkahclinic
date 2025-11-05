@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوابة سباهي | سجل معايرة الأجهزة (CAL) - مجمع مكة الطبي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        // Tailwind Configuration
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'cbahi-blue': '#00529B',
+                        'cbahi-gold': '#E9C46A',
+                        'cbahi-green': '#28a745',
+                        'cbahi-red': '#dc3545',
+                        'cbahi-orange': '#f59e0b',
+                    },
+                    fontFamily: {
+                        sans: ['Tajawal', 'sans-serif'],
+                    },
+                    // 💡 المؤشرات المرئية (Visual Indicators)
+                    boxShadow: {
+                        'gold-glow': '0 0 15px rgba(233, 196, 106, 0.5)',
+                    },
+                    keyframes: {
+                        // عند “Fail” أو "Overdue" يظهر لون أحمر/برتقالي نابض خفيف.
+                        'pulsating-alert': {
+                            '0%, 100%': { boxShadow: '0 0 5px rgba(220, 53, 69, 0.5)' },
+                            '50%': { boxShadow: '0 0 20px rgba(220, 53, 69, 0.8)' },
+                        },
+                        // مؤشر بصري ذهبي متوهج يظهر عند اقتراب موعد المعايرة
+                        'upcoming-glow': {
+                            '0%, 100%': { backgroundColor: 'rgba(233, 196, 106, 0.1)' },
+                            '50%': { backgroundColor: 'rgba(233, 196, 106, 0.3)' },
+                        }
+                    },
+                    animation: {
+                        'pulsate-alert': 'pulsating-alert 2s infinite',
+                        'upcoming-glow': 'upcoming-glow 3s infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Styles for Circular Progress Charts */
+        .circular-chart {
+            display: block;
+            margin: 10px auto;
+        }
+        .circle-bg {
+            fill: none;
+            stroke: #eee;
+            stroke-width: 3.8;
+        }
+        .circle {
+            fill: none;
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.6s ease;
+            /* Ensure the progress starts from the top (12 o'clock) */
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .percentage {
+            fill: #666;
+            font-family: 'Tajawal', sans-serif;
+            text-anchor: middle;
+            font-weight: bold;
+        }
+        /* Row highlight for upcoming calibrations */
+        .row-upcoming {
+            border-right: 4px solid #E9C46A;
+        }
+
+        /* Print Stylesheet */
+        @media print {
+            body { background-color: white; }
+            header, #smart-alert-banner, #dashboard-kpis, #compliance-indicators, #form-container, #table-controls, .shadow-md, .shadow-lg {
+                display: none !important;
+            }
+            #table-container {
+                display: block !important;
+                box-shadow: none;
+                width: 100%; margin: 0; padding: 0;
+            }
+            table { font-size: 10pt; border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ccc; padding: 5px; }
+            .row-upcoming, .bg-red-50 { -webkit-print-color-adjust: exact; color-adjust: exact; }
+            .row-upcoming { background-color: rgba(233, 196, 106, 0.1) !important; animation: none !important; }
+            .bg-red-50 { background-color: rgba(220, 53, 69, 0.1) !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+    <section id="fms-calibration" class="container mx-auto p-4 md:p-8">
+        
+        <header class="mb-6 p-4 bg-white shadow-md rounded-lg text-center">
+            <h1 class="text-2xl font-bold text-cbahi-blue">نظام إدارة معايرة الأجهزة (CAL Log)</h1>
+            <p class="text-gray-600">مجمع مكة الطبي بالزاهر - بوابة سباهي الإلكترونية</p>
+        </header>
+
+        <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin text-4xl text-cbahi-blue"></i>
+                <p class="mt-2">جاري التحميل والمعالجة...</p>
+            </div>
+        </div>
+
+        <div id="smart-alert-banner" class="hidden mb-6 p-4 bg-yellow-100 border-r-4 border-cbahi-gold text-yellow-800 rounded-lg shadow-sm">
+            <p id="alert-message" class="font-semibold"></p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            
+            <div class="lg:col-span-2" id="dashboard-kpis">
+                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 shadow-gold-glow bg-white p-5 rounded-lg border-t-4 border-cbahi-gold">
+                    <div id="kpi-pass" class="text-center p-3 bg-green-50 rounded-lg transition duration-300 hover:shadow-md">
+                        <i class="fas fa-check-circle text-3xl text-cbahi-green mb-2"></i>
+                        <p class="text-2xl font-bold" id="count-pass">0</p>
+                        <p class="text-sm text-gray-600">✅ مطابق (Pass)</p>
+                    </div>
+                    <div id="kpi-fail" class="text-center p-3 bg-red-50 rounded-lg transition duration-300 hover:shadow-md">
+                        <i class="fas fa-times-circle text-3xl text-cbahi-red mb-2"></i>
+                        <p class="text-2xl font-bold" id="count-fail">0</p>
+                        <p class="text-sm text-gray-600">❌ غير مطابق (Fail)</p>
+                    </div>
+                    <div id="kpi-overdue" class="text-center p-3 bg-orange-50 rounded-lg transition duration-300 hover:shadow-md">
+                        <i class="fas fa-exclamation-circle text-3xl text-cbahi-orange mb-2"></i>
+                        <p class="text-2xl font-bold" id="count-overdue">0</p>
+                        <p class="text-sm text-gray-600">⚠️ متأخر (Overdue)</p>
+                    </div>
+                    <div id="kpi-upcoming" class="text-center p-3 bg-yellow-50 rounded-lg transition duration-300 hover:shadow-md">
+                        <i class="fas fa-hourglass-half text-3xl text-cbahi-gold mb-2"></i>
+                        <p class="text-2xl font-bold" id="count-upcoming">0</p>
+                        <p class="text-sm text-gray-600">⏳ قادم (30 يوم)</p>
+                    </div>
+                    <div id="kpi-unscheduled" class="text-center p-3 bg-gray-100 rounded-lg transition duration-300 hover:shadow-md">
+                        <i class="fas fa-calendar-times text-3xl text-gray-500 mb-2"></i>
+                        <p class="text-2xl font-bold" id="count-unscheduled">0</p>
+                        <p class="text-sm text-gray-600">🕓 بدون موعد</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-md" id="compliance-indicators">
+                <h2 class="text-lg font-semibold mb-4 text-cbahi-blue">مؤشرات الالتزام (Compliance)</h2>
+                <div class="flex justify-center items-center mb-6">
+                    <div id="overall-compliance-chart" class="w-32 h-32">
+                        </div>
+                </div>
+                <h2 class="text-md font-semibold mb-3 text-center">التزام الأقسام</h2>
+                <div class="grid grid-cols-4 gap-2 text-center" id="department-compliance">
+                    </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <div class="lg:col-span-1" id="form-container">
+                <div class="bg-white p-6 rounded-lg shadow-md sticky top-8">
+                    <h2 class="text-xl font-bold mb-5 border-b pb-2 text-cbahi-blue">إضافة سجل جديد</h2>
+                    <form id="calibration-form">
+                        <div class="space-y-4">
+                            
+                            <div>
+                                <label for="department" class="block text-sm font-medium text-gray-700 mb-1">القسم <span class="text-red-500">*</span></label>
+                                <select id="department" name="department" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-cbahi-blue focus:border-cbahi-blue">
+                                    <option value="">اختر القسم...</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="staff" class="block text-sm font-medium text-gray-700 mb-1">اسم المسؤول <span class="text-red-500">*</span></label>
+                                <input type="text" id="staff" name="staff" required list="staff-list" placeholder="ادخل اسم المسؤول أو اختره" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-cbahi-blue focus:border-cbahi-blue">
+                                <datalist id="staff-list"></datalist>
+                            </div>
+
+                            <div>
+                                <label for="asset" class="block text-sm font-medium text-gray-700 mb-1">المهمة / الجهاز (Task) <span class="text-red-500">*</span></label>
+                                <select id="asset" name="asset" required disabled class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 focus:outline-none focus:ring-cbahi-blue focus:border-cbahi-blue">
+                                    <option value="">اختر القسم أولاً...</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="testDate" class="block text-sm font-medium text-gray-700 mb-1">تاريخ الفحص <span class="text-red-500">*</span></label>
+                                <input type="date" id="testDate" name="testDate" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-cbahi-blue focus:border-cbahi-blue">
+                            </div>
+
+                            <div>
+                                <label for="frequency" class="block text-sm font-medium text-gray-700 mb-1">التكرار <span class="text-red-500">*</span></label>
+                                <select id="frequency" name="frequency" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-cbahi-blue focus:border-cbahi-blue">
+                                    <option value="">اختر التكرار...</option>
+                                    <option value="أسبوعي">أسبوعي (Weekly)</option>
+                                    <option value="شهري">شهري (Monthly)</option>
+                                    <option value="نصف سنوي">نصف سنوي (Semi-Annually)</option>
+                                    <option value="سنوي">سنوي (Annually)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="nextDue" class="block text-sm font-medium text-gray-700 mb-1">تاريخ الاستحقاق القادم</label>
+                                <input type="date" id="nextDue" name="nextDue" readonly class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">النتيجة <span class="text-red-500">*</span></label>
+                                <div class="flex items-center space-x-4 rtl:space-x-reverse">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" name="result" value="Pass" required class="form-radio h-4 w-4 text-cbahi-green">
+                                        <span class="mr-2 text-cbahi-green font-semibold">✅ مطابق (Pass)</span>
+                                    </label>
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" name="result" value="Fail" class="form-radio h-4 w-4 text-cbahi-red">
+                                        <span class="mr-2 text-cbahi-red font-semibold">❌ غير مطابق (Fail)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="certificateFile" class="block text-sm font-medium text-gray-700 mb-1">رفع التقرير (PDF/صورة) <span class="text-red-500">*</span></label>
+                                <input type="file" id="certificateFile" name="certificateFile" accept="application/pdf,image/*" required class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cbahi-blue file:text-white hover:file:bg-blue-800">
+                                <p id="file-status" class="text-xs text-gray-500 mt-1"></p>
+                            </div>
+
+                            <button type="submit" id="submit-btn" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-cbahi-blue hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cbahi-blue transition duration-150 ease-in-out">
+                                <i class="fas fa-save ml-2"></i> حفظ السجل ورفع التقرير
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="bg-white p-6 rounded-lg shadow-md" id="table-container">
+                    <div class="flex justify-between items-center mb-4" id="table-controls">
+                        <h2 class="text-xl font-bold text-cbahi-blue">سجل المعايرات والفحوصات</h2>
+                        <div class="flex items-center space-x-3 rtl:space-x-reverse">
+                            <input type="text" id="search-input" placeholder="بحث في السجلات..." class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-cbahi-blue focus:border-cbahi-blue text-sm">
+                            <button id="print-btn" onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition duration-150 ease-in-out text-sm">
+                                <i class="fas fa-print ml-1"></i> طباعة
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200" id="logs-table">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الوقت</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">القسم</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المسؤول</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المهمة/الجهاز</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">تاريخ الفحص</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاستحقاق</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">النتيجة</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">التقرير</th>
+                                </tr>
+                            </thead>
+                            <tbody id="log-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr><td colspan="8" class="text-center py-4">جاري تحميل البيانات...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </section>
+
+    <script>
+        // ================================================================
+        // ⚙️ السكربت والتكامل (JavaScript Logic) - Final Version
+        // ================================================================
+
+        // --- Configuration ---
+        
+        // 🔴🔴🔴 هام جدًا: استبدل هذا الرابط برابط الـ API (Web app URL) الذي حصلت عليه بعد نشر Google Apps Script 🔴🔴🔴
+        const CAL_API_URL = 'ضع_رابط_API_الجديد_هنا';
+        
+        // تم ضبط النظام على الوضع الفعلي (LIVE MODE)
+        const MOCK_MODE = false; 
+
+        // --- Global State ---
+        let assetsMap = {};
+        let staffList = [];
+        let allRecords = [];
+        let DEPARTMENTS_LIST = []; // سيتم ملؤها ديناميكيًا
+        let uploadedFileBase64 = null;
+        let uploadedFileMimeType = null;
+        let uploadedFileName = null;
+
+        // --- DOM Elements ---
+        const elements = {
+            loadingOverlay: document.getElementById('loading-overlay'),
+            form: document.getElementById('calibration-form'),
+            departmentSelect: document.getElementById('department'),
+            assetSelect: document.getElementById('asset'),
+            testDateInput: document.getElementById('testDate'),
+            frequencySelect: document.getElementById('frequency'),
+            nextDueInput: document.getElementById('nextDue'),
+            certificateFileInput: document.getElementById('certificateFile'),
+            fileStatus: document.getElementById('file-status'),
+            submitBtn: document.getElementById('submit-btn'),
+            tableBody: document.getElementById('log-table-body'),
+            searchInput: document.getElementById('search-input'),
+            staffDatalist: document.getElementById('staff-list'),
+            alertBanner: document.getElementById('smart-alert-banner'),
+            alertMessage: document.getElementById('alert-message'),
+        };
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', init);
+
+        async function init() {
+            console.log("Initializing Calibration System...");
+            
+            if (CAL_API_URL.includes('ضع_رابط_API_الجديد_هنا') && !MOCK_MODE) {
+                showLoading(false);
+                showNotification('خطأ في الإعداد: لم يتم تحديث رابط الـ API في الكود. يرجى مراجعة التعليمات.', 'error');
+                elements.tableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-red-500">النظام غير متصل. يرجى مراجعة الإعدادات.</td></tr>';
+                return;
+            }
+
+            setupEventListeners();
+            // Set default date input to today
+            elements.testDateInput.valueAsDate = new Date();
+            await fetchData();
+        }
+
+        function setupEventListeners() {
+            elements.departmentSelect.addEventListener('change', handleDepartmentChange);
+            elements.testDateInput.addEventListener('change', calculateNextDue);
+            elements.frequencySelect.addEventListener('change', calculateNextDue);
+            elements.certificateFileInput.addEventListener('change', handleFileUpload);
+            elements.form.addEventListener('submit', handleSubmit);
+            elements.searchInput.addEventListener('keyup', filterTable);
+        }
+
+        // --- Utility Functions ---
+        function showLoading(isLoading) {
+            elements.loadingOverlay.classList.toggle('hidden', !isLoading);
+        }
+
+        function toggleSubmitLoading(isLoading) {
+            elements.submitBtn.disabled = isLoading;
+            if (isLoading) {
+                elements.submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...';
+            } else {
+                elements.submitBtn.innerHTML = '<i class="fas fa-save ml-2"></i> حفظ السجل ورفع التقرير';
+            }
+        }
+
+        // دالة تنسيق التاريخ للعرض (YYYY-MM-DD)
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                // التعامل مع تواريخ ISO String القادمة من السكربت
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) return dateString;
+                // استخدام en-CA لضمان التنسيق YYYY-MM-DD بغض النظر عن إعدادات المستخدم
+                return date.toLocaleDateString('en-CA'); 
+            } catch (e) {
+                return dateString;
+            }
+        }
+        
+        // Helper to get today's date cleared of time for accurate comparison
+        function getTodayClear() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return today;
+        }
+
+        function showNotification(message, type = 'success') {
+            alert(`${type === 'success' ? '✅ نجاح' : '❌ خطأ'}: ${message}`);
+        }
+
+        // --- Data Fetching (GET) ---
+        async function fetchData(forceRefresh = false) {
+            showLoading(true);
+            try {
+                let data;
+                
+                console.log("Fetching LIVE data from API...");
+                // استخدام refresh=true لتجاوز التخزين المؤقت في السكربت إذا لزم الأمر
+                const url = forceRefresh ? `${CAL_API_URL}?refresh=true` : CAL_API_URL;
+                const response = await fetch(url);
+                
+                if (!response.ok) throw new Error(`Network response was not ok. Status: ${response.status}`);
+                
+                // التحقق من نوع المحتوى
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const text = await response.text();
+                    console.error("Received non-JSON response:", text);
+                    throw new Error("استجابة غير متوقعة من الخادم. تأكد من نشر السكربت بشكل صحيح (Web App).");
+                }
+                
+                data = await response.json();
+                
+                if (data && data.status === 'success') {
+                    assetsMap = data.data.assetsMap || {};
+                    staffList = data.data.staffList || [];
+                    
+                    // تحديد الأقسام ديناميكيًا من البيانات المسترجعة
+                    DEPARTMENTS_LIST = Object.keys(assetsMap);
+                    populateDepartments();
+
+                    // توحيد هيكل السجلات المسترجعة (مطابقة لعناوين CAL_Log Sheet)
+                    allRecords = (data.data.records || []).map(record => ({
+                        Timestamp: record.Timestamp,
+                        department: record.Department,
+                        staff: record.Staff,
+                        assetID: record.AssetID,
+                        assetName: record.AssetName,
+                        testDate: record.TestDate,
+                        frequency: record.Frequency,
+                        nextDue: record.NextDue,
+                        result: record.Result,
+                        CertificateLink: record.CertificateLink
+                    }));
+                    
+                    processData();
+                } else {
+                    throw new Error(data.message || 'Failed to fetch data structure.');
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showNotification(`فشل في جلب البيانات: ${error.message}`, 'error');
+                elements.tableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-red-500">حدث خطأ أثناء تحميل البيانات.</td></tr>';
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function processData() {
+            renderStaffList();
+            // Calculate statuses based on the latest record for each asset/task
+            const assetStatuses = calculateAssetStatuses(allRecords);
+            renderDashboard(assetStatuses);
+            renderTable(allRecords);
+            checkSmartAlerts(assetStatuses);
+        }
+
+        // --- Form Handlers ---
+
+        function populateDepartments() {
+            elements.departmentSelect.innerHTML = '<option value="">اختر القسم...</option>';
+            DEPARTMENTS_LIST.sort().forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept;
+                option.textContent = dept;
+                elements.departmentSelect.appendChild(option);
+            });
+        }
+
+        function handleDepartmentChange() {
+            const department = elements.departmentSelect.value;
+            elements.assetSelect.innerHTML = '<option value="">اختر المهمة/الجهاز...</option>';
+            
+            if (department && assetsMap[department]) {
+                // فرز المهام أبجديًا
+                const sortedAssets = assetsMap[department].sort((a, b) => a.name.localeCompare(b.name));
+                
+                sortedAssets.forEach(asset => {
+                    const option = document.createElement('option');
+                    option.value = asset.id;
+                    option.textContent = asset.name; 
+                    elements.assetSelect.appendChild(option);
+                });
+                elements.assetSelect.disabled = false;
+                elements.assetSelect.classList.remove('bg-gray-100');
+            } else {
+                elements.assetSelect.disabled = true;
+                elements.assetSelect.classList.add('bg-gray-100');
+            }
+        }
+
+        function calculateNextDue() {
+            const testDateValue = elements.testDateInput.value;
+            const frequency = elements.frequencySelect.value;
+
+            if (!testDateValue || !frequency) {
+                elements.nextDueInput.value = '';
+                return;
+            }
+
+            // لضمان الحساب الصحيح بغض النظر عن المنطقة الزمنية للمستخدم، نعالج التاريخ بناءً على الأجزاء المدخلة
+            const dateParts = testDateValue.split('-').map(p => parseInt(p, 10));
+            // الشهر في JavaScript يبدأ من 0 (يناير=0)
+            const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+
+            if (isNaN(date.getTime())) return;
+
+            let nextDate = new Date(date.getTime());
+
+            switch (frequency) {
+                case 'أسبوعي':
+                    nextDate.setDate(date.getDate() + 7);
+                    break;
+                case 'شهري':
+                    nextDate.setMonth(date.getMonth() + 1);
+                    break;
+                case 'نصف سنوي':
+                    nextDate.setMonth(date.getMonth() + 6);
+                    break;
+                case 'سنوي':
+                    nextDate.setFullYear(date.getFullYear() + 1);
+                    break;
+            }
+
+            // Format as YYYY-MM-DD باستخدام en-CA لضمان التنسيق
+            elements.nextDueInput.value = nextDate.toLocaleDateString('en-CA');
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            elements.fileStatus.textContent = '';
+            uploadedFileBase64 = null;
+
+            if (!file) return;
+
+            // Validate file type and size (10MB limit)
+            if (!file.type.match('application/pdf') && !file.type.match('image.*')) {
+                showNotification('يرجى رفع ملف PDF أو صورة فقط.', 'error');
+                event.target.value = '';
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) { // 10MB
+                showNotification('حجم الملف يتجاوز الحد المسموح (10 ميجابايت).', 'error');
+                event.target.value = '';
+                return;
+            }
+
+            elements.fileStatus.textContent = 'جاري معالجة الملف...';
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                uploadedFileBase64 = e.target.result.split(',')[1];
+                uploadedFileMimeType = file.type;
+                uploadedFileName = file.name;
+                elements.fileStatus.textContent = `تمت معالجة: ${file.name}`;
+            };
+            reader.onerror = function() {
+                showNotification('حدث خطأ أثناء قراءة الملف.', 'error');
+                elements.fileStatus.textContent = 'خطأ في المعالجة.';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // --- Submission Handler (POST) ---
+        async function handleSubmit(event) {
+            event.preventDefault();
+
+            if (!uploadedFileBase64) {
+                showNotification('يرجى التأكد من رفع التقرير ومعالجته بنجاح قبل الحفظ.', 'error');
+                return;
+            }
+
+            const formData = new FormData(elements.form);
+            
+            // استخراج اسم المهمة (TaskName)
+            const selectedAssetOption = elements.assetSelect.options[elements.assetSelect.selectedIndex];
+            const assetName = selectedAssetOption ? selectedAssetOption.textContent : 'Unknown Task';
+
+            const payload = {
+                action: "logCalibration",
+                data: {
+                    department: formData.get('department'),
+                    staff: formData.get('staff'),
+                    assetID: formData.get('asset'), // TaskID
+                    assetName: assetName,            // TaskName
+                    testDate: formData.get('testDate'),
+                    frequency: formData.get('frequency'),
+                    nextDue: formData.get('nextDue'),
+                    result: formData.get('result'),
+                },
+                fileData: {
+                    fileName: uploadedFileName, 
+                    mimeType: uploadedFileMimeType,
+                    base64: uploadedFileBase64,
+                }
+            };
+
+            toggleSubmitLoading(true);
+
+            try {
+                let responseData;
+                
+                console.log("LIVE Submission to API...");
+                // CRITICAL: Use 'text/plain' to avoid CORS preflight issues with Google Apps Script
+                const response = await fetch(CAL_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                // Robust response parsing
+                const responseText = await response.text();
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (e) {
+                    console.error("Failed to parse JSON response:", responseText);
+                    throw new Error('استجابة غير صالحة من الخادم (قد يكون هناك خطأ في السكربت الخلفي).');
+                }
+
+                if (responseData.status === 'success') {
+                    showNotification(responseData.message, 'success');
+                    
+                    // تحديث البيانات المحلية بالاستجابة الناجحة (تحسين الأداء)
+                    if (responseData.data && responseData.data.newRecord) {
+                        const newRecord = responseData.data.newRecord;
+                         // توحيد هيكل السجل الجديد
+                         allRecords.unshift({
+                            Timestamp: newRecord.Timestamp,
+                            department: newRecord.Department,
+                            staff: newRecord.Staff,
+                            assetID: newRecord.AssetID,
+                            assetName: newRecord.AssetName,
+                            testDate: newRecord.TestDate,
+                            frequency: newRecord.Frequency,
+                            nextDue: newRecord.NextDue,
+                            result: newRecord.Result,
+                            CertificateLink: newRecord.CertificateLink
+                        });
+                        processData(); // إعادة رسم الواجهة
+                    }
+
+                    // Reset form
+                    resetForm();
+                    
+                } else {
+                    throw new Error(responseData.message || 'فشل الحفظ في الواجهة الخلفية.');
+                }
+            } catch (error) {
+                console.error('Error submitting data:', error);
+                showNotification(`فشل في حفظ السجل: ${error.message}`, 'error');
+            } finally {
+                toggleSubmitLoading(false);
+            }
+        }
+
+        function resetForm() {
+            elements.form.reset();
+            uploadedFileBase64 = null;
+            elements.fileStatus.textContent = '';
+            elements.assetSelect.disabled = true;
+            elements.assetSelect.classList.add('bg-gray-100');
+            elements.assetSelect.innerHTML = '<option value="">اختر القسم أولاً...</option>';
+            elements.testDateInput.valueAsDate = new Date(); // Reset date to today
+        }
+
+        // --- Data Processing & Business Logic ---
+
+        // 🧩 Calculates KPIs based on the LATEST record for each unique TaskID.
+        function calculateAssetStatuses(records) {
+            const statuses = {
+                Pass: 0, Fail: 0, Overdue: 0, Upcoming: 0, Unscheduled: 0,
+                DepartmentCompliance: {},
+                Assets: {}
+            };
+
+            // 1. Initialize Department Compliance structure dynamically
+            DEPARTMENTS_LIST.forEach(dept => {
+                statuses.DepartmentCompliance[dept] = { pass: 0, total: 0 };
+            });
+
+            // 2. Find the latest record for each task
+            const latestRecords = {};
+            const sortedRecords = [...records].sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+            
+            sortedRecords.forEach(record => {
+                if (!latestRecords[record.assetID]) {
+                    latestRecords[record.assetID] = record;
+                }
+            });
+
+            // 3. Analyze the latest records
+            const today = getTodayClear();
+            const upcomingThreshold = new Date(today);
+            upcomingThreshold.setDate(today.getDate() + 30);
+
+            Object.values(latestRecords).forEach(record => {
+                
+                // Update KPIs based on Result (Independent of date)
+                if (record.result === 'Pass') {
+                    statuses.Pass++;
+                } else if (record.result === 'Fail') {
+                    statuses.Fail++;
+                }
+
+                // Update Department Compliance
+                if (statuses.DepartmentCompliance[record.department]) {
+                    statuses.DepartmentCompliance[record.department].total++;
+                    if (record.result === 'Pass') {
+                        statuses.DepartmentCompliance[record.department].pass++;
+                    }
+                }
+
+                // Check Dates (NextDue)
+                if (record.nextDue) {
+                    try {
+                        const nextDue = new Date(record.nextDue);
+                        if (!isNaN(nextDue.getTime())) {
+                            // Normalize date for comparison
+                            const nextDueClear = new Date(nextDue.getFullYear(), nextDue.getMonth(), nextDue.getDate());
+        
+                            if (nextDueClear < today) {
+                                statuses.Overdue++;
+                            } else if (nextDueClear <= upcomingThreshold) {
+                                statuses.Upcoming++;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Invalid date encountered:", record.nextDue);
+                    }
+                }
+                
+                statuses.Assets[record.assetID] = record;
+            });
+
+            // 4. Calculate Unscheduled Tasks
+            let totalManagedTasks = 0;
+            Object.values(assetsMap).forEach(assets => totalManagedTasks += assets.length);
+            statuses.Unscheduled = Math.max(0, totalManagedTasks - Object.keys(latestRecords).length);
+
+            return statuses;
+        }
+
+        // --- Rendering Functions ---
+
+        function renderDashboard(statuses) {
+            document.getElementById('count-pass').textContent = statuses.Pass;
+            document.getElementById('count-fail').textContent = statuses.Fail;
+            document.getElementById('count-overdue').textContent = statuses.Overdue;
+            document.getElementById('count-upcoming').textContent = statuses.Upcoming;
+            document.getElementById('count-unscheduled').textContent = statuses.Unscheduled;
+
+            // Apply Pulsating Alert effect if Fail > 0 or Overdue > 0
+            const failKpi = document.getElementById('kpi-fail');
+            failKpi.classList.toggle('animate-pulsate-alert', statuses.Fail > 0);
+
+            const overdueKpi = document.getElementById('kpi-overdue');
+            overdueKpi.classList.toggle('animate-pulsate-alert', statuses.Overdue > 0);
+
+
+            // Overall Compliance Chart
+            const totalCalibrated = statuses.Pass + statuses.Fail;
+            // الالتزام = الناجح / (الناجح + الفاشل). إذا كان المقام 0، نتحقق مما إذا كانت هناك مهام مطلوبة أصلاً.
+            let totalTasks = 0;
+            Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
+
+            const overallCompliance = totalCalibrated > 0 ? (statuses.Pass / totalCalibrated) * 100 : (totalTasks === 0 ? 100 : 0);
+            
+            renderCircularChart('overall-compliance-chart', overallCompliance, '#00529B', false);
+
+            // Department Compliance Charts
+            const deptContainer = document.getElementById('department-compliance');
+            deptContainer.innerHTML = '';
+            
+            DEPARTMENTS_LIST.forEach(dept => {
+                const stats = statuses.DepartmentCompliance[dept];
+                const deptTasksCount = assetsMap[dept] ? assetsMap[dept].length : 0;
+                
+                const compliance = stats.total > 0 ? (stats.pass / stats.total) * 100 : (deptTasksCount > 0 ? 0 : 100);
+
+                const chartDiv = document.createElement('div');
+                chartDiv.id = `compliance-${dept}`;
+                deptContainer.appendChild(chartDiv);
+                renderCircularChart(`compliance-${dept}`, compliance, '#E9C46A', true);
+                
+                const label = document.createElement('p');
+                label.className = 'text-xs font-semibold mt-1';
+                label.textContent = dept;
+                chartDiv.appendChild(label);
+            });
+        }
+
+        // دالة رسم المخطط الدائري باستخدام SVG مع ألوان ديناميكية
+        function renderCircularChart(containerId, percentage, defaultColor, isSmall) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            // تحديد اللون بناءً على النسبة (تحسين مرئي)
+            let dynamicColor = defaultColor;
+            if (percentage < 60) {
+                dynamicColor = '#dc3545'; // Red
+            } else if (percentage < 90) {
+                dynamicColor = '#E9C46A'; // Gold
+            } else if (percentage >= 95) {
+                dynamicColor = '#28a745'; // Green
+            }
+
+            const radius = 15.9155;
+            const circumference = 100;
+            const dasharray = `${(percentage / 100) * circumference} ${circumference}`;
+            
+            const sizeClass = isSmall ? 'w-16 h-16' : 'w-24 h-24';
+            const strokeWidth = isSmall ? '3.8' : '2.8';
+            const fontSize = isSmall ? '0.4em' : '0.5em';
+
+            container.innerHTML = `
+```svg
+                <svg viewBox="0 0 36 36" class="circular-chart ${sizeClass}">
+                    <path class="circle-bg"
+                        stroke-width="3.8"
+                        d="M18 2.0845
+                        a ${radius} ${radius} 0 0 1 0 31.831
+                        a ${radius} ${radius} 0 0 1 0 -31.831" />
+                    <path class="circle"
+                        stroke="${dynamicColor}"
+                        stroke-width="${strokeWidth}"
+                        stroke-dasharray="${dasharray}"
+                        d="M18 2.0845
+                        a ${radius} ${radius} 0 0 1 0 31.831
+                        a ${radius} ${radius} 0 0 1 0 -31.831" />
+                    <text x="18" y="20.35" class="percentage" style="font-size: ${fontSize};">${Math.round(percentage)}%</text>
+                </svg>
