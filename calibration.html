@@ -8,14 +8,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
-        // Tailwind Configuration
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'primary': '#8B0000',      // قرمزي داكن
-                        'secondary': '#D4AF37',    // ذهبي
-                        'accent': '#B8860B',       // ذهبي غامق
+                        'primary': '#8B0000',
+                        'secondary': '#D4AF37',
+                        'accent': '#B8860B',
                         'light': '#F5F5F5',
                         'dark': '#2C2C2C',
                         'success': '#28a745',
@@ -49,7 +48,6 @@
         }
     </script>
     <style>
-        /* Styles for Circular Progress Charts */
         .circular-chart {
             display: block;
             margin: 10px auto;
@@ -72,29 +70,16 @@
             text-anchor: middle;
             font-weight: bold;
         }
-
-        /* Row highlight for upcoming calibrations */
         .row-upcoming {
             border-right: 4px solid #D4AF37;
         }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
+        .gradient-header {
+            background: linear-gradient(135deg, #8B0000 0%, #D4AF37 100%);
         }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #D4AF37;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #B8860B;
+        .gradient-kpi {
+            background: linear-gradient(135deg, #F5F5F5 0%, #E8E8E8 100%);
         }
 
-        /* Print Stylesheet */
         @media print {
             body {
                 background-color: white;
@@ -129,14 +114,6 @@
             .bg-red-50 {
                 background-color: rgba(220, 53, 69, 0.1) !important;
             }
-        }
-
-        /* Gradient backgrounds */
-        .gradient-header {
-            background: linear-gradient(135deg, #8B0000 0%, #D4AF37 100%);
-        }
-        .gradient-kpi {
-            background: linear-gradient(135deg, #F5F5F5 0%, #E8E8E8 100%);
         }
     </style>
 </head>
@@ -349,13 +326,12 @@
 
     <script>
         // ================================================================
-        // ⚙️ السكربت والتكامل (JavaScript Logic) - النسخة المحسّنة
+        // ⚙️ السكربت والتكامل (JavaScript Logic) - النسخة النهائية
         // ================================================================
 
         // --- Configuration ---
         const CAL_API_URL = 'https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec';
-        const MOCK_MODE = false;
-
+        
         // --- Global State ---
         let assetsMap = {};
         let staffList = [];
@@ -397,15 +373,7 @@
         document.addEventListener('DOMContentLoaded', init);
 
         async function init() {
-            console.log("Initializing Calibration System...");
-            
-            // التحقق من رابط API
-            if (CAL_API_URL.includes('ضع_رابط_API_الجديد_هنا') && !MOCK_MODE) {
-                showLoading(false);
-                showNotification('خطأ في الإعداد: لم يتم تحديث رابط الـ API في الكود.', 'error');
-                elements.tableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">النظام غير متصل.</td></tr>';
-                return;
-            }
+            console.log("🚀 بدء تشغيل نظام معايرة الأجهزة...");
             
             setupEventListeners();
             elements.testDateInput.valueAsDate = new Date();
@@ -466,7 +434,7 @@
             showLoading(true);
             try {
                 let data;
-                console.log("Fetching LIVE data from API...");
+                console.log("📥 جلب البيانات المباشرة من API...");
                 const url = forceRefresh ? `${CAL_API_URL}?refresh=true` : CAL_API_URL;
                 const response = await fetch(url);
                 
@@ -487,6 +455,7 @@
                     DEPARTMENTS_LIST = Object.keys(assetsMap);
                     populateDepartments();
                     
+                    // 🔥 التصحيح: استخدام الحقول الصحيحة من الرد
                     allRecords = (data.data.records || []).map(record => ({
                         Timestamp: record.Timestamp,
                         department: record.Department,
@@ -497,9 +466,12 @@
                         frequency: record.Frequency,
                         nextDue: record.NextDue,
                         result: record.Result,
-                        CertificateLink: record.CertificateLink
+                        // 🔥 التصحيح: استخدام الحقول الصحيحة للشهادات
+                        CertificateLink: record.Certificate || record.CertificateLink || record.CertificatePdf || '',
+                        FileLink: record.File || record.FileLink || ''
                     }));
                     
+                    console.log("📋 السجلات المستلمة:", allRecords);
                     processData();
                     updateLastUpdateTime();
                 } else {
@@ -682,7 +654,7 @@
             
             try {
                 let responseData;
-                console.log("LIVE Submission to API...");
+                console.log("📤 الإرسال المباشر إلى API...");
                 
                 const response = await fetch(CAL_API_URL, {
                     method: 'POST',
@@ -706,6 +678,7 @@
                     
                     if (responseData.data && responseData.data.newRecord) {
                         const newRecord = responseData.data.newRecord;
+                        // 🔥 التصحيح: استخدام الحقول الصحيحة للشهادة
                         allRecords.unshift({
                             Timestamp: newRecord.Timestamp,
                             department: newRecord.Department,
@@ -716,7 +689,8 @@
                             frequency: newRecord.Frequency,
                             nextDue: newRecord.NextDue,
                             result: newRecord.Result,
-                            CertificateLink: newRecord.CertificateLink
+                            CertificateLink: newRecord.Certificate || newRecord.CertificatePdf || '',
+                            FileLink: newRecord.File || ''
                         });
                         
                         processData();
@@ -746,6 +720,8 @@
 
         // --- Data Processing & Business Logic ---
         function calculateAssetStatuses(records) {
+            console.group("🔍 تحليل مؤشرات الالتزام");
+            
             const statuses = {
                 Pass: 0,
                 Fail: 0,
@@ -755,11 +731,18 @@
                 DepartmentCompliance: {},
                 Assets: {}
             };
-            
+
+            // 1. تهيئة جميع الأقسام
             DEPARTMENTS_LIST.forEach(dept => {
-                statuses.DepartmentCompliance[dept] = { pass: 0, total: 0 };
+                statuses.DepartmentCompliance[dept] = { 
+                    pass: 0, 
+                    total: 0, 
+                    taskCount: assetsMap[dept]?.length || 0 
+                };
+                console.log(`📁 ${dept}: ${assetsMap[dept]?.length || 0} مهمة`);
             });
-            
+
+            // 2. تجميع أحدث سجل لكل جهاز
             const latestRecords = {};
             const sortedRecords = [...records].sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
             
@@ -768,25 +751,31 @@
                     latestRecords[record.assetID] = record;
                 }
             });
-            
+
+            console.log(`📊 إجمالي المهام المسجلة: ${Object.keys(latestRecords).length}`);
+
+            // 3. تحليل السجلات
             const today = getTodayClear();
             const upcomingThreshold = new Date(today);
             upcomingThreshold.setDate(today.getDate() + 30);
             
             Object.values(latestRecords).forEach(record => {
+                if (!record.department || !statuses.DepartmentCompliance[record.department]) {
+                    console.warn(`⚠️ قسم غير معروف: ${record.department}`);
+                    return;
+                }
+
+                // تحديث العدادات العامة
+                if (record.result === 'Pass') statuses.Pass++;
+                else if (record.result === 'Fail') statuses.Fail++;
+
+                // تحديث إحصائيات القسم
+                statuses.DepartmentCompliance[record.department].total++;
                 if (record.result === 'Pass') {
-                    statuses.Pass++;
-                } else if (record.result === 'Fail') {
-                    statuses.Fail++;
+                    statuses.DepartmentCompliance[record.department].pass++;
                 }
-                
-                if (statuses.DepartmentCompliance[record.department]) {
-                    statuses.DepartmentCompliance[record.department].total++;
-                    if (record.result === 'Pass') {
-                        statuses.DepartmentCompliance[record.department].pass++;
-                    }
-                }
-                
+
+                // التحقق من المواعيد
                 if (record.nextDue) {
                     try {
                         const nextDue = new Date(record.nextDue);
@@ -805,42 +794,69 @@
                 
                 statuses.Assets[record.assetID] = record;
             });
-            
+
+            // 4. حساب المهام غير المجدولة
             let totalManagedTasks = 0;
             Object.values(assetsMap).forEach(assets => totalManagedTasks += assets.length);
             statuses.Unscheduled = Math.max(0, totalManagedTasks - Object.keys(latestRecords).length);
             
+            // 5. تسجيل النتائج النهائية
+            DEPARTMENTS_LIST.forEach(dept => {
+                const deptStats = statuses.DepartmentCompliance[dept];
+                console.log(`📈 ${dept}: ${deptStats.pass}/${deptStats.total} ناجحة من أصل ${deptStats.taskCount} مهمة`);
+            });
+
+            console.groupEnd();
             return statuses;
         }
 
         // --- Rendering Functions ---
         function renderDashboard(statuses) {
+            // تحديث العدادات الرئيسية
             document.getElementById('count-pass').textContent = statuses.Pass;
             document.getElementById('count-fail').textContent = statuses.Fail;
             document.getElementById('count-overdue').textContent = statuses.Overdue;
             document.getElementById('count-upcoming').textContent = statuses.Upcoming;
             document.getElementById('count-unscheduled').textContent = statuses.Unscheduled;
             
+            // تطبيق تأثيرات التنبيه
             const failKpi = document.getElementById('kpi-fail');
             failKpi.classList.toggle('animate-pulsate-alert', statuses.Fail > 0);
             
             const overdueKpi = document.getElementById('kpi-overdue');
             overdueKpi.classList.toggle('animate-pulsate-alert', statuses.Overdue > 0);
             
+            // حساب الالتزام العام
             const totalCalibrated = statuses.Pass + statuses.Fail;
             let totalTasks = 0;
             Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
-            const overallCompliance = totalCalibrated > 0 ? (statuses.Pass / totalCalibrated) * 100 : (totalTasks === 0 ? 100 : 0);
+            
+            let overallCompliance;
+            if (totalTasks === 0) {
+                overallCompliance = 100; // لا توجد مهام مطلوبة
+            } else if (totalCalibrated === 0) {
+                overallCompliance = 0; // توجد مهام ولكن لم يتم معايرتها
+            } else {
+                overallCompliance = (statuses.Pass / totalCalibrated) * 100;
+            }
             
             renderCircularChart('overall-compliance-chart', overallCompliance, '#8B0000', false);
             
+            // تحديث مخططات الأقسام
             const deptContainer = document.getElementById('department-compliance');
             deptContainer.innerHTML = '';
             
             DEPARTMENTS_LIST.forEach(dept => {
                 const stats = statuses.DepartmentCompliance[dept];
-                const deptTasksCount = assetsMap[dept] ? assetsMap[dept].length : 0;
-                const compliance = stats.total > 0 ? (stats.pass / stats.total) * 100 : (deptTasksCount > 0 ? 0 : 100);
+                let compliance;
+                
+                if (stats.taskCount === 0) {
+                    compliance = 100; // لا توجد مهام مطلوبة في هذا القسم
+                } else if (stats.total === 0) {
+                    compliance = 0; // توجد مهام ولكن لم يتم معايرتها
+                } else {
+                    compliance = (stats.pass / stats.total) * 100;
+                }
                 
                 const chartDiv = document.createElement('div');
                 chartDiv.id = `compliance-${dept}`;
@@ -904,11 +920,26 @@
                     </span>
                 `;
                 
-                const certificateHtml = record.CertificateLink ? 
-                    `<a href="${record.CertificateLink}" target="_blank" class="text-primary hover:text-primary/80 transition duration-150 flex items-center">
-                        <i class="fas fa-file-alt ml-1"></i> عرض
-                    </a>` : 
-                    'N/A';
+                // 🔥 التصحيح: عرض رابط الشهادة بشكل صحيح
+                let certificateHtml = 'N/A';
+                
+                if (record.CertificateLink && record.CertificateLink !== 'N/A') {
+                    certificateHtml = `
+                        <a href="${record.CertificateLink}" target="_blank" 
+                           class="text-primary hover:text-primary/80 transition duration-150 flex items-center justify-center bg-white border border-primary rounded-lg px-3 py-2 hover:bg-primary/10">
+                            <i class="fas fa-file-pdf ml-1 text-danger"></i>
+                            <span>عرض الشهادة</span>
+                        </a>
+                    `;
+                } else if (record.FileLink && record.FileLink !== 'N/A') {
+                    certificateHtml = `
+                        <a href="${record.FileLink}" target="_blank" 
+                           class="text-primary hover:text-primary/80 transition duration-150 flex items-center justify-center bg-white border border-primary rounded-lg px-3 py-2 hover:bg-primary/10">
+                            <i class="fas fa-file-alt ml-1 text-info"></i>
+                            <span>عرض التقرير</span>
+                        </a>
+                    `;
+                }
                 
                 let rowClass = '';
                 if (record.nextDue) {
@@ -946,6 +977,11 @@
 
         function renderStaffList() {
             elements.staffDatalist.innerHTML = staffList.map(staff => `<option value="${staff}">`).join('');
+        }
+
+        function updateTableStats() {
+            const totalRecords = allRecords.length;
+            elements.totalRecords.textContent = totalRecords;
         }
 
         // 🧭 Smart Alerts Logic (7-day lookahead)
@@ -1012,7 +1048,7 @@
                 }
                 
                 if (departmentFilter && visible) {
-                    const departmentCell = cells[1]; // القسم هو العمود الثاني
+                    const departmentCell = cells[1];
                     if (departmentCell && departmentCell.textContent !== departmentFilter) {
                         visible = false;
                     }
@@ -1023,11 +1059,6 @@
             }
             
             updateFilterStats(visibleCount, rows.length);
-        }
-
-        function updateTableStats() {
-            const totalRecords = allRecords.length;
-            elements.totalRecords.textContent = totalRecords;
         }
 
         function updateFilterStats(visibleCount, totalCount) {
