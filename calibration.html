@@ -28,7 +28,7 @@
                         'gold-glow': '0 0 15px rgba(233, 196, 106, 0.5)',
                     },
                     keyframes: {
-                        // عند “Fail” أو "Overdue" يظهر لون أحمر/برتقالي نابض خفيف.
+                        // عند "Fail" أو "Overdue" يظهر لون أحمر/برتقالي نابض خفيف.
                         'pulsating-alert': {
                             '0%, 100%': { boxShadow: '0 0 5px rgba(220, 53, 69, 0.5)' },
                             '50%': { boxShadow: '0 0 20px rgba(220, 53, 69, 0.8)' },
@@ -277,22 +277,18 @@
 
     <script>
         // ================================================================
-        // ⚙️ السكربت والتكامل (JavaScript Logic) - Final Corrected Version
+        // ⚙️ السكربت والتكامل (JavaScript Logic) - النسخة المحدثة مع JSONP
         // ================================================================
 
         // --- Configuration ---
-        
-        // 🌟 التصحيح: التأكد من أن رابط الـ API بصيغة JavaScript صحيحة
         const CAL_API_URL = 'https://script.google.com/macros/s/AKfycbydmSXpwKw01JjvdKU1V3UZ3S3Ketp8vNxGNSrGH160rwaO6Uq3E0A5CW8qD8segLRs9A/exec';
-        
-        // تم ضبط النظام على الوضع الفعلي (LIVE MODE)
         const MOCK_MODE = false; 
 
         // --- Global State ---
         let assetsMap = {};
         let staffList = [];
         let allRecords = [];
-        let DEPARTMENTS_LIST = []; // سيتم ملؤها ديناميكيًا
+        let DEPARTMENTS_LIST = [];
         let uploadedFileBase64 = null;
         let uploadedFileMimeType = null;
         let uploadedFileName = null;
@@ -322,16 +318,7 @@
         async function init() {
             console.log("Initializing Calibration System...");
             
-            // التحقق الأساسي من الرابط (في حال تم نسخ الكود بشكل خاطئ مستقبلاً)
-            if (CAL_API_URL.includes('ضع_رابط_API_الجديد_هنا') && !MOCK_MODE) {
-                showLoading(false);
-                showNotification('خطأ في الإعداد: لم يتم تحديث رابط الـ API في الكود.', 'error');
-                elements.tableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-red-500">النظام غير متصل.</td></tr>';
-                return;
-            }
-
             setupEventListeners();
-            // Set default date input to today
             elements.testDateInput.valueAsDate = new Date();
             await fetchData();
         }
@@ -347,7 +334,6 @@
 
         // --- Utility Functions ---
         function showLoading(isLoading) {
-            // إخفاء أو إظهار شاشة التحميل
             if (elements.loadingOverlay) {
                 elements.loadingOverlay.classList.toggle('hidden', !isLoading);
             }
@@ -362,20 +348,17 @@
             }
         }
 
-        // دالة تنسيق التاريخ للعرض (YYYY-MM-DD)
         function formatDate(dateString) {
             if (!dateString) return 'N/A';
             try {
                 const date = new Date(dateString);
                 if (isNaN(date.getTime())) return dateString;
-                // استخدام en-CA لضمان التنسيق YYYY-MM-DD بغض النظر عن إعدادات المستخدم
                 return date.toLocaleDateString('en-CA'); 
             } catch (e) {
                 return dateString;
             }
         }
-        
-        // Helper to get today's date cleared of time for accurate comparison
+
         function getTodayClear() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -383,65 +366,67 @@
         }
 
         function showNotification(message, type = 'success') {
-            // يمكن استبدال هذا بـ Toast notification أكثر تطوراً مستقبلاً
             alert(`${type === 'success' ? '✅ نجاح' : '❌ خطأ'}: ${message}`);
         }
 
-        // --- Data Fetching (GET) ---
-        async function fetchData(forceRefresh = false) {
-            showLoading(true);
-            try {
-                let data;
+        // --- JSONP Data Fetching ---
+        function fetchData() {
+            return new Promise((resolve, reject) => {
+                showLoading(true);
                 
-                console.log("Fetching LIVE data from API...");
-                const url = forceRefresh ? `${CAL_API_URL}?refresh=true` : CAL_API_URL;
-                const response = await fetch(url);
+                // إنشاء callback فريد
+                const callbackName = 'callback_' + Date.now() + '_' + Math.random().toString(36).substr(2);
                 
-                if (!response.ok) throw new Error(`Network response was not ok. Status: ${response.status}`);
-                
-                // التحقق من نوع المحتوى
-                const contentType = response.headers.get("content-type");
-                if (!contentType || !contentType.includes("application/json")) {
-                    const text = await response.text();
-                    console.error("Received non-JSON response:", text);
-                    throw new Error("استجابة غير متوقعة من الخادم. تأكد من نشر السكربت بشكل صحيح (Web App) وإعطاء الأذونات اللازمة.");
-                }
-                
-                data = await response.json();
-                
-                if (data && data.status === 'success') {
-                    assetsMap = data.data.assetsMap || {};
-                    staffList = data.data.staffList || [];
+                // تعريف الدالة المؤقتة
+                window[callbackName] = function(response) {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
                     
-                    // تحديد الأقسام ديناميكيًا من البيانات المسترجعة
-                    DEPARTMENTS_LIST = Object.keys(assetsMap);
-                    populateDepartments();
+                    if (response.status === 'success') {
+                        processFetchedData(response.data);
+                        resolve(response);
+                    } else {
+                        reject(new Error(response.message || 'Failed to fetch data'));
+                    }
+                };
+                
+                // إنشاء script tag لـ JSONP
+                const script = document.createElement('script');
+                script.src = `${CAL_API_URL}?action=getData&callback=${callbackName}`;
+                script.onerror = () => {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    reject(new Error('فشل في تحميل البيانات من الخادم'));
+                };
+                
+                document.body.appendChild(script);
+            });
+        }
 
-                    // توحيد هيكل السجلات المسترجعة (مطابقة لعناوين CAL_Log Sheet)
-                    allRecords = (data.data.records || []).map(record => ({
-                        Timestamp: record.Timestamp,
-                        department: record.Department,
-                        staff: record.Staff,
-                        assetID: record.AssetID,
-                        assetName: record.AssetName,
-                        testDate: record.TestDate,
-                        frequency: record.Frequency,
-                        nextDue: record.NextDue,
-                        result: record.Result,
-                        CertificateLink: record.CertificateLink
-                    }));
-                    
-                    processData();
-                } else {
-                    throw new Error(data.message || 'Failed to fetch data structure.');
-                }
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                showNotification(`فشل في جلب البيانات: ${error.message}`, 'error');
-                elements.tableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-red-500">حدث خطأ أثناء تحميل البيانات. يرجى التحقق من الاتصال وصلاحيات السكربت.</td></tr>';
-            } finally {
-                showLoading(false);
-            }
+        function processFetchedData(data) {
+            assetsMap = data.assetsMap || {};
+            staffList = data.staffList || [];
+            
+            // تحديد الأقسام ديناميكيًا
+            DEPARTMENTS_LIST = Object.keys(assetsMap);
+            populateDepartments();
+
+            // توحيد هيكل السجلات
+            allRecords = (data.records || []).map(record => ({
+                Timestamp: record.Timestamp,
+                department: record.Department,
+                staff: record.Staff,
+                assetID: record.AssetID,
+                assetName: record.AssetName,
+                testDate: record.TestDate,
+                frequency: record.Frequency,
+                nextDue: record.NextDue,
+                result: record.Result,
+                CertificateLink: record.CertificateLink
+            }));
+            
+            processData();
+            showLoading(false);
         }
 
         function processData() {
@@ -454,7 +439,6 @@
         }
 
         // --- Form Handlers ---
-
         function populateDepartments() {
             elements.departmentSelect.innerHTML = '<option value="">اختر القسم...</option>';
             DEPARTMENTS_LIST.sort().forEach(dept => {
@@ -470,7 +454,6 @@
             elements.assetSelect.innerHTML = '<option value="">اختر المهمة/الجهاز...</option>';
             
             if (department && assetsMap[department]) {
-                // فرز المهام أبجديًا
                 const sortedAssets = assetsMap[department].sort((a, b) => a.name.localeCompare(b.name));
                 
                 sortedAssets.forEach(asset => {
@@ -496,9 +479,7 @@
                 return;
             }
 
-            // لضمان الحساب الصحيح بغض النظر عن المنطقة الزمنية للمستخدم
             const dateParts = testDateValue.split('-').map(p => parseInt(p, 10));
-            // الشهر في JavaScript يبدأ من 0 (يناير=0)
             const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
 
             if (isNaN(date.getTime())) return;
@@ -520,7 +501,6 @@
                     break;
             }
 
-            // Format as YYYY-MM-DD
             elements.nextDueInput.value = nextDate.toLocaleDateString('en-CA');
         }
 
@@ -531,13 +511,12 @@
 
             if (!file) return;
 
-            // Validate file type and size (10MB limit)
             if (!file.type.match('application/pdf') && !file.type.match('image.*')) {
                 showNotification('يرجى رفع ملف PDF أو صورة فقط.', 'error');
                 event.target.value = '';
                 return;
             }
-            if (file.size > 10 * 1024 * 1024) { // 10MB
+            if (file.size > 10 * 1024 * 1024) {
                 showNotification('حجم الملف يتجاوز الحد المسموح (10 ميجابايت).', 'error');
                 event.target.value = '';
                 return;
@@ -558,7 +537,7 @@
             reader.readAsDataURL(file);
         }
 
-        // --- Submission Handler (POST) ---
+        // --- Submission Handler مع JSONP ---
         async function handleSubmit(event) {
             event.preventDefault();
 
@@ -568,8 +547,6 @@
             }
 
             const formData = new FormData(elements.form);
-            
-            // استخراج اسم المهمة (TaskName)
             const selectedAssetOption = elements.assetSelect.options[elements.assetSelect.selectedIndex];
             const assetName = selectedAssetOption ? selectedAssetOption.textContent : 'Unknown Task';
 
@@ -578,8 +555,8 @@
                 data: {
                     department: formData.get('department'),
                     staff: formData.get('staff'),
-                    assetID: formData.get('asset'), // TaskID
-                    assetName: assetName,            // TaskName
+                    assetID: formData.get('asset'),
+                    assetName: assetName,
                     testDate: formData.get('testDate'),
                     frequency: formData.get('frequency'),
                     nextDue: formData.get('nextDue'),
@@ -595,61 +572,68 @@
             toggleSubmitLoading(true);
 
             try {
-                let responseData;
-                
-                console.log("LIVE Submission to API...");
-                // CRITICAL: Use 'text/plain' to avoid CORS preflight issues with Google Apps Script
-                const response = await fetch(CAL_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'text/plain',
-                    },
-                    body: JSON.stringify(payload),
-                });
-
-                // Robust response parsing
-                const responseText = await response.text();
-                try {
-                    responseData = JSON.parse(responseText);
-                } catch (e) {
-                    console.error("Failed to parse JSON response:", responseText);
-                    throw new Error('استجابة غير صالحة من الخادم (قد يكون هناك خطأ في السكربت الخلفي).');
-                }
-
-                if (responseData.status === 'success') {
-                    showNotification(responseData.message, 'success');
-                    
-                    // تحديث البيانات المحلية بالاستجابة الناجحة (تحسين الأداء)
-                    if (responseData.data && responseData.data.newRecord) {
-                        const newRecord = responseData.data.newRecord;
-                         // توحيد هيكل السجل الجديد
-                         allRecords.unshift({
-                            Timestamp: newRecord.Timestamp,
-                            department: newRecord.Department,
-                            staff: newRecord.Staff,
-                            assetID: newRecord.AssetID,
-                            assetName: newRecord.AssetName,
-                            testDate: newRecord.TestDate,
-                            frequency: newRecord.Frequency,
-                            nextDue: newRecord.NextDue,
-                            result: newRecord.Result,
-                            CertificateLink: newRecord.CertificateLink
-                        });
-                        processData(); // إعادة رسم الواجهة
-                    }
-
-                    // Reset form
-                    resetForm();
-                    
-                } else {
-                    throw new Error(responseData.message || 'فشل الحفظ في الواجهة الخلفية.');
-                }
+                // استخدام JSONP للإرسال أيضاً
+                await submitViaJSONP(payload);
             } catch (error) {
                 console.error('Error submitting data:', error);
                 showNotification(`فشل في حفظ السجل: ${error.message}`, 'error');
             } finally {
                 toggleSubmitLoading(false);
             }
+        }
+
+        function submitViaJSONP(payload) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'submitCallback_' + Date.now() + '_' + Math.random().toString(36).substr(2);
+                
+                window[callbackName] = function(response) {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    
+                    if (response.status === 'success') {
+                        showNotification(response.message, 'success');
+                        
+                        if (response.data && response.data.newRecord) {
+                            const newRecord = response.data.newRecord;
+                            allRecords.unshift({
+                                Timestamp: newRecord.Timestamp,
+                                department: newRecord.Department,
+                                staff: newRecord.Staff,
+                                assetID: newRecord.AssetID,
+                                assetName: newRecord.AssetName,
+                                testDate: newRecord.TestDate,
+                                frequency: newRecord.Frequency,
+                                nextDue: newRecord.NextDue,
+                                result: newRecord.Result,
+                                CertificateLink: newRecord.CertificateLink
+                            });
+                            processData();
+                        }
+
+                        resetForm();
+                        resolve(response);
+                    } else {
+                        reject(new Error(response.message || 'فشل الحفظ في الواجهة الخلفية.'));
+                    }
+                };
+                
+                // تحويل payload إلى query string
+                const params = new URLSearchParams();
+                params.append('action', 'logCalibration');
+                params.append('callback', callbackName);
+                params.append('data', JSON.stringify(payload.data));
+                params.append('fileData', JSON.stringify(payload.fileData));
+                
+                const script = document.createElement('script');
+                script.src = `${CAL_API_URL}?${params.toString()}`;
+                script.onerror = () => {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    reject(new Error('فشل في الاتصال بالخادم'));
+                };
+                
+                document.body.appendChild(script);
+            });
         }
 
         function resetForm() {
@@ -659,12 +643,10 @@
             elements.assetSelect.disabled = true;
             elements.assetSelect.classList.add('bg-gray-100');
             elements.assetSelect.innerHTML = '<option value="">اختر القسم أولاً...</option>';
-            elements.testDateInput.valueAsDate = new Date(); // Reset date to today
+            elements.testDateInput.valueAsDate = new Date();
         }
 
         // --- Data Processing & Business Logic ---
-
-        // 🧩 Calculates KPIs based on the LATEST record for each unique TaskID.
         function calculateAssetStatuses(records) {
             const statuses = {
                 Pass: 0, Fail: 0, Overdue: 0, Upcoming: 0, Unscheduled: 0,
@@ -740,7 +722,6 @@
         }
 
         // --- Rendering Functions ---
-
         function renderDashboard(statuses) {
             document.getElementById('count-pass').textContent = statuses.Pass;
             document.getElementById('count-fail').textContent = statuses.Fail;
@@ -755,10 +736,8 @@
             const overdueKpi = document.getElementById('kpi-overdue');
             overdueKpi.classList.toggle('animate-pulsate-alert', statuses.Overdue > 0);
 
-
             // Overall Compliance Chart
             const totalCalibrated = statuses.Pass + statuses.Fail;
-            // الالتزام = الناجح / (الناجح + الفاشل). إذا كان المقام 0، نتحقق مما إذا كانت هناك مهام مطلوبة أصلاً.
             let totalTasks = 0;
             Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
 
@@ -774,7 +753,6 @@
                 const stats = statuses.DepartmentCompliance[dept];
                 const deptTasksCount = assetsMap[dept] ? assetsMap[dept].length : 0;
                 
-                // إذا لم يتم تسجيل أي مهمة (total=0)، ولكن هناك مهام مطلوبة (deptTasksCount>0)، فإن الالتزام هو 0%.
                 const compliance = stats.total > 0 ? (stats.pass / stats.total) * 100 : (deptTasksCount > 0 ? 0 : 100);
 
                 const chartDiv = document.createElement('div');
@@ -789,19 +767,17 @@
             });
         }
 
-        // 🌟 دالة رسم المخطط الدائري
         function renderCircularChart(containerId, percentage, defaultColor, isSmall) {
             const container = document.getElementById(containerId);
             if (!container) return;
 
-            // تحديد اللون بناءً على النسبة (تحسين مرئي)
             let dynamicColor = defaultColor;
             if (percentage < 60) {
-                dynamicColor = '#dc3545'; // Red
+                dynamicColor = '#dc3545';
             } else if (percentage < 90) {
-                dynamicColor = '#E9C46A'; // Gold
+                dynamicColor = '#E9C46A';
             } else if (percentage >= 95) {
-                dynamicColor = '#28a745'; // Green
+                dynamicColor = '#28a745';
             }
 
             const radius = 15.9155;
@@ -812,7 +788,6 @@
             const strokeWidth = isSmall ? '3.8' : '2.8';
             const fontSize = isSmall ? '0.4em' : '0.5em';
 
-            // رسم الـ SVG مباشرة
             container.innerHTML = `
                 <svg viewBox="0 0 36 36" class="circular-chart ${sizeClass}">
                     <path class="circle-bg"
@@ -831,7 +806,6 @@
                 </svg>
             `;
         }
-
 
         function renderTable(records) {
             if (records.length === 0) {
@@ -855,20 +829,16 @@
                     `<a href="${record.CertificateLink}" target="_blank" class="text-cbahi-blue hover:text-blue-800 transition duration-150"><i class="fas fa-file-alt ml-1"></i> عرض</a>` : 
                     'N/A';
 
-                // Determine row highlighting (Visual Indicators)
                 let rowClass = '';
                 if (record.nextDue) {
                     try {
                         const nextDue = new Date(record.nextDue);
                         if (!isNaN(nextDue.getTime())) {
-                             // Normalize date for comparison
                             const nextDueClear = new Date(nextDue.getFullYear(), nextDue.getMonth(), nextDue.getDate());
 
                             if (nextDueClear < today) {
-                                // Overdue
                                 rowClass = 'bg-red-50';
                             } else if (nextDueClear <= weeklyThreshold) {
-                                // Upcoming within 7 days
                                 rowClass = 'row-upcoming animate-upcoming-glow';
                             }
                         }
@@ -896,7 +866,6 @@
             elements.staffDatalist.innerHTML = staffList.map(staff => `<option value="${staff}">`).join('');
         }
         
-        // 🧭 Smart Alerts Logic (7-day lookahead)
         function checkSmartAlerts(statuses) {
             const today = getTodayClear();
             const weeklyThreshold = new Date(today);
@@ -910,7 +879,6 @@
                         if (!isNaN(nextDue.getTime())) {
                             const nextDueClear = new Date(nextDue.getFullYear(), nextDue.getMonth(), nextDue.getDate());
                             
-                            // Alert if overdue OR upcoming within 7 days
                             if (nextDueClear <= weeklyThreshold) {
                                 imminentDepartments.add(asset.department);
                             }
