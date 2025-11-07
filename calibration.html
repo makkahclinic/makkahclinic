@@ -827,18 +827,13 @@
             overdueKpi.classList.toggle('animate-pulsate-alert', statuses.Overdue > 0);
             
             // حساب الالتزام العام
-            const totalCalibrated = statuses.Pass + statuses.Fail;
-            let totalTasks = 0;
-            Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
-            
-            let overallCompliance;
-            if (totalTasks === 0) {
-                overallCompliance = 100; // لا توجد مهام مطلوبة
-            } else if (totalCalibrated === 0) {
-                overallCompliance = 0; // توجد مهام ولكن لم يتم معايرتها
-            } else {
-                overallCompliance = (statuses.Pass / totalCalibrated) * 100;
-            }
+            // ✅ إجمالي المهام المُدارة عبر جميع الأقسام
+const totalTasks = Object.values(assetsMap).reduce((sum, arr) => sum + arr.length, 0);
+
+// ✅ نسبة الالتزام = المهام “المطابقة” / كل المهام
+const overallCompliance = totalTasks === 0 ? 100 : (statuses.Pass / totalTasks) * 100;
+
+renderCircularChart('overall-compliance-chart', overallCompliance, '#8B0000', false);
             
             renderCircularChart('overall-compliance-chart', overallCompliance, '#8B0000', false);
             
@@ -850,13 +845,9 @@
                 const stats = statuses.DepartmentCompliance[dept];
                 let compliance;
                 
-                if (stats.taskCount === 0) {
-                    compliance = 100; // لا توجد مهام مطلوبة في هذا القسم
-                } else if (stats.total === 0) {
-                    compliance = 0; // توجد مهام ولكن لم يتم معايرتها
-                } else {
-                    compliance = (stats.pass / stats.total) * 100;
-                }
+// ✅ taskCount هو إجمالي مهام القسم من assetsMap
+const compliance = stats.taskCount === 0 ? 100 : (stats.pass / stats.taskCount) * 100;
+
                 
                 const chartDiv = document.createElement('div');
                 chartDiv.id = `compliance-${dept}`;
