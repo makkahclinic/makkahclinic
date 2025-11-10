@@ -416,9 +416,9 @@ body {
           <!-- المرفقات -->
           <div class="col-12">
             <label class="form-label text-white">إرفاق ملف (اختياري)</label>
-            <input id="fFile" type="file" accept=".pdf,.jpg,.jpeg,.png" 
+            <input id="fFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv" 
                    class="form-control bg-dark text-light border-secondary"/>
-            <div class="form-text text-muted">يمكن رفع ملفات PDF أو الصور (JPG, PNG, JPEG) - الحد الأقصى 10MB</div>
+            <div class="form-text text-muted">يمكن رفع ملفات PDF، الصور، أو Excel - الحد الأقصى 10MB</div>
           </div>
 
           <!-- أزرار التحكم -->
@@ -452,7 +452,7 @@ body {
 <script>
 // ===== التهيئة والإعدادات =====
 const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbz2QOwE8-LvR4thMXoJm9tZ-GycnksNsz9Rzwj0Jy2TWFpojSHJZ37QmvlmZEbK_jRrFQ/exec",
   AUTO_REFRESH_MS: 30000,
   MAX_FILE_MB: 10,
   WINDOW_DAYS: 365
@@ -568,10 +568,9 @@ class ApiService {
   static async get(forceRefresh = false) {
     try {
       const url = CONFIG.API_URL + (forceRefresh ? `?refresh=${Date.now()}` : '');
-      const response = await fetch(url, { 
-        cache: 'no-cache',
-        headers: { 'Cache-Control': 'no-cache' }
-      });
+      
+      // استخدام طلب بسيط بدون ترويسات مخصصة لتجنب CORS preflight
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`خطأ في الاتصال: ${response.status}`);
@@ -592,9 +591,10 @@ class ApiService {
 
   static async post(payload) {
     try {
+      // إرسال كـ text/plain لتجنب CORS preflight
       const response = await fetch(CONFIG.API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
       });
       
@@ -1115,8 +1115,8 @@ class FormManager {
     const fileInput = $('#fFile');
     
     try {
-      // التحقق من الحقول الإلزامية
-      const requiredFields = ['fDepartment', 'fStaff', 'fTaskType', 'fAsset', 'fServiceDate'];
+      // التحقق من الحقول الإلزامية - تم إصلاح المحددات هنا
+      const requiredFields = ['#fDepartment', '#fStaff', '#fTaskType', '#fAsset', '#fServiceDate'];
       const missingFields = requiredFields.filter(field => !$(field).value);
       
       if (missingFields.length > 0) {
@@ -1129,10 +1129,17 @@ class FormManager {
       if (fileInput.files.length > 0) {
         const file = fileInput.files[0];
         
-        // التحقق من نوع الملف
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+        // التحقق من نوع الملف - تم إضافة دعم ملفات Excel
+        const allowedTypes = [
+          'image/jpeg', 'image/png', 'image/jpg', 
+          'application/pdf',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'text/csv'
+        ];
+        
         if (!allowedTypes.includes(file.type)) {
-          showToast('نوع الملف غير مدعوم. يسمح فقط بملفات PDF والصور', 'error');
+          showToast('نوع الملف غير مدعوم. يسمح فقط بملفات PDF، الصور، أو Excel', 'error');
           return;
         }
         
