@@ -123,6 +123,7 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
       <button id="btnExportXLSX" class="btn btn-outline-gold btn-sm"><i class="fa-solid fa-file-excel ms-1"></i> تصدير Excel</button>
       <button id="btnExportPDF" class="btn btn-outline-gold btn-sm"><i class="fa-solid fa-file-pdf ms-1"></i> تصدير PDF</button>
       <button id="btnRefreshAll" class="btn btn-gold btn-sm"><i class="fa-solid fa-rotate ms-1"></i> تحديث</button>
+      <button id="btnRepairSheets" class="btn btn-outline-warning btn-sm"><i class="fa-solid fa-tools ms-1"></i> إصلاح الجداول</button>
     </div>
   </div>
 </nav>
@@ -513,6 +514,16 @@ function bindEvents(){
   });
   $('#btnRefreshAll').addEventListener('click', loadAll);
   $('#btnGenMissingCerts').addEventListener('click', genMissingCerts);
+  
+  $('#btnRepairSheets').addEventListener('click', async ()=>{
+    if(confirm('هل تريد إصلاح الجداول؟ هذا سيصلح هيكل البيانات.')){
+      try{ 
+        await API._post('repair'); 
+        toast('تم إصلاح الجداول','success'); 
+        await loadAll(); 
+      }catch(e){ toast('فشل الإصلاح: '+e.message,'error'); }
+    }
+  });
 }
 
 /* =================== تحميل كل البيانات =================== */
@@ -520,44 +531,74 @@ async function loadAll(){
   console.log('Loading records/assets/staff/kpis…');
   try {
     const [records, assets, staff, kpis] = await Promise.all([
-      API.getRecords(), API.getAssets(), API.getStaff(), API.getKPIs().catch(()=>null)
+      API.getRecords(), 
+      API.getAssets(), 
+      API.getStaff(), 
+      API.getKPIs().catch(() => null)
     ]);
-    App.records = records||[]; App.assetsMap = assets||{}; App.staff=staff||[];
+    
+    App.records = records || []; 
+    App.assetsMap = assets || {}; 
+    App.staff = staff || [];
+    
     // تعبئة القوائم
     const depts = Object.keys(App.assetsMap).sort();
-    $('#filterDept').innerHTML = '<option value="">جميع الأقسام</option>'+ depts.map(d=>`<option>${d}</option>`).join('');
-    $('#fDepartment').innerHTML = '<option value="">— اختر —</option>'+ depts.map(d=>`<option>${d}</option>`).join('');
-    $('#fStaff').innerHTML = '<option value="">— اختر —</option>'+ (App.staff||[]).map(s=>`<option>${s}</option>`).join('');
+    $('#filterDept').innerHTML = '<option value="">جميع الأقسام</option>' + depts.map(d => `<option>${d}</option>`).join('');
+    $('#fDepartment').innerHTML = '<option value="">— اختر —</option>' + depts.map(d => `<option>${d}</option>`).join('');
+    $('#fStaff').innerHTML = '<option value="">— اختر —</option>' + (App.staff || []).map(s => `<option>${s}</option>`).join('');
+    
     // KPIs & Charts & Tables
-    updateKPIs(kpis); drawCharts(); renderLog(); renderCerts();
-    toast('تم التحديث','success');
+    updateKPIs(kpis); 
+    drawCharts(); 
+    renderLog(); 
+    renderCerts();
+    
+    toast('تم التحديث', 'success');
   } catch (e) {
     console.error('LoadAll error:', e);
-    toast('تعذر تحميل البيانات: '+e.message, 'error');
+    toast('تعذر تحميل البيانات: ' + e.message, 'error');
   }
 }
 
-/* =================== KPIs =================== */
+/* =================== KPIs مصححة =================== */
 function updateKPIs(k){
-  // إن لم يرسل السيرفر KPIs، نحسبها محليًا
+  // استخدام البيانات من السيرفر أولاً، وإلا الحساب محلياً
+  let totalDevices;
+  let done;
+  
+  if (k) {
+    // استخدام بيانات KPIs من السيرفر
+    totalDevices = k.totalDevices || 0;
+    done = k.done || 0;
+  } else {
+    // الحساب محلياً
+    const recs = App.records;
+    
+    // عدد الأجهزة من خريطة الأصول
+    totalDevices = Object.values(App.assetsMap).reduce((a, arr) => a + (arr ? arr.length : 0), 0);
+    
+    // المهام المكتملة
+    done = recs.filter(r => r.Status === 'Completed').length;
+  }
+  
+  // نسبة الإنجاز = (المهام المكتملة ÷ إجمالي الأجهزة) × 100
+  const completionRate = totalDevices > 0 ? Math.round((done / totalDevices) * 100) : 0;
+  
+  // باقي الحسابات
   const recs = App.records;
-  const total = recs.length;
-  const done = recs.filter(r=> (r.Status==='Completed')).length;
-  const uncompleted = total - done;
-  const critical = recs.filter(r=> classify(r)==='Critical' || classify(r)==='OutOfService').length;
-  const downtime = recs.reduce((s,r)=> s + (Number(r.DowntimeHours)||0), 0);
-
+  const critical = recs.filter(r => classify(r) === 'Critical' || classify(r) === 'OutOfService').length;
+  const uncompleted = recs.filter(r => r.Status !== 'Completed').length;
+  const downtime = recs.reduce((s, r) => s + (Number(r.DowntimeHours) || 0), 0);
+  
   // MTTR
-  const completed = recs.filter(r => r.Status==='Completed' && r.StartDate && r.CompletedDate);
+  const completed = recs.filter(r => r.Status === 'Completed' && r.StartDate && r.CompletedDate);
   const mttr = completed.length
-    ? Math.round( completed.reduce((s,r)=> (s + ((new Date(r.CompletedDate)-new Date(r.StartDate))/(1000*3600*24))), 0) / completed.length )
+    ? Math.round(completed.reduce((s, r) => (s + ((new Date(r.CompletedDate) - new Date(r.StartDate)) / (1000 * 3600 * 24))), 0) / completed.length)
     : 0;
 
-  // الأصول من خريطة الأجهزة
-  const assets = Object.values(App.assetsMap).reduce((a,arr)=> a + (arr?arr.length:0), 0);
-
-  animateValue($('#kpiAssets'), assets);
-  animateValue($('#kpiDonePct'), total? Math.round(done/total*100):0, '%');
+  // تحديث واجهة المستخدم
+  animateValue($('#kpiAssets'), totalDevices);
+  animateValue($('#kpiDonePct'), completionRate, '%');
   animateValue($('#kpiCritical'), critical);
   animateValue($('#kpiUncompleted'), uncompleted);
   animateValue($('#kpiMTTR'), mttr);
@@ -565,12 +606,13 @@ function updateKPIs(k){
   
   // تنبيهات
   const alerts = recs
-    .filter(r=>['Overdue','Critical','OutOfService','DueSoon'].includes(classify(r)))
-    .slice(0,8);
-  $('#alertsList').innerHTML = alerts.map(r=>{
+    .filter(r => ['Overdue', 'Critical', 'OutOfService', 'DueSoon'].includes(classify(r)))
+    .slice(0, 8);
+  
+  $('#alertsList').innerHTML = alerts.map(r => {
     const c = classify(r);
-    const ico = c==='Overdue'||c==='Critical'||c==='OutOfService' ? '🔴' : '🟠';
-    return `<li class="mb-1">${ico} <b>${r.AssetName||r.AssetID||'-'}</b> — ${r.Department||''} • استحقاق: ${fmt(r.DueDate)}</li>`;
+    const ico = c === 'Overdue' || c === 'Critical' || c === 'OutOfService' ? '🔴' : '🟠';
+    return `<li class="mb-1">${ico} <b>${r.AssetName || r.AssetID || '-'}</b> — ${r.Department || ''} • استحقاق: ${fmt(r.DueDate)}</li>`;
   }).join('') || '<div class="smallmuted">لا توجد تنبيهات حالية</div>';
 }
 
@@ -593,7 +635,7 @@ function drawCharts(){
     else depts[d].Pending++;
   });
   const months = Array.from({length:12}).map((_,i)=>i);
-  const monthLab = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const monthLab = ['ينا','فبر','مار','أبر','ماي','يون','يول','أغس','سبت','أكت','نوف','ديس'];
   const series = Array(12).fill(0);
   recs.filter(r=> r.Status==='Completed' && r.CompletedDate).forEach(r=>{
     const m = new Date(r.CompletedDate).getMonth(); series[m] += 1;
