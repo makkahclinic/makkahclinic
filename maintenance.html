@@ -731,7 +731,7 @@ footer {
           </div>
 
           <div class="col-12">
-            <label class="form-label text-white">رفع المرفقات <span class="text-danger">*</span></label>
+            <label class="form-label text-white">رفع المرفقات</label>
             <div id="fileUploadArea" class="file-upload-area">
               <i class="fa-solid fa-cloud-upload-alt fa-2x mb-2 text-muted"></i>
               <div class="text-muted">اسحب وأفلت الملفات هنا أو انقر للاختيار</div>
@@ -774,22 +774,22 @@ footer {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 /** ===== إعدادات API ===== **/
-const API_URL = 'https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec'; // ضع رابط الويب آب هنا
+const API_URL = 'https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec';
 
 /** ===== الإعدادات العامة ===== **/
 var CONFIG = { 
-  AUTO_REFRESH_MS: 300000,  // تحديث تلقائي كل 5 دقائق (300,000 مللي ثانية)
-  MAX_FILE_MB: 10,          // الحد الأقصى لحجم الملف بالميجابايت
-  MAX_FILES: 5              // الحد الأقصى لعدد الملفات المسموح برفعها
+  AUTO_REFRESH_MS: 300000,
+  MAX_FILE_MB: 10,
+  MAX_FILES: 5
 };
 
 var AppState = {
-  assetsMap: {},           // خريطة الأجهزة حسب الأقسام
-  staffList: [],           // قائمة الفنيين
-  records: [],             // سجلات الصيانة
-  charts: { dept: null, status: null },  // المخططات
-  filters: { department: "", type: "", status: "", search: "" },  // عوامل التصفية
-  uploadedFiles: []        // الملفات المرفوعة حديثاً
+  assetsMap: {},
+  staffList: [],
+  records: [],
+  charts: { dept: null, status: null },
+  filters: { department: "", type: "", status: "", search: "" },
+  uploadedFiles: []
 };
 
 /** ===== دوال مساعدة واجهة ===== **/
@@ -842,7 +842,7 @@ function classifyStatus(r){
   return 'Pending';
 }
 
-/** ===== طبقة API (GET + POST x-www-form-urlencoded) ===== **/
+/** ===== طبقة API ===== **/
 const ApiManager = {
   async get(action, params={}){
     const url=new URL(API_URL); 
@@ -851,14 +851,27 @@ const ApiManager = {
       if(v!==undefined && v!==null) url.searchParams.set(k, v); 
     });
     
-    const res = await fetch(url.toString(), { method:'GET' });
-    const data = await res.json();
-    
-    if(data && data.error){ 
-      throw new Error(data.error); 
+    try {
+      const res = await fetch(url.toString(), { 
+        method:'GET',
+        mode: 'no-cors'
+      });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      
+      if(data && data.error){ 
+        throw new Error(data.error); 
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('API GET Error:', error);
+      throw error;
     }
-    
-    return data;
   },
   
   async post(action, params={}){
@@ -867,19 +880,28 @@ const ApiManager = {
       if(v!==undefined && v!==null) body.append(k, v); 
     });
     
-    const res = await fetch(API_URL, {
-      method:'POST',
-      headers: { 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
-      body
-    });
-    
-    const data = await res.json();
-    
-    if(data && data.error){ 
-      throw new Error(data.error); 
+    try {
+      const res = await fetch(API_URL, {
+        method:'POST',
+        headers: { 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
+        body
+      });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      
+      if(data && data.error){ 
+        throw new Error(data.error); 
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('API POST Error:', error);
+      throw error;
     }
-    
-    return data;
   },
   
   async getRecords(){ return await this.get('getRecords'); },
@@ -929,10 +951,21 @@ const ApiManager = {
 const DataManager = {
   async loadData(){
     try{
+      $('#logBody').innerHTML = '<tr><td colspan="12" class="text-center py-4"><div class="loading-spinner me-2"></div> جاري تحميل البيانات...</td></tr>';
+      
       const [records, assets, staff] = await Promise.all([
-        ApiManager.getRecords(), 
-        ApiManager.getAssets(), 
-        ApiManager.getStaff()
+        ApiManager.getRecords().catch(e => { 
+          console.warn('Failed to load records:', e); 
+          return []; 
+        }), 
+        ApiManager.getAssets().catch(e => { 
+          console.warn('Failed to load assets:', e); 
+          return {}; 
+        }), 
+        ApiManager.getStaff().catch(e => { 
+          console.warn('Failed to load staff:', e); 
+          return []; 
+        })
       ]);
       
       AppState.records  = records || [];
@@ -946,54 +979,48 @@ const DataManager = {
       
       showToast('تم تحميل البيانات بنجاح', 'info');
     }catch(err){
-      console.error(err); 
+      console.error('Load data error:', err); 
       showToast('خطأ في تحميل البيانات: ' + err.message, 'error');
+      $('#logBody').innerHTML = '<tr><td colspan="12" class="text-center py-4 text-danger"><i class="fa-solid fa-exclamation-triangle me-2"></i>فشل في تحميل البيانات</td></tr>';
     }
   },
   
   async addRecord(formData){
-    // رفع الملفات أولاً
+    // رفع الملفات أولاً إذا وجدت
     const files = $('#fFile').files;
-    if(!files || files.length === 0) {
-      throw new Error('يجب اختيار ملف للرفع على الأقل');
-    }
-    
     const fileUrls = [];
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      if(file.size > CONFIG.MAX_FILE_MB * 1024 * 1024) {
-        throw new Error(`حجم الملف ${file.name} أكبر من ${CONFIG.MAX_FILE_MB}MB`);
-      }
-      
-      // عرض تقدم الرفع
-      const progressBar = $('#uploadProgress');
-      const progressBarInner = progressBar.querySelector('.progress-bar');
-      progressBar.classList.remove('d-none');
-      
-      try {
-        const upload = await ApiManager.uploadFileBase64(
-          file, 
-          formData.department,
-          (progress) => {
-            progressBarInner.style.width = `${progress}%`;
-          }
-        );
+    if(files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         
-        fileUrls.push(upload.fileUrl);
-      } catch (error) {
-        // إذا فشل رفع الملف، نواصل مع الملفات الأخرى
-        console.error(`فشل رفع الملف ${file.name}:`, error);
-        showToast(`فشل رفع الملف ${file.name}`, 'warning');
-      } finally {
-        progressBar.classList.add('d-none');
+        if(file.size > CONFIG.MAX_FILE_MB * 1024 * 1024) {
+          throw new Error(`حجم الملف ${file.name} أكبر من ${CONFIG.MAX_FILE_MB}MB`);
+        }
+        
+        // عرض تقدم الرفع
+        const progressBar = $('#uploadProgress');
+        const progressBarInner = progressBar.querySelector('.progress-bar');
+        progressBar.classList.remove('d-none');
+        
+        try {
+          const upload = await ApiManager.uploadFileBase64(
+            file, 
+            formData.department,
+            (progress) => {
+              progressBarInner.style.width = `${progress}%`;
+            }
+          );
+          
+          fileUrls.push(upload.fileUrl);
+        } catch (error) {
+          // إذا فشل رفع الملف، نواصل مع الملفات الأخرى
+          console.error(`فشل رفع الملف ${file.name}:`, error);
+          showToast(`فشل رفع الملف ${file.name}`, 'warning');
+        } finally {
+          progressBar.classList.add('d-none');
+        }
       }
-    }
-    
-    // إذا لم يتم رفع أي ملف، نعطي تحذير ولكن نواصل
-    if (fileUrls.length === 0) {
-      showToast('تم إضافة المهمة بدون مرفقات', 'warning');
     }
     
     const recordData = {
@@ -1124,20 +1151,22 @@ const UIManager = {
       tbody.innerHTML = filtered.map(r=>{
         const statClass = this.getStatusBadgeClass(r);
         const priClass  = this.getPriorityBadgeClass(r.Priority);
-// عرض روابط المرفقات والشهادة
-let fileLinks = '';
+        
+        // عرض روابط المرفقات والشهادة بشكل صحيح
+        let fileLinks = '';
 
-if (r.File && String(r.File).trim() !== '') {
-  fileLinks += r.File.split(',').map(url =>
-    `<a href="${url.trim()}" target="_blank" class="text-success me-2"><i class="fa-solid fa-file me-1"></i>مرفق</a>`
-  ).join('');
-}
+        if (r.File && String(r.File).trim() !== '' && String(r.File).trim() !== 'undefined') {
+          const fileUrls = String(r.File).split(',').map(url => url.trim()).filter(url => url && url !== 'undefined');
+          fileLinks += fileUrls.map(url =>
+            `<a href="${url}" target="_blank" class="text-success me-2" title="فتح المرفق"><i class="fa-solid fa-file me-1"></i>مرفق</a>`
+          ).join('');
+        }
 
-if (r.Certificate && String(r.Certificate).trim() !== '') {
-  fileLinks += `<a href="${r.Certificate.trim()}" target="_blank" class="text-warning me-2"><i class="fa-solid fa-award me-1"></i>شهادة</a>`;
-}
+        if (r.Certificate && String(r.Certificate).trim() !== '' && String(r.Certificate).trim() !== 'undefined') {
+          fileLinks += `<a href="${r.Certificate.trim()}" target="_blank" class="text-warning me-2" title="فتح الشهادة"><i class="fa-solid fa-award me-1"></i>شهادة</a>`;
+        }
 
-if (!fileLinks) fileLinks = '—';
+        if (!fileLinks) fileLinks = '—';
           
         const recId = r.id || r.ID || r.RecordID || r.Timestamp;
         
@@ -1382,11 +1411,6 @@ const FormManager = {
         showToast('يرجى ملء جميع الحقول الإلزامية','error'); 
         return; 
       }
-      
-      if(!$('#fFile').files || !$('#fFile').files.length){ 
-        showToast('يجب رفع ملف للمهمة على الأقل','error'); 
-        return; 
-      }
 
       btn.innerHTML = '<div class="loading-spinner me-2"></div> جاري الحفظ...'; 
       btn.disabled = true;
@@ -1399,16 +1423,16 @@ const FormManager = {
         assetName: $('#fAsset').selectedOptions[0] ? $('#fAsset').selectedOptions[0].textContent : $('#fAsset').value,
         startDate: $('#fServiceDate').value,
         dueDate: $('#fNextDue').value,
-        completedDate: ($('#fTaskType').value==='PM' || $('#fStatus').value==='Completed') ? $('#fServiceDate').value : '',
+        completedDate: ($('#fStatus').value==='Completed') ? $('#fServiceDate').value : '',
         status: $('#fStatus').value,
         priority: $('#fPriority').value || 'Medium',
         downtimeHours: $('#fDown').value || '0',
-        notes: $('#fNotes') ? $('#fNotes').value : ''
+        notes: ''
       };
 
       await DataManager.addRecord(formData);
 
-      showToast('تم إضافة المهمة ورفع الملفات بنجاح');
+      showToast('تم إضافة المهمة بنجاح');
       ev.target.reset(); 
       this.resetFileUpload();
       
