@@ -104,6 +104,12 @@ h1,h2,h3,h4,h5{font-family:'Cairo',Tajawal,Arial;letter-spacing:.2px}
   background:linear-gradient(135deg,var(--crimson),#3a0010);color:#fff;padding:10px 16px;border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.45);font-weight:700
 }
 footer{border-top:1px solid rgba(255,255,255,.15)}
+
+/* لإتاحة حذف الملفات قبل الرفع */
+.thumb{display:inline-block; position:relative; margin:6px}
+.thumb .x{position:absolute; top:-8px; left:-8px; width:22px; height:22px; border-radius:50%;
+  background:#b00020; color:#fff; border:0; font-weight:900; line-height:20px; cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
@@ -412,101 +418,73 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
 const API_URL = "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec";
 const CONFIG = { MAX_FILES:5, MAX_MB:10, AUTO_REFRESH_MS: 5*60*1000 };
 
-/* =================== حالة التطبيق =================== */
-const App = {
-  records: [],
-  assetsMap: {},
-  staff: [],
-  charts: { donut:null, bar:null, line:null },
-  filters: { dept:"", type:"", status:"", search:"", alertsOnly:false }
-};
-
-/* =================== أدوات صغيرة =================== */
+const App = { records:[], assetsMap:{}, staff:[], charts:{donut:null,bar:null,line:null}, filters:{dept:"",type:"",status:"",search:"",alertsOnly:false} };
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
-function toast(msg, type="info"){
-  const t=document.createElement('div');t.className='toast-lite';
-  t.style.background = type==="error"
-    ? "linear-gradient(135deg,#a30000,#d00000)"
-    : type==="success" ? "linear-gradient(135deg,#147a3c,#28a745)" : t.style.background;
-  t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);
-}
-function fmt(d){
-  if(!d) return ""; const x=new Date(d); return isNaN(x)? String(d) : x.toLocaleDateString('ar-SA');
-}
-function addDays(d, n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-function classify(r){
-  if(r.Status==="Completed") return "Completed";
-  if(r.Status==="OutOfService") return "OutOfService";
-  if(r.Status==="Critical") return "Critical";
-  const due = r.DueDate ? new Date(r.DueDate) : null;
-  if(due){
-    const today=new Date(); today.setHours(0,0,0,0);
-    if(due < today) return "Overdue";
-    const warn = addDays(today,10);
-    if(due <= warn) return "DueSoon";
-  }
-  return r.Status || "Pending";
-}
-function animateValue(el, to, suffix=""){
-  const start=0, dur=900, t0=performance.now();
-  function step(now){const p=Math.min(1,(now-t0)/dur); el.textContent = Math.round(start+(to-start)*p) + suffix; if(p<1) requestAnimationFrame(step);}
-  requestAnimationFrame(step);
-}
+function toast(msg,type="info"){ const t=document.createElement('div'); t.className='toast-lite'; t.style.background=type==="error"?"linear-gradient(135deg,#a30000,#d00000)":type==="success"?"linear-gradient(135deg,#147a3c,#28a745)":t.style.background; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3500); }
+function fmt(d){ if(!d) return ""; const x=new Date(d); return isNaN(x)? String(d) : x.toLocaleDateString('ar-SA'); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function classify(r){ if(r.Status==="Completed") return "Completed"; if(r.Status==="OutOfService") return "OutOfService"; if(r.Status==="Critical") return "Critical"; const due=r.DueDate?new Date(r.DueDate):null; if(due){ const today=new Date(); today.setHours(0,0,0,0); if(due<today) return "Overdue"; if(due<=addDays(today,10)) return "DueSoon"; } return r.Status||"Pending"; }
+function animateValue(el,to,suffix=""){ const start=0, dur=900, t0=performance.now(); function step(now){const p=Math.min(1,(now-t0)/dur); el.textContent=Math.round(start+(to-start)*p)+suffix; if(p<1) requestAnimationFrame(step);} requestAnimationFrame(step); }
 
-/* =================== طبقة API =================== */
+/* =================== طبقة API (مع تسجيل أخطاء قوي) =================== */
 const API = {
-  async _get(action, params={}){
-    const url = new URL(API_URL); url.searchParams.set('action', action);
+  async _parseResponse(r){
+    const ct = (r.headers.get('content-type')||'').toLowerCase();
+    const raw = await r.text();
+    let j=null;
+    try{ j = ct.includes('application/json') ? JSON.parse(raw) : JSON.parse(raw); }
+    catch(e){ console.error('Raw response (non‑JSON):', raw); throw new Error(`استجابة غير JSON من الخادم (HTTP ${r.status})`); }
+    if(!r.ok){ console.error('HTTP not OK:', r.status, j); throw new Error(j?.error || `HTTP ${r.status}`); }
+    if(j && (j.success===false || j.error)){ console.error('API error payload:', j); throw new Error(j.error||'فشل العملية'); }
+    return j.data ?? j;
+  },
+  async _get(action,params={}){
+    const url=new URL(API_URL); url.searchParams.set('action', action);
     Object.entries(params).forEach(([k,v])=>{ if(v!==undefined && v!==null) url.searchParams.set(k,v) });
     const r = await fetch(url.toString(), {method:'GET'});
-    const j = await r.json(); if(j.error || j.success===false) throw new Error(j.error||'خطأ غير معروف'); return j.data || j;
+    return this._parseResponse(r);
   },
-  async _post(action, params={}){
-    const body = new URLSearchParams({action}); for(const [k,v] of Object.entries(params)){ if(v!==undefined && v!==null) body.append(k, v); }
-    const r = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body});
-    const j = await r.json(); if(j.error || j.success===false) throw new Error(j.error||'خطأ غير معروف'); return j.data || j;
+  async _post(action,params={}){
+    const body = new URLSearchParams({action});
+    for(const [k,v] of Object.entries(params)){ if(v!==undefined && v!==null) body.append(k, v); }
+    const r = await fetch(API_URL,{method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body});
+    return this._parseResponse(r);
   },
   getRecords(){ return this._get('getRecords'); },
-  getAssets(){ return this._get('getAssets'); },
-  getStaff(){  return this._get('getStaff'); },
-  getKPIs(){   return this._get('getKPIs'); },
+  getAssets(){  return this._get('getAssets');  },
+  getStaff(){   return this._get('getStaff');   },
+  getKPIs(){    return this._get('getKPIs');    },
   addRecord(payload){ return this._post('addRecord', payload); },
   deleteRecord(payload){ return this._post('deleteRecord', payload); },
   updateRecord(payload){ return this._post('updateRecord', payload); },
   uploadFile({department,fileName,mimeType,base64,recordId,timestamp}){
-    return this._post('uploadFile',{department,fileName,mimeType,fileData:base64,recordId,timestamp});
+    return this._post('uploadFile', {department,fileName,mimeType,fileData:base64,recordId,timestamp});
   },
-  generateCertificate({id,timestamp}){
-    return this._post('generateCertificate',{id,timestamp});
-  },
+  generateCertificate({id,timestamp}){ return this._post('generateCertificate',{id,timestamp}); },
   exportData(format){ return this._get('export',{format}); }
 };
 
-/* =================== التحميل الأولي =================== */
+/* =================== تحميل أولي وربط أحداث =================== */
 document.addEventListener('DOMContentLoaded', async ()=>{
-  const today = new Date().toISOString().split('T')[0]; $('#fStart').value = today;
-
-  bindEvents();
-  await loadAll();
-
-  setInterval(loadAll, CONFIG.AUTO_REFRESH_MS);
+  try{
+    $('#fStart').value = new Date().toISOString().split('T')[0];
+    bindEvents();
+    await loadAll();
+    setInterval(loadAll, CONFIG.AUTO_REFRESH_MS);
+  }catch(e){ console.error('INIT error:', e); toast('خطأ أثناء التهيئة: '+e.message,'error'); }
 });
 
-/* =================== ربط الأحداث =================== */
 function bindEvents(){
-  // الفلاتر
   $('#filterDept').addEventListener('change', e=>{ App.filters.dept=e.target.value; renderLog(); renderCerts(); });
   $('#filterType').addEventListener('change', e=>{ App.filters.type=e.target.value; renderLog(); renderCerts(); });
   $('#filterStatus').addEventListener('change', e=>{ App.filters.status=e.target.value; renderLog(); renderCerts(); });
   $('#searchBox').addEventListener('input', e=>{ App.filters.search=e.target.value.toLowerCase(); renderLog(); renderCerts(); });
   $('#btnShowAlertsOnly').addEventListener('click', ()=>{ App.filters.alertsOnly=!App.filters.alertsOnly; renderLog(); });
 
-  // تبويب "إضافة" – حساب الاستحقاق القادم
   $('#fFreq').addEventListener('change', calcNextDue);
   $('#fStart').addEventListener('change', calcNextDue);
 
-  // اختيار القسم → تعبئة الأجهزة + إلزامية رفع صورة
   $('#fDepartment').addEventListener('change', ()=>{
     const dep = $('#fDepartment').value;
     const arr = App.assetsMap[dep] || [];
@@ -515,7 +493,6 @@ function bindEvents(){
       : '<option value="">لا توجد أجهزة</option>';
   });
 
-  // رفع الملفات (إلزامي)
   const dz = $('#dropzone'), fi = $('#fFiles');
   dz.addEventListener('click', ()=> fi.click());
   dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
@@ -523,52 +500,39 @@ function bindEvents(){
   dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('drag'); handleFiles(e.dataTransfer.files); });
   fi.addEventListener('change', ()=> handleFiles(fi.files));
 
-  // حفظ/إعادة تعيين
   $('#formNew').addEventListener('submit', submitNew);
-  $('#btnReset').addEventListener('click', ()=>{ $('#formNew').reset(); $('#dzPreview').innerHTML=''; $('#dzInfo').textContent=''; });
+  $('#btnReset').addEventListener('click', ()=>{ $('#formNew').reset(); resetFilesUI(); });
 
-  // تصدير
   $('#btnExportXLSX').addEventListener('click', async ()=>{
-    try{ const r=await API.exportData('xlsx'); window.open(r.url,'_blank'); }catch(e){ toast('فشل تصدير Excel: '+e.message,'error'); }
+    try{ const r=await API.exportData('xlsx'); window.open(r.url,'_blank'); }
+    catch(e){ console.error('Export XLSX error:', e); toast('فشل تصدير Excel: '+e.message,'error'); }
   });
   $('#btnExportPDF').addEventListener('click', async ()=>{
-    try{ const r=await API.exportData('pdf'); window.open(r.url,'_blank'); }catch(e){ toast('فشل تصدير PDF: '+e.message,'error'); }
+    try{ const r=await API.exportData('pdf'); window.open(r.url,'_blank'); }
+    catch(e){ console.error('Export PDF error:', e); toast('فشل تصدير PDF: '+e.message,'error'); }
   });
   $('#btnRefreshAll').addEventListener('click', loadAll);
-
-  // توليد الشهادات الناقصة
   $('#btnGenMissingCerts').addEventListener('click', genMissingCerts);
 }
 
-/* =================== تحميل بيانات من الـ API =================== */
+/* =================== تحميل كل البيانات =================== */
 async function loadAll(){
-  try{
+  console.log('Loading records/assets/staff/kpis…');
+  try {
     const [records, assets, staff, kpis] = await Promise.all([
       API.getRecords(), API.getAssets(), API.getStaff(), API.getKPIs().catch(()=>null)
     ]);
-    App.records = records || [];
-    App.assetsMap = assets || {};
-    App.staff = staff || [];
-
+    App.records = records||[]; App.assetsMap = assets||{}; App.staff=staff||[];
     // تعبئة القوائم
     const depts = Object.keys(App.assetsMap).sort();
     $('#filterDept').innerHTML = '<option value="">جميع الأقسام</option>'+ depts.map(d=>`<option>${d}</option>`).join('');
     $('#fDepartment').innerHTML = '<option value="">— اختر —</option>'+ depts.map(d=>`<option>${d}</option>`).join('');
     $('#fStaff').innerHTML = '<option value="">— اختر —</option>'+ (App.staff||[]).map(s=>`<option>${s}</option>`).join('');
-
-    // مؤشرات
-    updateKPIs(kpis);
-
-    // رسوم
-    drawCharts();
-
-    // جداول
-    renderLog();
-    renderCerts();
-
-    toast('تم التحديث', 'success');
-  }catch(e){
-    console.error(e);
+    // KPIs & Charts & Tables
+    updateKPIs(kpis); drawCharts(); renderLog(); renderCerts();
+    toast('تم التحديث','success');
+  } catch (e) {
+    console.error('LoadAll error:', e);
     toast('تعذر تحميل البيانات: '+e.message, 'error');
   }
 }
@@ -629,7 +593,7 @@ function drawCharts(){
     else depts[d].Pending++;
   });
   const months = Array.from({length:12}).map((_,i)=>i);
-  const monthLab = ['ينا','فبر','مار','أبر','ماي','يون','يول','أغس','سبت','أكت','نوف','ديس'];
+  const monthLab = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   const series = Array(12).fill(0);
   recs.filter(r=> r.Status==='Completed' && r.CompletedDate).forEach(r=>{
     const m = new Date(r.CompletedDate).getMonth(); series[m] += 1;
@@ -740,6 +704,7 @@ function renderLog(){
   $('#viewCount').textContent = filtered.length;
   $('#totalCount').textContent = App.records.length;
 }
+
 function renderCerts(){
   const body = $('#certBody');
   const recs = App.records.filter(r=> r.Status==='Completed');
@@ -766,7 +731,7 @@ function renderCerts(){
   }));
 }
 
-/* =================== نموذج الإضافة =================== */
+/* =================== نموذج الإضافة + الرفع =================== */
 function calcNextDue(){
   const s=$('#fStart').value, f=$('#fFreq').value; if(!s||!f){ $('#fDue').value=''; return; }
   const d=new Date(s);
@@ -778,53 +743,78 @@ function calcNextDue(){
   if(f==='Y2') d.setFullYear(d.getFullYear()+2);
   $('#fDue').value = d.toISOString().split('T')[0];
 }
+
 let selectedFiles = [];
+function resetFilesUI(){ selectedFiles=[]; $('#fFiles').value=''; $('#dzPreview').innerHTML=''; $('#dzInfo').textContent=''; $('#dzProgress').classList.add('d-none'); $('#dzProgress .progress-bar').style.width='0%'; }
 function handleFiles(files){
   const list = Array.from(files||[]);
-  if(list.length + selectedFiles.length > CONFIG.MAX_FILES){ toast('الحد الأقصى 5 ملفات','error'); return; }
+  // تحقق من الحدود
   for(const f of list){
+    if(selectedFiles.length >= CONFIG.MAX_FILES){ toast('الحد الأقصى 5 ملفات','error'); break; }
     if(f.size > CONFIG.MAX_MB*1024*1024){ toast(`الملف ${f.name} يتجاوز ${CONFIG.MAX_MB}MB`,'error'); continue; }
     selectedFiles.push(f);
   }
-  const pv = $('#dzPreview'); pv.innerHTML=''; selectedFiles.forEach(f=>{
+  // إعادة رسم المعاينة + زر X للحذف
+  const pv = $('#dzPreview'); pv.innerHTML='';
+  selectedFiles.forEach((f,idx)=>{
+    const wrap=document.createElement('div'); wrap.className='thumb';
+    const del=document.createElement('button'); del.className='x'; del.innerText='×';
+    del.addEventListener('click', (e)=>{ e.stopPropagation(); removeFileAt(idx); });
+    wrap.appendChild(del);
     if(f.type.startsWith('image/')){
-      const img=document.createElement('img'); const r=new FileReader(); r.onload=e=> img.src=e.target.result; r.readAsDataURL(f); pv.appendChild(img);
+      const img=document.createElement('img'); const r=new FileReader(); r.onload=e=> img.src=e.target.result; r.readAsDataURL(f); wrap.appendChild(img);
     }else{
-      const d=document.createElement('div'); d.className='badge bg-dark me-2'; d.textContent = f.name; pv.appendChild(d);
+      const chip=document.createElement('div'); chip.className='badge bg-dark'; chip.textContent=f.name; wrap.appendChild(chip);
     }
+    pv.appendChild(wrap);
   });
-  $('#dzInfo').textContent = selectedFiles.length ? `تم اختيار ${selectedFiles.length} ملف` : '';
+  $('#dzInfo').textContent = selectedFiles.length ? `ملفات مختارة: ${selectedFiles.length}` : '';
 }
+function removeFileAt(i){ selectedFiles.splice(i,1); handleFiles([]); }
+
 async function submitNew(ev){
   ev.preventDefault();
-  if(!selectedFiles.length){ toast('رفع صورة/مرفق إلزامي','error'); return; }
-  const dep=$('#fDepartment').value, staff=$('#fStaff').value, type=$('#fTaskType').value;
-  const assetSel = $('#fAsset'), assetID=assetSel.value, assetName = assetSel.selectedOptions[0]?.textContent || assetID;
-  if(!dep||!staff||!type||!assetID||!$('#fStart').value){ toast('يرجى استكمال الحقول','error'); return; }
-
-  const payload = {
-    department:dep, staff:staff, taskType:type,
-    assetID:assetID, assetName:assetName,
-    startDate:$('#fStart').value, dueDate:$('#fDue').value, completedDate:$('#fCompleted').value,
-    status:$('#fStatus').value, priority:$('#fPriority').value,
-    downtimeHours:$('#fDown').value||'0', notes:''
-  };
   try{
+    if(!selectedFiles.length){ toast('رفع صورة/مرفق إلزامي','error'); return; }
+    const dep=$('#fDepartment').value, staff=$('#fStaff').value, type=$('#fTaskType').value;
+    const assetSel=$('#fAsset'), assetID=assetSel.value, assetName=assetSel.selectedOptions[0]?.textContent||assetID;
+    if(!dep||!staff||!type||!assetID||!$('#fStart').value){ toast('يرجى استكمال الحقول','error'); return; }
+
+    const payload = {
+      department:dep, staff, taskType:type, assetID, assetName,
+      startDate:$('#fStart').value, dueDate:$('#fDue').value, completedDate:$('#fCompleted').value,
+      status:$('#fStatus').value, priority:$('#fPriority').value, downtimeHours:$('#fDown').value||'0', notes:''
+    };
+    console.log('Adding record payload:', payload);
+
     const res = await API.addRecord(payload);
-    const rec = res.record || res; const id = rec.ID || '';
-    // رفع كل ملف
+    const rec = res.record || res; const recordId = rec.ID || ''; const ts = rec.Timestamp || '';
+    console.log('Record added:', rec);
+
+    // رفع الملفات بالتتابع
     const prog = $('#dzProgress'), bar=prog.querySelector('.progress-bar'); prog.classList.remove('d-none');
     for(let i=0;i<selectedFiles.length;i++){
-      const f = selectedFiles[i];
-      const base64 = await fileToBase64(f);
-      await API.uploadFile({department:dep, fileName:f.name, mimeType:f.type||'application/octet-stream', base64, recordId:id});
-      bar.style.width = ((i+1)/selectedFiles.length*100).toFixed(0)+'%';
+      const f = selectedFiles[i]; const base64 = await fileToBase64(f);
+      console.log(`Uploading file ${i+1}/${selectedFiles.length}:`, f.name, f.type, f.size);
+      try{
+        await API.uploadFile({department:dep, fileName:f.name, mimeType:f.type||'application/octet-stream', base64, recordId, timestamp:ts});
+        bar.style.width = ((i+1)/selectedFiles.length*100).toFixed(0)+'%';
+      }catch(e){
+        console.error('Upload error for', f.name, e);
+        toast(`فشل رفع ${f.name}: ${e.message}`,'error');
+        // نكمل بقية الملفات بدل ما نوقف الكل
+      }
     }
     prog.classList.add('d-none'); bar.style.width='0%';
+
     toast('تمت إضافة المهمة ورفع المرفقات','success');
-    selectedFiles=[]; $('#formNew').reset(); $('#dzPreview').innerHTML=''; $('#dzInfo').textContent='';
+    resetFilesUI();
+    $('#formNew').reset();
     await loadAll();
-  }catch(e){ toast('فشل الحفظ: '+e.message,'error'); }
+  }catch(e){
+    console.error('submitNew error:', e);
+    toast('فشل حفظ المهمة: '+e.message, 'error');
+  }
 }
 function fileToBase64(file){
   return new Promise((resolve,reject)=>{
@@ -835,7 +825,8 @@ async function genMissingCerts(){
   const toGen = App.records.filter(r=> r.Status==='Completed' && (!r.Certificate || r.Certificate===''));
   if(!toGen.length){ toast('لا توجد شهادات ناقصة','info'); return; }
   for(const r of toGen){
-    try{ await API.generateCertificate({id:r.ID||'', timestamp:r.Timestamp||''}); }catch(e){ console.warn(e); }
+    try{ await API.generateCertificate({id:r.ID||'', timestamp:r.Timestamp||''}); }
+    catch(e){ console.warn('gen cert failed for', r, e); }
   }
   toast('تم توليد الشهادات الناقصة','success'); await loadAll();
 }
