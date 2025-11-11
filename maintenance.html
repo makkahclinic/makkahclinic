@@ -972,16 +972,28 @@ const DataManager = {
       const progressBarInner = progressBar.querySelector('.progress-bar');
       progressBar.classList.remove('d-none');
       
-      const upload = await ApiManager.uploadFileBase64(
-        file, 
-        formData.department,
-        (progress) => {
-          progressBarInner.style.width = `${progress}%`;
-        }
-      );
-      
-      fileUrls.push(upload.fileUrl);
-      progressBar.classList.add('d-none');
+      try {
+        const upload = await ApiManager.uploadFileBase64(
+          file, 
+          formData.department,
+          (progress) => {
+            progressBarInner.style.width = `${progress}%`;
+          }
+        );
+        
+        fileUrls.push(upload.fileUrl);
+      } catch (error) {
+        // إذا فشل رفع الملف، نواصل مع الملفات الأخرى
+        console.error(`فشل رفع الملف ${file.name}:`, error);
+        showToast(`فشل رفع الملف ${file.name}`, 'warning');
+      } finally {
+        progressBar.classList.add('d-none');
+      }
+    }
+    
+    // إذا لم يتم رفع أي ملف، نعطي تحذير ولكن نواصل
+    if (fileUrls.length === 0) {
+      showToast('تم إضافة المهمة بدون مرفقات', 'warning');
     }
     
     const recordData = {
@@ -1197,11 +1209,8 @@ const FormManager = {
   },
   
   setupFileUpload(){
-    const fileInput = $('#fFile'), 
-          uploadArea = $('#fileUploadArea'), 
-          filePreview = $('#filePreview'),
-          fileInfo = $('#fileInfo'),
-          fileActions = $('#fileActions');
+    const fileInput = $('#fFile');
+    const uploadArea = $('#fileUploadArea');
     
     uploadArea.addEventListener('click', ()=> fileInput.click());
     
@@ -1244,6 +1253,7 @@ const FormManager = {
       return;
     }
     
+    const uploadArea = $('#fileUploadArea');
     const preview = $('#filePreview'); 
     const info = $('#fileInfo');
     const actions = $('#fileActions');
