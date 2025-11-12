@@ -13,7 +13,7 @@
 <!-- Bootstrap RTL + أيقونات + Chart.js -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet"/>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
 <style>
 :root{
@@ -416,7 +416,8 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
 
 <script>
 /* =================== إعدادات الاتصال =================== */
-const API_URL = "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec";
+// استبدل هذا الرابط برابط النشر الفعلي من Google Apps Script
+const API_URL = 'https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec';
 const CONFIG = { MAX_FILES:5, MAX_MB:10, AUTO_REFRESH_MS: 5*60*1000 };
 
 const App = { records:[], assetsMap:{}, staff:[], charts:{donut:null,bar:null,line:null}, filters:{dept:"",type:"",status:"",search:"",alertsOnly:false} };
@@ -428,30 +429,67 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function classify(r){ if(r.Status==="Completed") return "Completed"; if(r.Status==="OutOfService") return "OutOfService"; if(r.Status==="Critical") return "Critical"; const due=r.DueDate?new Date(r.DueDate):null; if(due){ const today=new Date(); today.setHours(0,0,0,0); if(due<today) return "Overdue"; if(due<=addDays(today,10)) return "DueSoon"; } return r.Status||"Pending"; }
 function animateValue(el,to,suffix=""){ const start=0, dur=900, t0=performance.now(); function step(now){const p=Math.min(1,(now-t0)/dur); el.textContent=Math.round(start+(to-start)*p)+suffix; if(p<1) requestAnimationFrame(step);} requestAnimationFrame(step); }
 
-/* =================== طبقة API (مع تسجيل أخطاء قوي) =================== */
+/* =================== طبقة API مصححة =================== */
 const API = {
   async _parseResponse(r){
-    const ct = (r.headers.get('content-type')||'').toLowerCase();
-    const raw = await r.text();
-    let j=null;
-    try{ j = ct.includes('application/json') ? JSON.parse(raw) : JSON.parse(raw); }
-    catch(e){ console.error('Raw response (non‑JSON):', raw); throw new Error(`استجابة غير JSON من الخادم (HTTP ${r.status})`); }
-    if(!r.ok){ console.error('HTTP not OK:', r.status, j); throw new Error(j?.error || `HTTP ${r.status}`); }
-    if(j && (j.success===false || j.error)){ console.error('API error payload:', j); throw new Error(j.error||'فشل العملية'); }
-    return j.data ?? j;
+    try {
+      const raw = await r.text();
+      let json;
+
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${raw.slice(0,200)}`);
+      }
+      
+      try {
+        json = JSON.parse(raw);
+      } catch(e) {
+        throw new Error('استجابة غير JSON من الخادم: ' + raw.slice(0,200));
+      }
+      
+      if (json?.success === false || json?.error) {
+        throw new Error(json.error || 'فشل العملية');
+      }
+      return json.data ?? json;
+    } catch (error) {
+      console.error('Parse response error:', error);
+      throw error;
+    }
   },
+
   async _get(action,params={}){
-    const url=new URL(API_URL); url.searchParams.set('action', action);
-    Object.entries(params).forEach(([k,v])=>{ if(v!==undefined && v!==null) url.searchParams.set(k,v) });
-    const r = await fetch(url.toString(), {method:'GET'});
-    return this._parseResponse(r);
+    try {
+      const url=new URL(API_URL); 
+      url.searchParams.set('action', action);
+      Object.entries(params).forEach(([k,v])=>{ 
+        if(v!==undefined && v!==null) url.searchParams.set(k,v) 
+      });
+      
+      const r = await fetch(url.toString(), {method:'GET'});
+      return this._parseResponse(r);
+    } catch (error) {
+      console.error('GET request error:', error);
+      throw error;
+    }
   },
+
   async _post(action,params={}){
-    const body = new URLSearchParams({action});
-    for(const [k,v] of Object.entries(params)){ if(v!==undefined && v!==null) body.append(k, v); }
-    const r = await fetch(API_URL,{method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body});
-    return this._parseResponse(r);
+    try {
+      const payload = { action, ...params };
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+      return this._parseResponse(r);
+    } catch (error) {
+      console.error('POST request error:', error);
+      throw error;
+    }
   },
+
+  // API methods
   getRecords(){ return this._get('getRecords'); },
   getAssets(){  return this._get('getAssets');  },
   getStaff(){   return this._get('getStaff');   },
@@ -459,11 +497,11 @@ const API = {
   addRecord(payload){ return this._post('addRecord', payload); },
   deleteRecord(payload){ return this._post('deleteRecord', payload); },
   updateRecord(payload){ return this._post('updateRecord', payload); },
-  uploadFile({department,fileName,mimeType,base64,recordId,timestamp}){
-    return this._post('uploadFile', {department,fileName,mimeType,fileData:base64,recordId,timestamp});
-  },
-  generateCertificate({id,timestamp}){ return this._post('generateCertificate',{id,timestamp}); },
-  exportData(format){ return this._get('export',{format}); }
+  uploadFile(payload){ return this._post('uploadFile', payload); },
+  generateCertificate(payload){ return this._post('generateCertificate', payload); },
+  exportData(format){ return this._get('export',{format}); },
+  repairSheets(){ return this._get('repair'); },
+  healthCheck(){ return this._get('health'); }
 };
 
 /* =================== تحميل أولي وربط أحداث =================== */
@@ -473,7 +511,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     bindEvents();
     await loadAll();
     setInterval(loadAll, CONFIG.AUTO_REFRESH_MS);
-  }catch(e){ console.error('INIT error:', e); toast('خطأ أثناء التهيئة: '+e.message,'error'); }
+  }catch(e){ 
+    console.error('INIT error:', e); 
+    toast('خطأ أثناء التهيئة: '+e.message,'error'); 
+  }
 });
 
 function bindEvents(){
@@ -505,11 +546,25 @@ function bindEvents(){
   $('#btnReset').addEventListener('click', ()=>{ $('#formNew').reset(); resetFilesUI(); });
 
   $('#btnExportXLSX').addEventListener('click', async ()=>{
-    try{ const r=await API.exportData('xlsx'); window.open(r.url,'_blank'); }
+    try{ 
+      const r=await API.exportData('xlsx'); 
+      if(r.url && r.url !== 'about:blank') {
+        window.open(r.url,'_blank');
+      } else {
+        toast('ميزة التصدير قيد التطوير','info');
+      }
+    }
     catch(e){ console.error('Export XLSX error:', e); toast('فشل تصدير Excel: '+e.message,'error'); }
   });
   $('#btnExportPDF').addEventListener('click', async ()=>{
-    try{ const r=await API.exportData('pdf'); window.open(r.url,'_blank'); }
+    try{ 
+      const r=await API.exportData('pdf'); 
+      if(r.url && r.url !== 'about:blank') {
+        window.open(r.url,'_blank');
+      } else {
+        toast('ميزة التصدير قيد التطوير','info');
+      }
+    }
     catch(e){ console.error('Export PDF error:', e); toast('فشل تصدير PDF: '+e.message,'error'); }
   });
   $('#btnRefreshAll').addEventListener('click', loadAll);
@@ -518,7 +573,7 @@ function bindEvents(){
   $('#btnRepairSheets').addEventListener('click', async ()=>{
     if(confirm('هل تريد إصلاح الجداول؟ هذا سيصلح هيكل البيانات.')){
       try{ 
-        await API._post('repair'); 
+        await API.repairSheets(); 
         toast('تم إصلاح الجداول','success'); 
         await loadAll(); 
       }catch(e){ toast('فشل الإصلاح: '+e.message,'error'); }
@@ -530,16 +585,17 @@ function bindEvents(){
 async function loadAll(){
   console.log('Loading records/assets/staff/kpis…');
   try {
-    const [records, assets, staff, kpis] = await Promise.all([
+    const [r1, r2, r3, r4] = await Promise.allSettled([
       API.getRecords(), 
       API.getAssets(), 
       API.getStaff(), 
-      API.getKPIs().catch(() => null)
+      API.getKPIs()
     ]);
-    
-    App.records = records || []; 
-    App.assetsMap = assets || {}; 
-    App.staff = staff || [];
+
+    App.records = r1.status === 'fulfilled' ? (r1.value || []) : [];
+    App.assetsMap = r2.status === 'fulfilled' ? (r2.value || {}) : {};
+    App.staff = r3.status === 'fulfilled' ? (r3.value || []) : [];
+    const kpis = r4.status === 'fulfilled' ? (r4.value || null) : null;
     
     // تعبئة القوائم
     const depts = Object.keys(App.assetsMap).sort();
@@ -553,7 +609,13 @@ async function loadAll(){
     renderLog(); 
     renderCerts();
     
-    toast('تم التحديث', 'success');
+    // إظهار رسالة تحذير إذا فشل بعض الطلبات
+    const failedRequests = [r1, r2, r3, r4].filter(r => r.status === 'rejected').length;
+    if (failedRequests > 0) {
+      toast('تم التحميل جزئيًا. بعض البيانات غير متوفرة.', 'warning');
+    } else {
+      toast('تم التحديث', 'success');
+    }
   } catch (e) {
     console.error('LoadAll error:', e);
     toast('تعذر تحميل البيانات: ' + e.message, 'error');
@@ -562,41 +624,29 @@ async function loadAll(){
 
 /* =================== KPIs مصححة =================== */
 function updateKPIs(k){
-  // استخدام البيانات من السيرفر أولاً، وإلا الحساب محلياً
   let totalDevices;
   let done;
   
   if (k) {
-    // استخدام بيانات KPIs من السيرفر
     totalDevices = k.totalDevices || 0;
-    done = k.done || 0;
+    done = k.done || k.completed || 0;
   } else {
-    // الحساب محلياً
     const recs = App.records;
-    
-    // عدد الأجهزة من خريطة الأصول
     totalDevices = Object.values(App.assetsMap).reduce((a, arr) => a + (arr ? arr.length : 0), 0);
-    
-    // المهام المكتملة
     done = recs.filter(r => r.Status === 'Completed').length;
   }
   
-  // نسبة الإنجاز = (المهام المكتملة ÷ إجمالي الأجهزة) × 100
   const completionRate = totalDevices > 0 ? Math.round((done / totalDevices) * 100) : 0;
-  
-  // باقي الحسابات
   const recs = App.records;
   const critical = recs.filter(r => classify(r) === 'Critical' || classify(r) === 'OutOfService').length;
   const uncompleted = recs.filter(r => r.Status !== 'Completed').length;
   const downtime = recs.reduce((s, r) => s + (Number(r.DowntimeHours) || 0), 0);
   
-  // MTTR
   const completed = recs.filter(r => r.Status === 'Completed' && r.StartDate && r.CompletedDate);
   const mttr = completed.length
     ? Math.round(completed.reduce((s, r) => (s + ((new Date(r.CompletedDate) - new Date(r.StartDate)) / (1000 * 3600 * 24))), 0) / completed.length)
     : 0;
 
-  // تحديث واجهة المستخدم
   animateValue($('#kpiAssets'), totalDevices);
   animateValue($('#kpiDonePct'), completionRate, '%');
   animateValue($('#kpiCritical'), critical);
@@ -604,7 +654,6 @@ function updateKPIs(k){
   animateValue($('#kpiMTTR'), mttr);
   animateValue($('#kpiDowntime'), Math.round(downtime));
   
-  // تنبيهات
   const alerts = recs
     .filter(r => ['Overdue', 'Critical', 'OutOfService', 'DueSoon'].includes(classify(r)))
     .slice(0, 8);
@@ -618,63 +667,72 @@ function updateKPIs(k){
 
 /* =================== رسوم بيانية =================== */
 function drawCharts(){
-  const ctxD = $('#donutStatus').getContext('2d');
-  const ctxB = $('#barDept').getContext('2d');
-  const ctxL = $('#lineMonthly').getContext('2d');
-  // بيانات
-  const recs = App.records;
-  const countBy = (fn)=> recs.reduce((m,r)=>{ const k=fn(r); m[k]=(m[k]||0)+1; return m; },{});
-  const st = countBy(r => classify(r));
-  const depts = {};
-  recs.forEach(r=>{
-    const d=r.Department||'غير محدد';
-    depts[d] = depts[d] || {Completed:0,Pending:0,Overdue:0};
-    const c = classify(r);
-    if(c==='Completed') depts[d].Completed++;
-    else if(c==='Overdue' || c==='Critical' || c==='OutOfService') depts[d].Overdue++;
-    else depts[d].Pending++;
-  });
-  const months = Array.from({length:12}).map((_,i)=>i);
-  const monthLab = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-  const series = Array(12).fill(0);
-  recs.filter(r=> r.Status==='Completed' && r.CompletedDate).forEach(r=>{
-    const m = new Date(r.CompletedDate).getMonth(); series[m] += 1;
-  });
+  try {
+    const ctxD = $('#donutStatus')?.getContext('2d');
+    const ctxB = $('#barDept')?.getContext('2d');
+    const ctxL = $('#lineMonthly')?.getContext('2d');
+    
+    if (!ctxD || !ctxB || !ctxL) {
+      console.warn('Charts not ready yet');
+      return;
+    }
+    
+    const recs = App.records;
+    const countBy = (fn)=> recs.reduce((m,r)=>{ const k=fn(r); m[k]=(m[k]||0)+1; return m; },{});
+    const st = countBy(r => classify(r));
+    const depts = {};
+    recs.forEach(r=>{
+      const d=r.Department||'غير محدد';
+      depts[d] = depts[d] || {Completed:0,Pending:0,Overdue:0};
+      const c = classify(r);
+      if(c==='Completed') depts[d].Completed++;
+      else if(c==='Overdue' || c==='Critical' || c==='OutOfService') depts[d].Overdue++;
+      else depts[d].Pending++;
+    });
+    const months = Array.from({length:12}).map((_,i)=>i);
+    const monthLab = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+    const series = Array(12).fill(0);
+    recs.filter(r=> r.Status==='Completed' && r.CompletedDate).forEach(r=>{
+      const m = new Date(r.CompletedDate).getMonth(); series[m] += 1;
+    });
 
-  App.charts.donut?.destroy();
-  App.charts.bar?.destroy();
-  App.charts.line?.destroy();
+    App.charts.donut?.destroy();
+    App.charts.bar?.destroy();
+    App.charts.line?.destroy();
 
-  App.charts.donut = new Chart(ctxD,{
-    type:'doughnut',
-    data:{ labels:['مكتملة','قيد الانتظار','متأخرة/حرجة','خارج الخدمة'], datasets:[{
-      data:[st.Completed||0, st.Pending||0, (st.Overdue||0)+(st.Critical||0), st.OutOfService||0],
-      backgroundColor:['#5fd997','#ffc44d','#ff6b6b','#9ea6b0'],
-      borderColor:['#2f8d5f','#a87b11','#b00020','#6c757d'], borderWidth:2
-    }]},
-    options:{ plugins:{ legend:{position:'bottom', labels:{color:'#fff'} } } }
-  });
+    App.charts.donut = new Chart(ctxD,{
+      type:'doughnut',
+      data:{ labels:['مكتملة','قيد الانتظار','متأخرة/حرجة','خارج الخدمة'], datasets:[{
+        data:[st.Completed||0, st.Pending||0, (st.Overdue||0)+(st.Critical||0), st.OutOfService||0],
+        backgroundColor:['#5fd997','#ffc44d','#ff6b6b','#9ea6b0'],
+        borderColor:['#2f8d5f','#a87b11','#b00020','#6c757d'], borderWidth:2
+      }]},
+      options:{ plugins:{ legend:{position:'bottom', labels:{color:'#fff'} } } }
+    });
 
-  const dKeys = Object.keys(depts);
-  App.charts.bar = new Chart(ctxB,{
-    type:'bar',
-    data:{
-      labels:dKeys, datasets:[
-        {label:'مكتملة', data:dKeys.map(k=>depts[k].Completed), backgroundColor:'rgba(40,167,69,.8)'},
-        {label:'متأخرة', data:dKeys.map(k=>depts[k].Overdue),   backgroundColor:'rgba(220,53,69,.85)'},
-        {label:'قيد الانتظار', data:dKeys.map(k=>depts[k].Pending), backgroundColor:'rgba(255,193,7,.85)'}
-      ]
-    },
-    options:{ plugins:{legend:{labels:{color:'#fff'}}}, scales:{x:{ticks:{color:'#fff'}}, y:{ticks:{color:'#fff'}}}}
-  });
+    const dKeys = Object.keys(depts);
+    App.charts.bar = new Chart(ctxB,{
+      type:'bar',
+      data:{
+        labels:dKeys, datasets:[
+          {label:'مكتملة', data:dKeys.map(k=>depts[k].Completed), backgroundColor:'rgba(40,167,69,.8)'},
+          {label:'متأخرة', data:dKeys.map(k=>depts[k].Overdue),   backgroundColor:'rgba(220,53,69,.85)'},
+          {label:'قيد الانتظار', data:dKeys.map(k=>depts[k].Pending), backgroundColor:'rgba(255,193,7,.85)'}
+        ]
+      },
+      options:{ plugins:{legend:{labels:{color:'#fff'}}}, scales:{x:{ticks:{color:'#fff'}}, y:{ticks:{color:'#fff'}}}}
+    });
 
-  App.charts.line = new Chart(ctxL,{
-    type:'line',
-    data:{ labels:monthLab, datasets:[{label:'منجز شهريًا', data:months.map(i=>series[i]),
-      borderWidth:3, fill:true, tension:.3, backgroundColor:'rgba(212,175,55,.15)', borderColor:'#d4af37'}]
-    },
-    options:{ plugins:{legend:{labels:{color:'#fff'}}}, scales:{x:{ticks:{color:'#fff'}}, y:{ticks:{color:'#fff'}}}}
-  });
+    App.charts.line = new Chart(ctxL,{
+      type:'line',
+      data:{ labels:monthLab, datasets:[{label:'منجز شهريًا', data:months.map(i=>series[i]),
+        borderWidth:3, fill:true, tension:.3, backgroundColor:'rgba(212,175,55,.15)', borderColor:'#d4af37'}]
+      },
+      options:{ plugins:{legend:{labels:{color:'#fff'}}}, scales:{x:{ticks:{color:'#fff'}}, y:{ticks:{color:'#fff'}}}}
+    });
+  } catch (error) {
+    console.error('Error drawing charts:', error);
+  }
 }
 
 /* =================== الجدول =================== */
@@ -728,7 +786,6 @@ function renderLog(){
     </tr>`;
   }).join('');
 
-  // إجراءات
   $$('.del-rec').forEach(b=> b.addEventListener('click', async function(){
     if(!confirm('تأكيد الحذف؟')) return;
     try{ await API.deleteRecord({id:this.dataset.id||'', timestamp:this.dataset.ts||''}); toast('تم الحذف','success'); await loadAll(); }
@@ -790,13 +847,11 @@ let selectedFiles = [];
 function resetFilesUI(){ selectedFiles=[]; $('#fFiles').value=''; $('#dzPreview').innerHTML=''; $('#dzInfo').textContent=''; $('#dzProgress').classList.add('d-none'); $('#dzProgress .progress-bar').style.width='0%'; }
 function handleFiles(files){
   const list = Array.from(files||[]);
-  // تحقق من الحدود
   for(const f of list){
     if(selectedFiles.length >= CONFIG.MAX_FILES){ toast('الحد الأقصى 5 ملفات','error'); break; }
     if(f.size > CONFIG.MAX_MB*1024*1024){ toast(`الملف ${f.name} يتجاوز ${CONFIG.MAX_MB}MB`,'error'); continue; }
     selectedFiles.push(f);
   }
-  // إعادة رسم المعاينة + زر X للحذف
   const pv = $('#dzPreview'); pv.innerHTML='';
   selectedFiles.forEach((f,idx)=>{
     const wrap=document.createElement('div'); wrap.className='thumb';
@@ -827,29 +882,44 @@ async function submitNew(ev){
       startDate:$('#fStart').value, dueDate:$('#fDue').value, completedDate:$('#fCompleted').value,
       status:$('#fStatus').value, priority:$('#fPriority').value, downtimeHours:$('#fDown').value||'0', notes:''
     };
-    console.log('Adding record payload:', payload);
 
     const res = await API.addRecord(payload);
-    const rec = res.record || res; const recordId = rec.ID || ''; const ts = rec.Timestamp || '';
-    console.log('Record added:', rec);
+    const recordId = res.ID || ''; 
+    const timestamp = res.Timestamp || '';
 
-    // رفع الملفات بالتتابع
-    const prog = $('#dzProgress'), bar=prog.querySelector('.progress-bar'); prog.classList.remove('d-none');
+    const prog = $('#dzProgress'), bar=prog.querySelector('.progress-bar'); 
+    prog.classList.remove('d-none');
+    
+    let uploadErrors = [];
+    
     for(let i=0;i<selectedFiles.length;i++){
-      const f = selectedFiles[i]; const base64 = await fileToBase64(f);
-      console.log(`Uploading file ${i+1}/${selectedFiles.length}:`, f.name, f.type, f.size);
-      try{
-        await API.uploadFile({department:dep, fileName:f.name, mimeType:f.type||'application/octet-stream', base64, recordId, timestamp:ts});
+      const f = selectedFiles[i]; 
+      try {
+        const base64 = await fileToBase64(f);
+        await API.uploadFile({
+          department:dep, 
+          fileName:f.name, 
+          mimeType:f.type||'application/octet-stream', 
+          fileData:base64, 
+          recordId, 
+          timestamp
+        });
         bar.style.width = ((i+1)/selectedFiles.length*100).toFixed(0)+'%';
-      }catch(e){
+      } catch(e) {
         console.error('Upload error for', f.name, e);
-        toast(`فشل رفع ${f.name}: ${e.message}`,'error');
-        // نكمل بقية الملفات بدل ما نوقف الكل
+        uploadErrors.push(f.name);
       }
     }
-    prog.classList.add('d-none'); bar.style.width='0%';
+    
+    prog.classList.add('d-none'); 
+    bar.style.width='0%';
 
-    toast('تمت إضافة المهمة ورفع المرفقات','success');
+    if(uploadErrors.length > 0) {
+      toast(`تم إضافة المهمة ولكن فشل رفع بعض الملفات: ${uploadErrors.join(', ')}`, 'warning');
+    } else {
+      toast('تمت إضافة المهمة ورفع المرفقات بنجاح','success');
+    }
+
     resetFilesUI();
     $('#formNew').reset();
     await loadAll();
@@ -858,19 +928,28 @@ async function submitNew(ev){
     toast('فشل حفظ المهمة: '+e.message, 'error');
   }
 }
+
 function fileToBase64(file){
   return new Promise((resolve,reject)=>{
-    const r=new FileReader(); r.onload=e=> resolve(e.target.result.split(',')[1]); r.onerror=()=>reject(new Error('file read error')); r.readAsDataURL(file);
+    const r=new FileReader(); 
+    r.onload=e=> resolve(e.target.result.split(',')[1]); 
+    r.onerror=()=>reject(new Error('file read error')); 
+    r.readAsDataURL(file);
   });
 }
+
 async function genMissingCerts(){
   const toGen = App.records.filter(r=> r.Status==='Completed' && (!r.Certificate || r.Certificate===''));
   if(!toGen.length){ toast('لا توجد شهادات ناقصة','info'); return; }
   for(const r of toGen){
-    try{ await API.generateCertificate({id:r.ID||'', timestamp:r.Timestamp||''}); }
-    catch(e){ console.warn('gen cert failed for', r, e); }
+    try{ 
+      await API.generateCertificate({id:r.ID||'', timestamp:r.Timestamp||''}); 
+    } catch(e){ 
+      console.warn('gen cert failed for', r, e); 
+    }
   }
-  toast('تم توليد الشهادات الناقصة','success'); await loadAll();
+  toast('تم توليد الشهادات الناقصة','success'); 
+  await loadAll();
 }
 </script>
 </body>
