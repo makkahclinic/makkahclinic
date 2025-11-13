@@ -479,34 +479,41 @@ function animateValue(el,to,suffix=""){
   } 
   requestAnimationFrame(step); 
 }
-
 /* =================== طبقة API مصححة =================== */
-  async _post(action, params = {}) {
+const API = {
+  async _parseResponse(r){
     try {
-      const payload = { action, ...params };
+      const raw = await r.text();
+      let json;
+
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${raw.slice(0,200)}`);
+      }
       
-      const r = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // هنا التغيير
-        body: JSON.stringify(payload)
-      });
+      try {
+        json = JSON.parse(raw);
+      } catch(e) {
+        throw new Error('استجابة غير JSON من الخادم: ' + raw.slice(0,200));
+      }
       
-      return this._parseResponse(r);
+      if (json?.success === false || json?.error) {
+        throw new Error(json.error || 'فشل العملية');
+      }
+      return json.data ?? json;
     } catch (error) {
-      console.error('POST request error:', error);
+      console.error('Parse response error:', error);
       throw error;
     }
   },
-
-  async _get(action,params={}){
+  async _get(action, params = {}){
     try {
-      const url=new URL(API_URL); 
+      const url = new URL(API_URL);
       url.searchParams.set('action', action);
-      Object.entries(params).forEach(([k,v])=>{ 
-        if(v!==undefined && v!==null) url.searchParams.set(k,v) 
+      Object.entries(params).forEach(([k,v])=>{
+        if (v !== undefined && v !== null) url.searchParams.set(k, v);
       });
-      
-      const r = await fetch(url.toString(), {method:'GET'});
+
+      const r = await fetch(url.toString(), { method: 'GET' });
       return this._parseResponse(r);
     } catch (error) {
       console.error('GET request error:', error);
@@ -514,16 +521,17 @@ function animateValue(el,to,suffix=""){
     }
   },
 
-  async _post(action, params={}){
+  // هنا النسخة الجديدة التي تستخدم text/plain لتفادي CORS
+  async _post(action, params = {}){
     try {
       const payload = { action, ...params };
-      
+
       const r = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
-      
+
       return this._parseResponse(r);
     } catch (error) {
       console.error('POST request error:', error);
@@ -536,16 +544,17 @@ function animateValue(el,to,suffix=""){
   getAssets(){  return this._get('getAssets');  },
   getStaff(){   return this._get('getStaff');   },
   getKPIs(){    return this._get('getKPIs');    },
-  addRecord(payload){ return this._post('addRecord', payload); },
-  deleteRecord(payload){ return this._post('deleteRecord', payload); },
-  updateRecord(payload){ return this._post('updateRecord', payload); },
-  uploadFile(payload){ return this._post('uploadFile', payload); },
-  generateCertificate(payload){ return this._post('generateCertificate', payload); },
-  exportData(format){ return this._get('export',{format}); },
-  repairSheets(){ return this._get('repair'); },
-  healthCheck(){ return this._get('health'); }
-};
 
+  addRecord(payload){           return this._post('addRecord', payload); },
+  deleteRecord(payload){        return this._post('deleteRecord', payload); },
+  updateRecord(payload){        return this._post('updateRecord', payload); },
+  uploadFile(payload){          return this._post('uploadFile', payload); },
+  generateCertificate(payload){ return this._post('generateCertificate', payload); },
+
+  exportData(format){ return this._get('export', { format }); },
+  repairSheets(){     return this._get('repair'); },
+  healthCheck(){      return this._get('health'); }
+};
 /* =================== تحميل أولي وربط أحداث =================== */
 document.addEventListener('DOMContentLoaded', async ()=>{
   try{
