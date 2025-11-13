@@ -481,28 +481,19 @@ function animateValue(el,to,suffix=""){
 }
 
 /* =================== طبقة API مصححة =================== */
-const API = {
-  async _parseResponse(r){
+  async _post(action, params = {}) {
     try {
-      const raw = await r.text();
-      let json;
-
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status}: ${raw.slice(0,200)}`);
-      }
+      const payload = { action, ...params };
       
-      try {
-        json = JSON.parse(raw);
-      } catch(e) {
-        throw new Error('استجابة غير JSON من الخادم: ' + raw.slice(0,200));
-      }
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // هنا التغيير
+        body: JSON.stringify(payload)
+      });
       
-      if (json?.success === false || json?.error) {
-        throw new Error(json.error || 'فشل العملية');
-      }
-      return json.data ?? json;
+      return this._parseResponse(r);
     } catch (error) {
-      console.error('Parse response error:', error);
+      console.error('POST request error:', error);
       throw error;
     }
   },
