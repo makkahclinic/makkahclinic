@@ -787,7 +787,8 @@ function drawCharts(){
 }
 
 /* =================== الجدول =================== */
-function renderLog(){++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+/* =================== الجدول =================== */
+function renderLog(){
   const f = App.filters;
   const filtered = (App.records||[]).filter(r=>{
     if(f.dept && r.Department!==f.dept) return false;
@@ -806,31 +807,51 @@ function renderLog(){+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   const tb = $('#logBody');
   if(!filtered.length){
     tb.innerHTML = '<tr><td colspan="13" class="text-center py-4 smallmuted"><i class="fa-solid fa-inbox ms-1"></i> لا توجد سجلات</td></tr>';
-    $('#viewCount').textContent = 0; $('#totalCount').textContent = App.records.length; return;
+    $('#viewCount').textContent = 0;
+    $('#totalCount').textContent = App.records.length;
+    return;
   }
 
   tb.innerHTML = filtered.map(r=>{
     const cls = classify(r);
-    const bClass = cls==='Completed'?'completed':cls==='Overdue'?'overdue':cls==='Critical'?'critical':cls==='DueSoon'?'due':cls==='OutOfService'?'critical':'pending';
-    const files = [];
-    if(r.File){ String(r.File).split(',').forEach(u=>{u=u.trim(); if(u && u!=='undefined') files.push(`<a href="${u}" target="_blank" class="me-2 text-success"><i class="fa-solid fa-paperclip"></i></a>`); }); }
-    
-let certHtml;
-if (r.Certificate) {
-  // في حال الشهادة موجودة فعلاً
-  certHtml = `<a class="btn btn-sm btn-outline-gold" target="_blank" href="${r.Certificate}" title="عرض الشهادة">
-    <i class="fa-solid fa-file-pdf"></i>
-  </a>`;
-} else if (r.Status === 'Completed') {
-  // مهمة مكتملة لكن ما عندها شهادة → إظهار زر إصدار
-  certHtml = `<button class="btn btn-sm btn-outline-gold btn-gen-cert" data-id="${r.ID || ''}" title="إصدار الشهادة">
-    <i class="fa-solid fa-file-circle-plus"></i>
-  </button>`;
-} else {
-  // غير مكتملة → لا يوجد شيء
-  certHtml = '—';
-}
+    const bClass = cls==='Completed'
+      ? 'completed'
+      : cls==='Overdue'
+      ? 'overdue'
+      : cls==='Critical'
+      ? 'critical'
+      : cls==='DueSoon'
+      ? 'due'
+      : cls==='OutOfService'
+      ? 'critical'
+      : 'pending';
 
+    const files = [];
+    if(r.File){
+      String(r.File).split(',').forEach(u=>{
+        u = u.trim();
+        if(u && u!=='undefined'){
+          files.push(`<a href="${u}" target="_blank" class="me-2 text-success"><i class="fa-solid fa-paperclip"></i></a>`);
+        }
+      });
+    }
+
+    // ===== الشهادة / زر إصدار الشهادة =====
+    let certHtml;
+    if (r.Certificate) {
+      // الشهادة موجودة فعلاً → زر فتح PDF
+      certHtml = `<a class="btn btn-sm btn-outline-gold" target="_blank" href="${r.Certificate}" title="عرض الشهادة">
+        <i class="fa-solid fa-file-pdf"></i>
+      </a>`;
+    } else if (r.Status === 'Completed') {
+      // مكتملة لكن بدون شهادة → زر إصدار
+      certHtml = `<button class="btn btn-sm btn-outline-gold btn-gen-cert" data-id="${r.ID || ''}" title="إصدار الشهادة">
+        <i class="fa-solid fa-file-circle-plus"></i>
+      </button>`;
+    } else {
+      // غير مكتملة → لا شيء
+      certHtml = '—';
+    }
 
     return `<tr>
       <td>${fmt(r.Timestamp)}</td>
@@ -844,23 +865,54 @@ if (r.Certificate) {
       <td><span class="badge-status ${bClass}">${r.Status||cls}</span></td>
       <td>${r.Priority||'-'}</td>
       <td>${files.join('')||'—'}</td>
-      <td>${certBtn}</td>
+      <td>${certHtml}</td>
       <td>
-        <button class="btn btn-sm btn-outline-danger del-rec" data-id="${r.ID||''}" data-ts="${r.Timestamp||''}"><i class="fa-solid fa-trash"></i></button>
+        <button class="btn btn-sm btn-outline-danger del-rec" data-id="${r.ID||''}" data-ts="${r.Timestamp||''}">
+          <i class="fa-solid fa-trash"></i>
+        </button>
       </td>
     </tr>`;
   }).join('');
 
+  // زر الحذف
   $$('.del-rec').forEach(b=> b.addEventListener('click', async function(){
     if(!confirm('تأكيد الحذف؟')) return;
-    try{ await API.deleteRecord({id:this.dataset.id||'', timestamp:this.dataset.ts||''}); toast('تم الحذف','success'); await loadAll(); }
-    catch(e){ toast('فشل الحذف: '+e.message,'error'); }
+    try{
+      await API.deleteRecord({id:this.dataset.id||'', timestamp:this.dataset.ts||''});
+      toast('تم الحذف','success');
+      await loadAll();
+    }catch(e){
+      toast('فشل الحذف: '+e.message,'error');
+    }
   }));
+
+  // أزرار إصدار الشهادة
+  $$('.btn-gen-cert').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const id = this.dataset.id;
+      if (!id) return;
+
+      try {
+        this.disabled = true;
+        this.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+        await API.generateCertificate({ id });
+
+        toast('تم إنشاء الشهادة بنجاح', 'success');
+        await loadAll();
+      } catch (e) {
+        console.error('Generate cert error:', e);
+        toast('فشل إنشاء الشهادة: ' + e.message, 'error');
+      } finally {
+        this.disabled = false;
+        this.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i>';
+      }
+    });
+  });
 
   $('#viewCount').textContent = filtered.length;
   $('#totalCount').textContent = App.records.length;
 }
-
 /* =================== نموذج الإضافة + الرفع =================== */
 function calcNextDue(){
   const s=$('#fStart').value, f=$('#fFreq').value; if(!s||!f){ $('#fDue').value=''; return; }
