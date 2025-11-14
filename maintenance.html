@@ -104,6 +104,7 @@ h1,h2,h3,h4,h5{font-family:'Cairo',Tajawal,Arial;letter-spacing:.2px}
 .kpi.red   .value{color:#ff8a8a}
 .kpi.orange .value{color:#ffd08a}
 .kpi.blue .value{color:#9dd7ff}
+.kpi.purple .value{color:#d8aaff}
 
 .badge-status{
   padding:.45rem .7rem;border-radius:999px;font-weight:700;border:2px solid rgba(255,255,255,.15);
@@ -119,11 +120,49 @@ h1,h2,h3,h4,h5{font-family:'Cairo',Tajawal,Arial;letter-spacing:.2px}
 .table{color:#fff}
 .table tbody tr:hover{background:rgba(255,255,255,.08);}
 
-.form-control,.form-select{
-  background:rgba(0,0,0,.35);color:#fff;border:1px solid rgba(255,255,255,.18)
+/* تحسين ألوان النموذج بشكل كامل */
+.form-control, .form-select {
+  background: rgba(0,0,0,.5) !important;
+  color: #ffd08a !important;
+  border: 1px solid rgba(255,255,255,.3) !important;
+  font-weight: 500;
 }
 
-.form-control:focus,.form-select:focus{border-color:var(--gold);box-shadow:0 0 0 .2rem rgba(212,175,55,.25); color: #fff;}
+.form-control:focus, .form-select:focus {
+  background: rgba(0,0,0,.7) !important;
+  color: #ffd08a !important;
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 .2rem rgba(212,175,55,.25) !important;
+}
+
+/* تحسين خاص لحقول التاريخ والأرقام */
+input[type="date"], input[type="number"] {
+  color: #9dd7ff !important;
+  font-weight: 600;
+}
+
+input[type="date"]:focus, input[type="number"]:focus {
+  color: #71ff9d !important;
+}
+
+/* تحسين أيقونة التقويم */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(2);
+  cursor: pointer;
+  padding: 4px;
+}
+
+input[type="date"]::-webkit-datetime-edit {
+  color: #9dd7ff !important;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  color: #9dd7ff !important;
+}
+
+input[type="date"]::-webkit-datetime-edit-text {
+  color: #ffd08a !important;
+}
 
 .btn-gold{
   background:linear-gradient(135deg,var(--gold),#f5d86c);
@@ -154,7 +193,6 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
   background:#b00020; color:#fff; border:0; font-weight:900; line-height:20px; cursor:pointer;
   box-shadow:0 2px 6px rgba(0,0,0,.35)}
   
-/* تحسينات إضافية */
 .chart-container {
   position: relative;
   height: 220px;
@@ -198,7 +236,6 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
   to { transform: rotate(360deg); }
 }
 
-/* تحسينات للاستجابة */
 @media (max-width: 768px) {
   .kpi .value {
     font-size: 28px;
@@ -247,10 +284,17 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
     <div class="container py-4">
       <div class="row g-3">
         <div class="col-6 col-lg-3">
-          <div class="card-glass kpi gold h-100">
-            <div class="label">إجمالي الأجهزة</div>
-            <div id="kpiAssets" class="value">—</div>
-            <div class="hint">المُسجّلة في النظام</div>
+          <div class="card-glass kpi purple h-100">
+            <div class="label">الأجهزة التي لم تتم صيانتها</div>
+            <div id="kpiNotServiced" class="value">—</div>
+            <div class="hint">تتطلب صيانة فورية</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="card-glass kpi red h-100">
+            <div class="label">الأجهزة المتأخرة عن موعد الصيانة</div>
+            <div id="kpiOverdue" class="value">0</div>
+            <div class="hint">تجاوزت موعد الصيانة المجدول</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
@@ -262,13 +306,6 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
         </div>
         <div class="col-6 col-lg-3">
           <div class="card-glass kpi orange h-100">
-            <div class="label">المتأخرة عن الجدول</div>
-            <div id="kpiOverdue" class="value">0</div>
-            <div class="hint">تجاوزت موعد الصيانة</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi red h-100">
             <div class="label">خارج الخدمة</div>
             <div id="kpiOutOfService" class="value">0</div>
             <div class="hint">غير قيد التشغيل</div>
@@ -522,56 +559,68 @@ footer{border-top:1px solid rgba(255,255,255,.15)}
 const API_URL = 'https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec';
 const CONFIG = { MAX_FILES:5, MAX_MB:10, AUTO_REFRESH_MS: 5*60*1000 };
 
-const App = { records:[], assetsMap:{}, staff:[], charts:{donut:null,bar:null,line:null}, filters:{dept:"",type:"",status:"",search:"",alertsOnly:false} };
+const App = { 
+  records:[], 
+  assetsMap:{}, 
+  staff:[], 
+  charts:{donut:null,bar:null,line:null}, 
+  filters:{dept:"",type:"",status:"",search:"",alertsOnly:false} 
+};
+
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
-function toast(msg,type="info"){ 
-  const t=document.createElement('div'); 
-  t.className='toast-lite'; 
-  t.style.background=type==="error"?"linear-gradient(135deg,#a30000,#d00000)":type==="success"?"linear-gradient(135deg,#147a3c,#28a745)":t.style.background; 
-  t.textContent=msg; 
+function toast(msg, type="info"){ 
+  const t = document.createElement('div'); 
+  t.className = 'toast-lite'; 
+  t.style.background = type === "error" ? "linear-gradient(135deg,#a30000,#d00000)" : 
+                        type === "success" ? "linear-gradient(135deg,#147a3c,#28a745)" : 
+                        "linear-gradient(135deg,var(--crimson),#3a0010)"; 
+  t.textContent = msg; 
   document.body.appendChild(t); 
-  setTimeout(()=>t.remove(),3500); 
+  setTimeout(() => t.remove(), 3500); 
 }
 
 function fmt(d){ 
   if(!d) return ""; 
-  const x=new Date(d); 
-  return isNaN(x)? String(d) : x.toLocaleDateString('ar-SA'); 
+  const x = new Date(d); 
+  return isNaN(x) ? String(d) : x.toLocaleDateString('ar-SA'); 
 }
 
-function addDays(d,n){ 
-  const x=new Date(d); 
-  x.setDate(x.getDate()+n); 
+function addDays(d, n){ 
+  const x = new Date(d); 
+  x.setDate(x.getDate() + n); 
   return x; 
 }
 
 function classify(r){ 
-  if(r.Status==="Completed") return "Completed"; 
-  if(r.Status==="OutOfService") return "OutOfService"; 
-  if(r.Status==="Critical") return "Critical"; 
-  const due=r.DueDate?new Date(r.DueDate):null; 
+  if(r.Status === "Completed") return "Completed"; 
+  if(r.Status === "OutOfService") return "OutOfService"; 
+  if(r.Status === "Critical") return "Critical"; 
+  
+  const due = r.DueDate ? new Date(r.DueDate) : null; 
   if(due){ 
-    const today=new Date(); 
-    today.setHours(0,0,0,0); 
-    if(due<today) return "Overdue"; 
-    if(due<=addDays(today,10)) return "DueSoon"; 
+    const today = new Date(); 
+    today.setHours(0,0,0,0);
+    due.setHours(0,0,0,0);
+    
+    if(due < today) return "Overdue"; 
+    if(due <= addDays(today, 10)) return "DueSoon"; 
   } 
-  return r.Status||"Pending"; 
+  return r.Status || "Pending"; 
 }
 
-function animateValue(el,to,suffix=""){ 
-  const start=0, dur=900, t0=performance.now(); 
+function animateValue(el, to, suffix=""){ 
+  const start = 0, dur = 900, t0 = performance.now(); 
   function step(now){
-    const p=Math.min(1,(now-t0)/dur); 
-    el.textContent=Math.round(start+(to-start)*p)+suffix; 
-    if(p<1) requestAnimationFrame(step);
+    const p = Math.min(1, (now - t0) / dur); 
+    el.textContent = Math.round(start + (to - start) * p) + suffix; 
+    if(p < 1) requestAnimationFrame(step);
   } 
   requestAnimationFrame(step); 
 }
 
-/* =================== طبقة API مصححة =================== */
+/* =================== طبقة API =================== */
 const API = {
   async _parseResponse(r){
     try {
@@ -597,11 +646,12 @@ const API = {
       throw error;
     }
   },
+
   async _get(action, params = {}){
     try {
       const url = new URL(API_URL);
       url.searchParams.set('action', action);
-      Object.entries(params).forEach(([k,v])=>{
+      Object.entries(params).forEach(([k,v]) => {
         if (v !== undefined && v !== null) url.searchParams.set(k, v);
       });
 
@@ -613,7 +663,6 @@ const API = {
     }
   },
 
-  // هنا النسخة الجديدة التي تستخدم text/plain لتفادي CORS
   async _post(action, params = {}){
     try {
       const payload = { action, ...params };
@@ -649,97 +698,210 @@ const API = {
 };
 
 /* =================== تحميل أولي وربط أحداث =================== */
-document.addEventListener('DOMContentLoaded', async ()=>{
+document.addEventListener('DOMContentLoaded', async () => {
   try{
     $('#fStart').value = new Date().toISOString().split('T')[0];
     bindEvents();
     await loadAll();
     setInterval(loadAll, CONFIG.AUTO_REFRESH_MS);
-  }catch(e){ 
+  } catch(e){ 
     console.error('INIT error:', e); 
-    toast('خطأ أثناء التهيئة: '+e.message,'error'); 
+    toast('خطأ أثناء التهيئة: ' + e.message, 'error'); 
   }
 });
 
 function bindEvents(){
-  $('#filterDept').addEventListener('change', e=>{ App.filters.dept=e.target.value; renderLog(); });
-  $('#filterType').addEventListener('change', e=>{ App.filters.type=e.target.value; renderLog(); });
-  $('#filterStatus').addEventListener('change', e=>{ App.filters.status=e.target.value; renderLog(); });
-  $('#searchBox').addEventListener('input', e=>{ App.filters.search=e.target.value.toLowerCase(); renderLog(); });
-  $('#btnShowAlertsOnly').addEventListener('click', ()=>{ App.filters.alertsOnly=!App.filters.alertsOnly; renderLog(); });
+  // الفلاتر والبحث
+  $('#filterDept').addEventListener('change', e => { App.filters.dept = e.target.value; renderLog(); });
+  $('#filterType').addEventListener('change', e => { App.filters.type = e.target.value; renderLog(); });
+  $('#filterStatus').addEventListener('change', e => { App.filters.status = e.target.value; renderLog(); });
+  $('#searchBox').addEventListener('input', e => { App.filters.search = e.target.value.toLowerCase(); renderLog(); });
+  $('#btnShowAlertsOnly').addEventListener('click', () => { App.filters.alertsOnly = !App.filters.alertsOnly; renderLog(); });
 
+  // حساب تاريخ الاستحقاق
   $('#fFreq').addEventListener('change', calcNextDue);
   $('#fStart').addEventListener('change', calcNextDue);
 
-  $('#fDepartment').addEventListener('change', ()=>{
+  // تحديث قائمة الأجهزة عند اختيار القسم
+  $('#fDepartment').addEventListener('change', () => {
     const dep = $('#fDepartment').value;
     const arr = App.assetsMap[dep] || [];
     $('#fAsset').innerHTML = arr.length
-      ? '<option value="">— اختر الجهاز —</option>'+arr.map(a=>`<option value="${a.id}">${a.name}</option>`).join('')
+      ? '<option value="">— اختر الجهاز —</option>' + arr.map(a => `<option value="${a.id}">${a.name}</option>`).join('')
       : '<option value="">لا توجد أجهزة</option>';
   });
 
+  // رفع الملفات
   const dz = $('#dropzone'), fi = $('#fFiles');
-  dz.addEventListener('click', ()=> fi.click());
-  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
-  dz.addEventListener('dragleave', ()=> dz.classList.remove('drag'));
-  dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('drag'); handleFiles(e.dataTransfer.files); });
-  fi.addEventListener('change', ()=> handleFiles(fi.files));
+  dz.addEventListener('click', () => fi.click());
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); handleFiles(e.dataTransfer.files); });
+  fi.addEventListener('change', () => handleFiles(fi.files));
 
+  // النموذج
   $('#formNew').addEventListener('submit', submitNew);
-  $('#btnReset').addEventListener('click', ()=>{ $('#formNew').reset(); resetFilesUI(); });
+  $('#btnReset').addEventListener('click', () => { $('#formNew').reset(); resetFilesUI(); });
 
-  $('#btnExportXLSX').addEventListener('click', async ()=>{
+  // الأزرار الأخرى
+  $('#btnExportXLSX').addEventListener('click', async () => {
     try{ 
-      const r=await API.exportData('xlsx'); 
+      const r = await API.exportData('xlsx'); 
       if(r.url && r.url !== 'about:blank') {
-        window.open(r.url,'_blank');
+        window.open(r.url, '_blank');
       } else {
-        toast('ميزة التصدير قيد التطوير','info');
+        toast('ميزة التصدير قيد التطوير', 'info');
       }
+    } catch(e){ 
+      console.error('Export XLSX error:', e); 
+      toast('فشل تصدير Excel: ' + e.message, 'error'); 
     }
-    catch(e){ console.error('Export XLSX error:', e); toast('فشل تصدير Excel: '+e.message,'error'); }
   });
-  $('#btnExportPDF').addEventListener('click', async ()=>{
+
+  $('#btnExportPDF').addEventListener('click', async () => {
     try{ 
-      const r=await API.exportData('pdf'); 
+      const r = await API.exportData('pdf'); 
       if(r.url && r.url !== 'about:blank') {
-        window.open(r.url,'_blank');
+        window.open(r.url, '_blank');
       } else {
-        toast('ميزة التصدير قيد التطوير','info');
+        toast('ميزة التصدير قيد التطوير', 'info');
       }
+    } catch(e){ 
+      console.error('Export PDF error:', e); 
+      toast('فشل تصدير PDF: ' + e.message, 'error'); 
     }
-    catch(e){ console.error('Export PDF error:', e); toast('فشل تصدير PDF: '+e.message,'error'); }
   });
+
   $('#btnRefreshAll').addEventListener('click', loadAll);
   
-  $('#btnRepairSheets').addEventListener('click', async ()=>{
+  $('#btnRepairSheets').addEventListener('click', async () => {
     if(confirm('هل تريد إصلاح الجداول؟ هذا سيصلح هيكل البيانات.')){
       try{ 
         await API.repairSheets(); 
-        toast('تم إصلاح الجداول','success'); 
+        toast('تم إصلاح الجداول', 'success'); 
         await loadAll(); 
-      }catch(e){ toast('فشل الإصلاح: '+e.message,'error'); }
+      } catch(e){ 
+        toast('فشل الإصلاح: ' + e.message, 'error'); 
+      }
+    }
+  });
+
+  // استخدام event delegation للأزرار الديناميكية
+  document.addEventListener('click', async function(e) {
+    // زر الحذف
+    if (e.target.closest('.del-rec')) {
+      e.preventDefault();
+      const btn = e.target.closest('.del-rec');
+      await handleDelete(btn);
+      return;
+    }
+    
+    // زر إنشاء الشهادة
+    if (e.target.closest('.btn-gen-cert')) {
+      e.preventDefault();
+      const btn = e.target.closest('.btn-gen-cert');
+      await handleGenerateCert(btn);
+      return;
     }
   });
 }
 
-/* =================== تحميل كل البيانات =================== */
-async function loadAll(){
-  console.log('Loading records/assets/staff/kpis…');
+/* =================== دوال معالجة الأحداث =================== */
+async function handleDelete(btn) {
+  const recordId = btn.dataset.id;
+  const timestamp = btn.dataset.timestamp;
+  const assetName = btn.dataset.asset;
+  
+  console.log('بدء عملية الحذف:', { recordId, timestamp, assetName });
+  
+  if (!recordId && !timestamp) {
+    console.error('بيانات الحذف ناقصة');
+    toast('خطأ: لا يمكن تحديد السجل للحذف', 'error');
+    return;
+  }
+  
+  const confirmMsg = `هل أنت متأكد من حذف سجل الصيانة للجهاز: ${assetName}؟\nهذا الإجراء لا يمكن التراجع عنه.`;
+  
+  if (!confirm(confirmMsg)) {
+    console.log('تم إلغاء الحذف من قبل المستخدم');
+    return;
+  }
+  
   try {
-    const [r1, r2, r3, r4] = await Promise.allSettled([
+    btn.disabled = true;
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> حذف...';
+    
+    console.log('إرسال طلب الحذف إلى الخادم:', { id: recordId, timestamp: timestamp });
+    
+    await API.deleteRecord({
+      id: recordId,
+      timestamp: timestamp
+    });
+    
+    toast('تم حذف السجل بنجاح', 'success');
+    await loadAll();
+    
+  } catch (error) {
+    console.error('فشل الحذف:', error);
+    
+    let errorMsg = 'فشل حذف السجل';
+    if (error.message.includes('404')) {
+      errorMsg = 'السجل غير موجود أو تم حذفه مسبقاً';
+    } else if (error.message.includes('403')) {
+      errorMsg = 'غير مسموح بالحذف - صلاحية مرفوضة';
+    } else if (error.message.includes('500')) {
+      errorMsg = 'خطأ في الخادم - حاول لاحقاً';
+    } else {
+      errorMsg = `فشل الحذف: ${error.message}`;
+    }
+    
+    toast(errorMsg, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+  }
+}
+
+async function handleGenerateCert(btn) {
+  const id = btn.dataset.id;
+  if (!id) {
+    toast('خطأ: لا يمكن تحديد السجل', 'error');
+    return;
+  }
+
+  try {
+    btn.disabled = true;
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+    await API.generateCertificate({ id });
+    toast('تم إنشاء الشهادة بنجاح', 'success');
+    await loadAll();
+  } catch (e) {
+    console.error('خطأ في إنشاء الشهادة:', e);
+    toast('فشل إنشاء الشهادة: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+  }
+}
+
+/* =================== تحميل البيانات =================== */
+async function loadAll(){
+  console.log('جاري تحميل البيانات...');
+  try {
+    const [recordsRes, assetsRes, staffRes, kpisRes] = await Promise.allSettled([
       API.getRecords(), 
       API.getAssets(), 
       API.getStaff(), 
       API.getKPIs()
     ]);
 
-    App.records = r1.status === 'fulfilled' ? (r1.value || []) : [];
-    App.assetsMap = r2.status === 'fulfilled' ? (r2.value || {}) : {};
-    App.staff = r3.status === 'fulfilled' ? (r3.value || []) : [];
-    const kpis = r4.status === 'fulfilled' ? (r4.value || null) : null;
+    App.records = recordsRes.status === 'fulfilled' ? (recordsRes.value || []) : [];
+    App.assetsMap = assetsRes.status === 'fulfilled' ? (assetsRes.value || {}) : {};
+    App.staff = staffRes.status === 'fulfilled' ? (staffRes.value || []) : [];
+    const kpis = kpisRes.status === 'fulfilled' ? (kpisRes.value || null) : null;
     
+    // تحديث القوائم المنسدلة
     const depts = Object.keys(App.assetsMap).sort();
     $('#filterDept').innerHTML = '<option value="">جميع الأقسام</option>' + depts.map(d => `<option>${d}</option>`).join('');
     $('#fDepartment').innerHTML = '<option value="">— اختر —</option>' + depts.map(d => `<option>${d}</option>`).join('');
@@ -749,7 +911,7 @@ async function loadAll(){
     drawCharts(); 
     renderLog(); 
     
-    const failedRequests = [r1, r2, r3, r4].filter(r => r.status === 'rejected').length;
+    const failedRequests = [recordsRes, assetsRes, staffRes, kpisRes].filter(r => r.status === 'rejected').length;
     if (failedRequests > 0) {
       toast('تم التحميل جزئيًا. بعض البيانات غير متوفرة.', 'warning');
     } else {
@@ -761,51 +923,128 @@ async function loadAll(){
   }
 }
 
-/* =================== KPIs مصححة =================== */
-function updateKPIs(k){
+/* =================== تحديث المؤشرات - الإصدار النهائي المصحح =================== */
+function updateKPIs(kpisData){
   const recs = App.records;
-  const totalDevices = Object.values(App.assetsMap).reduce((a, arr) => a + (arr ? arr.length : 0), 0);
+  
+  console.log('🚀 بدء حساب المؤشرات - الإصدار النهائي');
+  console.log('📊 إجمالي السجلات:', recs.length);
+  
+  // إعادة تعيين العدادات
+  let overdueCount = 0;
+  let dueThisMonthCount = 0;
+  let notServicedCount = 0;
   
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
   
-  // حساب الأجهزة المستحقة هذا الشهر
-  const dueThisMonth = recs.filter(r => {
-    if (r.Status === 'Completed') return false;
-    if (!r.DueDate) return false;
-    const dueDate = new Date(r.DueDate);
-    return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
-  }).length;
+  console.log('📅 اليوم الحالي:', now.toLocaleDateString('ar-SA'));
+  console.log('📋 الشهر الحالي:', currentMonth + 1, 'السنة:', currentYear);
   
-  // حساب الأجهزة المتأخرة
-  const overdue = recs.filter(r => {
-    if (r.Status === 'Completed') return false;
-    if (!r.DueDate) return false;
-    const dueDate = new Date(r.DueDate);
-    dueDate.setHours(0,0,0,0);
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    return dueDate < today;
-  }).length;
+  // تحليل كل سجل بشكل منفصل
+  recs.forEach((record, index) => {
+    const assetName = record.AssetName || record.AssetID || 'جهاز غير معروف';
+    
+    // فقط السجلات غير المكتملة
+    if (record.Status !== 'Completed') {
+      
+      // التحقق من التأخير
+      if (record.DueDate) {
+        try {
+          const dueDate = new Date(record.DueDate);
+          dueDate.setHours(0, 0, 0, 0);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          const daysDiff = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+          
+          if (dueDate < today) {
+            overdueCount++;
+            console.log(`🔴 متأخر: ${assetName} - ${record.DueDate} (قبل ${daysDiff} يوم)`);
+          } else {
+            console.log(`🟢 غير متأخر: ${assetName} - ${record.DueDate} (بعد ${Math.abs(daysDiff)} يوم)`);
+          }
+          
+          // التحقق من الاستحقاق هذا الشهر
+          if (dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear) {
+            dueThisMonthCount++;
+            console.log(`🟠 مستحق هذا الشهر: ${assetName} - ${record.DueDate}`);
+          }
+          
+        } catch (error) {
+          console.error(`❌ خطأ في معالجة التاريخ: ${record.DueDate}`, error);
+        }
+      } else {
+        console.log(`⚠️ بدون تاريخ استحقاق: ${assetName}`);
+      }
+    } else {
+      console.log(`✅ مكتمل: ${assetName} - ${record.CompletedDate}`);
+    }
+  });
   
+  // حساب الأجهزة التي لم تتم صيانتها
+  notServicedCount = calculateNotServicedDevices();
+  
+  // الحسابات الأخرى
   const outOfService = recs.filter(r => r.Status === 'OutOfService').length;
   const completed = recs.filter(r => r.Status === 'Completed').length;
   const critical = recs.filter(r => r.Status === 'Critical').length;
   const uncompleted = recs.filter(r => r.Status !== 'Completed').length;
   const downtime = recs.reduce((s, r) => s + (Number(r.DowntimeHours) || 0), 0);
   
-  animateValue($('#kpiAssets'), totalDevices);
-  animateValue($('#kpiDueThisMonth'), dueThisMonth);
-  animateValue($('#kpiOverdue'), overdue);
+  console.log('🎉 النتائج النهائية:', {
+    'الأجهزة المتأخرة': overdueCount,
+    'المستحقة هذا الشهر': dueThisMonthCount,
+    'التي لم تتم صيانتها': notServicedCount,
+    'خارج الخدمة': outOfService,
+    'مكتملة': completed
+  });
+  
+  // تحديث الواجهة
+  animateValue($('#kpiNotServiced'), notServicedCount);
+  animateValue($('#kpiOverdue'), overdueCount);
+  animateValue($('#kpiDueThisMonth'), dueThisMonthCount);
   animateValue($('#kpiOutOfService'), outOfService);
   animateValue($('#kpiCompleted'), completed);
   animateValue($('#kpiCritical'), critical);
   animateValue($('#kpiUncompleted'), uncompleted);
   animateValue($('#kpiDowntime'), Math.round(downtime));
   
-  // تحديث قائمة التنبيهات
   updateAlertsList();
+}
+
+function calculateNotServicedDevices() {
+  try {
+    const allDevices = new Set();
+    const servicedDevices = new Set();
+    
+    // جمع جميع الأجهزة من assetsMap
+    Object.values(App.assetsMap).forEach(devices => {
+      if (devices && Array.isArray(devices)) {
+        devices.forEach(device => {
+          if (device && device.id) {
+            allDevices.add(device.id);
+          }
+        });
+      }
+    });
+    
+    // جمع الأجهزة التي تمت صيانتها (لها سجل مكتمل)
+    App.records.forEach(record => {
+      if (record.Status === 'Completed' && record.AssetID) {
+        servicedDevices.add(record.AssetID);
+      }
+    });
+    
+    // الأجهزة التي لم تتم صيانتها = إجمالي الأجهزة - الأجهزة المكتملة الصيانة
+    const result = Math.max(0, allDevices.size - servicedDevices.size);
+    console.log('حساب الأجهزة غير المخدمة:', { total: allDevices.size, serviced: servicedDevices.size, notServiced: result });
+    return result;
+  } catch (error) {
+    console.error('Error calculating not serviced devices:', error);
+    return 0;
+  }
 }
 
 function updateAlertsList() {
@@ -851,7 +1090,7 @@ function updateAlertsList() {
   }).join('');
 }
 
-/* =================== رسوم بيانية =================== */
+/* =================== الرسوم البيانية =================== */
 function drawCharts(){
   try {
     const ctxD = $('#donutStatus')?.getContext('2d');
@@ -864,78 +1103,115 @@ function drawCharts(){
     }
     
     const recs = App.records;
-    const countBy = (fn)=> recs.reduce((m,r)=>{ const k=fn(r); m[k]=(m[k]||0)+1; return m; },{});
-    const st = countBy(r => classify(r));
-    const depts = {};
-    recs.forEach(r=>{
-      const d=r.Department||'غير محدد';
-      depts[d] = depts[d] || {Completed:0,Pending:0,Overdue:0};
-      const c = classify(r);
-      if(c==='Completed') depts[d].Completed++;
-      else if(c==='Overdue' || c==='Critical' || c==='OutOfService') depts[d].Overdue++;
-      else depts[d].Pending++;
+    
+    // تدمير الرسوم البيانية القديمة
+    if (App.charts.donut) App.charts.donut.destroy();
+    if (App.charts.bar) App.charts.bar.destroy();
+    if (App.charts.line) App.charts.line.destroy();
+    
+    // حساب البيانات للرسوم البيانية
+    const statusCount = recs.reduce((acc, r) => {
+      const status = classify(r);
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+    
+    const deptStats = {};
+    recs.forEach(r => {
+      const dept = r.Department || 'غير محدد';
+      if (!deptStats[dept]) {
+        deptStats[dept] = { completed: 0, overdue: 0, pending: 0 };
+      }
+      const status = classify(r);
+      if (status === 'Completed') deptStats[dept].completed++;
+      else if (['Overdue', 'Critical', 'OutOfService'].includes(status)) deptStats[dept].overdue++;
+      else deptStats[dept].pending++;
     });
-    const months = Array.from({length:12}).map((_,i)=>i);
-    const monthLab = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-    const series = Array(12).fill(0);
-    recs.filter(r=> r.Status==='Completed' && r.CompletedDate).forEach(r=>{
-      const m = new Date(r.CompletedDate).getMonth(); series[m] += 1;
+    
+    const monthlyData = Array(12).fill(0);
+    recs.forEach(r => {
+      if (r.Status === 'Completed' && r.CompletedDate) {
+        const month = new Date(r.CompletedDate).getMonth();
+        monthlyData[month]++;
+      }
     });
-
-    App.charts.donut?.destroy();
-    App.charts.bar?.destroy();
-    App.charts.line?.destroy();
-
-    App.charts.donut = new Chart(ctxD,{
-      type:'doughnut',
-      data:{ labels:['مكتملة','قيد الانتظار','متأخرة/حرجة','خارج الخدمة'], datasets:[{
-        data:[st.Completed||0, st.Pending||0, (st.Overdue||0)+(st.Critical||0), st.OutOfService||0],
-        backgroundColor:['#5fd997','#ffc44d','#ff6b6b','#9ea6b0'],
-        borderColor:['#2f8d5f','#a87b11','#b00020','#6c757d'], borderWidth:2
-      }]},
-      options:{ 
-        plugins:{ 
-          legend:{
-            position:'bottom', 
-            labels:{
-              color:'#fff',
+    
+    const monthLabels = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    
+    // رسم مخطط الدونات
+    App.charts.donut = new Chart(ctxD, {
+      type: 'doughnut',
+      data: {
+        labels: ['مكتملة', 'قيد الانتظار', 'متأخرة/حرجة', 'خارج الخدمة'],
+        datasets: [{
+          data: [
+            statusCount.Completed || 0,
+            statusCount.Pending || 0,
+            (statusCount.Overdue || 0) + (statusCount.Critical || 0),
+            statusCount.OutOfService || 0
+          ],
+          backgroundColor: ['#5fd997', '#ffc44d', '#ff6b6b', '#9ea6b0'],
+          borderColor: ['#2f8d5f', '#a87b11', '#b00020', '#6c757d'],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#fff',
               font: { family: 'Tajawal', size: 12 }
-            } 
-          } 
+            }
+          }
         },
         maintainAspectRatio: false
       }
     });
-
-    const dKeys = Object.keys(depts);
-    App.charts.bar = new Chart(ctxB,{
-      type:'bar',
-      data:{
-        labels:dKeys, datasets:[
-          {label:'مكتملة', data:dKeys.map(k=>depts[k].Completed), backgroundColor:'rgba(40,167,69,.8)'},
-          {label:'متأخرة', data:dKeys.map(k=>depts[k].Overdue),   backgroundColor:'rgba(220,53,69,.85)'},
-          {label:'قيد الانتظار', data:dKeys.map(k=>depts[k].Pending), backgroundColor:'rgba(255,193,7,.85)'}
+    
+    // رسم المخطط الشريطي
+    const deptNames = Object.keys(deptStats);
+    App.charts.bar = new Chart(ctxB, {
+      type: 'bar',
+      data: {
+        labels: deptNames,
+        datasets: [
+          {
+            label: 'مكتملة',
+            data: deptNames.map(dept => deptStats[dept].completed),
+            backgroundColor: 'rgba(40,167,69,.8)'
+          },
+          {
+            label: 'متأخرة',
+            data: deptNames.map(dept => deptStats[dept].overdue),
+            backgroundColor: 'rgba(220,53,69,.85)'
+          },
+          {
+            label: 'قيد الانتظار',
+            data: deptNames.map(dept => deptStats[dept].pending),
+            backgroundColor: 'rgba(255,193,7,.85)'
+          }
         ]
       },
-      options:{ 
-        plugins:{
-          legend:{
-            labels:{
-              color:'#fff',
+      options: {
+        plugins: {
+          legend: {
+            labels: {
+              color: '#fff',
               font: { family: 'Tajawal', size: 12 }
             }
           }
-        }, 
-        scales:{
-          x:{
-            ticks:{
-              color:'#fff',
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#fff',
               font: { family: 'Tajawal', size: 11 }
             }
-          }, 
-          y:{
-            ticks:{
-              color:'#fff',
+          },
+          y: {
+            ticks: {
+              color: '#fff',
               font: { family: 'Tajawal', size: 11 }
             }
           }
@@ -943,31 +1219,41 @@ function drawCharts(){
         maintainAspectRatio: false
       }
     });
-
-    App.charts.line = new Chart(ctxL,{
-      type:'line',
-      data:{ labels:monthLab, datasets:[{label:'منجز شهريًا', data:months.map(i=>series[i]),
-        borderWidth:3, fill:true, tension:.3, backgroundColor:'rgba(212,175,55,.15)', borderColor:'#d4af37'}]
+    
+    // رسم المخطط الخطي
+    App.charts.line = new Chart(ctxL, {
+      type: 'line',
+      data: {
+        labels: monthLabels,
+        datasets: [{
+          label: 'منجز شهريًا',
+          data: monthlyData,
+          borderWidth: 3,
+          fill: true,
+          tension: 0.3,
+          backgroundColor: 'rgba(212,175,55,.15)',
+          borderColor: '#d4af37'
+        }]
       },
-      options:{ 
-        plugins:{
-          legend:{
-            labels:{
-              color:'#fff',
+      options: {
+        plugins: {
+          legend: {
+            labels: {
+              color: '#fff',
               font: { family: 'Tajawal', size: 12 }
             }
           }
-        }, 
-        scales:{
-          x:{
-            ticks:{
-              color:'#fff',
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#fff',
               font: { family: 'Tajawal', size: 11 }
             }
-          }, 
-          y:{
-            ticks:{
-              color:'#fff',
+          },
+          y: {
+            ticks: {
+              color: '#fff',
               font: { family: 'Tajawal', size: 11 }
             }
           }
@@ -980,44 +1266,49 @@ function drawCharts(){
   }
 }
 
-/* =================== الجدول =================== */
+/* =================== عرض السجلات =================== */
 function renderLog(){
   const f = App.filters;
-  const filtered = (App.records||[]).filter(r=>{
-    if(f.dept && r.Department!==f.dept) return false;
-    if(f.type && r.TaskType!==f.type) return false;
+  const filtered = (App.records || []).filter(r => {
+    if (f.dept && r.Department !== f.dept) return false;
+    if (f.type && r.TaskType !== f.type) return false;
+    
     const cls = classify(r);
-    if(f.status && cls!==f.status) return false;
-    if(f.alertsOnly && !['Overdue','Critical','OutOfService','DueSoon'].includes(cls)) return false;
-    if(f.search){
-      const s=f.search;
-      const text = Object.values(r).join(' ').toLowerCase();
-      if(!text.includes(s)) return false;
+    if (f.status) {
+      if (f.status === 'Overdue' && cls !== 'Overdue') return false;
+      if (f.status === 'Completed' && cls !== 'Completed') return false;
+      if (f.status === 'Pending' && cls !== 'Pending') return false;
+      if (f.status === 'Critical' && cls !== 'Critical') return false;
+      if (f.status === 'OutOfService' && cls !== 'OutOfService') return false;
     }
+    
+    if (f.alertsOnly && !['Overdue', 'Critical', 'OutOfService', 'DueSoon'].includes(cls)) return false;
+    
+    if (f.search) {
+      const searchText = f.search.toLowerCase();
+      const recordText = `${r.Department || ''} ${r.Staff || ''} ${r.AssetName || ''} ${r.AssetID || ''} ${r.TaskType || ''}`.toLowerCase();
+      if (!recordText.includes(searchText)) return false;
+    }
+    
     return true;
-  }).sort((a,b)=> new Date(b.Timestamp) - new Date(a.Timestamp));
+  }).sort((a, b) => new Date(b.Timestamp || 0) - new Date(a.Timestamp || 0));
 
   const tb = $('#logBody');
-  if(!filtered.length){
+  if (!filtered.length) {
     tb.innerHTML = '<tr><td colspan="13" class="text-center py-4 smallmuted"><i class="fa-solid fa-inbox ms-1"></i> لا توجد سجلات</td></tr>';
-    $('#viewCount').textContent = 0;
-    $('#totalCount').textContent = App.records.length;
+    $('#viewCount').textContent = '0';
+    $('#totalCount').textContent = App.records.length.toString();
     return;
   }
 
-  tb.innerHTML = filtered.map(r=>{
+  tb.innerHTML = filtered.map(r => {
     const cls = classify(r);
-    const bClass = cls==='Completed'
-      ? 'completed'
-      : cls==='Overdue'
-      ? 'overdue'
-      : cls==='Critical'
-      ? 'critical'
-      : cls==='DueSoon'
-      ? 'due'
-      : cls==='OutOfService'
-      ? 'critical'
-      : 'pending';
+    const badgeClass = 
+      cls === 'Completed' ? 'completed' :
+      cls === 'Overdue' ? 'overdue' :
+      cls === 'Critical' ? 'critical' :
+      cls === 'DueSoon' ? 'due' :
+      cls === 'OutOfService' ? 'critical' : 'pending';
 
     const files = [];
     if (r.File) {
@@ -1025,9 +1316,7 @@ function renderLog(){
         u = u.trim();
         if (u && u !== 'undefined') {
           files.push(`
-            <a href="${u}" target="_blank"
-               class="btn btn-sm btn-outline-success me-1"
-               title="فتح المرفق">
+            <a href="${u}" target="_blank" class="btn btn-sm btn-outline-success me-1" title="فتح المرفق">
               <i class="fa-solid fa-paperclip ms-1"></i> ملف
             </a>
           `);
@@ -1035,131 +1324,145 @@ function renderLog(){
       });
     }
 
-    // ===== الشهادة / زر إصدار الشهادة =====
     let certHtml;
     if (r.Certificate) {
-      // الشهادة موجودة فعلاً → زر فتح PDF
       certHtml = `<a class="btn btn-sm btn-outline-gold" target="_blank" href="${r.Certificate}" title="عرض الشهادة">
         <i class="fa-solid fa-file-pdf"></i>
       </a>`;
     } else if (r.Status === 'Completed') {
-      // مكتملة لكن بدون شهادة → زر إصدار
-      certHtml = `<button class="btn btn-sm btn-outline-gold btn-gen-cert" data-id="${r.ID || ''}" title="إصدار الشهادة">
+      certHtml = `<button class="btn btn-sm btn-outline-gold btn-gen-cert" data-id="${r.ID || r.id || ''}" title="إصدار الشهادة">
         <i class="fa-solid fa-file-circle-plus"></i>
       </button>`;
     } else {
-      // غير مكتملة → لا شيء
       certHtml = '—';
     }
 
+    const recordId = r.ID || r.id || '';
+    const timestamp = r.Timestamp || r.timestamp || '';
+    const assetName = r.AssetName || r.AssetID || 'جهاز غير معروف';
+
     return `<tr>
       <td>${fmt(r.Timestamp)}</td>
-      <td><b>${r.Department||'-'}</b></td>
-      <td>${r.Staff||'-'}</td>
-      <td title="${r.AssetID||''}">${r.AssetName||r.AssetID||'-'}</td>
-      <td><span class="badge bg-primary">${r.TaskType||'-'}</span></td>
+      <td><b>${r.Department || '-'}</b></td>
+      <td>${r.Staff || '-'}</td>
+      <td title="${r.AssetID || ''}">${r.AssetName || r.AssetID || '-'}</td>
+      <td><span class="badge bg-primary">${r.TaskType || '-'}</span></td>
       <td>${fmt(r.StartDate)}</td>
       <td>${fmt(r.DueDate)}</td>
       <td>${fmt(r.CompletedDate)}</td>
-      <td><span class="badge-status ${bClass}">${r.Status||cls}</span></td>
-      <td>${r.Priority||'-'}</td>
-      <td>${files.join('')||'—'}</td>
+      <td><span class="badge-status ${badgeClass}">${r.Status || cls}</span></td>
+      <td>${r.Priority || '-'}</td>
+      <td>${files.join('') || '—'}</td>
       <td>${certHtml}</td>
       <td>
-        <button class="btn btn-sm btn-outline-danger del-rec" data-id="${r.ID||''}" data-ts="${r.Timestamp||''}">
+        <button class="btn btn-sm btn-outline-danger del-rec" 
+                data-id="${recordId}" 
+                data-timestamp="${timestamp}"
+                data-asset="${assetName}"
+                title="حذف السجل">
           <i class="fa-solid fa-trash"></i>
         </button>
       </td>
     </tr>`;
   }).join('');
 
-  // زر الحذف
-  $$('.del-rec').forEach(b=> b.addEventListener('click', async function(){
-    if(!confirm('تأكيد الحذف؟')) return;
-    try{
-      await API.deleteRecord({id:this.dataset.id||'', timestamp:this.dataset.ts||''});
-      toast('تم الحذف','success');
-      await loadAll();
-    }catch(e){
-      toast('فشل الحذف: '+e.message,'error');
-    }
-  }));
-
-  // أزرار إصدار الشهادة
-  $$('.btn-gen-cert').forEach(btn => {
-    btn.addEventListener('click', async function () {
-      const id = this.dataset.id;
-      if (!id) return;
-
-      try {
-        this.disabled = true;
-        this.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-
-        await API.generateCertificate({ id });
-
-        toast('تم إنشاء الشهادة بنجاح', 'success');
-        await loadAll();
-      } catch (e) {
-        console.error('Generate cert error:', e);
-        toast('فشل إنشاء الشهادة: ' + e.message, 'error');
-      } finally {
-        this.disabled = false;
-        this.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i>';
-      }
-    });
-  });
-
-  $('#viewCount').textContent = filtered.length;
-  $('#totalCount').textContent = App.records.length;
+  $('#viewCount').textContent = filtered.length.toString();
+  $('#totalCount').textContent = App.records.length.toString();
 }
 
-/* =================== نموذج الإضافة + الرفع =================== */
+/* =================== إدارة الملفات والنموذج =================== */
 function calcNextDue(){
-  const s=$('#fStart').value, f=$('#fFreq').value; if(!s||!f){ $('#fDue').value=''; return; }
-  const d=new Date(s);
-  if(f==='W1') d.setDate(d.getDate()+7);
-  if(f==='M1') d.setMonth(d.getMonth()+1);
-  if(f==='M3') d.setMonth(d.getMonth()+3);
-  if(f==='M6') d.setMonth(d.getMonth()+6);
-  if(f==='M12') d.setMonth(d.getMonth()+12);
-  if(f==='Y2') d.setFullYear(d.getFullYear()+2);
-  $('#fDue').value = d.toISOString().split('T')[0];
+  const startDate = $('#fStart').value;
+  const frequency = $('#fFreq').value;
+  
+  if (!startDate || !frequency) {
+    $('#fDue').value = '';
+    return;
+  }
+  
+  const start = new Date(startDate);
+  const due = new Date(start);
+  
+  switch(frequency) {
+    case 'W1': due.setDate(due.getDate() + 7); break;
+    case 'M1': due.setMonth(due.getMonth() + 1); break;
+    case 'M3': due.setMonth(due.getMonth() + 3); break;
+    case 'M6': due.setMonth(due.getMonth() + 6); break;
+    case 'M12': due.setMonth(due.getMonth() + 12); break;
+    case 'Y2': due.setFullYear(due.getFullYear() + 2); break;
+    default: $('#fDue').value = ''; return;
+  }
+  
+  $('#fDue').value = due.toISOString().split('T')[0];
 }
 
 let selectedFiles = [];
-function resetFilesUI(){ selectedFiles=[]; $('#fFiles').value=''; $('#dzPreview').innerHTML=''; $('#dzInfo').textContent=''; $('#dzProgress').classList.add('d-none'); $('#dzProgress .progress-bar').style.width='0%'; }
+function resetFilesUI(){ 
+  selectedFiles = []; 
+  $('#fFiles').value = ''; 
+  $('#dzPreview').innerHTML = ''; 
+  $('#dzInfo').textContent = ''; 
+  $('#dzProgress').classList.add('d-none'); 
+  $('#dzProgress .progress-bar').style.width = '0%'; 
+}
+
 function handleFiles(files){
-  const list = Array.from(files||[]);
-  for(const f of list){
-    if(selectedFiles.length >= CONFIG.MAX_FILES){ toast('الحد الأقصى 5 ملفات','error'); break; }
-    if(f.size > CONFIG.MAX_MB*1024*1024){ toast(`الملف ${f.name} يتجاوز ${CONFIG.MAX_MB}MB`,'error'); continue; }
+  const list = Array.from(files || []);
+  for (const f of list) {
+    if (selectedFiles.length >= CONFIG.MAX_FILES) { 
+      toast('الحد الأقصى 5 ملفات', 'error'); 
+      break; 
+    }
+    if (f.size > CONFIG.MAX_MB * 1024 * 1024) { 
+      toast(`الملف ${f.name} يتجاوز ${CONFIG.MAX_MB}MB`, 'error'); 
+      continue; 
+    }
     selectedFiles.push(f);
   }
-  const pv = $('#dzPreview'); pv.innerHTML='';
-  selectedFiles.forEach((f,idx)=>{
-    const wrap=document.createElement('div'); wrap.className='thumb';
-    const del=document.createElement('button'); del.className='x'; del.innerText='×';
-    del.addEventListener('click', (e)=>{ e.stopPropagation(); removeFileAt(idx); });
+  
+  const pv = $('#dzPreview'); 
+  pv.innerHTML = '';
+  
+  selectedFiles.forEach((f, idx) => {
+    const wrap = document.createElement('div'); 
+    wrap.className = 'thumb';
+    const del = document.createElement('button'); 
+    del.className = 'x'; 
+    del.innerText = '×';
+    del.addEventListener('click', (e) => { 
+      e.stopPropagation(); 
+      removeFileAt(idx); 
+    });
     wrap.appendChild(del);
-    if(f.type.startsWith('image/')){
-      const img=document.createElement('img'); const r=new FileReader(); r.onload=e=> img.src=e.target.result; r.readAsDataURL(f); wrap.appendChild(img);
-    }else{
-      const chip=document.createElement('div'); chip.className='badge bg-dark'; chip.textContent=f.name; wrap.appendChild(chip);
+    
+    if (f.type.startsWith('image/')) {
+      const img = document.createElement('img'); 
+      const r = new FileReader(); 
+      r.onload = e => img.src = e.target.result; 
+      r.readAsDataURL(f); 
+      wrap.appendChild(img);
+    } else {
+      const chip = document.createElement('div'); 
+      chip.className = 'badge bg-dark'; 
+      chip.textContent = f.name; 
+      wrap.appendChild(chip);
     }
     pv.appendChild(wrap);
   });
+  
   $('#dzInfo').textContent = selectedFiles.length ? `ملفات مختارة: ${selectedFiles.length}` : '';
 }
-function removeFileAt(i){ selectedFiles.splice(i,1); handleFiles([]); }
 
-let isSaving = false;   // يمنع الحفظ المزدوج
+function removeFileAt(i){ 
+  selectedFiles.splice(i, 1); 
+  handleFiles([]); 
+}
+
+let isSaving = false;
 async function submitNew(ev){
   ev.preventDefault();
 
-  // لو فيه عملية حفظ شغالة حالياً، نتجاهل أي ضغطة إضافية
-  if (isSaving) {
-    return;
-  }
+  if (isSaving) return;
   isSaving = true;
 
   const submitBtn = $('#formNew button[type="submit"]');
@@ -1167,30 +1470,30 @@ async function submitNew(ev){
   submitBtn.disabled = true;
   submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ms-1"></i> جاري الحفظ...';
 
-  try{
-    if(!selectedFiles.length){
-      toast('رفع صورة/مرفق إلزامي','error');
+  try {
+    if (!selectedFiles.length) {
+      toast('رفع صورة/مرفق إلزامي', 'error');
       return;
     }
 
-    const dep   = $('#fDepartment').value;
+    const dep = $('#fDepartment').value;
     const staff = $('#fStaff').value;
-    const type  = $('#fTaskType').value;
+    const type = $('#fTaskType').value;
     const assetSel = $('#fAsset');
-    const assetID  = assetSel.value;
+    const assetID = assetSel.value;
     const assetName = assetSel.selectedOptions[0]?.textContent || assetID;
 
-    if(!dep || !staff || !type || !assetID || !$('#fStart').value){
-      toast('يرجى استكمال الحقول','error');
+    if (!dep || !staff || !type || !assetID || !$('#fStart').value) {
+      toast('يرجى استكمال الحقول الإلزامية', 'error');
       return;
     }
 
     const payload = {
       department: dep,
-      staff,
+      staff: staff,
       taskType: type,
-      assetID,
-      assetName,
+      assetID: assetID,
+      assetName: assetName,
       startDate: $('#fStart').value,
       dueDate: $('#fDue').value,
       completedDate: $('#fCompleted').value,
@@ -1200,14 +1503,12 @@ async function submitNew(ev){
       notes: ''
     };
 
-    // إضافة السجل إلى الشيت
     const res = await API.addRecord(payload);
     const recordId = res.ID || '';
     const timestamp = res.Timestamp || '';
 
-    // رفع المرفقات
     const prog = $('#dzProgress'),
-          bar  = prog.querySelector('.progress-bar');
+          bar = prog.querySelector('.progress-bar');
     prog.classList.remove('d-none');
 
     let uploadErrors = [];
@@ -1221,8 +1522,8 @@ async function submitNew(ev){
           fileName: f.name,
           mimeType: f.type || 'application/octet-stream',
           fileData: base64,
-          recordId,
-          timestamp
+          recordId: recordId,
+          timestamp: timestamp
         });
         bar.style.width = ((i + 1) / selectedFiles.length * 100).toFixed(0) + '%';
       } catch(e) {
@@ -1237,16 +1538,16 @@ async function submitNew(ev){
     if (uploadErrors.length > 0) {
       toast(`تم إضافة المهمة ولكن فشل رفع بعض الملفات: ${uploadErrors.join(', ')}`, 'warning');
     } else {
-      toast('تمت إضافة المهمة ورفع المرفقات بنجاح','success');
+      toast('تمت إضافة المهمة ورفع المرفقات بنجاح', 'success');
     }
 
     resetFilesUI();
     $('#formNew').reset();
     await loadAll();
 
-  } catch(e){
+  } catch(e) {
     console.error('submitNew error:', e);
-    toast('فشل حفظ المهمة: '+e.message, 'error');
+    toast('فشل حفظ المهمة: ' + e.message, 'error');
   } finally {
     isSaving = false;
     submitBtn.disabled = false;
@@ -1255,10 +1556,10 @@ async function submitNew(ev){
 }
 
 function fileToBase64(file){
-  return new Promise((resolve,reject)=>{
-    const r=new FileReader(); 
-    r.onload=e=> resolve(e.target.result.split(',')[1]); 
-    r.onerror=()=>reject(new Error('file read error')); 
+  return new Promise((resolve, reject) => {
+    const r = new FileReader(); 
+    r.onload = e => resolve(e.target.result.split(',')[1]); 
+    r.onerror = () => reject(new Error('file read error')); 
     r.readAsDataURL(file);
   });
 }
