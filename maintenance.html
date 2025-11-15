@@ -176,7 +176,6 @@
     .badge-status.pending{background:linear-gradient(135deg,#f59e0b,#eab308);border-color:rgba(245,158,11,.7);}
     .badge-status.overdue{background:linear-gradient(135deg,#dc2626,#ef4444);border-color:rgba(239,68,68,.8);box-shadow:0 0 0 4px rgba(248,113,113,.25);}
     .badge-status.critical{background:linear-gradient(135deg,#7f1d1d,#b91c1c);border-color:rgba(248,113,113,.8);}
-    .badge-status.due{background:linear-gradient(135deg,#f97316,#eab308);border-color:rgba(249,115,22,.8);}
     .badge-status.due-soon{background:linear-gradient(135deg,#eab308,#facc15);border-color:rgba(250,204,21,.8);}
 
     .table thead th{
@@ -422,7 +421,7 @@
             <div class="kpi-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
             <div class="label"><i class="fa-solid fa-calendar-xmark"></i> الأجهزة المتأخرة</div>
             <div id="kpiOverdue" class="value">0</div>
-            <div class="hint">تجاوزت تاريخ الاستحقاق ولم تُغلق بعد</div>
+            <div class="hint">تجاوزت تاريخ الاستحقاق</div>
           </div>
         </div>
         <div class="col-6 col-lg-3">
@@ -744,12 +743,13 @@
     return x;
   }
 
+  // تصنيف سجل فردي (لجدول + donut)
   function classify(r){
     const status = String(r.Status || '').trim();
     if (status === 'Completed')    return 'Completed';
     if (status === 'OutOfService') return 'OutOfService';
     if (status === 'Critical')     return 'Critical';
-    if (status === 'Overdue')      return 'Overdue'; // لو فيه قديم يدوي
+    if (status === 'Overdue')      return 'Overdue'; // يدوي
 
     const due = r.DueDate ? new Date(r.DueDate) : null;
     if (due && !isNaN(due)){
@@ -1003,100 +1003,88 @@
 
   /*************** KPIs ****************/
   function updateKPIs(kpisData){
-    if (kpisData && typeof kpisData === 'object'){
-      animateValue($('#kpiNotServiced'), kpisData.notServiced ?? 0);
-      animateValue($('#kpiOverdue'),      kpisData.overdue      ?? 0);
-      animateValue($('#kpiDueThisMonth'), kpisData.dueThisMonth ?? 0);
-      animateValue($('#kpiOutOfService'), kpisData.outOfService ?? 0);
-      animateValue($('#kpiCompleted'),    kpisData.completed    ?? 0);
-      animateValue($('#kpiCritical'),     kpisData.critical     ?? 0);
-      animateValue($('#kpiUncompleted'),  kpisData.uncompleted  ?? 0);
-      animateValue($('#kpiDowntime'),     kpisData.downtime     ?? 0);
-    }else{
-      // احتياطي: حساب محلي لو فشل استدعاء KPIs
-      const recs = App.records || [];
-      let overdue = 0, dueThisMonth = 0, outOfService=0, completed=0, critical=0, uncompleted=0, downtime=0;
-      const now = new Date(); now.setHours(0,0,0,0);
-      const cm = now.getMonth(), cy = now.getFullYear();
+    // نعتمد كليًا على الباك إند
+    const data = kpisData || {};
+    animateValue($('#kpiNotServiced'), data.notServiced ?? 0);
+    animateValue($('#kpiOverdue'),      data.overdue      ?? 0);
+    animateValue($('#kpiDueThisMonth'), data.dueThisMonth ?? 0);
+    animateValue($('#kpiOutOfService'), data.outOfService ?? 0);
+    animateValue($('#kpiCompleted'),    data.completed    ?? 0);
+    animateValue($('#kpiCritical'),     data.critical     ?? 0);
+    animateValue($('#kpiUncompleted'),  data.uncompleted  ?? 0);
+    animateValue($('#kpiDowntime'),     data.downtime     ?? 0);
 
-      recs.forEach(r=>{
-        const st = String(r.Status || '').trim();
-        if (st === 'Completed') completed++; else uncompleted++;
-        if (st === 'OutOfService') outOfService++;
-        if (st === 'Critical')     critical++;
-        downtime += Number(r.DowntimeHours) || 0;
-
-        if (r.DueDate){
-          const d = new Date(r.DueDate); if (isNaN(d)) return;
-          d.setHours(0,0,0,0);
-          if (st !== 'Completed' && st !== 'OutOfService' && d < now) overdue++;
-          if (st !== 'Completed' && d.getFullYear() === cy && d.getMonth() === cm) dueThisMonth++;
-        }
-      });
-
-      const notServiced = calculateNotServicedDevices();
-
-      animateValue($('#kpiNotServiced'), notServiced);
-      animateValue($('#kpiOverdue'), overdue);
-      animateValue($('#kpiDueThisMonth'), dueThisMonth);
-      animateValue($('#kpiOutOfService'), outOfService);
-      animateValue($('#kpiCompleted'), completed);
-      animateValue($('#kpiCritical'), critical);
-      animateValue($('#kpiUncompleted'), uncompleted);
-      animateValue($('#kpiDowntime'), Math.round(downtime));
-    }
     updateAlertsList();
   }
 
-  function calculateNotServicedDevices(){
-    try{
-      const allDevices = new Set();
-      const devicesWithRecord = new Set();
-
-      Object.values(App.assetsMap).forEach(list=>{
-        if (!Array.isArray(list)) return;
-        list.forEach(a=>{
-          const id = String(a.id || '').trim();
-          if (id) allDevices.add(id);
-        });
-      });
-
-      (App.records || []).forEach(r=>{
-        const id = String(r.AssetID || '').trim();
-        if (id) devicesWithRecord.add(id);
-      });
-
-      let notServiced = 0;
-      allDevices.forEach(id=>{
-        if (!devicesWithRecord.has(id)) notServiced++;
-      });
-
-      console.log('NotServiced (local):', {total:allDevices.size, withRecords:devicesWithRecord.size, notServiced});
-      return notServiced;
-    }catch(e){
-      console.error('calculateNotServicedDevices error', e);
-      return 0;
-    }
-  }
-
-  function updateAlertsList(){
+  // تنبيهات قريبة مبنية على "آخر سجل لكل جهاز" و DueDate
+  function updateAlertsList() {
     const recs = App.records || [];
-    const alerts = recs
-      .filter(r=>{
-        const st = classify(r);
-        return ['Overdue','Critical','OutOfService','DueSoon'].includes(st);
-      })
-      .slice(0,8);
+
+    // 1) بناء آخر سجل لكل جهاز حسب Timestamp / StartDate / DueDate
+    const latestByAsset = {};
+    recs.forEach(r => {
+      const assetId = String(r.AssetID || '').trim();
+      if (!assetId) return;
+
+      let ts = r.Timestamp || r.StartDate || r.DueDate;
+      if (!ts) return;
+
+      const d = ts instanceof Date ? new Date(ts) : new Date(ts);
+      if (isNaN(d)) return;
+
+      const ms = d.getTime();
+      if (!latestByAsset[assetId] || ms > latestByAsset[assetId]._ts) {
+        latestByAsset[assetId] = Object.assign({}, r, { _ts: ms });
+      }
+    });
+
+    const now = new Date();
+    now.setHours(0,0,0,0);
+    const soonLimit = addDays(now, 10);
+
+    const alerts = [];
+
+    // 2) تحديد الأجهزة المتأخرة أو القريبة
+    Object.keys(latestByAsset).forEach(assetId => {
+      const r = latestByAsset[assetId];
+      const status = String(r.Status || '').trim();
+
+      // خارج الخدمة ما نبغى تنبيهات لها
+      if (status === 'OutOfService') return;
+
+      if (!r.DueDate) return;
+      let due = r.DueDate instanceof Date ? new Date(r.DueDate) : new Date(r.DueDate);
+      if (isNaN(due)) return;
+      due.setHours(0,0,0,0);
+
+      // متجاوزة الموعد
+      if (due < now) {
+        alerts.push({ rec: r, type: 'Overdue', due });
+      }
+      // خلال 10 أيام
+      else if (due <= soonLimit) {
+        alerts.push({ rec: r, type: 'DueSoon', due });
+      }
+    });
+
+    // ترتيب حسب أقرب موعد
+    alerts.sort((a,b) => a.due - b.due);
 
     const container = $('#alertsList');
-    if (!alerts.length){
-      container.innerHTML = '<div class="text-center smallmuted py-3"><i class="fa-solid fa-check-circle me-1"></i>لا توجد تنبيهات حالية</div>';
+    if (!alerts.length) {
+      container.innerHTML =
+        '<div class="text-center smallmuted py-3"><i class="fa-solid fa-check-circle me-1"></i>لا توجد تنبيهات حالية</div>';
       return;
     }
-    container.innerHTML = alerts.map(r=>{
-      const st = classify(r);
-      const icon = (st === 'DueSoon') ? '🟠' : '🔴';
-      const cls  = (st === 'DueSoon') ? 'due-soon' : 'critical';
+
+    container.innerHTML = alerts.slice(0, 8).map(a => {
+      const r      = a.rec;
+      const isSoon = a.type === 'DueSoon';
+      const icon   = isSoon ? '🟠' : '🔴';
+      const cls    = isSoon ? 'due-soon' : 'critical';
+      const label  = isSoon ? 'خلال 10 أيام' : 'متجاوزة الموعد';
+
       return `
         <div class="alert-item ${cls}">
           <div class="d-flex align-items-center">
@@ -1106,7 +1094,7 @@
             </div>
           </div>
           <div class="small smallmuted mt-1">
-            <i class="fa-solid fa-calendar me-1"></i>استحقاق: ${fmt(r.DueDate)}
+            <i class="fa-solid fa-calendar me-1"></i>${label}: ${fmt(r.DueDate)}
           </div>
         </div>
       `;
