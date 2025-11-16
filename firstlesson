@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة تقييم الجلسات الأكاديمية</title>
+
+  <!-- Tailwind CDN (مناسب للاختبار، للإنتاج يفضّل بناءه) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome للآيكونات -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    integrity="sha512-pIVpG8G3IgXVTJkJsteVEh9UpAJZxkd06P88GJEqn3Ejj6inUeJ8V+RaH59RUWowKIiMzFxLpy0XW3s8aQ+Fjw=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+
+  <!-- خطوط عربية -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    :root {
+      --maroon: #8b1a3b;
+      --gold: #d4af37;
+      --cream: #fff7ed;
+      --light-bg: #f9fafb;
+    }
+
+    body {
+      font-family: "Tajawal", system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      background-color: #f3f4f6;
+    }
+
+    .maroon-bg {
+      background-color: var(--maroon);
+    }
+    .maroon-text {
+      color: var(--maroon);
+    }
+    .gold-text {
+      color: var(--gold);
+    }
+
+    .card {
+      background-color: #ffffff;
+      border-radius: 1rem;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .tab-button {
+      @apply px-4 py-2 rounded-full text-sm font-medium cursor-pointer flex items-center gap-2;
+      border-radius: 9999px;
+    }
+
+    .tab-active {
+      background: linear-gradient(135deg, #8b1a3b, #d4af37);
+      color: #ffffff !important;
+      box-shadow: 0 6px 18px rgba(139, 26, 59, 0.35);
+    }
+
+    .table-header {
+      font-size: 0.85rem;
+      letter-spacing: 0.03em;
+    }
+
+    .row-light {
+      background-color: #ffffff;
+    }
+
+    .row-cream {
+      background-color: var(--cream);
+    }
+
+    .completed-session {
+      opacity: 0.9;
+    }
+
+    .evaluation-status {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .evaluation-pending {
+      background-color: #fef3c7;
+      color: #92400e;
+    }
+
+    .evaluation-done {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+
+    .evaluation-overdue {
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .join-now-btn {
+      @apply text-xs font-medium;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #0f766e, #22c55e);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    }
+
+    .join-now-btn i {
+      font-size: 0.9rem;
+    }
+
+    .evaluate-btn {
+      @apply text-xs font-medium;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #8b1a3b, #d97706);
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(148, 27, 66, 0.35);
+    }
+
+    .session-link {
+      color: #0f766e;
+      text-decoration: underline;
+      font-size: 0.8rem;
+    }
+
+    .session-info-card {
+      background-color: #ffffff;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 1rem;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem 1rem;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .info-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .info-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #111827;
+    }
+
+    .evaluation-form-section {
+      background-color: #ffffff;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      border: 1px solid #e5e7eb;
+      margin-top: 0.75rem;
+    }
+
+    .flag-red {
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+    }
+
+    .flag-yellow {
+      background-color: #fffbeb;
+      border: 1px solid #fef3c7;
+    }
+
+    .decision-section {
+      background-color: #f9fafb;
+      border: 1px dashed #e5e7eb;
+    }
+
+    .form-submit-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1.1rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #8b1a3b, #d97706);
+      color: #ffffff;
+      font-size: 0.85rem;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(148, 27, 66, 0.4);
+    }
+
+    .form-submit-btn i {
+      font-size: 0.9rem;
+    }
+
+    .filter-section select {
+      font-size: 0.8rem;
+    }
+
+    .log-entry {
+      background-color: #ffffff;
+      border-radius: 0.75rem;
+      padding: 0.75rem 0.9rem;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 0.5rem;
+    }
+
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .log-student {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #111827;
+    }
+
+    .log-date {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .log-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.35rem;
+      margin-top: 0.35rem;
+    }
+
+    .log-detail-item {
+      font-size: 0.75rem;
+    }
+
+    .log-label {
+      color: #6b7280;
+      margin-left: 0.25rem;
+    }
+
+    .log-value {
+      font-weight: 500;
+    }
+
+    .flags-display {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+
+    .flag-badge {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 9999px;
+      white-space: nowrap;
+    }
+
+    .red-flag {
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .yellow-flag {
+      background-color: #fef3c7;
+      color: #92400e;
+    }
+
+    .invoice-canceled {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 9999px;
+      background-color: #fee2e2;
+      color: #b91c1c;
+      white-space: nowrap;
+    }
+
+    .invoice-sent {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 9999px;
+      background-color: #dcfce7;
+      color: #166534;
+      white-space: nowrap;
+    }
+
+    .quality-display {
+      font-size: 0.75rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 9999px;
+      font-weight: 700;
+    }
+
+    /* درجات الجودة 0–10 */
+    .quality-0,
+    .quality-1,
+    .quality-2,
+    .quality-3 {
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+    .quality-4,
+    .quality-5,
+    .quality-6 {
+      background-color: #fef3c7;
+      color: #92400e;
+    }
+    .quality-7,
+    .quality-8,
+    .quality-9,
+    .quality-10 {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+
+    .syllabus-suitable {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+
+    .syllabus-unsuitable {
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .filter-section {
+      border-radius: 0.75rem;
+      background-color: #ffffff;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    }
+
+    #success-notification {
+      direction: rtl;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="min-h-screen flex flex-col gap-4 p-4 md:p-6 lg:p-8">
+    <!-- Header -->
+    <header class="card px-4 py-3 md:px-6 md:py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+      <div>
+        <h1 class="text-xl md:text-2xl font-extrabold maroon-text flex items-center gap-2">
+          <i class="fas fa-graduation-cap text-lg md:text-xl"></i>
+          لوحة تقييم الجلسات الأكاديمية
+        </h1>
+        <p class="text-xs md:text-sm text-gray-600 mt-1">
+          جلسات المرشدين الأكاديميين، الموجهين، ومديري المناهج – متصلة مباشرة بجدول Google Sheets.
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs md:text-sm flex items-center gap-2">
+          <span class="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+          <span id="user-role">مرشد أكاديمي</span>
+        </div>
+        <div class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs md:text-sm">
+          <i class="far fa-calendar-alt ml-1"></i>
+          <span id="current-date"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stats -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="card px-3 py-3">
+        <div class="flex justify-between items-center">
+          <span class="text-xs text-gray-500">جلسات بانتظار التقييم</span>
+          <i class="fas fa-hourglass-half text-amber-500 text-sm"></i>
+        </div>
+        <div class="mt-1 text-2xl font-bold text-gray-900" id="pending-evaluations">0</div>
+      </div>
+      <div class="card px-3 py-3">
+        <div class="flex justify-between items-center">
+          <span class="text-xs text-gray-500">تقييمات مكتملة</span>
+          <i class="fas fa-clipboard-check text-emerald-500 text-sm"></i>
+        </div>
+        <div class="mt-1 text-2xl font-bold text-gray-900" id="completed-evaluations">0</div>
+      </div>
+      <div class="card px-3 py-3">
+        <div class="flex justify-between items-center">
+          <span class="text-xs text-gray-500">فواتير ملغاة</span>
+          <i class="fas fa-file-invoice-dollar text-rose-500 text-sm"></i>
+        </div>
+        <div class="mt-1 text-2xl font-bold text-gray-900" id="canceled-invoices">0</div>
+      </div>
+      <div class="card px-3 py-3">
+        <div class="flex justify-between items-center">
+          <span class="text-xs text-gray-500">جلسات بجودة أقل من 7/10</span>
+          <i class="fas fa-triangle-exclamation text-amber-500 text-sm"></i>
+        </div>
+        <div class="mt-1 text-2xl font-bold text-gray-900" id="low-quality-sessions">0</div>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <section class="card px-3 py-2 md:px-4 md:py-3 flex flex-wrap gap-2 items-center">
+      <button
+        id="advisor-tab"
+        class="tab-button tab-active text-xs md:text-sm text-white"
+      >
+        <i class="fas fa-user-graduate"></i>
+        المرشدون الأكاديميون
+      </button>
+      <button
+        id="mentor-tab"
+        class="tab-button text-xs md:text-sm text-gray-600"
+      >
+        <i class="fas fa-user-tie"></i>
+        الموجهون
+      </button>
+      <button
+        id="director-tab"
+        class="tab-button text-xs md:text-sm text-gray-600"
+      >
+        <i class="fas fa-book-open"></i>
+        مدراء المناهج
+      </button>
+    </section>
+
+    <!-- Main content -->
+    <main class="flex flex-col lg:flex-row gap-4">
+      <!-- Left: sessions tables -->
+      <div class="flex-1 flex flex-col gap-3">
+        <!-- Filters: Advisor -->
+        <div
+          id="advisor-filters"
+          class="filter-section px-3 py-2 md:px-4 md:py-3 flex flex-wrap gap-3 items-center"
+        >
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">المرشد الأكاديمي</span>
+            <select
+              id="advisor-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">جميع المرشدين</option>
+            </select>
+          </div>
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">الموجه</span>
+            <select
+              id="mentor-name-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">جميع الموجهين</option>
+            </select>
+          </div>
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">مدير المناهج</span>
+            <select
+              id="director-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">جميع مديري المناهج</option>
+            </select>
+          </div>
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">حالة التقييم</span>
+            <select
+              id="session-status-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">الكل</option>
+              <option value="pending">بانتظار التقييم</option>
+              <option value="completed">تقييم مكتمل</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Filters: Mentor -->
+        <div
+          id="mentor-filters"
+          class="filter-section px-3 py-2 md:px-4 md:py-3 flex flex-wrap gap-3 items-center hidden"
+        >
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">الموجه</span>
+            <select
+              id="mentor-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">جميع الموجهين</option>
+            </select>
+          </div>
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">مدير المناهج</span>
+            <select
+              id="mentor-director-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">جميع مديري المناهج</option>
+            </select>
+          </div>
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">حالة التقييم</span>
+            <select
+              id="mentor-status-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">الكل</option>
+              <option value="pending">بانتظار التقييم</option>
+              <option value="completed">تقييم مكتمل</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Filters: Director -->
+        <div
+          id="director-filters"
+          class="filter-section px-3 py-2 md:px-4 md:py-3 flex flex-wrap gap-3 items-center hidden"
+        >
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">مدير المناهج</span>
+            <select
+              id="director-only-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">جميع مديري المناهج</option>
+            </select>
+          </div>
+          <div class="flex flex-col text-xs">
+            <span class="text-gray-500 mb-1">حالة التقييم</span>
+            <select
+              id="director-status-filter"
+              class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+            >
+              <option value="all">الكل</option>
+              <option value="pending">بانتظار التقييم</option>
+              <option value="completed">تقييم مكتمل</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Advisor table -->
+        <section id="advisor-content" class="card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-xs md:text-sm">
+              <thead>
+                <tr class="maroon-bg">
+                  <th class="py-3 px-4 text-left gold-text table-header">تاريخ الجلسة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">الطالب و الحالة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">المادة و نوع الجلسة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">المعلم / المرشد الأكاديمي</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">انضم للدرس الآن</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">حالة الدرس</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">حالة التقييم</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="advisor-sessions" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Mentor table -->
+        <section id="mentor-content" class="card overflow-hidden hidden">
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-xs md:text-sm">
+              <thead>
+                <tr class="maroon-bg">
+                  <th class="py-3 px-4 text-left gold-text table-header">تاريخ الجلسة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">الطالب و الحالة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">المادة و نوع الجلسة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">المعلم / الموجه</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">انضم للدرس الآن</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">حالة الدرس</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">حالة التقييم</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="mentor-sessions" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Director table -->
+        <section id="director-content" class="card overflow-hidden hidden">
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-xs md:text-sm">
+              <thead>
+                <tr class="maroon-bg">
+                  <th class="py-3 px-4 text-left gold-text table-header">تاريخ الجلسة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">الطالب و الحالة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">المادة و نوع الجلسة</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">المعلم / مدير المناهج</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">انضم للدرس الآن</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">حالة الدرس</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">حالة التقييم</th>
+                  <th class="py-3 px-4 text-left gold-text table-header">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="director-sessions" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right: Evaluation log / history -->
+      <aside class="w-full lg:w-80 flex flex-col gap-3">
+        <div class="card px-4 py-3">
+          <h3 class="text-sm font-semibold maroon-text flex items-center gap-2 mb-2">
+            <i class="fas fa-history text-xs"></i>
+            سجل آخر التقييمات
+          </h3>
+          <div
+            id="evaluation-log-entries"
+            class="max-h-[520px] overflow-y-auto pr-1 text-xs"
+          >
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Modal: Evaluation -->
+  <div
+    id="evaluation-modal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+  >
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-slate-50"
+      >
+        <h3 id="modal-title" class="text-sm md:text-base font-bold maroon-text">
+          تقييم الجلسة
+        </h3>
+        <button
+          id="close-modal"
+          class="text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div
+        id="modal-content"
+        class="flex-1 overflow-y-auto px-4 py-3 bg-slate-50 space-y-2 text-xs md:text-sm"
+      ></div>
+    </div>
+  </div>
+
+  <!-- Notification -->
+  <div
+    id="success-notification"
+    class="hidden fixed bottom-4 right-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs md:text-sm px-3 py-2 rounded-full shadow-md flex items-center gap-2 z-50"
+  >
+    <i class="fas fa-check-circle"></i>
+    <span>تم حفظ التقييم بنجاح.</span>
+  </div>
+
+  <!-- ======== Front-end Script ======== -->
+  <script>
+    // ========= Global State =========
+    let dashboardData = null;
+    let currentRole = "advisor";
+
+    // ========= DOM Elements =========
+    const advisorTab = document.getElementById("advisor-tab");
+    const mentorTab = document.getElementById("mentor-tab");
+    const directorTab = document.getElementById("director-tab");
+
+    const advisorContent = document.getElementById("advisor-content");
+    const mentorContent = document.getElementById("mentor-content");
+    const directorContent = document.getElementById("director-content");
+
+    const advisorTableBody = document.getElementById("advisor-sessions");
+    const mentorTableBody = document.getElementById("mentor-sessions");
+    const directorTableBody = document.getElementById("director-sessions");
+
+    const advisorFilters = document.getElementById("advisor-filters");
+    const mentorFilters = document.getElementById("mentor-filters");
+    const directorFilters = document.getElementById("director-filters");
+
+    const evaluationModal = document.getElementById("evaluation-modal");
+    const modalTitle = document.getElementById("modal-title");
+    const modalContent = document.getElementById("modal-content");
+    const closeModal = document.getElementById("close-modal");
+
+    const successNotification = document.getElementById("success-notification");
+
+    const userRole = document.getElementById("user-role");
+    const currentDate = document.getElementById("current-date");
+    const evaluationLogEntries = document.getElementById(
+      "evaluation-log-entries"
+    );
+
+    // Statistics cards
+    const canceledInvoices = document.getElementById("canceled-invoices");
+    const lowQualitySessions = document.getElementById("low-quality-sessions");
+    const pendingEvaluations = document.getElementById("pending-evaluations");
+    const completedEvaluationsCnt = document.getElementById(
+      "completed-evaluations"
+    );
+
+    // ========= Utility =========
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatTimestampToArabic(ts) {
+      if (!ts) return "";
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleDateString("ar-SA", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    function matchesStatusFilter(session, filterVal) {
+      const code = session.evaluationStatusCode || "";
+      if (filterVal === "pending") {
+        return code !== "completed";
+      }
+      if (filterVal === "completed") {
+        return code === "completed";
+      }
+      return true;
+    }
+
+    // ========= Date in header =========
+    (function setHeaderDate() {
+      const now = new Date();
+      currentDate.textContent = now.toLocaleDateString("ar-SA", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    })();
+
+    // ========= Tabs =========
+    advisorTab.addEventListener("click", () => {
+      switchTab("advisor");
+      userRole.textContent = "مرشد أكاديمي";
+    });
+
+    mentorTab.addEventListener("click", () => {
+      switchTab("mentor");
+      userRole.textContent = "موجه";
+    });
+
+    directorTab.addEventListener("click", () => {
+      switchTab("director");
+      userRole.textContent = "مدير المناهج";
+    });
+
+    function switchTab(role) {
+      currentRole = role;
+
+      [advisorTab, mentorTab, directorTab].forEach((t) => {
+        t.classList.remove("tab-active");
+        t.classList.add("text-gray-600");
+      });
+
+      [advisorContent, mentorContent, directorContent].forEach((c) =>
+        c.classList.add("hidden")
+      );
+      [advisorFilters, mentorFilters, directorFilters].forEach((f) =>
+        f.classList.add("hidden")
+      );
+
+      if (role === "advisor") {
+        advisorTab.classList.add("tab-active");
+        advisorTab.classList.remove("text-gray-600");
+        advisorContent.classList.remove("hidden");
+        advisorFilters.classList.remove("hidden");
+      } else if (role === "mentor") {
+        mentorTab.classList.add("tab-active");
+        mentorTab.classList.remove("text-gray-600");
+        mentorContent.classList.remove("hidden");
+        mentorFilters.classList.remove("hidden");
+      } else {
+        directorTab.classList.add("tab-active");
+        directorTab.classList.remove("text-gray-600");
+        directorContent.classList.remove("hidden");
+        directorFilters.classList.remove("hidden");
+      }
+
+      populateSessions();
+    }
+
+    // ========= Close Modal =========
+    closeModal.addEventListener("click", () => {
+      evaluationModal.classList.add("hidden");
+    });
+
+    // ========= Filters change =========
+    document.querySelectorAll(".filter-section select").forEach((sel) => {
+      sel.addEventListener("change", () => populateSessions());
+    });
+
+    // ========= Load data from Apps Script =========
+    function loadDashboardData() {
+      google.script.run
+        .withSuccessHandler((data) => {
+          dashboardData = data || {};
+          populateFilters();
+          populateSessions();
+          populateEvaluationLog();
+          updateStatistics();
+        })
+        .withFailureHandler((err) => {
+          console.error(err);
+          alert("تعذر تحميل البيانات من Google Sheets: " + err.message);
+        })
+        .getDashboardData();
+    }
+
+    function resetSelectOptions(select, allLabel, values) {
+      if (!select) return;
+      select.innerHTML = "";
+      const optAll = document.createElement("option");
+      optAll.value = "all";
+      optAll.textContent = allLabel;
+      select.appendChild(optAll);
+      (values || []).forEach((name) => {
+        if (!name) return;
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
+
+    function populateFilters() {
+      if (!dashboardData || !dashboardData.meta) return;
+      const meta = dashboardData.meta;
+
+      const academicAdvisors = meta.academicAdvisors || [];
+      const mentors = meta.mentors || [];
+      const directors = meta.syllabusDirectors || [];
+
+      resetSelectOptions(
+        document.getElementById("advisor-filter"),
+        "جميع المرشدين",
+        academicAdvisors
+      );
+      resetSelectOptions(
+        document.getElementById("mentor-name-filter"),
+        "جميع الموجهين",
+        mentors
+      );
+      resetSelectOptions(
+        document.getElementById("director-filter"),
+        "جميع مديري المناهج",
+        directors
+      );
+
+      resetSelectOptions(
+        document.getElementById("mentor-filter"),
+        "جميع الموجهين",
+        mentors
+      );
+      resetSelectOptions(
+        document.getElementById("mentor-director-filter"),
+        "جميع مديري المناهج",
+        directors
+      );
+
+      resetSelectOptions(
+        document.getElementById("director-only-filter"),
+        "جميع مديري المناهج",
+        directors
+      );
+    }
+
+    // ========= Populate sessions for each tab =========
+    function populateSessions() {
+      advisorTableBody.innerHTML = "";
+      mentorTableBody.innerHTML = "";
+      directorTableBody.innerHTML = "";
+
+      if (!dashboardData) return;
+
+      const advisorData = dashboardData.advisorSessions || [];
+      const mentorData = dashboardData.mentorSessions || [];
+      const directorData = dashboardData.directorSessions || [];
+
+      // Advisor filters
+      const advisorFilterVal =
+        (document.getElementById("advisor-filter") || {}).value || "all";
+      const mentorNameFilterVal =
+        (document.getElementById("mentor-name-filter") || {}).value || "all";
+      const directorFilterVal =
+        (document.getElementById("director-filter") || {}).value || "all";
+      const sessionStatusFilterVal =
+        (document.getElementById("session-status-filter") || {}).value ||
+        "all";
+
+      // Mentor filters
+      const mentorFilterVal =
+        (document.getElementById("mentor-filter") || {}).value || "all";
+      const mentorDirectorFilterVal =
+        (document.getElementById("mentor-director-filter") || {}).value ||
+        "all";
+      const mentorStatusFilterVal =
+        (document.getElementById("mentor-status-filter") || {}).value || "all";
+
+      // Director filters
+      const directorOnlyFilterVal =
+        (document.getElementById("director-only-filter") || {}).value || "all";
+      const directorStatusFilterVal =
+        (document.getElementById("director-status-filter") || {}).value ||
+        "all";
+
+      // Advisor table
+      advisorData.forEach((session, index) => {
+        if (
+          advisorFilterVal !== "all" &&
+          String(session.academicAdvisor || "") !== advisorFilterVal
+        )
+          return;
+        if (
+          mentorNameFilterVal !== "all" &&
+          String(session.mentor || "") !== mentorNameFilterVal
+        )
+          return;
+        if (
+          directorFilterVal !== "all" &&
+          String(session.syllabusDirector || "") !== directorFilterVal
+        )
+          return;
+        if (!matchesStatusFilter(session, sessionStatusFilterVal)) return;
+
+        appendSessionRow("advisor", session, index, advisorTableBody);
+      });
+
+      // Mentor table
+      mentorData.forEach((session, index) => {
+        if (
+          mentorFilterVal !== "all" &&
+          String(session.mentor || "") !== mentorFilterVal
+        )
+          return;
+        if (
+          mentorDirectorFilterVal !== "all" &&
+          String(session.syllabusDirector || "") !== mentorDirectorFilterVal
+        )
+          return;
+        if (!matchesStatusFilter(session, mentorStatusFilterVal)) return;
+
+        appendSessionRow("mentor", session, index, mentorTableBody);
+      });
+
+      // Director table
+      directorData.forEach((session, index) => {
+        if (
+          directorOnlyFilterVal !== "all" &&
+          String(session.syllabusDirector || "") !== directorOnlyFilterVal
+        )
+          return;
+        if (!matchesStatusFilter(session, directorStatusFilterVal)) return;
+
+        appendSessionRow("director", session, index, directorTableBody);
+      });
+    }
+
+    function appendSessionRow(role, session, index, tbody) {
+      const row = document.createElement("tr");
+      const rowClass = index % 2 === 0 ? "row-light" : "row-cream";
+
+      let evalClass = "evaluation-pending";
+      if (session.evaluationStatusCode === "completed")
+        evalClass = "evaluation-done";
+      else if (session.evaluationStatusCode === "deadline-passed")
+        evalClass = "evaluation-overdue";
+
+      const actionLabel =
+        session.evaluationStatusCode === "completed"
+          ? "عرض / تعديل التقييم"
+          : "تقييم الآن";
+
+      const studentStatusLower = (session.studentStatus || "").toLowerCase();
+      let statusBadgeClass = "bg-yellow-100 text-yellow-700";
+      if (
+        studentStatusLower === "active" ||
+        studentStatusLower === "نشط"
+      ) {
+        statusBadgeClass = "bg-green-100 text-green-700";
+      } else if (
+        studentStatusLower === "inactive" ||
+        studentStatusLower === "غير نشط"
+      ) {
+        statusBadgeClass = "bg-gray-200 text-gray-700";
+      }
+
+      const prevEval = session.previousEvaluation || null;
+
+      row.className =
+        rowClass +
+        (session.evaluationStatusCode === "completed" ? " completed-session" : "");
+      row.innerHTML = `
+        <td class="py-3 px-4">
+          <div>${session.date || ""}</div>
+          <div class="text-xs text-gray-600">${session.time || ""}</div>
+        </td>
+        <td class="py-3 px-4">
+          <div class="font-semibold">${session.studentName || ""}</div>
+          ${
+            session.studentStatus
+              ? `
+            <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${statusBadgeClass}">
+              ${session.studentStatus}
+            </span>`
+              : ""
+          }
+        </td>
+        <td class="py-3 px-4">
+          <div>${session.course || ""}</div>
+          <div class="text-xs text-gray-600">${session.sessionType || ""}</div>
+        </td>
+        <td class="py-3 px-4">
+          <div>${session.teacherName || ""}</div>
+          ${
+            role === "advisor"
+              ? `
+            <div class="text-xs text-gray-600">المرشد الأكاديمي: ${
+              session.academicAdvisor || "-"
+            }</div>`
+              : ""
+          }
+          ${
+            role === "mentor"
+              ? `
+            <div class="text-xs text-gray-600">الموجه: ${
+              session.mentor || "-"
+            }</div>`
+              : ""
+          }
+          ${
+            role === "director"
+              ? `
+            <div class="text-xs text-gray-600">مدير المناهج: ${
+              session.syllabusDirector || "-"
+            }</div>`
+              : ""
+          }
+        </td>
+        <td class="py-3 px-4">
+          ${
+            session.zoomLink
+              ? `
+            <button class="join-now-btn">
+              <i class="fas fa-video"></i>
+              انضم الآن
+            </button>`
+              : `
+            <span class="text-xs text-gray-500">لا يوجد رابط</span>`
+          }
+        </td>
+        <td class="py-3 px-4">
+          <span class="text-sm font-medium">${session.lessonStatusText || ""}</span>
+        </td>
+        <td class="py-3 px-4">
+          <span class="evaluation-status ${evalClass}">
+            ${session.evaluationStatusText || ""}
+          </span>
+          ${
+            prevEval && prevEval.quality != null
+              ? `
+            <div class="mt-1 text-xs text-gray-600">
+              آخر تقييم: ${prevEval.quality}/10
+            </div>`
+              : ""
+          }
+        </td>
+        <td class="py-3 px-4">
+          <button class="evaluate-btn">
+            <i class="fas fa-clipboard-check"></i>
+            ${actionLabel}
+          </button>
+        </td>
+      `;
+
+      const joinBtn = row.querySelector(".join-now-btn");
+      if (joinBtn && session.zoomLink) {
+        joinBtn.addEventListener("click", () => {
+          window.open(session.zoomLink, "_blank");
+        });
+      }
+
+      const evalBtn = row.querySelector(".evaluate-btn");
+      evalBtn.addEventListener("click", () => openEvaluationModal(role, session));
+
+      tbody.appendChild(row);
+    }
+
+    // ========= Evaluation Modal & Forms =========
+    function createAdvisorForm(session) {
+      const isCompleted = session.evaluationStatusCode === "completed";
+      const flags =
+        (dashboardData &&
+          dashboardData.flags &&
+          dashboardData.flags.advisor) || { red: [], yellow: [] };
+      const redOptions = flags.red || [];
+      const yellowOptions = flags.yellow || [];
+
+      const prev = session.previousEvaluation || {};
+      const defaultQuality = prev.quality != null ? prev.quality : 5;
+      const invoiceValue = prev.invoiceDecision || "sent";
+
+      const redHtml = redOptions
+        .map(
+          (label) => `
+        <label class="flex items-start">
+          <input type="checkbox" name="red-flags" value="${escapeHtml(
+            label
+          )}" class="mr-2 mt-1">
+          <span>${label}</span>
+        </label>
+      `
+        )
+        .join("");
+
+      const yellowHtml = yellowOptions
+        .map(
+          (label) => `
+        <label class="flex items-start">
+          <input type="checkbox" name="yellow-flags" value="${escapeHtml(
+            label
+          )}" class="mr-2 mt-1">
+          <span>${label}</span>
+        </label>
+      `
+        )
+        .join("");
+
+      const recordingsHtml = (session.sessionUrls || [])
+        .map(
+          (url, i) =>
+            `<a href="${url}" target="_blank" class="session-link text-sm bg-gray-100 py-1 px-2 rounded">التسجيل ${
+              i + 1
+            }</a>`
+        )
+        .join("");
+
+      return `
+        <form id="evaluation-form">
+          <div class="session-info-card">
+            <h4 class="text-lg font-semibold maroon-text mb-3">معلومات الجلسة</h4>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">الطالب</span>
+                <span class="info-value">${session.studentName}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">المادة</span>
+                <span class="info-value">${session.course}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">المعلم</span>
+                <span class="info-value">${session.teacherName}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">التاريخ والوقت</span>
+                <span class="info-value">${session.date} – ${session.time}</span>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="info-label">رابط الزوم</span>
+              <div class="mt-1">
+                <a href="${session.zoomLink}" target="_blank" class="session-link">${session.zoomLink}</a>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="info-label">تسجيلات الجلسة</span>
+              <div class="flex flex-wrap gap-2 mt-1">
+                ${recordingsHtml}
+              </div>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">قرار الفاتورة</h4>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">حالة الفاتورة</label>
+              <select id="invoice-decision" name="invoice-decision" class="w-full p-2 border border-gray-300 rounded-md">
+                <option value="sent" ${
+                  invoiceValue === "sent" ? "selected" : ""
+                }>إرسال الفاتورة</option>
+                <option value="canceled" ${
+                  invoiceValue === "canceled" ? "selected" : ""
+                }>إلغاء الفاتورة</option>
+              </select>
+            </div>
+            <div id="apology-section" class="${
+              invoiceValue === "canceled" ? "" : "hidden"
+            }">
+              <label class="block text-sm font-medium text-gray-700 mb-2">بريد الاعتذار للطالب</label>
+              <textarea name="apology-email" class="w-full p-2 border border-gray-300 rounded-md" rows="3" placeholder="اكتب بريد الاعتذار..."></textarea>
+              <p class="text-xs text-gray-500 mt-1">سيتم إرسال البريد إلى: ${
+                session.studentName
+              }</p>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">جودة الجلسة</h4>
+            <div class="flex items-center">
+              <span class="mr-3 text-sm font-medium">0 (ضعيف)</span>
+              <input type="range" id="quality-slider" name="quality" min="0" max="10" value="${defaultQuality}" class="w-full">
+              <span class="ml-3 text-sm font-medium">10 (ممتاز)</span>
+            </div>
+            <div class="mt-2 text-center">
+              <span id="quality-value" class="quality-${defaultQuality} py-1 px-3 rounded text-center font-bold">${defaultQuality}</span>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">تقييم المعلم</h4>
+
+            <div class="mb-4 flag-red p-3 rounded">
+              <label class="block text-sm font-medium text-red-700 mb-2">علامات حمراء (مشكلات جسيمة)</label>
+              <div class="space-y-2">
+                ${
+                  redHtml ||
+                  '<p class="text-xs text-gray-500">لا توجد عناصر معرفة بعد في ورقة العلامات.</p>'
+                }
+              </div>
+            </div>
+
+            <div class="mb-4 flag-yellow p-3 rounded">
+              <label class="block text-sm font-medium text-yellow-700 mb-2">علامات صفراء (تحتاج متابعة)</label>
+              <div class="space-y-2">
+                ${
+                  yellowHtml ||
+                  '<p class="text-xs text-gray-500">لا توجد عناصر معرفة بعد في ورقة العلامات.</p>'
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">تقييم المنهج</h4>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">ملاءمة المنهج</label>
+              <select id="syllabus-evaluation" name="syllabus-evaluation" class="w-full p-2 border border-gray-300 rounded-md">
+                <option value="suitable">مناسب</option>
+                <option value="unsuitable">غير مناسب</option>
+              </select>
+            </div>
+
+            <div id="syllabus-change-section" class="hidden">
+              <label class="block text-sm font-medium text-gray-700 mb-2">التغييرات المطلوبة</label>
+              <div class="space-y-2 mb-3">
+                <label class="flex items-center">
+                  <input type="checkbox" name="syllabus-changes" value="different-course" class="mr-2">
+                  <span>التغيير إلى مادة مختلفة</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="checkbox" name="syllabus-changes" value="different-level" class="mr-2">
+                  <span>التغيير إلى مستوى مختلف</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="checkbox" name="syllabus-changes" value="content-revision" class="mr-2">
+                  <span>حاجة إلى مراجعة المحتوى</span>
+                </label>
+              </div>
+              <textarea name="syllabus-notes" class="w-full p-2 border border-gray-300 rounded-md" rows="3" placeholder="ملاحظات إضافية حول تغييرات المنهج..."></textarea>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section decision-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">القرار الأكاديمي</h4>
+            <div class="space-y-3">
+              <label class="flex items-center">
+                <input type="radio" name="academic-decision" value="no-change" class="mr-2" checked>
+                <span>لا حاجة لتغييرات</span>
+              </label>
+              <label class="flex items-center">
+                <input type="radio" name="academic-decision" value="change-teacher" class="mr-2">
+                <span>تغيير المعلم فقط</span>
+              </label>
+              <label class="flex items-center">
+                <input type="radio" name="academic-decision" value="change-course" class="mr-2">
+                <span>تغيير المادة فقط</span>
+              </label>
+              <label class="flex items-center">
+                <input type="radio" name="academic-decision" value="change-both" class="mr-2">
+                <span>تغيير المعلم والمادة</span>
+              </label>
+              <label class="flex items-center">
+                <input type="radio" name="academic-decision" value="academic-plan" class="mr-2">
+                <span>إنشاء خطة أكاديمية جديدة</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center mt-6">
+            <div>
+              <label class="flex items-center">
+                <input type="checkbox" name="stop-following" id="stop-following-checkbox" class="mr-2">
+                <span class="text-sm">إيقاف متابعة ${
+                  session.studentName
+                } بعد هذا التقييم</span>
+              </label>
+            </div>
+            <div class="flex space-x-3 space-x-reverse">
+              <button type="button" id="cancel-evaluation" class="py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                إلغاء
+              </button>
+              <button type="submit" class="form-submit-btn">
+                <i class="fas fa-paper-plane"></i>
+                ${isCompleted ? "تحديث التقييم" : "إرسال التقييم"}
+              </button>
+            </div>
+          </div>
+        </form>
+      `;
+    }
+
+    function createMentorForm(session) {
+      const isCompleted = session.evaluationStatusCode === "completed";
+      const flags =
+        (dashboardData &&
+          dashboardData.flags &&
+          dashboardData.flags.mentor) || { red: [], yellow: [] };
+      const redOptions = flags.red || [];
+      const yellowOptions = flags.yellow || [];
+
+      const prev = session.previousEvaluation || {};
+      const defaultQuality = prev.quality != null ? prev.quality : 5;
+
+      const redHtml = redOptions
+        .map(
+          (label) => `
+        <label class="flex items-start">
+          <input type="checkbox" name="red-flags" value="${escapeHtml(
+            label
+          )}" class="mr-2 mt-1">
+          <span>${label}</span>
+        </label>
+      `
+        )
+        .join("");
+
+      const yellowHtml = yellowOptions
+        .map(
+          (label) => `
+        <label class="flex items-start">
+          <input type="checkbox" name="yellow-flags" value="${escapeHtml(
+            label
+          )}" class="mr-2 mt-1">
+          <span>${label}</span>
+        </label>
+      `
+        )
+        .join("");
+
+      const recordingsHtml = (session.sessionUrls || [])
+        .map(
+          (url, i) =>
+            `<a href="${url}" target="_blank" class="session-link text-sm bg-gray-100 py-1 px-2 rounded">التسجيل ${
+              i + 1
+            }</a>`
+        )
+        .join("");
+
+      return `
+        <form id="evaluation-form">
+          <div class="session-info-card">
+            <h4 class="text-lg font-semibold maroon-text mb-3">معلومات الجلسة</h4>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">الطالب</span>
+                <span class="info-value">${session.studentName}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">المادة</span>
+                <span class="info-value">${session.course}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">المعلم</span>
+                <span class="info-value">${session.teacherName}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">التاريخ والوقت</span>
+                <span class="info-value">${session.date} – ${session.time}</span>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="info-label">رابط الزوم</span>
+              <div class="mt-1">
+                <a href="${session.zoomLink}" target="_blank" class="session-link">${session.zoomLink}</a>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="info-label">تسجيلات الجلسة</span>
+              <div class="flex flex-wrap gap-2 mt-1">
+                ${recordingsHtml}
+              </div>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">جودة الجلسة</h4>
+            <div class="flex items-center">
+              <span class="mr-3 text-sm font-medium">0 (ضعيف)</span>
+              <input type="range" id="quality-slider" name="quality" min="0" max="10" value="${defaultQuality}" class="w-full">
+              <span class="ml-3 text-sm font-medium">10 (ممتاز)</span>
+            </div>
+            <div class="mt-2 text-center">
+              <span id="quality-value" class="quality-${defaultQuality} py-1 px-3 rounded text-center font-bold">${defaultQuality}</span>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">تقييم المعلم</h4>
+
+            <div class="mb-4 flag-red p-3 rounded">
+              <label class="block text-sm font-medium text-red-700 mb-2">علامات حمراء</label>
+              <div class="space-y-2">
+                ${
+                  redHtml ||
+                  '<p class="text-xs text-gray-500">لا توجد علامات حمراء معرفة بعد.</p>'
+                }
+              </div>
+            </div>
+
+            <div class="mb-4 flag-yellow p-3 rounded">
+              <label class="block text-sm font-medium text-yellow-700 mb-2">علامات صفراء</label>
+              <div class="space-y-2">
+                ${
+                  yellowHtml ||
+                  '<p class="text-xs text-gray-500">لا توجد علامات صفراء معرفة بعد.</p>'
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">ملاحظات الموجه</h4>
+            <textarea name="mentor-notes" class="w-full p-2 border border-gray-300 rounded-md" rows="4" placeholder="ملاحظات وتوصيات إضافية..."></textarea>
+          </div>
+
+          <div class="flex justify-between items-center mt-6">
+            <div>
+              <label class="flex items-center">
+                <input type="checkbox" name="stop-following" id="stop-following-checkbox" class="mr-2">
+                <span class="text-sm">إيقاف متابعة ${
+                  session.studentName
+                } بعد هذا التقييم</span>
+              </label>
+            </div>
+            <div class="flex space-x-3 space-x-reverse">
+              <button type="button" id="cancel-evaluation" class="py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                إلغاء
+              </button>
+              <button type="submit" class="form-submit-btn">
+                <i class="fas fa-paper-plane"></i>
+                ${isCompleted ? "تحديث التقييم" : "إرسال التقييم"}
+              </button>
+            </div>
+          </div>
+        </form>
+      `;
+    }
+
+    function createDirectorForm(session) {
+      const recordingsHtml = (session.sessionUrls || [])
+        .map(
+          (url, i) =>
+            `<a href="${url}" target="_blank" class="session-link text-sm bg-gray-100 py-1 px-2 rounded">التسجيل ${
+              i + 1
+            }</a>`
+        )
+        .join("");
+
+      return `
+        <form id="evaluation-form">
+          <div class="session-info-card">
+            <h4 class="text-lg font-semibold maroon-text mb-3">معلومات الجلسة</h4>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">الطالب</span>
+                <span class="info-value">${session.studentName}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">المادة</span>
+                <span class="info-value">${session.course}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">المعلم</span>
+                <span class="info-value">${session.teacherName}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">مدير المناهج</span>
+                <span class="info-value">${session.syllabusDirector || "-"}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">التاريخ والوقت</span>
+                <span class="info-value">${session.date} – ${session.time}</span>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="info-label">رابط الزوم</span>
+              <div class="mt-1">
+                <a href="${session.zoomLink}" target="_blank" class="session-link">${session.zoomLink}</a>
+              </div>
+            </div>
+            <div class="mt-4">
+              <span class="info-label">تسجيلات الجلسة</span>
+              <div class="flex flex-wrap gap-2 mt-1">
+                ${recordingsHtml}
+              </div>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">تقييم المنهج</h4>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">أرقام الصفحات المغطاة</label>
+              <input type="text" name="page-numbers" class="w-full p-2 border border-gray-300 rounded-md" placeholder="مثال: 45-52, 60-65">
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">ملاءمة المنهج</label>
+              <div class="flex space-x-4 space-x-reverse">
+                <label class="flex items-center">
+                  <input type="radio" name="syllabus-suitability" value="suitable" class="mr-2" checked>
+                  <span class="syllabus-suitable py-1 px-3 rounded">مناسب</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="radio" name="syllabus-suitability" value="unsuitable" class="mr-2">
+                  <span class="syllabus-unsuitable py-1 px-3 rounded">غير مناسب</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">التغييرات المطلوبة في المنهج</label>
+              <textarea name="syllabus-changes" class="w-full p-2 border border-gray-300 rounded-md" rows="4" placeholder="اذكر بالتفصيل التغييرات المطلوبة في المنهج..."></textarea>
+            </div>
+          </div>
+
+          <div class="evaluation-form-section">
+            <h4 class="text-lg font-semibold maroon-text mb-3">تقييم المحتوى</h4>
+            <div class="space-y-3">
+              <label class="flex items-center">
+                <input type="checkbox" name="content-issues" value="outdated" class="mr-2">
+                <span>المحتوى قديم</span>
+              </label>
+              <label class="flex items-center">
+                <input type="checkbox" name="content-issues" value="too-advanced" class="mr-2">
+                <span>المحتوى متقدم جداً</span>
+              </label>
+              <label class="flex items-center">
+                <input type="checkbox" name="content-issues" value="too-basic" class="mr-2">
+                <span>المحتوى أساسي جداً</span>
+              </label>
+              <label class="flex items-center">
+                <input type="checkbox" name="content-issues" value="poor-organization" class="mr-2">
+                <span>تنظيم ضعيف</span>
+              </label>
+              <label class="flex items-center">
+                <input type="checkbox" name="content-issues" value="missing-topics" class="mr-2">
+                <span>مواضيع مهمة مفقودة</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center mt-6">
+            <div>
+              <label class="flex items-center">
+                <input type="checkbox" name="stop-following" id="stop-following-checkbox" class="mr-2">
+                <span class="text-sm">إيقاف متابعة ${
+                  session.studentName
+                } بعد هذا التقييم</span>
+              </label>
+            </div>
+            <div class="flex space-x-3 space-x-reverse">
+              <button type="button" id="cancel-evaluation" class="py-2 px-4 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                إلغاء
+              </button>
+              <button type="submit" class="form-submit-btn">
+                <i class="fas fa-paper-plane"></i>
+                إرسال التقييم
+              </button>
+            </div>
+          </div>
+        </form>
+      `;
+    }
+
+    function openEvaluationModal(role, session) {
+      modalTitle.textContent = `تقييم الجلسة – ${session.studentName} (${session.course})`;
+
+      if (role === "advisor") {
+        modalContent.innerHTML = createAdvisorForm(session);
+      } else if (role === "mentor") {
+        modalContent.innerHTML = createMentorForm(session);
+      } else {
+        modalContent.innerHTML = createDirectorForm(session);
+      }
+
+      evaluationModal.classList.remove("hidden");
+
+      const form = document.getElementById("evaluation-form");
+      const qualitySlider = document.getElementById("quality-slider");
+      const qualityValue = document.getElementById("quality-value");
+      const invoiceDecision = document.getElementById("invoice-decision");
+      const apologySection = document.getElementById("apology-section");
+      const syllabusEval = document.getElementById("syllabus-evaluation");
+      const syllabusChange = document.getElementById("syllabus-change-section");
+      const cancelBtn = document.getElementById("cancel-evaluation");
+
+      if (qualitySlider && qualityValue) {
+        qualitySlider.addEventListener("input", () => {
+          const v = Number(qualitySlider.value || 0);
+          qualityValue.textContent = v;
+          qualityValue.className = `quality-${v} py-1 px-3 rounded text-center font-bold`;
+        });
+      }
+
+      if (invoiceDecision && apologySection) {
+        invoiceDecision.addEventListener("change", () => {
+          if (invoiceDecision.value === "canceled") {
+            apologySection.classList.remove("hidden");
+          } else {
+            apologySection.classList.add("hidden");
+          }
+        });
+      }
+
+      if (syllabusEval && syllabusChange) {
+        syllabusEval.addEventListener("change", () => {
+          if (syllabusEval.value === "unsuitable") {
+            syllabusChange.classList.remove("hidden");
+          } else {
+            syllabusChange.classList.add("hidden");
+          }
+        });
+      }
+
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", () => {
+          evaluationModal.classList.add("hidden");
+        });
+      }
+
+      if (form) {
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          submitEvaluation(role, session);
+        });
+      }
+    }
+
+    // ========= Submit Evaluation =========
+    function submitEvaluation(role, session) {
+      const form = document.getElementById("evaluation-form");
+      const formData = new FormData(form);
+
+      const qualitySlider = document.getElementById("quality-slider");
+      let quality = null;
+      if (qualitySlider) {
+        const v = qualitySlider.value;
+        quality = v === "" ? null : Number(v);
+      }
+
+      const invoiceDecision = formData.get("invoice-decision") || "";
+      const redFlags = formData.getAll("red-flags");
+      const yellowFlags = formData.getAll("yellow-flags");
+      const academicDecision = formData.get("academic-decision") || "";
+      const syllabusEvaluation =
+        formData.get("syllabus-evaluation") ||
+        formData.get("syllabus-suitability") ||
+        "";
+      const syllabusChangesArray = formData.getAll("syllabus-changes");
+      const syllabusNotes = formData.get("syllabus-notes") || "";
+      const mentorNotes = formData.get("mentor-notes") || "";
+      const contentIssues = formData.getAll("content-issues");
+      const stopChk = document.getElementById("stop-following-checkbox");
+      const stopFollowing = stopChk ? stopChk.checked : false;
+
+      const payload = {
+        role: role,
+        sessionKey: session.sessionKey,
+        sessionDate: session.date,
+        sessionTime: session.time,
+        course: session.course,
+        sessionType: session.sessionType,
+        studentName: session.studentName,
+        studentStatus: session.studentStatus,
+        teacherName: session.teacherName,
+        academicAdvisor: session.academicAdvisor,
+        mentor: session.mentor,
+        syllabusDirector: session.syllabusDirector,
+        invoiceDecision: invoiceDecision,
+        quality: quality,
+        redFlags: redFlags,
+        yellowFlags: yellowFlags,
+        academicDecision: academicDecision,
+        syllabusEvaluation: syllabusEvaluation,
+        syllabusChanges: syllabusChangesArray.length
+          ? syllabusChangesArray
+          : syllabusNotes
+          ? [syllabusNotes]
+          : [],
+        mentorNotes: mentorNotes,
+        contentIssues: contentIssues,
+        stopFollowing: stopFollowing,
+      };
+
+      google.script.run
+        .withSuccessHandler(() => {
+          const msg = stopFollowing
+            ? `تم إرسال التقييم، وتم إيقاف متابعة ${session.studentName}.`
+            : "تم إرسال التقييم بنجاح.";
+          showNotification(msg);
+          evaluationModal.classList.add("hidden");
+          loadDashboardData();
+        })
+        .withFailureHandler((err) => {
+          console.error(err);
+          alert("تعذر حفظ التقييم: " + err.message);
+        })
+        .saveEvaluation(payload);
+    }
+
+    // ========= Evaluation log =========
+    function populateEvaluationLog() {
+      evaluationLogEntries.innerHTML = "";
+
+      if (
+        !dashboardData ||
+        !dashboardData.evaluationLogs ||
+        dashboardData.evaluationLogs.length === 0
+      ) {
+        evaluationLogEntries.innerHTML =
+          '<p class="text-gray-500 text-center py-4">لا توجد تقييمات مسجلة بعد</p>';
+        return;
+      }
+
+      const logs = [...dashboardData.evaluationLogs];
+      logs.sort(
+        (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+      );
+
+      logs.forEach((log) => {
+        const div = document.createElement("div");
+        div.className = "log-entry";
+
+        const dateText = formatTimestampToArabic(log.timestamp);
+        const quality =
+          typeof log.quality === "number" && !isNaN(log.quality)
+            ? log.quality
+            : null;
+
+        const flagsDisplay = `
+          <div class="flags-display">
+            ${
+              (log.redFlags || [])
+                .map(
+                  (f) =>
+                    `<span class="flag-badge red-flag">${escapeHtml(
+                      f
+                    )}</span>`
+                )
+                .join("") || ""
+            }
+            ${
+              (log.yellowFlags || [])
+                .map(
+                  (f) =>
+                    `<span class="flag-badge yellow-flag">${escapeHtml(
+                      f
+                    )}</span>`
+                )
+                .join("") || ""
+            }
+          </div>
+        `;
+
+        let invoiceStatus = "";
+        if ((log.invoiceDecision || "").toLowerCase() === "canceled") {
+          invoiceStatus = '<span class="invoice-canceled">فاتورة ملغاة</span>';
+        } else if ((log.invoiceDecision || "").toLowerCase() === "sent") {
+          invoiceStatus = '<span class="invoice-sent">فاتورة مرسلة</span>';
+        }
+
+        div.innerHTML = `
+          <div class="log-header">
+            <div class="log-student">${log.studentName} - ${
+          log.course
+        }</div>
+            <div class="log-date">${dateText}</div>
+          </div>
+          <div class="log-details">
+            <div class="log-detail-item">
+              <span class="log-label">المعلم</span>
+              <span class="log-value">${log.teacherName || ""}</span>
+            </div>
+            <div class="log-detail-item">
+              <span class="log-label">جودة الجلسة</span>
+              <span class="log-value">
+                ${
+                  quality != null
+                    ? `<span class="quality-display quality-${quality}">${quality}/10</span>`
+                    : "—"
+                }
+              </span>
+            </div>
+            <div class="log-detail-item">
+              <span class="log-label">حالة الفاتورة</span>
+              <span class="log-value">${invoiceStatus || "—"}</span>
+            </div>
+            <div class="log-detail-item">
+              <span class="log-label">العلامات</span>
+              <span class="log-value">
+                ${
+                  (log.redFlags && log.redFlags.length) ||
+                  (log.yellowFlags && log.yellowFlags.length)
+                    ? flagsDisplay
+                    : "لا توجد"
+                }
+              </span>
+            </div>
+          </div>
+        `;
+
+        evaluationLogEntries.appendChild(div);
+      });
+    }
+
+    // ========= Statistics =========
+    function updateStatistics() {
+      if (!dashboardData) return;
+      const logs = dashboardData.evaluationLogs || [];
+
+      const canceledCount = logs.filter(
+        (l) => (l.invoiceDecision || "").toLowerCase() === "canceled"
+      ).length;
+      const lowQualityCount = logs.filter(
+        (l) => typeof l.quality === "number" && l.quality < 7
+      ).length;
+
+      const totalSessions =
+        (dashboardData.advisorSessions || []).length +
+        (dashboardData.mentorSessions || []).length +
+        (dashboardData.directorSessions || []).length;
+
+      const completedCount = logs.length;
+
+      canceledInvoices.textContent = canceledCount;
+      lowQualitySessions.textContent = lowQualityCount;
+      pendingEvaluations.textContent = Math.max(
+        totalSessions - completedCount,
+        0
+      );
+      completedEvaluationsCnt.textContent = completedCount;
+    }
+
+    // ========= Notification =========
+    function showNotification(message) {
+      successNotification.querySelector("span").textContent = message;
+      successNotification.classList.remove("hidden");
+      setTimeout(() => {
+        successNotification.classList.add("hidden");
+      }, 3000);
+    }
+
+    // ========= Init =========
+    document.addEventListener("DOMContentLoaded", () => {
+      switchTab("advisor");
+      loadDashboardData();
+    });
+  </script>
+</body>
+</html>
