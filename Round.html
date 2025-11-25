@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>محطات جولات السلامة – المجمع الطبي</title>
+
+  <!-- Bootstrap RTL -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
+  <!-- Tajawal font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --maroon: #7b1a28;
+      --maroon-dark: #4c0d16;
+      --maroon-soft: #fbe2e7;
+      --gold: #f1c76f;
+    }
+    body {
+      font-family: 'Tajawal', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at top, #fff7f7 0, #f3e5e5 40%, #f0ebee 70%);
+      min-height: 100vh;
+    }
+    .navbar-custom {
+      background: linear-gradient(135deg, var(--maroon-dark), var(--maroon));
+      color: #fff;
+    }
+    .navbar-custom .navbar-brand,
+    .navbar-custom .navbar-text {
+      color: #fff !important;
+    }
+    .logo-img {
+      height: 38px;
+      width: 38px;
+      border-radius: 50%;
+      object-fit: contain;
+      background-color: #fff;
+      padding: 2px;
+      margin-left: .45rem;
+    }
+    .station-card {
+      border-radius: 1.2rem;
+      border: 0;
+      background: #fff;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border 0.15s ease;
+      min-height: 160px;
+    }
+    .station-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+    }
+    .station-card.active {
+      border: 2px solid var(--maroon);
+    }
+    .chip {
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      font-size: 0.8rem;
+      display: inline-block;
+    }
+    .chip-green {
+      background-color: #e5f6e8;
+      color: #157347;
+    }
+    .chip-red {
+      background-color: #f8d7da;
+      color: #842029;
+    }
+    .chip-gold {
+      background-color: #fff3cd;
+      color: #8a6d1f;
+    }
+    .spinner-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.7);
+      z-index: 2000;
+      backdrop-filter: blur(2px);
+    }
+    .check-item-row {
+      border-radius: .75rem;
+      background: #f9f4f4;
+      padding: .5rem .75rem;
+      margin-bottom: .4rem;
+      font-size: .9rem;
+    }
+    .check-buttons .btn {
+      min-width: 3.2rem;
+    }
+    .chart-card {
+      height: 260px;
+    }
+  </style>
+</head>
+<body>
+  <!-- شريط علوي -->
+  <nav class="navbar navbar-expand-lg navbar-custom shadow-sm">
+    <div class="container-fluid px-4">
+      <span class="navbar-brand fw-bold d-flex align-items-center">
+        <!-- ضع شعار المجمع في ملف mc-logo.png بجانب هذا الـ HTML -->
+        <img src="mc-logo.png" alt="شعار مجمع مكة الطبي" class="logo-img" />
+        <span>
+          محطات جولات السلامة اليومية
+        </span>
+      </span>
+      <span class="navbar-text small ms-auto" id="todayInfoText"></span>
+    </div>
+  </nav>
+
+  <div class="container-fluid my-4">
+    <div class="row g-4">
+      <!-- يسار: الجراف + كروت المسؤولين -->
+      <div class="col-lg-4">
+        <!-- كرت الجراف -->
+        <div class="card border-0 shadow-sm rounded-4 mb-3 chart-card">
+          <div class="card-header bg-white border-0 rounded-4">
+            <h6 class="mb-0">
+              <i class="fa-solid fa-chart-column me-2 text-danger"></i>
+              مؤشّر إنجاز جولات اليوم حسب المسؤول
+            </h6>
+            <small class="text-muted">
+              العمود الذهبي = مهام اليوم، العمود الأخضر = المنجَز اليوم.
+            </small>
+          </div>
+          <div class="card-body">
+            <canvas id="staffRoundsChart" height="170"></canvas>
+          </div>
+        </div>
+
+        <!-- كروت المسؤولين -->
+        <h5 class="fw-bold mb-2">
+          <i class="fa-solid fa-users-line me-2 text-danger"></i>
+          محطات المسؤولين
+        </h5>
+        <p class="small text-muted mb-2">
+          الأسماء تُسحب آليًا من عمود <strong>Assigned_To</strong> في MASTER_TASKS.
+        </p>
+        <div class="row g-3" id="stationCardsContainer"></div>
+      </div>
+
+      <!-- يمين: مهام اليوم + السجل + نموذج الجولة -->
+      <div class="col-lg-8">
+        <!-- مهام اليوم للمسؤول المختار -->
+        <div class="card border-0 shadow-sm rounded-4 mb-3">
+          <div class="card-header bg-white border-0 rounded-4">
+            <h5 class="mb-0">
+              <i class="fa-solid fa-user-gear me-2 text-danger"></i>
+              مهام اليوم للمسؤول:
+              <span id="selectedStaffName" class="fw-bold text-dark">لم يتم اختيار مسؤول</span>
+            </h5>
+            <small class="text-muted" id="staffTasksInfo">
+              اختر أحد الكروت على اليسار لرؤية مهامه اليومية بالتفصيل.
+            </small>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>الجولة</th>
+                    <th class="text-center">منفذة / مطلوبة اليوم</th>
+                    <th class="text-center">الوقت المستهدف</th>
+                    <th class="text-center">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody id="staffTasksTableBody">
+                  <tr>
+                    <td colspan="4" class="text-center text-muted small">
+                      لا توجد بيانات حتى الآن.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- سجل جولات اليوم -->
+        <div class="card border-0 shadow-sm rounded-4 mb-3">
+          <div class="card-header bg-white border-0 rounded-4">
+            <h6 class="mb-0">
+              <i class="fa-solid fa-list-ul me-2 text-danger"></i>
+              سجل جولات اليوم
+            </h6>
+            <small class="text-muted">
+              يتم السحب مباشرة من Rounds_Log بدون الحاجة لفتح الإكسيل.
+            </small>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>الوقت</th>
+                    <th>الجولة</th>
+                    <th>المسؤول</th>
+                    <th>مسؤول التنفيذ</th>
+                    <th>الحالة</th>
+                    <th>ملخص الخلل</th>
+                  </tr>
+                </thead>
+                <tbody id="roundsLogBody">
+                  <tr>
+                    <td colspan="6" class="text-center text-muted small">
+                      لا توجد جولات مسجلة حتى الآن.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- نموذج checklist -->
+        <div class="card border-0 shadow-sm rounded-4">
+          <div class="card-header bg-white border-0 rounded-4">
+            <h6 class="mb-0">
+              <i class="fa-solid fa-clipboard-check me-2 text-danger"></i>
+              نموذج التحقق للجولة المختارة
+            </h6>
+            <p class="small text-muted mb-0" id="checklistRoundTitle">
+              لم يتم اختيار جولة بعد.
+            </p>
+          </div>
+          <div class="card-body">
+            <div id="checklistItemsContainer" class="mb-3"></div>
+
+            <div class="mb-2" id="execRespContainer" style="display:none;">
+              <label class="form-label">مسؤول التنفيذ (في حال وجود خلل)</label>
+              <select id="execRespSelect" class="form-select">
+                <option value="">لا يوجد (لا حاجة لإجراء)</option>
+              </select>
+              <div class="form-text small">
+                اختر الشخص المكلف بتصحيح الخلل من قائمة المسؤولين للجولة.
+              </div>
+              <div class="form-text small text-danger" id="execRespWarning" style="display:none;">
+                يوجد بند واحد على الأقل عليه "لا" – الرجاء اختيار مسؤول التنفيذ قبل الحفظ.
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label">ملاحظات إضافية (اختياري)</label>
+              <textarea id="checklistComment" class="form-control" rows="2"></textarea>
+            </div>
+
+            <button id="btnSaveChecklist" class="btn btn-danger px-4" disabled>
+              <i class="fa-solid fa-floppy-disk ms-1"></i>
+              حفظ الجولة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- شاشة تحميل -->
+  <div id="spinnerOverlay" class="spinner-overlay">
+    <div class="text-center">
+      <div class="spinner-border text-danger mb-3" role="status"></div>
+      <div class="fw-semibold text-dark">جاري تحميل بيانات الجولات…</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    const WEB_APP_URL =
+      'https://script.google.com/macros/s/AKfycbzzK213HbZPw4Js-7Xq8PW9SKO-yuKiuRN6wc3ms0erYlKFihvS4ITGAFantA7nSvNb/exec';
+
+    let HOME_DATA = null;
+    let ROUNDS_LOG = [];
+    let SELECTED_STAFF = null;
+    let SELECTED_TASK = null;
+    let SELECTED_CHECKLIST = [];
+    let STAFF_CHART = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadHomeData();
+      loadRoundsLog();
+      document.getElementById('btnSaveChecklist').addEventListener('click', onSaveChecklist);
+    });
+
+    function showSpinner(show) {
+      const el = document.getElementById('spinnerOverlay');
+      if (!el) return;
+      el.style.display = show ? 'flex' : 'none';
+    }
+
+    async function callApi(action, payload) {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Backend error');
+      return data;
+    }
+
+    async function loadHomeData() {
+      showSpinner(true);
+      try {
+        const data = await callApi('getHomeData', {});
+        HOME_DATA = data;
+        renderTodayHeader(data);
+        renderStationCards(data.staff || []);
+        updateStaffChart(data.staff || []);
+      } catch (err) {
+        alert('خطأ في تحميل بيانات الكروت: ' + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    async function loadRoundsLog() {
+      try {
+        const data = await callApi('getRoundsLog', { limit: 50 });
+        ROUNDS_LOG = data.entries || [];
+        renderRoundsLogTable();
+      } catch (err) {
+        console.error('log error', err);
+      }
+    }
+
+    function renderTodayHeader(data) {
+      const el = document.getElementById('todayInfoText');
+      if (!el) return;
+      el.textContent = `تاريخ اليوم: ${data.todayDate || ''}`;
+    }
+
+    function renderStationCards(staffArr) {
+      const container = document.getElementById('stationCardsContainer');
+      container.innerHTML = '';
+      if (!staffArr.length) {
+        container.innerHTML = '<div class="col-12 text-muted small">لا توجد أسماء في Assigned_To في MASTER_TASKS.</div>';
+        return;
+      }
+
+      staffArr.forEach(s => {
+        const col = document.createElement('div');
+        col.className = 'col-12';
+
+        const card = document.createElement('div');
+        card.className = 'station-card p-3';
+        card.dataset.staffName = s.name;
+
+        const tasksSummary = (s.tasksToday || []).slice(0, 3).map(t => {
+          return `• ${t.roundNameAr || t.roundNameEn} – تكرار: ${t.roundsPerDay}×`;
+        }).join('<br>');
+
+        card.innerHTML = `
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <div class="fw-bold fs-5">${s.name}</div>
+              <div class="small text-muted">مسؤول عن جولات السلامة حسب MASTER_TASKS</div>
+            </div>
+          </div>
+          <div class="small mb-2">
+            <span class="chip ${s.remainingToday > 0 ? 'chip-red' : 'chip-green'}">
+              مهام اليوم: ${s.expectedToday} – منجَز: ${s.doneToday || 0} – متبقّي: ${s.remainingToday}
+            </span>
+          </div>
+          <div class="small mb-1">
+            <span class="chip chip-gold">
+              إجمالي مهام الأسبوع (حسب Yes في الأيام): ${s.expectedWeek}
+            </span>
+          </div>
+          <div class="small mt-2 text-muted">
+            <strong>أهم جولات اليوم:</strong><br>
+            ${tasksSummary || '<span class="text-muted">لا توجد جولات مفعّلة اليوم.</span>'}
+          </div>
+        `;
+
+        card.addEventListener('click', () => selectStaff(s.name));
+        col.appendChild(card);
+        container.appendChild(col);
+      });
+    }
+
+    function updateStaffChart(staffArr) {
+      const ctx = document.getElementById('staffRoundsChart');
+      if (!ctx) return;
+
+      const labels = staffArr.map(s => s.name);
+      const totalData = staffArr.map(s => s.expectedToday || 0);
+      const doneData  = staffArr.map(s => s.doneToday || 0);
+
+      const data = {
+        labels,
+        datasets: [
+          {
+            label: 'مهام اليوم',
+            data: totalData,
+            backgroundColor: '#f1c76f'
+          },
+          {
+            label: 'منجَز اليوم',
+            data: doneData,
+            backgroundColor: '#198754'
+          }
+        ]
+      };
+
+      const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { stepSize: 1 }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom'
+          }
+        }
+      };
+
+      if (STAFF_CHART) {
+        STAFF_CHART.data = data;
+        STAFF_CHART.options = options;
+        STAFF_CHART.update();
+      } else {
+        STAFF_CHART = new Chart(ctx, {
+          type: 'bar',
+          data,
+          options
+        });
+      }
+    }
+
+    function selectStaff(staffName) {
+      if (!HOME_DATA || !HOME_DATA.staff) return;
+      const staff = HOME_DATA.staff.find(s => s.name === staffName);
+      SELECTED_STAFF = staff || null;
+      SELECTED_TASK = null;
+      SELECTED_CHECKLIST = [];
+      document.getElementById('checklistItemsContainer').innerHTML = '';
+      document.getElementById('checklistRoundTitle').textContent = 'لم يتم اختيار جولة بعد.';
+      document.getElementById('checklistComment').value = '';
+      document.getElementById('btnSaveChecklist').disabled = true;
+      document.getElementById('execRespContainer').style.display = 'none';
+      document.getElementById('execRespWarning').style.display = 'none';
+
+      document.querySelectorAll('.station-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.staffName === staffName);
+      });
+
+      const nameEl = document.getElementById('selectedStaffName');
+      const infoEl = document.getElementById('staffTasksInfo');
+      if (staff) {
+        nameEl.textContent = staff.name;
+        infoEl.textContent = `إجمالي مهام اليوم: ${staff.expectedToday} – منجَز: ${staff.doneToday || 0} – متبقّي: ${staff.remainingToday}`;
+        renderStaffTasksTable(staff);
+      } else {
+        nameEl.textContent = 'لم يتم اختيار مسؤول';
+        infoEl.textContent = '';
+        document.getElementById('staffTasksTableBody').innerHTML =
+          '<tr><td colspan="4" class="text-center text-muted small">لا توجد مهام لهذا المسؤول.</td></tr>';
+      }
+    }
+
+    function renderStaffTasksTable(staff) {
+      const tbody = document.getElementById('staffTasksTableBody');
+      tbody.innerHTML = '';
+
+      if (!staff.tasksToday || !staff.tasksToday.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="4" class="text-center text-muted small">لا توجد جولات مفعّلة في MASTER_TASKS.</td></tr>';
+        return;
+      }
+
+      staff.tasksToday.forEach(t => {
+        const done = t.doneCountToday || 0;
+        const total = t.roundsPerDay || 0;
+        const completed = total > 0 && done >= total;
+
+        const tr = document.createElement('tr');
+        if (completed) tr.classList.add('table-primary');
+
+        tr.innerHTML = `
+          <td>${t.roundNameAr || t.roundNameEn}</td>
+          <td class="text-center">${done}/${total}</td>
+          <td class="text-center">${t.targetTime || ''}</td>
+          <td class="text-center">
+            <button class="btn btn-sm ${completed ? 'btn-outline-secondary' : 'btn-outline-danger'}"
+                    ${completed ? 'disabled' : ''}>
+              ${completed ? 'مكتملة' : 'بدء الجولة'}
+            </button>
+          </td>
+        `;
+
+        const btn = tr.querySelector('button');
+        if (!completed) {
+          btn.addEventListener('click', () => openChecklistForTask(staff, t));
+        }
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderRoundsLogTable() {
+      const tbody = document.getElementById('roundsLogBody');
+      tbody.innerHTML = '';
+
+      if (!ROUNDS_LOG.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="6" class="text-center text-muted small">لا توجد جولات مسجلة.</td></tr>';
+        return;
+      }
+
+      ROUNDS_LOG.forEach(entry => {
+        const statusBadge =
+          entry.status === 'في الوقت'
+            ? '<span class="badge bg-success">في الوقت</span>'
+            : entry.status === 'متأخر'
+            ? '<span class="badge bg-warning text-dark">متأخر</span>'
+            : '<span class="badge bg-secondary">تم التنفيذ</span>';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="small">${entry.time}</td>
+          <td class="small">${entry.area}</td>
+          <td class="small">${entry.staff}</td>
+          <td class="small">${entry.execResponsible || '-'}</td>
+          <td class="small">${statusBadge}</td>
+          <td class="small">${entry.negativeNotes || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function openChecklistForTask(staff, task) {
+      SELECTED_STAFF = staff;
+      SELECTED_TASK = task;
+      SELECTED_CHECKLIST = [];
+      document.getElementById('checklistComment').value = '';
+      document.getElementById('checklistRoundTitle').textContent =
+        `الجولة: ${task.roundNameAr || task.roundNameEn} – المسؤول: ${staff.name}`;
+
+      showSpinner(true);
+      try {
+        const data = await callApi('getTaskChecklist', { taskId: task.taskId });
+        renderChecklistItems(data.items || []);
+        updateExecRespOptions(task);
+        document.getElementById('btnSaveChecklist').disabled = false;
+      } catch (err) {
+        alert('خطأ في تحميل checklist: ' + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    function renderChecklistItems(items) {
+      const container = document.getElementById('checklistItemsContainer');
+      container.innerHTML = '';
+      SELECTED_CHECKLIST = [];
+      document.getElementById('execRespWarning').style.display = 'none';
+
+      if (!items.length) {
+        container.innerHTML =
+          '<p class="text-muted small mb-0">لا توجد بنود checklist معرفة لهذه الجولة (شيت R0X فارغ).</p>';
+        return;
+      }
+
+      items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'check-item-row d-flex justify-content-between align-items-center';
+        div.innerHTML = `
+          <div class="me-3">${item.text}</div>
+          <div class="check-buttons btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-success active" data-value="yes">نعم</button>
+            <button type="button" class="btn btn-outline-danger" data-value="no">لا</button>
+          </div>
+        `;
+        const btnYes = div.querySelector('button[data-value="yes"]');
+        const btnNo = div.querySelector('button[data-value="no"]');
+
+        btnYes.addEventListener('click', () => {
+          btnYes.classList.add('active');
+          btnNo.classList.remove('active');
+          updateSelectedChecklistItem(item.text, false);
+        });
+        btnNo.addEventListener('click', () => {
+          btnNo.classList.add('active');
+          btnYes.classList.remove('active');
+          updateSelectedChecklistItem(item.text, true);
+        });
+
+        container.appendChild(div);
+      });
+    }
+
+    function updateSelectedChecklistItem(text, isNo) {
+      const idx = SELECTED_CHECKLIST.indexOf(text);
+      if (isNo) {
+        if (idx === -1) SELECTED_CHECKLIST.push(text);
+      } else {
+        if (idx !== -1) SELECTED_CHECKLIST.splice(idx, 1);
+      }
+      // كل مرة نغيّر الاختيارات نخفي التحذير (لو كان ظاهر)
+      const warning = document.getElementById('execRespWarning');
+      if (warning) warning.style.display = 'none';
+    }
+
+    function updateExecRespOptions(task) {
+      const container = document.getElementById('execRespContainer');
+      const select = document.getElementById('execRespSelect');
+      if (!container || !select) return;
+
+      select.innerHTML = '<option value="">لا يوجد (لا حاجة لإجراء)</option>';
+      document.getElementById('execRespWarning').style.display = 'none';
+
+      if (!task || !task.responsibles || !task.responsibles.length) {
+        container.style.display = 'none';
+        return;
+      }
+
+      const unique = Array.from(new Set(task.responsibles.filter(Boolean)));
+      unique.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+
+      container.style.display = 'block';
+    }
+
+    async function onSaveChecklist() {
+      if (!SELECTED_STAFF || !SELECTED_TASK) {
+        alert('الرجاء اختيار مسؤول وجولة أولاً.');
+        return;
+      }
+
+      const comment = document.getElementById('checklistComment').value.trim();
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mi = String(now.getMinutes()).padStart(2, '0');
+      const timeStr = `${hh}:${mi}`;
+
+      const execSelect = document.getElementById('execRespSelect');
+      const execResp = execSelect ? execSelect.value.trim() : '';
+
+      if (SELECTED_CHECKLIST.length > 0 && !execResp) {
+        const warning = document.getElementById('execRespWarning');
+        if (warning) warning.style.display = 'block';
+        alert('يوجد بند واحد على الأقل عليه "لا" – الرجاء اختيار مسؤول التنفيذ من القائمة قبل الحفظ.');
+        return;
+      }
+
+      const payload = {
+        taskId: SELECTED_TASK.taskId,
+        staffName: SELECTED_STAFF.name,
+        selectedItems: SELECTED_CHECKLIST.slice(),
+        comment: comment,
+        date: dateStr,
+        actualTime: timeStr,
+        roundNo: 1,
+        executionResponsible: execResp
+      };
+
+      showSpinner(true);
+      try {
+        await callApi('saveRound', payload);
+        alert('تم تسجيل الجولة بنجاح ✅');
+
+        await loadHomeData();
+        await loadRoundsLog();
+        if (SELECTED_STAFF && SELECTED_STAFF.name) {
+          selectStaff(SELECTED_STAFF.name);
+        }
+
+        document.getElementById('checklistItemsContainer').innerHTML = '';
+        document.getElementById('checklistComment').value = '';
+        document.getElementById('checklistRoundTitle').textContent = 'لم يتم اختيار جولة بعد.';
+        document.getElementById('btnSaveChecklist').disabled = true;
+        document.getElementById('execRespContainer').style.display = 'none';
+        document.getElementById('execRespWarning').style.display = 'none';
+        SELECTED_TASK = null;
+        SELECTED_CHECKLIST = [];
+      } catch (err) {
+        alert('تعذّر حفظ الجولة: ' + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    }
+  </script>
+</body>
+</html>
