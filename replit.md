@@ -52,6 +52,11 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-11: **Added Is_Violation checkbox** - User can explicitly mark entries as violations
+- 2025-12-11: **Added Round_Schedule sheet** - Contains all 15 rounds with timing windows (Round_1_Start, Round_1_End, etc.)
+- 2025-12-11: **Success Toast notifications** - Beautiful green toast for successful saves instead of basic alerts
+- 2025-12-11: **Fixed violation detection** - Status="خلل" or "نقاط الخلل:" now correctly triggers violations
+- 2025-12-11: **UI auto-refresh** - Staff cards, charts, and counters update immediately after form submission
 - 2025-12-11: **Fixed data accuracy** - todayDone now counts all logged rounds (not just on-time ones)
 - 2025-12-11: **Redesigned layout** - Staff cards on right side, log table on left (matching original design)
 - 2025-12-11: **Improved log table** - Added mسؤول التنفيذ and ملخص الخلل columns

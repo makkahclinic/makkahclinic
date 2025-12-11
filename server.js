@@ -204,40 +204,35 @@ app.get('/api/rounds/history', async (req, res) => {
 
 function isRealViolation(entry) {
   // 1. PRIORITY: If Is_Violation checkbox is explicitly set to "Yes" - definite violation
-  const isViolationField = (entry.Is_Violation || entry.IsViolation || '').toLowerCase();
+  const isViolationField = (entry.Is_Violation || entry.IsViolation || '').toLowerCase().trim();
   if (isViolationField === 'yes' || isViolationField === 'نعم') {
     return true;
   }
   
-  // 2. If Is_Violation is explicitly "No" - respect the user's choice
-  if (isViolationField === 'no' || isViolationField === 'لا') {
-    return false;
-  }
-  
-  // 3. If status is explicitly "خلل" (issue) - it's a violation
+  // 2. If status is explicitly "خلل" (issue) - it's a violation
   if (entry.Status === 'خلل' || entry.Status === 'violation' || entry.Status === 'issue') {
     return true;
   }
   
   const negNotes = (entry.Negative_Notes || entry.NegativeNotes || '').trim();
   
-  // 4. If Negative_Notes contains "نقاط الخلل:" - means checklist items were marked "لا" (No)
+  // 3. If Negative_Notes contains "نقاط الخلل:" - means checklist items were marked "لا" (No)
   if (negNotes.includes('نقاط الخلل:') || negNotes.includes('نقاط الخلل :')) {
     return true;
   }
   
-  // 5. If there's an Execution_Responsible assigned AND negative notes exist
+  // 4. If there's an Execution_Responsible assigned AND negative notes exist
   const execResp = (entry.Execution_Responsible || entry.Exec_Responsible || '').trim();
   if (execResp && execResp !== '' && negNotes !== '') {
     return true;
   }
   
-  // 6. No Is_Violation field and no negative notes = NOT a violation
+  // 5. No negative notes = NOT a violation
   if (!negNotes || negNotes === '') {
     return false;
   }
   
-  // 7. Check for explicit negative keywords that indicate real problems
+  // 6. Check for explicit negative keywords that indicate real problems
   const realIssueKeywords = [
     'عطل', 'معطل', 'مكسور', 'تالف', 'ناقص', 'غير متوفر', 'لا يعمل', 
     'يحتاج صيانة', 'يحتاج تصليح', 'خطير', 'متسخ جدا', 'رائحة كريهة'
@@ -246,7 +241,7 @@ function isRealViolation(entry) {
   const hasRealIssue = realIssueKeywords.some(kw => negNotes.includes(kw));
   if (hasRealIssue) return true;
   
-  // 8. Positive notes are NOT violations
+  // 7. Positive notes only are NOT violations
   const positiveOnlyKeywords = ['نظيف', 'جيد', 'ممتاز', 'سليم', 'يعمل', 'متوفر', 'مكتمل', 'خالي'];
   const seemsPositive = positiveOnlyKeywords.some(kw => negNotes.includes(kw));
   if (seemsPositive && !hasRealIssue) return false;

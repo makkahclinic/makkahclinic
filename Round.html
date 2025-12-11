@@ -620,6 +620,27 @@
     </div>
   </div>
 
+  <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-5">
+          <i class="fas fa-check-circle me-2"></i>
+          <span id="successToastMessage">تم بنجاح!</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+    <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-5">
+          <i class="fas fa-exclamation-circle me-2"></i>
+          <span id="errorToastMessage">حدث خطأ!</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  </div>
+
   <button class="btn btn-lg rounded-circle shadow-lg position-fixed" 
           style="bottom: 2rem; left: 2rem; width: 60px; height: 60px; background: var(--crimson); color: white; z-index: 1000;"
           data-bs-toggle="modal" data-bs-target="#roundFormModal" title="تسجيل جولة جديدة">
@@ -710,6 +731,20 @@
 
     function showSpinner(show) {
       document.getElementById('spinnerOverlay').style.display = show ? 'flex' : 'none';
+    }
+    
+    function showSuccessToast(message) {
+      const toastEl = document.getElementById('successToast');
+      document.getElementById('successToastMessage').textContent = message;
+      const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+      toast.show();
+    }
+    
+    function showErrorToast(message) {
+      const toastEl = document.getElementById('errorToast');
+      document.getElementById('errorToastMessage').textContent = message;
+      const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+      toast.show();
     }
 
     function updateTodayHeader() {
@@ -1087,7 +1122,8 @@
         status: status,
         positiveNotes: currentChecklist.items.filter(i => i.answer === true).map(i => i.item).join('، '),
         negativeNotes: negativeNotes + (notes ? ' | ' + notes : ''),
-        actionsTaken: ''
+        actionsTaken: '',
+        isViolation: hasIssues ? 'Yes' : 'No'
       };
       
       showSpinner(true);
@@ -1100,15 +1136,15 @@
         const data = await res.json();
         
         if (data.ok) {
-          alert('تم حفظ الجولة بنجاح!');
+          showSuccessToast('تم حفظ الجولة بنجاح!');
           cancelChecklist();
-          loadAllData();
+          await loadAllData();
         } else {
-          alert('حدث خطأ: ' + (data.error || 'غير معروف'));
+          showErrorToast('حدث خطأ: ' + (data.error || 'غير معروف'));
         }
       } catch (err) {
         console.error('Submit error:', err);
-        alert('حدث خطأ في الاتصال');
+        showErrorToast('حدث خطأ في الاتصال');
       } finally {
         showSpinner(false);
       }
@@ -1263,16 +1299,16 @@
         const data = await res.json();
         
         if (data.ok) {
-          alert('تم حفظ الجولة بنجاح!');
+          showSuccessToast('تم حفظ الجولة بنجاح!');
           document.getElementById('roundForm').reset();
           bootstrap.Modal.getInstance(document.getElementById('roundFormModal')).hide();
-          loadAllData();
+          await loadAllData();
         } else {
-          alert('حدث خطأ: ' + (data.error || 'غير معروف'));
+          showErrorToast('حدث خطأ: ' + (data.error || 'غير معروف'));
         }
       } catch (err) {
         console.error('Submit error:', err);
-        alert('حدث خطأ في الاتصال');
+        showErrorToast('حدث خطأ في الاتصال');
       } finally {
         showSpinner(false);
       }
