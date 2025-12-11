@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { getSheetData, appendRow, updateCell, getSheetNames } from './sheets-service.js';
+import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate } from './sheets-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +36,61 @@ app.get('/api/debug/sheet/:name', async (req, res) => {
   try {
     const data = await getSheetData(req.params.name);
     res.json({ ok: true, headers: data[0], sampleRows: data.slice(1, 5), totalRows: data.length - 1 });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Create Round_Schedule sheet with all timing data
+app.post('/api/rounds/create-schedule', async (req, res) => {
+  try {
+    // Create the sheet if it doesn't exist
+    await createSheet('Round_Schedule');
+    
+    // Schedule data based on the user's requirements
+    const scheduleData = [
+      ['TaskID', 'Round_Name_AR', 'Round_Name_EN', 'Assigned_To', 'Rounds_Per_Day', 'Round_1_Start', 'Round_1_End', 'Round_2_Start', 'Round_2_End', 'Round_3_Start', 'Round_3_End', 'Allowed_Time_Min'],
+      ['R01', 'دورات المياه العامة', 'Public Toilets', 'عدنان', '3', '08:00', '09:00', '12:00', '13:00', '16:00', '17:00', '60'],
+      ['R02', 'دورات مياه الموظفين', 'Staff Toilets', 'عدنان', '2', '08:30', '09:30', '14:30', '15:30', '', '', '60'],
+      ['R03', 'الممرات والمداخل', 'Corridors', 'عدنان', '2', '09:00', '10:00', '13:00', '14:00', '', '', '60'],
+      ['R04', 'مناطق الانتظار', 'Waiting Areas', 'عدنان', '2', '10:00', '11:00', '15:00', '16:00', '', '', '60'],
+      ['R05', 'العيادات', 'Clinics', 'بلال', '1', '09:30', '10:30', '', '', '', '', '60'],
+      ['R06', 'الطوارئ', 'Emergency', 'عبدالسلام', '2', '08:00', '09:00', '14:00', '15:00', '', '', '60'],
+      ['R07', 'الأشعة', 'Radiology', 'بلال', '1', '10:00', '11:00', '', '', '', '', '60'],
+      ['R08', 'المختبر', 'Laboratory', 'خالد', '1', '10:30', '11:30', '', '', '', '', '60'],
+      ['R09', 'الصيدلية', 'Pharmacy', 'خالد', '1', '11:00', '12:00', '', '', '', '', '60'],
+      ['R10', 'ثلاجة الأدوية', 'Pharmacy Fridge', 'خالد', '2', '08:00', '08:30', '16:00', '16:30', '', '', '30'],
+      ['R11', 'عربات الأدوية', 'Medication Carts', 'خالد', '1', '11:30', '12:30', '', '', '', '', '60'],
+      ['R12', 'التعقيم المركزي', 'CSSD', 'خالد', '1', '12:00', '13:00', '', '', '', '', '60'],
+      ['R13', 'إدارة النفايات', 'Waste Management', 'عدنان', '1', '13:00', '14:00', '', '', '', '', '60'],
+      ['R14', 'السلامة من الحريق', 'Fire Safety', 'بلال', '1', '14:00', '15:00', '', '', '', '', '90'],
+      ['R15', 'الغازات الطبية', 'Medical Gases', 'عبدالسلام', '1', '09:00', '10:00', '', '', '', '', '60']
+    ];
+    
+    await batchUpdate('Round_Schedule', scheduleData);
+    
+    res.json({ ok: true, message: 'Round_Schedule sheet created with 15 tasks', rows: scheduleData.length - 1 });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Get schedule for delay calculation
+app.get('/api/rounds/schedule', async (req, res) => {
+  try {
+    const data = await getSheetData('Round_Schedule');
+    if (!data || data.length === 0) {
+      return res.json({ ok: true, schedule: [], message: 'Schedule not created yet. POST to /api/rounds/create-schedule first.' });
+    }
+    const headers = data[0];
+    const schedule = data.slice(1).map(row => {
+      const obj = {};
+      headers.forEach((h, i) => {
+        obj[h] = row[i] || '';
+      });
+      return obj;
+    });
+    res.json({ ok: true, schedule });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -138,32 +193,41 @@ app.get('/api/rounds/history', async (req, res) => {
 });
 
 function isRealViolation(entry) {
-  // 1. If status is explicitly "خلل" (issue) - it's a violation
+  // 1. PRIORITY: If Is_Violation checkbox is explicitly set to "Yes" - definite violation
+  const isViolationField = (entry.Is_Violation || entry.IsViolation || '').toLowerCase();
+  if (isViolationField === 'yes' || isViolationField === 'نعم') {
+    return true;
+  }
+  
+  // 2. If Is_Violation is explicitly "No" - respect the user's choice
+  if (isViolationField === 'no' || isViolationField === 'لا') {
+    return false;
+  }
+  
+  // 3. If status is explicitly "خلل" (issue) - it's a violation
   if (entry.Status === 'خلل' || entry.Status === 'violation' || entry.Status === 'issue') {
     return true;
   }
   
   const negNotes = (entry.Negative_Notes || entry.NegativeNotes || '').trim();
   
-  // 2. If Negative_Notes contains "نقاط الخلل:" - means checklist items were marked "لا" (No)
-  //    This is the PRIMARY indicator of a violation from the checklist form
+  // 4. If Negative_Notes contains "نقاط الخلل:" - means checklist items were marked "لا" (No)
   if (negNotes.includes('نقاط الخلل:') || negNotes.includes('نقاط الخلل :')) {
     return true;
   }
   
-  // 3. If there's an Execution_Responsible assigned AND negative notes exist
-  //    This means someone was assigned to fix an issue
+  // 5. If there's an Execution_Responsible assigned AND negative notes exist
   const execResp = (entry.Execution_Responsible || entry.Exec_Responsible || '').trim();
   if (execResp && execResp !== '' && negNotes !== '') {
     return true;
   }
   
-  // 4. If no negative notes, it's NOT a violation
+  // 6. No Is_Violation field and no negative notes = NOT a violation
   if (!negNotes || negNotes === '') {
     return false;
   }
   
-  // 5. Check for explicit negative keywords that indicate real problems
+  // 7. Check for explicit negative keywords that indicate real problems
   const realIssueKeywords = [
     'عطل', 'معطل', 'مكسور', 'تالف', 'ناقص', 'غير متوفر', 'لا يعمل', 
     'يحتاج صيانة', 'يحتاج تصليح', 'خطير', 'متسخ جدا', 'رائحة كريهة'
@@ -172,7 +236,7 @@ function isRealViolation(entry) {
   const hasRealIssue = realIssueKeywords.some(kw => negNotes.includes(kw));
   if (hasRealIssue) return true;
   
-  // 6. Positive notes are NOT violations (even if in Negative_Notes field by mistake)
+  // 8. Positive notes are NOT violations
   const positiveOnlyKeywords = ['نظيف', 'جيد', 'ممتاز', 'سليم', 'يعمل', 'متوفر', 'مكتمل', 'خالي'];
   const seemsPositive = positiveOnlyKeywords.some(kw => negNotes.includes(kw));
   if (seemsPositive && !hasRealIssue) return false;
@@ -270,7 +334,7 @@ app.get('/api/rounds/delayed', async (req, res) => {
 
 app.post('/api/rounds/log', async (req, res) => {
   try {
-    const { date, time, roundName, staff, execResponsible, status, positiveNotes, negativeNotes, actionsTaken } = req.body;
+    const { date, time, roundName, staff, execResponsible, status, positiveNotes, negativeNotes, actionsTaken, isViolation } = req.body;
     
     const now = new Date();
     const dateStr = date || now.toLocaleDateString('en-US') + ' ' + now.toLocaleTimeString('en-US', {hour12: false});
@@ -293,7 +357,8 @@ app.post('/api/rounds/log', async (req, res) => {
       negativeNotes || '',
       actionsTaken || '',
       'N',
-      ''
+      '',
+      isViolation || 'No'
     ];
     
     await appendRow('Rounds_Log', values);

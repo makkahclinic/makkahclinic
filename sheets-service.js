@@ -101,3 +101,39 @@ export async function getSheetNames() {
   
   return response.data.sheets.map(s => s.properties.title);
 }
+
+export async function createSheet(sheetName) {
+  const sheets = await getGoogleSheetsClient();
+  
+  try {
+    const response = await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [{
+          addSheet: {
+            properties: { title: sheetName }
+          }
+        }]
+      }
+    });
+    return response.data;
+  } catch (err) {
+    if (err.message.includes('already exists')) {
+      return { exists: true };
+    }
+    throw err;
+  }
+}
+
+export async function batchUpdate(sheetName, values) {
+  const sheets = await getGoogleSheetsClient();
+  
+  const response = await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A1`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values }
+  });
+  
+  return response.data;
+}
