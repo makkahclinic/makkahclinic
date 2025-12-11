@@ -31,7 +31,8 @@ This is a medical center website for Makkah Medical Complex (مجمع مكة ا�
 ## Color Scheme (matching new logo)
 - Primary: #1e3a5f (Dark Blue)
 - Secondary/Accent: #c9a962 (Gold)
-- Accent: #c41e3a (Red)
+- Accent/Crimson: #DC143C (Crimson - deep, rich, vibrant red)
+- Logo Background: rgba(220, 20, 60, 0.8) - Crimson at 80% opacity
 
 ## Tech Stack
 - Frontend: Static HTML/CSS/JavaScript with Tajawal font
