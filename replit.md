@@ -52,6 +52,12 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-11: **Staff-centric workflow redesign** - Staff cards now show detailed daily stats with "منفذة/مطلوبة" tracking
+- 2025-12-11: Added "بدء الجولة" (Start Round) button for each task with completion status
+- 2025-12-11: Implemented checklist form with Yes/No toggles for each inspection item
+- 2025-12-11: Added `/api/rounds/staff-summary` endpoint for aggregated staff statistics
+- 2025-12-11: Added `/api/rounds/checklist/:taskId` endpoint to fetch R01-R15 checklist items
+- 2025-12-11: Staff cards now display today's tasks, completed count, and remaining rounds
 - 2025-12-11: Added round submission form (floating + button) for staff to log rounds
 - 2025-12-11: Added Dashboard tab with 4 charts (trend, status, staff, area performance)
 - 2025-12-11: Fixed violation detection - now uses smart keyword detection (reduced from 33 to 3 real violations)
@@ -65,3 +71,10 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - 2025-12-11: Added all doctors and departments information
 - 2025-12-11: Added services section (Lab, X-ray, Ultrasound, etc.)
 - 2025-12-11: Initial setup for Replit environment with Express static server
+
+## Staff Workflow (Round.html)
+1. Staff member clicks their card on the right panel
+2. Tasks table appears showing: Round name, Done/Required count, Target time, Start button
+3. Clicking "بدء الجولة" loads the checklist form (from R01-R15 sheets)
+4. Staff selects Yes/No for each item, assigns responsible party if issues found
+5. Submitting saves to Rounds_Log with proper status and notes

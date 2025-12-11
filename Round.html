@@ -142,6 +142,62 @@
     .stat-box.danger .number { color: var(--danger); }
     .stat-box.warning .number { color: #d97706; }
     .stat-box.success .number { color: var(--success); }
+    .text-crimson { color: var(--crimson); }
+    .btn-start-round {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      color: #78350f;
+      border: none;
+      font-weight: 600;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+    }
+    .btn-start-round:hover { background: #f59e0b; color: #451a03; }
+    .btn-completed {
+      background: #d1fae5;
+      color: #065f46;
+      border: none;
+      font-weight: 600;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+    }
+    .checklist-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      background: #fafafa;
+      border: 1px solid #e5e7eb;
+    }
+    .checklist-item .item-text { flex: 1; font-size: 0.95rem; }
+    .checklist-btns { display: flex; gap: 0.5rem; }
+    .checklist-btns .btn { min-width: 60px; }
+    .btn-yes { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .btn-yes.active { background: #10b981; color: white; border-color: #10b981; }
+    .btn-no { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .btn-no.active { background: #ef4444; color: white; border-color: #ef4444; }
+    .staff-card-detailed {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .staff-card-detailed:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .staff-card-detailed.active { border-color: var(--crimson); background: #fff5f5; }
+    .staff-stats { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .staff-stat { 
+      background: #f3f4f6; 
+      padding: 0.25rem 0.5rem; 
+      border-radius: 6px; 
+      font-size: 0.8rem;
+    }
+    .staff-stat.done { background: #d1fae5; color: #065f46; }
+    .staff-stat.remaining { background: #fef3c7; color: #92400e; }
   </style>
 </head>
 <body>
@@ -214,28 +270,64 @@
             <div id="stationCardsContainer"></div>
           </div>
           <div class="col-lg-8">
-            <div class="card card-custom mb-3">
-              <div class="card-header bg-white border-0">
+            <div class="card card-custom mb-3" id="staffTasksCard" style="display:none;">
+              <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
-                  <i class="fas fa-tasks text-primary me-2"></i>
-                  مهام: <span id="selectedStaffName" class="text-primary">اختر مسؤول</span>
+                  <i class="fas fa-clipboard-list text-crimson me-2"></i>
+                  مهام اليوم للمسؤول: <span id="selectedStaffName" class="text-crimson fw-bold"></span>
                 </h5>
+                <div class="small text-muted">
+                  إجمالي مهام اليوم: <span id="staffTodayTotal" class="fw-bold">0</span> - 
+                  منجز <span id="staffTodayDone" class="text-success fw-bold">0</span> - 
+                  متبقي: <span id="staffTodayRemaining" class="text-warning fw-bold">0</span>
+                </div>
               </div>
               <div class="card-body">
                 <div class="table-responsive">
-                  <table class="table table-sm align-middle">
-                    <thead>
+                  <table class="table table-hover align-middle">
+                    <thead class="table-light">
                       <tr>
                         <th>الجولة</th>
+                        <th class="text-center">منفذة / مطلوبة اليوم</th>
                         <th class="text-center">الوقت المستهدف</th>
-                        <th class="text-center">المدة المسموحة</th>
-                        <th class="text-center">الحالة</th>
+                        <th class="text-center" style="width:150px;">الحالة</th>
                       </tr>
                     </thead>
-                    <tbody id="staffTasksTableBody">
-                      <tr><td colspan="4" class="text-center text-muted">اختر مسؤول لعرض مهامه</td></tr>
-                    </tbody>
+                    <tbody id="staffTasksTableBody"></tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+            
+            <div id="checklistFormCard" class="card card-custom mb-3" style="display:none;">
+              <div class="card-header" style="background: linear-gradient(135deg, #f0f9ff, #e0f2fe);">
+                <h6 class="mb-0"><i class="fas fa-check-double text-success me-2"></i>نموذج التحقق للجولة المختارة</h6>
+                <div class="small text-muted mt-1" id="checklistRoundName"></div>
+              </div>
+              <div class="card-body">
+                <div id="checklistItems"></div>
+                
+                <div class="border-top pt-3 mt-3">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold">مسؤول التنفيذ (في حال وجود خلل)</label>
+                      <select class="form-select" id="checklistResponsible">
+                        <option value="">لا يوجد (لا حاجة لإجراء)</option>
+                      </select>
+                      <div class="small text-muted mt-1">اختر الشخص المكلف بتصحيح الخلل من قائمة المسؤولين للجولة</div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label fw-bold">ملاحظات إضافية (اختياري)</label>
+                      <textarea class="form-control" id="checklistNotes" rows="2" placeholder="أي ملاحظات إضافية..."></textarea>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="text-end mt-4">
+                  <button class="btn btn-secondary me-2" onclick="cancelChecklist()">إلغاء</button>
+                  <button class="btn btn-success btn-lg" onclick="submitChecklist()">
+                    <i class="fas fa-save me-1"></i> حفظ الجولة
+                  </button>
                 </div>
               </div>
             </div>
@@ -526,7 +618,8 @@
           loadRoundsLog(),
           loadStaffList(),
           loadDelayed(),
-          loadViolations()
+          loadViolations(),
+          loadStaffSummary()
         ]);
         updateStats();
       } catch (err) {
@@ -623,59 +716,215 @@
       document.getElementById('statDelayed').textContent = delayed;
     }
 
+    let STAFF_SUMMARY = [];
+    let currentChecklist = null;
+    let selectedStaffData = null;
+    
+    async function loadStaffSummary() {
+      try {
+        const res = await fetch('/api/rounds/staff-summary');
+        const data = await res.json();
+        if (data.ok) {
+          STAFF_SUMMARY = data.staffSummary;
+          renderStationCards();
+        }
+      } catch (err) {
+        console.error('Staff summary error:', err);
+      }
+    }
+
     function renderStationCards() {
       const container = document.getElementById('stationCardsContainer');
-      const staffMap = {};
       
-      MASTER_TASKS.forEach(task => {
-        const staff = task.Assigned_To;
-        if (!staff) return;
-        if (!staffMap[staff]) {
-          staffMap[staff] = { name: staff, tasks: [], total: 0 };
-        }
-        staffMap[staff].tasks.push(task);
-        staffMap[staff].total += parseInt(task.Rounds_Per_Day) || 0;
-      });
+      if (!STAFF_SUMMARY.length) {
+        container.innerHTML = '<div class="text-muted">لا توجد بيانات</div>';
+        return;
+      }
       
-      container.innerHTML = Object.values(staffMap).map(s => `
-        <div class="station-card mb-3" onclick="selectStaff('${s.name}')">
-          <div class="d-flex justify-content-between align-items-center">
+      container.innerHTML = STAFF_SUMMARY.map(s => `
+        <div class="staff-card-detailed" onclick="selectStaff('${s.name}', this)">
+          <div class="d-flex justify-content-between align-items-start">
             <div>
-              <div class="fw-bold">${s.name}</div>
-              <div class="small text-muted">${s.tasks.length} جولات مختلفة</div>
+              <div class="fw-bold fs-6">${s.name}</div>
+              <div class="small text-muted">مسؤول عن جولات السلامة حسب MASTER_TASKS</div>
             </div>
-            <span class="chip chip-info">${s.total} مرة/يوم</span>
+            <i class="fas fa-user-tie text-muted"></i>
           </div>
+          <div class="staff-stats">
+            <span class="staff-stat">مهام اليوم: ${s.todayTasks}</span>
+            <span class="staff-stat done">منجز ${s.todayDone}</span>
+            <span class="staff-stat remaining">متبقي: ${s.todayRemaining}</span>
+          </div>
+          <div class="small text-muted mt-2">إجمالي مهام الأسبوع (حسب Yes في الأيام): ${s.weeklyTotal}</div>
+          ${s.topRounds.length ? `
+            <div class="small mt-2 text-muted">
+              <strong>أهم جولات اليوم:</strong><br>
+              ${s.topRounds.slice(0,3).map(r => `• ${r.name.substring(0,40)}... - تكرار x${r.roundsRequired}`).join('<br>')}
+            </div>
+          ` : ''}
         </div>
       `).join('');
     }
 
-    function selectStaff(staffName) {
-      document.querySelectorAll('.station-card').forEach(c => c.classList.remove('active'));
-      event.currentTarget?.classList.add('active');
+    function selectStaff(staffName, el) {
+      document.querySelectorAll('.staff-card-detailed').forEach(c => c.classList.remove('active'));
+      el?.classList.add('active');
       
+      selectedStaffData = STAFF_SUMMARY.find(s => s.name === staffName);
+      if (!selectedStaffData) return;
+      
+      document.getElementById('staffTasksCard').style.display = 'block';
+      document.getElementById('checklistFormCard').style.display = 'none';
       document.getElementById('selectedStaffName').textContent = staffName;
+      document.getElementById('staffTodayTotal').textContent = selectedStaffData.todayTasks;
+      document.getElementById('staffTodayDone').textContent = selectedStaffData.todayDone;
+      document.getElementById('staffTodayRemaining').textContent = selectedStaffData.todayRemaining;
       
-      const tasks = MASTER_TASKS.filter(t => t.Assigned_To === staffName);
       const tbody = document.getElementById('staffTasksTableBody');
       
-      if (!tasks.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد مهام</td></tr>';
+      if (!selectedStaffData.topRounds.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد مهام لهذا اليوم</td></tr>';
         return;
       }
       
-      tbody.innerHTML = tasks.map(t => `
-        <tr>
-          <td>${t.Round_Name_AR || t.Round_Name_EN}</td>
-          <td class="text-center">${t.Target_Time || '-'}</td>
-          <td class="text-center">${t.Allowed_Time_Min || 60} دقيقة</td>
-          <td class="text-center">
-            <span class="chip chip-warning">
-              <i class="fas fa-sync-alt me-1"></i>${t.Rounds_Per_Day || 1}×
-            </span>
-          </td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = selectedStaffData.topRounds.map(r => {
+        const isComplete = r.done >= r.roundsRequired;
+        const statusBtn = isComplete 
+          ? `<button class="btn btn-completed"><i class="fas fa-check me-1"></i>مكتملة</button>`
+          : `<button class="btn btn-start-round" onclick="startRound('${r.taskId}', '${r.name}')"><i class="fas fa-play me-1"></i>بدء الجولة</button>`;
+        
+        return `
+          <tr>
+            <td>${r.name}</td>
+            <td class="text-center"><strong>${r.done}</strong>/${r.roundsRequired}</td>
+            <td class="text-center">${r.targetTime || '-'}</td>
+            <td class="text-center">${statusBtn}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    async function startRound(taskId, roundName) {
+      showSpinner(true);
+      try {
+        const res = await fetch('/api/rounds/checklist/' + taskId);
+        const data = await res.json();
+        
+        if (!data.ok) {
+          alert('حدث خطأ في تحميل قائمة الفحص');
+          return;
+        }
+        
+        currentChecklist = { taskId, roundName, task: data.task, items: data.checklist, responsibles: data.responsibles };
+        renderChecklistForm();
+      } catch (err) {
+        console.error('Checklist error:', err);
+        alert('خطأ في الاتصال');
+      } finally {
+        showSpinner(false);
+      }
+    }
+    
+    function renderChecklistForm() {
+      document.getElementById('checklistFormCard').style.display = 'block';
+      document.getElementById('checklistRoundName').textContent = 
+        `الجولة: ${currentChecklist.roundName} - المسؤول: ${selectedStaffData?.name || ''}`;
+      
+      const container = document.getElementById('checklistItems');
+      
+      if (!currentChecklist.items.length) {
+        container.innerHTML = `
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            لا توجد قائمة فحص محددة لهذه الجولة. يمكنك إضافة ملاحظات أدناه.
+          </div>
+        `;
+      } else {
+        container.innerHTML = currentChecklist.items.map(item => `
+          <div class="checklist-item" data-id="${item.id}">
+            <span class="item-text">${item.item}</span>
+            <div class="checklist-btns">
+              <button class="btn btn-sm btn-no" onclick="setChecklistAnswer(${item.id}, false, this)">لا</button>
+              <button class="btn btn-sm btn-yes" onclick="setChecklistAnswer(${item.id}, true, this)">نعم</button>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      const respSelect = document.getElementById('checklistResponsible');
+      respSelect.innerHTML = '<option value="">لا يوجد (لا حاجة لإجراء)</option>';
+      currentChecklist.responsibles.forEach(r => {
+        respSelect.innerHTML += `<option value="${r}">${r}</option>`;
+      });
+      
+      document.getElementById('checklistFormCard').scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    function setChecklistAnswer(itemId, isYes, btn) {
+      const item = btn.closest('.checklist-item');
+      item.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const itemData = currentChecklist.items.find(i => i.id === itemId);
+      if (itemData) itemData.answer = isYes;
+    }
+    
+    function cancelChecklist() {
+      document.getElementById('checklistFormCard').style.display = 'none';
+      currentChecklist = null;
+    }
+    
+    async function submitChecklist() {
+      if (!currentChecklist) return;
+      
+      const hasIssues = currentChecklist.items.some(i => i.answer === false);
+      const responsible = document.getElementById('checklistResponsible').value;
+      const notes = document.getElementById('checklistNotes').value;
+      
+      let status = 'في الوقت';
+      let negativeNotes = '';
+      
+      if (hasIssues) {
+        const issues = currentChecklist.items.filter(i => i.answer === false).map(i => i.item);
+        negativeNotes = 'نقاط الخلل: ' + issues.join('، ');
+        status = responsible ? 'خلل' : 'في الوقت';
+      }
+      
+      const now = new Date();
+      const payload = {
+        date: now.toLocaleDateString('en-US'),
+        time: now.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'}),
+        roundName: currentChecklist.roundName,
+        staff: selectedStaffData?.name || '',
+        execResponsible: responsible,
+        status: status,
+        positiveNotes: currentChecklist.items.filter(i => i.answer === true).map(i => i.item).join('، '),
+        negativeNotes: negativeNotes + (notes ? ' | ' + notes : ''),
+        actionsTaken: ''
+      };
+      
+      showSpinner(true);
+      try {
+        const res = await fetch('/api/rounds/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (data.ok) {
+          alert('تم حفظ الجولة بنجاح!');
+          cancelChecklist();
+          loadAllData();
+        } else {
+          alert('حدث خطأ: ' + (data.error || 'غير معروف'));
+        }
+      } catch (err) {
+        console.error('Submit error:', err);
+        alert('حدث خطأ في الاتصال');
+      } finally {
+        showSpinner(false);
+      }
     }
 
     function renderRoundsLog() {

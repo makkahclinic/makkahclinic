@@ -295,6 +295,143 @@ app.get('/api/rounds/staff', async (req, res) => {
   }
 });
 
+app.get('/api/rounds/staff-summary', async (req, res) => {
+  try {
+    const [tasksData, logData] = await Promise.all([
+      getSheetData('MASTER_TASKS'),
+      getSheetData('Rounds_Log')
+    ]);
+    
+    if (!tasksData || tasksData.length === 0) {
+      return res.json({ ok: true, staffSummary: [] });
+    }
+    
+    const taskHeaders = tasksData[0];
+    const tasks = tasksData.slice(1).map(row => {
+      const obj = {};
+      taskHeaders.forEach((h, i) => { obj[h] = row[i] || ''; });
+      return obj;
+    });
+    
+    const logHeaders = logData?.[0] || [];
+    const logs = (logData?.slice(1) || []).map(row => {
+      const obj = {};
+      logHeaders.forEach((h, i) => { obj[h] = row[i] || ''; });
+      obj._parsedDate = parseSheetDate(obj.Date);
+      return obj;
+    });
+    
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('en-CA');
+    const dayMap = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+    const dayKey = dayMap[today.getDay()];
+    
+    const staffMap = {};
+    
+    tasks.forEach(t => {
+      const staff = t.Assigned_To;
+      if (!staff) return;
+      
+      if (!staffMap[staff]) {
+        staffMap[staff] = {
+          name: staff,
+          todayTasks: 0,
+          todayDone: 0,
+          todayRemaining: 0,
+          weeklyTotal: 0,
+          topRounds: []
+        };
+      }
+      
+      const isToday = t[dayKey]?.toLowerCase() === 'yes';
+      const roundsPerDay = parseInt(t.Rounds_Per_Day) || 1;
+      
+      if (isToday) {
+        staffMap[staff].todayTasks += roundsPerDay;
+        staffMap[staff].topRounds.push({
+          taskId: t.TaskID,
+          name: t.Round_Name_AR || t.Round_Name_EN,
+          targetTime: t.Target_Time,
+          allowedMin: t.Allowed_Time_Min,
+          roundsRequired: roundsPerDay
+        });
+      }
+      
+      ['Sat','Sun','Mon','Tue','Wed','Thu'].forEach(d => {
+        if (t[d]?.toLowerCase() === 'yes') {
+          staffMap[staff].weeklyTotal += roundsPerDay;
+        }
+      });
+    });
+    
+    const todayLogs = logs.filter(l => {
+      if (!l._parsedDate) return false;
+      return l._parsedDate.toLocaleDateString('en-CA') === todayStr;
+    });
+    
+    Object.keys(staffMap).forEach(staff => {
+      const staffLogs = todayLogs.filter(l => l.Responsible_Role === staff);
+      staffMap[staff].todayDone = staffLogs.filter(l => l.Status === 'في الوقت' || l.Status === 'مكتمل').length;
+      staffMap[staff].todayRemaining = Math.max(0, staffMap[staff].todayTasks - staffLogs.length);
+      
+      staffMap[staff].topRounds.forEach(r => {
+        const roundLogs = staffLogs.filter(l => l.Area === r.name || l.TaskID === r.taskId);
+        r.done = roundLogs.length;
+        r.remaining = Math.max(0, r.roundsRequired - roundLogs.length);
+      });
+    });
+    
+    res.json({ ok: true, staffSummary: Object.values(staffMap) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/rounds/checklist/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const sheetName = `R${taskId.toString().padStart(2, '0')}`;
+    
+    const [checklistData, taskData] = await Promise.all([
+      getSheetData(sheetName).catch(() => null),
+      getSheetData('MASTER_TASKS')
+    ]);
+    
+    const taskHeaders = taskData[0];
+    const tasks = taskData.slice(1).map(row => {
+      const obj = {};
+      taskHeaders.forEach((h, i) => { obj[h] = row[i] || ''; });
+      return obj;
+    });
+    const task = tasks.find(t => t.TaskID === taskId);
+    
+    if (!checklistData || checklistData.length === 0) {
+      return res.json({ 
+        ok: true, 
+        task,
+        checklist: [],
+        responsibles: [task?.Responsible_1, task?.Responsible_2, task?.Responsible_3].filter(Boolean)
+      });
+    }
+    
+    const headers = checklistData[0];
+    const items = checklistData.slice(1).map((row, idx) => ({
+      id: idx + 1,
+      item: row[0] || '',
+      category: row[1] || ''
+    }));
+    
+    res.json({ 
+      ok: true, 
+      task,
+      checklist: items,
+      responsibles: [task?.Responsible_1, task?.Responsible_2, task?.Responsible_3, task?.Responsible_4, task?.Responsible_5].filter(Boolean)
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/api/rounds/metrics', async (req, res) => {
   try {
     const [logData, tasksData] = await Promise.all([
