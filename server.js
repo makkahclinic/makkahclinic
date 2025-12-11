@@ -370,12 +370,24 @@ app.get('/api/rounds/staff-summary', async (req, res) => {
     });
     
     Object.keys(staffMap).forEach(staff => {
-      const staffLogs = todayLogs.filter(l => l.Responsible_Role === staff);
-      staffMap[staff].todayDone = staffLogs.filter(l => l.Status === 'في الوقت' || l.Status === 'مكتمل').length;
+      const staffLogs = todayLogs.filter(l => 
+        l.Responsible_Role === staff || 
+        l.Staff === staff || 
+        l.Responsible_Role?.includes(staff) || 
+        l.Staff?.includes(staff)
+      );
+      
+      staffMap[staff].todayDone = staffLogs.length;
       staffMap[staff].todayRemaining = Math.max(0, staffMap[staff].todayTasks - staffLogs.length);
       
       staffMap[staff].topRounds.forEach(r => {
-        const roundLogs = staffLogs.filter(l => l.Area === r.name || l.TaskID === r.taskId);
+        const roundLogs = staffLogs.filter(l => 
+          l.Area === r.name || 
+          l.TaskID === r.taskId ||
+          l.Round_Name === r.name ||
+          l.Area?.includes(r.name?.substring(0, 20)) ||
+          r.name?.includes(l.Area?.substring(0, 20))
+        );
         r.done = roundLogs.length;
         r.remaining = Math.max(0, r.roundsRequired - roundLogs.length);
       });

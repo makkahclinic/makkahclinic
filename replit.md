@@ -52,6 +52,9 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-11: **Fixed data accuracy** - todayDone now counts all logged rounds (not just on-time ones)
+- 2025-12-11: **Redesigned layout** - Staff cards on right side, log table on left (matching original design)
+- 2025-12-11: **Improved log table** - Added mسؤول التنفيذ and ملخص الخلل columns
 - 2025-12-11: **Staff-centric workflow redesign** - Staff cards now show detailed daily stats with "منفذة/مطلوبة" tracking
 - 2025-12-11: Added "بدء الجولة" (Start Round) button for each task with completion status
 - 2025-12-11: Implemented checklist form with Yes/No toggles for each inspection item
