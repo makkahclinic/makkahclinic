@@ -31,6 +31,16 @@ app.get('/api/sheets/names', async (req, res) => {
   }
 });
 
+app.post('/api/sheets/update-cell', async (req, res) => {
+  try {
+    const { sheet, cell, value } = req.body;
+    await updateCell(sheet, cell, value);
+    res.json({ ok: true, message: `Updated ${sheet}!${cell} to "${value}"` });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Debug endpoint to see raw sheet data
 app.get('/api/debug/sheet/:name', async (req, res) => {
   try {
