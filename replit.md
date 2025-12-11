@@ -42,7 +42,20 @@ This is a medical center website for Makkah Medical Complex (مجمع مكة ا�
 ## Running the Project
 The project runs on port 5000 using a simple Express static file server.
 
+## Safety Rounds System (Round.html)
+The safety rounds system has been upgraded with direct Google Sheets integration:
+- **Today Tab**: Shows staff cards, daily stats, and round logs
+- **Delayed Tab**: Shows all overdue rounds with delay time
+- **Violations Tab**: Tracks violations and detects repeated issues
+- **History Tab**: Filter historical rounds by date and staff
+- **API Endpoints**: /api/rounds/* for all round operations
+- **Data Source**: Google Sheets via Replit integration
+
 ## Recent Changes
+- 2025-12-11: Upgraded Round.html with new features (history, delays, violations tracking)
+- 2025-12-11: Added Google Sheets API integration via Replit connector
+- 2025-12-11: Created sheets-service.js for Google Sheets operations
+- 2025-12-11: Updated server.js with API endpoints for rounds system
 - 2025-12-11: Updated logo to new design (logo-new.png)
 - 2025-12-11: Updated color scheme across all pages to match new logo
 - 2025-12-11: Added all doctors and departments information

@@ -3,81 +3,105 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>محطات جولات السلامة – المجمع الطبي</title>
+  <title>نظام جولات السلامة المطوّر – المجمع الطبي</title>
 
-  <!-- Bootstrap RTL -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
-  <!-- Tajawal font -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
-  <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     :root {
-      --maroon: #7b1a28;
-      --maroon-dark: #4c0d16;
-      --maroon-soft: #fbe2e7;
-      --gold: #f1c76f;
+      --primary: #1e3a5f;
+      --primary-light: #2d5a8a;
+      --crimson: #DC143C;
+      --crimson-80: rgba(220, 20, 60, 0.8);
+      --gold: #c9a962;
+      --success: #198754;
+      --warning: #ffc107;
+      --danger: #dc3545;
     }
     body {
-      font-family: 'Tajawal', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: radial-gradient(circle at top, #fff7f7 0, #f3e5e5 40%, #f0ebee 70%);
+      font-family: 'Tajawal', system-ui, sans-serif;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
       min-height: 100vh;
     }
     .navbar-custom {
-      background: linear-gradient(135deg, var(--maroon-dark), var(--maroon));
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
       color: #fff;
     }
-    .navbar-custom .navbar-brand,
-    .navbar-custom .navbar-text {
-      color: #fff !important;
-    }
+    .navbar-custom .navbar-brand { color: #fff !important; }
     .logo-img {
-      height: 38px;
-      width: 38px;
+      height: 42px;
+      width: 42px;
       border-radius: 50%;
       object-fit: contain;
-      background-color: #fff;
-      padding: 2px;
-      margin-left: .45rem;
+      background: var(--crimson-80);
+      padding: 3px;
+      margin-left: .5rem;
+    }
+    .nav-tabs .nav-link {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .nav-tabs .nav-link.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .card-custom {
+      border-radius: 1rem;
+      border: 0;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
     }
     .station-card {
-      border-radius: 1.2rem;
-      border: 0;
+      border-radius: 1rem;
+      border: 2px solid transparent;
       background: #fff;
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
       cursor: pointer;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border 0.15s ease;
-      min-height: 160px;
+      transition: all 0.2s;
+      padding: 1rem;
     }
     .station-card:hover {
       transform: translateY(-3px);
-      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
     }
     .station-card.active {
-      border: 2px solid var(--maroon);
+      border-color: var(--crimson);
+      background: #fff5f5;
     }
     .chip {
-      border-radius: 999px;
-      padding: 0.2rem 0.7rem;
+      border-radius: 20px;
+      padding: 0.25rem 0.75rem;
       font-size: 0.8rem;
       display: inline-block;
     }
-    .chip-green {
-      background-color: #e5f6e8;
-      color: #157347;
+    .chip-success { background: #d1e7dd; color: #0f5132; }
+    .chip-danger { background: #f8d7da; color: #842029; }
+    .chip-warning { background: #fff3cd; color: #664d03; }
+    .chip-info { background: #cff4fc; color: #055160; }
+    .delayed-card {
+      background: linear-gradient(135deg, #fff5f5, #ffe8e8);
+      border-right: 4px solid var(--danger);
     }
-    .chip-red {
-      background-color: #f8d7da;
-      color: #842029;
+    .violation-card {
+      background: linear-gradient(135deg, #fff8e1, #ffecb3);
+      border-right: 4px solid var(--warning);
     }
-    .chip-gold {
-      background-color: #fff3cd;
-      color: #8a6d1f;
+    .repeat-badge {
+      background: var(--danger);
+      color: #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: bold;
     }
     .spinner-overlay {
       position: fixed;
@@ -85,620 +109,556 @@
       display: none;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.7);
+      background: rgba(255,255,255,0.8);
       z-index: 2000;
-      backdrop-filter: blur(2px);
+      backdrop-filter: blur(3px);
     }
-    .check-item-row {
-      border-radius: .75rem;
-      background: #f9f4f4;
-      padding: .5rem .75rem;
-      margin-bottom: .4rem;
-      font-size: .9rem;
+    .filter-section {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-    .check-buttons .btn {
-      min-width: 3.2rem;
+    .stats-mini {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
-    .chart-card {
-      height: 260px;
+    .stat-box {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
+    .stat-box .number {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .stat-box.danger .number { color: var(--danger); }
+    .stat-box.warning .number { color: #d97706; }
+    .stat-box.success .number { color: var(--success); }
   </style>
 </head>
 <body>
-  <!-- شريط علوي -->
   <nav class="navbar navbar-expand-lg navbar-custom shadow-sm">
     <div class="container-fluid px-4">
       <span class="navbar-brand fw-bold d-flex align-items-center">
-        <!-- ضع شعار المجمع في ملف logo-new.png بجانب هذا الـ HTML -->
         <img src="logo-new.png" alt="شعار مجمع مكة الطبي" class="logo-img" />
-        <span>
-          محطات جولات السلامة اليومية
-        </span>
+        <span>نظام جولات السلامة المطوّر</span>
       </span>
-      <span class="navbar-text small ms-auto" id="todayInfoText"></span>
+      <span class="navbar-text small ms-auto text-white" id="todayInfoText"></span>
     </div>
   </nav>
 
-  <div class="container-fluid my-4">
-    <div class="row g-4">
-      <!-- يسار: الجراف + كروت المسؤولين -->
-      <div class="col-lg-4">
-        <!-- كرت الجراف -->
-        <div class="card border-0 shadow-sm rounded-4 mb-3 chart-card">
-          <div class="card-header bg-white border-0 rounded-4">
-            <h6 class="mb-0">
-              <i class="fa-solid fa-chart-column me-2 text-danger"></i>
-              مؤشّر إنجاز جولات اليوم حسب المسؤول
-            </h6>
-            <small class="text-muted">
-              العمود الذهبي = مهام اليوم، العمود الأخضر = المنجَز اليوم.
-            </small>
+  <div class="container-fluid py-4">
+    <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" id="today-tab" data-bs-toggle="tab" data-bs-target="#todayPane" type="button">
+          <i class="fas fa-calendar-day me-1"></i> اليوم
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="delayed-tab" data-bs-toggle="tab" data-bs-target="#delayedPane" type="button">
+          <i class="fas fa-clock me-1"></i> المتأخرون
+          <span class="badge bg-danger ms-1" id="delayedCount">0</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="violations-tab" data-bs-toggle="tab" data-bs-target="#violationsPane" type="button">
+          <i class="fas fa-exclamation-triangle me-1"></i> المخالفات
+          <span class="badge bg-warning text-dark ms-1" id="violationsCount">0</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#historyPane" type="button">
+          <i class="fas fa-history me-1"></i> التاريخ
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- Today Tab -->
+      <div class="tab-pane fade show active" id="todayPane">
+        <div class="stats-mini mb-4">
+          <div class="stat-box">
+            <div class="number" id="statTotal">0</div>
+            <div class="small text-muted">إجمالي المهام</div>
           </div>
-          <div class="card-body">
-            <canvas id="staffRoundsChart" height="170"></canvas>
+          <div class="stat-box success">
+            <div class="number" id="statDone">0</div>
+            <div class="small text-muted">مكتملة</div>
+          </div>
+          <div class="stat-box warning">
+            <div class="number" id="statPending">0</div>
+            <div class="small text-muted">قيد التنفيذ</div>
+          </div>
+          <div class="stat-box danger">
+            <div class="number" id="statDelayed">0</div>
+            <div class="small text-muted">متأخرة</div>
           </div>
         </div>
 
-        <!-- كروت المسؤولين -->
-        <h5 class="fw-bold mb-2">
-          <i class="fa-solid fa-users-line me-2 text-danger"></i>
-          محطات المسؤولين
-        </h5>
-        <p class="small text-muted mb-2">
-          الأسماء تُسحب آليًا من عمود <strong>Assigned_To</strong> في MASTER_TASKS.
-        </p>
-        <div class="row g-3" id="stationCardsContainer"></div>
-      </div>
-
-      <!-- يمين: مهام اليوم + السجل + نموذج الجولة -->
-      <div class="col-lg-8">
-        <!-- مهام اليوم للمسؤول المختار -->
-        <div class="card border-0 shadow-sm rounded-4 mb-3">
-          <div class="card-header bg-white border-0 rounded-4">
-            <h5 class="mb-0">
-              <i class="fa-solid fa-user-gear me-2 text-danger"></i>
-              مهام اليوم للمسؤول:
-              <span id="selectedStaffName" class="fw-bold text-dark">لم يتم اختيار مسؤول</span>
-            </h5>
-            <small class="text-muted" id="staffTasksInfo">
-              اختر أحد الكروت على اليسار لرؤية مهامه اليومية بالتفصيل.
-            </small>
+        <div class="row g-4">
+          <div class="col-lg-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-users text-primary me-2"></i>المسؤولون</h5>
+            <div id="stationCardsContainer"></div>
           </div>
-          <div class="card-body">
-            <div class="table-responsive">
-              <table class="table table-sm align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th>الجولة</th>
-                    <th class="text-center">منفذة / مطلوبة اليوم</th>
-                    <th class="text-center">الوقت المستهدف</th>
-                    <th class="text-center">الحالة</th>
-                  </tr>
-                </thead>
-                <tbody id="staffTasksTableBody">
-                  <tr>
-                    <td colspan="4" class="text-center text-muted small">
-                      لا توجد بيانات حتى الآن.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+          <div class="col-lg-8">
+            <div class="card card-custom mb-3">
+              <div class="card-header bg-white border-0">
+                <h5 class="mb-0">
+                  <i class="fas fa-tasks text-primary me-2"></i>
+                  مهام: <span id="selectedStaffName" class="text-primary">اختر مسؤول</span>
+                </h5>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead>
+                      <tr>
+                        <th>الجولة</th>
+                        <th class="text-center">الوقت المستهدف</th>
+                        <th class="text-center">المدة المسموحة</th>
+                        <th class="text-center">الحالة</th>
+                      </tr>
+                    </thead>
+                    <tbody id="staffTasksTableBody">
+                      <tr><td colspan="4" class="text-center text-muted">اختر مسؤول لعرض مهامه</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0">
+                <h6 class="mb-0"><i class="fas fa-list text-primary me-2"></i>سجل جولات اليوم</h6>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead>
+                      <tr>
+                        <th>الوقت</th>
+                        <th>الجولة</th>
+                        <th>المسؤول</th>
+                        <th>الحالة</th>
+                        <th>ملاحظات</th>
+                      </tr>
+                    </thead>
+                    <tbody id="roundsLogBody">
+                      <tr><td colspan="5" class="text-center text-muted">جاري التحميل...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- سجل جولات اليوم -->
-        <div class="card border-0 shadow-sm rounded-4 mb-3">
-          <div class="card-header bg-white border-0 rounded-4">
-            <h6 class="mb-0">
-              <i class="fa-solid fa-list-ul me-2 text-danger"></i>
-              سجل جولات اليوم
-            </h6>
-            <small class="text-muted">
-              يتم السحب مباشرة من Rounds_Log بدون الحاجة لفتح الإكسيل.
-            </small>
+      <!-- Delayed Tab -->
+      <div class="tab-pane fade" id="delayedPane">
+        <div class="filter-section">
+          <h5 class="mb-3"><i class="fas fa-clock text-danger me-2"></i>الجولات المتأخرة</h5>
+          <p class="text-muted small">هنا تظهر جميع الجولات التي تجاوزت وقتها المحدد</p>
+        </div>
+        <div id="delayedList" class="row g-3"></div>
+      </div>
+
+      <!-- Violations Tab -->
+      <div class="tab-pane fade" id="violationsPane">
+        <div class="filter-section">
+          <h5 class="mb-3"><i class="fas fa-exclamation-triangle text-warning me-2"></i>المخالفات والتكرارات</h5>
+          <p class="text-muted small">المخالفات المرصودة مع تتبع التكرار لنفس المشكلة</p>
+        </div>
+        
+        <h6 class="fw-bold mb-3"><i class="fas fa-redo text-danger me-2"></i>مخالفات متكررة (تحتاج تدخل)</h6>
+        <div id="repeatedViolationsList" class="row g-3 mb-4"></div>
+        
+        <h6 class="fw-bold mb-3"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
+        <div id="allViolationsList" class="row g-3"></div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-pane fade" id="historyPane">
+        <div class="filter-section">
+          <h5 class="mb-3"><i class="fas fa-history text-primary me-2"></i>سجل الجولات التاريخي</h5>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label small">من تاريخ</label>
+              <input type="date" class="form-control" id="historyStartDate" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">إلى تاريخ</label>
+              <input type="date" class="form-control" id="historyEndDate" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">المسؤول</label>
+              <select class="form-select" id="historyStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-primary w-100" onclick="loadHistory()">
+                <i class="fas fa-search me-1"></i> بحث
+              </button>
+            </div>
           </div>
+        </div>
+        
+        <div class="card card-custom">
           <div class="card-body">
             <div class="table-responsive">
-              <table class="table table-sm align-middle mb-0">
+              <table class="table table-sm table-hover">
                 <thead>
                   <tr>
+                    <th>التاريخ</th>
                     <th>الوقت</th>
                     <th>الجولة</th>
                     <th>المسؤول</th>
                     <th>مسؤول التنفيذ</th>
                     <th>الحالة</th>
-                    <th>ملخص الخلل</th>
+                    <th>ملاحظات</th>
                   </tr>
                 </thead>
-                <tbody id="roundsLogBody">
-                  <tr>
-                    <td colspan="6" class="text-center text-muted small">
-                      لا توجد جولات مسجلة حتى الآن.
-                    </td>
-                  </tr>
+                <tbody id="historyTableBody">
+                  <tr><td colspan="7" class="text-center text-muted">اختر الفلاتر واضغط بحث</td></tr>
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-
-        <!-- نموذج checklist -->
-        <div class="card border-0 shadow-sm rounded-4">
-          <div class="card-header bg-white border-0 rounded-4">
-            <h6 class="mb-0">
-              <i class="fa-solid fa-clipboard-check me-2 text-danger"></i>
-              نموذج التحقق للجولة المختارة
-            </h6>
-            <p class="small text-muted mb-0" id="checklistRoundTitle">
-              لم يتم اختيار جولة بعد.
-            </p>
-          </div>
-          <div class="card-body">
-            <div id="checklistItemsContainer" class="mb-3"></div>
-
-            <div class="mb-2" id="execRespContainer" style="display:none;">
-              <label class="form-label">مسؤول التنفيذ (في حال وجود خلل)</label>
-              <select id="execRespSelect" class="form-select">
-                <option value="">لا يوجد (لا حاجة لإجراء)</option>
-              </select>
-              <div class="form-text small">
-                اختر الشخص المكلف بتصحيح الخلل من قائمة المسؤولين للجولة.
-              </div>
-              <div class="form-text small text-danger" id="execRespWarning" style="display:none;">
-                يوجد بند واحد على الأقل عليه "لا" – الرجاء اختيار مسؤول التنفيذ قبل الحفظ.
-              </div>
-            </div>
-
-            <div class="mb-2">
-              <label class="form-label">ملاحظات إضافية (اختياري)</label>
-              <textarea id="checklistComment" class="form-control" rows="2"></textarea>
-            </div>
-
-            <button id="btnSaveChecklist" class="btn btn-danger px-4" disabled>
-              <i class="fa-solid fa-floppy-disk ms-1"></i>
-              حفظ الجولة
-            </button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- شاشة تحميل -->
   <div id="spinnerOverlay" class="spinner-overlay">
     <div class="text-center">
-      <div class="spinner-border text-danger mb-3" role="status"></div>
-      <div class="fw-semibold text-dark">جاري تحميل بيانات الجولات…</div>
+      <div class="spinner-border text-primary mb-3" role="status"></div>
+      <div class="fw-semibold">جاري تحميل البيانات...</div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
   <script>
-    const WEB_APP_URL =
-      'https://script.google.com/macros/s/AKfycbzzK213HbZPw4Js-7Xq8PW9SKO-yuKiuRN6wc3ms0erYlKFihvS4ITGAFantA7nSvNb/exec';
-
-    let HOME_DATA = null;
+    let MASTER_TASKS = [];
     let ROUNDS_LOG = [];
-    let SELECTED_STAFF = null;
-    let SELECTED_TASK = null;
-    let SELECTED_CHECKLIST = [];
-    let STAFF_CHART = null;
+    let STAFF_LIST = [];
+    let DELAYED_LIST = [];
+    let VIOLATIONS_DATA = { violations: [], repeated: [] };
 
     document.addEventListener('DOMContentLoaded', () => {
-      loadHomeData();
-      loadRoundsLog();
-      document.getElementById('btnSaveChecklist').addEventListener('click', onSaveChecklist);
+      updateTodayHeader();
+      loadAllData();
     });
 
     function showSpinner(show) {
-      const el = document.getElementById('spinnerOverlay');
-      if (!el) return;
-      el.style.display = show ? 'flex' : 'none';
+      document.getElementById('spinnerOverlay').style.display = show ? 'flex' : 'none';
     }
 
-    async function callApi(action, payload) {
-      const res = await fetch(WEB_APP_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action, payload })
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Backend error');
-      return data;
+    function updateTodayHeader() {
+      const today = new Date();
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      document.getElementById('todayInfoText').textContent = today.toLocaleDateString('ar-SA', options);
     }
 
-    async function loadHomeData() {
+    async function loadAllData() {
       showSpinner(true);
       try {
-        const data = await callApi('getHomeData', {});
-        HOME_DATA = data;
-        renderTodayHeader(data);
-        renderStationCards(data.staff || []);
-        updateStaffChart(data.staff || []);
+        await Promise.all([
+          loadMasterTasks(),
+          loadRoundsLog(),
+          loadStaffList(),
+          loadDelayed(),
+          loadViolations()
+        ]);
+        updateStats();
       } catch (err) {
-        alert('خطأ في تحميل بيانات الكروت: ' + err.message);
+        console.error('Load error:', err);
       } finally {
         showSpinner(false);
+      }
+    }
+
+    async function loadMasterTasks() {
+      try {
+        const res = await fetch('/api/rounds/master-tasks');
+        const data = await res.json();
+        if (data.ok) {
+          MASTER_TASKS = data.tasks;
+          renderStationCards();
+        }
+      } catch (err) {
+        console.error('Master tasks error:', err);
       }
     }
 
     async function loadRoundsLog() {
       try {
-        const data = await callApi('getRoundsLog', { limit: 50 });
-        ROUNDS_LOG = data.entries || [];
-        renderRoundsLogTable();
-      } catch (err) {
-        console.error('log error', err);
-      }
-    }
-
-    function renderTodayHeader(data) {
-      const el = document.getElementById('todayInfoText');
-      if (!el) return;
-      el.textContent = `تاريخ اليوم: ${data.todayDate || ''}`;
-    }
-
-    function renderStationCards(staffArr) {
-      const container = document.getElementById('stationCardsContainer');
-      container.innerHTML = '';
-      if (!staffArr.length) {
-        container.innerHTML = '<div class="col-12 text-muted small">لا توجد أسماء في Assigned_To في MASTER_TASKS.</div>';
-        return;
-      }
-
-      staffArr.forEach(s => {
-        const col = document.createElement('div');
-        col.className = 'col-12';
-
-        const card = document.createElement('div');
-        card.className = 'station-card p-3';
-        card.dataset.staffName = s.name;
-
-        const tasksSummary = (s.tasksToday || []).slice(0, 3).map(t => {
-          return `• ${t.roundNameAr || t.roundNameEn} – تكرار: ${t.roundsPerDay}×`;
-        }).join('<br>');
-
-        card.innerHTML = `
-          <div class="d-flex justify-content-between align-items-start mb-2">
-            <div>
-              <div class="fw-bold fs-5">${s.name}</div>
-              <div class="small text-muted">مسؤول عن جولات السلامة حسب MASTER_TASKS</div>
-            </div>
-          </div>
-          <div class="small mb-2">
-            <span class="chip ${s.remainingToday > 0 ? 'chip-red' : 'chip-green'}">
-              مهام اليوم: ${s.expectedToday} – منجَز: ${s.doneToday || 0} – متبقّي: ${s.remainingToday}
-            </span>
-          </div>
-          <div class="small mb-1">
-            <span class="chip chip-gold">
-              إجمالي مهام الأسبوع (حسب Yes في الأيام): ${s.expectedWeek}
-            </span>
-          </div>
-          <div class="small mt-2 text-muted">
-            <strong>أهم جولات اليوم:</strong><br>
-            ${tasksSummary || '<span class="text-muted">لا توجد جولات مفعّلة اليوم.</span>'}
-          </div>
-        `;
-
-        card.addEventListener('click', () => selectStaff(s.name));
-        col.appendChild(card);
-        container.appendChild(col);
-      });
-    }
-
-    function updateStaffChart(staffArr) {
-      const ctx = document.getElementById('staffRoundsChart');
-      if (!ctx) return;
-
-      const labels = staffArr.map(s => s.name);
-      const totalData = staffArr.map(s => s.expectedToday || 0);
-      const doneData  = staffArr.map(s => s.doneToday || 0);
-
-      const data = {
-        labels,
-        datasets: [
-          {
-            label: 'مهام اليوم',
-            data: totalData,
-            backgroundColor: '#f1c76f'
-          },
-          {
-            label: 'منجَز اليوم',
-            data: doneData,
-            backgroundColor: '#198754'
-          }
-        ]
-      };
-
-      const options = {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: { stepSize: 1 }
-          }
-        },
-        plugins: {
-          legend: {
-            position: 'bottom'
-          }
+        const res = await fetch('/api/rounds/log');
+        const data = await res.json();
+        if (data.ok) {
+          ROUNDS_LOG = data.entries;
+          renderRoundsLog();
         }
-      };
-
-      if (STAFF_CHART) {
-        STAFF_CHART.data = data;
-        STAFF_CHART.options = options;
-        STAFF_CHART.update();
-      } else {
-        STAFF_CHART = new Chart(ctx, {
-          type: 'bar',
-          data,
-          options
-        });
+      } catch (err) {
+        console.error('Rounds log error:', err);
       }
+    }
+
+    async function loadStaffList() {
+      try {
+        const res = await fetch('/api/rounds/staff');
+        const data = await res.json();
+        if (data.ok) {
+          STAFF_LIST = data.staff;
+          populateStaffFilter();
+        }
+      } catch (err) {
+        console.error('Staff list error:', err);
+      }
+    }
+
+    async function loadDelayed() {
+      try {
+        const res = await fetch('/api/rounds/delayed');
+        const data = await res.json();
+        if (data.ok) {
+          DELAYED_LIST = data.delayed;
+          document.getElementById('delayedCount').textContent = DELAYED_LIST.length;
+          renderDelayedList();
+        }
+      } catch (err) {
+        console.error('Delayed error:', err);
+      }
+    }
+
+    async function loadViolations() {
+      try {
+        const res = await fetch('/api/rounds/violations');
+        const data = await res.json();
+        if (data.ok) {
+          VIOLATIONS_DATA = data;
+          document.getElementById('violationsCount').textContent = data.violations.length;
+          renderViolations();
+        }
+      } catch (err) {
+        console.error('Violations error:', err);
+      }
+    }
+
+    function updateStats() {
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      const todayTasks = MASTER_TASKS.filter(t => {
+        const dayMap = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+        const today = new Date().getDay();
+        const dayKey = dayMap[today];
+        return t[dayKey] && t[dayKey].toLowerCase() === 'yes';
+      });
+      
+      const total = todayTasks.reduce((sum, t) => sum + (parseInt(t.Rounds_Per_Day) || 0), 0);
+      const todayLogs = ROUNDS_LOG.filter(r => r.Date && r.Date.includes(todayStr.split('-')[2]));
+      const done = todayLogs.filter(r => r.Status !== 'متأخر').length;
+      const delayed = DELAYED_LIST.length;
+      
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statDone').textContent = done;
+      document.getElementById('statPending').textContent = Math.max(0, total - done - delayed);
+      document.getElementById('statDelayed').textContent = delayed;
+    }
+
+    function renderStationCards() {
+      const container = document.getElementById('stationCardsContainer');
+      const staffMap = {};
+      
+      MASTER_TASKS.forEach(task => {
+        const staff = task.Assigned_To;
+        if (!staff) return;
+        if (!staffMap[staff]) {
+          staffMap[staff] = { name: staff, tasks: [], total: 0 };
+        }
+        staffMap[staff].tasks.push(task);
+        staffMap[staff].total += parseInt(task.Rounds_Per_Day) || 0;
+      });
+      
+      container.innerHTML = Object.values(staffMap).map(s => `
+        <div class="station-card mb-3" onclick="selectStaff('${s.name}')">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-bold">${s.name}</div>
+              <div class="small text-muted">${s.tasks.length} جولات مختلفة</div>
+            </div>
+            <span class="chip chip-info">${s.total} مرة/يوم</span>
+          </div>
+        </div>
+      `).join('');
     }
 
     function selectStaff(staffName) {
-      if (!HOME_DATA || !HOME_DATA.staff) return;
-      const staff = HOME_DATA.staff.find(s => s.name === staffName);
-      SELECTED_STAFF = staff || null;
-      SELECTED_TASK = null;
-      SELECTED_CHECKLIST = [];
-      document.getElementById('checklistItemsContainer').innerHTML = '';
-      document.getElementById('checklistRoundTitle').textContent = 'لم يتم اختيار جولة بعد.';
-      document.getElementById('checklistComment').value = '';
-      document.getElementById('btnSaveChecklist').disabled = true;
-      document.getElementById('execRespContainer').style.display = 'none';
-      document.getElementById('execRespWarning').style.display = 'none';
-
-      document.querySelectorAll('.station-card').forEach(card => {
-        card.classList.toggle('active', card.dataset.staffName === staffName);
-      });
-
-      const nameEl = document.getElementById('selectedStaffName');
-      const infoEl = document.getElementById('staffTasksInfo');
-      if (staff) {
-        nameEl.textContent = staff.name;
-        infoEl.textContent = `إجمالي مهام اليوم: ${staff.expectedToday} – منجَز: ${staff.doneToday || 0} – متبقّي: ${staff.remainingToday}`;
-        renderStaffTasksTable(staff);
-      } else {
-        nameEl.textContent = 'لم يتم اختيار مسؤول';
-        infoEl.textContent = '';
-        document.getElementById('staffTasksTableBody').innerHTML =
-          '<tr><td colspan="4" class="text-center text-muted small">لا توجد مهام لهذا المسؤول.</td></tr>';
-      }
-    }
-
-    function renderStaffTasksTable(staff) {
+      document.querySelectorAll('.station-card').forEach(c => c.classList.remove('active'));
+      event.currentTarget?.classList.add('active');
+      
+      document.getElementById('selectedStaffName').textContent = staffName;
+      
+      const tasks = MASTER_TASKS.filter(t => t.Assigned_To === staffName);
       const tbody = document.getElementById('staffTasksTableBody');
-      tbody.innerHTML = '';
-
-      if (!staff.tasksToday || !staff.tasksToday.length) {
-        tbody.innerHTML =
-          '<tr><td colspan="4" class="text-center text-muted small">لا توجد جولات مفعّلة في MASTER_TASKS.</td></tr>';
+      
+      if (!tasks.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد مهام</td></tr>';
         return;
       }
-
-      staff.tasksToday.forEach(t => {
-        const done = t.doneCountToday || 0;
-        const total = t.roundsPerDay || 0;
-        const completed = total > 0 && done >= total;
-
-        const tr = document.createElement('tr');
-        if (completed) tr.classList.add('table-primary');
-
-        tr.innerHTML = `
-          <td>${t.roundNameAr || t.roundNameEn}</td>
-          <td class="text-center">${done}/${total}</td>
-          <td class="text-center">${t.targetTime || ''}</td>
+      
+      tbody.innerHTML = tasks.map(t => `
+        <tr>
+          <td>${t.Round_Name_AR || t.Round_Name_EN}</td>
+          <td class="text-center">${t.Target_Time || '-'}</td>
+          <td class="text-center">${t.Allowed_Time_Min || 60} دقيقة</td>
           <td class="text-center">
-            <button class="btn btn-sm ${completed ? 'btn-outline-secondary' : 'btn-outline-danger'}"
-                    ${completed ? 'disabled' : ''}>
-              ${completed ? 'مكتملة' : 'بدء الجولة'}
-            </button>
+            <span class="chip chip-warning">
+              <i class="fas fa-sync-alt me-1"></i>${t.Rounds_Per_Day || 1}×
+            </span>
           </td>
-        `;
-
-        const btn = tr.querySelector('button');
-        if (!completed) {
-          btn.addEventListener('click', () => openChecklistForTask(staff, t));
-        }
-
-        tbody.appendChild(tr);
-      });
+        </tr>
+      `).join('');
     }
 
-    function renderRoundsLogTable() {
+    function renderRoundsLog() {
       const tbody = document.getElementById('roundsLogBody');
-      tbody.innerHTML = '';
-
+      
       if (!ROUNDS_LOG.length) {
-        tbody.innerHTML =
-          '<tr><td colspan="6" class="text-center text-muted small">لا توجد جولات مسجلة.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">لا توجد جولات مسجلة اليوم</td></tr>';
         return;
       }
-
-      ROUNDS_LOG.forEach(entry => {
-        const statusBadge =
-          entry.status === 'في الوقت'
-            ? '<span class="badge bg-success">في الوقت</span>'
-            : entry.status === 'متأخر'
-            ? '<span class="badge bg-warning text-dark">متأخر</span>'
-            : '<span class="badge bg-secondary">تم التنفيذ</span>';
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="small">${entry.time}</td>
-          <td class="small">${entry.area}</td>
-          <td class="small">${entry.staff}</td>
-          <td class="small">${entry.execResponsible || '-'}</td>
-          <td class="small">${statusBadge}</td>
-          <td class="small">${entry.negativeNotes || ''}</td>
+      
+      tbody.innerHTML = ROUNDS_LOG.slice(0, 20).map(entry => {
+        const statusClass = entry.Status === 'متأخر' ? 'bg-warning text-dark' : 
+                           entry.Status === 'في الوقت' ? 'bg-success' : 'bg-secondary';
+        return `
+          <tr>
+            <td class="small">${entry.Actual_Time || entry.Date?.split(' ')[1] || '-'}</td>
+            <td class="small">${entry.Area || entry.Round_Name || '-'}</td>
+            <td class="small">${entry.Responsible_Role || entry.Staff || '-'}</td>
+            <td><span class="badge ${statusClass}">${entry.Status || 'تم'}</span></td>
+            <td class="small">${entry.Negative_Notes || entry.NegativeNotes || '-'}</td>
+          </tr>
         `;
-        tbody.appendChild(tr);
-      });
+      }).join('');
     }
 
-    async function openChecklistForTask(staff, task) {
-      SELECTED_STAFF = staff;
-      SELECTED_TASK = task;
-      SELECTED_CHECKLIST = [];
-      document.getElementById('checklistComment').value = '';
-      document.getElementById('checklistRoundTitle').textContent =
-        `الجولة: ${task.roundNameAr || task.roundNameEn} – المسؤول: ${staff.name}`;
-
-      showSpinner(true);
-      try {
-        const data = await callApi('getTaskChecklist', { taskId: task.taskId });
-        renderChecklistItems(data.items || []);
-        updateExecRespOptions(task);
-        document.getElementById('btnSaveChecklist').disabled = false;
-      } catch (err) {
-        alert('خطأ في تحميل checklist: ' + err.message);
-      } finally {
-        showSpinner(false);
-      }
-    }
-
-    function renderChecklistItems(items) {
-      const container = document.getElementById('checklistItemsContainer');
-      container.innerHTML = '';
-      SELECTED_CHECKLIST = [];
-      document.getElementById('execRespWarning').style.display = 'none';
-
-      if (!items.length) {
-        container.innerHTML =
-          '<p class="text-muted small mb-0">لا توجد بنود checklist معرفة لهذه الجولة (شيت R0X فارغ).</p>';
+    function renderDelayedList() {
+      const container = document.getElementById('delayedList');
+      
+      if (!DELAYED_LIST.length) {
+        container.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد جولات متأخرة - ممتاز!</div></div>';
         return;
       }
-
-      items.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'check-item-row d-flex justify-content-between align-items-center';
-        div.innerHTML = `
-          <div class="me-3">${item.text}</div>
-          <div class="check-buttons btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-success active" data-value="yes">نعم</button>
-            <button type="button" class="btn btn-outline-danger" data-value="no">لا</button>
+      
+      container.innerHTML = DELAYED_LIST.map(d => `
+        <div class="col-md-6 col-lg-4">
+          <div class="card card-custom delayed-card p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h6 class="fw-bold mb-0">${d.Area || d.Round_Name || 'جولة'}</h6>
+              <span class="badge bg-danger">${d.Delay_Min || 0} دقيقة تأخير</span>
+            </div>
+            <div class="small text-muted mb-1"><i class="fas fa-user me-1"></i>${d.Responsible_Role || d.Staff || '-'}</div>
+            <div class="small text-muted mb-1"><i class="fas fa-clock me-1"></i>الوقت المحدد: ${d.Planned_Time || '-'}</div>
+            <div class="small text-muted"><i class="fas fa-calendar me-1"></i>${d.Date || '-'}</div>
           </div>
-        `;
-        const btnYes = div.querySelector('button[data-value="yes"]');
-        const btnNo = div.querySelector('button[data-value="no"]');
-
-        btnYes.addEventListener('click', () => {
-          btnYes.classList.add('active');
-          btnNo.classList.remove('active');
-          updateSelectedChecklistItem(item.text, false);
-        });
-        btnNo.addEventListener('click', () => {
-          btnNo.classList.add('active');
-          btnYes.classList.remove('active');
-          updateSelectedChecklistItem(item.text, true);
-        });
-
-        container.appendChild(div);
-      });
+        </div>
+      `).join('');
     }
 
-    function updateSelectedChecklistItem(text, isNo) {
-      const idx = SELECTED_CHECKLIST.indexOf(text);
-      if (isNo) {
-        if (idx === -1) SELECTED_CHECKLIST.push(text);
+    function renderViolations() {
+      const repeatedContainer = document.getElementById('repeatedViolationsList');
+      const allContainer = document.getElementById('allViolationsList');
+      
+      if (!VIOLATIONS_DATA.repeated.length) {
+        repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات متكررة</div></div>';
       } else {
-        if (idx !== -1) SELECTED_CHECKLIST.splice(idx, 1);
+        repeatedContainer.innerHTML = VIOLATIONS_DATA.repeated.map(v => `
+          <div class="col-md-6 col-lg-4">
+            <div class="card card-custom violation-card p-3">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h6 class="fw-bold mb-0">${v.area || 'منطقة'}</h6>
+                <span class="repeat-badge">${v.count}</span>
+              </div>
+              <div class="small mb-2">${v.issue || 'مخالفة غير محددة'}</div>
+              <div class="small text-muted"><i class="fas fa-user me-1"></i>المكلف: ${v.assignedTo || 'غير محدد'}</div>
+              <div class="small text-muted"><i class="fas fa-calendar me-1"></i>آخر تكرار: ${v.dates[v.dates.length-1] || '-'}</div>
+            </div>
+          </div>
+        `).join('');
       }
-      // كل مرة نغيّر الاختيارات نخفي التحذير (لو كان ظاهر)
-      const warning = document.getElementById('execRespWarning');
-      if (warning) warning.style.display = 'none';
+      
+      if (!VIOLATIONS_DATA.violations.length) {
+        allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
+      } else {
+        allContainer.innerHTML = VIOLATIONS_DATA.violations.slice(0, 12).map(v => `
+          <div class="col-md-6 col-lg-4">
+            <div class="card card-custom p-3">
+              <h6 class="fw-bold mb-1">${v.Area || v.Round_Name || 'جولة'}</h6>
+              <div class="small mb-2">${v.Negative_Notes || v.NegativeNotes || 'خلل'}</div>
+              <div class="small text-muted"><i class="fas fa-calendar me-1"></i>${v.Date || '-'}</div>
+            </div>
+          </div>
+        `).join('');
+      }
     }
 
-    function updateExecRespOptions(task) {
-      const container = document.getElementById('execRespContainer');
-      const select = document.getElementById('execRespSelect');
-      if (!container || !select) return;
-
-      select.innerHTML = '<option value="">لا يوجد (لا حاجة لإجراء)</option>';
-      document.getElementById('execRespWarning').style.display = 'none';
-
-      if (!task || !task.responsibles || !task.responsibles.length) {
-        container.style.display = 'none';
-        return;
-      }
-
-      const unique = Array.from(new Set(task.responsibles.filter(Boolean)));
-      unique.forEach(name => {
+    function populateStaffFilter() {
+      const select = document.getElementById('historyStaffFilter');
+      STAFF_LIST.forEach(s => {
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = s;
+        opt.textContent = s;
         select.appendChild(opt);
       });
-
-      container.style.display = 'block';
     }
 
-    async function onSaveChecklist() {
-      if (!SELECTED_STAFF || !SELECTED_TASK) {
-        alert('الرجاء اختيار مسؤول وجولة أولاً.');
-        return;
-      }
-
-      const comment = document.getElementById('checklistComment').value.trim();
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const dateStr = `${yyyy}-${mm}-${dd}`;
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mi = String(now.getMinutes()).padStart(2, '0');
-      const timeStr = `${hh}:${mi}`;
-
-      const execSelect = document.getElementById('execRespSelect');
-      const execResp = execSelect ? execSelect.value.trim() : '';
-
-      if (SELECTED_CHECKLIST.length > 0 && !execResp) {
-        const warning = document.getElementById('execRespWarning');
-        if (warning) warning.style.display = 'block';
-        alert('يوجد بند واحد على الأقل عليه "لا" – الرجاء اختيار مسؤول التنفيذ من القائمة قبل الحفظ.');
-        return;
-      }
-
-      const payload = {
-        taskId: SELECTED_TASK.taskId,
-        staffName: SELECTED_STAFF.name,
-        selectedItems: SELECTED_CHECKLIST.slice(),
-        comment: comment,
-        date: dateStr,
-        actualTime: timeStr,
-        roundNo: 1,
-        executionResponsible: execResp
-      };
-
+    async function loadHistory() {
+      const startDate = document.getElementById('historyStartDate').value;
+      const endDate = document.getElementById('historyEndDate').value;
+      const staff = document.getElementById('historyStaffFilter').value;
+      
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (staff) params.append('staff', staff);
+      
       showSpinner(true);
       try {
-        await callApi('saveRound', payload);
-        alert('تم تسجيل الجولة بنجاح ✅');
-
-        await loadHomeData();
-        await loadRoundsLog();
-        if (SELECTED_STAFF && SELECTED_STAFF.name) {
-          selectStaff(SELECTED_STAFF.name);
+        const res = await fetch('/api/rounds/history?' + params.toString());
+        const data = await res.json();
+        
+        const tbody = document.getElementById('historyTableBody');
+        if (!data.ok || !data.entries.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">لا توجد نتائج</td></tr>';
+          return;
         }
-
-        document.getElementById('checklistItemsContainer').innerHTML = '';
-        document.getElementById('checklistComment').value = '';
-        document.getElementById('checklistRoundTitle').textContent = 'لم يتم اختيار جولة بعد.';
-        document.getElementById('btnSaveChecklist').disabled = true;
-        document.getElementById('execRespContainer').style.display = 'none';
-        document.getElementById('execRespWarning').style.display = 'none';
-        SELECTED_TASK = null;
-        SELECTED_CHECKLIST = [];
+        
+        tbody.innerHTML = data.entries.map(e => {
+          const statusClass = e.Status === 'متأخر' ? 'bg-warning text-dark' : 
+                             e.Status === 'في الوقت' ? 'bg-success' : 'bg-secondary';
+          return `
+            <tr>
+              <td class="small">${e.Date?.split(' ')[0] || '-'}</td>
+              <td class="small">${e.Actual_Time || e.Date?.split(' ')[1] || '-'}</td>
+              <td class="small">${e.Area || e.Round_Name || '-'}</td>
+              <td class="small">${e.Responsible_Role || e.Staff || '-'}</td>
+              <td class="small">${e.Execution_Responsible || '-'}</td>
+              <td><span class="badge ${statusClass}">${e.Status || 'تم'}</span></td>
+              <td class="small">${e.Negative_Notes || '-'}</td>
+            </tr>
+          `;
+        }).join('');
       } catch (err) {
-        alert('تعذّر حفظ الجولة: ' + err.message);
+        console.error('History error:', err);
       } finally {
         showSpinner(false);
       }
