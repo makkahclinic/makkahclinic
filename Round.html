@@ -722,6 +722,49 @@
     </div>
   </div>
 
+  <!-- Resolve Confirmation Modal -->
+  <div class="modal fade" id="resolveConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-body text-center p-4">
+          <img src="logo-new.png" alt="Logo" style="width: 80px; height: 80px; margin-bottom: 15px;">
+          <h5 class="fw-bold mb-3" style="color: var(--primary);">تأكيد المعالجة</h5>
+          <p class="text-muted mb-4">هل أنت واثق من أن المخالفات تمت معالجتها؟</p>
+          <div id="resolveViolationInfo" class="alert alert-light text-end mb-4" style="font-size: 0.9rem;"></div>
+          <div class="d-flex gap-2 justify-content-center">
+            <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
+              <i class="fas fa-times me-1"></i>إلغاء
+            </button>
+            <button type="button" class="btn btn-success px-4" onclick="showPasscodeModal()">
+              <i class="fas fa-check me-1"></i>تأكيد
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Passcode Input Modal -->
+  <div class="modal fade" id="passcodeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header" style="background: var(--primary); color: white;">
+          <h6 class="modal-title"><i class="fas fa-lock me-2"></i>الرمز السري</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted small mb-3 text-center">أدخل رمزك السري للتأكيد</p>
+          <input type="password" class="form-control form-control-lg text-center" id="passcodeInput" 
+                 maxlength="6" placeholder="****" autocomplete="off" style="letter-spacing: 10px; font-size: 1.5rem;">
+          <div id="passcodeError" class="text-danger small mt-2 text-center" style="display:none;"></div>
+          <button type="button" class="btn btn-success w-100 mt-3" onclick="verifyAndResolve()">
+            <i class="fas fa-check-circle me-1"></i>تحقق وأكمل المعالجة
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <button class="btn btn-lg rounded-circle shadow-lg position-fixed" 
           style="bottom: 2rem; left: 2rem; width: 60px; height: 60px; background: var(--crimson); color: white; z-index: 1000;"
           data-bs-toggle="modal" data-bs-target="#roundFormModal" title="تسجيل جولة جديدة">
@@ -826,6 +869,85 @@
       document.getElementById('errorToastMessage').textContent = message;
       const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
       toast.show();
+    }
+
+    // Resolve violation modal handling
+    let currentResolveData = null;
+    
+    function openResolveModal(rowIndex, staffName, area, issue) {
+      currentResolveData = { rowIndex, staffName, area, issue };
+      document.getElementById('resolveViolationInfo').innerHTML = `
+        <strong>الجولة:</strong> ${area}<br>
+        <strong>المسؤول:</strong> ${staffName}<br>
+        <strong>الخلل:</strong> ${issue}...
+      `;
+      const modal = new bootstrap.Modal(document.getElementById('resolveConfirmModal'));
+      modal.show();
+    }
+    
+    function showPasscodeModal() {
+      bootstrap.Modal.getInstance(document.getElementById('resolveConfirmModal')).hide();
+      document.getElementById('passcodeInput').value = '';
+      document.getElementById('passcodeError').style.display = 'none';
+      setTimeout(() => {
+        const modal = new bootstrap.Modal(document.getElementById('passcodeModal'));
+        modal.show();
+        document.getElementById('passcodeInput').focus();
+      }, 300);
+    }
+    
+    async function verifyAndResolve() {
+      const passcode = document.getElementById('passcodeInput').value;
+      const staffName = currentResolveData?.staffName;
+      
+      if (!passcode || passcode.length < 4) {
+        document.getElementById('passcodeError').textContent = 'الرجاء إدخال الرمز السري';
+        document.getElementById('passcodeError').style.display = 'block';
+        return;
+      }
+      
+      try {
+        // Verify passcode
+        const verifyRes = await fetch('/api/rounds/verify-passcode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staffName, passcode })
+        });
+        const verifyData = await verifyRes.json();
+        
+        if (!verifyData.verified) {
+          document.getElementById('passcodeError').textContent = verifyData.message || 'الرمز السري غير صحيح';
+          document.getElementById('passcodeError').style.display = 'block';
+          return;
+        }
+        
+        // Mark as resolved
+        const resolveRes = await fetch('/api/rounds/resolve-violation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rowIndex: currentResolveData.rowIndex,
+            staffName: staffName,
+            resolvedBy: staffName,
+            resolvedDate: new Date().toLocaleDateString('en-US')
+          })
+        });
+        const resolveData = await resolveRes.json();
+        
+        if (resolveData.ok) {
+          bootstrap.Modal.getInstance(document.getElementById('passcodeModal')).hide();
+          showSuccessToast('تم تسجيل المعالجة بنجاح');
+          currentResolveData = null;
+          // Reload violations
+          await loadViolations();
+          renderViolations();
+        } else {
+          showErrorToast(resolveData.message || 'حدث خطأ');
+        }
+      } catch (err) {
+        console.error('Resolve error:', err);
+        showErrorToast('حدث خطأ في الاتصال');
+      }
     }
 
     function updateTodayHeader() {
@@ -1342,19 +1464,24 @@
       if (!data.violations?.length) {
         allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
       } else {
-        allContainer.innerHTML = data.violations.slice(0, 20).map(v => {
+        allContainer.innerHTML = data.violations.slice(0, 20).map((v, idx) => {
           const notes = (v.Negative_Notes || v.NegativeNotes || 'خلل').replace('نقاط الخلل:', '').trim();
           const items = notes.split(/[|،]/).map(i => i.trim()).filter(i => i);
           const itemsList = items.map(item => `<li class="mb-1">${item}</li>`).join('');
+          const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx;
+          const staffName = v.Responsible_Role || v.Staff || '';
           return `
           <div class="col-md-6">
             <div class="card card-custom p-3 border-start border-danger border-3">
               <h6 class="fw-bold text-danger mb-2"><i class="fas fa-exclamation-triangle me-2"></i>${v.Area || v.Round_Name || 'جولة'}</h6>
               <ul class="list-unstyled small mb-2 pe-3">${itemsList}</ul>
-              <div class="d-flex justify-content-between small text-muted">
-                <span><i class="fas fa-user me-1"></i>${v.Responsible_Role || v.Staff || '-'}</span>
+              <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
+                <span><i class="fas fa-user me-1"></i>${staffName || '-'}</span>
                 <span><i class="fas fa-calendar me-1"></i>${v.Date?.split(' ')[0] || '-'}</span>
               </div>
+              <button class="btn btn-success btn-sm w-100" onclick="openResolveModal(${rowIdx}, '${staffName}', '${(v.Area || v.Round_Name || '').replace(/'/g, "\\'")}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
+                <i class="fas fa-check-circle me-1"></i>تم المعالجة
+              </button>
             </div>
           </div>
         `}).join('');

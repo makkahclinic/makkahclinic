@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate } from './sheets-service.js';
+import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow } from './sheets-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -253,24 +253,28 @@ app.get('/api/rounds/violations', async (req, res) => {
   try {
     const data = await getSheetData('Rounds_Log');
     if (!data || data.length === 0) {
-      return res.json({ ok: true, violations: [], repeated: [], summary: { total: 0, byArea: {}, byStaff: {} } });
+      return res.json({ ok: true, violations: [], resolved: [], repeated: [], summary: { total: 0, pending: 0, resolved: 0, byArea: {}, byStaff: {} } });
     }
     const headers = data[0];
-    const entries = data.slice(1).map(row => {
-      const obj = {};
+    const entries = data.slice(1).map((row, idx) => {
+      const obj = { _rowIndex: idx };
       headers.forEach((h, i) => {
         obj[h] = row[i] || '';
       });
       return obj;
     });
     
-    const violations = entries.filter(isRealViolation);
+    const allViolations = entries.filter(isRealViolation);
+    
+    // Separate resolved vs pending violations
+    const resolvedViolations = allViolations.filter(v => v.Is_Resolved === 'Yes');
+    const pendingViolations = allViolations.filter(v => v.Is_Resolved !== 'Yes');
     
     const violationCounts = {};
     const byArea = {};
     const byStaff = {};
     
-    violations.forEach(v => {
+    pendingViolations.forEach(v => {
       const area = v.Area || v.Round_Name || 'غير محدد';
       const staff = v.Responsible_Role || v.Execution_Responsible || 'غير محدد';
       const issue = v.Negative_Notes || v.NegativeNotes || '';
@@ -296,10 +300,13 @@ app.get('/api/rounds/violations', async (req, res) => {
     
     res.json({ 
       ok: true, 
-      violations, 
+      violations: pendingViolations,
+      resolved: resolvedViolations,
       repeated,
       summary: {
-        total: violations.length,
+        total: allViolations.length,
+        pending: pendingViolations.length,
+        resolved: resolvedViolations.length,
         byArea,
         byStaff
       }
@@ -368,6 +375,134 @@ app.post('/api/rounds/log', async (req, res) => {
     
     await appendRow('Rounds_Log', values);
     res.json({ ok: true, message: 'تم حفظ الجولة بنجاح' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Create Staff_Passcodes sheet with default passcodes
+app.post('/api/rounds/create-passcodes', async (req, res) => {
+  try {
+    await createSheet('Staff_Passcodes');
+    
+    const passcodeData = [
+      ['Staff_Name', 'Passcode', 'Role', 'Created_Date'],
+      ['عدنان الرفاعي', '1234', 'مسؤول جولات', new Date().toLocaleDateString('en-US')],
+      ['بلال نتو', '5678', 'مسؤول جولات', new Date().toLocaleDateString('en-US')],
+      ['عبدالسلام الضوراني', '9012', 'مسؤول جولات', new Date().toLocaleDateString('en-US')],
+      ['خالد الخطاب', '3456', 'مسؤول جولات', new Date().toLocaleDateString('en-US')]
+    ];
+    
+    await batchUpdate('Staff_Passcodes', passcodeData);
+    
+    res.json({ 
+      ok: true, 
+      message: 'Staff_Passcodes sheet created',
+      passcodes: passcodeData.slice(1).map(row => ({ name: row[0], code: row[1] }))
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Verify staff passcode
+app.post('/api/rounds/verify-passcode', async (req, res) => {
+  try {
+    const { staffName, passcode } = req.body;
+    
+    const data = await getSheetData('Staff_Passcodes');
+    if (!data || data.length < 2) {
+      return res.json({ ok: false, verified: false, message: 'لم يتم إعداد الرموز السرية' });
+    }
+    
+    const headers = data[0];
+    const staffNameIndex = headers.indexOf('Staff_Name');
+    const passcodeIndex = headers.indexOf('Passcode');
+    
+    // Flexible matching: check if staffName contains or is contained in stored name
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const storedName = row[staffNameIndex] || '';
+      const storedCode = row[passcodeIndex] || '';
+      
+      // Check for exact match, partial match, or first name match
+      const nameMatch = storedName === staffName || 
+                       storedName.includes(staffName) || 
+                       staffName.includes(storedName) ||
+                       storedName.split(' ')[0] === staffName.split(' ')[0];
+      
+      if (nameMatch && storedCode === passcode) {
+        return res.json({ ok: true, verified: true, message: 'تم التحقق بنجاح' });
+      }
+    }
+    
+    res.json({ ok: true, verified: false, message: 'الرمز السري غير صحيح' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Mark violation as resolved
+app.post('/api/rounds/resolve-violation', async (req, res) => {
+  try {
+    const { rowIndex, staffName, resolvedBy, resolvedDate } = req.body;
+    
+    const data = await getSheetData('Rounds_Log');
+    if (!data || data.length === 0) {
+      return res.json({ ok: false, message: 'لا توجد بيانات' });
+    }
+    
+    const headers = data[0];
+    
+    // Find or add Is_Resolved column (column T = index 19)
+    let resolvedColIndex = headers.indexOf('Is_Resolved');
+    if (resolvedColIndex === -1) {
+      resolvedColIndex = 19;
+      await updateCell('Rounds_Log', 'T1', 'Is_Resolved');
+    }
+    
+    // Find Resolved_By column (column U = index 20)
+    let resolvedByColIndex = headers.indexOf('Resolved_By');
+    if (resolvedByColIndex === -1) {
+      resolvedByColIndex = 20;
+      await updateCell('Rounds_Log', 'U1', 'Resolved_By');
+    }
+    
+    // Find Resolved_Date column (column V = index 21)
+    let resolvedDateColIndex = headers.indexOf('Resolved_Date');
+    if (resolvedDateColIndex === -1) {
+      resolvedDateColIndex = 21;
+      await updateCell('Rounds_Log', 'V1', 'Resolved_Date');
+    }
+    
+    // Update the row
+    const actualRow = rowIndex + 2; // +1 for header, +1 for 1-based index
+    await updateCell('Rounds_Log', `T${actualRow}`, 'Yes');
+    await updateCell('Rounds_Log', `U${actualRow}`, resolvedBy || staffName);
+    await updateCell('Rounds_Log', `V${actualRow}`, resolvedDate || new Date().toLocaleDateString('en-US'));
+    
+    res.json({ ok: true, message: 'تم تسجيل المعالجة بنجاح', row: actualRow });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Get staff passcodes (for admin)
+app.get('/api/rounds/passcodes', async (req, res) => {
+  try {
+    const data = await getSheetData('Staff_Passcodes');
+    if (!data || data.length < 2) {
+      return res.json({ ok: true, passcodes: [], message: 'لم يتم إعداد الرموز. استخدم POST /api/rounds/create-passcodes' });
+    }
+    
+    const headers = data[0];
+    const passcodes = data.slice(1).map(row => {
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = row[i] || ''; });
+      return obj;
+    });
+    
+    res.json({ ok: true, passcodes });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

@@ -137,3 +137,57 @@ export async function batchUpdate(sheetName, values) {
   
   return response.data;
 }
+
+export async function updateRowByIndex(sheetName, rowIndex, columnIndex, value) {
+  const sheets = await getGoogleSheetsClient();
+  
+  const colLetter = String.fromCharCode(65 + columnIndex);
+  const range = `${sheetName}!${colLetter}${rowIndex + 1}`;
+  
+  const response = await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: range,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[value]] }
+  });
+  
+  return response.data;
+}
+
+export async function findAndUpdateRow(sheetName, matchColumn, matchValue, updateColumn, updateValue) {
+  const sheets = await getGoogleSheetsClient();
+  
+  const data = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: sheetName
+  });
+  
+  const rows = data.data.values || [];
+  if (rows.length === 0) return null;
+  
+  const headers = rows[0];
+  const matchColIndex = headers.indexOf(matchColumn);
+  const updateColIndex = headers.indexOf(updateColumn);
+  
+  if (matchColIndex === -1 || updateColIndex === -1) {
+    throw new Error(`Column not found: ${matchColumn} or ${updateColumn}`);
+  }
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][matchColIndex] === matchValue) {
+      const colLetter = String.fromCharCode(65 + updateColIndex);
+      const range = `${sheetName}!${colLetter}${i + 1}`;
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: range,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[updateValue]] }
+      });
+      
+      return { updated: true, row: i + 1 };
+    }
+  }
+  
+  return { updated: false };
+}
