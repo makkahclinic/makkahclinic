@@ -333,6 +333,19 @@
               </div>
             </div>
 
+            <!-- Staff Performance Chart -->
+            <div class="card card-custom mb-3">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0" style="color: #DC143C;">
+                  <i class="fas fa-chart-bar me-2"></i>مؤشر إنجاز جولات اليوم حسب المسؤول
+                </h6>
+                <small class="text-muted">العمود الذهبي = مهام اليوم، العمود الأخضر = المنجز اليوم</small>
+              </div>
+              <div class="card-body" style="height: 280px;">
+                <canvas id="staffPerformanceChart"></canvas>
+              </div>
+            </div>
+            
             <!-- Log Table -->
             <div class="card card-custom">
               <div class="card-header bg-white border-0 py-2">
@@ -742,10 +755,69 @@
         if (data.ok) {
           STAFF_SUMMARY = data.staffSummary;
           renderStationCards();
+          renderStaffPerformanceChart();
         }
       } catch (err) {
         console.error('Staff summary error:', err);
       }
+    }
+    
+    let staffPerformanceChartInstance = null;
+    function renderStaffPerformanceChart() {
+      const ctx = document.getElementById('staffPerformanceChart');
+      if (!ctx || !STAFF_SUMMARY.length) return;
+      
+      if (staffPerformanceChartInstance) {
+        staffPerformanceChartInstance.destroy();
+      }
+      
+      const labels = STAFF_SUMMARY.map(s => s.name);
+      const todayTasks = STAFF_SUMMARY.map(s => s.todayTasks);
+      const todayDone = STAFF_SUMMARY.map(s => s.todayDone);
+      
+      staffPerformanceChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'مهام اليوم',
+              data: todayTasks,
+              backgroundColor: '#c9a962',
+              borderRadius: 4,
+              barThickness: 30
+            },
+            {
+              label: 'منجز اليوم',
+              data: todayDone,
+              backgroundColor: '#22c55e',
+              borderRadius: 4,
+              barThickness: 30
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { family: 'Tajawal' }, usePointStyle: true }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { stepSize: 1, font: { family: 'Tajawal' } },
+              grid: { color: 'rgba(0,0,0,0.05)' }
+            },
+            x: {
+              ticks: { font: { family: 'Tajawal', size: 11 } },
+              grid: { display: false }
+            }
+          }
+        }
+      });
     }
 
     function renderStationCards() {
