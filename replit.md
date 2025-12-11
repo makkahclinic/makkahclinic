@@ -5,7 +5,7 @@ This is a medical center website for Makkah Medical Complex (مجمع مكة ا�
 
 ## Project Structure
 - `index.html` - Main landing page with departments and doctors info
-- `logo-new.png` - New logo (used across the site)
+- `attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg` - New hexagonal logo with heartbeat design
 - `portal.html` - Smart portal (Doctor, Patient, Pharmacist portals)
 - `cbahi-portal.html` - Patient safety portal (password protected)
 - `doctor-mohammed.html` - Internal Medicine department page
@@ -52,6 +52,8 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-11: **Updated Logo** - Changed all site logos to new hexagonal design (شعار_للموقع_المجمع_1765489579657.jpeg) across all pages
+- 2025-12-11: **History Tab Date Highlighting** - Added active state for date range buttons (اليوم/أسبوع/شهر/3 أشهر/سنة) - selected button now highlights with primary color
 - 2025-12-11: **Violation Resolution System** - Added "تم المعالجة" button on each violation, confirmation modal with logo, staff passcode verification, and Is_Resolved/Resolved_By/Resolved_Date columns in Rounds_Log
 - 2025-12-11: **Staff Passcodes** - Created Staff_Passcodes sheet with unique codes for each staff member (عدنان:1234, بلال:5678, عبدالسلام:9012, خالد:3456)
 - 2025-12-11: **Enhanced Violations Tab** - Added filters (staff/round/time period), statistics cards (total, repeated, top staff, top area), and trend chart showing violation frequency over time
