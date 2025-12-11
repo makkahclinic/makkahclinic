@@ -1321,6 +1321,7 @@
         renderStatusChart(m);
         renderStaffChart(m.byStaff);
         renderAreaChart(m.byArea);
+        renderTopIssues(m.byArea);
       } catch (err) {
         console.error('Dashboard error:', err);
       }
@@ -1336,11 +1337,16 @@
         data: {
           labels,
           datasets: [
-            { label: 'مكتملة', data: byDay.map(d => d.completed), borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, tension: 0.3 },
-            { label: 'متأخرة', data: byDay.map(d => d.delayed), borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)', fill: true, tension: 0.3 }
+            { label: 'مكتملة', data: byDay.map(d => d.completed), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+            { label: 'متأخرة', data: byDay.map(d => d.delayed), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 }
           ]
         },
-        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10, family: 'Tajawal' } } } }, 
+          scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 9 } }, grid: { display: false } } } 
+        }
       });
     }
     
@@ -1354,10 +1360,16 @@
           labels: ['مكتملة', 'متأخرة', 'مخالفات'],
           datasets: [{
             data: [m.completed, m.delayed, m.violations],
-            backgroundColor: ['#198754', '#dc3545', '#ffc107']
+            backgroundColor: ['#22c55e', '#ef4444', '#eab308'],
+            borderWidth: 0
           }]
         },
-        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          cutout: '60%',
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' }, padding: 8 } } } 
+        }
       });
     }
     
@@ -1365,7 +1377,7 @@
       const ctx = document.getElementById('staffChart').getContext('2d');
       if (staffChart) staffChart.destroy();
       
-      const labels = Object.keys(byStaff).slice(0, 6);
+      const labels = Object.keys(byStaff).slice(0, 5);
       const completed = labels.map(l => byStaff[l].completed);
       const delayed = labels.map(l => byStaff[l].delayed);
       
@@ -1374,11 +1386,16 @@
         data: {
           labels,
           datasets: [
-            { label: 'مكتملة', data: completed, backgroundColor: '#198754' },
-            { label: 'متأخرة', data: delayed, backgroundColor: '#dc3545' }
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 16 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 16 }
           ]
         },
-        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' } } } }, 
+          scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 9 } }, grid: { display: false } } } 
+        }
       });
     }
     
@@ -1386,8 +1403,8 @@
       const ctx = document.getElementById('areaChart').getContext('2d');
       if (areaChart) areaChart.destroy();
       
-      const sorted = Object.entries(byArea).sort((a, b) => b[1].total - a[1].total).slice(0, 6);
-      const labels = sorted.map(([k]) => k.length > 25 ? k.slice(0, 25) + '...' : k);
+      const sorted = Object.entries(byArea).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+      const labels = sorted.map(([k]) => k.length > 20 ? k.slice(0, 20) + '...' : k);
       const completed = sorted.map(([, v]) => v.completed);
       const delayed = sorted.map(([, v]) => v.delayed);
       
@@ -1396,12 +1413,36 @@
         data: {
           labels,
           datasets: [
-            { label: 'مكتملة', data: completed, backgroundColor: '#198754' },
-            { label: 'متأخرة', data: delayed, backgroundColor: '#dc3545' }
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 14 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 14 }
           ]
         },
-        options: { indexAxis: 'y', responsive: true, plugins: { legend: { position: 'top' } } }
+        options: { 
+          indexAxis: 'y', 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' } } } },
+          scales: { x: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, y: { ticks: { font: { size: 9 } }, grid: { display: false } } }
+        }
       });
+    }
+    
+    function renderTopIssues(byArea) {
+      const container = document.getElementById('topIssuesList');
+      if (!container) return;
+      
+      const sorted = Object.entries(byArea).sort((a, b) => b[1].delayed - a[1].delayed).slice(0, 5);
+      if (!sorted.length) {
+        container.innerHTML = '<div class="text-muted text-center py-2">لا توجد مشاكل مسجلة</div>';
+        return;
+      }
+      
+      container.innerHTML = sorted.map(([name, data], idx) => `
+        <div class="d-flex align-items-center py-1 ${idx < sorted.length - 1 ? 'border-bottom' : ''}" style="gap: 8px;">
+          <span class="badge ${data.delayed > 5 ? 'bg-danger' : 'bg-warning text-dark'}" style="min-width: 24px;">${data.delayed}</span>
+          <span class="text-truncate" style="flex: 1;">${name.length > 35 ? name.slice(0, 35) + '...' : name}</span>
+        </div>
+      `).join('');
     }
   </script>
 </body>
