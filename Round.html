@@ -163,6 +163,11 @@
         </button>
       </li>
       <li class="nav-item">
+        <button class="nav-link" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboardPane" type="button">
+          <i class="fas fa-chart-line me-1"></i> لوحة التحكم
+        </button>
+      </li>
+      <li class="nav-item">
         <button class="nav-link" id="delayed-tab" data-bs-toggle="tab" data-bs-target="#delayedPane" type="button">
           <i class="fas fa-clock me-1"></i> المتأخرون
           <span class="badge bg-danger ms-1" id="delayedCount">0</span>
@@ -256,6 +261,82 @@
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Tab -->
+      <div class="tab-pane fade" id="dashboardPane">
+        <div class="row g-4 mb-4">
+          <div class="col-md-3">
+            <div class="stat-box">
+              <div class="number" id="dashTotalRounds">0</div>
+              <div class="small text-muted">إجمالي الجولات</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="stat-box success">
+              <div class="number" id="dashCompleted">0</div>
+              <div class="small text-muted">مكتملة</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="stat-box danger">
+              <div class="number" id="dashDelayed">0</div>
+              <div class="small text-muted">متأخرة</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="stat-box" style="background: linear-gradient(135deg, #d1fae5, #a7f3d0);">
+              <div class="number" id="dashCompliance" style="color: #059669;">0%</div>
+              <div class="small text-muted">نسبة الامتثال</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0">
+                <h6 class="mb-0"><i class="fas fa-chart-area text-primary me-2"></i>أداء الجولات (آخر 14 يوم)</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="trendChart" height="200"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0">
+                <h6 class="mb-0"><i class="fas fa-chart-pie text-primary me-2"></i>توزيع الحالات</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="statusChart" height="200"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="row g-4 mt-2">
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0">
+                <h6 class="mb-0"><i class="fas fa-user-tie text-primary me-2"></i>أداء المسؤولين</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="staffChart" height="200"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0">
+                <h6 class="mb-0"><i class="fas fa-map-marker-alt text-primary me-2"></i>الأداء حسب المنطقة</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="areaChart" height="200"></canvas>
               </div>
             </div>
           </div>
@@ -662,6 +743,116 @@
       } finally {
         showSpinner(false);
       }
+    }
+
+    let chartsLoaded = false;
+    let trendChart, statusChart, staffChart, areaChart;
+    
+    document.getElementById('dashboard-tab').addEventListener('shown.bs.tab', () => {
+      if (!chartsLoaded) {
+        loadDashboardData();
+        chartsLoaded = true;
+      }
+    });
+    
+    async function loadDashboardData() {
+      try {
+        const res = await fetch('/api/rounds/metrics');
+        const data = await res.json();
+        
+        if (!data.ok) return;
+        
+        const m = data.metrics;
+        document.getElementById('dashTotalRounds').textContent = m.totalRounds;
+        document.getElementById('dashCompleted').textContent = m.completed;
+        document.getElementById('dashDelayed').textContent = m.delayed;
+        document.getElementById('dashCompliance').textContent = m.complianceRate + '%';
+        
+        renderTrendChart(m.byDay);
+        renderStatusChart(m);
+        renderStaffChart(m.byStaff);
+        renderAreaChart(m.byArea);
+      } catch (err) {
+        console.error('Dashboard error:', err);
+      }
+    }
+    
+    function renderTrendChart(byDay) {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (trendChart) trendChart.destroy();
+      
+      const labels = byDay.map(d => d.date.split('-').slice(1).join('/'));
+      trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: byDay.map(d => d.completed), borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, tension: 0.3 },
+            { label: 'متأخرة', data: byDay.map(d => d.delayed), borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)', fill: true, tension: 0.3 }
+          ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+    
+    function renderStatusChart(m) {
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      if (statusChart) statusChart.destroy();
+      
+      statusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['مكتملة', 'متأخرة', 'مخالفات'],
+          datasets: [{
+            data: [m.completed, m.delayed, m.violations],
+            backgroundColor: ['#198754', '#dc3545', '#ffc107']
+          }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+      });
+    }
+    
+    function renderStaffChart(byStaff) {
+      const ctx = document.getElementById('staffChart').getContext('2d');
+      if (staffChart) staffChart.destroy();
+      
+      const labels = Object.keys(byStaff).slice(0, 6);
+      const completed = labels.map(l => byStaff[l].completed);
+      const delayed = labels.map(l => byStaff[l].delayed);
+      
+      staffChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: completed, backgroundColor: '#198754' },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#dc3545' }
+          ]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+    
+    function renderAreaChart(byArea) {
+      const ctx = document.getElementById('areaChart').getContext('2d');
+      if (areaChart) areaChart.destroy();
+      
+      const sorted = Object.entries(byArea).sort((a, b) => b[1].total - a[1].total).slice(0, 6);
+      const labels = sorted.map(([k]) => k.length > 25 ? k.slice(0, 25) + '...' : k);
+      const completed = sorted.map(([, v]) => v.completed);
+      const delayed = sorted.map(([, v]) => v.delayed);
+      
+      areaChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: completed, backgroundColor: '#198754' },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#dc3545' }
+          ]
+        },
+        options: { indexAxis: 'y', responsive: true, plugins: { legend: { position: 'top' } } }
+      });
     }
   </script>
 </body>
