@@ -652,48 +652,74 @@
 
       <!-- History Tab -->
       <div class="tab-pane fade" id="historyPane">
-        <div class="filter-section">
-          <h5 class="mb-3"><i class="fas fa-history text-primary me-2"></i>سجل الجولات التاريخي</h5>
+        <div class="filter-section" style="background: linear-gradient(135deg, #fdf2f4, #fce7eb); border: 1px solid rgba(139, 69, 100, 0.2);">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="fas fa-history me-2" style="color: var(--crimson);"></i>سجل الجولات التاريخي</h5>
+            <button class="btn btn-sm" style="background: var(--crimson); color: white;" onclick="exportHistory()">
+              <i class="fas fa-file-export me-1"></i>تصدير التقرير
+            </button>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label small fw-bold">اختيار سريع:</label>
+            <div class="btn-group btn-group-sm" role="group">
+              <button type="button" class="btn btn-outline-secondary" onclick="setHistoryRange('today')">اليوم</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setHistoryRange('week')">أسبوع</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setHistoryRange('month')">شهر</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setHistoryRange('3months')">3 أشهر</button>
+              <button type="button" class="btn btn-outline-secondary" onclick="setHistoryRange('year')">سنة</button>
+            </div>
+          </div>
+          
           <div class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
               <label class="form-label small">من تاريخ</label>
-              <input type="date" class="form-control" id="historyStartDate" />
+              <input type="date" class="form-control form-control-sm" id="historyStartDate" />
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
               <label class="form-label small">إلى تاريخ</label>
-              <input type="date" class="form-control" id="historyEndDate" />
+              <input type="date" class="form-control form-control-sm" id="historyEndDate" />
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
               <label class="form-label small">المسؤول</label>
-              <select class="form-select" id="historyStaffFilter">
+              <select class="form-select form-select-sm" id="historyStaffFilter">
                 <option value="">الكل</option>
               </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
-              <button class="btn btn-primary w-100" onclick="loadHistory()">
-                <i class="fas fa-search me-1"></i> بحث
+            <div class="col-md-2">
+              <label class="form-label small">المعالجة</label>
+              <select class="form-select form-select-sm" id="historyResolvedFilter">
+                <option value="">الكل</option>
+                <option value="yes">نعم - تم المعالجة</option>
+                <option value="no">لا - لم يتم المعالجة</option>
+              </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button class="btn btn-sm w-100" style="background: var(--primary); color: white;" onclick="loadHistory()">
+                <i class="fas fa-search me-1"></i>بحث
               </button>
             </div>
           </div>
         </div>
         
-        <div class="card card-custom">
-          <div class="card-body">
+        <div class="card" style="border: 2px solid rgba(139, 69, 100, 0.3); background: linear-gradient(135deg, #fffbfc, #fff5f7);">
+          <div class="card-body p-2">
             <div class="table-responsive">
-              <table class="table table-sm table-hover">
-                <thead>
+              <table class="table table-sm table-hover mb-0" id="historyTable" style="background: white;">
+                <thead style="background: linear-gradient(135deg, #8b4563, #6b3548); color: white;">
                   <tr>
-                    <th>التاريخ</th>
-                    <th>الوقت</th>
-                    <th>الجولة</th>
-                    <th>المسؤول</th>
-                    <th>مسؤول التنفيذ</th>
-                    <th>الحالة</th>
-                    <th>ملاحظات</th>
+                    <th class="text-center">التاريخ</th>
+                    <th class="text-center">الوقت</th>
+                    <th class="text-center">الجولة</th>
+                    <th class="text-center">المسؤول</th>
+                    <th class="text-center">مسؤول التنفيذ</th>
+                    <th class="text-center">الحالة</th>
+                    <th class="text-center">المعالجة</th>
+                    <th class="text-center">ملاحظات</th>
                   </tr>
                 </thead>
                 <tbody id="historyTableBody">
-                  <tr><td colspan="7" class="text-center text-muted">اختر الفلاتر واضغط بحث</td></tr>
+                  <tr><td colspan="8" class="text-center text-muted py-4">اختر الفترة الزمنية واضغط بحث</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1694,10 +1720,51 @@
       }
     }
 
+    let HISTORY_DATA = [];
+    
+    function setHistoryRange(range) {
+      const today = new Date();
+      const endDate = today.toISOString().split('T')[0];
+      let startDate;
+      
+      switch(range) {
+        case 'today':
+          startDate = endDate;
+          break;
+        case 'week':
+          const weekAgo = new Date(today);
+          weekAgo.setDate(today.getDate() - 7);
+          startDate = weekAgo.toISOString().split('T')[0];
+          break;
+        case 'month':
+          const monthAgo = new Date(today);
+          monthAgo.setMonth(today.getMonth() - 1);
+          startDate = monthAgo.toISOString().split('T')[0];
+          break;
+        case '3months':
+          const threeMonthsAgo = new Date(today);
+          threeMonthsAgo.setMonth(today.getMonth() - 3);
+          startDate = threeMonthsAgo.toISOString().split('T')[0];
+          break;
+        case 'year':
+          const yearAgo = new Date(today);
+          yearAgo.setFullYear(today.getFullYear() - 1);
+          startDate = yearAgo.toISOString().split('T')[0];
+          break;
+        default:
+          startDate = endDate;
+      }
+      
+      document.getElementById('historyStartDate').value = startDate;
+      document.getElementById('historyEndDate').value = endDate;
+      loadHistory();
+    }
+    
     async function loadHistory() {
       const startDate = document.getElementById('historyStartDate').value;
       const endDate = document.getElementById('historyEndDate').value;
       const staff = document.getElementById('historyStaffFilter').value;
+      const resolved = document.getElementById('historyResolvedFilter').value;
       
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
@@ -1711,21 +1778,43 @@
         
         const tbody = document.getElementById('historyTableBody');
         if (!data.ok || !data.entries.length) {
-          tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">لا توجد نتائج</td></tr>';
+          HISTORY_DATA = [];
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
           return;
         }
         
-        tbody.innerHTML = data.entries.map(e => {
+        let entries = data.entries;
+        
+        if (resolved === 'yes') {
+          entries = entries.filter(e => e.Is_Resolved === 'Yes' || e.Is_Resolved === 'نعم');
+        } else if (resolved === 'no') {
+          entries = entries.filter(e => !e.Is_Resolved || e.Is_Resolved === 'No' || e.Is_Resolved === 'لا');
+        }
+        
+        HISTORY_DATA = entries;
+        
+        if (!entries.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = entries.map(e => {
           const statusClass = e.Status === 'متأخر' ? 'bg-warning text-dark' : 
+                             e.Status === 'خلل' ? 'bg-danger' :
                              e.Status === 'في الوقت' ? 'bg-success' : 'bg-secondary';
+          const isResolved = e.Is_Resolved === 'Yes' || e.Is_Resolved === 'نعم';
+          const resolvedBadge = isResolved ? 
+            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>نعم</span>' : 
+            '<span class="badge bg-secondary">لا</span>';
           return `
             <tr>
-              <td class="small">${e.Date?.split(' ')[0] || '-'}</td>
-              <td class="small">${e.Actual_Time || e.Date?.split(' ')[1] || '-'}</td>
+              <td class="small text-center">${e.Date?.split(' ')[0] || '-'}</td>
+              <td class="small text-center">${e.Actual_Time || e.Date?.split(' ')[1] || '-'}</td>
               <td class="small">${e.Area || e.Round_Name || '-'}</td>
-              <td class="small">${e.Responsible_Role || e.Staff || '-'}</td>
-              <td class="small">${e.Execution_Responsible || '-'}</td>
-              <td><span class="badge ${statusClass}">${e.Status || 'تم'}</span></td>
+              <td class="small text-center">${e.Responsible_Role || e.Staff || '-'}</td>
+              <td class="small text-center">${e.Execution_Responsible || '-'}</td>
+              <td class="text-center"><span class="badge ${statusClass}">${e.Status || 'تم'}</span></td>
+              <td class="text-center">${resolvedBadge}</td>
               <td class="small">${e.Negative_Notes || '-'}</td>
             </tr>
           `;
@@ -1735,6 +1824,83 @@
       } finally {
         showSpinner(false);
       }
+    }
+    
+    function exportHistory() {
+      if (!HISTORY_DATA.length) {
+        showErrorToast('لا توجد بيانات للتصدير');
+        return;
+      }
+      
+      const startDate = document.getElementById('historyStartDate').value || 'غير محدد';
+      const endDate = document.getElementById('historyEndDate').value || 'غير محدد';
+      
+      const tableRows = HISTORY_DATA.map(e => {
+        const statusClass = e.Status === 'متأخر' ? 'badge-warning' : 
+                           e.Status === 'خلل' ? 'badge-danger' :
+                           e.Status === 'في الوقت' ? 'badge-success' : 'badge-secondary';
+        const isResolved = e.Is_Resolved === 'Yes' || e.Is_Resolved === 'نعم';
+        const resolvedClass = isResolved ? 'badge-success' : 'badge-secondary';
+        const resolvedText = isResolved ? 'نعم' : 'لا';
+        return '<tr>' +
+          '<td>' + (e.Date?.split(' ')[0] || '-') + '</td>' +
+          '<td>' + (e.Actual_Time || '-') + '</td>' +
+          '<td>' + (e.Area || e.Round_Name || '-') + '</td>' +
+          '<td>' + (e.Responsible_Role || '-') + '</td>' +
+          '<td>' + (e.Execution_Responsible || '-') + '</td>' +
+          '<td><span class="badge ' + statusClass + '">' + (e.Status || 'تم') + '</span></td>' +
+          '<td><span class="badge ' + resolvedClass + '">' + resolvedText + '</span></td>' +
+          '<td>' + (e.Negative_Notes || '-') + '</td>' +
+        '</tr>';
+      }).join('');
+      
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(
+        '<!DOCTYPE html>' +
+        '<html dir="rtl" lang="ar">' +
+        '<head>' +
+        '<meta charset="UTF-8">' +
+        '<title>تقرير الجولات - مجمع مكة الطبي</title>' +
+        '<style>' +
+        '* { font-family: Tajawal, sans-serif; }' +
+        'body { padding: 20px; background: #fff; }' +
+        '.header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #8b4563; padding-bottom: 20px; }' +
+        '.logo { width: 80px; height: 80px; margin-bottom: 10px; }' +
+        '.title { color: #1e3a5f; font-size: 24px; font-weight: bold; margin: 10px 0; }' +
+        '.subtitle { color: #8b4563; font-size: 16px; }' +
+        '.date-range { background: #fdf2f4; padding: 10px 20px; border-radius: 8px; display: inline-block; margin: 15px 0; }' +
+        'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
+        'th { background: #8b4563; color: white; padding: 12px 8px; font-size: 14px; }' +
+        'td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 13px; }' +
+        'tr:nth-child(even) { background: #fdf2f4; }' +
+        '.badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; display: inline-block; }' +
+        '.badge-success { background: #10b981; color: white; }' +
+        '.badge-warning { background: #f59e0b; color: #000; }' +
+        '.badge-danger { background: #ef4444; color: white; }' +
+        '.badge-secondary { background: #6b7280; color: white; }' +
+        '.footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 15px; }' +
+        '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
+        '</style>' +
+        '</head>' +
+        '<body>' +
+        '<div class="header">' +
+        '<img src="logo-new.png" class="logo" alt="شعار المجمع">' +
+        '<div class="title">مجمع مكة الطبي بالزاهر</div>' +
+        '<div class="subtitle">تقرير سجل الجولات الرقابية</div>' +
+        '<div class="date-range"><strong>الفترة:</strong> من ' + startDate + ' إلى ' + endDate + '</div>' +
+        '</div>' +
+        '<table>' +
+        '<thead><tr><th>التاريخ</th><th>الوقت</th><th>الجولة</th><th>المسؤول</th><th>منفذ الجولة</th><th>الحالة</th><th>المعالجة</th><th>ملاحظات</th></tr></thead>' +
+        '<tbody>' + tableRows + '</tbody>' +
+        '</table>' +
+        '<div class="footer">' +
+        '<p>تم إنشاء هذا التقرير بواسطة نظام جولات السلامة المطوّر</p>' +
+        '<p>مجمع مكة الطبي بالزاهر - ' + new Date().toLocaleDateString('ar-SA') + '</p>' +
+        '</div>' +
+        '<script>window.onload = function() { window.print(); }<\/script>' +
+        '</body></html>'
+      );
+      printWindow.document.close();
     }
 
     let chartsLoaded = false;
