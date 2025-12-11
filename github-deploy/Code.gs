@@ -104,6 +104,12 @@ function getTodayString() {
 }
 
 function getDayNameAr() {
+  // Sheet uses English day abbreviations: Sun, Mon, Tue, Wed, Thu, Fri, Sat
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return days[new Date().getDay()];
+}
+
+function getDayNameArDisplay() {
   const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   return days[new Date().getDay()];
 }
@@ -152,7 +158,7 @@ function getHomeData() {
       targetTime: task.Target_Time || ''
     });
     
-    const weekDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     weekDays.forEach(d => {
       if (task[d] === 'Yes' || task[d] === true || task[d] === 'yes') {
         staffMap[assignee].expectedWeek += rpd;
@@ -173,7 +179,7 @@ function getHomeData() {
   
   return {
     todayDate: todayStr,
-    dayName: dayName,
+    dayName: getDayNameArDisplay(), // Return Arabic name for display
     staff: Object.values(staffMap)
   };
 }
