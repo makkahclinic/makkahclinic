@@ -254,7 +254,7 @@
   <nav class="navbar navbar-expand-lg navbar-custom shadow-sm">
     <div class="container-fluid px-4">
       <span class="navbar-brand fw-bold d-flex align-items-center">
-        <img src="attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg" alt="شعار مجمع مكة الطبي" class="logo-img" />
+        <img src="شعار للموقع المجمع.jpeg" alt="شعار مجمع مكة الطبي" class="logo-img" />
         <span>نظام جولات السلامة المطوّر</span>
       </span>
       <span class="navbar-text small ms-auto text-white" id="todayInfoText"></span>
@@ -762,7 +762,7 @@
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow">
         <div class="modal-body text-center p-4">
-          <img src="attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg" alt="Logo" style="width: 80px; height: 80px; margin-bottom: 15px;">
+          <img src="شعار للموقع المجمع.jpeg" alt="Logo" style="width: 80px; height: 80px; margin-bottom: 15px;">
           <h5 class="fw-bold mb-3" style="color: var(--primary);">تأكيد المعالجة</h5>
           <p class="text-muted mb-4">هل أنت واثق من أن المخالفات تمت معالجتها؟</p>
           <div id="resolveViolationInfo" class="alert alert-light text-end mb-4" style="font-size: 0.9rem;"></div>
@@ -872,6 +872,22 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    // Google Apps Script Web App URL
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzzK213HbZPw4Js-7Xq8PW9SKO-yuKiuRN6wc3ms0erYlKFihvS4ITGAFantA7nSvNb/exec';
+    
+    // API helper function
+    async function callApi(action, payload = {}) {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Backend error');
+      return data;
+    }
+    
     let MASTER_TASKS = [];
     let ROUNDS_LOG = [];
     let STAFF_LIST = [];
@@ -938,31 +954,21 @@
       
       try {
         // Verify passcode
-        const verifyRes = await fetch('/api/rounds/verify-passcode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ staffName, passcode })
-        });
-        const verifyData = await verifyRes.json();
+        const verifyData = await callApi('verifyPasscode', { staffName, passcode });
         
-        if (!verifyData.verified) {
-          document.getElementById('passcodeError').textContent = verifyData.message || 'الرمز السري غير صحيح';
+        if (!verifyData.valid) {
+          document.getElementById('passcodeError').textContent = verifyData.error || 'الرمز السري غير صحيح';
           document.getElementById('passcodeError').style.display = 'block';
           return;
         }
         
         // Mark as resolved
-        const resolveRes = await fetch('/api/rounds/resolve-violation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rowIndex: currentResolveData.rowIndex,
-            staffName: staffName,
-            resolvedBy: staffName,
-            resolvedDate: new Date().toLocaleDateString('en-US')
-          })
+        const resolveData = await callApi('resolveViolation', {
+          rowIndex: currentResolveData.rowIndex,
+          staffName: staffName,
+          resolvedBy: staffName,
+          resolvedDate: new Date().toLocaleDateString('en-US')
         });
-        const resolveData = await resolveRes.json();
         
         if (resolveData.ok) {
           bootstrap.Modal.getInstance(document.getElementById('passcodeModal')).hide();
@@ -1007,12 +1013,9 @@
 
     async function loadMasterTasks() {
       try {
-        const res = await fetch('/api/rounds/master-tasks');
-        const data = await res.json();
-        if (data.ok) {
-          MASTER_TASKS = data.tasks;
-          renderStationCards();
-        }
+        const data = await callApi('getMasterTasks');
+        MASTER_TASKS = data.tasks || [];
+        renderStationCards();
       } catch (err) {
         console.error('Master tasks error:', err);
       }
@@ -1020,12 +1023,9 @@
 
     async function loadRoundsLog() {
       try {
-        const res = await fetch('/api/rounds/log');
-        const data = await res.json();
-        if (data.ok) {
-          ROUNDS_LOG = data.entries;
-          renderRoundsLog();
-        }
+        const data = await callApi('getRoundsLog', { limit: 100 });
+        ROUNDS_LOG = data.entries || [];
+        renderRoundsLog();
       } catch (err) {
         console.error('Rounds log error:', err);
       }
@@ -1033,12 +1033,9 @@
 
     async function loadStaffList() {
       try {
-        const res = await fetch('/api/rounds/staff');
-        const data = await res.json();
-        if (data.ok) {
-          STAFF_LIST = data.staff;
-          populateStaffFilter();
-        }
+        const data = await callApi('getStaff');
+        STAFF_LIST = data.staff || [];
+        populateStaffFilter();
       } catch (err) {
         console.error('Staff list error:', err);
       }
@@ -1046,13 +1043,10 @@
 
     async function loadDelayed() {
       try {
-        const res = await fetch('/api/rounds/delayed');
-        const data = await res.json();
-        if (data.ok) {
-          DELAYED_LIST = data.delayed;
-          document.getElementById('delayedCount').textContent = DELAYED_LIST.length;
-          renderDelayedList();
-        }
+        const data = await callApi('getDelayed');
+        DELAYED_LIST = data.delayed || [];
+        document.getElementById('delayedCount').textContent = DELAYED_LIST.length;
+        renderDelayedList();
       } catch (err) {
         console.error('Delayed error:', err);
       }
@@ -1060,13 +1054,10 @@
 
     async function loadViolations() {
       try {
-        const res = await fetch('/api/rounds/violations');
-        const data = await res.json();
-        if (data.ok) {
-          VIOLATIONS_DATA = data;
-          document.getElementById('violationsCount').textContent = data.violations.length;
-          renderViolations();
-        }
+        const data = await callApi('getViolations');
+        VIOLATIONS_DATA = data;
+        document.getElementById('violationsCount').textContent = (data.violations || []).length;
+        renderViolations();
       } catch (err) {
         console.error('Violations error:', err);
       }
@@ -1099,19 +1090,16 @@
     
     async function loadStaffSummary() {
       try {
-        const res = await fetch('/api/rounds/staff-summary');
-        const data = await res.json();
-        if (data.ok) {
-          STAFF_SUMMARY = data.staffSummary;
-          renderStationCards();
-          renderStaffPerformanceChart();
-          
-          // Re-render selected staff's tasks if one is selected
-          if (selectedStaffData) {
-            const updatedStaff = STAFF_SUMMARY.find(s => s.name === selectedStaffData.name);
-            if (updatedStaff) {
-              selectStaff(updatedStaff.name);
-            }
+        const data = await callApi('getStaffSummary');
+        STAFF_SUMMARY = data.staff || [];
+        renderStationCards();
+        renderStaffPerformanceChart();
+        
+        // Re-render selected staff's tasks if one is selected
+        if (selectedStaffData) {
+          const updatedStaff = STAFF_SUMMARY.find(s => s.name === selectedStaffData.name);
+          if (updatedStaff) {
+            selectStaff(updatedStaff.name);
           }
         }
       } catch (err) {
@@ -1262,15 +1250,9 @@
     async function startRound(taskId, roundName) {
       showSpinner(true);
       try {
-        const res = await fetch('/api/rounds/checklist/' + taskId);
-        const data = await res.json();
+        const data = await callApi('getChecklist', { taskId });
         
-        if (!data.ok) {
-          alert('حدث خطأ في تحميل قائمة الفحص');
-          return;
-        }
-        
-        currentChecklist = { taskId, roundName, task: data.task, items: data.checklist, responsibles: data.responsibles };
+        currentChecklist = { taskId, roundName, task: data.task || {}, items: data.items || [], responsibles: STAFF_LIST || [] };
         renderChecklistForm();
       } catch (err) {
         console.error('Checklist error:', err);
@@ -1369,23 +1351,21 @@
       
       showSpinner(true);
       try {
-        const res = await fetch('/api/rounds/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+        const data = await callApi('logRound', {
+          taskId: currentChecklist.taskId,
+          staff: payload.staff,
+          execResponsible: payload.execResponsible,
+          status: payload.status,
+          notes: payload.negativeNotes,
+          isViolation: payload.isViolation === 'Yes'
         });
-        const data = await res.json();
         
-        if (data.ok) {
-          showSuccessToast('تم حفظ الجولة بنجاح!');
-          cancelChecklist();
-          await loadAllData();
-        } else {
-          showErrorToast('حدث خطأ: ' + (data.error || 'غير معروف'));
-        }
+        showSuccessToast('تم حفظ الجولة بنجاح!');
+        cancelChecklist();
+        await loadAllData();
       } catch (err) {
         console.error('Submit error:', err);
-        showErrorToast('حدث خطأ في الاتصال');
+        showErrorToast('حدث خطأ في الاتصال: ' + err.message);
       } finally {
         showSpinner(false);
       }
@@ -1697,24 +1677,22 @@
       
       showSpinner(true);
       try {
-        const res = await fetch('/api/rounds/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+        await callApi('logRound', {
+          taskId: roundName,
+          staff: staff,
+          execResponsible: payload.execResponsible,
+          status: payload.status,
+          notes: payload.negativeNotes,
+          isViolation: payload.isViolation === 'Yes'
         });
-        const data = await res.json();
         
-        if (data.ok) {
-          showSuccessToast('تم حفظ الجولة بنجاح!');
-          document.getElementById('roundForm').reset();
-          bootstrap.Modal.getInstance(document.getElementById('roundFormModal')).hide();
-          await loadAllData();
-        } else {
-          showErrorToast('حدث خطأ: ' + (data.error || 'غير معروف'));
-        }
+        showSuccessToast('تم حفظ الجولة بنجاح!');
+        document.getElementById('roundForm').reset();
+        bootstrap.Modal.getInstance(document.getElementById('roundFormModal')).hide();
+        await loadAllData();
       } catch (err) {
         console.error('Submit error:', err);
-        showErrorToast('حدث خطأ في الاتصال');
+        showErrorToast('حدث خطأ في الاتصال: ' + err.message);
       } finally {
         showSpinner(false);
       }
@@ -1784,11 +1762,10 @@
       
       showSpinner(true);
       try {
-        const res = await fetch('/api/rounds/history?' + params.toString());
-        const data = await res.json();
+        const data = await callApi('getHistory', { startDate, endDate, staff });
         
         const tbody = document.getElementById('historyTableBody');
-        if (!data.ok || !data.entries.length) {
+        if (!data.entries || !data.entries.length) {
           HISTORY_DATA = [];
           tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
           return;
@@ -1895,7 +1872,7 @@
         '</head>' +
         '<body>' +
         '<div class="header">' +
-        '<img src="attached_assets/شعار_للموقع_المجمع_1765490359069.jpeg" class="logo" alt="شعار المجمع">' +
+        '<img src="شعار للموقع المجمع.jpeg" class="logo" alt="شعار المجمع">' +
         '<div class="title">مجمع مكة الطبي بالزاهر</div>' +
         '<div class="subtitle">تقرير سجل الجولات الرقابية</div>' +
         '<div class="date-range"><strong>الفترة:</strong> من ' + startDate + ' إلى ' + endDate + '</div>' +
@@ -1926,13 +1903,19 @@
     
     async function loadDashboardData() {
       try {
-        const days = document.getElementById('dashPeriodFilter')?.value || 14;
-        const res = await fetch('/api/rounds/metrics?days=' + days);
-        const data = await res.json();
+        const days = parseInt(document.getElementById('dashPeriodFilter')?.value) || 14;
+        const data = await callApi('getMetrics', { days });
         
-        if (!data.ok) return;
-        
-        const m = data.metrics;
+        const m = {
+          totalRounds: data.total || 0,
+          completed: data.completed || 0,
+          delayed: data.delayed || 0,
+          violations: data.violations || 0,
+          complianceRate: data.compliance || 0,
+          byDay: Object.entries(data.byDate || {}).map(([date, count]) => ({ date, completed: count, delayed: 0 })),
+          byStaff: Object.entries(data.byStaff || {}).map(([name, count]) => ({ name, count })),
+          byArea: Object.entries(data.byArea || {}).map(([area, count]) => ({ area, count }))
+        };
         document.getElementById('dashTotalRounds').textContent = m.totalRounds;
         document.getElementById('dashCompleted').textContent = m.completed;
         document.getElementById('dashDelayed').textContent = m.delayed;
