@@ -167,8 +167,8 @@ function getHomeData() {
   });
   
   todayLog.forEach(log => {
-    const staff = log.Staff || log.Assigned_To || '';
-    const taskId = log.Task_ID || log.Round || '';
+    const staff = log.Responsible_Role || log.Execution_Responsible || '';
+    const taskId = log.TaskID || '';
     if (staffMap[staff]) {
       staffMap[staff].todayDone++;
       // Update done count for the specific round
@@ -192,12 +192,28 @@ function getRoundsLog(limit) {
   const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   
   roundsLog.sort((a, b) => {
-    const dateA = new Date(a.Date + ' ' + (a.Time || ''));
-    const dateB = new Date(b.Date + ' ' + (b.Time || ''));
+    const dateA = new Date(a.Date + ' ' + (a.Actual_Time || ''));
+    const dateB = new Date(b.Date + ' ' + (b.Actual_Time || ''));
     return dateB - dateA;
   });
   
-  return { entries: roundsLog.slice(0, limit) };
+  // Map to frontend expected format
+  const entries = roundsLog.slice(0, limit).map(r => ({
+    Date: r.Date,
+    Time: r.Actual_Time,
+    TaskID: r.TaskID,
+    Round: r.TaskID,
+    Area: r.Area,
+    Staff: r.Responsible_Role,
+    Exec_Responsible: r.Execution_Responsible,
+    Status: r.Status,
+    Negative_Notes: r.Negative_Notes,
+    Positive_Notes: r.Positive_Notes,
+    Is_Violation: r.Is_Violation,
+    Closed_YN: r.Closed_YN
+  }));
+  
+  return { entries };
 }
 
 function getMasterTasks() {
@@ -244,7 +260,7 @@ function getDelayed() {
     const taskId = task.Task_ID;
     const rpd = parseInt(task.Rounds_Per_Day) || 1;
     
-    const doneCount = todayLog.filter(l => l.Task_ID === taskId || l.Round === taskId).length;
+    const doneCount = todayLog.filter(l => l.TaskID === taskId).length;
     
     for (let roundNum = 1; roundNum <= rpd; roundNum++) {
       if (roundNum <= doneCount) continue;
@@ -279,32 +295,51 @@ function getDelayed() {
 
 function getViolations() {
   const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-  
+
   const violations = roundsLog.filter(r => {
-    if (r.Is_Violation === true || r.Is_Violation === 'TRUE' || r.Is_Violation === 'true' || r.Is_Violation === 'Yes') {
-      return true;
-    }
+    const isViolation = String(r.Is_Violation || '').toLowerCase();
+    if (isViolation === 'true' || isViolation === 'yes') return true;
+
     const status = String(r.Status || '').toLowerCase();
-    const notes = String(r.Notes || '').toLowerCase();
-    return status.includes('خلل') || notes.includes('نقاط الخلل');
-  });
-  
-  const grouped = {};
+    const notes = String(r.Negative_Notes || '').toLowerCase();
+    return status.includes('خلل') || notes.includes('نقاط الخلل') || notes.includes('❌');
+  }).map((r, idx) => ({
+    _rowIndex: idx + 2,
+    Date: r.Date,
+    Actual_Time: r.Actual_Time,
+    Area: r.Area,
+    Round_Name: r.TaskID,
+    Responsible_Role: r.Responsible_Role,
+    Execution_Responsible: r.Execution_Responsible,
+    Status: r.Status,
+    Negative_Notes: r.Negative_Notes,
+    Is_Resolved: r.Closed_YN,
+  }));
+
+  const map = {};
   violations.forEach(v => {
-    const key = `${v.Task_ID || v.Round}_${v.Staff || v.Assigned_To}_${v.Notes || ''}`;
-    if (!grouped[key]) {
-      grouped[key] = { ...v, count: 1 };
-    } else {
-      grouped[key].count++;
+    const key = `${v.Area}||${(v.Negative_Notes || '').substring(0,80)}`;
+    if (!map[key]) {
+      map[key] = {
+        area: v.Area,
+        issue: v.Negative_Notes,
+        assignedTo: v.Responsible_Role,
+        count: 0,
+        dates: []
+      };
     }
+    map[key].count++;
+    map[key].dates.push(v.Date);
   });
-  
-  return { 
-    violations: violations,
-    grouped: Object.values(grouped),
+
+  const repeated = Object.values(map).filter(x => x.count >= 2);
+
+  return {
+    violations,
+    repeated,
+    resolved: violations.filter(v => String(v.Is_Resolved).toLowerCase() === 'yes'),
     total: violations.length,
-    resolved: violations.filter(v => v.Is_Resolved === true || v.Is_Resolved === 'TRUE').length,
-    pending: violations.filter(v => !v.Is_Resolved || v.Is_Resolved === 'FALSE').length
+    pending: violations.filter(v => String(v.Is_Resolved).toLowerCase() !== 'yes').length
   };
 }
 
@@ -330,20 +365,35 @@ function getHistory(params) {
   }
   
   if (params.staff) {
-    filtered = filtered.filter(r => r.Staff === params.staff || r.Assigned_To === params.staff);
+    filtered = filtered.filter(r => r.Responsible_Role === params.staff || r.Execution_Responsible === params.staff);
   }
   
   if (params.round) {
-    filtered = filtered.filter(r => r.Task_ID === params.round || r.Round === params.round);
+    filtered = filtered.filter(r => r.TaskID === params.round);
   }
   
   filtered.sort((a, b) => {
-    const dateA = new Date(a.Date + ' ' + (a.Time || ''));
-    const dateB = new Date(b.Date + ' ' + (b.Time || ''));
+    const dateA = new Date(a.Date + ' ' + (a.Actual_Time || ''));
+    const dateB = new Date(b.Date + ' ' + (b.Actual_Time || ''));
     return dateB - dateA;
   });
   
-  return { entries: filtered };
+  // Map to frontend expected format
+  const entries = filtered.map(r => ({
+    Date: r.Date,
+    Time: r.Actual_Time,
+    TaskID: r.TaskID,
+    Area: r.Area,
+    Staff: r.Responsible_Role,
+    Exec_Responsible: r.Execution_Responsible,
+    Status: r.Status,
+    Negative_Notes: r.Negative_Notes,
+    Positive_Notes: r.Positive_Notes,
+    Is_Violation: r.Is_Violation,
+    Closed_YN: r.Closed_YN
+  }));
+  
+  return { entries };
 }
 
 function getMetrics(days) {
@@ -359,9 +409,11 @@ function getMetrics(days) {
   const total = filtered.length;
   const completed = filtered.filter(r => r.Status === 'تم' || r.Status === 'مكتمل' || r.Status === 'OK').length;
   const violations = filtered.filter(r => {
-    if (r.Is_Violation === true || r.Is_Violation === 'TRUE') return true;
+    const isViol = String(r.Is_Violation || '').toLowerCase();
+    if (isViol === 'true' || isViol === 'yes') return true;
     const status = String(r.Status || '').toLowerCase();
-    return status.includes('خلل');
+    const notes = String(r.Negative_Notes || '').toLowerCase();
+    return status.includes('خلل') || notes.includes('نقاط الخلل');
   }).length;
   
   const byDate = {};
@@ -373,10 +425,10 @@ function getMetrics(days) {
     const dateKey = r.Date ? new Date(r.Date).toISOString().split('T')[0] : 'unknown';
     byDate[dateKey] = (byDate[dateKey] || 0) + 1;
     
-    const staff = r.Staff || r.Assigned_To || 'غير محدد';
+    const staff = r.Responsible_Role || r.Execution_Responsible || 'غير محدد';
     byStaff[staff] = (byStaff[staff] || 0) + 1;
     
-    const area = r.Area || r.Task_ID || 'غير محدد';
+    const area = r.Area || r.TaskID || 'غير محدد';
     byArea[area] = (byArea[area] || 0) + 1;
     
     const status = r.Status || 'غير محدد';
@@ -445,23 +497,24 @@ function resolveViolation(params) {
   const rowIndex = params.rowIndex;
   if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row' };
   
-  const isResolvedCol = headers.indexOf('Is_Resolved');
+  // Use correct column names from Sheet
+  const closedYNCol = headers.indexOf('Closed_YN');
+  const closedDateCol = headers.indexOf('Closed_Date');
   const resolvedByCol = headers.indexOf('Resolved_By');
-  const resolvedDateCol = headers.indexOf('Resolved_Date');
   
-  if (isResolvedCol === -1) return { success: false, error: 'Is_Resolved column not found' };
+  if (closedYNCol === -1) return { success: false, error: 'Closed_YN column not found' };
   
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   
-  sheet.getRange(rowIndex, isResolvedCol + 1).setValue('TRUE');
+  sheet.getRange(rowIndex, closedYNCol + 1).setValue('Yes');
+  
+  if (closedDateCol !== -1) {
+    sheet.getRange(rowIndex, closedDateCol + 1).setValue(dateStr);
+  }
   
   if (resolvedByCol !== -1) {
     sheet.getRange(rowIndex, resolvedByCol + 1).setValue(params.resolvedBy || '');
-  }
-  
-  if (resolvedDateCol !== -1) {
-    sheet.getRange(rowIndex, resolvedDateCol + 1).setValue(dateStr);
   }
   
   return { success: true };
@@ -480,16 +533,16 @@ function logRound(payload) {
   const row = headers.map(h => {
     switch(h) {
       case 'Date': return dateStr;
-      case 'Time': return timeStr;
-      case 'Task_ID': 
-      case 'Round': return payload.taskId || '';
-      case 'Staff': 
-      case 'Assigned_To': return payload.staff || '';
-      case 'Exec_Responsible': return payload.execResponsible || '';
+      case 'Actual_Time': return timeStr;
+      case 'TaskID': return payload.taskId || '';
+      case 'Area': return payload.area || '';
+      case 'Responsible_Role': return payload.staff || '';
+      case 'Execution_Responsible': return payload.execResponsible || '';
       case 'Status': return payload.status || 'تم';
-      case 'Notes': return payload.notes || '';
+      case 'Positive_Notes': return payload.positiveNotes || '';
+      case 'Negative_Notes': return payload.negativeNotes || payload.notes || '';
       case 'Is_Violation': return payload.isViolation ? 'TRUE' : 'FALSE';
-      case 'Checklist_Data': return payload.checklistData || '';
+      case 'Closed_YN': return 'No';
       default: return '';
     }
   });
