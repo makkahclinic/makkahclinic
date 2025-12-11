@@ -473,6 +473,10 @@ app.get('/api/rounds/checklist/:taskId', async (req, res) => {
 
 app.get('/api/rounds/metrics', async (req, res) => {
   try {
+    const days = parseInt(req.query.days) || 14;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
     const [logData, tasksData] = await Promise.all([
       getSheetData('Rounds_Log'),
       getSheetData('MASTER_TASKS')
@@ -486,12 +490,15 @@ app.get('/api/rounds/metrics', async (req, res) => {
     }
     
     const headers = logData[0];
-    const entries = logData.slice(1).map(row => {
+    const allEntries = logData.slice(1).map(row => {
       const obj = {};
       headers.forEach((h, i) => { obj[h] = row[i] || ''; });
       obj._parsedDate = parseSheetDate(obj.Date);
       return obj;
     });
+    
+    // Filter entries by the specified period
+    const entries = allEntries.filter(e => e._parsedDate && e._parsedDate >= cutoffDate);
     
     const totalRounds = entries.length;
     const completed = entries.filter(e => e.Status === 'مكتمل' || e.Status === 'في الوقت' || e.Status === 'completed').length;

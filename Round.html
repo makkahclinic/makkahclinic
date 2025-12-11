@@ -416,6 +416,22 @@
 
       <!-- Dashboard Tab -->
       <div class="tab-pane fade" id="dashboardPane">
+        <!-- Date Filter -->
+        <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <label class="small fw-bold text-muted mb-0">الفترة:</label>
+            <select class="form-select form-select-sm" id="dashPeriodFilter" style="width: auto;">
+              <option value="7">آخر أسبوع</option>
+              <option value="14" selected>آخر أسبوعين</option>
+              <option value="30">آخر شهر</option>
+              <option value="90">آخر 3 أشهر</option>
+            </select>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="loadDashboardData()">
+            <i class="fas fa-sync-alt me-1"></i>تحديث
+          </button>
+        </div>
+        
         <!-- KPI Summary Row -->
         <div class="row g-2 mb-3">
           <div class="col-6 col-md-3">
@@ -456,60 +472,64 @@
           </div>
         </div>
         
-        <!-- Charts Row 1 -->
+        <!-- Row 1: Trend + Donut -->
         <div class="row g-2 mb-2">
-          <div class="col-lg-5">
-            <div class="card card-custom" style="height: 220px;">
+          <div class="col-lg-8">
+            <div class="card card-custom">
               <div class="card-header bg-white border-0 py-2">
-                <h6 class="mb-0 small"><i class="fas fa-chart-line text-primary me-1"></i>الأداء اليومي (14 يوم)</h6>
+                <h6 class="mb-0 small"><i class="fas fa-chart-line text-primary me-1"></i>الأداء اليومي</h6>
               </div>
-              <div class="card-body p-2">
+              <div class="card-body p-2" style="height: 160px;">
                 <canvas id="trendChart"></canvas>
               </div>
             </div>
           </div>
-          <div class="col-lg-3">
-            <div class="card card-custom" style="height: 220px;">
+          <div class="col-lg-4">
+            <div class="card card-custom">
               <div class="card-header bg-white border-0 py-2">
                 <h6 class="mb-0 small"><i class="fas fa-chart-pie text-success me-1"></i>توزيع الحالات</h6>
               </div>
-              <div class="card-body p-2 d-flex align-items-center justify-content-center">
+              <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 160px;">
                 <canvas id="statusChart"></canvas>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4">
-            <div class="card card-custom" style="height: 220px;">
-              <div class="card-header bg-white border-0 py-2">
-                <h6 class="mb-0 small"><i class="fas fa-user-tie text-info me-1"></i>أداء المسؤولين</h6>
-              </div>
-              <div class="card-body p-2">
-                <canvas id="staffChart"></canvas>
               </div>
             </div>
           </div>
         </div>
         
-        <!-- Charts Row 2 -->
-        <div class="row g-2">
+        <!-- Row 2: Staff + Area -->
+        <div class="row g-2 mb-2">
           <div class="col-lg-6">
-            <div class="card card-custom" style="height: 200px;">
+            <div class="card card-custom">
               <div class="card-header bg-white border-0 py-2">
-                <h6 class="mb-0 small"><i class="fas fa-map-marker-alt text-warning me-1"></i>الأداء حسب المنطقة</h6>
+                <h6 class="mb-0 small"><i class="fas fa-user-tie text-info me-1"></i>أداء المسؤولين</h6>
               </div>
-              <div class="card-body p-2">
-                <canvas id="areaChart"></canvas>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="staffChart"></canvas>
               </div>
             </div>
           </div>
           <div class="col-lg-6">
-            <div class="card card-custom" style="height: 200px;">
-              <div class="card-header bg-white border-0 py-2 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 small"><i class="fas fa-exclamation-triangle text-danger me-1"></i>أكثر المشاكل تكراراً</h6>
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-map-marker-alt text-warning me-1"></i>الأداء حسب المنطقة</h6>
               </div>
-              <div class="card-body p-2" style="overflow-y: auto;">
-                <div id="topIssuesList" class="small">
-                  <div class="text-muted text-center py-3">جاري التحميل...</div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="areaChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Row 3: Top Issues -->
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-exclamation-triangle text-danger me-1"></i>أكثر المشاكل تكراراً (خلال الفترة المحددة)</h6>
+              </div>
+              <div class="card-body p-2">
+                <div id="topIssuesList" class="d-flex flex-wrap gap-2">
+                  <div class="text-muted text-center py-2 w-100">جاري التحميل...</div>
                 </div>
               </div>
             </div>
@@ -1306,7 +1326,8 @@
     
     async function loadDashboardData() {
       try {
-        const res = await fetch('/api/rounds/metrics');
+        const days = document.getElementById('dashPeriodFilter')?.value || 14;
+        const res = await fetch('/api/rounds/metrics?days=' + days);
         const data = await res.json();
         
         if (!data.ok) return;
@@ -1431,16 +1452,16 @@
       const container = document.getElementById('topIssuesList');
       if (!container) return;
       
-      const sorted = Object.entries(byArea).sort((a, b) => b[1].delayed - a[1].delayed).slice(0, 5);
+      const sorted = Object.entries(byArea).filter(([,v]) => v.delayed > 0).sort((a, b) => b[1].delayed - a[1].delayed).slice(0, 8);
       if (!sorted.length) {
-        container.innerHTML = '<div class="text-muted text-center py-2">لا توجد مشاكل مسجلة</div>';
+        container.innerHTML = '<div class="text-muted text-center py-2 w-100">لا توجد مشاكل مسجلة في هذه الفترة</div>';
         return;
       }
       
-      container.innerHTML = sorted.map(([name, data], idx) => `
-        <div class="d-flex align-items-center py-1 ${idx < sorted.length - 1 ? 'border-bottom' : ''}" style="gap: 8px;">
-          <span class="badge ${data.delayed > 5 ? 'bg-danger' : 'bg-warning text-dark'}" style="min-width: 24px;">${data.delayed}</span>
-          <span class="text-truncate" style="flex: 1;">${name.length > 35 ? name.slice(0, 35) + '...' : name}</span>
+      container.innerHTML = sorted.map(([name, data]) => `
+        <div class="issue-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${data.delayed > 10 ? '#fef2f2' : data.delayed > 5 ? '#fefce8' : '#f3f4f6'}; border-radius: 20px; border: 1px solid ${data.delayed > 10 ? '#fecaca' : data.delayed > 5 ? '#fef08a' : '#e5e7eb'};">
+          <span class="badge ${data.delayed > 10 ? 'bg-danger' : data.delayed > 5 ? 'bg-warning text-dark' : 'bg-secondary'}" style="font-size: 0.7rem;">${data.delayed}</span>
+          <span style="font-size: 0.8rem; color: #374151;">${name.length > 30 ? name.slice(0, 30) + '...' : name}</span>
         </div>
       `).join('');
     }
