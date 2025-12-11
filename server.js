@@ -235,19 +235,30 @@ app.get('/api/rounds/delayed', async (req, res) => {
 
 app.post('/api/rounds/log', async (req, res) => {
   try {
-    const { date, time, roundName, staff, execResponsible, status, notes, checklistResults } = req.body;
+    const { date, time, roundName, staff, execResponsible, status, positiveNotes, negativeNotes, actionsTaken } = req.body;
     
-    const timestamp = new Date().toISOString();
+    const now = new Date();
+    const dateStr = date || now.toLocaleDateString('en-US') + ' ' + now.toLocaleTimeString('en-US', {hour12: false});
+    
     const values = [
-      timestamp,
-      date || new Date().toLocaleDateString('ar-SA'),
-      time || new Date().toLocaleTimeString('ar-SA'),
+      dateStr,
+      '',
+      '1',
       roundName,
+      '',
+      time || now.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'}),
+      time || now.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'}),
+      '0',
+      '60',
+      status,
+      status === 'متأخر' ? '🔔' : '',
       staff,
       execResponsible || '',
-      status,
-      notes || '',
-      JSON.stringify(checklistResults || {})
+      positiveNotes || '',
+      negativeNotes || '',
+      actionsTaken || '',
+      'N',
+      ''
     ];
     
     await appendRow('Rounds_Log', values);

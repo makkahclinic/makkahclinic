@@ -52,6 +52,10 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-11: Added round submission form (floating + button) for staff to log rounds
+- 2025-12-11: Added Dashboard tab with 4 charts (trend, status, staff, area performance)
+- 2025-12-11: Fixed violation detection - now uses smart keyword detection (reduced from 33 to 3 real violations)
+- 2025-12-11: Added /api/rounds/metrics endpoint for dashboard data
 - 2025-12-11: Upgraded Round.html with new features (history, delays, violations tracking)
 - 2025-12-11: Added Google Sheets API integration via Replit connector
 - 2025-12-11: Created sheets-service.js for Google Sheets operations
