@@ -52,6 +52,8 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-11: **Enhanced Violations Tab** - Added filters (staff/round/time period), statistics cards (total, repeated, top staff, top area), and trend chart showing violation frequency over time
+- 2025-12-11: **Improved violation display** - Each violation shown as organized list with red border, danger icon, and proper formatting
 - 2025-12-11: **Added Is_Violation checkbox** - User can explicitly mark entries as violations
 - 2025-12-11: **Added Round_Schedule sheet** - Contains all 15 rounds with timing windows (Round_1_Start, Round_1_End, etc.)
 - 2025-12-11: **Success Toast notifications** - Beautiful green toast for successful saves instead of basic alerts

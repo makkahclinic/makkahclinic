@@ -550,7 +550,88 @@
       <div class="tab-pane fade" id="violationsPane">
         <div class="filter-section">
           <h5 class="mb-3"><i class="fas fa-exclamation-triangle text-warning me-2"></i>المخالفات والتكرارات</h5>
-          <p class="text-muted small">المخالفات المرصودة مع تتبع التكرار لنفس المشكلة</p>
+          
+          <!-- Filters Row -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الفترة الزمنية</label>
+              <select class="form-select form-select-sm" id="violationPeriodFilter">
+                <option value="7">آخر أسبوع</option>
+                <option value="14">آخر أسبوعين</option>
+                <option value="30" selected>آخر شهر</option>
+                <option value="90">آخر 3 أشهر</option>
+                <option value="365">آخر سنة</option>
+                <option value="0">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">المسؤول</label>
+              <select class="form-select form-select-sm" id="violationStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الجولة</label>
+              <select class="form-select form-select-sm" id="violationRoundFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-primary btn-sm w-100" onclick="applyViolationFilters()">
+                <i class="fas fa-filter me-1"></i>تطبيق الفلتر
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="row g-2 mb-4">
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-right: 4px solid #ef4444;">
+              <div class="kpi-icon"><i class="fas fa-exclamation-circle" style="color:#ef4444;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTotalCount">0</div>
+                <div class="kpi-label">إجمالي المخالفات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-right: 4px solid #f59e0b;">
+              <div class="kpi-icon"><i class="fas fa-redo" style="color:#f59e0b;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationRepeatedCount">0</div>
+                <div class="kpi-label">مخالفات متكررة</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border-right: 4px solid #3b82f6;">
+              <div class="kpi-icon"><i class="fas fa-user-times" style="color:#3b82f6;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTopStaff">-</div>
+                <div class="kpi-label">أكثر مسؤول مخالفات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fdf4ff, #f5d0fe); border-right: 4px solid #a855f7;">
+              <div class="kpi-icon"><i class="fas fa-map-marker-alt" style="color:#a855f7;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTopArea">-</div>
+                <div class="kpi-label">أكثر منطقة مخالفات</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trend Chart -->
+        <div class="card card-custom mb-4">
+          <div class="card-header bg-white border-0 py-2">
+            <h6 class="mb-0 small"><i class="fas fa-chart-line text-danger me-2"></i>تكرار المخالفات عبر الزمن</h6>
+          </div>
+          <div class="card-body" style="height: 200px;">
+            <canvas id="violationTrendChart"></canvas>
+          </div>
         </div>
         
         <h6 class="fw-bold mb-3"><i class="fas fa-redo text-danger me-2"></i>مخالفات متكررة (تحتاج تدخل)</h6>
@@ -1210,14 +1291,40 @@
       `).join('');
     }
 
-    function renderViolations() {
+    let violationTrendChart = null;
+    let FILTERED_VIOLATIONS = [];
+    
+    function renderViolations(filteredData = null) {
+      const data = filteredData || VIOLATIONS_DATA;
       const repeatedContainer = document.getElementById('repeatedViolationsList');
       const allContainer = document.getElementById('allViolationsList');
       
-      if (!VIOLATIONS_DATA.repeated.length) {
+      // Update statistics
+      document.getElementById('violationTotalCount').textContent = data.violations?.length || 0;
+      document.getElementById('violationRepeatedCount').textContent = data.repeated?.length || 0;
+      
+      // Calculate top staff and area
+      const staffCounts = {};
+      const areaCounts = {};
+      (data.violations || []).forEach(v => {
+        const staff = v.Responsible_Role || v.Staff || 'غير محدد';
+        const area = v.Area || v.Round_Name || 'غير محدد';
+        staffCounts[staff] = (staffCounts[staff] || 0) + 1;
+        areaCounts[area] = (areaCounts[area] || 0) + 1;
+      });
+      
+      const topStaff = Object.entries(staffCounts).sort((a,b) => b[1]-a[1])[0];
+      const topArea = Object.entries(areaCounts).sort((a,b) => b[1]-a[1])[0];
+      document.getElementById('violationTopStaff').textContent = topStaff ? `${topStaff[0]} (${topStaff[1]})` : '-';
+      document.getElementById('violationTopArea').textContent = topArea ? `${topArea[0].substring(0,15)}...` : '-';
+      
+      // Render trend chart
+      renderViolationTrendChart(data.violations || []);
+      
+      if (!data.repeated?.length) {
         repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات متكررة</div></div>';
       } else {
-        repeatedContainer.innerHTML = VIOLATIONS_DATA.repeated.map(v => `
+        repeatedContainer.innerHTML = data.repeated.map(v => `
           <div class="col-md-6 col-lg-4">
             <div class="card card-custom violation-card p-3">
               <div class="d-flex justify-content-between align-items-start mb-2">
@@ -1232,10 +1339,10 @@
         `).join('');
       }
       
-      if (!VIOLATIONS_DATA.violations.length) {
+      if (!data.violations?.length) {
         allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
       } else {
-        allContainer.innerHTML = VIOLATIONS_DATA.violations.slice(0, 12).map(v => {
+        allContainer.innerHTML = data.violations.slice(0, 20).map(v => {
           const notes = (v.Negative_Notes || v.NegativeNotes || 'خلل').replace('نقاط الخلل:', '').trim();
           const items = notes.split(/[|،]/).map(i => i.trim()).filter(i => i);
           const itemsList = items.map(item => `<li class="mb-1">${item}</li>`).join('');
@@ -1245,7 +1352,7 @@
               <h6 class="fw-bold text-danger mb-2"><i class="fas fa-exclamation-triangle me-2"></i>${v.Area || v.Round_Name || 'جولة'}</h6>
               <ul class="list-unstyled small mb-2 pe-3">${itemsList}</ul>
               <div class="d-flex justify-content-between small text-muted">
-                <span><i class="fas fa-user me-1"></i>${v.Responsible_Role || '-'}</span>
+                <span><i class="fas fa-user me-1"></i>${v.Responsible_Role || v.Staff || '-'}</span>
                 <span><i class="fas fa-calendar me-1"></i>${v.Date?.split(' ')[0] || '-'}</span>
               </div>
             </div>
@@ -1253,10 +1360,106 @@
         `}).join('');
       }
     }
+    
+    function renderViolationTrendChart(violations) {
+      const ctx = document.getElementById('violationTrendChart');
+      if (!ctx) return;
+      
+      // Group by date
+      const dateCounts = {};
+      violations.forEach(v => {
+        const dateStr = v.Date?.split(' ')[0] || v.Date;
+        if (dateStr) {
+          dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+        }
+      });
+      
+      // Sort dates and get last 14 days
+      const sortedDates = Object.keys(dateCounts).sort((a,b) => new Date(a) - new Date(b)).slice(-14);
+      const chartData = sortedDates.map(d => dateCounts[d] || 0);
+      
+      if (violationTrendChart) {
+        violationTrendChart.destroy();
+      }
+      
+      violationTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: sortedDates.map(d => d.replace(/^\d{4}-/, '').replace(/\//g, '/')),
+          datasets: [{
+            label: 'عدد المخالفات',
+            data: chartData,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointBackgroundColor: '#ef4444'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+            x: { ticks: { maxRotation: 45 } }
+          }
+        }
+      });
+    }
+    
+    function applyViolationFilters() {
+      const period = parseInt(document.getElementById('violationPeriodFilter').value) || 0;
+      const staff = document.getElementById('violationStaffFilter').value;
+      const round = document.getElementById('violationRoundFilter').value;
+      
+      let filtered = [...VIOLATIONS_DATA.violations];
+      
+      // Filter by period
+      if (period > 0) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - period);
+        filtered = filtered.filter(v => {
+          const vDate = new Date(v.Date);
+          return vDate >= cutoff;
+        });
+      }
+      
+      // Filter by staff
+      if (staff) {
+        filtered = filtered.filter(v => 
+          (v.Responsible_Role || v.Staff || '').includes(staff)
+        );
+      }
+      
+      // Filter by round
+      if (round) {
+        filtered = filtered.filter(v => 
+          (v.Area || v.Round_Name || '').includes(round)
+        );
+      }
+      
+      // Recalculate repeated based on filtered
+      const issueMap = {};
+      filtered.forEach(v => {
+        const key = (v.Area || v.Round_Name || '') + '|' + (v.Negative_Notes || '').substring(0, 50);
+        if (!issueMap[key]) {
+          issueMap[key] = { area: v.Area || v.Round_Name, issue: v.Negative_Notes, assignedTo: v.Responsible_Role, count: 0, dates: [] };
+        }
+        issueMap[key].count++;
+        issueMap[key].dates.push(v.Date);
+      });
+      const repeated = Object.values(issueMap).filter(x => x.count >= 2).sort((a,b) => b.count - a.count);
+      
+      renderViolations({ violations: filtered, repeated });
+    }
 
     function populateStaffFilter() {
       const historySelect = document.getElementById('historyStaffFilter');
       const formSelect = document.getElementById('formStaff');
+      const violationStaffSelect = document.getElementById('violationStaffFilter');
+      const violationRoundSelect = document.getElementById('violationRoundFilter');
       
       STAFF_LIST.forEach(s => {
         const opt1 = document.createElement('option');
@@ -1268,6 +1471,11 @@
         opt2.value = s;
         opt2.textContent = s;
         formSelect.appendChild(opt2);
+        
+        const opt3 = document.createElement('option');
+        opt3.value = s;
+        opt3.textContent = s;
+        violationStaffSelect.appendChild(opt3);
       });
       
       const roundSelect = document.getElementById('formRound');
@@ -1277,6 +1485,11 @@
         opt.value = r;
         opt.textContent = r;
         roundSelect.appendChild(opt);
+        
+        const opt2 = document.createElement('option');
+        opt2.value = r;
+        opt2.textContent = r;
+        violationRoundSelect.appendChild(opt2);
       });
     }
     
