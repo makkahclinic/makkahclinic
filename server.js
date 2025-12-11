@@ -31,6 +31,16 @@ app.get('/api/sheets/names', async (req, res) => {
   }
 });
 
+// Debug endpoint to see raw sheet data
+app.get('/api/debug/sheet/:name', async (req, res) => {
+  try {
+    const data = await getSheetData(req.params.name);
+    res.json({ ok: true, headers: data[0], sampleRows: data.slice(1, 5), totalRows: data.length - 1 });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/api/rounds/master-tasks', async (req, res) => {
   try {
     const data = await getSheetData('MASTER_TASKS');
@@ -401,11 +411,17 @@ app.get('/api/rounds/staff-summary', async (req, res) => {
 
 app.get('/api/rounds/checklist/:taskId', async (req, res) => {
   try {
-    const { taskId } = req.params;
-    const sheetName = `R${taskId.toString().padStart(2, '0')}`;
+    let { taskId } = req.params;
+    // Normalize taskId - remove 'R' prefix if exists, then format correctly
+    let numericId = taskId.toString().replace(/^R/i, '');
+    const sheetPrefix = `R${numericId.toString().padStart(2, '0')}`;
+    
+    // Get all sheet names to find the correct one (e.g., R01_PublicToilets)
+    const allSheetNames = await getSheetNames();
+    const matchingSheet = allSheetNames.find(name => name.startsWith(sheetPrefix));
     
     const [checklistData, taskData] = await Promise.all([
-      getSheetData(sheetName).catch(() => null),
+      matchingSheet ? getSheetData(matchingSheet).catch(() => null) : Promise.resolve(null),
       getSheetData('MASTER_TASKS')
     ]);
     
@@ -427,11 +443,22 @@ app.get('/api/rounds/checklist/:taskId', async (req, res) => {
     }
     
     const headers = checklistData[0];
+    // Find the column index for Item_Description_AR or similar
+    const itemColIndex = headers.findIndex(h => 
+      h && (h.includes('Description') || h.includes('Item_Description') || 
+            h.includes('البند') || h.includes('الوصف'))
+    );
+    const roundNameColIndex = headers.findIndex(h => h && h.includes('Round_Name'));
+    
+    // Use Item_Description_AR (index 3 typically) or fall back to column search
+    const textCol = itemColIndex >= 0 ? itemColIndex : 3;
+    const categoryCol = roundNameColIndex >= 0 ? roundNameColIndex : 1;
+    
     const items = checklistData.slice(1).map((row, idx) => ({
       id: idx + 1,
-      item: row[0] || '',
-      category: row[1] || ''
-    }));
+      item: row[textCol] || '',
+      category: row[categoryCol] || ''
+    })).filter(item => item.item && item.item.trim() !== '');
     
     res.json({ 
       ok: true, 
