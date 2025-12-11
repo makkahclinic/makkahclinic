@@ -151,8 +151,8 @@ function getHomeData() {
     staffMap[assignee].todayTasks += rpd;
     
     staffMap[assignee].topRounds.push({
-      taskId: task.Task_ID,
-      name: task.Round_Name_Ar || task.Task_ID,
+      taskId: task.Task_ID || task.TaskID || '',
+      name: task.Round_Name_Ar || task.Round_Name_AR || task.Round_Name_En || task.Task_ID || task.TaskID || 'غير محدد',
       roundsRequired: rpd,
       done: 0,
       targetTime: task.Target_Time || ''
