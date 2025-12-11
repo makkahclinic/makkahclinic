@@ -139,42 +139,46 @@ function getHomeData() {
     if (!staffMap[assignee]) {
       staffMap[assignee] = {
         name: assignee,
-        expectedToday: 0,
-        doneToday: 0,
-        remainingToday: 0,
-        expectedWeek: 0,
-        tasksToday: []
+        todayTasks: 0,
+        todayDone: 0,
+        todayRemaining: 0,
+        weeklyTotal: 0,
+        topRounds: []
       };
     }
     
     const rpd = parseInt(task.Rounds_Per_Day) || 1;
-    staffMap[assignee].expectedToday += rpd;
+    staffMap[assignee].todayTasks += rpd;
     
-    staffMap[assignee].tasksToday.push({
+    staffMap[assignee].topRounds.push({
       taskId: task.Task_ID,
-      roundNameAr: task.Round_Name_Ar || task.Task_ID,
-      roundNameEn: task.Round_Name_En || '',
-      roundsPerDay: rpd,
+      name: task.Round_Name_Ar || task.Task_ID,
+      roundsRequired: rpd,
+      done: 0,
       targetTime: task.Target_Time || ''
     });
     
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     weekDays.forEach(d => {
       if (task[d] === 'Yes' || task[d] === true || task[d] === 'yes') {
-        staffMap[assignee].expectedWeek += rpd;
+        staffMap[assignee].weeklyTotal += rpd;
       }
     });
   });
   
   todayLog.forEach(log => {
     const staff = log.Staff || log.Assigned_To || '';
+    const taskId = log.Task_ID || log.Round || '';
     if (staffMap[staff]) {
-      staffMap[staff].doneToday++;
+      staffMap[staff].todayDone++;
+      // Update done count for the specific round
+      const round = staffMap[staff].topRounds.find(r => r.taskId === taskId);
+      if (round) round.done++;
     }
   });
   
   Object.values(staffMap).forEach(s => {
-    s.remainingToday = Math.max(0, s.expectedToday - s.doneToday);
+    s.todayRemaining = Math.max(0, s.todayTasks - s.todayDone);
   });
   
   return {
