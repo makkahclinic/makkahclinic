@@ -85,7 +85,7 @@ function sheetToObjects(sheet) {
   const rows = [];
   
   for (let i = 1; i < data.length; i++) {
-    const row = {};
+    const row = { _rowIndex: i + 1 };
     for (let j = 0; j < headers.length; j++) {
       row[headers[j]] = data[i][j];
     }
@@ -151,8 +151,8 @@ function getHomeData() {
     staffMap[assignee].todayTasks += rpd;
     
     staffMap[assignee].topRounds.push({
-      taskId: task.Task_ID || task.TaskID || '',
-      name: task.Round_Name_Ar || task.Round_Name_AR || task.Round_Name_En || task.Task_ID || task.TaskID || 'غير محدد',
+      taskId: task.TaskID || '',
+      name: task.Round_Name_AR || task.Round_Name_EN || task.TaskID || 'غير محدد',
       roundsRequired: rpd,
       done: 0,
       targetTime: task.Target_Time || ''
@@ -257,7 +257,7 @@ function getDelayed() {
     const dayCol = task[dayName];
     if (dayCol !== 'Yes' && dayCol !== true && dayCol !== 'yes') return;
     
-    const taskId = task.Task_ID;
+    const taskId = task.TaskID;
     const rpd = parseInt(task.Rounds_Per_Day) || 1;
     
     const doneCount = todayLog.filter(l => l.TaskID === taskId).length;
@@ -279,7 +279,7 @@ function getDelayed() {
         
         delayed.push({
           taskId: taskId,
-          roundName: task.Round_Name_Ar || taskId,
+          roundName: task.Round_Name_AR || taskId,
           staff: task.Assigned_To || '',
           roundNumber: roundNum,
           expectedTime: endTimeStr,
@@ -303,8 +303,8 @@ function getViolations() {
     const status = String(r.Status || '').toLowerCase();
     const notes = String(r.Negative_Notes || '').toLowerCase();
     return status.includes('خلل') || notes.includes('نقاط الخلل') || notes.includes('❌');
-  }).map((r, idx) => ({
-    _rowIndex: idx + 2,
+  }).map(r => ({
+    _rowIndex: r._rowIndex,
     Date: r.Date,
     Actual_Time: r.Actual_Time,
     Area: r.Area,

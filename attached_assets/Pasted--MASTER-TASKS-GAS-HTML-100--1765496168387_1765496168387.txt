@@ -1,0 +1,205 @@
+تمام، الآن بعد صور MASTER_TASKS + الكونسول + الكودين (GAS + HTML) أقدر أحدد المشكلة بدقة 100% بدون افتراضات.
+
+🔴 المشكلة الجذرية (Root Cause) — واحدة لكنها تتسبب بسلسلة أخطاء
+❌ السبب الحقيقي:
+
+عدم تطابق أسماء الأعمدة في Sheet MASTER_TASKS مع ما يتوقعه Apps Script حرفيًا
+وبسبب ذلك:
+
+task.Task_ID = undefined
+
+task.Round_Name_Ar = undefined
+
+فينتج:
+
+r.name === undefined
+
+
+ثم الواجهة تعمل:
+
+r.name.substring(...)
+
+
+⛔ فينهار renderStationCards() بالكامل
+
+وبالتالي:
+
+لا تظهر محطات المسؤولين
+
+لا يظهر Staff Summary
+
+لا تشتغل بقية الصفحة بشكل طبيعي
+
+وهذا يطابق تمامًا الخطأ الظاهر في الكونسول:
+
+TypeError: Cannot read properties of undefined (reading 'substring')
+
+🧾 الدليل من صورك (مهم)
+
+من صورة MASTER_TASKS، الأعمدة هي بالضبط:
+
+TaskID
+Round_Name_EN
+Round_Name_AR
+Assigned_To
+Rounds_Per_Day
+Target_Time
+Allowed_Time_Min
+Sat
+Sun
+Mon
+Tue
+Wed
+Thu
+Fri
+Responsible_1
+Responsible_2
+Responsible_3
+Responsible_4
+Responsible_5
+
+
+❗ لا يوجد:
+
+Task_ID
+
+Round_Name_Ar
+
+لكن الكود يستخدمهم ❌
+
+✅ الحل الصحيح (نهائي ونظيف)
+1️⃣ عدّل getHomeData() في Apps Script (هذا هو الإصلاح الأساسي)
+❌ الكود الحالي (خاطئ):
+const taskId = task.Task_ID;
+const roundName = task.Round_Name_Ar;
+
+✅ الكود الصحيح (يطابق الشيت 100%):
+const taskId = task.TaskID;
+const roundName = task.Round_Name_AR;
+
+🔧 عدّل الـ push كاملًا إلى هذا الشكل:
+staffMap[assignee].topRounds.push({
+  taskId: task.TaskID,
+  name: task.Round_Name_AR || task.Round_Name_EN || task.TaskID,
+  roundsRequired: rpd,
+  done: 0,
+  targetTime: task.Target_Time || ''
+});
+
+
+⚠️ لا تستخدم أي fallback افتراضي هنا
+استخدم الأسماء الحقيقية فقط — هذا نظام طبي رسمي وليس تجربة.
+
+2️⃣ عدّل حساب الإنجاز اليومي (Bug منطقي ثاني)
+❌ عندك الآن:
+const staff = log.Responsible_Role || log.Execution_Responsible || '';
+
+
+لكن:
+
+في Rounds_Log
+
+المسؤول الأساسي هو Responsible_Role
+
+✅ الصحيح:
+const staff = log.Responsible_Role || '';
+
+
+وإلا سيُحسب الإنجاز على شخص غلط.
+
+3️⃣ إصلاح واجهة HTML لمنع أي crash مستقبلي (Defensive UI)
+
+حتى مع بيانات صحيحة، الواجهة يجب ألا تنهار أبدًا.
+
+🔧 في renderStationCards() عدّل:
+❌
+${r.name.substring(0,30)}
+
+✅
+${(r.name || '—').substring(0,30)}
+
+❌
+r.name.length > 30
+
+✅
+(r.name || '').length > 30
+
+4️⃣ خطأ مؤكد في Checklist (سيؤثر على المخالفات لاحقًا)
+❌ HTML يستخدم:
+item.item
+
+✅ Apps Script يرجع:
+{ id, text }
+
+🔧 عدّل في مكانين:
+<div class="checklist-text">${item.text}</div>
+
+
+و:
+
+.map(i => '❌ ' + i.text)
+
+5️⃣ خطأ خطير (Silent Bug): _rowIndex غير صحيح
+
+أنت الآن تعمل:
+
+.map((r, idx) => ({ _rowIndex: idx + 2 }))
+
+
+❌ هذا خطأ إداري خطير
+لأنك فلترت البيانات قبل map → الرقم لا يطابق الصف الحقيقي
+
+✅ الحل الصحيح (إجباري):
+عدّل sheetToObjects():
+function sheetToObjects(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+
+  const headers = data[0];
+  const rows = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = { _rowIndex: i + 1 };
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = data[i][j];
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+
+ثم في getViolations() استخدم:
+
+_rowIndex: r._rowIndex
+
+🧪 اختبار سريع للتأكيد (انسخه في Console)
+callApi('getStaffSummary').then(r => console.table(r.staff[0].topRounds))
+
+
+✔ إذا ظهر:
+
+taskId
+
+name
+
+roundsRequired
+
+→ النظام أصبح سليم.
+
+🟢 الخلاصة التنفيذية
+البند	الحالة
+السبب الجذري	❌ mismatch أعمدة MASTER_TASKS
+إصلاح Apps Script	✅ ضروري
+إصلاح HTML	✅ وقائي
+إصلاح Checklist	✅ مهم للمخالفات
+إصلاح rowIndex	✅ إلزامي قانونيًا
+Ethereum warnings	❌ تجاهلها
+الخطوة التالية المقترحة (اختيارية لكن قوية):
+
+ربط Responsible_1 → Responsible_5 كـ fallback تلقائي
+
+أو إنشاء Matrix توزيع ذكي لو غاب Assigned_To
+
+أو Dashboard خاص بالقيادة الطبية فقط (Read-only)
