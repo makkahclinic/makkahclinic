@@ -740,34 +740,32 @@
       }
       
       container.innerHTML = STAFF_SUMMARY.map(s => {
-        const percent = s.todayTasks > 0 ? Math.round((s.todayDone / s.todayTasks) * 100) : 0;
-        const progressColor = percent >= 100 ? '#10b981' : percent >= 50 ? '#f59e0b' : '#ef4444';
-        
         return `
         <div class="staff-card-detailed" onclick="selectStaff('${s.name}', this)">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <div class="d-flex align-items-center">
-              <div class="me-2" style="width:32px;height:32px;background:#f3f4f6;border-radius:50%;display:flex;align-items:center;justify-content:center;">
-                <i class="fas fa-user" style="color:#6b7280;"></i>
-              </div>
-              <div>
-                <div class="fw-bold">${s.name}</div>
-                <div class="small text-muted">مسؤول عن جولات السلامة حسب MASTER_TASKS</div>
-              </div>
+          <div class="d-flex align-items-center mb-2">
+            <div class="me-2" style="width:36px;height:36px;background:linear-gradient(135deg,#f3f4f6,#e5e7eb);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-user-tie" style="color:#6b7280;font-size:1rem;"></i>
+            </div>
+            <div>
+              <div class="fw-bold" style="font-size:1.05rem;">${s.name}</div>
+              <div class="small text-muted">مسؤول عن جولات السلامة حسب MASTER_TASKS</div>
             </div>
           </div>
-          <div class="d-flex gap-2 mb-2">
-            <span class="badge" style="background:#dbeafe;color:#1e40af;">مهام اليوم: ${s.todayTasks}</span>
-            <span class="badge" style="background:#d1fae5;color:#065f46;">منجز ${s.todayDone}</span>
-            <span class="badge" style="background:#fef3c7;color:#92400e;">متبقي: ${s.todayRemaining}</span>
+          <div class="d-flex gap-2 flex-wrap">
+            <span class="badge" style="background:#dbeafe;color:#1e40af;font-weight:500;">مهام اليوم: ${s.todayTasks}</span>
+            <span class="badge" style="background:#d1fae5;color:#065f46;font-weight:500;">منجز ${s.todayDone}</span>
+            <span class="badge" style="background:#fef3c7;color:#92400e;font-weight:500;">متبقي: ${s.todayRemaining}</span>
           </div>
-          <div class="small text-muted mb-2">إجمالي مهام الأسبوع (حسب Yes في الأيام): ${s.weeklyTotal}</div>
+          <div class="small text-muted mt-2">إجمالي مهام الأسبوع (حسب Yes في الأيام): ${s.weeklyTotal}</div>
           ${s.topRounds.length ? `
-            <div class="small" style="border-top:1px dashed #e5e7eb;padding-top:0.5rem;">
-              <strong style="color:#374151;">أهم جولات اليوم:</strong>
-              <ul class="mb-0 ps-3" style="font-size:0.8rem;color:#6b7280;">
-                ${s.topRounds.slice(0,3).map(r => `<li>${r.name.substring(0,35)}${r.name.length>35?'...':''} - تكرار x${r.roundsRequired}</li>`).join('')}
-              </ul>
+            <div class="mt-2 pt-2" style="border-top:1px dashed #e5e7eb;">
+              <div class="small fw-bold mb-1" style="color:#374151;">أهم جولات اليوم:</div>
+              ${s.topRounds.slice(0,3).map(r => `
+                <div class="small d-flex justify-content-between align-items-center py-1" style="color:#6b7280;">
+                  <span>• ${r.name.substring(0,30)}${r.name.length>30?'...':''}</span>
+                  <span class="badge ${r.done >= r.roundsRequired ? 'bg-success' : 'bg-warning text-dark'}" style="font-size:0.65rem;">x${r.roundsRequired}</span>
+                </div>
+              `).join('')}
             </div>
           ` : ''}
         </div>
@@ -791,25 +789,28 @@
       const tbody = document.getElementById('staffTasksTableBody');
       
       if (!selectedStaffData.topRounds.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد مهام لهذا اليوم</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">لا توجد مهام لهذا اليوم</td></tr>';
         return;
       }
       
       tbody.innerHTML = selectedStaffData.topRounds.map(r => {
         const isComplete = r.done >= r.roundsRequired;
-        const statusBtn = isComplete 
-          ? `<button class="btn btn-completed"><i class="fas fa-check me-1"></i>مكتملة</button>`
-          : `<button class="btn btn-start-round" onclick="startRound('${r.taskId}', '${r.name}')"><i class="fas fa-play me-1"></i>بدء الجولة</button>`;
+        const rowStyle = isComplete ? 'background:#f0fdf4;' : '';
+        const statusCell = isComplete 
+          ? `<span class="badge bg-success rounded-pill px-3">مكتملة</span>`
+          : `<span class="badge bg-warning text-dark rounded-pill px-3" style="cursor:pointer;" onclick="startRound('${r.taskId}', '${r.name}')">بدء الجولة</span>`;
         
         return `
-          <tr>
-            <td>${r.name}</td>
-            <td class="text-center"><strong>${r.done}</strong>/${r.roundsRequired}</td>
-            <td class="text-center">${r.targetTime || '-'}</td>
-            <td class="text-center">${statusBtn}</td>
+          <tr style="${rowStyle}">
+            <td class="py-2 ps-3">${r.name}</td>
+            <td class="text-center py-2"><span class="fw-bold">${r.done}</span>/${r.roundsRequired}</td>
+            <td class="text-center py-2">${r.targetTime || '-'}</td>
+            <td class="text-center py-2">${statusCell}</td>
           </tr>
         `;
       }).join('');
+      
+      document.getElementById('staffTasksCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     
     async function startRound(taskId, roundName) {
@@ -835,25 +836,37 @@
     
     function renderChecklistForm() {
       document.getElementById('checklistFormCard').style.display = 'block';
-      document.getElementById('checklistRoundName').textContent = 
-        `الجولة: ${currentChecklist.roundName} - المسؤول: ${selectedStaffData?.name || ''}`;
+      document.getElementById('checklistRoundName').innerHTML = `
+        <span class="fw-bold">${currentChecklist.roundName}</span>
+        <span class="text-muted mx-2">|</span>
+        <span>المسؤول: <strong>${selectedStaffData?.name || ''}</strong></span>
+      `;
+      document.getElementById('checklistItemsCount').textContent = currentChecklist.items.length || 0;
       
       const container = document.getElementById('checklistItems');
       
       if (!currentChecklist.items.length) {
         container.innerHTML = `
-          <div class="alert alert-info">
-            <i class="fas fa-info-circle me-2"></i>
-            لا توجد قائمة فحص محددة لهذه الجولة. يمكنك إضافة ملاحظات أدناه.
+          <div class="text-center py-4" style="background:#f8fafc;border-radius:8px;">
+            <i class="fas fa-clipboard-check fa-2x text-muted mb-2"></i>
+            <div class="text-muted">لا توجد قائمة فحص محددة لهذه الجولة</div>
+            <div class="small text-muted">يمكنك إضافة ملاحظات أدناه وحفظ الجولة</div>
           </div>
         `;
       } else {
-        container.innerHTML = currentChecklist.items.map(item => `
-          <div class="checklist-item" data-id="${item.id}">
-            <span class="item-text">${item.item}</span>
+        container.innerHTML = currentChecklist.items.map((item, idx) => `
+          <div class="checklist-item" data-id="${item.id}" style="background:${idx % 2 === 0 ? '#fafafa' : '#fff'};">
+            <div class="d-flex align-items-center">
+              <span class="badge bg-secondary me-2" style="font-size:0.7rem;min-width:24px;">${idx + 1}</span>
+              <span class="item-text">${item.item}</span>
+            </div>
             <div class="checklist-btns">
-              <button class="btn btn-sm btn-no" onclick="setChecklistAnswer(${item.id}, false, this)">لا</button>
-              <button class="btn btn-sm btn-yes" onclick="setChecklistAnswer(${item.id}, true, this)">نعم</button>
+              <button class="btn btn-sm btn-yes" onclick="setChecklistAnswer(${item.id}, true, this)">
+                <i class="fas fa-check me-1"></i>نعم
+              </button>
+              <button class="btn btn-sm btn-no" onclick="setChecklistAnswer(${item.id}, false, this)">
+                <i class="fas fa-times me-1"></i>لا
+              </button>
             </div>
           </div>
         `).join('');
