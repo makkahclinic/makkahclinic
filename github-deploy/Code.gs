@@ -1,0 +1,490 @@
+/**
+ * نظام جولات السلامة المطوّر - Google Apps Script
+ * مجمع مكة الطبي
+ */
+
+const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
+
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const action = body.action;
+    const payload = body.payload || {};
+    
+    let result;
+    
+    switch (action) {
+      case 'getHomeData':
+        result = getHomeData();
+        break;
+      case 'getRoundsLog':
+        result = getRoundsLog(payload.limit || 100);
+        break;
+      case 'logRound':
+        result = logRound(payload);
+        break;
+      case 'getMasterTasks':
+        result = getMasterTasks();
+        break;
+      case 'getStaff':
+        result = getStaff();
+        break;
+      case 'getStaffSummary':
+        result = getStaffSummary();
+        break;
+      case 'getDelayed':
+        result = getDelayed();
+        break;
+      case 'getViolations':
+        result = getViolations();
+        break;
+      case 'getHistory':
+        result = getHistory(payload);
+        break;
+      case 'getMetrics':
+        result = getMetrics(payload.days || 14);
+        break;
+      case 'getChecklist':
+        result = getChecklist(payload.taskId);
+        break;
+      case 'verifyPasscode':
+        result = verifyPasscode(payload.staffName, payload.passcode);
+        break;
+      case 'resolveViolation':
+        result = resolveViolation(payload);
+        break;
+      default:
+        throw new Error('Unknown action: ' + action);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getSheet(name) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(name);
+}
+
+function sheetToObjects(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  
+  const headers = data[0];
+  const rows = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = data[i][j];
+    }
+    rows.push(row);
+  }
+  
+  return rows;
+}
+
+function getTodayString() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getDayNameAr() {
+  const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  return days[new Date().getDay()];
+}
+
+function getHomeData() {
+  const todayStr = getTodayString();
+  const dayName = getDayNameAr();
+  
+  const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+  
+  const todayLog = roundsLog.filter(r => {
+    const logDate = r.Date ? new Date(r.Date) : null;
+    if (!logDate) return false;
+    const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
+    return logStr === todayStr;
+  });
+  
+  const staffMap = {};
+  masterTasks.forEach(task => {
+    const assignee = task.Assigned_To || '';
+    if (!assignee) return;
+    
+    const dayCol = task[dayName];
+    if (dayCol !== 'Yes' && dayCol !== true && dayCol !== 'yes') return;
+    
+    if (!staffMap[assignee]) {
+      staffMap[assignee] = {
+        name: assignee,
+        expectedToday: 0,
+        doneToday: 0,
+        remainingToday: 0,
+        expectedWeek: 0,
+        tasksToday: []
+      };
+    }
+    
+    const rpd = parseInt(task.Rounds_Per_Day) || 1;
+    staffMap[assignee].expectedToday += rpd;
+    
+    staffMap[assignee].tasksToday.push({
+      taskId: task.Task_ID,
+      roundNameAr: task.Round_Name_Ar || task.Task_ID,
+      roundNameEn: task.Round_Name_En || '',
+      roundsPerDay: rpd,
+      targetTime: task.Target_Time || ''
+    });
+    
+    const weekDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    weekDays.forEach(d => {
+      if (task[d] === 'Yes' || task[d] === true || task[d] === 'yes') {
+        staffMap[assignee].expectedWeek += rpd;
+      }
+    });
+  });
+  
+  todayLog.forEach(log => {
+    const staff = log.Staff || log.Assigned_To || '';
+    if (staffMap[staff]) {
+      staffMap[staff].doneToday++;
+    }
+  });
+  
+  Object.values(staffMap).forEach(s => {
+    s.remainingToday = Math.max(0, s.expectedToday - s.doneToday);
+  });
+  
+  return {
+    todayDate: todayStr,
+    dayName: dayName,
+    staff: Object.values(staffMap)
+  };
+}
+
+function getRoundsLog(limit) {
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+  
+  roundsLog.sort((a, b) => {
+    const dateA = new Date(a.Date + ' ' + (a.Time || ''));
+    const dateB = new Date(b.Date + ' ' + (b.Time || ''));
+    return dateB - dateA;
+  });
+  
+  return { entries: roundsLog.slice(0, limit) };
+}
+
+function getMasterTasks() {
+  return { tasks: sheetToObjects(getSheet('MASTER_TASKS')) };
+}
+
+function getStaff() {
+  const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
+  const staffSet = new Set();
+  masterTasks.forEach(t => {
+    if (t.Assigned_To) staffSet.add(t.Assigned_To);
+  });
+  return { staff: Array.from(staffSet) };
+}
+
+function getStaffSummary() {
+  const homeData = getHomeData();
+  return { staff: homeData.staff };
+}
+
+function getDelayed() {
+  const todayStr = getTodayString();
+  const dayName = getDayNameAr();
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  
+  const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+  const schedule = sheetToObjects(getSheet('Round_Schedule'));
+  
+  const todayLog = roundsLog.filter(r => {
+    const logDate = r.Date ? new Date(r.Date) : null;
+    if (!logDate) return false;
+    const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
+    return logStr === todayStr;
+  });
+  
+  const delayed = [];
+  
+  masterTasks.forEach(task => {
+    const dayCol = task[dayName];
+    if (dayCol !== 'Yes' && dayCol !== true && dayCol !== 'yes') return;
+    
+    const taskId = task.Task_ID;
+    const rpd = parseInt(task.Rounds_Per_Day) || 1;
+    
+    const doneCount = todayLog.filter(l => l.Task_ID === taskId || l.Round === taskId).length;
+    
+    for (let roundNum = 1; roundNum <= rpd; roundNum++) {
+      if (roundNum <= doneCount) continue;
+      
+      const scheduleRow = schedule.find(s => s.Task_ID === taskId);
+      if (!scheduleRow) continue;
+      
+      const endTimeStr = scheduleRow[`Round_${roundNum}_End`];
+      if (!endTimeStr) continue;
+      
+      const [h, m] = String(endTimeStr).split(':').map(Number);
+      const endMinutes = h * 60 + m;
+      
+      if (currentMinutes > endMinutes) {
+        const delayMinutes = currentMinutes - endMinutes;
+        
+        delayed.push({
+          taskId: taskId,
+          roundName: task.Round_Name_Ar || taskId,
+          staff: task.Assigned_To || '',
+          roundNumber: roundNum,
+          expectedTime: endTimeStr,
+          delayMinutes: delayMinutes,
+          delayFormatted: Math.floor(delayMinutes / 60) + ':' + String(delayMinutes % 60).padStart(2, '0')
+        });
+      }
+    }
+  });
+  
+  return { delayed: delayed };
+}
+
+function getViolations() {
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+  
+  const violations = roundsLog.filter(r => {
+    if (r.Is_Violation === true || r.Is_Violation === 'TRUE' || r.Is_Violation === 'true' || r.Is_Violation === 'Yes') {
+      return true;
+    }
+    const status = String(r.Status || '').toLowerCase();
+    const notes = String(r.Notes || '').toLowerCase();
+    return status.includes('خلل') || notes.includes('نقاط الخلل');
+  });
+  
+  const grouped = {};
+  violations.forEach(v => {
+    const key = `${v.Task_ID || v.Round}_${v.Staff || v.Assigned_To}_${v.Notes || ''}`;
+    if (!grouped[key]) {
+      grouped[key] = { ...v, count: 1 };
+    } else {
+      grouped[key].count++;
+    }
+  });
+  
+  return { 
+    violations: violations,
+    grouped: Object.values(grouped),
+    total: violations.length,
+    resolved: violations.filter(v => v.Is_Resolved === true || v.Is_Resolved === 'TRUE').length,
+    pending: violations.filter(v => !v.Is_Resolved || v.Is_Resolved === 'FALSE').length
+  };
+}
+
+function getHistory(params) {
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+  
+  let filtered = roundsLog;
+  
+  if (params.startDate) {
+    filtered = filtered.filter(r => {
+      const logDate = r.Date ? new Date(r.Date) : null;
+      if (!logDate) return false;
+      return logDate >= new Date(params.startDate);
+    });
+  }
+  
+  if (params.endDate) {
+    filtered = filtered.filter(r => {
+      const logDate = r.Date ? new Date(r.Date) : null;
+      if (!logDate) return false;
+      return logDate <= new Date(params.endDate + 'T23:59:59');
+    });
+  }
+  
+  if (params.staff) {
+    filtered = filtered.filter(r => r.Staff === params.staff || r.Assigned_To === params.staff);
+  }
+  
+  if (params.round) {
+    filtered = filtered.filter(r => r.Task_ID === params.round || r.Round === params.round);
+  }
+  
+  filtered.sort((a, b) => {
+    const dateA = new Date(a.Date + ' ' + (a.Time || ''));
+    const dateB = new Date(b.Date + ' ' + (b.Time || ''));
+    return dateB - dateA;
+  });
+  
+  return { entries: filtered };
+}
+
+function getMetrics(days) {
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  
+  const filtered = roundsLog.filter(r => {
+    const logDate = r.Date ? new Date(r.Date) : null;
+    return logDate && logDate >= cutoff;
+  });
+  
+  const total = filtered.length;
+  const completed = filtered.filter(r => r.Status === 'تم' || r.Status === 'مكتمل' || r.Status === 'OK').length;
+  const violations = filtered.filter(r => {
+    if (r.Is_Violation === true || r.Is_Violation === 'TRUE') return true;
+    const status = String(r.Status || '').toLowerCase();
+    return status.includes('خلل');
+  }).length;
+  
+  const byDate = {};
+  const byStaff = {};
+  const byArea = {};
+  const byStatus = {};
+  
+  filtered.forEach(r => {
+    const dateKey = r.Date ? new Date(r.Date).toISOString().split('T')[0] : 'unknown';
+    byDate[dateKey] = (byDate[dateKey] || 0) + 1;
+    
+    const staff = r.Staff || r.Assigned_To || 'غير محدد';
+    byStaff[staff] = (byStaff[staff] || 0) + 1;
+    
+    const area = r.Area || r.Task_ID || 'غير محدد';
+    byArea[area] = (byArea[area] || 0) + 1;
+    
+    const status = r.Status || 'غير محدد';
+    byStatus[status] = (byStatus[status] || 0) + 1;
+  });
+  
+  return {
+    total: total,
+    completed: completed,
+    violations: violations,
+    delayed: total - completed,
+    compliance: total > 0 ? Math.round((completed / total) * 100) : 0,
+    byDate: byDate,
+    byStaff: byStaff,
+    byArea: byArea,
+    byStatus: byStatus
+  };
+}
+
+function getChecklist(taskId) {
+  const sheet = getSheet(taskId);
+  if (!sheet) {
+    return { items: [], error: 'Sheet not found: ' + taskId };
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { items: [] };
+  
+  const items = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) {
+      items.push({
+        id: i,
+        text: data[i][0],
+        category: data[i][1] || ''
+      });
+    }
+  }
+  
+  return { items: items };
+}
+
+function verifyPasscode(staffName, passcode) {
+  const passcodes = sheetToObjects(getSheet('Staff_Passcodes'));
+  
+  const staff = passcodes.find(p => p.Staff_Name === staffName || p.Name === staffName);
+  
+  if (!staff) {
+    return { valid: false, error: 'الموظف غير موجود' };
+  }
+  
+  if (String(staff.Passcode) === String(passcode) || String(staff.Code) === String(passcode)) {
+    return { valid: true };
+  }
+  
+  return { valid: false, error: 'رمز التحقق غير صحيح' };
+}
+
+function resolveViolation(params) {
+  const sheet = getSheet('Rounds_Log');
+  if (!sheet) return { success: false, error: 'Sheet not found' };
+  
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  const rowIndex = params.rowIndex;
+  if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row' };
+  
+  const isResolvedCol = headers.indexOf('Is_Resolved');
+  const resolvedByCol = headers.indexOf('Resolved_By');
+  const resolvedDateCol = headers.indexOf('Resolved_Date');
+  
+  if (isResolvedCol === -1) return { success: false, error: 'Is_Resolved column not found' };
+  
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  
+  sheet.getRange(rowIndex, isResolvedCol + 1).setValue('TRUE');
+  
+  if (resolvedByCol !== -1) {
+    sheet.getRange(rowIndex, resolvedByCol + 1).setValue(params.resolvedBy || '');
+  }
+  
+  if (resolvedDateCol !== -1) {
+    sheet.getRange(rowIndex, resolvedDateCol + 1).setValue(dateStr);
+  }
+  
+  return { success: true };
+}
+
+function logRound(payload) {
+  const sheet = getSheet('Rounds_Log');
+  if (!sheet) return { success: false, error: 'Rounds_Log sheet not found' };
+  
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  const row = headers.map(h => {
+    switch(h) {
+      case 'Date': return dateStr;
+      case 'Time': return timeStr;
+      case 'Task_ID': 
+      case 'Round': return payload.taskId || '';
+      case 'Staff': 
+      case 'Assigned_To': return payload.staff || '';
+      case 'Exec_Responsible': return payload.execResponsible || '';
+      case 'Status': return payload.status || 'تم';
+      case 'Notes': return payload.notes || '';
+      case 'Is_Violation': return payload.isViolation ? 'TRUE' : 'FALSE';
+      case 'Checklist_Data': return payload.checklistData || '';
+      default: return '';
+    }
+  });
+  
+  sheet.appendRow(row);
+  
+  return { success: true };
+}

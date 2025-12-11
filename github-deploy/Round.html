@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>نظام جولات السلامة المطوّر – المجمع الطبي</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --primary-light: #2d5a8a;
+      --crimson: #DC143C;
+      --crimson-80: rgba(220, 20, 60, 0.8);
+      --gold: #c9a962;
+      --success: #198754;
+      --warning: #ffc107;
+      --danger: #dc3545;
+    }
+    body {
+      font-family: 'Tajawal', system-ui, sans-serif;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      min-height: 100vh;
+    }
+    .navbar-custom {
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: #fff;
+    }
+    .navbar-custom .navbar-brand { color: #fff !important; }
+    .logo-img {
+      height: 42px;
+      width: 42px;
+      border-radius: 50%;
+      object-fit: contain;
+      background: var(--crimson-80);
+      padding: 3px;
+      margin-left: .5rem;
+    }
+    .nav-tabs .nav-link {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .nav-tabs .nav-link.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .card-custom {
+      border-radius: 1rem;
+      border: 0;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+    .station-card {
+      border-radius: 1rem;
+      border: 2px solid transparent;
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: all 0.2s;
+      padding: 1rem;
+    }
+    .station-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    }
+    .station-card.active {
+      border-color: var(--crimson);
+      background: #fff5f5;
+    }
+    .chip {
+      border-radius: 20px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+      display: inline-block;
+    }
+    .chip-success { background: #d1e7dd; color: #0f5132; }
+    .chip-danger { background: #f8d7da; color: #842029; }
+    .chip-warning { background: #fff3cd; color: #664d03; }
+    .chip-info { background: #cff4fc; color: #055160; }
+    .delayed-card {
+      background: linear-gradient(135deg, #fff5f5, #ffe8e8);
+      border-right: 4px solid var(--danger);
+    }
+    .violation-card {
+      background: linear-gradient(135deg, #fff8e1, #ffecb3);
+      border-right: 4px solid var(--warning);
+    }
+    .repeat-badge {
+      background: var(--danger);
+      color: #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+    .spinner-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.8);
+      z-index: 2000;
+      backdrop-filter: blur(3px);
+    }
+    .filter-section {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .stats-mini {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .stat-box {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .stat-box .number {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .stat-box.danger .number { color: var(--danger); }
+    .stat-box.warning .number { color: #d97706; }
+    .stat-box.success .number { color: var(--success); }
+    .text-crimson { color: var(--crimson); }
+    
+    /* KPI Cards for Dashboard */
+    .kpi-card {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      gap: 0.75rem;
+    }
+    .kpi-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+    .kpi-content { flex: 1; }
+    .kpi-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      line-height: 1.2;
+      color: #1f2937;
+    }
+    .kpi-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+    .btn-start-round {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      color: #78350f;
+      border: none;
+      font-weight: 600;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+    }
+    .btn-start-round:hover { background: #f59e0b; color: #451a03; }
+    .btn-completed {
+      background: #d1fae5;
+      color: #065f46;
+      border: none;
+      font-weight: 600;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+    }
+    .checklist-row {
+      display: flex;
+      align-items: center;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .checklist-row:last-child { border-bottom: none; }
+    .checklist-btns-rtl { 
+      display: flex; 
+      gap: 0.25rem; 
+      flex-shrink: 0;
+    }
+    .checklist-text { 
+      flex: 1; 
+      font-size: 0.9rem; 
+      text-align: right;
+      padding-right: 1rem;
+      color: #374151;
+    }
+    .btn-yes { 
+      background: #d1fae5; 
+      color: #065f46; 
+      border: 1px solid #a7f3d0; 
+      min-width: 50px;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.6rem;
+    }
+    .btn-yes:hover { background: #a7f3d0; }
+    .btn-yes.active { background: #10b981; color: white; border-color: #10b981; }
+    .btn-no { 
+      background: #fee2e2; 
+      color: #991b1b; 
+      border: 1px solid #fca5a5; 
+      min-width: 50px;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.6rem;
+    }
+    .btn-no:hover { background: #fca5a5; }
+    .btn-no.active { background: #ef4444; color: white; border-color: #ef4444; }
+    .staff-card-detailed {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .staff-card-detailed:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .staff-card-detailed.active { border-color: var(--crimson); background: #fff5f5; }
+    .staff-stats { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .staff-stat { 
+      background: #f3f4f6; 
+      padding: 0.25rem 0.5rem; 
+      border-radius: 6px; 
+      font-size: 0.8rem;
+    }
+    .staff-stat.done { background: #d1fae5; color: #065f46; }
+    .staff-stat.remaining { background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-custom shadow-sm">
+    <div class="container-fluid px-4">
+      <span class="navbar-brand fw-bold d-flex align-items-center">
+        <img src="شعار للموقع المجمع.jpeg" alt="شعار مجمع مكة الطبي" class="logo-img" />
+        <span>نظام جولات السلامة المطوّر</span>
+      </span>
+      <span class="navbar-text small ms-auto text-white" id="todayInfoText"></span>
+    </div>
+  </nav>
+
+  <div class="container-fluid py-4">
+    <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" id="today-tab" data-bs-toggle="tab" data-bs-target="#todayPane" type="button">
+          <i class="fas fa-calendar-day me-1"></i> اليوم
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboardPane" type="button">
+          <i class="fas fa-chart-line me-1"></i> لوحة التحكم
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="delayed-tab" data-bs-toggle="tab" data-bs-target="#delayedPane" type="button">
+          <i class="fas fa-clock me-1"></i> المتأخرون
+          <span class="badge bg-danger ms-1" id="delayedCount">0</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="violations-tab" data-bs-toggle="tab" data-bs-target="#violationsPane" type="button">
+          <i class="fas fa-exclamation-triangle me-1"></i> المخالفات
+          <span class="badge bg-warning text-dark ms-1" id="violationsCount">0</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#historyPane" type="button">
+          <i class="fas fa-history me-1"></i> التاريخ
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- Today Tab -->
+      <div class="tab-pane fade show active" id="todayPane">
+        <div class="row g-3" style="direction: ltr;">
+          <!-- Main Content - Left Side -->
+          <div class="col-lg-8">
+            <!-- Staff Tasks Card -->
+            <div class="card card-custom mb-3" id="staffTasksCard" style="display:none;">
+              <div class="card-header" style="background: linear-gradient(135deg, #fef2f2, #fee2e2); border-bottom: 2px solid #DC143C;">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0" style="color: #DC143C;">
+                    <i class="fas fa-clipboard-list me-2"></i>
+                    مهام اليوم للمسؤول: <span id="selectedStaffName" class="fw-bold"></span>
+                  </h5>
+                  <div class="d-flex gap-2">
+                    <span class="badge bg-secondary">مهام اليوم: <span id="staffTodayTotal">0</span></span>
+                    <span class="badge bg-success">منجز: <span id="staffTodayDone">0</span></span>
+                    <span class="badge bg-warning text-dark">متبقي: <span id="staffTodayRemaining">0</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                  <thead style="background: #f8f9fa;">
+                    <tr>
+                      <th style="padding: 0.75rem 1rem;">الجولة</th>
+                      <th class="text-center" style="width: 120px;">منفذة / مطلوبة اليوم</th>
+                      <th class="text-center" style="width: 100px;">الوقت المستهدف</th>
+                      <th class="text-center" style="width: 120px;">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody id="staffTasksTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+            
+            <!-- Checklist Form Card -->
+            <div id="checklistFormCard" class="card card-custom mb-3" style="display:none;">
+              <div class="card-header py-2" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-bottom: 2px solid #22c55e;">
+                <div class="d-flex align-items-center">
+                  <i class="fas fa-check-square me-2" style="color: #16a34a;"></i>
+                  <span class="fw-bold" style="color: #166534;">نموذج التحقق للجولة المختارة</span>
+                </div>
+                <div class="small mt-1" id="checklistRoundName" style="color: #4b5563;"></div>
+              </div>
+              <div class="card-body p-0">
+                <div id="checklistItems" style="max-height: 300px; overflow-y: auto;"></div>
+                
+                <div class="p-3" style="background: #f9fafb; border-top: 1px solid #e5e7eb;">
+                  <div class="mb-3">
+                    <label class="form-label fw-bold small mb-1">مسؤول التنفيذ (في حال وجود خلل)</label>
+                    <select class="form-select form-select-sm" id="checklistResponsible">
+                      <option value="">لا يوجد (لا حاجة لإجراء)</option>
+                    </select>
+                    <div class="small text-muted mt-1">اختر الشخص المكلف بتصحيح الخلل من قائمة المسؤولين للجولة.</div>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label fw-bold small mb-1">ملاحظات إضافية (اختياري)</label>
+                    <textarea class="form-control form-control-sm" id="checklistNotes" rows="2" placeholder=""></textarea>
+                  </div>
+                  <div class="text-start">
+                    <button class="btn btn-success px-4" onclick="submitChecklist()">
+                      <i class="fas fa-save me-1"></i> حفظ الجولة
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Staff Performance Chart -->
+            <div class="card card-custom mb-3">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0" style="color: #DC143C;">
+                  <i class="fas fa-chart-bar me-2"></i>مؤشر إنجاز جولات اليوم حسب المسؤول
+                </h6>
+                <small class="text-muted">العمود الذهبي = مهام اليوم، العمود الأخضر = المنجز اليوم</small>
+              </div>
+              <div class="card-body" style="height: 280px;">
+                <canvas id="staffPerformanceChart"></canvas>
+              </div>
+            </div>
+            
+            <!-- Log Table -->
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0"><i class="fas fa-list-alt text-secondary me-2"></i>سجل جولات اليوم <small class="text-muted">(يتم السحب مباشرة من Rounds_Log)</small></h6>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                  <table class="table table-sm table-hover mb-0">
+                    <thead style="background: #f8f9fa; position: sticky; top: 0;">
+                      <tr>
+                        <th style="width: 70px;">الوقت</th>
+                        <th>الجولة</th>
+                        <th style="width: 100px;">المسؤول</th>
+                        <th style="width: 80px;">مسؤول التنفيذ</th>
+                        <th style="width: 70px;">الحالة</th>
+                        <th>ملخص الخلل</th>
+                      </tr>
+                    </thead>
+                    <tbody id="roundsLogBody">
+                      <tr><td colspan="6" class="text-center text-muted">جاري التحميل...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Staff Cards - Right Side -->
+          <div class="col-lg-4">
+            <div class="card card-custom mb-3">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 text-end"><i class="fas fa-users text-primary me-2"></i>محطات المسؤولين</h6>
+                <small class="text-muted d-block text-end">الأسماء تُسحب تلقائياً من عمود Assigned_To في MASTER_TASKS</small>
+              </div>
+              <div class="card-body" id="stationCardsContainer" style="max-height: 600px; overflow-y: auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Tab -->
+      <div class="tab-pane fade" id="dashboardPane">
+        <!-- Date Filter -->
+        <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <label class="small fw-bold text-muted mb-0">الفترة:</label>
+            <select class="form-select form-select-sm" id="dashPeriodFilter" style="width: auto;">
+              <option value="7">آخر أسبوع</option>
+              <option value="14" selected>آخر أسبوعين</option>
+              <option value="30">آخر شهر</option>
+              <option value="90">آخر 3 أشهر</option>
+            </select>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="loadDashboardData()">
+            <i class="fas fa-sync-alt me-1"></i>تحديث
+          </button>
+        </div>
+        
+        <!-- KPI Summary Row -->
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border-right: 4px solid #3b82f6;">
+              <div class="kpi-icon"><i class="fas fa-clipboard-list" style="color:#3b82f6;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashTotalRounds">0</div>
+                <div class="kpi-label">إجمالي الجولات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-right: 4px solid #22c55e;">
+              <div class="kpi-icon"><i class="fas fa-check-circle" style="color:#22c55e;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashCompleted">0</div>
+                <div class="kpi-label">مكتملة</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef2f2, #fee2e2); border-right: 4px solid #ef4444;">
+              <div class="kpi-icon"><i class="fas fa-clock" style="color:#ef4444;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashDelayed">0</div>
+                <div class="kpi-label">متأخرة</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fefce8, #fef9c3); border-right: 4px solid #eab308;">
+              <div class="kpi-icon"><i class="fas fa-percentage" style="color:#eab308;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashCompliance">0%</div>
+                <div class="kpi-label">نسبة الامتثال</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Row 1: Trend + Donut -->
+        <div class="row g-2 mb-2">
+          <div class="col-lg-8">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-line text-primary me-1"></i>الأداء اليومي</h6>
+              </div>
+              <div class="card-body p-2" style="height: 160px;">
+                <canvas id="trendChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-pie text-success me-1"></i>توزيع الحالات</h6>
+              </div>
+              <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 160px;">
+                <canvas id="statusChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Row 2: Staff + Area -->
+        <div class="row g-2 mb-2">
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-user-tie text-info me-1"></i>أداء المسؤولين</h6>
+              </div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="staffChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-map-marker-alt text-warning me-1"></i>الأداء حسب المنطقة</h6>
+              </div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="areaChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Row 3: Top Issues -->
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-exclamation-triangle text-danger me-1"></i>أكثر المشاكل تكراراً (خلال الفترة المحددة)</h6>
+              </div>
+              <div class="card-body p-2">
+                <div id="topIssuesList" class="d-flex flex-wrap gap-2">
+                  <div class="text-muted text-center py-2 w-100">جاري التحميل...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delayed Tab -->
+      <div class="tab-pane fade" id="delayedPane">
+        <div class="filter-section">
+          <h5 class="mb-3"><i class="fas fa-clock text-danger me-2"></i>الجولات المتأخرة</h5>
+          <p class="text-muted small">هنا تظهر جميع الجولات التي تجاوزت وقتها المحدد</p>
+        </div>
+        <div id="delayedList" class="row g-3"></div>
+      </div>
+
+      <!-- Violations Tab -->
+      <div class="tab-pane fade" id="violationsPane">
+        <div class="filter-section">
+          <h5 class="mb-3"><i class="fas fa-exclamation-triangle text-warning me-2"></i>المخالفات والتكرارات</h5>
+          
+          <!-- Filters Row -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الفترة الزمنية</label>
+              <select class="form-select form-select-sm" id="violationPeriodFilter">
+                <option value="7">آخر أسبوع</option>
+                <option value="14">آخر أسبوعين</option>
+                <option value="30" selected>آخر شهر</option>
+                <option value="90">آخر 3 أشهر</option>
+                <option value="365">آخر سنة</option>
+                <option value="0">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">المسؤول</label>
+              <select class="form-select form-select-sm" id="violationStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الجولة</label>
+              <select class="form-select form-select-sm" id="violationRoundFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-primary btn-sm w-100" onclick="applyViolationFilters()">
+                <i class="fas fa-filter me-1"></i>تطبيق الفلتر
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="row g-2 mb-4">
+          <div class="col-6 col-lg-2">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-right: 4px solid #ef4444;">
+              <div class="kpi-icon"><i class="fas fa-exclamation-circle" style="color:#ef4444;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTotalCount">0</div>
+                <div class="kpi-label">إجمالي المخالفات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #ecfdf5, #a7f3d0); border-right: 4px solid #10b981;">
+              <div class="kpi-icon"><i class="fas fa-check-circle" style="color:#10b981;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationResolvedCount">0</div>
+                <div class="kpi-label">تم معالجتها</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-right: 4px solid #f59e0b;">
+              <div class="kpi-icon"><i class="fas fa-redo" style="color:#f59e0b;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationRepeatedCount">0</div>
+                <div class="kpi-label">متكررة</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border-right: 4px solid #3b82f6;">
+              <div class="kpi-icon"><i class="fas fa-user-times" style="color:#3b82f6;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTopStaff">-</div>
+                <div class="kpi-label">أكثر مسؤول مخالفات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fdf4ff, #f5d0fe); border-right: 4px solid #a855f7;">
+              <div class="kpi-icon"><i class="fas fa-map-marker-alt" style="color:#a855f7;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTopArea">-</div>
+                <div class="kpi-label">أكثر منطقة مخالفات</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trend Chart -->
+        <div class="card card-custom mb-4">
+          <div class="card-header bg-white border-0 py-2">
+            <h6 class="mb-0 small"><i class="fas fa-chart-line text-danger me-2"></i>تكرار المخالفات عبر الزمن</h6>
+          </div>
+          <div class="card-body" style="height: 200px;">
+            <canvas id="violationTrendChart"></canvas>
+          </div>
+        </div>
+        
+        <h6 class="fw-bold mb-3"><i class="fas fa-redo text-danger me-2"></i>مخالفات متكررة (تحتاج تدخل)</h6>
+        <div id="repeatedViolationsList" class="row g-3 mb-4"></div>
+        
+        <h6 class="fw-bold mb-3"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
+        <div id="allViolationsList" class="row g-3"></div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-pane fade" id="historyPane">
+        <div class="filter-section" style="background: linear-gradient(135deg, #fdf2f4, #fce7eb); border: 1px solid rgba(139, 69, 100, 0.2);">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="fas fa-history me-2" style="color: var(--crimson);"></i>سجل الجولات التاريخي</h5>
+            <button class="btn btn-sm" style="background: var(--crimson); color: white;" onclick="exportHistory()">
+              <i class="fas fa-file-export me-1"></i>تصدير التقرير
+            </button>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label small fw-bold">اختيار سريع:</label>
+            <div class="btn-group btn-group-sm" role="group" id="dateRangeBtnGroup">
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="today" onclick="setHistoryRange('today')">اليوم</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="week" onclick="setHistoryRange('week')">أسبوع</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="month" onclick="setHistoryRange('month')">شهر</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="3months" onclick="setHistoryRange('3months')">3 أشهر</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="year" onclick="setHistoryRange('year')">سنة</button>
+            </div>
+          </div>
+          
+          <div class="row g-3">
+            <div class="col-md-2">
+              <label class="form-label small">من تاريخ</label>
+              <input type="date" class="form-control form-control-sm" id="historyStartDate" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">إلى تاريخ</label>
+              <input type="date" class="form-control form-control-sm" id="historyEndDate" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">المسؤول</label>
+              <select class="form-select form-select-sm" id="historyStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">المعالجة</label>
+              <select class="form-select form-select-sm" id="historyResolvedFilter">
+                <option value="">الكل</option>
+                <option value="yes">نعم - تم المعالجة</option>
+                <option value="no">لا - لم يتم المعالجة</option>
+              </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button class="btn btn-sm w-100" style="background: var(--primary); color: white;" onclick="loadHistory()">
+                <i class="fas fa-search me-1"></i>بحث
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card" style="border: 2px solid rgba(139, 69, 100, 0.3); background: linear-gradient(135deg, #fffbfc, #fff5f7);">
+          <div class="card-body p-2">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0" id="historyTable" style="background: white;">
+                <thead style="background: linear-gradient(135deg, #8b4563, #6b3548); color: white;">
+                  <tr>
+                    <th class="text-center">التاريخ</th>
+                    <th class="text-center">الوقت</th>
+                    <th class="text-center">الجولة</th>
+                    <th class="text-center">المسؤول</th>
+                    <th class="text-center">مسؤول التنفيذ</th>
+                    <th class="text-center">الحالة</th>
+                    <th class="text-center">المعالجة</th>
+                    <th class="text-center">ملاحظات</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                  <tr><td colspan="8" class="text-center text-muted py-4">اختر الفترة الزمنية واضغط بحث</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="spinnerOverlay" class="spinner-overlay">
+    <div class="text-center">
+      <div class="spinner-border text-primary mb-3" role="status"></div>
+      <div class="fw-semibold">جاري تحميل البيانات...</div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-5">
+          <i class="fas fa-check-circle me-2"></i>
+          <span id="successToastMessage">تم بنجاح!</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+    <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-5">
+          <i class="fas fa-exclamation-circle me-2"></i>
+          <span id="errorToastMessage">حدث خطأ!</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resolve Confirmation Modal -->
+  <div class="modal fade" id="resolveConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-body text-center p-4">
+          <img src="شعار للموقع المجمع.jpeg" alt="Logo" style="width: 80px; height: 80px; margin-bottom: 15px;">
+          <h5 class="fw-bold mb-3" style="color: var(--primary);">تأكيد المعالجة</h5>
+          <p class="text-muted mb-4">هل أنت واثق من أن المخالفات تمت معالجتها؟</p>
+          <div id="resolveViolationInfo" class="alert alert-light text-end mb-4" style="font-size: 0.9rem;"></div>
+          <div class="d-flex gap-2 justify-content-center">
+            <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
+              <i class="fas fa-times me-1"></i>إلغاء
+            </button>
+            <button type="button" class="btn btn-success px-4" onclick="showPasscodeModal()">
+              <i class="fas fa-check me-1"></i>تأكيد
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Passcode Input Modal -->
+  <div class="modal fade" id="passcodeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header" style="background: var(--primary); color: white;">
+          <h6 class="modal-title"><i class="fas fa-lock me-2"></i>الرمز السري</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted small mb-3 text-center">أدخل رمزك السري للتأكيد</p>
+          <input type="password" class="form-control form-control-lg text-center" id="passcodeInput" 
+                 maxlength="6" placeholder="****" autocomplete="off" style="letter-spacing: 10px; font-size: 1.5rem;">
+          <div id="passcodeError" class="text-danger small mt-2 text-center" style="display:none;"></div>
+          <button type="button" class="btn btn-success w-100 mt-3" onclick="verifyAndResolve()">
+            <i class="fas fa-check-circle me-1"></i>تحقق وأكمل المعالجة
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal fade" id="roundFormModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background: var(--primary); color: white;">
+          <h5 class="modal-title"><i class="fas fa-clipboard-check me-2"></i>تسجيل جولة رقابية</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="roundForm">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">المسؤول <span class="text-danger">*</span></label>
+                <select class="form-select" id="formStaff" required>
+                  <option value="">اختر المسؤول...</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">منفذ الجولة</label>
+                <input type="text" class="form-control" id="formExecResponsible" placeholder="اسم المنفذ (اختياري)">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">الجولة <span class="text-danger">*</span></label>
+                <select class="form-select" id="formRound" required>
+                  <option value="">اختر الجولة...</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">الحالة <span class="text-danger">*</span></label>
+                <select class="form-select" id="formStatus" required>
+                  <option value="في الوقت">في الوقت - مكتمل</option>
+                  <option value="متأخر">متأخر</option>
+                  <option value="خلل">يوجد خلل / مخالفة</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">وقت التنفيذ</label>
+                <input type="time" class="form-control" id="formTime">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">ملاحظات إيجابية</label>
+                <textarea class="form-control" id="formPositiveNotes" rows="2" placeholder="نقاط القوة والإيجابيات..."></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">نقاط الخلل / المخالفات</label>
+                <textarea class="form-control" id="formNegativeNotes" rows="2" placeholder="المشاكل والملاحظات السلبية (إن وجدت)..."></textarea>
+                <div class="form-check mt-2">
+                  <input class="form-check-input border-danger" type="checkbox" id="formIsViolation" style="width: 1.3em; height: 1.3em;">
+                  <label class="form-check-label text-danger fw-bold" for="formIsViolation" style="font-size: 0.95rem;">
+                    اعتبر هذه مخالفة تستوجب المتابعة
+                  </label>
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">الإجراءات المتخذة</label>
+                <textarea class="form-control" id="formActions" rows="2" placeholder="ما تم فعله لحل المشكلة (إن وجد)..."></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="button" class="btn btn-success" onclick="submitRoundForm()">
+            <i class="fas fa-save me-1"></i> حفظ الجولة
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Google Apps Script Web App URL
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzzK213HbZPw4Js-7Xq8PW9SKO-yuKiuRN6wc3ms0erYlKFihvS4ITGAFantA7nSvNb/exec';
+    
+    // API helper function
+    async function callApi(action, payload = {}) {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Backend error');
+      return data;
+    }
+    
+    let MASTER_TASKS = [];
+    let ROUNDS_LOG = [];
+    let STAFF_LIST = [];
+    let DELAYED_LIST = [];
+    let VIOLATIONS_DATA = { violations: [], repeated: [] };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateTodayHeader();
+      loadAllData();
+    });
+
+    function showSpinner(show) {
+      document.getElementById('spinnerOverlay').style.display = show ? 'flex' : 'none';
+    }
+    
+    function showSuccessToast(message) {
+      const toastEl = document.getElementById('successToast');
+      document.getElementById('successToastMessage').textContent = message;
+      const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+      toast.show();
+    }
+    
+    function showErrorToast(message) {
+      const toastEl = document.getElementById('errorToast');
+      document.getElementById('errorToastMessage').textContent = message;
+      const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+      toast.show();
+    }
+
+    // Resolve violation modal handling
+    let currentResolveData = null;
+    
+    function openResolveModal(rowIndex, staffName, area, issue) {
+      currentResolveData = { rowIndex, staffName, area, issue };
+      document.getElementById('resolveViolationInfo').innerHTML = `
+        <strong>الجولة:</strong> ${area}<br>
+        <strong>المسؤول:</strong> ${staffName}<br>
+        <strong>الخلل:</strong> ${issue}...
+      `;
+      const modal = new bootstrap.Modal(document.getElementById('resolveConfirmModal'));
+      modal.show();
+    }
+    
+    function showPasscodeModal() {
+      bootstrap.Modal.getInstance(document.getElementById('resolveConfirmModal')).hide();
+      document.getElementById('passcodeInput').value = '';
+      document.getElementById('passcodeError').style.display = 'none';
+      setTimeout(() => {
+        const modal = new bootstrap.Modal(document.getElementById('passcodeModal'));
+        modal.show();
+        document.getElementById('passcodeInput').focus();
+      }, 300);
+    }
+    
+    async function verifyAndResolve() {
+      const passcode = document.getElementById('passcodeInput').value;
+      const staffName = currentResolveData?.staffName;
+      
+      if (!passcode || passcode.length < 4) {
+        document.getElementById('passcodeError').textContent = 'الرجاء إدخال الرمز السري';
+        document.getElementById('passcodeError').style.display = 'block';
+        return;
+      }
+      
+      try {
+        // Verify passcode
+        const verifyData = await callApi('verifyPasscode', { staffName, passcode });
+        
+        if (!verifyData.valid) {
+          document.getElementById('passcodeError').textContent = verifyData.error || 'الرمز السري غير صحيح';
+          document.getElementById('passcodeError').style.display = 'block';
+          return;
+        }
+        
+        // Mark as resolved
+        const resolveData = await callApi('resolveViolation', {
+          rowIndex: currentResolveData.rowIndex,
+          staffName: staffName,
+          resolvedBy: staffName,
+          resolvedDate: new Date().toLocaleDateString('en-US')
+        });
+        
+        if (resolveData.ok) {
+          bootstrap.Modal.getInstance(document.getElementById('passcodeModal')).hide();
+          showSuccessToast('تم تسجيل المعالجة بنجاح');
+          currentResolveData = null;
+          // Reload violations
+          await loadViolations();
+          renderViolations();
+        } else {
+          showErrorToast(resolveData.message || 'حدث خطأ');
+        }
+      } catch (err) {
+        console.error('Resolve error:', err);
+        showErrorToast('حدث خطأ في الاتصال');
+      }
+    }
+
+    function updateTodayHeader() {
+      const today = new Date();
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      document.getElementById('todayInfoText').textContent = today.toLocaleDateString('ar-SA', options);
+    }
+
+    async function loadAllData() {
+      showSpinner(true);
+      try {
+        await Promise.all([
+          loadMasterTasks(),
+          loadRoundsLog(),
+          loadStaffList(),
+          loadDelayed(),
+          loadViolations(),
+          loadStaffSummary()
+        ]);
+        updateStats();
+      } catch (err) {
+        console.error('Load error:', err);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    async function loadMasterTasks() {
+      try {
+        const data = await callApi('getMasterTasks');
+        MASTER_TASKS = data.tasks || [];
+        renderStationCards();
+      } catch (err) {
+        console.error('Master tasks error:', err);
+      }
+    }
+
+    async function loadRoundsLog() {
+      try {
+        const data = await callApi('getRoundsLog', { limit: 100 });
+        ROUNDS_LOG = data.entries || [];
+        renderRoundsLog();
+      } catch (err) {
+        console.error('Rounds log error:', err);
+      }
+    }
+
+    async function loadStaffList() {
+      try {
+        const data = await callApi('getStaff');
+        STAFF_LIST = data.staff || [];
+        populateStaffFilter();
+      } catch (err) {
+        console.error('Staff list error:', err);
+      }
+    }
+
+    async function loadDelayed() {
+      try {
+        const data = await callApi('getDelayed');
+        DELAYED_LIST = data.delayed || [];
+        document.getElementById('delayedCount').textContent = DELAYED_LIST.length;
+        renderDelayedList();
+      } catch (err) {
+        console.error('Delayed error:', err);
+      }
+    }
+
+    async function loadViolations() {
+      try {
+        const data = await callApi('getViolations');
+        VIOLATIONS_DATA = data;
+        document.getElementById('violationsCount').textContent = (data.violations || []).length;
+        renderViolations();
+      } catch (err) {
+        console.error('Violations error:', err);
+      }
+    }
+
+    function updateStats() {
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      const todayTasks = MASTER_TASKS.filter(t => {
+        const dayMap = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+        const today = new Date().getDay();
+        const dayKey = dayMap[today];
+        return t[dayKey] && t[dayKey].toLowerCase() === 'yes';
+      });
+      
+      const total = todayTasks.reduce((sum, t) => sum + (parseInt(t.Rounds_Per_Day) || 0), 0);
+      const todayLogs = ROUNDS_LOG.filter(r => r.Date && r.Date.includes(todayStr.split('-')[2]));
+      const done = todayLogs.filter(r => r.Status !== 'متأخر').length;
+      const delayed = DELAYED_LIST.length;
+      
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      setEl('statTotal', total);
+      setEl('statDone', done);
+      setEl('statPending', Math.max(0, total - done - delayed));
+      setEl('statDelayed', delayed);
+    }
+
+    let STAFF_SUMMARY = [];
+    let currentChecklist = null;
+    let selectedStaffData = null;
+    
+    async function loadStaffSummary() {
+      try {
+        const data = await callApi('getStaffSummary');
+        STAFF_SUMMARY = data.staff || [];
+        renderStationCards();
+        renderStaffPerformanceChart();
+        
+        // Re-render selected staff's tasks if one is selected
+        if (selectedStaffData) {
+          const updatedStaff = STAFF_SUMMARY.find(s => s.name === selectedStaffData.name);
+          if (updatedStaff) {
+            selectStaff(updatedStaff.name);
+          }
+        }
+      } catch (err) {
+        console.error('Staff summary error:', err);
+      }
+    }
+    
+    let staffPerformanceChartInstance = null;
+    function renderStaffPerformanceChart() {
+      const ctx = document.getElementById('staffPerformanceChart');
+      if (!ctx || !STAFF_SUMMARY.length) return;
+      
+      if (staffPerformanceChartInstance) {
+        staffPerformanceChartInstance.destroy();
+      }
+      
+      const labels = STAFF_SUMMARY.map(s => s.name);
+      const todayTasks = STAFF_SUMMARY.map(s => s.todayTasks);
+      const todayDone = STAFF_SUMMARY.map(s => s.todayDone);
+      
+      staffPerformanceChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'مهام اليوم',
+              data: todayTasks,
+              backgroundColor: '#c9a962',
+              borderRadius: 4,
+              barThickness: 30
+            },
+            {
+              label: 'منجز اليوم',
+              data: todayDone,
+              backgroundColor: '#22c55e',
+              borderRadius: 4,
+              barThickness: 30
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { family: 'Tajawal' }, usePointStyle: true }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { stepSize: 1, font: { family: 'Tajawal' } },
+              grid: { color: 'rgba(0,0,0,0.05)' }
+            },
+            x: {
+              ticks: { font: { family: 'Tajawal', size: 11 } },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function renderStationCards() {
+      const container = document.getElementById('stationCardsContainer');
+      
+      if (!STAFF_SUMMARY.length) {
+        container.innerHTML = '<div class="text-muted text-center py-3">لا توجد بيانات</div>';
+        return;
+      }
+      
+      container.innerHTML = STAFF_SUMMARY.map(s => {
+        return `
+        <div class="staff-card-detailed" onclick="selectStaff('${s.name}', this)">
+          <div class="d-flex align-items-center mb-2">
+            <div class="me-2" style="width:36px;height:36px;background:linear-gradient(135deg,#f3f4f6,#e5e7eb);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-user-tie" style="color:#6b7280;font-size:1rem;"></i>
+            </div>
+            <div>
+              <div class="fw-bold" style="font-size:1.05rem;">${s.name}</div>
+              <div class="small text-muted">مسؤول عن جولات السلامة حسب MASTER_TASKS</div>
+            </div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <span class="badge" style="background:#dbeafe;color:#1e40af;font-weight:500;">مهام اليوم: ${s.todayTasks}</span>
+            <span class="badge" style="background:#d1fae5;color:#065f46;font-weight:500;">منجز ${s.todayDone}</span>
+            <span class="badge" style="background:#fef3c7;color:#92400e;font-weight:500;">متبقي: ${s.todayRemaining}</span>
+          </div>
+          <div class="small text-muted mt-2">إجمالي مهام الأسبوع (حسب Yes في الأيام): ${s.weeklyTotal}</div>
+          ${s.topRounds.length ? `
+            <div class="mt-2 pt-2" style="border-top:1px dashed #e5e7eb;">
+              <div class="small fw-bold mb-1" style="color:#374151;">أهم جولات اليوم:</div>
+              ${s.topRounds.slice(0,3).map(r => `
+                <div class="small d-flex justify-content-between align-items-center py-1" style="color:#6b7280;">
+                  <span>• ${r.name.substring(0,30)}${r.name.length>30?'...':''}</span>
+                  <span class="badge ${r.done >= r.roundsRequired ? 'bg-success' : 'bg-warning text-dark'}" style="font-size:0.65rem;">x${r.roundsRequired}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `}).join('');
+    }
+
+    function selectStaff(staffName, el) {
+      document.querySelectorAll('.staff-card-detailed').forEach(c => c.classList.remove('active'));
+      el?.classList.add('active');
+      
+      selectedStaffData = STAFF_SUMMARY.find(s => s.name === staffName);
+      if (!selectedStaffData) return;
+      
+      document.getElementById('staffTasksCard').style.display = 'block';
+      document.getElementById('checklistFormCard').style.display = 'none';
+      document.getElementById('selectedStaffName').textContent = staffName;
+      document.getElementById('staffTodayTotal').textContent = selectedStaffData.todayTasks;
+      document.getElementById('staffTodayDone').textContent = selectedStaffData.todayDone;
+      document.getElementById('staffTodayRemaining').textContent = selectedStaffData.todayRemaining;
+      
+      const tbody = document.getElementById('staffTasksTableBody');
+      
+      if (!selectedStaffData.topRounds.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">لا توجد مهام لهذا اليوم</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = selectedStaffData.topRounds.map(r => {
+        const isComplete = r.done >= r.roundsRequired;
+        const rowStyle = isComplete ? 'background:#f0fdf4;' : '';
+        const statusCell = isComplete 
+          ? `<span class="badge bg-success rounded-pill px-3">مكتملة</span>`
+          : `<span class="badge bg-warning text-dark rounded-pill px-3" style="cursor:pointer;" onclick="startRound('${r.taskId}', '${r.name}')">بدء الجولة</span>`;
+        
+        return `
+          <tr style="${rowStyle}">
+            <td class="py-2 ps-3">${r.name}</td>
+            <td class="text-center py-2"><span class="fw-bold">${r.done}</span>/${r.roundsRequired}</td>
+            <td class="text-center py-2">${r.targetTime || '-'}</td>
+            <td class="text-center py-2">${statusCell}</td>
+          </tr>
+        `;
+      }).join('');
+      
+      document.getElementById('staffTasksCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    async function startRound(taskId, roundName) {
+      showSpinner(true);
+      try {
+        const data = await callApi('getChecklist', { taskId });
+        
+        currentChecklist = { taskId, roundName, task: data.task || {}, items: data.items || [], responsibles: STAFF_LIST || [] };
+        renderChecklistForm();
+      } catch (err) {
+        console.error('Checklist error:', err);
+        alert('خطأ في الاتصال');
+      } finally {
+        showSpinner(false);
+      }
+    }
+    
+    function renderChecklistForm() {
+      document.getElementById('checklistFormCard').style.display = 'block';
+      document.getElementById('checklistRoundName').innerHTML = `
+        الجولة: <strong>${currentChecklist.roundName}</strong> - المسؤول: <strong>${selectedStaffData?.name || ''}</strong>
+      `;
+      const countEl = document.getElementById('checklistItemsCount');
+      if (countEl) countEl.textContent = currentChecklist.items.length || 0;
+      
+      const container = document.getElementById('checklistItems');
+      
+      currentChecklist.items.forEach(item => { item.answer = true; });
+      
+      if (!currentChecklist.items.length) {
+        container.innerHTML = `
+          <div class="text-center py-4" style="background:#f8fafc;border-radius:8px;">
+            <i class="fas fa-clipboard-check fa-2x text-muted mb-2"></i>
+            <div class="text-muted">لا توجد قائمة فحص محددة لهذه الجولة</div>
+            <div class="small text-muted">يمكنك إضافة ملاحظات أدناه وحفظ الجولة</div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = currentChecklist.items.map((item, idx) => `
+          <div class="checklist-row" data-id="${item.id}">
+            <div class="checklist-btns-rtl">
+              <button class="btn btn-sm btn-yes active" onclick="setChecklistAnswer(${item.id}, true, this)">نعم</button>
+              <button class="btn btn-sm btn-no" onclick="setChecklistAnswer(${item.id}, false, this)">لا</button>
+            </div>
+            <div class="checklist-text">${item.item}</div>
+          </div>
+        `).join('');
+      }
+      
+      const respSelect = document.getElementById('checklistResponsible');
+      respSelect.innerHTML = '<option value="">لا يوجد (لا حاجة لإجراء)</option>';
+      currentChecklist.responsibles.forEach(r => {
+        respSelect.innerHTML += `<option value="${r}">${r}</option>`;
+      });
+      
+      document.getElementById('checklistFormCard').scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    function setChecklistAnswer(itemId, isYes, btn) {
+      const row = btn.closest('.checklist-row');
+      if (row) {
+        row.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      
+      const itemData = currentChecklist.items.find(i => i.id === itemId);
+      if (itemData) itemData.answer = isYes;
+    }
+    
+    function cancelChecklist() {
+      document.getElementById('checklistFormCard').style.display = 'none';
+      currentChecklist = null;
+    }
+    
+    async function submitChecklist() {
+      if (!currentChecklist) return;
+      
+      const hasIssues = currentChecklist.items.some(i => i.answer === false);
+      const responsible = document.getElementById('checklistResponsible').value;
+      const notes = document.getElementById('checklistNotes').value;
+      
+      let status = 'في الوقت';
+      let negativeNotes = '';
+      
+      if (hasIssues) {
+        const issues = currentChecklist.items.filter(i => i.answer === false).map(i => '❌ ' + i.item);
+        negativeNotes = 'نقاط الخلل: ' + issues.join(' | ');
+        status = responsible ? 'خلل' : 'في الوقت';
+      }
+      
+      const now = new Date();
+      const payload = {
+        date: now.toLocaleDateString('en-US'),
+        time: now.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'}),
+        roundName: currentChecklist.roundName,
+        staff: selectedStaffData?.name || '',
+        execResponsible: responsible,
+        status: status,
+        positiveNotes: currentChecklist.items.filter(i => i.answer === true).map(i => i.item).join('، '),
+        negativeNotes: negativeNotes + (notes ? ' | ' + notes : ''),
+        actionsTaken: '',
+        isViolation: hasIssues ? 'Yes' : 'No'
+      };
+      
+      showSpinner(true);
+      try {
+        const data = await callApi('logRound', {
+          taskId: currentChecklist.taskId,
+          staff: payload.staff,
+          execResponsible: payload.execResponsible,
+          status: payload.status,
+          notes: payload.negativeNotes,
+          isViolation: payload.isViolation === 'Yes'
+        });
+        
+        showSuccessToast('تم حفظ الجولة بنجاح!');
+        cancelChecklist();
+        await loadAllData();
+      } catch (err) {
+        console.error('Submit error:', err);
+        showErrorToast('حدث خطأ في الاتصال: ' + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    function renderRoundsLog() {
+      const tbody = document.getElementById('roundsLogBody');
+      
+      if (!ROUNDS_LOG.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">لا توجد جولات مسجلة اليوم</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = ROUNDS_LOG.slice(0, 50).map(entry => {
+        const status = entry.Status || '';
+        let statusClass = 'bg-secondary';
+        let statusText = status || 'تم';
+        if (status === 'متأخر') { statusClass = 'bg-danger'; statusText = 'متأخر'; }
+        else if (status === 'في الوقت' || status === 'مكتمل' || status === 'مكتملة') { statusClass = 'bg-success'; statusText = 'مكتملة'; }
+        else if (status === 'خلل') { statusClass = 'bg-warning text-dark'; statusText = 'متأخر'; }
+        
+        return `
+          <tr>
+            <td class="small">${entry.Actual_Time || entry.Date?.split(' ')[1] || '-'}</td>
+            <td class="small text-truncate" style="max-width:200px;" title="${entry.Area || entry.Round_Name || '-'}">${entry.Area || entry.Round_Name || '-'}</td>
+            <td class="small">${entry.Staff || entry.Responsible_Role || '-'}</td>
+            <td class="small">${entry.Exec_Responsible || '-'}</td>
+            <td><span class="badge ${statusClass} rounded-pill" style="font-size: 0.7rem;">${statusText}</span></td>
+            <td class="small text-truncate" style="max-width:150px;" title="${entry.Negative_Notes || ''}">${entry.Negative_Notes || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderDelayedList() {
+      const container = document.getElementById('delayedList');
+      
+      if (!DELAYED_LIST.length) {
+        container.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد جولات متأخرة - ممتاز!</div></div>';
+        return;
+      }
+      
+      container.innerHTML = DELAYED_LIST.map(d => `
+        <div class="col-md-6 col-lg-4">
+          <div class="card card-custom delayed-card p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h6 class="fw-bold mb-0">${d.Area || d.Round_Name || 'جولة'}</h6>
+              <span class="badge bg-danger">${d.Delay_Min || 0} دقيقة تأخير</span>
+            </div>
+            <div class="small text-muted mb-1"><i class="fas fa-user me-1"></i>${d.Responsible_Role || d.Staff || '-'}</div>
+            <div class="small text-muted mb-1"><i class="fas fa-clock me-1"></i>الوقت المحدد: ${d.Planned_Time || '-'}</div>
+            <div class="small text-muted"><i class="fas fa-calendar me-1"></i>${d.Date || '-'}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    let violationTrendChart = null;
+    let FILTERED_VIOLATIONS = [];
+    
+    function renderViolations(filteredData = null) {
+      const data = filteredData || VIOLATIONS_DATA;
+      const repeatedContainer = document.getElementById('repeatedViolationsList');
+      const allContainer = document.getElementById('allViolationsList');
+      
+      // Update statistics
+      document.getElementById('violationTotalCount').textContent = data.violations?.length || 0;
+      document.getElementById('violationResolvedCount').textContent = data.resolved?.length || VIOLATIONS_DATA.resolved?.length || 0;
+      document.getElementById('violationRepeatedCount').textContent = data.repeated?.length || 0;
+      
+      // Calculate top staff and area
+      const staffCounts = {};
+      const areaCounts = {};
+      (data.violations || []).forEach(v => {
+        const staff = v.Responsible_Role || v.Staff || 'غير محدد';
+        const area = v.Area || v.Round_Name || 'غير محدد';
+        staffCounts[staff] = (staffCounts[staff] || 0) + 1;
+        areaCounts[area] = (areaCounts[area] || 0) + 1;
+      });
+      
+      const topStaff = Object.entries(staffCounts).sort((a,b) => b[1]-a[1])[0];
+      const topArea = Object.entries(areaCounts).sort((a,b) => b[1]-a[1])[0];
+      document.getElementById('violationTopStaff').textContent = topStaff ? `${topStaff[0]} (${topStaff[1]})` : '-';
+      document.getElementById('violationTopArea').textContent = topArea ? `${topArea[0].substring(0,15)}...` : '-';
+      
+      // Render trend chart
+      renderViolationTrendChart(data.violations || []);
+      
+      if (!data.repeated?.length) {
+        repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات متكررة</div></div>';
+      } else {
+        repeatedContainer.innerHTML = data.repeated.map(v => `
+          <div class="col-md-6 col-lg-4">
+            <div class="card card-custom violation-card p-3">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h6 class="fw-bold mb-0">${v.area || 'منطقة'}</h6>
+                <span class="repeat-badge">${v.count}</span>
+              </div>
+              <div class="small mb-2">${v.issue || 'مخالفة غير محددة'}</div>
+              <div class="small text-muted"><i class="fas fa-user me-1"></i>المكلف: ${v.assignedTo || 'غير محدد'}</div>
+              <div class="small text-muted"><i class="fas fa-calendar me-1"></i>آخر تكرار: ${v.dates[v.dates.length-1] || '-'}</div>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      if (!data.violations?.length) {
+        allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
+      } else {
+        allContainer.innerHTML = data.violations.slice(0, 20).map((v, idx) => {
+          const notes = (v.Negative_Notes || v.NegativeNotes || 'خلل').replace('نقاط الخلل:', '').trim();
+          const items = notes.split(/[|،]/).map(i => i.trim()).filter(i => i);
+          const itemsList = items.map(item => `<li class="mb-1">${item}</li>`).join('');
+          const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx;
+          const staffName = v.Responsible_Role || v.Staff || '';
+          return `
+          <div class="col-md-6">
+            <div class="card card-custom p-3 border-start border-danger border-3">
+              <h6 class="fw-bold text-danger mb-2"><i class="fas fa-exclamation-triangle me-2"></i>${v.Area || v.Round_Name || 'جولة'}</h6>
+              <ul class="list-unstyled small mb-2 pe-3">${itemsList}</ul>
+              <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
+                <span><i class="fas fa-user me-1"></i>${staffName || '-'}</span>
+                <span><i class="fas fa-calendar me-1"></i>${v.Date?.split(' ')[0] || '-'}</span>
+              </div>
+              <button class="btn btn-success btn-sm w-100" onclick="openResolveModal(${rowIdx}, '${staffName}', '${(v.Area || v.Round_Name || '').replace(/'/g, "\\'")}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
+                <i class="fas fa-check-circle me-1"></i>تم المعالجة
+              </button>
+            </div>
+          </div>
+        `}).join('');
+      }
+    }
+    
+    function renderViolationTrendChart(violations) {
+      const ctx = document.getElementById('violationTrendChart');
+      if (!ctx) return;
+      
+      // Group by date
+      const dateCounts = {};
+      violations.forEach(v => {
+        const dateStr = v.Date?.split(' ')[0] || v.Date;
+        if (dateStr) {
+          dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+        }
+      });
+      
+      // Sort dates and get last 14 days
+      const sortedDates = Object.keys(dateCounts).sort((a,b) => new Date(a) - new Date(b)).slice(-14);
+      const chartData = sortedDates.map(d => dateCounts[d] || 0);
+      
+      if (violationTrendChart) {
+        violationTrendChart.destroy();
+      }
+      
+      violationTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: sortedDates.map(d => d.replace(/^\d{4}-/, '').replace(/\//g, '/')),
+          datasets: [{
+            label: 'عدد المخالفات',
+            data: chartData,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointBackgroundColor: '#ef4444'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+            x: { ticks: { maxRotation: 45 } }
+          }
+        }
+      });
+    }
+    
+    // Helper to parse date in various formats
+    function parseViolationDate(dateStr) {
+      if (!dateStr) return null;
+      // Try parsing as MM/DD/YYYY or DD/MM/YYYY
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        // Assume MM/DD/YYYY format (US)
+        const month = parseInt(parts[0]) - 1;
+        const day = parseInt(parts[1]);
+        const year = parseInt(parts[2]);
+        if (year > 1900 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+          return new Date(year, month, day);
+        }
+      }
+      // Fallback to standard parsing
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    
+    function applyViolationFilters() {
+      const period = parseInt(document.getElementById('violationPeriodFilter').value) || 0;
+      const staff = document.getElementById('violationStaffFilter').value;
+      const round = document.getElementById('violationRoundFilter').value;
+      
+      let filtered = [...(VIOLATIONS_DATA.violations || [])];
+      
+      // Filter by period
+      if (period > 0) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - period);
+        cutoff.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(v => {
+          const vDate = parseViolationDate(v.Date);
+          return vDate && vDate >= cutoff;
+        });
+      }
+      
+      // Filter by staff
+      if (staff) {
+        filtered = filtered.filter(v => 
+          (v.Responsible_Role || v.Staff || '').includes(staff)
+        );
+      }
+      
+      // Filter by round
+      if (round) {
+        filtered = filtered.filter(v => 
+          (v.Area || v.Round_Name || '').includes(round)
+        );
+      }
+      
+      // Recalculate repeated based on filtered
+      const issueMap = {};
+      filtered.forEach(v => {
+        const key = (v.Area || v.Round_Name || '') + '|' + (v.Negative_Notes || '').substring(0, 50);
+        if (!issueMap[key]) {
+          issueMap[key] = { area: v.Area || v.Round_Name, issue: v.Negative_Notes, assignedTo: v.Responsible_Role, count: 0, dates: [] };
+        }
+        issueMap[key].count++;
+        issueMap[key].dates.push(v.Date);
+      });
+      const repeated = Object.values(issueMap).filter(x => x.count >= 2).sort((a,b) => b.count - a.count);
+      
+      renderViolations({ violations: filtered, repeated });
+    }
+
+    function populateStaffFilter() {
+      const historySelect = document.getElementById('historyStaffFilter');
+      const formSelect = document.getElementById('formStaff');
+      const violationStaffSelect = document.getElementById('violationStaffFilter');
+      const violationRoundSelect = document.getElementById('violationRoundFilter');
+      
+      STAFF_LIST.forEach(s => {
+        const opt1 = document.createElement('option');
+        opt1.value = s;
+        opt1.textContent = s;
+        historySelect.appendChild(opt1);
+        
+        const opt2 = document.createElement('option');
+        opt2.value = s;
+        opt2.textContent = s;
+        formSelect.appendChild(opt2);
+        
+        const opt3 = document.createElement('option');
+        opt3.value = s;
+        opt3.textContent = s;
+        violationStaffSelect.appendChild(opt3);
+      });
+      
+      const roundSelect = document.getElementById('formRound');
+      const uniqueRounds = [...new Set(MASTER_TASKS.map(t => t.Round_Name || t.Area))].filter(Boolean);
+      uniqueRounds.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r;
+        opt.textContent = r;
+        roundSelect.appendChild(opt);
+        
+        const opt2 = document.createElement('option');
+        opt2.value = r;
+        opt2.textContent = r;
+        violationRoundSelect.appendChild(opt2);
+      });
+    }
+    
+    async function submitRoundForm() {
+      const staff = document.getElementById('formStaff').value;
+      const roundName = document.getElementById('formRound').value;
+      const status = document.getElementById('formStatus').value;
+      
+      if (!staff || !roundName) {
+        alert('الرجاء اختيار المسؤول والجولة');
+        return;
+      }
+      
+      const now = new Date();
+      const payload = {
+        date: now.toLocaleDateString('en-US'),
+        time: document.getElementById('formTime').value || now.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'}),
+        roundName: roundName,
+        staff: staff,
+        execResponsible: document.getElementById('formExecResponsible').value,
+        status: status,
+        positiveNotes: document.getElementById('formPositiveNotes').value,
+        negativeNotes: document.getElementById('formNegativeNotes').value,
+        actionsTaken: document.getElementById('formActions').value,
+        isViolation: document.getElementById('formIsViolation').checked ? 'Yes' : 'No'
+      };
+      
+      showSpinner(true);
+      try {
+        await callApi('logRound', {
+          taskId: roundName,
+          staff: staff,
+          execResponsible: payload.execResponsible,
+          status: payload.status,
+          notes: payload.negativeNotes,
+          isViolation: payload.isViolation === 'Yes'
+        });
+        
+        showSuccessToast('تم حفظ الجولة بنجاح!');
+        document.getElementById('roundForm').reset();
+        bootstrap.Modal.getInstance(document.getElementById('roundFormModal')).hide();
+        await loadAllData();
+      } catch (err) {
+        console.error('Submit error:', err);
+        showErrorToast('حدث خطأ في الاتصال: ' + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    let HISTORY_DATA = [];
+    
+    function setHistoryRange(range) {
+      const today = new Date();
+      const endDate = today.toISOString().split('T')[0];
+      let startDate;
+      
+      document.querySelectorAll('.date-range-btn').forEach(btn => {
+        btn.classList.remove('active', 'btn-primary');
+        btn.classList.add('btn-outline-secondary');
+      });
+      
+      const activeBtn = document.querySelector(`.date-range-btn[data-range="${range}"]`);
+      if (activeBtn) {
+        activeBtn.classList.remove('btn-outline-secondary');
+        activeBtn.classList.add('active', 'btn-primary');
+      }
+      
+      switch(range) {
+        case 'today':
+          startDate = endDate;
+          break;
+        case 'week':
+          const weekAgo = new Date(today);
+          weekAgo.setDate(today.getDate() - 7);
+          startDate = weekAgo.toISOString().split('T')[0];
+          break;
+        case 'month':
+          const monthAgo = new Date(today);
+          monthAgo.setMonth(today.getMonth() - 1);
+          startDate = monthAgo.toISOString().split('T')[0];
+          break;
+        case '3months':
+          const threeMonthsAgo = new Date(today);
+          threeMonthsAgo.setMonth(today.getMonth() - 3);
+          startDate = threeMonthsAgo.toISOString().split('T')[0];
+          break;
+        case 'year':
+          const yearAgo = new Date(today);
+          yearAgo.setFullYear(today.getFullYear() - 1);
+          startDate = yearAgo.toISOString().split('T')[0];
+          break;
+        default:
+          startDate = endDate;
+      }
+      
+      document.getElementById('historyStartDate').value = startDate;
+      document.getElementById('historyEndDate').value = endDate;
+      loadHistory();
+    }
+    
+    async function loadHistory() {
+      const startDate = document.getElementById('historyStartDate').value;
+      const endDate = document.getElementById('historyEndDate').value;
+      const staff = document.getElementById('historyStaffFilter').value;
+      const resolved = document.getElementById('historyResolvedFilter').value;
+      
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (staff) params.append('staff', staff);
+      
+      showSpinner(true);
+      try {
+        const data = await callApi('getHistory', { startDate, endDate, staff });
+        
+        const tbody = document.getElementById('historyTableBody');
+        if (!data.entries || !data.entries.length) {
+          HISTORY_DATA = [];
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
+          return;
+        }
+        
+        let entries = data.entries;
+        
+        if (resolved === 'yes') {
+          entries = entries.filter(e => e.Is_Resolved === 'Yes' || e.Is_Resolved === 'نعم');
+        } else if (resolved === 'no') {
+          entries = entries.filter(e => !e.Is_Resolved || e.Is_Resolved === 'No' || e.Is_Resolved === 'لا');
+        }
+        
+        HISTORY_DATA = entries;
+        
+        if (!entries.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = entries.map(e => {
+          const statusClass = e.Status === 'متأخر' ? 'bg-warning text-dark' : 
+                             e.Status === 'خلل' ? 'bg-danger' :
+                             e.Status === 'في الوقت' ? 'bg-success' : 'bg-secondary';
+          const isResolved = e.Is_Resolved === 'Yes' || e.Is_Resolved === 'نعم';
+          const resolvedBadge = isResolved ? 
+            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>نعم</span>' : 
+            '<span class="badge bg-secondary">لا</span>';
+          return `
+            <tr>
+              <td class="small text-center">${e.Date?.split(' ')[0] || '-'}</td>
+              <td class="small text-center">${e.Actual_Time || e.Date?.split(' ')[1] || '-'}</td>
+              <td class="small">${e.Area || e.Round_Name || '-'}</td>
+              <td class="small text-center">${e.Responsible_Role || e.Staff || '-'}</td>
+              <td class="small text-center">${e.Execution_Responsible || '-'}</td>
+              <td class="text-center"><span class="badge ${statusClass}">${e.Status || 'تم'}</span></td>
+              <td class="text-center">${resolvedBadge}</td>
+              <td class="small">${e.Negative_Notes || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('History error:', err);
+      } finally {
+        showSpinner(false);
+      }
+    }
+    
+    function exportHistory() {
+      if (!HISTORY_DATA.length) {
+        showErrorToast('لا توجد بيانات للتصدير');
+        return;
+      }
+      
+      const startDate = document.getElementById('historyStartDate').value || 'غير محدد';
+      const endDate = document.getElementById('historyEndDate').value || 'غير محدد';
+      
+      const tableRows = HISTORY_DATA.map(e => {
+        const statusClass = e.Status === 'متأخر' ? 'badge-warning' : 
+                           e.Status === 'خلل' ? 'badge-danger' :
+                           e.Status === 'في الوقت' ? 'badge-success' : 'badge-secondary';
+        const isResolved = e.Is_Resolved === 'Yes' || e.Is_Resolved === 'نعم';
+        const resolvedClass = isResolved ? 'badge-success' : 'badge-secondary';
+        const resolvedText = isResolved ? 'نعم' : 'لا';
+        return '<tr>' +
+          '<td>' + (e.Date?.split(' ')[0] || '-') + '</td>' +
+          '<td>' + (e.Actual_Time || '-') + '</td>' +
+          '<td>' + (e.Area || e.Round_Name || '-') + '</td>' +
+          '<td>' + (e.Responsible_Role || '-') + '</td>' +
+          '<td>' + (e.Execution_Responsible || '-') + '</td>' +
+          '<td><span class="badge ' + statusClass + '">' + (e.Status || 'تم') + '</span></td>' +
+          '<td><span class="badge ' + resolvedClass + '">' + resolvedText + '</span></td>' +
+          '<td>' + (e.Negative_Notes || '-') + '</td>' +
+        '</tr>';
+      }).join('');
+      
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(
+        '<!DOCTYPE html>' +
+        '<html dir="rtl" lang="ar">' +
+        '<head>' +
+        '<meta charset="UTF-8">' +
+        '<title>تقرير الجولات - مجمع مكة الطبي</title>' +
+        '<style>' +
+        '* { font-family: Tajawal, sans-serif; }' +
+        'body { padding: 20px; background: #fff; }' +
+        '.header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #8b4563; padding-bottom: 20px; }' +
+        '.logo { width: 80px; height: 80px; margin-bottom: 10px; }' +
+        '.title { color: #1e3a5f; font-size: 24px; font-weight: bold; margin: 10px 0; }' +
+        '.subtitle { color: #8b4563; font-size: 16px; }' +
+        '.date-range { background: #fdf2f4; padding: 10px 20px; border-radius: 8px; display: inline-block; margin: 15px 0; }' +
+        'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
+        'th { background: #8b4563; color: white; padding: 12px 8px; font-size: 14px; }' +
+        'td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 13px; }' +
+        'tr:nth-child(even) { background: #fdf2f4; }' +
+        '.badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; display: inline-block; }' +
+        '.badge-success { background: #10b981; color: white; }' +
+        '.badge-warning { background: #f59e0b; color: #000; }' +
+        '.badge-danger { background: #ef4444; color: white; }' +
+        '.badge-secondary { background: #6b7280; color: white; }' +
+        '.footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 15px; }' +
+        '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
+        '</style>' +
+        '</head>' +
+        '<body>' +
+        '<div class="header">' +
+        '<img src="شعار للموقع المجمع.jpeg" class="logo" alt="شعار المجمع">' +
+        '<div class="title">مجمع مكة الطبي بالزاهر</div>' +
+        '<div class="subtitle">تقرير سجل الجولات الرقابية</div>' +
+        '<div class="date-range"><strong>الفترة:</strong> من ' + startDate + ' إلى ' + endDate + '</div>' +
+        '</div>' +
+        '<table>' +
+        '<thead><tr><th>التاريخ</th><th>الوقت</th><th>الجولة</th><th>المسؤول</th><th>منفذ الجولة</th><th>الحالة</th><th>المعالجة</th><th>ملاحظات</th></tr></thead>' +
+        '<tbody>' + tableRows + '</tbody>' +
+        '</table>' +
+        '<div class="footer">' +
+        '<p>تم إنشاء هذا التقرير بواسطة نظام جولات السلامة المطوّر</p>' +
+        '<p>مجمع مكة الطبي بالزاهر - ' + new Date().toLocaleDateString('ar-SA') + '</p>' +
+        '</div>' +
+        '<script>window.onload = function() { window.print(); }<\/script>' +
+        '</body></html>'
+      );
+      printWindow.document.close();
+    }
+
+    let chartsLoaded = false;
+    let trendChart, statusChart, staffChart, areaChart;
+    
+    document.getElementById('dashboard-tab').addEventListener('shown.bs.tab', () => {
+      if (!chartsLoaded) {
+        loadDashboardData();
+        chartsLoaded = true;
+      }
+    });
+    
+    async function loadDashboardData() {
+      try {
+        const days = parseInt(document.getElementById('dashPeriodFilter')?.value) || 14;
+        const data = await callApi('getMetrics', { days });
+        
+        const m = {
+          totalRounds: data.total || 0,
+          completed: data.completed || 0,
+          delayed: data.delayed || 0,
+          violations: data.violations || 0,
+          complianceRate: data.compliance || 0,
+          byDay: Object.entries(data.byDate || {}).map(([date, count]) => ({ date, completed: count, delayed: 0 })),
+          byStaff: Object.entries(data.byStaff || {}).map(([name, count]) => ({ name, count })),
+          byArea: Object.entries(data.byArea || {}).map(([area, count]) => ({ area, count }))
+        };
+        document.getElementById('dashTotalRounds').textContent = m.totalRounds;
+        document.getElementById('dashCompleted').textContent = m.completed;
+        document.getElementById('dashDelayed').textContent = m.delayed;
+        document.getElementById('dashCompliance').textContent = m.complianceRate + '%';
+        
+        renderTrendChart(m.byDay);
+        renderStatusChart(m);
+        renderStaffChart(m.byStaff);
+        renderAreaChart(m.byArea);
+        renderTopIssues(m.byArea);
+      } catch (err) {
+        console.error('Dashboard error:', err);
+      }
+    }
+    
+    function renderTrendChart(byDay) {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (trendChart) trendChart.destroy();
+      
+      const labels = byDay.map(d => d.date.split('-').slice(1).join('/'));
+      trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: byDay.map(d => d.completed), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+            { label: 'متأخرة', data: byDay.map(d => d.delayed), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 }
+          ]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10, family: 'Tajawal' } } } }, 
+          scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 9 } }, grid: { display: false } } } 
+        }
+      });
+    }
+    
+    function renderStatusChart(m) {
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      if (statusChart) statusChart.destroy();
+      
+      statusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['مكتملة', 'متأخرة', 'مخالفات'],
+          datasets: [{
+            data: [m.completed, m.delayed, m.violations],
+            backgroundColor: ['#22c55e', '#ef4444', '#eab308'],
+            borderWidth: 0
+          }]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          cutout: '60%',
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' }, padding: 8 } } } 
+        }
+      });
+    }
+    
+    function renderStaffChart(byStaff) {
+      const ctx = document.getElementById('staffChart').getContext('2d');
+      if (staffChart) staffChart.destroy();
+      
+      const labels = Object.keys(byStaff).slice(0, 5);
+      const completed = labels.map(l => byStaff[l].completed);
+      const delayed = labels.map(l => byStaff[l].delayed);
+      
+      staffChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 16 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 16 }
+          ]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' } } } }, 
+          scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 9 } }, grid: { display: false } } } 
+        }
+      });
+    }
+    
+    function renderAreaChart(byArea) {
+      const ctx = document.getElementById('areaChart').getContext('2d');
+      if (areaChart) areaChart.destroy();
+      
+      const sorted = Object.entries(byArea).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+      const labels = sorted.map(([k]) => k.length > 20 ? k.slice(0, 20) + '...' : k);
+      const completed = sorted.map(([, v]) => v.completed);
+      const delayed = sorted.map(([, v]) => v.delayed);
+      
+      areaChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 14 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 14 }
+          ]
+        },
+        options: { 
+          indexAxis: 'y', 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' } } } },
+          scales: { x: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, y: { ticks: { font: { size: 9 } }, grid: { display: false } } }
+        }
+      });
+    }
+    
+    function renderTopIssues(byArea) {
+      const container = document.getElementById('topIssuesList');
+      if (!container) return;
+      
+      const sorted = Object.entries(byArea).filter(([,v]) => v.delayed > 0).sort((a, b) => b[1].delayed - a[1].delayed).slice(0, 8);
+      if (!sorted.length) {
+        container.innerHTML = '<div class="text-muted text-center py-2 w-100">لا توجد مشاكل مسجلة في هذه الفترة</div>';
+        return;
+      }
+      
+      container.innerHTML = sorted.map(([name, data]) => `
+        <div class="issue-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${data.delayed > 10 ? '#fef2f2' : data.delayed > 5 ? '#fefce8' : '#f3f4f6'}; border-radius: 20px; border: 1px solid ${data.delayed > 10 ? '#fecaca' : data.delayed > 5 ? '#fef08a' : '#e5e7eb'};">
+          <span class="badge ${data.delayed > 10 ? 'bg-danger' : data.delayed > 5 ? 'bg-warning text-dark' : 'bg-secondary'}" style="font-size: 0.7rem;">${data.delayed}</span>
+          <span style="font-size: 0.8rem; color: #374151;">${name.length > 30 ? name.slice(0, 30) + '...' : name}</span>
+        </div>
+      `).join('');
+    }
+  </script>
+</body>
+</html>
