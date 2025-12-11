@@ -450,12 +450,28 @@ function getMetrics(days) {
 
 function getChecklist(taskId) {
   const sheet = getSheet(taskId);
+  
+  // إذا ما فيه شيت، نرجع بنود افتراضية للاختبار
   if (!sheet) {
-    return { items: [], error: 'Sheet not found: ' + taskId };
+    const defaultItems = [
+      { id: 1, text: 'التأكد من نظافة المنطقة', category: 'نظافة' },
+      { id: 2, text: 'فحص معدات السلامة', category: 'سلامة' },
+      { id: 3, text: 'التأكد من التهوية المناسبة', category: 'بيئة' },
+      { id: 4, text: 'فحص الإضاءة', category: 'بيئة' },
+      { id: 5, text: 'التأكد من توفر مستلزمات النظافة', category: 'نظافة' }
+    ];
+    return { items: defaultItems, isDefault: true };
   }
   
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return { items: [] };
+  if (data.length < 2) {
+    const defaultItems = [
+      { id: 1, text: 'التأكد من نظافة المنطقة', category: 'نظافة' },
+      { id: 2, text: 'فحص معدات السلامة', category: 'سلامة' },
+      { id: 3, text: 'التأكد من التهوية المناسبة', category: 'بيئة' }
+    ];
+    return { items: defaultItems, isDefault: true };
+  }
   
   const items = [];
   for (let i = 1; i < data.length; i++) {
@@ -468,7 +484,7 @@ function getChecklist(taskId) {
     }
   }
   
-  return { items: items };
+  return { items: items, isDefault: false };
 }
 
 function verifyPasscode(staffName, passcode) {
