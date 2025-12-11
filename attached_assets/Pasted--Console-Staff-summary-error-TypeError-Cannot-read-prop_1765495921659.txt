@@ -1,0 +1,164 @@
+شفت الصورة ✅ والخطأ واضح جدًا من الـ Console:
+
+Staff summary error: TypeError: Cannot read properties of undefined (reading 'substring')
+يعني في renderStationCards() أنت تعمل:
+r.name.substring(...)
+لكن r.name طالع undefined داخل topRounds.
+
+وهذا يحدث بسبب عدم تطابق أسماء أعمدة MASTER_TASKS مع اللي تقرأه Apps Script، فيطلع:
+
+task.Task_ID = undefined
+
+و task.Round_Name_Ar = undefined
+فتنتهي name = undefined → والواجهة تتكسر.
+
+(تحذيرات ethereum/Host whitelist اللي فوق في الكونسول من إضافات المتصفح، ليست سبب المشكلة.)
+
+1) أصلح Apps Script: اجعل قراءة أعمدة MASTER_TASKS “مرنة” (مهم جدًا)
+✅ عدّل داخل getHomeData() هذا الجزء فقط:
+
+بدل:
+
+task.Task_ID
+task.Round_Name_Ar
+
+
+استخدم fallback للأسماء المحتملة (لأنك واضح تغيّر الهيدر أكثر من مرة):
+
+const taskId = task.Task_ID || task.TaskID || task.TaskId || task.Task || '';
+const roundNameAr = task.Round_Name_Ar || task.Round_Name_AR || task.Round_Name_Arb || task.Round_Name_AR || task.Round_Name_AR || task.Round_Name || '';
+
+
+ثم داخل push:
+
+staffMap[assignee].topRounds.push({
+  taskId: taskId,
+  name: (roundNameAr || taskId || '—'),
+  roundsRequired: rpd,
+  done: 0,
+  targetTime: task.Target_Time || task.TargetTime || ''
+});
+
+
+هذا يمنع name من أن تكون undefined مهما كان الهيدر.
+
+2) أصلح الواجهة HTML: امنع crash حتى لو البيانات ناقصة
+
+في renderStationCards() لديك:
+
+${r.name.substring(0,30)}
+
+
+بدّلها إلى:
+
+${(r.name || '—').substring(0,30)}
+
+
+وبرضه هنا:
+
+r.name.length>30
+
+
+بدّلها إلى:
+
+(r.name || '').length > 30
+
+
+✅ بهذه الخطوة، حتى لو API رجّع شيء ناقص، الواجهة ما تنهار.
+
+3) عندك Bug ثاني أكيد في الـ Checklist (هذا سيخرب عرض البنود + استخراج المخالفات)
+
+أنت ما زلت تستخدم item.item بينما Apps Script يرجع { id, text }.
+
+✅ في HTML داخل renderChecklistForm():
+
+بدّل:
+
+<div class="checklist-text">${item.item}</div>
+
+
+إلى:
+
+<div class="checklist-text">${item.text}</div>
+
+
+وبدل:
+
+.map(i => '❌ ' + i.item)
+
+
+إلى:
+
+.map(i => '❌ ' + i.text)
+
+4) Bug ثالث في سجل اليوم: أنت تعرض entry.Actual_Time لكن API يرجّع Time
+
+في renderRoundsLog() عندك:
+
+entry.Actual_Time
+
+
+لكن في Apps Script أنت ترجع:
+
+Time: r.Actual_Time
+
+✅ الحل:
+
+بدّل سطر الوقت في HTML إلى:
+
+${entry.Time || entry.Actual_Time || '-'}
+
+5) مهم جدًا: _rowIndex عندك في المخالفات غلط (يأشر على صف خاطئ)
+
+في getViolations() أنت تعمل:
+
+.map((r, idx) => ({ _rowIndex: idx + 2, ... }))
+
+
+هذا خطأ لأنك فلترت قبل الـ map، فـ idx لم يعد يطابق رقم الصف في الشيت.
+
+✅ الحل الصحيح:
+
+لازم sheetToObjects() يضيف رقم الصف الحقيقي.
+
+استبدل sheetToObjects() بـ:
+
+function sheetToObjects(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+
+  const headers = data[0];
+  const rows = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = { _rowIndex: i + 1 };
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = data[i][j];
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+
+ثم في getViolations() استخدم:
+
+_rowIndex: r._rowIndex
+
+6) بعد أي تعديل في Apps Script لازم “Deploy” جديد
+
+لأن Web App يستدعي النسخة المنشورة (Deployment)، وليس تلقائيًا آخر تعديل في المحرر. توثيق Google يوضح استخدام doGet/doPost مع ContentService في Web Apps. 
+Google for Developers
++1
+
+أسرع اختبار عندك الآن (بدون تخمين)
+
+افتح Console واكتب:
+
+callApi('getStaffSummary').then(d => console.log(d.staff?.[0]))
+
+
+إذا أول عنصر في topRounds لا يحتوي name → المشكلة من MASTER_TASKS headers / mapping (حلّها بند 1).
+
+إذا يحتوي name ومع ذلك ينهار → المشكلة من HTML substring (حلّها بند 2).
