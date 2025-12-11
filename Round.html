@@ -1536,20 +1536,40 @@
       });
     }
     
+    // Helper to parse date in various formats
+    function parseViolationDate(dateStr) {
+      if (!dateStr) return null;
+      // Try parsing as MM/DD/YYYY or DD/MM/YYYY
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        // Assume MM/DD/YYYY format (US)
+        const month = parseInt(parts[0]) - 1;
+        const day = parseInt(parts[1]);
+        const year = parseInt(parts[2]);
+        if (year > 1900 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+          return new Date(year, month, day);
+        }
+      }
+      // Fallback to standard parsing
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    
     function applyViolationFilters() {
       const period = parseInt(document.getElementById('violationPeriodFilter').value) || 0;
       const staff = document.getElementById('violationStaffFilter').value;
       const round = document.getElementById('violationRoundFilter').value;
       
-      let filtered = [...VIOLATIONS_DATA.violations];
+      let filtered = [...(VIOLATIONS_DATA.violations || [])];
       
       // Filter by period
       if (period > 0) {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - period);
+        cutoff.setHours(0, 0, 0, 0);
         filtered = filtered.filter(v => {
-          const vDate = new Date(v.Date);
-          return vDate >= cutoff;
+          const vDate = parseViolationDate(v.Date);
+          return vDate && vDate >= cutoff;
         });
       }
       
