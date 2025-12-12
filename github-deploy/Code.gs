@@ -599,9 +599,13 @@ function logRound(payload) {
   const row = headers.map(h => {
     switch(h) {
       case 'Date': return dateStr;
-      case 'Actual_Time': return timeStr;
+      case 'Actual_Time': return payload.time || timeStr;
+      case 'Planned_Time': return payload.plannedTime || '';
       case 'TaskID': return payload.taskId || '';
-      case 'Area': return payload.area || '';
+      case 'RoundNo': return payload.roundNo || '';
+      case 'Round_Name': return payload.roundName || payload.area || '';
+      case 'Area': return payload.area || payload.roundName || '';
+      case 'Domain': return payload.domain || '';
       case 'Responsible_Role': return payload.staff || '';
       case 'Execution_Responsible': return payload.execResponsible || '';
       case 'Status': return payload.status || 'تم';
@@ -609,6 +613,9 @@ function logRound(payload) {
       case 'Negative_Notes': return payload.negativeNotes || payload.notes || '';
       case 'Is_Violation': return payload.isViolation ? 'TRUE' : 'FALSE';
       case 'Closed_YN': return 'No';
+      case 'Alert': return '';
+      case 'Delay_Min': return '';
+      case 'MaxDelay_Min': return '';
       default: return '';
     }
   });
