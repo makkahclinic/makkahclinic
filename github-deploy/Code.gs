@@ -333,18 +333,25 @@ function getViolations() {
     const status = String(r.Status || '').toLowerCase();
     const notes = String(r.Negative_Notes || '').toLowerCase();
     return status.includes('خلل') || notes.includes('نقاط الخلل') || notes.includes('❌');
-  }).map(r => ({
-    _rowIndex: r._rowIndex,
-    Date: formatDate(r.Date),
-    Actual_Time: formatTime(r.Actual_Time),
-    Area: r.Area || r.Round_Name || r.TaskID || '',
-    Round_Name: r.Round_Name || r.Area || r.TaskID || '',
-    Responsible_Role: r.Responsible_Role || '',
-    Execution_Responsible: r.Execution_Responsible || '',
-    Status: r.Status || '',
-    Negative_Notes: r.Negative_Notes || r.Notes || '',
-    Is_Resolved: r.Closed_YN || r.Is_Resolved || 'no',
-  }));
+  }).map(r => {
+    // إذا كان Area رقم فقط، استخدم Round_Name بدلاً منه
+    let area = r.Area || r.Round_Name || '';
+    if (/^\d+$/.test(String(area).trim())) {
+      area = r.Round_Name || r.Negative_Notes?.split('-')[0]?.trim() || 'منطقة غير محددة';
+    }
+    return {
+      _rowIndex: r._rowIndex,
+      Date: formatDate(r.Date),
+      Actual_Time: formatTime(r.Actual_Time),
+      Area: area,
+      Round_Name: r.Round_Name || area || '',
+      Responsible_Role: r.Responsible_Role || '',
+      Execution_Responsible: r.Execution_Responsible || '',
+      Status: r.Status || '',
+      Negative_Notes: r.Negative_Notes || r.Notes || '',
+      Is_Resolved: r.Closed_YN || r.Is_Resolved || 'no',
+    };
+  });
 
   // تجميع المخالفات المتكررة بناءً على البند الفعلي (وليس النص الكامل)
   // نفصل Negative_Notes حسب | لنحصل على كل بند فاشل منفصل
