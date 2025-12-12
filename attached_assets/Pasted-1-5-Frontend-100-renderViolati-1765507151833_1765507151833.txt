@@ -1,0 +1,171 @@
+1) لماذا “أكثر منطقة مخالفات” يظهر رقم (5) بدون اسم منطقة؟
+
+هذا خلل Frontend 100%.
+
+في renderViolations() أنت تحسب topArea صح (اسم + عدد)، لكن بعدها تكتب في العنصر violationTopArea اسم مقصوص فقط:
+
+document.getElementById('violationTopArea').textContent =
+  topArea ? (topArea[0].length > 20 ? topArea[0].substring(0,20) + '...' : topArea[0]) : '-';
+
+
+بينما الكرت البنفسجي في واجهتك مصمم يظهر “رقم كبير” فقط، لذلك المستخدم يشوف “5” بلا اسم.
+✅ الحل: خلِّ الكرت يعرض “الاسم + العدد” مثل كرت “أكثر مسؤول مخالفات”.
+
+بدّل السطر إلى:
+
+document.getElementById('violationTopArea').textContent =
+  topArea ? `${topArea[0]} (${topArea[1]})` : '-';
+
+
+الآن سيظهر مثل: “العيادات العامة (5)” بدل رقم يتيم.
+
+2) لماذا قائمة الموظفين في الفلتر تتكرر عشرات المرات؟
+
+هذا خلل Frontend بسبب أن populateStaffFilter() يتم استدعاؤها أكثر من مرة بدون تنظيف الخيارات.
+
+أنت عندك محاولة تنظيف في نسخة، لكن واضح أنها ليست مطبّقة في كل القوائم/أو لم تُنشر نفس النسخة.
+
+✅ استخدم هذه النسخة “نهائية” (تحذف كل شيء بعد الخيار الأول ثم تضيف بدون تكرار):
+
+function resetSelectKeepFirst(sel) {
+  if (!sel) return;
+  while (sel.options.length > 1) sel.remove(1);
+}
+
+function populateStaffFilter() {
+  const historySelect = document.getElementById('historyStaffFilter');
+  const formSelect = document.getElementById('formStaff');
+  const violationStaffSelect = document.getElementById('violationStaffFilter');
+  const violationRoundSelect = document.getElementById('violationRoundFilter');
+  const roundSelect = document.getElementById('formRound');
+
+  // نظّف
+  [historySelect, formSelect, violationStaffSelect].forEach(resetSelectKeepFirst);
+  [violationRoundSelect, roundSelect].forEach(resetSelectKeepFirst);
+
+  // Staff بدون تكرار
+  const uniqueStaff = [...new Set((STAFF_LIST || []).map(x => String(x || '').trim()).filter(Boolean))];
+  uniqueStaff.forEach(s => {
+    [historySelect, formSelect, violationStaffSelect].forEach(sel => {
+      if (!sel) return;
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  });
+
+  // Rounds بدون تكرار (من MASTER_TASKS عندك الاسم الحقيقي Round_Name_AR)
+  const uniqueRounds = [...new Set((MASTER_TASKS || []).map(t => (t.Round_Name_AR || t.Round_Name_EN || t.TaskID || '').toString().trim()).filter(Boolean))];
+  uniqueRounds.forEach(r => {
+    [roundSelect, violationRoundSelect].forEach(sel => {
+      if (!sel) return;
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = r;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+3) لماذا “قائمة جميع المخالفات” أحيانًا تطلع فاضية أو غلط؟
+
+هنا الخلل مشترك بين البيانات + المنطق:
+
+(أ) أنت تعتبر أي سجل فيه ❌ في النص “مخالفة”
+
+هذا صحيح لو النص فعلاً يمثل بنود فشل.
+
+لكن من لقطة “سجل الجولات اليوم” واضح أن Negative_Notes عندك صار يحتوي تكرار اسم الجولة نفسه عشرات المرات مع ❌
+وهذا معناه أحد شيئين:
+
+السبب 1 (الأكثر شيوعًا):
+
+الشيتات R01/R02… ليست قائمة بنود فعلاً في العمود الذي تقرأه
+يعني أنت تقرأ عمود فيه “عنوان الجولة” أو “اسم القسم” مكرر، وليس البنود.
+
+في getChecklist() أنت افترضت:
+
+النص العربي في العمود B (index 1)
+
+والوصف في العمود C (index 2)
+
+لكن هذا ليس مضمونًا.
+
+✅ الحل الصحيح في الـ Backend: اجعل getChecklist() يختار “أكثر عمود منطقي للبنود” بدل افتراض رقم ثابت.
+
+استبدل حلقة استخراج البنود داخل getChecklist() بهذه:
+
+  const items = [];
+  for (let i = 1; i < data.length; i++) {
+    // ابحث عن أول نص “طويل نسبيًا” (عادة البند)
+    const cells = data[i].map(v => (v === null ? '' : String(v).trim()));
+    const candidate = cells
+      .filter(s => s && s.length >= 6)        // تجاهل القيم القصيرة
+      .sort((a,b) => b.length - a.length)[0]; // خذ الأطول
+
+    if (candidate) {
+      items.push({
+        id: i,
+        text: candidate,
+        item: candidate
+      });
+    }
+  }
+
+
+هذا يمنع أن يقرأ “TaskID” أو “عنوان قصير مكرر”، ويأخذ النص الأكثر معنى في الصف.
+
+(ب) منطق “أكثر منطقة مخالفات” عندك يعدّ حسب Area لكن Area قد تكون فاضية أو متكررة
+
+في logRound() أنت تملأ:
+
+case 'Area': return payload.area || payload.roundName || '';
+
+
+لكن لو payload.area غير مرسل أو ترسل اسم الجولة فقط، سيكون Area = اسم الجولة وليس “المنطقة/القسم”.
+
+✅ قرار منطقي:
+
+خلي Area = اسم الجولة (Round_Name_AR) (وهذا مقبول لو هدفك المنطقة = الجولة)
+
+أو اضف “Domain” و“Area” من MASTER_TASKS لاحقًا.
+
+الأهم: لا تتركها فارغة. في submitChecklist() عندك الآن ترسل area ✅ ممتاز.
+
+4) تحسين عرض “نعم/لا” نفسه (للاختبار السهل)
+
+هذا Frontend: أنت جعلت الصف يتلوّن عند الضغط، ممتاز.
+لكن لازال سيء لأن:
+
+ما في ملخص (كم بند صار “لا”)
+
+وما في شرط يمنع الحفظ إذا فيه “لا” بدون اختيار مسؤول تنفيذ
+
+✅ أضف هذا الشرط (مهم جدًا للنظام اللي تريده):
+
+داخل submitChecklist() قبل الإرسال:
+
+if (hasIssues && !responsible) {
+  showErrorToast('يوجد بنود عليها "لا" — اختر مسؤول التنفيذ لمعالجة الخلل.');
+  return;
+}
+
+الخلاصة: أين الخلل؟
+
+المشكلة في عرض المخالفات وتكرار أسماء الموظفين: Frontend.
+
+المشكلة في أن المخالفة تظهر كنص مكرر غريب: Backend/البيانات (getChecklist يقرأ العمود الخطأ) + ثم Frontend يعرضه كما هو.
+
+أسرع طريقة “تثبت” أن getChecklist صحيح الآن
+
+افتح Console ونفّذ:
+
+callApi('getChecklist', { taskId: 1 }).then(r => console.log(r.sheetName, r.items.slice(0,5)))
+
+
+إذا أول 5 عناصر:
+
+كلها نفس اسم الجولة → ما زلنا نقرأ العمود الخطأ ✅ (طبق تعديل اختيار العمود الأطول)
+
+كانت بنود حقيقية متنوعة → البيانات صارت صح، ووقتها نركز على تجميل الـ UI فقط.

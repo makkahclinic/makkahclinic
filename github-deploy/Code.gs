@@ -500,22 +500,29 @@ function getChecklist(taskId) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return { items: [] };
 
-  // تحديد أعمدة النص - العمود B (index 1) يحتوي النص العربي
-  // العمود A (index 0) يحتوي TaskID
+  // اختيار العمود الأنسب للبنود - البحث عن أطول نص في كل صف
   const items = [];
   for (let i = 1; i < data.length; i++) {
-    // النص العربي في العمود B (index 1)
-    const text = data[i][1] || data[i][0];
-    // الوصف في العمود C (index 2)
-    const description = data[i][2] || '';
+    const cells = data[i].map(v => (v === null || v === undefined) ? '' : String(v).trim());
     
-    if (text) {
+    // ابحث عن أول نص طويل نسبياً (عادة البند الحقيقي)
+    // تجاهل القيم القصيرة والأرقام فقط
+    const candidates = cells
+      .filter(s => s && s.length >= 6 && !/^[\d\s\-]+$/.test(s))
+      .sort((a, b) => b.length - a.length);
+    
+    const candidate = candidates[0];
+    
+    if (candidate) {
+      // الوصف = ثاني أطول نص إذا وجد
+      const description = candidates[1] || '';
+      
       items.push({
         id: i,
-        text: String(text).trim(),
-        item: String(text).trim(),
-        description: String(description).trim(),
-        category: data[i][3] ? String(data[i][3]).trim() : ''
+        text: candidate,
+        item: candidate,
+        description: description,
+        category: ''
       });
     }
   }
