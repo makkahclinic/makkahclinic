@@ -1512,7 +1512,7 @@
       const topStaff = Object.entries(staffCounts).sort((a,b) => b[1]-a[1])[0];
       const topArea = Object.entries(areaCounts).sort((a,b) => b[1]-a[1])[0];
       document.getElementById('violationTopStaff').textContent = topStaff ? `${topStaff[0]} (${topStaff[1]})` : '-';
-      document.getElementById('violationTopArea').textContent = topArea ? `${topArea[0].substring(0,15)}...` : '-';
+      document.getElementById('violationTopArea').textContent = topArea ? (topArea[0].length > 20 ? topArea[0].substring(0,20) + '...' : topArea[0]) : '-';
       
       // Render trend chart
       renderViolationTrendChart(data.violations || []);
@@ -1520,28 +1520,56 @@
       if (!data.repeated?.length) {
         repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-info border-info"><i class="fas fa-info-circle me-2"></i>لا توجد مخالفات متكررة حالياً - ممتاز!</div></div>';
       } else {
+        // تنسيق نص المخالفة
+        const formatIssueText = (text) => {
+          if (!text) return 'مخالفة متكررة';
+          let cleaned = String(text)
+            .replace(/نقاط الخلل[:\s]*/g, '')
+            .replace(/❌\s*/g, '• ')
+            .replace(/\s*\|\s*/g, '\n• ')
+            .trim();
+          if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) return 'مخالفة متكررة';
+          return cleaned.length > 100 ? cleaned.substring(0, 100) + '...' : cleaned;
+        };
+        
         repeatedContainer.innerHTML = data.repeated.map(v => `
-          <div class="col-md-6 col-lg-4 mb-3">
-            <div class="card h-100 shadow border-warning" style="border-width: 3px; border-radius: 12px;">
-              <div class="card-header bg-warning text-dark py-2" style="border-radius: 9px 9px 0 0;">
+          <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-lg" style="border: 3px solid #dc3545; border-radius: 16px; overflow: hidden;">
+              <div class="card-header py-3" style="background: linear-gradient(135deg, #dc3545, #c82333);">
                 <div class="d-flex justify-content-between align-items-center">
-                  <span class="fw-bold"><i class="fas fa-redo-alt me-2"></i>${v.area || 'منطقة'}</span>
-                  <span class="badge bg-danger text-white fs-5" style="border-radius: 50%; padding: 8px 14px; animation: pulse 1.5s infinite;">
-                    ${v.count}×
-                  </span>
+                  <div class="text-white">
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    <span class="fw-bold fs-6">${v.area || 'منطقة'}</span>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-warning text-dark fs-5 px-3 py-2" style="animation: pulse 1.5s infinite;">
+                      🔁 ${v.count}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div class="card-body py-3">
-                <p class="card-text mb-3" style="line-height: 1.7;">${v.issue || 'مخالفة متكررة'}</p>
-                <div class="small text-muted mb-2">
-                  <i class="fas fa-user-tie me-1"></i>المكلف: <strong>${v.assignedTo || 'غير محدد'}</strong>
+              <div class="card-body py-3" style="background: #fff5f5;">
+                <div class="mb-3 p-2 bg-white rounded" style="border-right: 3px solid #dc3545;">
+                  <small class="text-muted d-block mb-1">تفاصيل المخالفة:</small>
+                  <p class="mb-0 small" style="line-height: 1.8; white-space: pre-line;">${formatIssueText(v.issue)}</p>
                 </div>
-                <div class="small text-danger">
-                  <i class="fas fa-calendar-times me-1"></i>آخر تكرار: <strong>${v.dates?.[v.dates.length-1] || '-'}</strong>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <div class="p-2 bg-white rounded text-center">
+                      <small class="text-muted d-block"><i class="fas fa-user-cog me-1"></i>المكلف بالإصلاح</small>
+                      <strong class="text-danger">${v.assignedTo || 'غير محدد'}</strong>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-2 bg-white rounded text-center">
+                      <small class="text-muted d-block"><i class="fas fa-calendar me-1"></i>آخر تكرار</small>
+                      <strong>${v.dates?.[v.dates.length-1] || '-'}</strong>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="card-footer py-2 bg-light text-center" style="border-radius: 0 0 9px 9px;">
-                <span class="badge bg-danger">⚠️ يحتاج تدخل عاجل</span>
+              <div class="card-footer py-2 text-center" style="background: #fff3cd;">
+                <span class="badge bg-danger fs-6 px-4 py-2">⚠️ تكرار ${v.count} مرات - يحتاج تدخل عاجل</span>
               </div>
             </div>
           </div>
@@ -1556,8 +1584,8 @@
           if (!notes) return 'مخالفة';
           let cleaned = String(notes)
             .replace(/نقاط الخلل[:\s]*/g, '')
-            .replace(/❌\s*/g, '')
-            .replace(/\s*\|\s*/g, ' | ')
+            .replace(/❌\s*/g, '• ')
+            .replace(/\s*\|\s*/g, '\n• ')
             .trim();
           
           // إذا كانت الملاحظات تحتوي على أرقام فقط (بيانات قديمة)، نعرض "مخالفة"
@@ -1568,51 +1596,68 @@
           return cleaned;
         };
         
-        // حساب عدد التكرار لكل مخالفة بناءً على المنطقة والنوع
+        // حساب عدد التكرار لكل مخالفة بناءً على المنطقة والمكلف بالإصلاح
         const repeatCounts = {};
         data.violations.forEach(v => {
-          const key = `${v.Area || v.Round_Name}_${v.Responsible_Role || v.Staff}`;
+          const key = `${v.Area || v.Round_Name}_${v.Execution_Responsible || v.Exec_Responsible || ''}`;
           repeatCounts[key] = (repeatCounts[key] || 0) + 1;
         });
         
-        // عرض المخالفات في كروت واضحة مع عدد التكرار
-        allContainer.innerHTML = data.violations.slice(0, 30).map((v, idx) => {
-          const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx;
-          const staffName = v.Responsible_Role || v.Staff || '';
+        // عرض المخالفات في كروت واضحة مع عدد التكرار وزر المعالجة
+        allContainer.innerHTML = data.violations.slice(0, 50).map((v, idx) => {
+          const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx + 2;
+          const detectedBy = v.Staff || v.Responsible_Role || '';
+          const assignedTo = v.Execution_Responsible || v.Exec_Responsible || 'غير محدد';
           const notes = formatViolationNotes(v.Negative_Notes || v.NegativeNotes);
           const areaName = (v.Area || v.Round_Name || 'جولة').replace(/'/g, "\\'");
           const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
-          const repeatKey = `${v.Area || v.Round_Name}_${staffName}`;
+          const repeatKey = `${v.Area || v.Round_Name}_${assignedTo}`;
           const repeatCount = repeatCounts[repeatKey] || 1;
           
           return `
-            <div class="col-md-6 col-lg-4 mb-3">
-              <div class="card h-100 shadow-sm ${isResolved ? 'border-success' : 'border-danger'}" style="border-width: 3px; border-radius: 12px;">
-                <div class="card-header py-2 ${isResolved ? 'bg-success' : 'bg-danger'} text-white" style="border-radius: 9px 9px 0 0;">
+            <div class="col-md-6 mb-3">
+              <div class="card h-100 shadow" style="border: 2px solid ${isResolved ? '#198754' : '#dc3545'}; border-radius: 14px; overflow: hidden;">
+                <div class="card-header py-2" style="background: ${isResolved ? 'linear-gradient(135deg, #198754, #157347)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
                   <div class="d-flex justify-content-between align-items-center">
-                    <span class="fw-bold"><i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>${v.Area || v.Round_Name || 'جولة'}</span>
-                    ${repeatCount > 1 ? `<span class="badge bg-warning text-dark fs-6" style="border-radius: 50%; padding: 5px 10px;">🔁 ${repeatCount}</span>` : ''}
+                    <div class="text-white">
+                      <i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+                      <span class="fw-bold">${v.Area || v.Round_Name || 'جولة'}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      ${repeatCount > 1 ? `<span class="badge bg-warning text-dark">🔁 ${repeatCount}</span>` : ''}
+                      <span class="badge bg-light text-dark">${v.Date || '-'}</span>
+                    </div>
                   </div>
                 </div>
-                <div class="card-body py-3">
-                  <p class="card-text mb-3" style="line-height: 1.8; font-size: 0.95rem;">${notes}</p>
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div class="text-muted small">
-                      <i class="fas fa-user me-1"></i>المسؤول: <strong>${staffName || '-'}</strong>
+                <div class="card-body py-3" style="background: ${isResolved ? '#f0fdf4' : '#fef2f2'};">
+                  <div class="p-2 bg-white rounded mb-3" style="border-right: 3px solid ${isResolved ? '#198754' : '#dc3545'}; white-space: pre-line; line-height: 1.7;">
+                    ${notes}
+                  </div>
+                  <div class="row g-2 small">
+                    <div class="col-6">
+                      <div class="p-2 bg-white rounded">
+                        <i class="fas fa-eye text-info me-1"></i>اكتشفها: <strong>${detectedBy || '-'}</strong>
+                      </div>
                     </div>
-                    <span class="badge bg-light text-secondary">${v.Date || '-'}</span>
+                    <div class="col-6">
+                      <div class="p-2 bg-white rounded">
+                        <i class="fas fa-user-cog text-danger me-1"></i>المكلف: <strong>${assignedTo}</strong>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 ${!isResolved ? `
-                  <div class="card-footer py-2 bg-light" style="border-radius: 0 0 9px 9px;">
-                    <button class="btn btn-success btn-sm w-100 py-2" onclick="openResolveModal(${rowIdx}, '${staffName.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
+                  <div class="card-footer py-2 bg-white border-top">
+                    <button class="btn btn-success w-100 py-2 fw-bold" onclick="openResolveModal(${rowIdx}, '${detectedBy.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
                       <i class="fas fa-check-double me-2"></i>تم المعالجة
                     </button>
                   </div>
                 ` : `
-                  <div class="card-footer py-2 text-center" style="background: rgba(25, 135, 84, 0.1); border-radius: 0 0 9px 9px;">
-                    <span class="text-success fw-bold"><i class="fas fa-check-circle me-1"></i>تمت المعالجة بنجاح</span>
-                    ${v.Resolved_Date ? `<br><small class="text-muted">${v.Resolved_Date}</small>` : ''}
+                  <div class="card-footer py-2 text-center" style="background: #d1e7dd;">
+                    <i class="fas fa-check-circle text-success me-1"></i>
+                    <span class="text-success fw-bold">تمت المعالجة</span>
+                    ${v.Resolved_By ? `<span class="text-muted mx-2">|</span><small>${v.Resolved_By}</small>` : ''}
+                    ${v.Resolved_Date ? `<span class="text-muted mx-2">|</span><small>${v.Resolved_Date}</small>` : ''}
                   </div>
                 `}
               </div>
@@ -1721,15 +1766,24 @@
         );
       }
       
-      // Recalculate repeated based on filtered
+      // Recalculate repeated based on filtered - استخدام المكلف بالإصلاح
       const issueMap = {};
       filtered.forEach(v => {
-        const key = (v.Area || v.Round_Name || '') + '|' + (v.Negative_Notes || '').substring(0, 50);
+        const key = (v.Area || v.Round_Name || '') + '|' + (v.Execution_Responsible || v.Exec_Responsible || '');
         if (!issueMap[key]) {
-          issueMap[key] = { area: v.Area || v.Round_Name, issue: v.Negative_Notes, assignedTo: v.Responsible_Role, count: 0, dates: [] };
+          issueMap[key] = { 
+            area: v.Area || v.Round_Name, 
+            issue: v.Negative_Notes || v.NegativeNotes, 
+            assignedTo: v.Execution_Responsible || v.Exec_Responsible || 'غير محدد',
+            detectedBy: v.Staff || v.Responsible_Role || '',
+            count: 0, 
+            dates: [],
+            rowIndices: []
+          };
         }
         issueMap[key].count++;
         issueMap[key].dates.push(v.Date);
+        if (v._rowIndex !== undefined) issueMap[key].rowIndices.push(v._rowIndex);
       });
       const repeated = Object.values(issueMap).filter(x => x.count >= 2).sort((a,b) => b.count - a.count);
       
@@ -1742,7 +1796,9 @@
       const violationStaffSelect = document.getElementById('violationStaffFilter');
       const violationRoundSelect = document.getElementById('violationRoundFilter');
       
-      STAFF_LIST.forEach(s => {
+      // إزالة التكرار من قائمة الموظفين
+      const uniqueStaff = [...new Set(STAFF_LIST)].filter(Boolean);
+      uniqueStaff.forEach(s => {
         const opt1 = document.createElement('option');
         opt1.value = s;
         opt1.textContent = s;
