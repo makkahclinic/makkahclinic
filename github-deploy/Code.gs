@@ -211,10 +211,17 @@ function getHomeData() {
     s.todayRemaining = Math.max(0, s.todayTasks - s.todayDone);
   });
   
+  // تحقق إذا اليوم إجازة (لا توجد مهام مجدولة)
+  const staffList = Object.values(staffMap);
+  const isHoliday = staffList.length === 0;
+  const holidayMessage = isHoliday ? 'اليوم إجازة! 🎉 استمتع بيومك وارتح' : '';
+  
   return {
     todayDate: todayStr,
-    dayName: getDayNameArDisplay(), // Return Arabic name for display
-    staff: Object.values(staffMap)
+    dayName: getDayNameArDisplay(),
+    staff: staffList,
+    isHoliday: isHoliday,
+    holidayMessage: holidayMessage
   };
 }
 
@@ -262,7 +269,12 @@ function getStaff() {
 
 function getStaffSummary() {
   const homeData = getHomeData();
-  return { staff: homeData.staff };
+  return { 
+    staff: homeData.staff,
+    isHoliday: homeData.isHoliday,
+    holidayMessage: homeData.holidayMessage,
+    dayName: homeData.dayName
+  };
 }
 
 function getDelayed() {

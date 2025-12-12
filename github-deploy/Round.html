@@ -1242,6 +1242,7 @@
       try {
         const data = await callApi('getStaffSummary');
         STAFF_SUMMARY = data.staff || [];
+        window.IS_HOLIDAY = data.isHoliday || false;
         renderStationCards();
         renderStaffPerformanceChart();
         
@@ -1319,7 +1320,19 @@
       const container = document.getElementById('stationCardsContainer');
       
       if (!STAFF_SUMMARY.length) {
-        container.innerHTML = '<div class="text-muted text-center py-3">لا توجد بيانات</div>';
+        // عرض رسالة الإجازة إذا كانت متوفرة
+        if (window.IS_HOLIDAY) {
+          container.innerHTML = `
+            <div class="text-center py-4" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 16px; border: 2px dashed #86efac;">
+              <div style="font-size: 3rem; margin-bottom: 10px;">🌴</div>
+              <div style="font-size: 1.3rem; font-weight: bold; color: #166534; margin-bottom: 8px;">اليوم إجازة!</div>
+              <div style="color: #15803d; font-size: 1rem;">استمتع بيومك وارتح 😊</div>
+              <div style="color: #22c55e; font-size: 0.85rem; margin-top: 10px;">لا توجد مهام مجدولة اليوم</div>
+            </div>
+          `;
+        } else {
+          container.innerHTML = '<div class="text-muted text-center py-3">لا توجد بيانات</div>';
+        }
         return;
       }
       
@@ -1565,7 +1578,11 @@
       const tbody = document.getElementById('roundsLogBody');
       
       if (!ROUNDS_LOG.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">لا توجد جولات مسجلة اليوم</td></tr>';
+        if (window.IS_HOLIDAY) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7);">🌴 اليوم إجازة - لا توجد جولات مجدولة</td></tr>';
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">لا توجد جولات مسجلة اليوم</td></tr>';
+        }
         return;
       }
       
