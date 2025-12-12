@@ -825,24 +825,89 @@
 
   <!-- Passcode Input Modal -->
   <div class="modal fade" id="passcodeModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header" style="background: var(--primary); color: white;">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 320px;">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+        <div class="modal-header border-0" style="background: var(--primary); color: white;">
           <h6 class="modal-title"><i class="fas fa-lock me-2"></i>الرمز السري</h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
           <p class="text-muted small mb-3 text-center">أدخل رمزك السري للتأكيد</p>
-          <input type="password" class="form-control form-control-lg text-center" id="passcodeInput" 
-                 maxlength="6" placeholder="****" autocomplete="off" style="letter-spacing: 10px; font-size: 1.5rem;">
-          <div id="passcodeError" class="text-danger small mt-2 text-center" style="display:none;"></div>
-          <button type="button" class="btn btn-success w-100 mt-3" onclick="verifyAndResolve()">
-            <i class="fas fa-check-circle me-1"></i>تحقق وأكمل المعالجة
-          </button>
+          
+          <!-- PIN Display -->
+          <div class="d-flex justify-content-center gap-2 mb-4" id="pinDisplay">
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+          </div>
+          <input type="hidden" id="passcodeInput" maxlength="4">
+          
+          <!-- Number Pad -->
+          <div class="numpad-grid">
+            <button type="button" class="numpad-btn" onclick="addPinDigit('1')">1</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('2')">2</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('3')">3</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('4')">4</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('5')">5</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('6')">6</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('7')">7</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('8')">8</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('9')">9</button>
+            <button type="button" class="numpad-btn numpad-clear" onclick="clearPin()"><i class="fas fa-backspace"></i></button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('0')">0</button>
+            <button type="button" class="numpad-btn numpad-submit" onclick="verifyAndResolve()"><i class="fas fa-check"></i></button>
+          </div>
+          
+          <div id="passcodeError" class="text-danger small mt-3 text-center" style="display:none;"></div>
         </div>
       </div>
     </div>
   </div>
+  
+  <style>
+    .pin-dot {
+      width: 18px; height: 18px;
+      border: 2px solid var(--primary);
+      border-radius: 50%;
+      background: #fff;
+      transition: all 0.15s ease;
+    }
+    .pin-dot.filled {
+      background: var(--primary);
+      transform: scale(1.15);
+      box-shadow: 0 0 8px rgba(30, 58, 95, 0.4);
+    }
+    .numpad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .numpad-btn {
+      width: 100%; height: 55px;
+      border: none;
+      border-radius: 12px;
+      background: #f3f4f6;
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #1f2937;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .numpad-btn:active {
+      transform: scale(0.92);
+      background: #e5e7eb;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
+    }
+    .numpad-btn:hover {
+      background: #e5e7eb;
+    }
+    .numpad-clear { background: #fef2f2; color: #dc3545; }
+    .numpad-clear:hover { background: #fee2e2; }
+    .numpad-submit { background: #d1fae5; color: #059669; }
+    .numpad-submit:hover { background: #a7f3d0; }
+  </style>
 
 
   <div class="modal fade" id="roundFormModal" tabindex="-1">
@@ -994,13 +1059,36 @@
     
     function showPasscodeModal() {
       bootstrap.Modal.getInstance(document.getElementById('resolveConfirmModal')).hide();
-      document.getElementById('passcodeInput').value = '';
+      clearPin();
       document.getElementById('passcodeError').style.display = 'none';
       setTimeout(() => {
         const modal = new bootstrap.Modal(document.getElementById('passcodeModal'));
         modal.show();
-        document.getElementById('passcodeInput').focus();
       }, 300);
+    }
+    
+    // دوال لوحة الأرقام
+    function addPinDigit(digit) {
+      const input = document.getElementById('passcodeInput');
+      if (input.value.length < 4) {
+        input.value += digit;
+        updatePinDisplay();
+        // اهتزاز خفيف للتأكيد
+        if (navigator.vibrate) navigator.vibrate(30);
+      }
+    }
+    
+    function clearPin() {
+      document.getElementById('passcodeInput').value = '';
+      updatePinDisplay();
+    }
+    
+    function updatePinDisplay() {
+      const len = document.getElementById('passcodeInput').value.length;
+      const dots = document.querySelectorAll('#pinDisplay .pin-dot');
+      dots.forEach((dot, i) => {
+        dot.classList.toggle('filled', i < len);
+      });
     }
     
     async function verifyAndResolve() {
@@ -1739,20 +1827,26 @@
                     </div>
                   </div>
                 </div>
-                ${!isResolved ? `
-                  <div class="card-footer py-2 bg-white border-top">
-                    <button class="btn btn-success w-100 py-2 fw-bold" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleResolveClick(this)">
-                      <i class="fas fa-check-double me-2"></i>تم المعالجة
-                    </button>
+                <div class="card-footer py-2 ${isResolved ? '' : 'bg-white'} border-top" style="${isResolved ? 'background: #d1e7dd;' : ''}">
+                  <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                      <span class="small text-muted">حالة المعالجة:</span>
+                      <span class="fw-bold ${isResolved ? 'text-success' : 'text-danger'} ms-1">
+                        ${isResolved ? '<i class="fas fa-check-circle me-1"></i>تمت' : '<i class="fas fa-times-circle me-1"></i>لم تتم'}
+                      </span>
+                    </div>
+                    ${!isResolved ? `
+                      <button class="btn btn-sm btn-outline-success px-3 py-1" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleResolveClick(this)">
+                        <i class="fas fa-check me-1"></i>معالجة
+                      </button>
+                    ` : `
+                      <small class="text-muted">
+                        ${v.Resolved_By ? v.Resolved_By : ''}
+                        ${v.Resolved_Date ? ' - ' + v.Resolved_Date : ''}
+                      </small>
+                    `}
                   </div>
-                ` : `
-                  <div class="card-footer py-2 text-center" style="background: #d1e7dd;">
-                    <i class="fas fa-check-circle text-success me-1"></i>
-                    <span class="text-success fw-bold">تمت المعالجة</span>
-                    ${v.Resolved_By ? `<span class="text-muted mx-2">|</span><small>${v.Resolved_By}</small>` : ''}
-                    ${v.Resolved_Date ? `<span class="text-muted mx-2">|</span><small>${v.Resolved_Date}</small>` : ''}
-                  </div>
-                `}
+                </div>
               </div>
             </div>
           `;
