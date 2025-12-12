@@ -70,6 +70,14 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  const action = e && e.parameter && e.parameter.action;
+  
+  if (action === 'debug') {
+    const result = debugInfo();
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
   return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
