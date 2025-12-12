@@ -464,42 +464,35 @@ function getMetrics(days) {
 }
 
 function getChecklist(taskId) {
-  const sheet = getSheet(taskId);
-  
-  // إذا ما فيه شيت، نرجع بنود افتراضية للاختبار
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  const id = String(taskId || '').trim();
+  const pad = id.padStart(2, '0');
+  const prefix = `R${pad}_`; // R01_, R02_ ...
+
+  // دور على أي شيت اسمه يبدأ بـ R01_ مثلا
+  const sheet = ss.getSheets().find(sh => sh.getName().startsWith(prefix));
+
   if (!sheet) {
-    const defaultItems = [
-      { id: 1, text: 'التأكد من نظافة المنطقة', category: 'نظافة' },
-      { id: 2, text: 'فحص معدات السلامة', category: 'سلامة' },
-      { id: 3, text: 'التأكد من التهوية المناسبة', category: 'بيئة' },
-      { id: 4, text: 'فحص الإضاءة', category: 'بيئة' },
-      { id: 5, text: 'التأكد من توفر مستلزمات النظافة', category: 'نظافة' }
-    ];
-    return { items: defaultItems, isDefault: true };
+    return { items: [], error: 'Checklist sheet not found for TaskID=' + id + ' (expected prefix ' + prefix + ')' };
   }
-  
+
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) {
-    const defaultItems = [
-      { id: 1, text: 'التأكد من نظافة المنطقة', category: 'نظافة' },
-      { id: 2, text: 'فحص معدات السلامة', category: 'سلامة' },
-      { id: 3, text: 'التأكد من التهوية المناسبة', category: 'بيئة' }
-    ];
-    return { items: defaultItems, isDefault: true };
-  }
-  
+  if (data.length < 2) return { items: [] };
+
   const items = [];
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0]) {
+    const text = data[i][0];
+    if (text) {
       items.push({
         id: i,
-        text: data[i][0],
-        category: data[i][1] || ''
+        text: String(text).trim(),
+        category: data[i][1] ? String(data[i][1]).trim() : ''
       });
     }
   }
-  
-  return { items: items, isDefault: false };
+
+  return { items: items, sheetName: sheet.getName() };
 }
 
 function verifyPasscode(staffName, passcode) {
