@@ -1,0 +1,90 @@
+✅ السبب الحقيقي لماذا الفورم لا يظهر
+
+أنت تربط زر “بدء الجولة” بـ:
+
+startRound(r.taskId, r.name)
+
+
+و r.taskId يأتي من شيت MASTER_TASKS عمود TaskID (أرقام 1، 2، 3…).
+
+لكن في Apps Script عندك:
+
+function getChecklist(taskId) {
+  const sheet = getSheet(taskId); // يبحث عن شيت اسمه "1" أو "2"...
+}
+
+
+بينما شيتات الـ Checklist عندك ليست أرقام… أسماء التابات عندك مثل:
+
+R01_PublicToilets
+
+R02_StaffToilets
+
+R03_Corridors
+… إلخ
+
+✅ يعني لما يجي taskId=1 هو يدور على Tab اسمها "1" → ما يلقاها → يرجّع items: [] → وبالتالي الفورم ما يطلع “نعم/لا” لأن مافيه بنود أصلاً.
+
+✅ الحل النهائي (بدون تغيير في الواجهة): خلي Apps Script يلاقي التاب الصحيح تلقائيًا
+
+عدّل دالة getChecklist(taskId) في Apps Script إلى هذا الإصدار:
+
+function getChecklist(taskId) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  const id = String(taskId || '').trim();
+  const pad = id.padStart(2, '0');
+  const prefix = `R${pad}_`; // R01_, R02_ ...
+
+  // دور على أي شيت اسمه يبدأ بـ R01_ مثلا
+  const sheet = ss.getSheets().find(sh => sh.getName().startsWith(prefix));
+
+  if (!sheet) {
+    return { items: [], error: 'Checklist sheet not found for TaskID=' + id + ' (expected prefix ' + prefix + ')' };
+  }
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { items: [] };
+
+  const items = [];
+  for (let i = 1; i < data.length; i++) {
+    const text = data[i][0];
+    if (text) {
+      items.push({
+        id: i,
+        text: String(text).trim(),
+        category: data[i][1] ? String(data[i][1]).trim() : ''
+      });
+    }
+  }
+
+  return { items, sheetName: sheet.getName() };
+}
+
+
+✅ هذا سيجعل:
+
+TaskID=1 → يفتح R01_PublicToilets
+
+TaskID=2 → يفتح R02_StaffToilets
+… تلقائيًا بدون ما تغيّر MASTER_TASKS.
+
+✅ خطوة تأكيد سريعة (بعد الـ Deploy)
+
+بعد ما تنشر (Deploy) نسخة جديدة من الـ Web App، افتح الموقع وجرّب جولة رقم 1.
+
+وإذا حبيت تتأكد فورًا من المتصفح (Console):
+
+callApi('getChecklist', { taskId: 1 }).then(r => console.log(r.items?.length, r.sheetName, r.error))
+
+
+لازم تشوف عدد بنود > 0 واسم الشيت مثل R01_PublicToilets.
+
+ملاحظة صغيرة: تأكد أن الواجهة فعلاً تعرض البند من text
+
+أنت عندك الآن ممتاز:
+
+<div class="checklist-text">${item.text || item.item || ''}</div>
+
+
+هذا صحيح.

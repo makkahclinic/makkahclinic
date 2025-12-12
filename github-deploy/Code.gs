@@ -103,6 +103,21 @@ function getTodayString() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function formatTime(value) {
+  if (!value) return '';
+  if (value instanceof Date) {
+    const h = String(value.getHours()).padStart(2, '0');
+    const m = String(value.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+  const str = String(value);
+  if (str.includes('T')) {
+    const timePart = str.split('T')[1];
+    if (timePart) return timePart.substring(0, 5);
+  }
+  return str;
+}
+
 function getDayNameAr() {
   // Sheet uses English day abbreviations: Sun, Mon, Tue, Wed, Thu, Fri, Sat
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -155,7 +170,7 @@ function getHomeData() {
       name: task.Round_Name_AR || task.Round_Name_EN || task.TaskID || 'غير محدد',
       roundsRequired: rpd,
       done: 0,
-      targetTime: task.Target_Time || ''
+      targetTime: formatTime(task.Target_Time)
     });
     
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
