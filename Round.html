@@ -1430,26 +1430,43 @@
         return;
       }
       
-      // تنظيف وتنسيق الملاحظات مع الحفاظ على النص العربي
+      // تنظيف وتنسيق الملاحظات - معالجة البيانات القديمة والجديدة
       const formatLogNotes = (notes, hasIssues) => {
-        if (!notes) return '-';
-        let cleaned = String(notes)
-          .replace(/نقاط الخلل[:\s]*/g, '')
-          .replace(/\s*\|\s*/g, ' | ')
-          .trim();
+        if (!notes) return hasIssues ? '<span class="text-danger">يوجد خلل</span>' : '-';
         
-        // إذا كانت الملاحظات تحتوي على أرقام فقط (بيانات قديمة)، نعرض "-"
+        let cleaned = String(notes).trim();
+        
+        // إذا كانت الملاحظات تحتوي على أرقام فقط (بيانات قديمة)
         if (/^[\d\s\-|×xX]+$/.test(cleaned)) {
           return hasIssues ? '<span class="text-danger">يوجد خلل</span>' : '-';
         }
         
-        // تنسيق الملاحظات مع ❌
-        if (cleaned.includes('❌')) {
-          const items = cleaned.split('|').map(item => item.trim()).filter(Boolean);
-          return items.map(item => `<span class="text-danger">${item}</span>`).join(' | ');
+        // البيانات القديمة: اسم الجولة مكرر عدة مرات
+        // نكتشف ذلك إذا نفس النص يتكرر أكثر من مرتين
+        const parts = cleaned.split('|').map(p => p.replace(/❌/g, '').trim()).filter(Boolean);
+        const uniqueParts = [...new Set(parts)];
+        
+        // إذا كل البنود متشابهة = بيانات قديمة خاطئة
+        if (parts.length > 2 && uniqueParts.length === 1) {
+          return `<span class="text-danger">يوجد ${parts.length} نقاط خلل</span>`;
         }
         
-        return cleaned || '-';
+        // تنظيف وعرض البنود الفريدة
+        cleaned = cleaned
+          .replace(/نقاط الخلل[:\s]*/g, '')
+          .replace(/\s*\|\s*/g, ' | ');
+        
+        if (cleaned.includes('❌')) {
+          const items = cleaned.split('|').map(item => item.trim()).filter(Boolean);
+          // عرض أول 3 بنود فقط
+          const display = items.slice(0, 3);
+          const remaining = items.length - 3;
+          let html = display.map(item => `<span class="text-danger">${item}</span>`).join(' | ');
+          if (remaining > 0) html += ` <span class="badge bg-secondary">+${remaining}</span>`;
+          return html;
+        }
+        
+        return cleaned.length > 100 ? cleaned.substring(0, 100) + '...' : cleaned;
       };
       
       tbody.innerHTML = ROUNDS_LOG.slice(0, 50).map(entry => {
@@ -1457,10 +1474,12 @@
         const hasIssues = status === 'خلل' || (entry.Negative_Notes && entry.Negative_Notes.includes('❌'));
         
         let statusClass = 'bg-secondary';
-        let statusText = status || 'تم';
+        let statusText = '';
         if (status === 'متأخر') { statusClass = 'bg-danger'; statusText = 'متأخر'; }
-        else if (status === 'في الوقت' || status === 'مكتمل' || status === 'مكتملة') { statusClass = 'bg-success'; statusText = 'مكتملة'; }
+        else if (status === 'في الوقت' || status === 'مكتمل' || status === 'مكتملة' || status === 'تم') { statusClass = 'bg-success'; statusText = 'مكتملة'; }
         else if (status === 'خلل') { statusClass = 'bg-warning text-dark'; statusText = 'خلل'; }
+        else if (!status || status.trim() === '') { statusClass = 'bg-success'; statusText = 'مكتملة'; }
+        else { statusText = status; }
         
         const formattedNotes = formatLogNotes(entry.Negative_Notes, hasIssues);
         
