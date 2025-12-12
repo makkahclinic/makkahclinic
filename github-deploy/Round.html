@@ -1600,16 +1600,29 @@
       // Render trend chart
       renderViolationTrendChart(data.violations || []);
       
-      // تنسيق نص المخالفة
+      // تنسيق نص المخالفة - إبقاء علامة ❌ واضحة
       const formatIssueText = (text) => {
-        if (!text) return 'مخالفة';
+        if (!text) return '<span class="text-danger">❌ مخالفة</span>';
         let cleaned = String(text)
           .replace(/نقاط الخلل[:\s]*/g, '')
-          .replace(/❌\s*/g, '• ')
-          .replace(/\s*\|\s*/g, '\n• ')
           .trim();
-        if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) return 'مخالفة مسجلة';
-        return cleaned.length > 120 ? cleaned.substring(0, 120) + '...' : cleaned;
+        
+        // إذا كانت بيانات قديمة (أرقام فقط)
+        if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) {
+          return '<span class="text-danger">❌ مخالفة مسجلة</span>';
+        }
+        
+        // فصل البنود وإضافة ❌ لكل بند
+        const items = cleaned.split('|').map(s => s.trim()).filter(Boolean);
+        const formatted = items.map(item => {
+          // إذا البند لا يحتوي على ❌، نضيفها
+          if (!item.includes('❌')) {
+            return `<span class="text-danger">❌ ${item}</span>`;
+          }
+          return `<span class="text-danger">${item}</span>`;
+        });
+        
+        return formatted.join('<br>');
       };
       
       // قسم المخالفات المتكررة (تحذير بصري)
