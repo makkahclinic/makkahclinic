@@ -118,6 +118,21 @@ function formatTime(value) {
   return str;
 }
 
+function formatDate(value) {
+  if (!value) return '';
+  if (value instanceof Date) {
+    const yyyy = value.getFullYear();
+    const mm = String(value.getMonth() + 1).padStart(2, '0');
+    const dd = String(value.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const str = String(value);
+  if (str.includes('T')) {
+    return str.split('T')[0];
+  }
+  return str;
+}
+
 function getDayNameAr() {
   // Sheet uses English day abbreviations: Sun, Mon, Tue, Wed, Thu, Fri, Sat
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -320,15 +335,15 @@ function getViolations() {
     return status.includes('خلل') || notes.includes('نقاط الخلل') || notes.includes('❌');
   }).map(r => ({
     _rowIndex: r._rowIndex,
-    Date: r.Date,
-    Actual_Time: r.Actual_Time,
-    Area: r.Area,
-    Round_Name: r.TaskID,
-    Responsible_Role: r.Responsible_Role,
-    Execution_Responsible: r.Execution_Responsible,
-    Status: r.Status,
-    Negative_Notes: r.Negative_Notes,
-    Is_Resolved: r.Closed_YN,
+    Date: formatDate(r.Date),
+    Actual_Time: formatTime(r.Actual_Time),
+    Area: r.Area || r.TaskID || '',
+    Round_Name: r.Round_Name || r.TaskID || '',
+    Responsible_Role: r.Responsible_Role || r.Execution_Responsible || '',
+    Execution_Responsible: r.Execution_Responsible || '',
+    Status: r.Status || '',
+    Negative_Notes: r.Negative_Notes || r.Notes || '',
+    Is_Resolved: r.Closed_YN || r.Is_Resolved || 'no',
   }));
 
   const map = {};
@@ -491,8 +506,22 @@ function getChecklist(taskId) {
       });
     }
   }
+  
+  // جلب المسؤولين من MASTER_TASKS للمهمة المحددة
+  const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
+  const task = masterTasks.find(t => String(t.TaskID) === id);
+  
+  const responsibles = [];
+  if (task) {
+    for (let i = 1; i <= 5; i++) {
+      const resp = task[`Responsible_${i}`];
+      if (resp && String(resp).trim()) {
+        responsibles.push(String(resp).trim());
+      }
+    }
+  }
 
-  return { items: items, sheetName: sheet.getName() };
+  return { items: items, sheetName: sheet.getName(), responsibles: responsibles };
 }
 
 function verifyPasscode(staffName, passcode) {
