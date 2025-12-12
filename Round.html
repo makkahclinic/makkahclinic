@@ -1517,21 +1517,22 @@
       // Render trend chart
       renderViolationTrendChart(data.violations || []);
       
+      // تنسيق نص المخالفة
+      const formatIssueText = (text) => {
+        if (!text) return 'مخالفة';
+        let cleaned = String(text)
+          .replace(/نقاط الخلل[:\s]*/g, '')
+          .replace(/❌\s*/g, '• ')
+          .replace(/\s*\|\s*/g, '\n• ')
+          .trim();
+        if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) return 'مخالفة مسجلة';
+        return cleaned.length > 120 ? cleaned.substring(0, 120) + '...' : cleaned;
+      };
+      
+      // قسم المخالفات المتكررة (تحذير بصري)
       if (!data.repeated?.length) {
         repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-info border-info"><i class="fas fa-info-circle me-2"></i>لا توجد مخالفات متكررة حالياً - ممتاز!</div></div>';
       } else {
-        // تنسيق نص المخالفة
-        const formatIssueText = (text) => {
-          if (!text) return 'مخالفة متكررة';
-          let cleaned = String(text)
-            .replace(/نقاط الخلل[:\s]*/g, '')
-            .replace(/❌\s*/g, '• ')
-            .replace(/\s*\|\s*/g, '\n• ')
-            .trim();
-          if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) return 'مخالفة متكررة';
-          return cleaned.length > 100 ? cleaned.substring(0, 100) + '...' : cleaned;
-        };
-        
         repeatedContainer.innerHTML = data.repeated.map(v => `
           <div class="col-md-6 mb-3">
             <div class="card h-100 shadow-lg" style="border: 3px solid #dc3545; border-radius: 16px; overflow: hidden;">
@@ -1541,11 +1542,9 @@
                     <i class="fas fa-map-marker-alt me-2"></i>
                     <span class="fw-bold fs-6">${v.area || 'منطقة'}</span>
                   </div>
-                  <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-warning text-dark fs-5 px-3 py-2" style="animation: pulse 1.5s infinite;">
-                      🔁 ${v.count}
-                    </span>
-                  </div>
+                  <span class="badge bg-warning text-dark fs-5 px-3 py-2" style="animation: pulse 1.5s infinite;">
+                    🔁 ${v.count}
+                  </span>
                 </div>
               </div>
               <div class="card-body py-3" style="background: #fff5f5;">
@@ -1576,39 +1575,23 @@
         `).join('');
       }
       
+      // قسم جميع المخالفات - يعرض كل مخالفة مع زر المعالجة
       if (!data.violations?.length) {
         allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
       } else {
-        // تنظيف وتنسيق الملاحظات مع الحفاظ على النص العربي
-        const formatViolationNotes = (notes) => {
-          if (!notes) return 'مخالفة';
-          let cleaned = String(notes)
-            .replace(/نقاط الخلل[:\s]*/g, '')
-            .replace(/❌\s*/g, '• ')
-            .replace(/\s*\|\s*/g, '\n• ')
-            .trim();
-          
-          // إذا كانت الملاحظات تحتوي على أرقام فقط (بيانات قديمة)، نعرض "مخالفة"
-          if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) {
-            return 'مخالفة مسجلة';
-          }
-          
-          return cleaned;
-        };
-        
         // حساب عدد التكرار لكل مخالفة بناءً على المنطقة والمكلف بالإصلاح
         const repeatCounts = {};
         data.violations.forEach(v => {
-          const key = `${v.Area || v.Round_Name}_${v.Execution_Responsible || v.Exec_Responsible || ''}`;
+          const key = `${v.Area || v.Round_Name}_${v.Execution_Responsible || ''}`;
           repeatCounts[key] = (repeatCounts[key] || 0) + 1;
         });
         
-        // عرض المخالفات في كروت واضحة مع عدد التكرار وزر المعالجة
-        allContainer.innerHTML = data.violations.slice(0, 50).map((v, idx) => {
+        // عرض جميع المخالفات في كروت واضحة مع زر المعالجة
+        allContainer.innerHTML = data.violations.slice(0, 100).map((v, idx) => {
           const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx + 2;
-          const detectedBy = v.Staff || v.Responsible_Role || '';
-          const assignedTo = v.Execution_Responsible || v.Exec_Responsible || 'غير محدد';
-          const notes = formatViolationNotes(v.Negative_Notes || v.NegativeNotes);
+          const detectedBy = v.Responsible_Role || '';
+          const assignedTo = v.Execution_Responsible || 'غير محدد';
+          const notes = formatIssueText(v.Negative_Notes || v.NegativeNotes);
           const areaName = (v.Area || v.Round_Name || 'جولة').replace(/'/g, "\\'");
           const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
           const repeatKey = `${v.Area || v.Round_Name}_${assignedTo}`;
@@ -1648,7 +1631,7 @@
                 </div>
                 ${!isResolved ? `
                   <div class="card-footer py-2 bg-white border-top">
-                    <button class="btn btn-success w-100 py-2 fw-bold" onclick="openResolveModal(${rowIdx}, '${detectedBy.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
+                    <button class="btn btn-success w-100 py-2 fw-bold" onclick="openResolveModal(${rowIdx}, '${assignedTo.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
                       <i class="fas fa-check-double me-2"></i>تم المعالجة
                     </button>
                   </div>
