@@ -53,9 +53,6 @@ function doPost(e) {
       case 'resolveViolation':
         result = resolveViolation(payload);
         break;
-      case 'debug':
-        result = debugInfo();
-        break;
       default:
         throw new Error('Unknown action: ' + action);
     }
@@ -319,8 +316,7 @@ function getDelayed() {
     for (let roundNum = 1; roundNum <= rpd; roundNum++) {
       if (roundNum <= doneCount) continue;
       
-      // البحث بكلا الاسمين Task_ID و TaskID
-      const scheduleRow = schedule.find(s => s.Task_ID === taskId || s.TaskID === taskId);
+      const scheduleRow = schedule.find(s => s.Task_ID === taskId);
       if (!scheduleRow) continue;
       
       const endTimeStr = scheduleRow[`Round_${roundNum}_End`];
@@ -776,51 +772,4 @@ function logRound(payload) {
   sheet.appendRow(row);
   
   return { success: true };
-}
-
-// دالة تشخيصية لفحص البيانات
-function debugInfo() {
-  const saudiNow = getSaudiDate();
-  const todayStr = getTodayString();
-  const dayName = getDayNameAr();
-  const currentMinutes = saudiNow.getHours() * 60 + saudiNow.getMinutes();
-  
-  const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-  const schedule = sheetToObjects(getSheet('Round_Schedule'));
-  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
-  
-  // المهام المجدولة اليوم
-  const todayTasks = masterTasks.filter(t => {
-    const dayCol = t[dayName];
-    return dayCol === 'Yes' || dayCol === true || dayCol === 'yes';
-  });
-  
-  // أسماء الأعمدة في Round_Schedule
-  const scheduleHeaders = schedule.length > 0 ? Object.keys(schedule[0]) : [];
-  
-  // أول 3 صفوف من الجدول الزمني
-  const scheduleSample = schedule.slice(0, 3);
-  
-  return {
-    debug: {
-      saudiTime: saudiNow.toISOString(),
-      todayStr: todayStr,
-      dayName: dayName,
-      dayNameDisplay: getDayNameArDisplay(),
-      currentMinutes: currentMinutes,
-      currentTimeFormatted: Math.floor(currentMinutes/60) + ':' + String(currentMinutes%60).padStart(2,'0'),
-      masterTasksCount: masterTasks.length,
-      todayTasksCount: todayTasks.length,
-      todayTasksSample: todayTasks.slice(0, 3).map(t => ({
-        TaskID: t.TaskID,
-        name: t.Round_Name_AR,
-        assignee: t.Assigned_To,
-        rpd: t.Rounds_Per_Day
-      })),
-      scheduleRowsCount: schedule.length,
-      scheduleHeaders: scheduleHeaders,
-      scheduleSample: scheduleSample,
-      roundsLogCount: roundsLog.length
-    }
-  };
 }
