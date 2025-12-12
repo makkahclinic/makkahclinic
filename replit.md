@@ -1,106 +1,204 @@
-# Medical Insurance Analyzer - Makkah Medical Complex
+# مجمع مكة الطبي بالزاهر - دليل المشروع الشامل
 
-## Overview
-This is a medical center website for Makkah Medical Complex (مجمع مكة الطبي بالزاهر), a healthcare facility in Makkah, Saudi Arabia serving the community for over 26 years. The website is primarily in Arabic and provides information about the medical complex, its departments, doctors, and services.
+## نظرة عامة
+موقع مجمع مكة الطبي بالزاهر (m2020m.org) - نظام متكامل يشمل الموقع الرئيسي + بوابة سباهي + نظام الجولات
 
-## Project Structure
-- `index.html` - Main landing page with departments and doctors info
-- `attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg` - New hexagonal logo with heartbeat design
-- `portal.html` - Smart portal (Doctor, Patient, Pharmacist portals)
-- `cbahi-portal.html` - Patient safety portal (password protected)
-- `doctor-mohammed.html` - Internal Medicine department page
-- `patient.html`, `pharmacy.html`, `insurance-check.html` - Various patient services
-- `report.html` - Complaint/incident reporting
-- `login.html`, `signup.html` - Authentication pages
-- `api/` - Serverless API functions (designed for Vercel)
-- `pages/api/` - Next.js style API routes
-- `ipc/` - Incident reporting templates
-- `server.js` - Express static file server for Replit
+---
 
-## Departments & Doctors
-1. **Internal Medicine (الباطنية):** Dr. Mohammed Al-Amin (Consultant), Dr. Hamada Nageh (Senior Resident), Dr. Magdy Askar (Specialist - 26 years)
-2. **Obstetrics & Gynecology:** Dr. Sawsan Al-Mahdar (Specialist)
-3. **Orthopedics:** Dr. Mohammed Al-Khaled (Specialist)
-4. **Ophthalmology:** Dr. Shaza (Senior Resident) - OCT, Fundus exam, Retinopathy follow-up
-5. **Dental:** Dr. Rabia Tabassum (Orthodontics Consultant), Dr. Muaz Labyoush, Dr. Noura Al-Habashi, Dr. Rasha, Dr. Al-Anoud Al-Zubaidi
-6. **General Practice:** Dr. Jaafar, Dr. Noor Al-Islam, Dr. Mohammed
+## هيكل النشر (Deployment Structure)
 
-## Services
-- Full Laboratory, X-ray, Ultrasound, Doppler, Dental Panorama, OCT for eyes
+| المكون | مكان النشر | الرابط |
+|--------|-----------|--------|
+| HTML Files | GitHub Pages | https://m2020m.org |
+| Code.gs | Google Apps Script | Web App URL |
+| Data | Google Sheets | متعدد |
+| Documents | Google Drive | متعدد |
 
-## Color Scheme (matching new logo)
-- Primary: #1e3a5f (Dark Blue)
-- Secondary/Accent: #c9a962 (Gold)
-- Accent/Crimson: #DC143C (Crimson - deep, rich, vibrant red)
-- Logo Background: rgba(220, 20, 60, 0.8) - Crimson at 80% opacity
+---
 
-## Tech Stack
-- Frontend: Static HTML/CSS/JavaScript with Tajawal font
-- Backend APIs: Node.js (serverless functions)
-- External integrations: Google Sheets, Google Drive, Firebase Auth, Google Apps Script
+## الملفات الرئيسية
 
-## Running the Project
-The project runs on port 5000 using a simple Express static file server.
+### الموقع الرئيسي
+| الملف | الوصف | الحالة |
+|-------|-------|--------|
+| `index.html` | الصفحة الرئيسية للمجمع | ✅ مكتمل |
+| `portal.html` | البوابة الذكية (طبيب/مريض/صيدلي) | ✅ مكتمل |
+| `doctor-mohammed.html` | صفحة قسم الباطنية | ✅ يحتاج تنقل |
+| `patient.html` | خدمات المرضى | ✅ مكتمل |
+| `pharmacy.html` | الصيدلية | ✅ مكتمل |
+| `login.html` | تسجيل الدخول | ✅ مكتمل |
+| `signup.html` | إنشاء حساب | ✅ مكتمل |
+| `insurance-check.html` | فحص التأمين | ✅ مكتمل |
 
-## Safety Rounds System (Round.html)
-The safety rounds system has been upgraded with direct Google Sheets integration:
-- **Today Tab**: Shows staff cards, daily stats, and round logs
-- **Delayed Tab**: Shows all overdue rounds with delay time
-- **Violations Tab**: Tracks violations and detects repeated issues
-- **History Tab**: Filter historical rounds by date and staff
-- **API Endpoints**: /api/rounds/* for all round operations
-- **Data Source**: Google Sheets via Replit integration
+### نظام سباهي (CBAHI)
+| الملف | الوصف | الحالة |
+|-------|-------|--------|
+| `cbahi-portal.html` | بوابة سباهي الإلكترونية (4114 سطر) | ✅ مكتمل |
+| `Round.html` | نظام جولات السلامة (2071 سطر) | ✅ مكتمل |
+| `calibration.html` | سجل معايرة الأجهزة (CAL) | ✅ مكتمل |
+| `report.html` | نموذج الإبلاغ الموحد | ✅ مكتمل |
 
-## Recent Changes
-- 2025-12-12: **CRITICAL FIX: Checklist Column D** - getChecklist() now reads Column D (Item_Description_AR) = البنود الحقيقية، وليس Column B (Round_Name_AR)
-- 2025-12-12: **CRITICAL FIX: Violation Counting** - getViolations() now splits Negative_Notes by "|" to count each failed item separately (not the whole text)
-- 2025-12-12: **CRITICAL FIX: logRound Complete Data** - Now saves: Round_Name, Area, Actual_Time, positiveNotes, negativeNotes to correct columns
-- 2025-12-12: **submitChecklist Fix** - No longer adds round name in items, only records actual failed items
-- 2025-12-12: **Top Area Display** - Now shows "المنطقة (العدد)" format e.g., "دورات المياه (3)"
-- 2025-12-12: **Validation** - If items have "لا" without selecting Execution_Responsible, shows error
-- 2025-12-12: **Fixed Staff Filter Duplication** - Staff dropdown now uses Set to remove duplicates
-- 2025-12-12: **Correct Field Usage** - Uses Execution_Responsible for "المكلف بالإصلاح" instead of Staff who detected it
-- 2025-12-12: **Enhanced Checklist Visual Feedback** - When selecting "لا" items turn red with border, "نعم" items turn green
-- 2025-12-12: **Fixed Log Table Display** - Old corrupted data (numeric patterns like "1-1-1-1") now shows "يوجد خلل" instead
-- 2025-12-12: **Redesigned Violations Tab** - Violations now shown as cards with red/green headers based on resolution status
-- 2025-12-12: **Passcode Resolution Workflow** - Confirmed working: تم المعالجة → Confirm Modal → Passcode Modal → verifyPasscode API → resolveViolation API
-- 2025-12-11: **Updated Logo** - Changed all site logos to new hexagonal design (شعار_للموقع_المجمع_1765489579657.jpeg) across all pages
-- 2025-12-11: **History Tab Date Highlighting** - Added active state for date range buttons (اليوم/أسبوع/شهر/3 أشهر/سنة) - selected button now highlights with primary color
-- 2025-12-11: **Violation Resolution System** - Added "تم المعالجة" button on each violation, confirmation modal with logo, staff passcode verification, and Is_Resolved/Resolved_By/Resolved_Date columns in Rounds_Log
-- 2025-12-11: **Staff Passcodes** - Created Staff_Passcodes sheet with unique codes for each staff member (عدنان:1234, بلال:5678, عبدالسلام:9012, خالد:3456)
-- 2025-12-11: **Enhanced Violations Tab** - Added filters (staff/round/time period), statistics cards (total, repeated, top staff, top area), and trend chart showing violation frequency over time
-- 2025-12-11: **Improved violation display** - Each violation shown as organized list with red border, danger icon, and proper formatting
-- 2025-12-11: **Added Is_Violation checkbox** - User can explicitly mark entries as violations
-- 2025-12-11: **Added Round_Schedule sheet** - Contains all 15 rounds with timing windows (Round_1_Start, Round_1_End, etc.)
-- 2025-12-11: **Success Toast notifications** - Beautiful green toast for successful saves instead of basic alerts
-- 2025-12-11: **Fixed violation detection** - Status="خلل" or "نقاط الخلل:" now correctly triggers violations
-- 2025-12-11: **UI auto-refresh** - Staff cards, charts, and counters update immediately after form submission
-- 2025-12-11: **Fixed data accuracy** - todayDone now counts all logged rounds (not just on-time ones)
-- 2025-12-11: **Redesigned layout** - Staff cards on right side, log table on left (matching original design)
-- 2025-12-11: **Improved log table** - Added mسؤول التنفيذ and ملخص الخلل columns
-- 2025-12-11: **Staff-centric workflow redesign** - Staff cards now show detailed daily stats with "منفذة/مطلوبة" tracking
-- 2025-12-11: Added "بدء الجولة" (Start Round) button for each task with completion status
-- 2025-12-11: Implemented checklist form with Yes/No toggles for each inspection item
-- 2025-12-11: Added `/api/rounds/staff-summary` endpoint for aggregated staff statistics
-- 2025-12-11: Added `/api/rounds/checklist/:taskId` endpoint to fetch R01-R15 checklist items
-- 2025-12-11: Staff cards now display today's tasks, completed count, and remaining rounds
-- 2025-12-11: Added round submission form (floating + button) for staff to log rounds
-- 2025-12-11: Added Dashboard tab with 4 charts (trend, status, staff, area performance)
-- 2025-12-11: Fixed violation detection - now uses smart keyword detection (reduced from 33 to 3 real violations)
-- 2025-12-11: Added /api/rounds/metrics endpoint for dashboard data
-- 2025-12-11: Upgraded Round.html with new features (history, delays, violations tracking)
-- 2025-12-11: Added Google Sheets API integration via Replit connector
-- 2025-12-11: Created sheets-service.js for Google Sheets operations
-- 2025-12-11: Updated server.js with API endpoints for rounds system
-- 2025-12-11: Updated logo to new design (logo-new.png)
-- 2025-12-11: Updated color scheme across all pages to match new logo
-- 2025-12-11: Added all doctors and departments information
-- 2025-12-11: Added services section (Lab, X-ray, Ultrasound, etc.)
-- 2025-12-11: Initial setup for Replit environment with Express static server
+### مكافحة العدوى (IPC)
+| الملف | الوصف | الحالة |
+|-------|-------|--------|
+| `ipc/incidents/report-needlestick.html` | بلاغ تعرض وخزي/دموي | ✅ مكتمل |
 
-## Staff Workflow (Round.html)
-1. Staff member clicks their card on the right panel
-2. Tasks table appears showing: Round name, Done/Required count, Target time, Start button
-3. Clicking "بدء الجولة" loads the checklist form (from R01-R15 sheets)
-4. Staff selects Yes/No for each item, assigns responsible party if issues found
-5. Submitting saves to Rounds_Log with proper status and notes
+### Backend
+| الملف | الوصف | الحالة |
+|-------|-------|--------|
+| `github-deploy/Code.gs` | Google Apps Script Backend | ✅ مكتمل |
+| `server.js` | Express Server (Replit فقط) | ✅ مكتمل |
+| `sheets-service.js` | خدمة Google Sheets | ✅ مكتمل |
+
+### الأصول (Assets)
+| الملف | الوصف |
+|-------|-------|
+| `logo-transparent.png` | الشعار الشفاف الجديد |
+| `logo-new.png` | الشعار السداسي |
+| `hero-bg.png` | صورة البطل (طبيب العيون) |
+
+---
+
+## أقسام بوابة سباهي (cbahi-portal.html)
+
+| القسم | الرمز | المعيار |
+|-------|-------|---------|
+| الصفحة الرئيسية | `#home` | - |
+| الدليل الإداري | `#manuals` | LD |
+| القيادة والحوكمة | `#leadership` | LD |
+| اللجان الرسمية | `#committees` | LD |
+| إدارة المخاطر | `#rm` | RM |
+| السلامة والمرافق | `#fms` | FMS |
+| سلامة المرضى | `#psc` | PSC |
+| مكافحة العدوى | `#ipc` | IPC |
+| الجودة والتحسين | `#qi` | QI |
+| الطوارئ والكوارث | `#eoc` | EOC |
+| بلاغات/شكاوى | `#complaints` | RM |
+| سجل التدريب | `#training` | LD |
+
+---
+
+## نظام الجولات (Round.html)
+
+### التبويبات
+1. **اليوم**: بطاقات الموظفين + جدول السجل
+2. **المتأخرة**: الجولات المتأخرة مع وقت التأخير
+3. **المخالفات**: تتبع المخالفات + الحل
+4. **السجل**: البحث التاريخي بالتاريخ والموظف
+5. **Dashboard**: رسوم بيانية وإحصائيات
+
+### APIs (Code.gs)
+| Action | الوظيفة |
+|--------|---------|
+| `getHomeData` | بيانات اليوم + الموظفين |
+| `getRoundsLog` | سجل الجولات |
+| `logRound` | تسجيل جولة جديدة |
+| `getMasterTasks` | المهام الرئيسية (15 جولة) |
+| `getStaffSummary` | ملخص الموظفين |
+| `getDelayed` | الجولات المتأخرة |
+| `getViolations` | المخالفات + التكرار |
+| `getHistory` | السجل التاريخي |
+| `getMetrics` | إحصائيات Dashboard |
+| `getChecklist` | بنود الفحص (R01-R15) |
+| `verifyPasscode` | التحقق من رمز الموظف |
+| `resolveViolation` | إغلاق مخالفة |
+
+---
+
+## Google Sheets
+
+| الشيت | الوظيفة | Spreadsheet ID |
+|-------|---------|----------------|
+| `MASTER_TASKS` | جدول المهام الـ 15 | `1JB-I7_r6MiafNFk...` |
+| `Rounds_Log` | سجل الجولات | نفس الـ ID |
+| `Round_Schedule` | مواعيد الجولات | نفس الـ ID |
+| `Staff_Passcodes` | رموز الموظفين | نفس الـ ID |
+| `R01_` - `R15_` | بنود فحص كل جولة | نفس الـ ID |
+
+### Spreadsheet IDs
+```
+نظام الجولات: 1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc
+السجل الإلكتروني: 1cGxMCYqGfPH2UiE-nsCoytIRjIPSDYxutnq04XF5YGs
+سجل الشكاوى: 1zVzjvVBh8F7Gvut0kX8fTq2GyKrYo3fBop8jUBEsV3Q
+التعرض الوخزي: 11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw
+معايرة الأجهزة: 1HPQIlhnvynNKctQLgINtVc3OK8Ey4RX52dYdmlIT9F8
+```
+
+---
+
+## الهوية البصرية
+
+### الألوان الرسمية
+| اللون | الكود | الاستخدام |
+|-------|-------|----------|
+| أزرق داكن | `#1e3a5f` | الخلفيات والعناوين |
+| ذهبي | `#c9a962` | التمييز والأزرار الثانوية |
+| قرمزي | `#DC143C` | التنبيهات والشعار |
+| أبيض | `#ffffff` | النصوص على الخلفيات الداكنة |
+
+### الخط
+- **Tajawal** - الخط الرئيسي للعربية
+
+---
+
+## مجلد github-deploy (للنشر)
+
+الملفات التي ترفع على GitHub:
+```
+github-deploy/
+├── Round.html      (نسخة للنشر)
+├── Code.gs         (يُنسخ إلى Apps Script)
+```
+
+---
+
+## المهام المعلقة
+
+### عاجل
+- [ ] إضافة Header موحد لكل الصفحات (تنقل)
+- [ ] توحيد الألوان في كل الصفحات
+
+### مهم
+- [ ] لوحة إدارة بصلاحيات
+- [ ] نظام تسجيل دخول للإدارة
+
+### تحسينات
+- [ ] تقارير PDF
+- [ ] إشعارات Push
+
+---
+
+## ملاحظات التشغيل
+
+### Replit
+- المنفذ: 5000
+- السيرفر: Express static
+
+### GitHub Pages
+- الفرع: main
+- المجلد: root
+- الدومين: m2020m.org
+
+### Google Apps Script
+- نوع النشر: Web App
+- التنفيذ: As me
+- الوصول: Anyone
+
+---
+
+## التحديثات الأخيرة
+
+### 2025-12-12
+- تحديث الشعار إلى الشفاف (logo-transparent.png)
+- إضافة صورة البطل (hero-bg.png)
+- تحليل شامل للمشروع
+
+### 2025-12-11
+- إصلاحات نظام الجولات (Round.html)
+- إضافة نظام المعالجة للمخالفات
+- تحسين عرض البيانات
+
+---
+
+## للتواصل
+مجمع مكة الطبي بالزاهر - مكة المكرمة
