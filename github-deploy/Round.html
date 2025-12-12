@@ -963,12 +963,29 @@
     // Resolve violation modal handling
     let currentResolveData = null;
     
+    function handleResolveClick(btn) {
+      const rowIndex = parseInt(btn.dataset.row) || 0;
+      const staffName = btn.dataset.staff || '';
+      const area = btn.dataset.area || '';
+      const notes = btn.dataset.notes || '';
+      openResolveModal(rowIndex, staffName, area, notes);
+    }
+    
     function openResolveModal(rowIndex, staffName, area, issue) {
       currentResolveData = { rowIndex, staffName, area, issue };
       document.getElementById('resolveViolationInfo').innerHTML = `
-        <strong>الجولة:</strong> ${area}<br>
-        <strong>المسؤول:</strong> ${staffName}<br>
-        <strong>الخلل:</strong> ${issue}...
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-map-marker-alt text-danger me-2"></i>
+          <strong>الجولة:</strong>&nbsp;${area || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-user-cog text-primary me-2"></i>
+          <strong>المكلف:</strong>&nbsp;${staffName || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-start">
+          <i class="fas fa-exclamation-circle text-warning me-2 mt-1"></i>
+          <div><strong>الخلل:</strong>&nbsp;${issue || 'مخالفة مسجلة'}</div>
+        </div>
       `;
       const modal = new bootstrap.Modal(document.getElementById('resolveConfirmModal'));
       modal.show();
@@ -1657,10 +1674,17 @@
           const detectedBy = v.Responsible_Role || '';
           const assignedTo = v.Execution_Responsible || 'غير محدد';
           const notes = formatIssueText(v.Negative_Notes || v.NegativeNotes);
-          const areaName = (v.Area || v.Round_Name || 'جولة').replace(/'/g, "\\'");
+          const areaName = v.Area || v.Round_Name || 'جولة';
           const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
           const repeatKey = `${v.Area || v.Round_Name}_${assignedTo}`;
           const repeatCount = repeatCounts[repeatKey] || 1;
+          const dateStr = v.Date || '-';
+          const timeStr = v.Actual_Time || v.Time || '';
+          
+          // تنظيف النصوص للاستخدام في onclick
+          const safeArea = areaName.replace(/['"\\]/g, '');
+          const safeAssigned = assignedTo.replace(/['"\\]/g, '');
+          const safeNotes = notes.substring(0, 40).replace(/['"\\<>\n\r]/g, ' ').trim();
           
           return `
             <div class="col-md-6 mb-3">
@@ -1669,11 +1693,11 @@
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="text-white">
                       <i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
-                      <span class="fw-bold">${v.Area || v.Round_Name || 'جولة'}</span>
+                      <span class="fw-bold">${areaName}</span>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                       ${repeatCount > 1 ? `<span class="badge bg-warning text-dark">🔁 ${repeatCount}</span>` : ''}
-                      <span class="badge bg-light text-dark">${v.Date || '-'}</span>
+                      <span class="badge bg-light text-dark">${dateStr}${timeStr ? ' ' + timeStr : ''}</span>
                     </div>
                   </div>
                 </div>
@@ -1696,7 +1720,7 @@
                 </div>
                 ${!isResolved ? `
                   <div class="card-footer py-2 bg-white border-top">
-                    <button class="btn btn-success w-100 py-2 fw-bold" onclick="openResolveModal(${rowIdx}, '${assignedTo.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
+                    <button class="btn btn-success w-100 py-2 fw-bold" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleResolveClick(this)">
                       <i class="fas fa-check-double me-2"></i>تم المعالجة
                     </button>
                   </div>
