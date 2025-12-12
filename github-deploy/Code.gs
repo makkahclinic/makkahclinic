@@ -477,6 +477,16 @@ function getHistory(params) {
   
   let filtered = roundsLog;
   
+  // دعم فلتر عدد الأيام
+  if (params.days && params.days > 0) {
+    const cutoff = getSaudiDate();
+    cutoff.setDate(cutoff.getDate() - parseInt(params.days));
+    filtered = filtered.filter(r => {
+      const logDate = r.Date ? new Date(r.Date) : null;
+      return logDate && logDate >= cutoff;
+    });
+  }
+  
   if (params.startDate) {
     filtered = filtered.filter(r => {
       const logDate = r.Date ? new Date(r.Date) : null;
@@ -507,29 +517,63 @@ function getHistory(params) {
     return dateB - dateA;
   });
   
-  // Map to frontend expected format - تضمين حقول المعالجة
-  const entries = filtered.map(r => ({
-    Date: formatDate(r.Date),
-    Actual_Time: formatTime(r.Actual_Time),
-    Time: formatTime(r.Actual_Time),
-    TaskID: r.TaskID,
-    Area: r.Area || r.Round_Name,
-    Round_Name: r.Round_Name,
-    Staff: r.Responsible_Role,
-    Responsible_Role: r.Responsible_Role,
-    Exec_Responsible: r.Execution_Responsible,
-    Execution_Responsible: r.Execution_Responsible,
-    Status: r.Status,
-    Negative_Notes: r.Negative_Notes,
-    Positive_Notes: r.Positive_Notes,
-    Is_Violation: r.Is_Violation,
-    Closed_YN: r.Closed_YN,
-    Is_Resolved: r.Closed_YN,
-    Resolved_By: r.Resolved_By,
-    Resolved_Date: r.Resolved_Date
-  }));
+  // Map to frontend expected format - تضمين حقول المعالجة + حقول التأخير
+  const entries = filtered.map(r => {
+    // حساب وقت التأخير إذا كانت الحالة متأخر
+    let delayMin = 0;
+    const status = String(r.Status || '').toLowerCase();
+    if (status.includes('متأخر') || status.includes('تأخر')) {
+      // حساب التأخير من الفرق بين الوقت الفعلي والمخطط
+      if (r.Planned_Time && r.Actual_Time) {
+        try {
+          const planned = parseTime(r.Planned_Time);
+          const actual = parseTime(r.Actual_Time);
+          if (planned && actual) {
+            delayMin = Math.round((actual - planned) / 60000);
+            if (delayMin < 0) delayMin = 0;
+          }
+        } catch(e) {}
+      }
+      // إذا لم يمكن الحساب، استخدم قيمة افتراضية
+      if (delayMin === 0) delayMin = 15;
+    }
+    
+    return {
+      Date: formatDate(r.Date),
+      Actual_Time: formatTime(r.Actual_Time),
+      Time: formatTime(r.Actual_Time),
+      Planned_Time: formatTime(r.Planned_Time) || '',
+      Delay_Min: delayMin,
+      TaskID: r.TaskID,
+      Area: r.Area || r.Round_Name,
+      Round_Name: r.Round_Name,
+      Staff: r.Responsible_Role,
+      Responsible_Role: r.Responsible_Role,
+      Exec_Responsible: r.Execution_Responsible,
+      Execution_Responsible: r.Execution_Responsible,
+      Status: r.Status,
+      Negative_Notes: r.Negative_Notes,
+      Positive_Notes: r.Positive_Notes,
+      Is_Violation: r.Is_Violation,
+      Closed_YN: r.Closed_YN,
+      Is_Resolved: r.Closed_YN,
+      Resolved_By: r.Resolved_By,
+      Resolved_Date: r.Resolved_Date
+    };
+  });
   
   return { entries };
+}
+
+// دالة تحويل نص الوقت إلى كائن Date
+function parseTime(timeStr) {
+  if (!timeStr) return null;
+  const str = String(timeStr);
+  const match = str.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const d = new Date();
+  d.setHours(parseInt(match[1]), parseInt(match[2]), 0, 0);
+  return d;
 }
 
 function getMetrics(days) {
