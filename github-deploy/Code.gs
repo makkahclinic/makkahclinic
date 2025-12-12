@@ -363,24 +363,27 @@ function getViolations() {
   const openViolations = allViolations.filter(v => v.Is_Resolved !== 'yes');
   const resolvedViolations = allViolations.filter(v => v.Is_Resolved === 'yes');
 
-  // حساب التكرار الذكي: نفس المنطقة + تشابه في البنود (المخالفات المفتوحة فقط)
+  // حساب التكرار الذكي: نفس المنطقة + نفس البند الفاشل = تكرار
+  // المفتاح: Area فقط - ونبحث عن تشابه في البنود
   const repeatGroups = {};
   
   openViolations.forEach(v => {
     const area = v.Area || v.Round_Name || 'غير محدد';
-    const assignee = v.Execution_Responsible || 'غير محدد';
     
-    // البحث عن مجموعة موجودة بنفس المنطقة وتشابه في البنود
+    // البحث عن مجموعة موجودة بنفس المنطقة وأي تشابه في البنود
     let foundGroup = null;
-    const groupKey = `${area}||${assignee}`;
     
-    if (repeatGroups[groupKey]) {
-      // تحقق من التشابه في البنود
-      const existingItems = repeatGroups[groupKey].allFailedItems;
-      const overlap = v.failedItems.filter(item => existingItems.includes(item));
-      
-      if (overlap.length > 0 || v.failedItems.length === 0) {
-        foundGroup = repeatGroups[groupKey];
+    // نبحث في كل المجموعات الموجودة بنفس المنطقة
+    for (const key in repeatGroups) {
+      if (key.startsWith(area + '||')) {
+        const existingItems = repeatGroups[key].allFailedItems;
+        const overlap = v.failedItems.filter(item => existingItems.includes(item));
+        
+        // أي تشابه = تكرار (حتى لو بند واحد)
+        if (overlap.length > 0) {
+          foundGroup = repeatGroups[key];
+          break;
+        }
       }
     }
     
@@ -395,11 +398,15 @@ function getViolations() {
         }
       });
       foundGroup.issue = v.Negative_Notes || foundGroup.issue;
+      // تحديث المكلف بآخر مخالفة
+      foundGroup.assignedTo = v.Execution_Responsible || foundGroup.assignedTo;
     } else {
+      // مجموعة جديدة بمفتاح المنطقة + timestamp للتفريق
+      const groupKey = `${area}||${v._rowIndex || Date.now()}`;
       repeatGroups[groupKey] = {
         area: area,
         issue: v.Negative_Notes || 'مخالفة',
-        assignedTo: assignee,
+        assignedTo: v.Execution_Responsible || 'غير محدد',
         detectedBy: v.Responsible_Role,
         count: 1,
         dates: v.Date ? [v.Date] : [],
@@ -409,7 +416,7 @@ function getViolations() {
     }
   });
 
-  // المخالفات المتكررة = count >= 2 (من المخالفات المفتوحة فقط)
+  // المخالفات المتكررة = count >= 2 (نفس المنطقة + نفس البند مكرر)
   const repeated = Object.values(repeatGroups)
     .filter(x => x.count >= 2)
     .sort((a,b) => b.count - a.count);
