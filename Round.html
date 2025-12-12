@@ -1316,6 +1316,23 @@
       if (row) {
         row.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        
+        // إعادة تعيين الشكل الافتراضي ثم تطبيق الجديد
+        row.style.background = '';
+        row.style.borderRight = '';
+        const textEl = row.querySelector('.checklist-text');
+        if (textEl) textEl.style.color = '';
+        
+        // تحديث شكل الصف بناءً على الإجابة
+        if (isYes) {
+          row.style.background = '#f0fdf4';
+          row.style.borderRight = '3px solid #22c55e';
+          if (textEl) textEl.style.color = '#166534';
+        } else {
+          row.style.background = '#fef2f2';
+          row.style.borderRight = '3px solid #dc3545';
+          if (textEl) textEl.style.color = '#991b1b';
+        }
       }
       
       const itemData = currentChecklist.items.find(i => i.id === itemId);
@@ -1338,7 +1355,7 @@
       let negativeNotes = '';
       
       if (hasIssues) {
-        const issues = currentChecklist.items.filter(i => i.answer === false).map(i => '❌ ' + (i.text || i.item || ''));
+        const issues = currentChecklist.items.filter(i => i.answer === false).map(i => '❌ ' + (i.text || i.item || i.description || ''));
         negativeNotes = 'نقاط الخلل: ' + issues.join(' | ');
         status = responsible ? 'خلل' : 'في الوقت';
       }
@@ -1351,7 +1368,7 @@
         staff: selectedStaffData?.name || '',
         execResponsible: responsible,
         status: status,
-        positiveNotes: currentChecklist.items.filter(i => i.answer === true).map(i => i.item).join('، '),
+        positiveNotes: currentChecklist.items.filter(i => i.answer === true).map(i => i.text || i.item || i.description || '').join('، '),
         negativeNotes: negativeNotes + (notes ? ' | ' + notes : ''),
         actionsTaken: '',
         isViolation: hasIssues ? 'Yes' : 'No'
@@ -1387,35 +1404,48 @@
         return;
       }
       
-      // تنظيف الملاحظات مع الحفاظ على النص العربي
-      const cleanLogNotes = (notes) => {
+      // تنظيف وتنسيق الملاحظات مع الحفاظ على النص العربي
+      const formatLogNotes = (notes, hasIssues) => {
         if (!notes) return '-';
         let cleaned = String(notes)
           .replace(/نقاط الخلل[:\s]*/g, '')
-          .replace(/❌/g, '')
-          .replace(/\s*\|\s*/g, ' - ')
+          .replace(/\s*\|\s*/g, ' | ')
           .trim();
+        
+        // إذا كانت الملاحظات تحتوي على أرقام فقط (بيانات قديمة)، نعرض "-"
+        if (/^[\d\s\-|×xX]+$/.test(cleaned)) {
+          return hasIssues ? '<span class="text-danger">يوجد خلل</span>' : '-';
+        }
+        
+        // تنسيق الملاحظات مع ❌
+        if (cleaned.includes('❌')) {
+          const items = cleaned.split('|').map(item => item.trim()).filter(Boolean);
+          return items.map(item => `<span class="text-danger">${item}</span>`).join(' | ');
+        }
+        
         return cleaned || '-';
       };
       
       tbody.innerHTML = ROUNDS_LOG.slice(0, 50).map(entry => {
         const status = entry.Status || '';
+        const hasIssues = status === 'خلل' || (entry.Negative_Notes && entry.Negative_Notes.includes('❌'));
+        
         let statusClass = 'bg-secondary';
         let statusText = status || 'تم';
         if (status === 'متأخر') { statusClass = 'bg-danger'; statusText = 'متأخر'; }
         else if (status === 'في الوقت' || status === 'مكتمل' || status === 'مكتملة') { statusClass = 'bg-success'; statusText = 'مكتملة'; }
-        else if (status === 'خلل') { statusClass = 'bg-warning text-dark'; statusText = 'متأخر'; }
+        else if (status === 'خلل') { statusClass = 'bg-warning text-dark'; statusText = 'خلل'; }
         
-        const cleanedNotes = cleanLogNotes(entry.Negative_Notes);
+        const formattedNotes = formatLogNotes(entry.Negative_Notes, hasIssues);
         
         return `
-          <tr>
+          <tr class="${hasIssues ? 'table-warning' : ''}">
             <td class="small">${entry.Actual_Time || entry.Date?.split(' ')[1] || '-'}</td>
             <td class="small text-truncate" style="max-width:200px;" title="${entry.Area || entry.Round_Name || '-'}">${entry.Area || entry.Round_Name || '-'}</td>
             <td class="small">${entry.Staff || entry.Responsible_Role || '-'}</td>
             <td class="small">${entry.Exec_Responsible || '-'}</td>
             <td><span class="badge ${statusClass} rounded-pill" style="font-size: 0.7rem;">${statusText}</span></td>
-            <td class="small text-truncate" style="max-width:150px;" title="${cleanedNotes}">${cleanedNotes}</td>
+            <td class="small" style="max-width:200px;">${formattedNotes}</td>
           </tr>
         `;
       }).join('');
@@ -1496,57 +1526,61 @@
       if (!data.violations?.length) {
         allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
       } else {
-        // تنظيف الملاحظات مع الحفاظ على النص العربي
-        const cleanNotes = (notes) => {
-          if (!notes) return '-';
+        // تنظيف وتنسيق الملاحظات مع الحفاظ على النص العربي
+        const formatViolationNotes = (notes) => {
+          if (!notes) return 'مخالفة';
           let cleaned = String(notes)
             .replace(/نقاط الخلل[:\s]*/g, '')
-            .replace(/❌/g, '')
-            .replace(/\s*\|\s*/g, ' - ')
+            .replace(/❌\s*/g, '')
+            .replace(/\s*\|\s*/g, ' | ')
             .trim();
-          return cleaned || '-';
+          
+          // إذا كانت الملاحظات تحتوي على أرقام فقط (بيانات قديمة)، نعرض "مخالفة"
+          if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) {
+            return 'مخالفة مسجلة';
+          }
+          
+          return cleaned;
         };
         
-        // عرض جدول مخفف بدل الكروت الكبيرة
-        const tableHtml = `
-          <div class="col-12">
-            <div class="table-responsive">
-              <table class="table table-sm table-striped table-hover">
-                <thead class="table-light">
-                  <tr>
-                    <th style="width:15%">التاريخ</th>
-                    <th style="width:20%">المنطقة</th>
-                    <th style="width:15%">المسؤول</th>
-                    <th style="width:35%">الملاحظات</th>
-                    <th style="width:15%">إجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${data.violations.slice(0, 30).map((v, idx) => {
-                    const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx;
-                    const staffName = v.Responsible_Role || v.Staff || '';
-                    const notes = cleanNotes(v.Negative_Notes || v.NegativeNotes);
-                    const areaName = (v.Area || v.Round_Name || 'جولة').replace(/'/g, "\\'");
-                    return `
-                      <tr>
-                        <td class="small">${v.Date || '-'}</td>
-                        <td class="small">${v.Area || v.Round_Name || '-'}</td>
-                        <td class="small">${staffName || '-'}</td>
-                        <td class="small text-truncate" style="max-width:250px;" title="${notes}">${notes}</td>
-                        <td>
-                          <button class="btn btn-success btn-xs px-2 py-1" style="font-size:0.7rem;" onclick="openResolveModal(${rowIdx}, '${staffName}', '${areaName}', '${notes.substring(0,30).replace(/'/g, "\\'")}')">
-                            <i class="fas fa-check"></i> معالجة
-                          </button>
-                        </td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
+        // عرض المخالفات في كروت واضحة
+        allContainer.innerHTML = data.violations.slice(0, 30).map((v, idx) => {
+          const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx;
+          const staffName = v.Responsible_Role || v.Staff || '';
+          const notes = formatViolationNotes(v.Negative_Notes || v.NegativeNotes);
+          const areaName = (v.Area || v.Round_Name || 'جولة').replace(/'/g, "\\'");
+          const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
+          
+          return `
+            <div class="col-md-6 col-lg-4 mb-3">
+              <div class="card h-100 ${isResolved ? 'border-success' : 'border-danger'}" style="border-width: 2px;">
+                <div class="card-header py-2 ${isResolved ? 'bg-success' : 'bg-danger'} text-white">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="small fw-bold"><i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-1"></i>${v.Area || v.Round_Name || 'جولة'}</span>
+                    <span class="badge bg-light text-dark">${v.Date || '-'}</span>
+                  </div>
+                </div>
+                <div class="card-body py-2">
+                  <p class="card-text small mb-2" style="line-height: 1.6;">${notes}</p>
+                  <div class="small text-muted">
+                    <i class="fas fa-user me-1"></i>المسؤول: ${staffName || '-'}
+                  </div>
+                </div>
+                ${!isResolved ? `
+                  <div class="card-footer py-2 bg-light">
+                    <button class="btn btn-success btn-sm w-100" onclick="openResolveModal(${rowIdx}, '${staffName.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,30).replace(/'/g, "\\'")}')">
+                      <i class="fas fa-check-circle me-1"></i>تم المعالجة
+                    </button>
+                  </div>
+                ` : `
+                  <div class="card-footer py-2 bg-success bg-opacity-10">
+                    <span class="small text-success"><i class="fas fa-check me-1"></i>تمت المعالجة</span>
+                  </div>
+                `}
+              </div>
             </div>
-          </div>
-        `;
-        allContainer.innerHTML = tableHtml;
+          `;
+        }).join('');
       }
     }
     
