@@ -52,14 +52,14 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-12: **CRITICAL FIX: Checklist Column D** - getChecklist() now reads Column D (Item_Description_AR) = البنود الحقيقية، وليس Column B (Round_Name_AR)
+- 2025-12-12: **CRITICAL FIX: Violation Counting** - getViolations() now splits Negative_Notes by "|" to count each failed item separately (not the whole text)
+- 2025-12-12: **CRITICAL FIX: logRound Complete Data** - Now saves: Round_Name, Area, Actual_Time, positiveNotes, negativeNotes to correct columns
+- 2025-12-12: **submitChecklist Fix** - No longer adds round name in items, only records actual failed items
+- 2025-12-12: **Top Area Display** - Now shows "المنطقة (العدد)" format e.g., "دورات المياه (3)"
+- 2025-12-12: **Validation** - If items have "لا" without selecting Execution_Responsible, shows error
 - 2025-12-12: **Fixed Staff Filter Duplication** - Staff dropdown now uses Set to remove duplicates
-- 2025-12-12: **Fixed Top Area Display** - Now shows full area name instead of "1..." truncation
 - 2025-12-12: **Correct Field Usage** - Uses Execution_Responsible for "المكلف بالإصلاح" instead of Staff who detected it
-- 2025-12-12: **All Violations Section** - Each violation card shows: اكتشفها (who detected) + المكلف (who fixes) + زر تم المعالجة
-- 2025-12-12: **Improved Violations Display** - Cards with clear repeat count badges (🔁), prominent warning modal before resolution with تأكيد/إلغاء buttons
-- 2025-12-12: **Enhanced Repeat Count** - Each violation card shows repeat count calculated by area+assignedTo combination
-- 2025-12-12: **Warning Modal Redesign** - Yellow header with warning icon, clear "هذا الإجراء لا يمكن التراجع عنه" message
-- 2025-12-12: **Fixed Checklist Column Reading** - Code.gs getChecklist now reads Arabic text from Column B instead of Column A (which has TaskID numbers)
 - 2025-12-12: **Enhanced Checklist Visual Feedback** - When selecting "لا" items turn red with border, "نعم" items turn green
 - 2025-12-12: **Fixed Log Table Display** - Old corrupted data (numeric patterns like "1-1-1-1") now shows "يوجد خلل" instead
 - 2025-12-12: **Redesigned Violations Tab** - Violations now shown as cards with red/green headers based on resolution status

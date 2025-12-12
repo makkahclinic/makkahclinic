@@ -346,28 +346,44 @@ function getViolations() {
     Is_Resolved: r.Closed_YN || r.Is_Resolved || 'no',
   }));
 
-  // تجميع المخالفات المتكررة بناءً على المنطقة والمكلف بالإصلاح
+  // تجميع المخالفات المتكررة بناءً على البند الفعلي (وليس النص الكامل)
+  // نفصل Negative_Notes حسب | لنحصل على كل بند فاشل منفصل
   const map = {};
   violations.forEach(v => {
     const assignee = v.Execution_Responsible || 'غير محدد';
-    const key = `${v.Area}||${assignee}`;
-    if (!map[key]) {
-      map[key] = {
-        area: v.Area,
-        issue: v.Negative_Notes,
-        assignedTo: assignee,
-        detectedBy: v.Responsible_Role,
-        count: 0,
-        dates: [],
-        rowIndices: []
-      };
-    }
-    map[key].count++;
-    map[key].dates.push(v.Date);
-    map[key].rowIndices.push(v._rowIndex);
+    const area = v.Area || v.Round_Name || 'غير محدد';
+    
+    // فصل البنود الفاشلة
+    const issues = String(v.Negative_Notes || '')
+      .split('|')
+      .map(s => s.replace(/❌/g, '').replace(/نقاط الخلل[:\s]*/g, '').trim())
+      .filter(s => s && s.length > 3);
+    
+    // إذا لم نجد بنود مفصولة، نستخدم النص كاملاً
+    const itemsToCount = issues.length > 0 ? issues : [v.Negative_Notes || 'مخالفة'];
+    
+    itemsToCount.forEach(issue => {
+      const key = `${area}||${issue.substring(0, 50)}`;
+      if (!map[key]) {
+        map[key] = {
+          area: area,
+          issue: issue,
+          assignedTo: assignee,
+          detectedBy: v.Responsible_Role,
+          count: 0,
+          dates: [],
+          rowIndices: []
+        };
+      }
+      map[key].count++;
+      if (!map[key].dates.includes(v.Date)) map[key].dates.push(v.Date);
+      if (v._rowIndex && !map[key].rowIndices.includes(v._rowIndex)) {
+        map[key].rowIndices.push(v._rowIndex);
+      }
+    });
   });
 
-  const repeated = Object.values(map).filter(x => x.count >= 2);
+  const repeated = Object.values(map).filter(x => x.count >= 2).sort((a,b) => b.count - a.count);
 
   return {
     violations,
@@ -500,29 +516,17 @@ function getChecklist(taskId) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return { items: [] };
 
-  // اختيار العمود الأنسب للبنود - البحث عن أطول نص في كل صف
+  // هيكل الشيت الصحيح:
+  // A: TaskID, B: Round_Name_AR, C: Item_No, D: Item_Description_AR (البند الحقيقي)
   const items = [];
   for (let i = 1; i < data.length; i++) {
-    const cells = data[i].map(v => (v === null || v === undefined) ? '' : String(v).trim());
-    
-    // ابحث عن أول نص طويل نسبياً (عادة البند الحقيقي)
-    // تجاهل القيم القصيرة والأرقام فقط
-    const candidates = cells
-      .filter(s => s && s.length >= 6 && !/^[\d\s\-]+$/.test(s))
-      .sort((a, b) => b.length - a.length);
-    
-    const candidate = candidates[0];
-    
-    if (candidate) {
-      // الوصف = ثاني أطول نص إذا وجد
-      const description = candidates[1] || '';
-      
+    // العمود D (index 3) = Item_Description_AR = البند الفعلي
+    const desc = data[i][3];
+    if (desc && String(desc).trim()) {
       items.push({
         id: i,
-        text: candidate,
-        item: candidate,
-        description: description,
-        category: ''
+        text: String(desc).trim(),
+        item: String(desc).trim()
       });
     }
   }
