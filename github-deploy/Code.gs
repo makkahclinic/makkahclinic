@@ -309,7 +309,8 @@ function getDelayed() {
   
   masterTasks.forEach(task => {
     const dayCol = task[dayName];
-    if (dayCol !== 'Yes' && dayCol !== true && dayCol !== 'yes') return;
+    const dayVal = String(dayCol || '').toLowerCase().trim();
+    if (dayVal !== 'yes' && dayVal !== 'true' && dayVal !== 'نعم' && dayVal !== '1') return;
     
     const taskId = task.TaskID;
     const rpd = parseInt(task.Rounds_Per_Day) || 1;
@@ -833,17 +834,39 @@ function debugInfo() {
   const schedule = sheetToObjects(getSheet('Round_Schedule'));
   const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   
-  // المهام المجدولة اليوم
+  // أسماء أعمدة الأيام في MASTER_TASKS
+  const masterHeaders = masterTasks.length > 0 ? Object.keys(masterTasks[0]) : [];
+  const dayColumns = masterHeaders.filter(h => 
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].includes(h)
+  );
+  
+  // المهام المجدولة اليوم (بكل القيم الممكنة)
   const todayTasks = masterTasks.filter(t => {
     const dayCol = t[dayName];
-    return dayCol === 'Yes' || dayCol === true || dayCol === 'yes';
+    const val = String(dayCol || '').toLowerCase().trim();
+    return val === 'yes' || val === 'true' || val === 'نعم' || val === '1';
   });
+  
+  // عينة من قيم عمود اليوم
+  const dayColumnValues = masterTasks.slice(0, 10).map(t => ({
+    TaskID: t.TaskID,
+    dayValue: t[dayName],
+    dayValueType: typeof t[dayName]
+  }));
   
   // أسماء الأعمدة في Round_Schedule
   const scheduleHeaders = schedule.length > 0 ? Object.keys(schedule[0]) : [];
   
   // أول 3 صفوف من الجدول الزمني
   const scheduleSample = schedule.slice(0, 3);
+  
+  // سجل اليوم
+  const todayLog = roundsLog.filter(r => {
+    const logDate = r.Date ? new Date(r.Date) : null;
+    if (!logDate) return false;
+    const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
+    return logStr === todayStr;
+  });
   
   return {
     debug: {
@@ -854,17 +877,22 @@ function debugInfo() {
       currentMinutes: currentMinutes,
       currentTimeFormatted: Math.floor(currentMinutes/60) + ':' + String(currentMinutes%60).padStart(2,'0'),
       masterTasksCount: masterTasks.length,
+      masterHeaders: masterHeaders,
+      dayColumns: dayColumns,
       todayTasksCount: todayTasks.length,
-      todayTasksSample: todayTasks.slice(0, 3).map(t => ({
+      todayTasksSample: todayTasks.slice(0, 5).map(t => ({
         TaskID: t.TaskID,
         name: t.Round_Name_AR,
         assignee: t.Assigned_To,
-        rpd: t.Rounds_Per_Day
+        rpd: t.Rounds_Per_Day,
+        dayValue: t[dayName]
       })),
+      dayColumnValues: dayColumnValues,
       scheduleRowsCount: schedule.length,
       scheduleHeaders: scheduleHeaders,
       scheduleSample: scheduleSample,
-      roundsLogCount: roundsLog.length
+      roundsLogCount: roundsLog.length,
+      todayLogCount: todayLog.length
     }
   };
 }
