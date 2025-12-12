@@ -1273,6 +1273,9 @@
       
       const container = document.getElementById('checklistItems');
       
+      // DEBUG: Log what we received from API
+      console.log('Checklist items received:', JSON.stringify(currentChecklist.items, null, 2));
+      
       currentChecklist.items.forEach(item => { item.answer = true; });
       
       if (!currentChecklist.items.length) {
@@ -1284,15 +1287,19 @@
           </div>
         `;
       } else {
-        container.innerHTML = currentChecklist.items.map((item, idx) => `
-          <div class="checklist-row" data-id="${item.id}">
-            <div class="checklist-btns-rtl">
-              <button class="btn btn-sm btn-yes active" onclick="setChecklistAnswer(${item.id}, true, this)">نعم</button>
-              <button class="btn btn-sm btn-no" onclick="setChecklistAnswer(${item.id}, false, this)">لا</button>
+        // Extract text properly - handle both 'text' and 'item' properties
+        container.innerHTML = currentChecklist.items.map((item, idx) => {
+          const itemText = String(item.text || item.item || item.Item || item.description || `بند ${idx+1}`);
+          return `
+            <div class="checklist-row" data-id="${item.id}">
+              <div class="checklist-btns-rtl">
+                <button class="btn btn-sm btn-yes active" onclick="setChecklistAnswer(${item.id}, true, this)">نعم</button>
+                <button class="btn btn-sm btn-no" onclick="setChecklistAnswer(${item.id}, false, this)">لا</button>
+              </div>
+              <div class="checklist-text">${itemText}</div>
             </div>
-            <div class="checklist-text">${item.text || item.item || ''}</div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
       }
       
       const respSelect = document.getElementById('checklistResponsible');
@@ -1380,15 +1387,15 @@
         return;
       }
       
-      // تنظيف الملاحظات
+      // تنظيف الملاحظات مع الحفاظ على النص العربي
       const cleanLogNotes = (notes) => {
         if (!notes) return '-';
-        return notes
+        let cleaned = String(notes)
           .replace(/نقاط الخلل[:\s]*/g, '')
-          .replace(/❌\s*/g, '')
-          .replace(/\d+\s*[×x]\s*\|?/gi, '')
+          .replace(/❌/g, '')
           .replace(/\s*\|\s*/g, ' - ')
-          .trim() || '-';
+          .trim();
+        return cleaned || '-';
       };
       
       tbody.innerHTML = ROUNDS_LOG.slice(0, 50).map(entry => {
@@ -1489,15 +1496,15 @@
       if (!data.violations?.length) {
         allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
       } else {
-        // تنظيف الملاحظات من الأرقام والرموز الزائدة
+        // تنظيف الملاحظات مع الحفاظ على النص العربي
         const cleanNotes = (notes) => {
           if (!notes) return '-';
-          return notes
+          let cleaned = String(notes)
             .replace(/نقاط الخلل[:\s]*/g, '')
-            .replace(/❌\s*/g, '')
-            .replace(/\d+\s*[×x]\s*\|?/gi, '')
+            .replace(/❌/g, '')
             .replace(/\s*\|\s*/g, ' - ')
-            .trim() || '-';
+            .trim();
+          return cleaned || '-';
         };
         
         // عرض جدول مخفف بدل الكروت الكبيرة
