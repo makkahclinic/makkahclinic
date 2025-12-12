@@ -512,14 +512,41 @@ function getMetrics(days) {
   });
   
   const total = filtered.length;
-  const completed = filtered.filter(r => r.Status === 'تم' || r.Status === 'مكتمل' || r.Status === 'OK').length;
-  const violations = filtered.filter(r => {
-    const isViol = String(r.Is_Violation || '').toLowerCase();
-    if (isViol === 'true' || isViol === 'yes') return true;
-    const status = String(r.Status || '').toLowerCase();
+  
+  // تصنيف الحالات بشكل صحيح
+  const COMPLETED_STATUS = ['تم', 'مكتمل', 'مكتملة', 'OK', 'في الوقت', 'done', 'complete'];
+  const DELAYED_STATUS = ['متأخر', 'متأخرة', 'تأخر', 'delayed', 'late'];
+  const VIOLATION_STATUS = ['خلل', 'مخالفة', 'violation'];
+  
+  let completed = 0;
+  let delayed = 0;
+  let violations = 0;
+  
+  filtered.forEach(r => {
+    const status = String(r.Status || '').toLowerCase().trim();
     const notes = String(r.Negative_Notes || '').toLowerCase();
-    return status.includes('خلل') || notes.includes('نقاط الخلل');
-  }).length;
+    const isViol = String(r.Is_Violation || '').toLowerCase();
+    
+    // تحقق من الحالة
+    if (COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()))) {
+      completed++;
+    } else if (DELAYED_STATUS.some(s => status.includes(s.toLowerCase()))) {
+      delayed++;
+    }
+    
+    // تحقق من المخالفات
+    if (isViol === 'true' || isViol === 'yes' || 
+        VIOLATION_STATUS.some(s => status.includes(s.toLowerCase())) ||
+        notes.includes('نقاط الخلل') || notes.includes('❌')) {
+      violations++;
+    }
+  });
+  
+  // إذا لم يكن هناك حالة واضحة، اعتبرها مكتملة (جولة مسجلة = مكتملة)
+  const unclassified = total - completed - delayed;
+  if (unclassified > 0) {
+    completed += unclassified;
+  }
   
   const byDate = {};
   const byStaff = {};
@@ -544,7 +571,7 @@ function getMetrics(days) {
     total: total,
     completed: completed,
     violations: violations,
-    delayed: total - completed,
+    delayed: delayed,
     compliance: total > 0 ? Math.round((completed / total) * 100) : 0,
     byDate: byDate,
     byStaff: byStaff,
