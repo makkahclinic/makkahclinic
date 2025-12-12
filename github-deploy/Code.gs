@@ -346,20 +346,25 @@ function getViolations() {
     Is_Resolved: r.Closed_YN || r.Is_Resolved || 'no',
   }));
 
+  // تجميع المخالفات المتكررة بناءً على المنطقة والمكلف بالإصلاح
   const map = {};
   violations.forEach(v => {
-    const key = `${v.Area}||${(v.Negative_Notes || '').substring(0,80)}`;
+    const assignee = v.Execution_Responsible || 'غير محدد';
+    const key = `${v.Area}||${assignee}`;
     if (!map[key]) {
       map[key] = {
         area: v.Area,
         issue: v.Negative_Notes,
-        assignedTo: v.Responsible_Role,
+        assignedTo: assignee,
+        detectedBy: v.Responsible_Role,
         count: 0,
-        dates: []
+        dates: [],
+        rowIndices: []
       };
     }
     map[key].count++;
     map[key].dates.push(v.Date);
+    map[key].rowIndices.push(v._rowIndex);
   });
 
   const repeated = Object.values(map).filter(x => x.count >= 2);
