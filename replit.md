@@ -52,6 +52,11 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-12: **Fixed Checklist Column Reading** - Code.gs getChecklist now reads Arabic text from Column B instead of Column A (which has TaskID numbers)
+- 2025-12-12: **Enhanced Checklist Visual Feedback** - When selecting "لا" items turn red with border, "نعم" items turn green
+- 2025-12-12: **Fixed Log Table Display** - Old corrupted data (numeric patterns like "1-1-1-1") now shows "يوجد خلل" instead
+- 2025-12-12: **Redesigned Violations Tab** - Violations now shown as cards with red/green headers based on resolution status
+- 2025-12-12: **Passcode Resolution Workflow** - Confirmed working: تم المعالجة → Confirm Modal → Passcode Modal → verifyPasscode API → resolveViolation API
 - 2025-12-11: **Updated Logo** - Changed all site logos to new hexagonal design (شعار_للموقع_المجمع_1765489579657.jpeg) across all pages
 - 2025-12-11: **History Tab Date Highlighting** - Added active state for date range buttons (اليوم/أسبوع/شهر/3 أشهر/سنة) - selected button now highlights with primary color
 - 2025-12-11: **Violation Resolution System** - Added "تم المعالجة" button on each violation, confirmation modal with logo, staff passcode verification, and Is_Resolved/Resolved_By/Resolved_Date columns in Rounds_Log
