@@ -52,6 +52,9 @@ The safety rounds system has been upgraded with direct Google Sheets integration
 - **Data Source**: Google Sheets via Replit integration
 
 ## Recent Changes
+- 2025-12-12: **Improved Violations Display** - Cards with clear repeat count badges (🔁), prominent warning modal before resolution with تأكيد/إلغاء buttons
+- 2025-12-12: **Enhanced Repeat Count** - Each violation card shows repeat count calculated by area+staff combination
+- 2025-12-12: **Warning Modal Redesign** - Yellow header with warning icon, clear "هذا الإجراء لا يمكن التراجع عنه" message
 - 2025-12-12: **Fixed Checklist Column Reading** - Code.gs getChecklist now reads Arabic text from Column B instead of Column A (which has TaskID numbers)
 - 2025-12-12: **Enhanced Checklist Visual Feedback** - When selecting "لا" items turn red with border, "نعم" items turn green
 - 2025-12-12: **Fixed Log Table Display** - Old corrupted data (numeric patterns like "1-1-1-1") now shows "يوجد خلل" instead
