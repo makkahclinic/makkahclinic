@@ -95,8 +95,16 @@ function sheetToObjects(sheet) {
   return rows;
 }
 
+function getSaudiDate() {
+  // توقيت السعودية UTC+3
+  const now = new Date();
+  const saudiOffset = 3 * 60; // 3 hours in minutes
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  return new Date(utcTime + (saudiOffset * 60000));
+}
+
 function getTodayString() {
-  const today = new Date();
+  const today = getSaudiDate();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
@@ -136,12 +144,12 @@ function formatDate(value) {
 function getDayNameAr() {
   // Sheet uses English day abbreviations: Sun, Mon, Tue, Wed, Thu, Fri, Sat
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return days[new Date().getDay()];
+  return days[getSaudiDate().getDay()];
 }
 
 function getDayNameArDisplay() {
   const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-  return days[new Date().getDay()];
+  return days[getSaudiDate().getDay()];
 }
 
 function getHomeData() {
@@ -280,7 +288,7 @@ function getStaffSummary() {
 function getDelayed() {
   const todayStr = getTodayString();
   const dayName = getDayNameAr();
-  const now = new Date();
+  const now = getSaudiDate();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   
   const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
