@@ -2285,9 +2285,13 @@
           delayed: data.delayed || 0,
           violations: data.violations || 0,
           complianceRate: data.compliance || 0,
-          byDay: Object.entries(data.byDate || {}).map(([date, count]) => ({ date, completed: count, delayed: 0 })),
-          byStaff: Object.entries(data.byStaff || {}).map(([name, count]) => ({ name, count })),
-          byArea: Object.entries(data.byArea || {}).map(([area, count]) => ({ area, count }))
+          byDay: Object.entries(data.byDate || {}).map(([date, v]) => ({ 
+            date, 
+            completed: typeof v === 'object' ? (v.completed || 0) : v, 
+            delayed: typeof v === 'object' ? (v.delayed || 0) : 0 
+          })),
+          byStaff: data.byStaff || {},
+          byArea: data.byArea || {}
         };
         document.getElementById('dashTotalRounds').textContent = m.totalRounds;
         document.getElementById('dashCompleted').textContent = m.completed;
@@ -2354,9 +2358,11 @@
       const ctx = document.getElementById('staffChart').getContext('2d');
       if (staffChart) staffChart.destroy();
       
-      const labels = Object.keys(byStaff).slice(0, 5);
-      const completed = labels.map(l => byStaff[l].completed);
-      const delayed = labels.map(l => byStaff[l].delayed);
+      // ترتيب حسب الإجمالي وأخذ أول 5
+      const sorted = Object.entries(byStaff).sort((a, b) => (b[1].total || 0) - (a[1].total || 0)).slice(0, 5);
+      const labels = sorted.map(([k]) => k.length > 15 ? k.slice(0, 15) + '...' : k);
+      const completed = sorted.map(([, v]) => v.completed || 0);
+      const delayed = sorted.map(([, v]) => v.delayed || 0);
       
       staffChart = new Chart(ctx, {
         type: 'bar',
@@ -2380,10 +2386,11 @@
       const ctx = document.getElementById('areaChart').getContext('2d');
       if (areaChart) areaChart.destroy();
       
-      const sorted = Object.entries(byArea).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
-      const labels = sorted.map(([k]) => k.length > 20 ? k.slice(0, 20) + '...' : k);
-      const completed = sorted.map(([, v]) => v.completed);
-      const delayed = sorted.map(([, v]) => v.delayed);
+      // ترتيب حسب الإجمالي وأخذ أول 5
+      const sorted = Object.entries(byArea).sort((a, b) => (b[1].total || 0) - (a[1].total || 0)).slice(0, 5);
+      const labels = sorted.map(([k]) => k.length > 15 ? k.slice(0, 15) + '...' : k);
+      const completed = sorted.map(([, v]) => v.completed || 0);
+      const delayed = sorted.map(([, v]) => v.delayed || 0);
       
       areaChart = new Chart(ctx, {
         type: 'bar',
@@ -2408,7 +2415,7 @@
       const container = document.getElementById('topIssuesList');
       if (!container) return;
       
-      const sorted = Object.entries(byArea).filter(([,v]) => v.delayed > 0).sort((a, b) => b[1].delayed - a[1].delayed).slice(0, 8);
+      const sorted = Object.entries(byArea).filter(([,v]) => (v.delayed || 0) > 0).sort((a, b) => (b[1].delayed || 0) - (a[1].delayed || 0)).slice(0, 8);
       if (!sorted.length) {
         container.innerHTML = '<div class="text-muted text-center py-2 w-100">لا توجد مشاكل مسجلة في هذه الفترة</div>';
         return;

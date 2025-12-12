@@ -562,16 +562,35 @@ function getMetrics(days) {
   
   filtered.forEach(r => {
     const dateKey = r.Date ? new Date(r.Date).toISOString().split('T')[0] : 'unknown';
-    byDate[dateKey] = (byDate[dateKey] || 0) + 1;
+    const status = String(r.Status || '').toLowerCase().trim();
     
+    // تحديد إذا كانت مكتملة أو متأخرة
+    const isCompleted = COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()));
+    const isDelayed = DELAYED_STATUS.some(s => status.includes(s.toLowerCase()));
+    
+    // تجميع حسب التاريخ مع التفصيل
+    if (!byDate[dateKey]) byDate[dateKey] = { total: 0, completed: 0, delayed: 0 };
+    byDate[dateKey].total++;
+    if (isCompleted) byDate[dateKey].completed++;
+    if (isDelayed) byDate[dateKey].delayed++;
+    
+    // تجميع حسب الموظف مع التفصيل
     const staff = r.Responsible_Role || r.Execution_Responsible || 'غير محدد';
-    byStaff[staff] = (byStaff[staff] || 0) + 1;
+    if (!byStaff[staff]) byStaff[staff] = { total: 0, completed: 0, delayed: 0 };
+    byStaff[staff].total++;
+    if (isCompleted) byStaff[staff].completed++;
+    if (isDelayed) byStaff[staff].delayed++;
     
-    const area = r.Area || r.TaskID || 'غير محدد';
-    byArea[area] = (byArea[area] || 0) + 1;
+    // تجميع حسب المنطقة مع التفصيل
+    const area = r.Area || r.Round_Name || r.TaskID || 'غير محدد';
+    if (!byArea[area]) byArea[area] = { total: 0, completed: 0, delayed: 0 };
+    byArea[area].total++;
+    if (isCompleted) byArea[area].completed++;
+    if (isDelayed) byArea[area].delayed++;
     
-    const status = r.Status || 'غير محدد';
-    byStatus[status] = (byStatus[status] || 0) + 1;
+    // تجميع حسب الحالة
+    const statusKey = r.Status || 'غير محدد';
+    byStatus[statusKey] = (byStatus[statusKey] || 0) + 1;
   });
   
   return {
