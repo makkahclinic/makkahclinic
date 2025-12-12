@@ -483,19 +483,26 @@ function getHistory(params) {
     return dateB - dateA;
   });
   
-  // Map to frontend expected format
+  // Map to frontend expected format - تضمين حقول المعالجة
   const entries = filtered.map(r => ({
-    Date: r.Date,
-    Time: r.Actual_Time,
+    Date: formatDate(r.Date),
+    Actual_Time: formatTime(r.Actual_Time),
+    Time: formatTime(r.Actual_Time),
     TaskID: r.TaskID,
-    Area: r.Area,
+    Area: r.Area || r.Round_Name,
+    Round_Name: r.Round_Name,
     Staff: r.Responsible_Role,
+    Responsible_Role: r.Responsible_Role,
     Exec_Responsible: r.Execution_Responsible,
+    Execution_Responsible: r.Execution_Responsible,
     Status: r.Status,
     Negative_Notes: r.Negative_Notes,
     Positive_Notes: r.Positive_Notes,
     Is_Violation: r.Is_Violation,
-    Closed_YN: r.Closed_YN
+    Closed_YN: r.Closed_YN,
+    Is_Resolved: r.Closed_YN,
+    Resolved_By: r.Resolved_By,
+    Resolved_Date: r.Resolved_Date
   }));
   
   return { entries };
