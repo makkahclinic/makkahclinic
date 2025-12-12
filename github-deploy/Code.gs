@@ -353,41 +353,34 @@ function getViolations() {
     };
   });
 
-  // تجميع المخالفات المتكررة بناءً على البند الفعلي (وليس النص الكامل)
-  // نفصل Negative_Notes حسب | لنحصل على كل بند فاشل منفصل
+  // تجميع المخالفات المتكررة بناءً على المنطقة فقط (كل صف = مخالفة واحدة)
+  // لا نقسم البنود - كل جولة تُحسب كمخالفة واحدة فقط
   const map = {};
   violations.forEach(v => {
     const assignee = v.Execution_Responsible || 'غير محدد';
     const area = v.Area || v.Round_Name || 'غير محدد';
     
-    // فصل البنود الفاشلة
-    const issues = String(v.Negative_Notes || '')
-      .split('|')
-      .map(s => s.replace(/❌/g, '').replace(/نقاط الخلل[:\s]*/g, '').trim())
-      .filter(s => s && s.length > 3);
+    // مفتاح التجميع: المنطقة + المكلف
+    const key = `${area}||${assignee}`;
     
-    // إذا لم نجد بنود مفصولة، نستخدم النص كاملاً
-    const itemsToCount = issues.length > 0 ? issues : [v.Negative_Notes || 'مخالفة'];
-    
-    itemsToCount.forEach(issue => {
-      const key = `${area}||${issue.substring(0, 50)}`;
-      if (!map[key]) {
-        map[key] = {
-          area: area,
-          issue: issue,
-          assignedTo: assignee,
-          detectedBy: v.Responsible_Role,
-          count: 0,
-          dates: [],
-          rowIndices: []
-        };
-      }
-      map[key].count++;
-      if (!map[key].dates.includes(v.Date)) map[key].dates.push(v.Date);
-      if (v._rowIndex && !map[key].rowIndices.includes(v._rowIndex)) {
-        map[key].rowIndices.push(v._rowIndex);
-      }
-    });
+    if (!map[key]) {
+      map[key] = {
+        area: area,
+        issue: v.Negative_Notes || 'مخالفة',
+        assignedTo: assignee,
+        detectedBy: v.Responsible_Role,
+        count: 0,
+        dates: [],
+        rowIndices: []
+      };
+    }
+    map[key].count++;
+    if (v.Date && !map[key].dates.includes(v.Date)) map[key].dates.push(v.Date);
+    if (v._rowIndex && !map[key].rowIndices.includes(v._rowIndex)) {
+      map[key].rowIndices.push(v._rowIndex);
+    }
+    // تحديث آخر مخالفة
+    map[key].issue = v.Negative_Notes || map[key].issue;
   });
 
   const repeated = Object.values(map).filter(x => x.count >= 2).sort((a,b) => b.count - a.count);
