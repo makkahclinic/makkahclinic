@@ -103,6 +103,11 @@
       font-size: 0.75rem;
       font-weight: bold;
     }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.9; }
+      100% { transform: scale(1); opacity: 1; }
+    }
     .spinner-overlay {
       position: fixed;
       inset: 0;
@@ -761,17 +766,24 @@
   <div class="modal fade" id="resolveConfirmModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-warning text-dark border-0">
+          <h5 class="modal-title fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>تحذير هام</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
         <div class="modal-body text-center p-4">
-          <img src="شعار للموقع المجمع.jpeg" alt="Logo" style="width: 80px; height: 80px; margin-bottom: 15px;">
-          <h5 class="fw-bold mb-3" style="color: var(--primary);">تأكيد المعالجة</h5>
-          <p class="text-muted mb-4">هل أنت واثق من أن المخالفات تمت معالجتها؟</p>
-          <div id="resolveViolationInfo" class="alert alert-light text-end mb-4" style="font-size: 0.9rem;"></div>
-          <div class="d-flex gap-2 justify-content-center">
-            <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
-              <i class="fas fa-times me-1"></i>إلغاء
+          <div class="mb-3">
+            <i class="fas fa-shield-alt fa-3x text-warning"></i>
+          </div>
+          <h5 class="fw-bold mb-3" style="color: #dc3545;">هل أنت متأكد من تسجيل المعالجة؟</h5>
+          <p class="text-danger fw-bold mb-3">⚠️ هذا الإجراء لا يمكن التراجع عنه!</p>
+          <div id="resolveViolationInfo" class="alert alert-secondary text-end mb-4" style="font-size: 0.95rem; border-right: 4px solid #dc3545;"></div>
+          <p class="text-muted small mb-4">سيتم تسجيل معالجة هذه المخالفة باسمك وتاريخ اليوم</p>
+          <div class="d-flex gap-3 justify-content-center">
+            <button type="button" class="btn btn-outline-secondary btn-lg px-5" data-bs-dismiss="modal">
+              <i class="fas fa-times me-2"></i>إلغاء
             </button>
-            <button type="button" class="btn btn-success px-4" onclick="showPasscodeModal()">
-              <i class="fas fa-check me-1"></i>تأكيد
+            <button type="button" class="btn btn-success btn-lg px-5" onclick="showPasscodeModal()">
+              <i class="fas fa-check-circle me-2"></i>تأكيد
             </button>
           </div>
         </div>
@@ -1506,18 +1518,31 @@
       renderViolationTrendChart(data.violations || []);
       
       if (!data.repeated?.length) {
-        repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات متكررة</div></div>';
+        repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-info border-info"><i class="fas fa-info-circle me-2"></i>لا توجد مخالفات متكررة حالياً - ممتاز!</div></div>';
       } else {
         repeatedContainer.innerHTML = data.repeated.map(v => `
-          <div class="col-md-6 col-lg-4">
-            <div class="card card-custom violation-card p-3">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h6 class="fw-bold mb-0">${v.area || 'منطقة'}</h6>
-                <span class="repeat-badge">${v.count}</span>
+          <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card h-100 shadow border-warning" style="border-width: 3px; border-radius: 12px;">
+              <div class="card-header bg-warning text-dark py-2" style="border-radius: 9px 9px 0 0;">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="fw-bold"><i class="fas fa-redo-alt me-2"></i>${v.area || 'منطقة'}</span>
+                  <span class="badge bg-danger text-white fs-5" style="border-radius: 50%; padding: 8px 14px; animation: pulse 1.5s infinite;">
+                    ${v.count}×
+                  </span>
+                </div>
               </div>
-              <div class="small mb-2">${v.issue || 'مخالفة غير محددة'}</div>
-              <div class="small text-muted"><i class="fas fa-user me-1"></i>المكلف: ${v.assignedTo || 'غير محدد'}</div>
-              <div class="small text-muted"><i class="fas fa-calendar me-1"></i>آخر تكرار: ${v.dates[v.dates.length-1] || '-'}</div>
+              <div class="card-body py-3">
+                <p class="card-text mb-3" style="line-height: 1.7;">${v.issue || 'مخالفة متكررة'}</p>
+                <div class="small text-muted mb-2">
+                  <i class="fas fa-user-tie me-1"></i>المكلف: <strong>${v.assignedTo || 'غير محدد'}</strong>
+                </div>
+                <div class="small text-danger">
+                  <i class="fas fa-calendar-times me-1"></i>آخر تكرار: <strong>${v.dates?.[v.dates.length-1] || '-'}</strong>
+                </div>
+              </div>
+              <div class="card-footer py-2 bg-light text-center" style="border-radius: 0 0 9px 9px;">
+                <span class="badge bg-danger">⚠️ يحتاج تدخل عاجل</span>
+              </div>
             </div>
           </div>
         `).join('');
@@ -1543,38 +1568,51 @@
           return cleaned;
         };
         
-        // عرض المخالفات في كروت واضحة
+        // حساب عدد التكرار لكل مخالفة بناءً على المنطقة والنوع
+        const repeatCounts = {};
+        data.violations.forEach(v => {
+          const key = `${v.Area || v.Round_Name}_${v.Responsible_Role || v.Staff}`;
+          repeatCounts[key] = (repeatCounts[key] || 0) + 1;
+        });
+        
+        // عرض المخالفات في كروت واضحة مع عدد التكرار
         allContainer.innerHTML = data.violations.slice(0, 30).map((v, idx) => {
           const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx;
           const staffName = v.Responsible_Role || v.Staff || '';
           const notes = formatViolationNotes(v.Negative_Notes || v.NegativeNotes);
           const areaName = (v.Area || v.Round_Name || 'جولة').replace(/'/g, "\\'");
           const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
+          const repeatKey = `${v.Area || v.Round_Name}_${staffName}`;
+          const repeatCount = repeatCounts[repeatKey] || 1;
           
           return `
             <div class="col-md-6 col-lg-4 mb-3">
-              <div class="card h-100 ${isResolved ? 'border-success' : 'border-danger'}" style="border-width: 2px;">
-                <div class="card-header py-2 ${isResolved ? 'bg-success' : 'bg-danger'} text-white">
+              <div class="card h-100 shadow-sm ${isResolved ? 'border-success' : 'border-danger'}" style="border-width: 3px; border-radius: 12px;">
+                <div class="card-header py-2 ${isResolved ? 'bg-success' : 'bg-danger'} text-white" style="border-radius: 9px 9px 0 0;">
                   <div class="d-flex justify-content-between align-items-center">
-                    <span class="small fw-bold"><i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-1"></i>${v.Area || v.Round_Name || 'جولة'}</span>
-                    <span class="badge bg-light text-dark">${v.Date || '-'}</span>
+                    <span class="fw-bold"><i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>${v.Area || v.Round_Name || 'جولة'}</span>
+                    ${repeatCount > 1 ? `<span class="badge bg-warning text-dark fs-6" style="border-radius: 50%; padding: 5px 10px;">🔁 ${repeatCount}</span>` : ''}
                   </div>
                 </div>
-                <div class="card-body py-2">
-                  <p class="card-text small mb-2" style="line-height: 1.6;">${notes}</p>
-                  <div class="small text-muted">
-                    <i class="fas fa-user me-1"></i>المسؤول: ${staffName || '-'}
+                <div class="card-body py-3">
+                  <p class="card-text mb-3" style="line-height: 1.8; font-size: 0.95rem;">${notes}</p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted small">
+                      <i class="fas fa-user me-1"></i>المسؤول: <strong>${staffName || '-'}</strong>
+                    </div>
+                    <span class="badge bg-light text-secondary">${v.Date || '-'}</span>
                   </div>
                 </div>
                 ${!isResolved ? `
-                  <div class="card-footer py-2 bg-light">
-                    <button class="btn btn-success btn-sm w-100" onclick="openResolveModal(${rowIdx}, '${staffName.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,30).replace(/'/g, "\\'")}')">
-                      <i class="fas fa-check-circle me-1"></i>تم المعالجة
+                  <div class="card-footer py-2 bg-light" style="border-radius: 0 0 9px 9px;">
+                    <button class="btn btn-success btn-sm w-100 py-2" onclick="openResolveModal(${rowIdx}, '${staffName.replace(/'/g, "\\'")}', '${areaName}', '${notes.substring(0,50).replace(/'/g, "\\'")}')">
+                      <i class="fas fa-check-double me-2"></i>تم المعالجة
                     </button>
                   </div>
                 ` : `
-                  <div class="card-footer py-2 bg-success bg-opacity-10">
-                    <span class="small text-success"><i class="fas fa-check me-1"></i>تمت المعالجة</span>
+                  <div class="card-footer py-2 text-center" style="background: rgba(25, 135, 84, 0.1); border-radius: 0 0 9px 9px;">
+                    <span class="text-success fw-bold"><i class="fas fa-check-circle me-1"></i>تمت المعالجة بنجاح</span>
+                    ${v.Resolved_Date ? `<br><small class="text-muted">${v.Resolved_Date}</small>` : ''}
                   </div>
                 `}
               </div>
