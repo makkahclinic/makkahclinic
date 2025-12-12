@@ -1363,13 +1363,19 @@
       const responsible = document.getElementById('checklistResponsible').value;
       const notes = document.getElementById('checklistNotes').value;
       
+      // التحقق: إذا فيه بنود "لا" لازم يختار مسؤول التنفيذ
+      if (hasIssues && !responsible) {
+        showErrorToast('يوجد بنود عليها "لا" — اختر مسؤول التنفيذ لمعالجة الخلل.');
+        return;
+      }
+      
       let status = 'في الوقت';
       let negativeNotes = '';
       
       if (hasIssues) {
         const issues = currentChecklist.items.filter(i => i.answer === false).map(i => '❌ ' + (i.text || i.item || i.description || ''));
         negativeNotes = 'نقاط الخلل: ' + issues.join(' | ');
-        status = responsible ? 'خلل' : 'في الوقت';
+        status = 'خلل';
       }
       
       const now = new Date();
@@ -1517,7 +1523,7 @@
       const topStaff = Object.entries(staffCounts).sort((a,b) => b[1]-a[1])[0];
       const topArea = Object.entries(areaCounts).sort((a,b) => b[1]-a[1])[0];
       document.getElementById('violationTopStaff').textContent = topStaff ? `${topStaff[0]} (${topStaff[1]})` : '-';
-      document.getElementById('violationTopArea').textContent = topArea ? (topArea[0].length > 20 ? topArea[0].substring(0,20) + '...' : topArea[0]) : '-';
+      document.getElementById('violationTopArea').textContent = topArea ? `${topArea[0].length > 15 ? topArea[0].substring(0,15) + '...' : topArea[0]} (${topArea[1]})` : '-';
       
       // Render trend chart
       renderViolationTrendChart(data.violations || []);
@@ -1778,6 +1784,11 @@
       renderViolations({ violations: filtered, repeated });
     }
 
+    function resetSelectKeepFirst(sel) {
+      if (!sel) return;
+      while (sel.options.length > 1) sel.remove(1);
+    }
+
     function populateStaffFilter() {
       const historySelect = document.getElementById('historyStaffFilter');
       const formSelect = document.getElementById('formStaff');
@@ -1785,54 +1796,32 @@
       const violationRoundSelect = document.getElementById('violationRoundFilter');
       const roundSelect = document.getElementById('formRound');
       
-      // تنظيف القوائم أولاً (إبقاء الخيار الأول فقط)
-      [historySelect, formSelect, violationStaffSelect].forEach(sel => {
-        if (sel) while (sel.options.length > 1) sel.remove(1);
-      });
-      [violationRoundSelect, roundSelect].forEach(sel => {
-        if (sel) while (sel.options.length > 1) sel.remove(1);
-      });
+      // تنظيف القوائم أولاً
+      [historySelect, formSelect, violationStaffSelect].forEach(resetSelectKeepFirst);
+      [violationRoundSelect, roundSelect].forEach(resetSelectKeepFirst);
       
-      // إزالة التكرار من قائمة الموظفين
-      const uniqueStaff = [...new Set(STAFF_LIST)].filter(Boolean);
+      // Staff بدون تكرار
+      const uniqueStaff = [...new Set((STAFF_LIST || []).map(x => String(x || '').trim()).filter(Boolean))];
       uniqueStaff.forEach(s => {
-        if (historySelect) {
-          const opt1 = document.createElement('option');
-          opt1.value = s;
-          opt1.textContent = s;
-          historySelect.appendChild(opt1);
-        }
-        
-        if (formSelect) {
-          const opt2 = document.createElement('option');
-          opt2.value = s;
-          opt2.textContent = s;
-          formSelect.appendChild(opt2);
-        }
-        
-        if (violationStaffSelect) {
-          const opt3 = document.createElement('option');
-          opt3.value = s;
-          opt3.textContent = s;
-          violationStaffSelect.appendChild(opt3);
-        }
+        [historySelect, formSelect, violationStaffSelect].forEach(sel => {
+          if (!sel) return;
+          const opt = document.createElement('option');
+          opt.value = s;
+          opt.textContent = s;
+          sel.appendChild(opt);
+        });
       });
       
-      const uniqueRounds = [...new Set(MASTER_TASKS.map(t => t.Round_Name || t.Area))].filter(Boolean);
+      // Rounds بدون تكرار - استخدام Round_Name_AR أولاً
+      const uniqueRounds = [...new Set((MASTER_TASKS || []).map(t => (t.Round_Name_AR || t.Round_Name || t.Area || t.TaskID || '').toString().trim()).filter(Boolean))];
       uniqueRounds.forEach(r => {
-        if (roundSelect) {
+        [roundSelect, violationRoundSelect].forEach(sel => {
+          if (!sel) return;
           const opt = document.createElement('option');
           opt.value = r;
           opt.textContent = r;
-          roundSelect.appendChild(opt);
-        }
-        
-        if (violationRoundSelect) {
-          const opt2 = document.createElement('option');
-          opt2.value = r;
-          opt2.textContent = r;
-          violationRoundSelect.appendChild(opt2);
-        }
+          sel.appendChild(opt);
+        });
       });
     }
     
