@@ -534,26 +534,23 @@ function getMetrics(days) {
     const notes = String(r.Negative_Notes || '').toLowerCase();
     const isViol = String(r.Is_Violation || '').toLowerCase();
     
-    // تحقق من الحالة
-    if (COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()))) {
+    // تحقق من المخالفات أولاً
+    const isViolation = isViol === 'true' || isViol === 'yes' || 
+        VIOLATION_STATUS.some(s => status.includes(s.toLowerCase())) ||
+        notes.includes('نقاط الخلل') || notes.includes('❌');
+    
+    if (isViolation) {
+      violations++;
+      // المخالفات لا تُحسب كمكتملة
+    } else if (COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()))) {
       completed++;
     } else if (DELAYED_STATUS.some(s => status.includes(s.toLowerCase()))) {
       delayed++;
-    }
-    
-    // تحقق من المخالفات
-    if (isViol === 'true' || isViol === 'yes' || 
-        VIOLATION_STATUS.some(s => status.includes(s.toLowerCase())) ||
-        notes.includes('نقاط الخلل') || notes.includes('❌')) {
-      violations++;
+    } else {
+      // جولة مسجلة بدون حالة واضحة = مكتملة
+      completed++;
     }
   });
-  
-  // إذا لم يكن هناك حالة واضحة، اعتبرها مكتملة (جولة مسجلة = مكتملة)
-  const unclassified = total - completed - delayed;
-  if (unclassified > 0) {
-    completed += unclassified;
-  }
   
   const byDate = {};
   const byStaff = {};
@@ -563,30 +560,41 @@ function getMetrics(days) {
   filtered.forEach(r => {
     const dateKey = r.Date ? new Date(r.Date).toISOString().split('T')[0] : 'unknown';
     const status = String(r.Status || '').toLowerCase().trim();
+    const notes = String(r.Negative_Notes || '').toLowerCase();
+    const isViol = String(r.Is_Violation || '').toLowerCase();
     
-    // تحديد إذا كانت مكتملة أو متأخرة
-    const isCompleted = COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()));
-    const isDelayed = DELAYED_STATUS.some(s => status.includes(s.toLowerCase()));
+    // تحديد التصنيف
+    const isViolation = isViol === 'true' || isViol === 'yes' || 
+        VIOLATION_STATUS.some(s => status.includes(s.toLowerCase())) ||
+        notes.includes('نقاط الخلل') || notes.includes('❌');
+    const isCompleted = !isViolation && COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()));
+    const isDelayed = !isViolation && DELAYED_STATUS.some(s => status.includes(s.toLowerCase()));
     
     // تجميع حسب التاريخ مع التفصيل
-    if (!byDate[dateKey]) byDate[dateKey] = { total: 0, completed: 0, delayed: 0 };
+    if (!byDate[dateKey]) byDate[dateKey] = { total: 0, completed: 0, delayed: 0, violations: 0 };
     byDate[dateKey].total++;
-    if (isCompleted) byDate[dateKey].completed++;
-    if (isDelayed) byDate[dateKey].delayed++;
+    if (isViolation) byDate[dateKey].violations++;
+    else if (isCompleted) byDate[dateKey].completed++;
+    else if (isDelayed) byDate[dateKey].delayed++;
+    else byDate[dateKey].completed++;
     
     // تجميع حسب الموظف مع التفصيل
     const staff = r.Responsible_Role || r.Execution_Responsible || 'غير محدد';
-    if (!byStaff[staff]) byStaff[staff] = { total: 0, completed: 0, delayed: 0 };
+    if (!byStaff[staff]) byStaff[staff] = { total: 0, completed: 0, delayed: 0, violations: 0 };
     byStaff[staff].total++;
-    if (isCompleted) byStaff[staff].completed++;
-    if (isDelayed) byStaff[staff].delayed++;
+    if (isViolation) byStaff[staff].violations++;
+    else if (isCompleted) byStaff[staff].completed++;
+    else if (isDelayed) byStaff[staff].delayed++;
+    else byStaff[staff].completed++;
     
     // تجميع حسب المنطقة مع التفصيل
     const area = r.Area || r.Round_Name || r.TaskID || 'غير محدد';
-    if (!byArea[area]) byArea[area] = { total: 0, completed: 0, delayed: 0 };
+    if (!byArea[area]) byArea[area] = { total: 0, completed: 0, delayed: 0, violations: 0 };
     byArea[area].total++;
-    if (isCompleted) byArea[area].completed++;
-    if (isDelayed) byArea[area].delayed++;
+    if (isViolation) byArea[area].violations++;
+    else if (isCompleted) byArea[area].completed++;
+    else if (isDelayed) byArea[area].delayed++;
+    else byArea[area].completed++;
     
     // تجميع حسب الحالة
     const statusKey = r.Status || 'غير محدد';
