@@ -327,7 +327,8 @@ function getDelayed() {
 function getViolations() {
   const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
 
-  const violations = roundsLog.filter(r => {
+  // استخراج جميع المخالفات مع معلوماتها
+  const allViolations = roundsLog.filter(r => {
     const isViolation = String(r.Is_Violation || '').toLowerCase();
     if (isViolation === 'true' || isViolation === 'yes') return true;
 
@@ -335,11 +336,14 @@ function getViolations() {
     const notes = String(r.Negative_Notes || '').toLowerCase();
     return status.includes('خلل') || notes.includes('نقاط الخلل') || notes.includes('❌');
   }).map(r => {
-    // إذا كان Area رقم فقط، استخدم Round_Name بدلاً منه
     let area = r.Area || r.Round_Name || '';
     if (/^\d+$/.test(String(area).trim())) {
-      area = r.Round_Name || r.Negative_Notes?.split('-')[0]?.trim() || 'منطقة غير محددة';
+      area = r.Round_Name || 'منطقة غير محددة';
     }
+    
+    // استخراج البنود الفاشلة كـ Set للمقارنة
+    const failedItems = extractFailedItems(r.Negative_Notes);
+    
     return {
       _rowIndex: r._rowIndex,
       Date: formatDate(r.Date),
@@ -350,49 +354,91 @@ function getViolations() {
       Execution_Responsible: r.Execution_Responsible || '',
       Status: r.Status || '',
       Negative_Notes: r.Negative_Notes || r.Notes || '',
-      Is_Resolved: r.Closed_YN || r.Is_Resolved || 'no',
+      Is_Resolved: String(r.Closed_YN || r.Is_Resolved || 'no').toLowerCase(),
+      failedItems: failedItems
     };
   });
 
-  // تجميع المخالفات المتكررة بناءً على المنطقة فقط (كل صف = مخالفة واحدة)
-  // لا نقسم البنود - كل جولة تُحسب كمخالفة واحدة فقط
-  const map = {};
-  violations.forEach(v => {
-    const assignee = v.Execution_Responsible || 'غير محدد';
+  // فصل المخالفات: مفتوحة vs معالجة
+  const openViolations = allViolations.filter(v => v.Is_Resolved !== 'yes');
+  const resolvedViolations = allViolations.filter(v => v.Is_Resolved === 'yes');
+
+  // حساب التكرار الذكي: نفس المنطقة + تشابه في البنود (المخالفات المفتوحة فقط)
+  const repeatGroups = {};
+  
+  openViolations.forEach(v => {
     const area = v.Area || v.Round_Name || 'غير محدد';
+    const assignee = v.Execution_Responsible || 'غير محدد';
     
-    // مفتاح التجميع: المنطقة + المكلف
-    const key = `${area}||${assignee}`;
+    // البحث عن مجموعة موجودة بنفس المنطقة وتشابه في البنود
+    let foundGroup = null;
+    const groupKey = `${area}||${assignee}`;
     
-    if (!map[key]) {
-      map[key] = {
+    if (repeatGroups[groupKey]) {
+      // تحقق من التشابه في البنود
+      const existingItems = repeatGroups[groupKey].allFailedItems;
+      const overlap = v.failedItems.filter(item => existingItems.includes(item));
+      
+      if (overlap.length > 0 || v.failedItems.length === 0) {
+        foundGroup = repeatGroups[groupKey];
+      }
+    }
+    
+    if (foundGroup) {
+      foundGroup.count++;
+      if (v.Date && !foundGroup.dates.includes(v.Date)) foundGroup.dates.push(v.Date);
+      if (v._rowIndex) foundGroup.rowIndices.push(v._rowIndex);
+      // دمج البنود الفاشلة
+      v.failedItems.forEach(item => {
+        if (!foundGroup.allFailedItems.includes(item)) {
+          foundGroup.allFailedItems.push(item);
+        }
+      });
+      foundGroup.issue = v.Negative_Notes || foundGroup.issue;
+    } else {
+      repeatGroups[groupKey] = {
         area: area,
         issue: v.Negative_Notes || 'مخالفة',
         assignedTo: assignee,
         detectedBy: v.Responsible_Role,
-        count: 0,
-        dates: [],
-        rowIndices: []
+        count: 1,
+        dates: v.Date ? [v.Date] : [],
+        rowIndices: v._rowIndex ? [v._rowIndex] : [],
+        allFailedItems: [...v.failedItems]
       };
     }
-    map[key].count++;
-    if (v.Date && !map[key].dates.includes(v.Date)) map[key].dates.push(v.Date);
-    if (v._rowIndex && !map[key].rowIndices.includes(v._rowIndex)) {
-      map[key].rowIndices.push(v._rowIndex);
-    }
-    // تحديث آخر مخالفة
-    map[key].issue = v.Negative_Notes || map[key].issue;
   });
 
-  const repeated = Object.values(map).filter(x => x.count >= 2).sort((a,b) => b.count - a.count);
+  // المخالفات المتكررة = count >= 2 (من المخالفات المفتوحة فقط)
+  const repeated = Object.values(repeatGroups)
+    .filter(x => x.count >= 2)
+    .sort((a,b) => b.count - a.count);
 
   return {
-    violations,
+    violations: allViolations,
     repeated,
-    resolved: violations.filter(v => String(v.Is_Resolved).toLowerCase() === 'yes'),
-    total: violations.length,
-    pending: violations.filter(v => String(v.Is_Resolved).toLowerCase() !== 'yes').length
+    resolved: resolvedViolations,
+    total: allViolations.length,
+    pending: openViolations.length
   };
+}
+
+// دالة مساعدة لاستخراج البنود الفاشلة من النص
+function extractFailedItems(notes) {
+  if (!notes) return [];
+  
+  const items = String(notes)
+    .split(/[|\n]/)
+    .map(s => s.replace(/❌/g, '').replace(/نقاط الخلل[:\s]*/g, '').trim())
+    .filter(s => s && s.length > 5);
+  
+  // تطبيع النص (إزالة التشكيل والأحرف الخاصة)
+  return items.map(item => 
+    item.replace(/[\u064B-\u065F]/g, '') // إزالة التشكيل
+        .replace(/[^\u0621-\u064Aa-zA-Z0-9\s]/g, '') // إبقاء الحروف فقط
+        .trim()
+        .substring(0, 40) // أول 40 حرف للمقارنة
+  );
 }
 
 function getHistory(params) {
