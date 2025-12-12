@@ -495,14 +495,22 @@ function getChecklist(taskId) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return { items: [] };
 
+  // تحديد أعمدة النص - العمود B (index 1) يحتوي النص العربي
+  // العمود A (index 0) يحتوي TaskID
   const items = [];
   for (let i = 1; i < data.length; i++) {
-    const text = data[i][0];
+    // النص العربي في العمود B (index 1)
+    const text = data[i][1] || data[i][0];
+    // الوصف في العمود C (index 2)
+    const description = data[i][2] || '';
+    
     if (text) {
       items.push({
         id: i,
         text: String(text).trim(),
-        category: data[i][1] ? String(data[i][1]).trim() : ''
+        item: String(text).trim(),
+        description: String(description).trim(),
+        category: data[i][3] ? String(data[i][3]).trim() : ''
       });
     }
   }
