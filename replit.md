@@ -175,9 +175,31 @@ github-deploy/
 - السيرفر: Express static
 
 ### GitHub Pages
+- الريبو: https://github.com/makkahclinic/makkahclinic
 - الفرع: main
 - المجلد: root
 - الدومين: m2020m.org
+
+### ملفات للنشر على GitHub
+```
+index.html
+portal.html
+doctor-mohammed.html
+patient.html
+pharmacy.html
+login.html
+signup.html
+insurance-check.html
+cbahi-portal.html
+Round.html
+calibration.html
+report.html
+project-index.html
+ipc/incidents/report-needlestick.html
+logo-transparent.png
+logo-new.png
+hero-bg.png
+```
 
 ### Google Apps Script
 - نوع النشر: Web App
