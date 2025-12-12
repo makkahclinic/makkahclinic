@@ -2363,14 +2363,16 @@
       const labels = sorted.map(([k]) => k.length > 15 ? k.slice(0, 15) + '...' : k);
       const completed = sorted.map(([, v]) => v.completed || 0);
       const delayed = sorted.map(([, v]) => v.delayed || 0);
+      const violations = sorted.map(([, v]) => v.violations || 0);
       
       staffChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels,
           datasets: [
-            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 16 },
-            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 16 }
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 12 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 12 },
+            { label: 'مخالفات', data: violations, backgroundColor: '#eab308', borderRadius: 3, barThickness: 12 }
           ]
         },
         options: { 
@@ -2386,19 +2388,26 @@
       const ctx = document.getElementById('areaChart').getContext('2d');
       if (areaChart) areaChart.destroy();
       
-      // ترتيب حسب الإجمالي وأخذ أول 5
-      const sorted = Object.entries(byArea).sort((a, b) => (b[1].total || 0) - (a[1].total || 0)).slice(0, 5);
+      // ترتيب حسب المخالفات أولاً ثم الإجمالي
+      const sorted = Object.entries(byArea).sort((a, b) => {
+        const violA = b[1].violations || 0;
+        const violB = a[1].violations || 0;
+        if (violA !== violB) return violA - violB;
+        return (b[1].total || 0) - (a[1].total || 0);
+      }).slice(0, 5);
       const labels = sorted.map(([k]) => k.length > 15 ? k.slice(0, 15) + '...' : k);
       const completed = sorted.map(([, v]) => v.completed || 0);
       const delayed = sorted.map(([, v]) => v.delayed || 0);
+      const violations = sorted.map(([, v]) => v.violations || 0);
       
       areaChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels,
           datasets: [
-            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 14 },
-            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 14 }
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 10 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 10 },
+            { label: 'مخالفات', data: violations, backgroundColor: '#eab308', borderRadius: 3, barThickness: 10 }
           ]
         },
         options: { 
@@ -2415,16 +2424,22 @@
       const container = document.getElementById('topIssuesList');
       if (!container) return;
       
-      const sorted = Object.entries(byArea).filter(([,v]) => (v.delayed || 0) > 0).sort((a, b) => (b[1].delayed || 0) - (a[1].delayed || 0)).slice(0, 8);
+      // المخالفات + المتأخرة = المشاكل
+      const sorted = Object.entries(byArea)
+        .map(([name, data]) => ({ name, issues: (data.violations || 0) + (data.delayed || 0), violations: data.violations || 0 }))
+        .filter(d => d.issues > 0)
+        .sort((a, b) => b.issues - a.issues)
+        .slice(0, 8);
+        
       if (!sorted.length) {
         container.innerHTML = '<div class="text-muted text-center py-2 w-100">لا توجد مشاكل مسجلة في هذه الفترة</div>';
         return;
       }
       
-      container.innerHTML = sorted.map(([name, data]) => `
-        <div class="issue-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${data.delayed > 10 ? '#fef2f2' : data.delayed > 5 ? '#fefce8' : '#f3f4f6'}; border-radius: 20px; border: 1px solid ${data.delayed > 10 ? '#fecaca' : data.delayed > 5 ? '#fef08a' : '#e5e7eb'};">
-          <span class="badge ${data.delayed > 10 ? 'bg-danger' : data.delayed > 5 ? 'bg-warning text-dark' : 'bg-secondary'}" style="font-size: 0.7rem;">${data.delayed}</span>
-          <span style="font-size: 0.8rem; color: #374151;">${name.length > 30 ? name.slice(0, 30) + '...' : name}</span>
+      container.innerHTML = sorted.map(d => `
+        <div class="issue-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${d.issues > 10 ? '#fef2f2' : d.issues > 5 ? '#fefce8' : '#f3f4f6'}; border-radius: 20px; border: 1px solid ${d.issues > 10 ? '#fecaca' : d.issues > 5 ? '#fef08a' : '#e5e7eb'};">
+          <span class="badge ${d.issues > 10 ? 'bg-danger' : d.issues > 5 ? 'bg-warning text-dark' : 'bg-secondary'}" style="font-size: 0.7rem;">${d.issues}</span>
+          <span style="font-size: 0.8rem; color: #374151;">${d.name.length > 30 ? d.name.slice(0, 30) + '...' : d.name}</span>
         </div>
       `).join('');
     }
