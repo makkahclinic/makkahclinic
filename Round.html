@@ -550,10 +550,120 @@
       <!-- Delayed Tab -->
       <div class="tab-pane fade" id="delayedPane">
         <div class="filter-section">
-          <h5 class="mb-3"><i class="fas fa-clock text-danger me-2"></i>الجولات المتأخرة</h5>
-          <p class="text-muted small">هنا تظهر جميع الجولات التي تجاوزت وقتها المحدد</p>
+          <h5 class="mb-3"><i class="fas fa-clock text-danger me-2"></i>سجل التأخيرات</h5>
+          
+          <!-- Filters Row -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الفترة الزمنية</label>
+              <select class="form-select form-select-sm" id="delayedPeriodFilter">
+                <option value="1">اليوم</option>
+                <option value="7">آخر أسبوع</option>
+                <option value="14" selected>آخر أسبوعين</option>
+                <option value="30">آخر شهر</option>
+                <option value="60">آخر شهرين</option>
+                <option value="90">آخر 3 أشهر</option>
+                <option value="0">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">المسؤول</label>
+              <select class="form-select form-select-sm" id="delayedStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الجولة</label>
+              <select class="form-select form-select-sm" id="delayedRoundFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-danger btn-sm w-100" onclick="applyDelayedFilters()">
+                <i class="fas fa-filter me-1"></i>تطبيق الفلتر
+              </button>
+            </div>
+          </div>
         </div>
-        <div id="delayedList" class="row g-3"></div>
+        
+        <!-- Statistics Cards -->
+        <div class="row g-2 mb-4">
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-right: 4px solid #ef4444;">
+              <div class="kpi-icon"><i class="fas fa-clock" style="color:#ef4444;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedTotalCount">0</div>
+                <div class="kpi-label">إجمالي التأخيرات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fefce8, #fef08a); border-right: 4px solid #eab308;">
+              <div class="kpi-icon"><i class="fas fa-hourglass-half" style="color:#eab308;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedAvgTime">0</div>
+                <div class="kpi-label">متوسط التأخير (دقيقة)</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fdf2f8, #fbcfe8); border-right: 4px solid #ec4899;">
+              <div class="kpi-icon"><i class="fas fa-user-clock" style="color:#ec4899;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedTopStaff">-</div>
+                <div class="kpi-label">أكثر تأخيراً</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #f0f9ff, #bae6fd); border-right: 4px solid #0ea5e9;">
+              <div class="kpi-icon"><i class="fas fa-calendar-day" style="color:#0ea5e9;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedTodayCount">0</div>
+                <div class="kpi-label">تأخيرات اليوم</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Today's Delayed Section -->
+        <div class="card card-custom mb-3">
+          <div class="card-header bg-white border-0 py-2">
+            <h6 class="mb-0"><i class="fas fa-exclamation-circle text-danger me-2"></i>الجولات المتأخرة الآن (اليوم)</h6>
+            <small class="text-muted">الجولات التي تجاوزت وقتها المحدد ولم تُنفذ بعد</small>
+          </div>
+          <div class="card-body p-3">
+            <div id="delayedNowList" class="row g-3">
+              <div class="col-12 text-center text-muted py-3">جاري التحميل...</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Historical Delays Table -->
+        <div class="card card-custom">
+          <div class="card-header bg-white border-0 py-2">
+            <h6 class="mb-0"><i class="fas fa-history text-secondary me-2"></i>سجل التأخيرات التاريخي</h6>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+              <table class="table table-hover table-sm mb-0">
+                <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>الجولة</th>
+                    <th>المسؤول</th>
+                    <th>الوقت المتوقع</th>
+                    <th>الوقت الفعلي</th>
+                    <th>التأخير</th>
+                  </tr>
+                </thead>
+                <tbody id="delayedHistoryBody">
+                  <tr><td colspan="6" class="text-center text-muted py-3">جاري التحميل...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Violations Tab -->
@@ -1196,15 +1306,159 @@
       }
     }
 
+    let DELAYED_HISTORY = [];
+    
     async function loadDelayed() {
       try {
         const data = await callApi('getDelayed');
         DELAYED_LIST = data.delayed || [];
         document.getElementById('delayedCount').textContent = DELAYED_LIST.length;
-        renderDelayedList();
+        document.getElementById('delayedTodayCount').textContent = DELAYED_LIST.length;
+        renderDelayedNow();
+        loadDelayedHistory();
       } catch (err) {
         console.error('Delayed error:', err);
       }
+    }
+    
+    function renderDelayedNow() {
+      const container = document.getElementById('delayedNowList');
+      if (!DELAYED_LIST.length) {
+        container.innerHTML = `
+          <div class="col-12">
+            <div class="alert alert-success text-center mb-0">
+              <i class="fas fa-check-circle me-2"></i>لا توجد جولات متأخرة - ممتاز!
+            </div>
+          </div>`;
+        return;
+      }
+      
+      container.innerHTML = DELAYED_LIST.map(d => `
+        <div class="col-md-6 col-lg-4">
+          <div class="delayed-card p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h6 class="mb-0 text-danger">${d.roundName || d.taskId}</h6>
+              <span class="badge bg-danger">${d.delayFormatted}</span>
+            </div>
+            <div class="small text-muted mb-1">
+              <i class="fas fa-user me-1"></i>${d.staff || 'غير محدد'}
+            </div>
+            <div class="small text-muted">
+              <i class="fas fa-clock me-1"></i>الوقت المتوقع: ${d.expectedTime}
+            </div>
+            <div class="small text-danger mt-1">
+              <i class="fas fa-hourglass-end me-1"></i>متأخر ${d.delayMinutes} دقيقة
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    async function loadDelayedHistory() {
+      try {
+        const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 14;
+        const data = await callApi('getHistory', { days: days });
+        
+        // Filter entries that are delayed (Status contains 'متأخر' or has delay info)
+        DELAYED_HISTORY = (data.entries || []).filter(e => {
+          const status = String(e.Status || '').toLowerCase();
+          const delayMin = parseInt(e.Delay_Min) || 0;
+          return status.includes('متأخر') || delayMin > 0;
+        });
+        
+        populateDelayedFilters();
+        applyDelayedFilters();
+      } catch (err) {
+        console.error('Delayed history error:', err);
+      }
+    }
+    
+    function populateDelayedFilters() {
+      // Populate staff filter
+      const staffFilter = document.getElementById('delayedStaffFilter');
+      const staffSet = new Set(DELAYED_HISTORY.map(d => d.Staff || d.Responsible_Role).filter(Boolean));
+      staffFilter.innerHTML = '<option value="">الكل</option>' + 
+        Array.from(staffSet).map(s => `<option value="${s}">${s}</option>`).join('');
+      
+      // Populate round filter
+      const roundFilter = document.getElementById('delayedRoundFilter');
+      const roundSet = new Set(DELAYED_HISTORY.map(d => d.Round_Name || d.Area).filter(Boolean));
+      roundFilter.innerHTML = '<option value="">الكل</option>' + 
+        Array.from(roundSet).map(r => `<option value="${r}">${r}</option>`).join('');
+    }
+    
+    function applyDelayedFilters() {
+      const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 0;
+      const staff = document.getElementById('delayedStaffFilter')?.value || '';
+      const round = document.getElementById('delayedRoundFilter')?.value || '';
+      
+      let filtered = [...DELAYED_HISTORY];
+      
+      // Filter by date
+      if (days > 0) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        filtered = filtered.filter(d => {
+          const date = new Date(d.Date);
+          return date >= cutoff;
+        });
+      }
+      
+      // Filter by staff
+      if (staff) {
+        filtered = filtered.filter(d => (d.Staff || d.Responsible_Role) === staff);
+      }
+      
+      // Filter by round
+      if (round) {
+        filtered = filtered.filter(d => (d.Round_Name || d.Area) === round);
+      }
+      
+      // Update statistics
+      document.getElementById('delayedTotalCount').textContent = filtered.length;
+      
+      // Calculate average delay
+      const delays = filtered.map(d => parseInt(d.Delay_Min) || 0).filter(d => d > 0);
+      const avgDelay = delays.length ? Math.round(delays.reduce((a,b) => a+b, 0) / delays.length) : 0;
+      document.getElementById('delayedAvgTime').textContent = avgDelay;
+      
+      // Find top delayed staff
+      const staffCounts = {};
+      filtered.forEach(d => {
+        const s = d.Staff || d.Responsible_Role || 'غير محدد';
+        staffCounts[s] = (staffCounts[s] || 0) + 1;
+      });
+      const topStaff = Object.entries(staffCounts).sort((a,b) => b[1] - a[1])[0];
+      document.getElementById('delayedTopStaff').textContent = topStaff ? topStaff[0] : '-';
+      
+      // Render table
+      renderDelayedHistoryTable(filtered);
+    }
+    
+    function renderDelayedHistoryTable(data) {
+      const tbody = document.getElementById('delayedHistoryBody');
+      
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">لا توجد تأخيرات في هذه الفترة</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = data.map(d => {
+        const delayMin = parseInt(d.Delay_Min) || 0;
+        const delayClass = delayMin > 60 ? 'text-danger fw-bold' : delayMin > 30 ? 'text-warning' : 'text-muted';
+        const delayText = delayMin > 0 ? `${delayMin} دقيقة` : '-';
+        
+        return `
+          <tr>
+            <td>${d.Date || '-'}</td>
+            <td>${d.Round_Name || d.Area || '-'}</td>
+            <td>${d.Staff || d.Responsible_Role || '-'}</td>
+            <td>${d.Planned_Time || '-'}</td>
+            <td>${d.Actual_Time || '-'}</td>
+            <td class="${delayClass}">${delayText}</td>
+          </tr>
+        `;
+      }).join('');
     }
 
     async function loadViolations() {
