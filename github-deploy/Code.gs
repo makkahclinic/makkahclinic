@@ -558,17 +558,20 @@ function getChecklist(taskId) {
 function verifyPasscode(staffName, passcode) {
   const passcodes = sheetToObjects(getSheet('Staff_Passcodes'));
   
-  const staff = passcodes.find(p => p.Staff_Name === staffName || p.Name === staffName);
+  // البحث عن أي موظف لديه هذا الرمز السري
+  const staffByPasscode = passcodes.find(p => 
+    String(p.Passcode) === String(passcode) || String(p.Code) === String(passcode)
+  );
   
-  if (!staff) {
-    return { valid: false, error: 'الموظف غير موجود' };
+  if (staffByPasscode) {
+    // الرمز صحيح - نرجع اسم الموظف صاحب الرمز
+    return { 
+      valid: true, 
+      staffName: staffByPasscode.Staff_Name || staffByPasscode.Name || staffName 
+    };
   }
   
-  if (String(staff.Passcode) === String(passcode) || String(staff.Code) === String(passcode)) {
-    return { valid: true };
-  }
-  
-  return { valid: false, error: 'رمز التحقق غير صحيح' };
+  return { valid: false, error: 'الرمز السري غير صحيح' };
 }
 
 function resolveViolation(params) {

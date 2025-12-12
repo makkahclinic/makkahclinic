@@ -1004,7 +1004,6 @@
     
     async function verifyAndResolve() {
       const passcode = document.getElementById('passcodeInput').value;
-      const staffName = currentResolveData?.staffName;
       
       if (!passcode || passcode.length < 4) {
         document.getElementById('passcodeError').textContent = 'الرجاء إدخال الرمز السري';
@@ -1013,8 +1012,8 @@
       }
       
       try {
-        // Verify passcode
-        const verifyData = await callApi('verifyPasscode', { staffName, passcode });
+        // Verify passcode - الآن يقبل أي رمز صحيح ويرجع اسم صاحبه
+        const verifyData = await callApi('verifyPasscode', { passcode });
         
         if (!verifyData.valid) {
           document.getElementById('passcodeError').textContent = verifyData.error || 'الرمز السري غير صحيح';
@@ -1022,23 +1021,25 @@
           return;
         }
         
+        // استخدام اسم الموظف الذي أدخل الرمز (من الـ API)
+        const resolvedByName = verifyData.staffName || 'موظف';
+        
         // Mark as resolved
         const resolveData = await callApi('resolveViolation', {
           rowIndex: currentResolveData.rowIndex,
-          staffName: staffName,
-          resolvedBy: staffName,
+          resolvedBy: resolvedByName,
           resolvedDate: new Date().toLocaleDateString('en-US')
         });
         
-        if (resolveData.ok) {
+        if (resolveData.ok || resolveData.success) {
           bootstrap.Modal.getInstance(document.getElementById('passcodeModal')).hide();
-          showSuccessToast('تم تسجيل المعالجة بنجاح');
+          showSuccessToast(`تم تسجيل المعالجة بواسطة ${resolvedByName}`);
           currentResolveData = null;
           // Reload violations
           await loadViolations();
           renderViolations();
         } else {
-          showErrorToast(resolveData.message || 'حدث خطأ');
+          showErrorToast(resolveData.message || resolveData.error || 'حدث خطأ');
         }
       } catch (err) {
         console.error('Resolve error:', err);
