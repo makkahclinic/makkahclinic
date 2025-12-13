@@ -803,11 +803,29 @@ const COMMITTEES = {
   }
 };
 
+const API_URL = 'https://script.google.com/macros/s/AKfycbxfBU4kbqP0TJXK-KBJCkxsglxmS2kL-3TqLjC8Eov2hTSHMNq3yFzMBi0UYtlGzfYi/exec';
+
 let currentCommittee = null;
 let selectedMembers = new Set();
 let selectedRecommendations = new Set();
 let meetingsData = [];
 let recommendationsData = [];
+
+async function apiCall(action, payload = {}) {
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, payload })
+    });
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || 'API Error');
+    return result;
+  } catch (err) {
+    console.error('API Error:', err);
+    throw err;
+  }
+}
 
 document.querySelectorAll('.committee-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -997,7 +1015,144 @@ function renderRecorderOptions(comm) {
 
 async function loadCommitteeData(code) {
   showToast('جاري تحميل البيانات...', 'info');
+  
+  try {
+    const data = await apiCall('getMeetingData', { committee: code });
+    
+    document.getElementById('kpiCompleted').textContent = data.completed || 0;
+    document.getElementById('kpiDelayed').textContent = data.delayed || 0;
+    document.getElementById('kpiOpenRecs').textContent = data.openRecommendations || 0;
+    document.getElementById('kpiAttendance').textContent = (data.avgAttendance || 0) + '%';
+    
+    meetingsData = data.meetings || [];
+    
+    showToast('تم تحميل البيانات بنجاح', 'success');
+  } catch (err) {
+    console.error('Load error:', err);
+    document.getElementById('kpiCompleted').textContent = '0';
+    document.getElementById('kpiDelayed').textContent = '0';
+    document.getElementById('kpiOpenRecs').textContent = '0';
+    document.getElementById('kpiAttendance').textContent = '0%';
+  }
+  
+  loadDelayedMeetings(code);
+  loadRecommendationsData(code);
 }
+
+async function loadDelayedMeetings(code) {
+  try {
+    const data = await apiCall('getDelayedMeetings', { committee: code });
+    const list = document.getElementById('delayedList');
+    const noDelayed = document.getElementById('noDelayed');
+    
+    if (!data.delayed || data.delayed.length === 0) {
+      list.innerHTML = '';
+      noDelayed.classList.remove('d-none');
+    } else {
+      noDelayed.classList.add('d-none');
+      list.innerHTML = data.delayed.map(d => `
+        <div class="meeting-row">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <span class="fw-bold" style="color: ${COMMITTEES[d.committee]?.color || '#fff'};">
+                <i class="fa-solid ${COMMITTEES[d.committee]?.icon || 'fa-users'} me-2"></i>
+                ${d.committeeName}
+              </span>
+              <div class="small text-muted mt-1">
+                مكتمل: ${d.completed} | مطلوب: ${d.required} | متأخر: ${d.delayed}
+              </div>
+            </div>
+            <div class="text-end">
+              <span class="badge bg-danger">${d.delayed} متأخر</span>
+              <div class="small text-muted mt-1">آخر اجتماع: ${d.lastMeeting}</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Delayed error:', err);
+  }
+}
+
+async function loadRecommendationsData(code) {
+  try {
+    const data = await apiCall('getMeetingRecommendations', { committee: code });
+    recommendationsData = data.recommendations || [];
+    renderRecommendationsList();
+  } catch (err) {
+    console.error('Recommendations error:', err);
+  }
+}
+
+function renderRecommendationsList(filter = 'all') {
+  const list = document.getElementById('recommendationsList');
+  
+  let filtered = recommendationsData;
+  if (filter === 'open') filtered = recommendationsData.filter(r => r.status.toLowerCase() !== 'closed');
+  if (filter === 'closed') filtered = recommendationsData.filter(r => r.status.toLowerCase() === 'closed');
+  if (filter === 'overdue') filtered = recommendationsData.filter(r => {
+    if (r.status.toLowerCase() === 'closed') return false;
+    if (!r.dueDate) return false;
+    return new Date(r.dueDate) < new Date();
+  });
+  
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="text-center py-4 text-muted">لا توجد توصيات</div>';
+    return;
+  }
+  
+  list.innerHTML = filtered.map(r => {
+    let statusClass = 'open';
+    let statusText = 'مفتوحة';
+    if (r.status.toLowerCase() === 'closed') {
+      statusClass = 'closed';
+      statusText = 'مغلقة';
+    } else if (r.dueDate && new Date(r.dueDate) < new Date()) {
+      statusClass = 'overdue';
+      statusText = 'متأخرة';
+    }
+    
+    return `
+      <div class="meeting-row">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-bold">${r.recommendation}</div>
+            <div class="small text-muted mt-1">
+              <i class="fa-solid fa-calendar me-1"></i> ${r.meetingDate || 'غير محدد'}
+              ${r.assignedTo ? `<span class="ms-3"><i class="fa-solid fa-user me-1"></i> ${r.assignedTo}</span>` : ''}
+            </div>
+          </div>
+          <div class="text-end">
+            <span class="recommendation-status ${statusClass}">${statusText}</span>
+            ${r.status.toLowerCase() !== 'closed' ? `
+              <button class="btn btn-sm btn-outline-success mt-2" onclick="closeRecommendation(${r.rowIndex})">
+                <i class="fa-solid fa-check"></i> إغلاق
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function closeRecommendation(rowIndex) {
+  const recorder = prompt('اسم من أغلق التوصية:');
+  if (!recorder) return;
+  
+  try {
+    await apiCall('closeMeetingRecommendation', { rowIndex, closedBy: recorder });
+    showToast('تم إغلاق التوصية', 'success');
+    loadRecommendationsData(currentCommittee);
+  } catch (err) {
+    showToast('فشل إغلاق التوصية', 'error');
+  }
+}
+
+document.getElementById('recFilter').addEventListener('change', (e) => {
+  renderRecommendationsList(e.target.value);
+});
 
 async function saveMeeting() {
   const comm = COMMITTEES[currentCommittee];
@@ -1026,24 +1181,42 @@ async function saveMeeting() {
     attendeesCount: attendees.length,
     quorumMet: selectedMembers.size >= comm.quorum,
     recommendations: recommendations,
-    recorder: recorder,
-    createdAt: new Date().toISOString()
+    recorder: recorder
   };
   
-  console.log('Meeting Data:', meetingData);
+  const saveBtn = document.getElementById('btnSaveMeeting');
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<span class="loading-spinner"></span> جاري الحفظ...';
   
-  const modal = new bootstrap.Modal(document.getElementById('successModal'));
-  modal.show();
-  
-  document.getElementById('meetingDate').value = '';
-  document.getElementById('zoomLink').value = '';
-  document.getElementById('customRecommendation').value = '';
-  selectedMembers.clear();
-  selectedRecommendations.clear();
-  renderAttendanceGrid(comm);
-  renderRecommendationsGrid(comm);
-  
-  showToast('تم حفظ الاجتماع بنجاح!', 'success');
+  try {
+    const result = await apiCall('saveMeeting', meetingData);
+    
+    if (result.success) {
+      const modal = new bootstrap.Modal(document.getElementById('successModal'));
+      modal.show();
+      
+      document.getElementById('meetingDate').value = '';
+      document.getElementById('zoomLink').value = '';
+      document.getElementById('customRecommendation').value = '';
+      selectedMembers.clear();
+      selectedRecommendations.clear();
+      renderAttendanceGrid(comm);
+      renderRecommendationsGrid(comm);
+      
+      loadCommitteeData(currentCommittee);
+      
+      showToast('تم حفظ الاجتماع بنجاح!', 'success');
+    } else {
+      throw new Error(result.error || 'Failed to save');
+    }
+  } catch (err) {
+    console.error('Save error:', err);
+    showToast('فشل حفظ الاجتماع: ' + err.message, 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="fa-solid fa-save me-2"></i> حفظ وإغلاق الاجتماع';
+    updateQuorumStatus();
+  }
 }
 
 function showToast(message, type = 'info') {

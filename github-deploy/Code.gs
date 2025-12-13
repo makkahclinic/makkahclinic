@@ -56,6 +56,28 @@
         case 'debug':
           result = debugInfo();
           break;
+        // Committee Meeting APIs
+        case 'getMeetingData':
+          result = getMeetingData(payload.committee);
+          break;
+        case 'saveMeeting':
+          result = saveMeeting(payload);
+          break;
+        case 'getMeetingRecommendations':
+          result = getMeetingRecommendations(payload.committee);
+          break;
+        case 'getDelayedMeetings':
+          result = getDelayedMeetings(payload.committee);
+          break;
+        case 'closeMeetingRecommendation':
+          result = closeMeetingRecommendation(payload);
+          break;
+        case 'getMeetingsArchive':
+          result = getMeetingsArchive(payload);
+          break;
+        case 'getMeetingsDashboard':
+          result = getMeetingsDashboard(payload.year);
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }
@@ -930,6 +952,345 @@
         roundsLogCount: roundsLog.length,
         todayLogCount: todayLog.length
       }
+    };
+  }
+  
+  // ==================== COMMITTEE MEETINGS APIs ====================
+  
+  const MEETINGS_SHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc'; // نفس الـ Spreadsheet
+  
+  function getMeetingsSheet(name) {
+    const ss = SpreadsheetApp.openById(MEETINGS_SHEET_ID);
+    return ss.getSheetByName(name);
+  }
+  
+  // بيانات اللجان المطلوبة
+  const COMMITTEE_CONFIG = {
+    RM: { name: 'إدارة المخاطر', frequency: 'monthly', required: 10 },
+    FMS: { name: 'السلامة والمرافق', frequency: 'monthly', required: 10 },
+    PSC: { name: 'سلامة المرضى', frequency: 'monthly', required: 10 },
+    IPC: { name: 'مكافحة العدوى', frequency: 'monthly', required: 10 },
+    QI: { name: 'الجودة والتحسين', frequency: 'quarterly', required: 4 },
+    EOC: { name: 'الطوارئ والكوارث', frequency: 'semiannual', required: 2 }
+  };
+  
+  function getMeetingData(committee) {
+    const meetingsLog = sheetToObjects(getMeetingsSheet('Meetings_Log')) || [];
+    const recommendations = sheetToObjects(getMeetingsSheet('Meeting_Recommendations')) || [];
+    
+    const year = new Date().getFullYear();
+    const config = COMMITTEE_CONFIG[committee] || {};
+    
+    // فلترة اجتماعات اللجنة للسنة الحالية
+    const committeeMeetings = meetingsLog.filter(m => {
+      if (m.Committee !== committee) return false;
+      const dateVal = m.Date;
+      if (!dateVal) return false;
+      // Handle Date objects
+      if (dateVal instanceof Date) {
+        return dateVal.getFullYear() === year;
+      }
+      // Handle strings
+      return String(dateVal).includes(String(year));
+    });
+    
+    // فلترة التوصيات
+    const committeeRecs = recommendations.filter(r => r.Committee === committee);
+    const openRecs = committeeRecs.filter(r => String(r.Status).toLowerCase() !== 'closed');
+    const overdueRecs = committeeRecs.filter(r => {
+      if (String(r.Status).toLowerCase() === 'closed') return false;
+      if (!r.Due_Date) return false;
+      return new Date(r.Due_Date) < new Date();
+    });
+    
+    // حساب متوسط الحضور
+    let avgAttendance = 0;
+    if (committeeMeetings.length > 0) {
+      const totalAttendance = committeeMeetings.reduce((sum, m) => 
+        sum + (parseInt(m.Attendees_Count) || 0), 0
+      );
+      avgAttendance = Math.round((totalAttendance / committeeMeetings.length / 5) * 100);
+    }
+    
+    // حساب الاجتماعات المتأخرة
+    const delayedCount = calculateDelayedMeetings(committee, committeeMeetings);
+    
+    return {
+      completed: committeeMeetings.length,
+      required: config.required || 10,
+      delayed: delayedCount,
+      openRecommendations: openRecs.length,
+      overdueRecommendations: overdueRecs.length,
+      avgAttendance: avgAttendance,
+      meetings: committeeMeetings.slice(0, 10).map(m => ({
+        date: formatDate(m.Date),
+        type: m.Meeting_Type || 'حضوري',
+        attendees: parseInt(m.Attendees_Count) || 0,
+        recommendations: parseInt(m.Recommendations_Count) || 0
+      }))
+    };
+  }
+  
+  function calculateDelayedMeetings(committee, meetings) {
+    const config = COMMITTEE_CONFIG[committee];
+    if (!config) return 0;
+    
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    let expectedMeetings = 0;
+    
+    if (config.frequency === 'monthly') {
+      // شهري: كل شهر ماعدا 7 (أغسطس) و11 (ديسمبر لبعض اللجان)
+      expectedMeetings = Math.min(currentMonth + 1, 10);
+    } else if (config.frequency === 'quarterly') {
+      // ربع سنوي: مارس، يونيو، سبتمبر، ديسمبر
+      const quarterMonths = [2, 5, 8, 11];
+      expectedMeetings = quarterMonths.filter(m => m <= currentMonth).length;
+    } else if (config.frequency === 'semiannual') {
+      // نصف سنوي: يونيو وديسمبر
+      const semiMonths = [5, 11];
+      expectedMeetings = semiMonths.filter(m => m <= currentMonth).length;
+    }
+    
+    return Math.max(0, expectedMeetings - meetings.length);
+  }
+  
+  function saveMeeting(payload) {
+    const sheet = getMeetingsSheet('Meetings_Log');
+    if (!sheet) return { success: false, error: 'Meetings_Log sheet not found' };
+    
+    const now = getSaudiDate();
+    const timestamp = now.toISOString();
+    
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    const row = headers.map(h => {
+      switch(h) {
+        case 'Meeting_ID': return `MTG-${payload.committee}-${Date.now()}`;
+        case 'Committee': return payload.committee || '';
+        case 'Date': return payload.date || '';
+        case 'Meeting_Type': return payload.type || 'حضوري';
+        case 'Zoom_Link': return payload.zoomLink || '';
+        case 'Attendees': return (payload.attendees || []).join(', ');
+        case 'Attendees_Count': return payload.attendeesCount || 0;
+        case 'Quorum_Met': return payload.quorumMet ? 'Yes' : 'No';
+        case 'Recommendations_Count': return (payload.recommendations || []).length;
+        case 'Recorder': return payload.recorder || '';
+        case 'Created_At': return timestamp;
+        default: return '';
+      }
+    });
+    
+    sheet.appendRow(row);
+    
+    // حفظ التوصيات
+    if (payload.recommendations && payload.recommendations.length > 0) {
+      const recsSheet = getMeetingsSheet('Meeting_Recommendations');
+      if (recsSheet) {
+        const recsHeaders = recsSheet.getRange(1, 1, 1, recsSheet.getLastColumn()).getValues()[0];
+        
+        payload.recommendations.forEach((rec, idx) => {
+          const recRow = recsHeaders.map(h => {
+            switch(h) {
+              case 'Rec_ID': return `REC-${payload.committee}-${Date.now()}-${idx}`;
+              case 'Committee': return payload.committee || '';
+              case 'Meeting_Date': return payload.date || '';
+              case 'Recommendation': return rec;
+              case 'Status': return 'Open';
+              case 'Due_Date': return '';
+              case 'Assigned_To': return '';
+              case 'Created_At': return timestamp;
+              default: return '';
+            }
+          });
+          recsSheet.appendRow(recRow);
+        });
+      }
+    }
+    
+    return { success: true, meetingId: `MTG-${payload.committee}-${Date.now()}` };
+  }
+  
+  function getMeetingRecommendations(committee) {
+    const recommendations = sheetToObjects(getMeetingsSheet('Meeting_Recommendations'));
+    
+    let filtered = recommendations;
+    if (committee) {
+      filtered = recommendations.filter(r => r.Committee === committee);
+    }
+    
+    return {
+      recommendations: filtered.map(r => ({
+        id: r.Rec_ID || r._rowIndex,
+        rowIndex: r._rowIndex,
+        committee: r.Committee,
+        meetingDate: formatDate(r.Meeting_Date),
+        recommendation: r.Recommendation,
+        status: r.Status || 'Open',
+        dueDate: formatDate(r.Due_Date),
+        assignedTo: r.Assigned_To || '',
+        closedDate: formatDate(r.Closed_Date),
+        closedBy: r.Closed_By || ''
+      }))
+    };
+  }
+  
+  function getDelayedMeetings(committee) {
+    const meetingsLog = sheetToObjects(getMeetingsSheet('Meetings_Log'));
+    const delayed = [];
+    
+    for (const [code, config] of Object.entries(COMMITTEE_CONFIG)) {
+      if (committee && code !== committee) continue;
+      
+      const year = new Date().getFullYear();
+      const committeeMeetings = meetingsLog.filter(m => 
+        m.Committee === code && String(m.Date).includes(String(year))
+      );
+      
+      const delayCount = calculateDelayedMeetings(code, committeeMeetings);
+      
+      if (delayCount > 0) {
+        delayed.push({
+          committee: code,
+          committeeName: config.name,
+          completed: committeeMeetings.length,
+          required: config.required,
+          delayed: delayCount,
+          lastMeeting: committeeMeetings.length > 0 ? formatDate(committeeMeetings[committeeMeetings.length - 1].Date) : 'لا يوجد'
+        });
+      }
+    }
+    
+    return { delayed };
+  }
+  
+  function closeMeetingRecommendation(params) {
+    const sheet = getMeetingsSheet('Meeting_Recommendations');
+    if (!sheet) return { success: false, error: 'Sheet not found' };
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const rowIndex = params.rowIndex;
+    if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row' };
+    
+    const statusCol = headers.indexOf('Status');
+    const closedDateCol = headers.indexOf('Closed_Date');
+    const closedByCol = headers.indexOf('Closed_By');
+    
+    if (statusCol === -1) return { success: false, error: 'Status column not found' };
+    
+    const now = getSaudiDate();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    sheet.getRange(rowIndex, statusCol + 1).setValue('Closed');
+    
+    if (closedDateCol !== -1) {
+      sheet.getRange(rowIndex, closedDateCol + 1).setValue(dateStr);
+    }
+    
+    if (closedByCol !== -1) {
+      sheet.getRange(rowIndex, closedByCol + 1).setValue(params.closedBy || '');
+    }
+    
+    return { success: true };
+  }
+  
+  function getMeetingsArchive(params) {
+    const meetingsLog = sheetToObjects(getMeetingsSheet('Meetings_Log'));
+    
+    let filtered = meetingsLog;
+    
+    if (params.committee) {
+      filtered = filtered.filter(m => m.Committee === params.committee);
+    }
+    
+    if (params.year) {
+      filtered = filtered.filter(m => String(m.Date).includes(String(params.year)));
+    }
+    
+    filtered.sort((a, b) => new Date(b.Date) - new Date(a.Date));
+    
+    return {
+      meetings: filtered.map(m => ({
+        id: m.Meeting_ID || '',
+        committee: m.Committee,
+        date: formatDate(m.Date),
+        type: m.Meeting_Type || 'حضوري',
+        attendees: m.Attendees || '',
+        attendeesCount: parseInt(m.Attendees_Count) || 0,
+        quorumMet: m.Quorum_Met === 'Yes',
+        recommendationsCount: parseInt(m.Recommendations_Count) || 0,
+        recorder: m.Recorder || ''
+      }))
+    };
+  }
+  
+  function getMeetingsDashboard(year) {
+    const currentYear = year || new Date().getFullYear();
+    const meetingsLog = sheetToObjects(getMeetingsSheet('Meetings_Log'));
+    const recommendations = sheetToObjects(getMeetingsSheet('Meeting_Recommendations'));
+    
+    const yearMeetings = meetingsLog.filter(m => String(m.Date).includes(String(currentYear)));
+    const yearRecs = recommendations.filter(r => String(r.Meeting_Date).includes(String(currentYear)));
+    
+    // إحصائيات حسب اللجنة
+    const byCommittee = {};
+    for (const [code, config] of Object.entries(COMMITTEE_CONFIG)) {
+      const commMeetings = yearMeetings.filter(m => m.Committee === code);
+      byCommittee[code] = {
+        name: config.name,
+        completed: commMeetings.length,
+        required: config.required,
+        percentage: Math.round((commMeetings.length / config.required) * 100)
+      };
+    }
+    
+    // إحصائيات التوصيات
+    const openRecs = yearRecs.filter(r => String(r.Status).toLowerCase() !== 'closed').length;
+    const closedRecs = yearRecs.filter(r => String(r.Status).toLowerCase() === 'closed').length;
+    const overdueRecs = yearRecs.filter(r => {
+      if (String(r.Status).toLowerCase() === 'closed') return false;
+      if (!r.Due_Date) return false;
+      return new Date(r.Due_Date) < new Date();
+    }).length;
+    
+    // إحصائيات الحضور الشهرية
+    const attendanceByMonth = {};
+    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
+                    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    
+    yearMeetings.forEach(m => {
+      const date = parseLogDate(m.Date);
+      if (date) {
+        const month = date.getMonth();
+        if (!attendanceByMonth[month]) {
+          attendanceByMonth[month] = { total: 0, count: 0 };
+        }
+        attendanceByMonth[month].total += parseInt(m.Attendees_Count) || 0;
+        attendanceByMonth[month].count++;
+      }
+    });
+    
+    const monthlyAttendance = months.map((name, idx) => ({
+      month: name,
+      average: attendanceByMonth[idx] ? 
+        Math.round(attendanceByMonth[idx].total / attendanceByMonth[idx].count) : 0
+    }));
+    
+    return {
+      year: currentYear,
+      totalMeetings: yearMeetings.length,
+      byCommittee,
+      recommendations: {
+        total: yearRecs.length,
+        open: openRecs,
+        closed: closedRecs,
+        overdue: overdueRecs
+      },
+      monthlyAttendance
     };
   }
   
