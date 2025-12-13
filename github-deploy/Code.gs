@@ -1,6 +1,11 @@
   /**
-   * نظام جولات السلامة المطوّر - Google Apps Script
-   * مجمع مكة الطبي
+   * نظام الجودة المتكامل - Google Apps Script
+   * مجمع مكة الطبي بالزاهر
+   * 
+   * يشمل:
+   * - نظام جولات السلامة
+   * - نظام الاجتماعات واللجان
+   * - نظام حوادث سلامة المرضى
    */
   
   const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
