@@ -699,14 +699,24 @@
     <div class="container py-4">
       <div class="card-glass p-4 mb-4">
         <div class="row g-3">
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label">السنة</label>
             <select id="archiveYear" class="form-select">
               <option value="2025">2025</option>
               <option value="2024">2024</option>
             </select>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
+            <label class="form-label">الفترة</label>
+            <select id="archivePeriod" class="form-select">
+              <option value="">كل السنة</option>
+              <option value="1">آخر شهر</option>
+              <option value="2">آخر شهرين</option>
+              <option value="3">آخر 3 شهور</option>
+              <option value="6">آخر 6 شهور</option>
+            </select>
+          </div>
+          <div class="col-md-3">
             <label class="form-label">الحالة</label>
             <select id="archiveStatus" class="form-select">
               <option value="">الكل</option>
@@ -714,9 +724,12 @@
               <option value="delayed">متأخر</option>
             </select>
           </div>
-          <div class="col-md-4 d-flex align-items-end">
-            <button id="btnSearchArchive" class="btn btn-gold w-100">
+          <div class="col-md-3 d-flex align-items-end gap-2">
+            <button id="btnSearchArchive" class="btn btn-gold flex-grow-1">
               <i class="fa-solid fa-search me-1"></i> بحث
+            </button>
+            <button id="btnPrintArchive" class="btn btn-crimson" title="طباعة التقرير">
+              <i class="fa-solid fa-print"></i>
             </button>
           </div>
         </div>
@@ -1493,6 +1506,7 @@ let archiveData = [];
 
 async function loadArchiveData() {
   const year = document.getElementById('archiveYear').value;
+  const period = document.getElementById('archivePeriod').value;
   const status = document.getElementById('archiveStatus').value;
   const container = document.getElementById('archiveList');
   
@@ -1502,6 +1516,7 @@ async function loadArchiveData() {
     const result = await apiCall('getMeetingsArchive', { 
       committee: currentCommittee || '', 
       year: year,
+      period: period,
       status: status
     });
     
@@ -1530,6 +1545,7 @@ function renderArchiveList() {
     const comm = COMMITTEES[meeting.committee] || {};
     const statusClass = meeting.status === 'completed' ? 'emerald' : 'ruby';
     const statusText = meeting.status === 'completed' ? 'مكتمل' : 'متأخر';
+    const attendeesList = meeting.attendees ? meeting.attendees.split(',').join(' • ') : '-';
     
     html += `
       <div class="meeting-row">
@@ -1537,13 +1553,16 @@ function renderArchiveList() {
           <div>
             <span class="badge" style="background: ${comm.color || '#666'};">${comm.name || meeting.committee}</span>
             <span class="ms-2 fw-bold">${meeting.date}</span>
+            <span class="ms-2 small text-muted">(${meeting.type || 'حضوري'})</span>
           </div>
           <span class="badge" style="background: var(--${statusClass});">${statusText}</span>
         </div>
-        <div class="mt-2 small text-muted">
-          <i class="fa-solid fa-users me-1"></i> الحضور: ${meeting.attendeesCount || 0}
-          <span class="mx-2">|</span>
-          <i class="fa-solid fa-list-check me-1"></i> التوصيات: ${meeting.recommendationsCount || 0}
+        <div class="mt-2 small">
+          <div class="text-muted mb-1">
+            <i class="fa-solid fa-users me-1"></i> الحضور (${meeting.attendeesCount || 0}): 
+            <span class="text-light">${attendeesList}</span>
+          </div>
+          ${meeting.recommendations ? `<div class="text-muted"><i class="fa-solid fa-list-check me-1"></i> التوصيات: ${meeting.recommendationsCount || 0}</div>` : ''}
         </div>
       </div>`;
   });
@@ -1551,7 +1570,192 @@ function renderArchiveList() {
   container.innerHTML = html;
 }
 
+function printArchiveReport() {
+  if (!archiveData || archiveData.length === 0) {
+    showToast('لا توجد بيانات للطباعة', 'warning');
+    return;
+  }
+  
+  const year = document.getElementById('archiveYear').value;
+  const period = document.getElementById('archivePeriod').value;
+  const periodText = period ? `آخر ${period} شهر` : 'كامل السنة';
+  const commName = currentCommittee ? COMMITTEES[currentCommittee]?.name : 'جميع اللجان';
+  
+  let tableRows = '';
+  let completedCount = 0;
+  let delayedCount = 0;
+  
+  archiveData.forEach((meeting, idx) => {
+    const comm = COMMITTEES[meeting.committee] || {};
+    const statusText = meeting.status === 'completed' ? 'مكتمل' : 'متأخر';
+    const statusColor = meeting.status === 'completed' ? '#10b981' : '#ef4444';
+    if (meeting.status === 'completed') completedCount++; else delayedCount++;
+    
+    tableRows += `
+      <tr>
+        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${idx + 1}</td>
+        <td style="padding: 10px; border: 1px solid #ddd;">${comm.name || meeting.committee}</td>
+        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${meeting.date}</td>
+        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${meeting.type || 'حضوري'}</td>
+        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${meeting.attendeesCount || 0}</td>
+        <td style="padding: 10px; border: 1px solid #ddd;">${meeting.attendees || '-'}</td>
+        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${meeting.recommendationsCount || 0}</td>
+        <td style="padding: 10px; border: 1px solid #ddd; text-align: center; color: ${statusColor}; font-weight: bold;">${statusText}</td>
+      </tr>`;
+  });
+  
+  const printContent = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="utf-8">
+      <title>تقرير اجتماعات اللجان - مجمع مكة الطبي</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+        * { box-sizing: border-box; }
+        body { 
+          font-family: 'Tajawal', Arial, sans-serif; 
+          padding: 20px; 
+          color: #333;
+          background: #fff;
+        }
+        .header { 
+          text-align: center; 
+          margin-bottom: 30px; 
+          border-bottom: 3px solid #7d0024;
+          padding-bottom: 20px;
+        }
+        .logo { width: 80px; height: 80px; margin-bottom: 10px; }
+        .title { color: #7d0024; font-size: 24px; font-weight: bold; margin: 10px 0; }
+        .subtitle { color: #666; font-size: 16px; }
+        .info-box {
+          background: #f8f9fa;
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          padding: 15px;
+          margin-bottom: 20px;
+          display: flex;
+          justify-content: space-around;
+        }
+        .info-item { text-align: center; }
+        .info-label { color: #666; font-size: 12px; }
+        .info-value { font-size: 18px; font-weight: bold; color: #7d0024; }
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          margin-top: 20px;
+          font-size: 12px;
+        }
+        th { 
+          background: #7d0024; 
+          color: white; 
+          padding: 12px 8px; 
+          border: 1px solid #5b001a;
+          font-weight: bold;
+        }
+        tr:nth-child(even) { background: #f8f9fa; }
+        .summary { 
+          margin-top: 30px; 
+          padding: 15px; 
+          background: #f0f0f0; 
+          border-radius: 8px;
+          display: flex;
+          justify-content: space-around;
+        }
+        .summary-item { text-align: center; }
+        .summary-num { font-size: 28px; font-weight: bold; }
+        .summary-num.green { color: #10b981; }
+        .summary-num.red { color: #ef4444; }
+        .footer { 
+          margin-top: 40px; 
+          text-align: center; 
+          color: #666; 
+          font-size: 11px;
+          border-top: 1px solid #ddd;
+          padding-top: 15px;
+        }
+        @media print {
+          body { padding: 10px; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <img src="logo-new.png" class="logo" alt="شعار المجمع">
+        <div class="title">مجمع مكة الطبي بالزاهر</div>
+        <div class="subtitle">تقرير سجل اجتماعات اللجان</div>
+      </div>
+      
+      <div class="info-box">
+        <div class="info-item">
+          <div class="info-label">اللجنة</div>
+          <div class="info-value">${commName}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">السنة</div>
+          <div class="info-value">${year}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">الفترة</div>
+          <div class="info-value">${periodText}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">تاريخ التقرير</div>
+          <div class="info-value">${new Date().toLocaleDateString('ar-SA')}</div>
+        </div>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>اللجنة</th>
+            <th>التاريخ</th>
+            <th>النوع</th>
+            <th>عدد الحضور</th>
+            <th>أسماء الحضور</th>
+            <th>التوصيات</th>
+            <th>الحالة</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+      
+      <div class="summary">
+        <div class="summary-item">
+          <div class="summary-num">${archiveData.length}</div>
+          <div>إجمالي الاجتماعات</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-num green">${completedCount}</div>
+          <div>مكتملة</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-num red">${delayedCount}</div>
+          <div>متأخرة</div>
+        </div>
+      </div>
+      
+      <div class="footer">
+        <p>مجمع مكة الطبي بالزاهر - مكة المكرمة</p>
+        <p>تم إنشاء هذا التقرير آلياً من نظام إدارة اجتماعات اللجان</p>
+      </div>
+      
+      <script>window.onload = function() { window.print(); }</script>
+    </body>
+    </html>
+  `;
+  
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(printContent);
+  printWindow.document.close();
+}
+
 document.getElementById('btnSearchArchive').addEventListener('click', loadArchiveData);
+document.getElementById('btnPrintArchive').addEventListener('click', printArchiveReport);
 
 async function saveMeeting() {
   const comm = COMMITTEES[currentCommittee];
@@ -1649,6 +1853,131 @@ if (committeeParam && COMMITTEES[committeeParam]) {
 }
 
 document.getElementById('meetingDate').valueAsDate = new Date();
+
+// Dashboard Charts
+let chartCommittees = null;
+let chartRecommendations = null;
+let chartAttendance = null;
+
+async function loadDashboardData() {
+  try {
+    const result = await apiCall('getMeetingsDashboard', {});
+    renderDashboardCharts(result);
+  } catch (err) {
+    console.error('Dashboard error:', err);
+    renderDashboardCharts({});
+  }
+}
+
+function renderDashboardCharts(data) {
+  const committeesCtx = document.getElementById('chartCommittees').getContext('2d');
+  const recsCtx = document.getElementById('chartRecommendations').getContext('2d');
+  const attendanceCtx = document.getElementById('chartAttendance').getContext('2d');
+  
+  if (chartCommittees) chartCommittees.destroy();
+  if (chartRecommendations) chartRecommendations.destroy();
+  if (chartAttendance) chartAttendance.destroy();
+  
+  const commData = data.byCommittee || {
+    RM: { completed: 0, required: 10 },
+    FMS: { completed: 0, required: 10 },
+    PSC: { completed: 0, required: 10 },
+    IPC: { completed: 0, required: 10 },
+    QI: { completed: 0, required: 10 },
+    EOC: { completed: 0, required: 10 },
+    EXEC: { completed: 0, required: 4 }
+  };
+  
+  const commLabels = Object.keys(commData).map(k => COMMITTEES[k]?.name || k);
+  const commCompleted = Object.values(commData).map(v => v.completed || 0);
+  const commRequired = Object.values(commData).map(v => v.required || 10);
+  const commColors = Object.keys(commData).map(k => COMMITTEES[k]?.color || '#666');
+  
+  chartCommittees = new Chart(committeesCtx, {
+    type: 'bar',
+    data: {
+      labels: commLabels,
+      datasets: [
+        {
+          label: 'المنجزة',
+          data: commCompleted,
+          backgroundColor: commColors.map(c => c + '99'),
+          borderColor: commColors,
+          borderWidth: 2
+        },
+        {
+          label: 'المطلوبة',
+          data: commRequired,
+          backgroundColor: 'rgba(255,255,255,0.1)',
+          borderColor: 'rgba(255,255,255,0.3)',
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#fff' } } },
+      scales: {
+        x: { ticks: { color: '#ccc' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+        y: { ticks: { color: '#ccc' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+      }
+    }
+  });
+  
+  const recsData = data.recommendations || { open: 0, closed: 0, overdue: 0 };
+  chartRecommendations = new Chart(recsCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['مفتوحة', 'مغلقة', 'متأخرة'],
+      datasets: [{
+        data: [recsData.open || 0, recsData.closed || 0, recsData.overdue || 0],
+        backgroundColor: ['#f59e0b', '#10b981', '#ef4444'],
+        borderColor: '#1a0b10',
+        borderWidth: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#fff' } } }
+    }
+  });
+  
+  const monthlyData = data.monthlyAttendance || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const monthLabels = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  
+  chartAttendance = new Chart(attendanceCtx, {
+    type: 'line',
+    data: {
+      labels: monthLabels,
+      datasets: [{
+        label: 'متوسط نسبة الحضور %',
+        data: monthlyData,
+        borderColor: '#d4af37',
+        backgroundColor: 'rgba(212,175,55,0.2)',
+        fill: true,
+        tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#fff' } } },
+      scales: {
+        x: { ticks: { color: '#ccc' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+        y: { 
+          ticks: { color: '#ccc' }, 
+          grid: { color: 'rgba(255,255,255,0.1)' },
+          min: 0,
+          max: 100
+        }
+      }
+    }
+  });
+}
+
+document.querySelector('[data-bs-target="#tab-dashboard"]').addEventListener('shown.bs.tab', loadDashboardData);
 </script>
 </body>
 </html>
