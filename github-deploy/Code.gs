@@ -966,12 +966,13 @@
   
   // بيانات اللجان المطلوبة
   const COMMITTEE_CONFIG = {
-    RM: { name: 'إدارة المخاطر', frequency: 'monthly', required: 10 },
-    FMS: { name: 'السلامة والمرافق', frequency: 'monthly', required: 10 },
-    PSC: { name: 'سلامة المرضى', frequency: 'monthly', required: 10 },
-    IPC: { name: 'مكافحة العدوى', frequency: 'monthly', required: 10 },
-    QI: { name: 'الجودة والتحسين', frequency: 'quarterly', required: 4 },
-    EOC: { name: 'الطوارئ والكوارث', frequency: 'semiannual', required: 2 }
+    RM: { name: 'إدارة المخاطر', frequency: 'monthly', required: 10, members: 6 },
+    FMS: { name: 'السلامة والمرافق', frequency: 'monthly', required: 10, members: 6 },
+    PSC: { name: 'سلامة المرضى', frequency: 'monthly', required: 10, members: 6 },
+    IPC: { name: 'مكافحة العدوى', frequency: 'monthly', required: 10, members: 6 },
+    QI: { name: 'الجودة والتحسين', frequency: 'quarterly', required: 4, members: 5 },
+    EOC: { name: 'الطوارئ والكوارث', frequency: 'semiannual', required: 2, members: 8 },
+    EXEC: { name: 'الإدارة العليا', frequency: 'monthly', required: 10, members: 5 }
   };
   
   function getMeetingData(committee) {
@@ -1003,13 +1004,17 @@
       return new Date(r.Due_Date) < new Date();
     });
     
-    // حساب متوسط الحضور
+    // حساب متوسط الحضور (نسبة الحاضرين من إجمالي أعضاء اللجنة)
     let avgAttendance = 0;
     if (committeeMeetings.length > 0) {
+      const membersCount = config.members || 6; // عدد أعضاء اللجنة
       const totalAttendance = committeeMeetings.reduce((sum, m) => 
         sum + (parseInt(m.Attendees_Count) || 0), 0
       );
-      avgAttendance = Math.round((totalAttendance / committeeMeetings.length / 5) * 100);
+      // متوسط الحضور = (إجمالي الحاضرين / عدد الاجتماعات / عدد الأعضاء) × 100
+      avgAttendance = Math.round((totalAttendance / committeeMeetings.length / membersCount) * 100);
+      // التأكد من عدم تجاوز 100%
+      avgAttendance = Math.min(avgAttendance, 100);
     }
     
     // حساب الاجتماعات المتأخرة
