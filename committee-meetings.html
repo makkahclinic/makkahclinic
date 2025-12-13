@@ -273,6 +273,27 @@
       color: var(--muted);
     }
 
+    .quick-date-btn {
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.05);
+      color: var(--muted);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .quick-date-btn:hover {
+      background: rgba(212,175,55,0.2);
+      border-color: var(--gold);
+      color: #fff;
+    }
+    .quick-date-btn.current-month {
+      background: rgba(245,158,11,0.2);
+      border-color: var(--amber);
+      color: #fff;
+    }
+
     .meeting-row {
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.1);
@@ -579,7 +600,15 @@
         <div class="row g-4">
           <div class="col-md-6">
             <label class="form-label"><i class="fa-solid fa-calendar me-1"></i> تاريخ الاجتماع</label>
-            <input type="date" id="meetingDate" class="form-control" required>
+            <div class="input-group">
+              <input type="date" id="meetingDate" class="form-control" required>
+              <button type="button" class="btn btn-outline-warning" onclick="document.getElementById('meetingDate').showPicker()">
+                <i class="fa-solid fa-calendar-days"></i>
+              </button>
+            </div>
+            <div id="quickDatePicker" class="mt-2 d-flex flex-wrap gap-2">
+              <small class="text-muted w-100 mb-1">اختيار سريع:</small>
+            </div>
           </div>
           <div class="col-md-6">
             <label class="form-label"><i class="fa-solid fa-video me-1"></i> نوع الاجتماع</label>
@@ -1008,8 +1037,55 @@ function selectCommittee(code) {
   renderAttendanceGrid(comm);
   renderRecommendationsGrid(comm);
   renderRecorderOptions(comm);
+  renderQuickDatePicker(comm);
   
   loadCommitteeData(code);
+}
+
+function renderQuickDatePicker(comm) {
+  const container = document.getElementById('quickDatePicker');
+  const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
+                  'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  
+  let meetingMonths = [];
+  if (comm.frequency === 'شهري') {
+    meetingMonths = [0, 1, 2, 3, 4, 5, 6, 8, 9, 10];
+  } else if (comm.frequency === 'ربع سنوي') {
+    meetingMonths = [2, 5, 8, 11];
+  } else {
+    meetingMonths = [5, 11];
+  }
+  
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  
+  let html = '<small class="text-muted w-100 mb-1">اختيار سريع:</small>';
+  
+  meetingMonths.filter(m => m <= currentMonth).forEach(m => {
+    const isCurrentMonth = m === currentMonth;
+    const day = 15;
+    const dateStr = `${currentYear}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    html += `
+      <button type="button" class="quick-date-btn ${isCurrentMonth ? 'current-month' : ''}" 
+              onclick="setQuickDate('${dateStr}')">
+        ${months[m]}
+      </button>
+    `;
+  });
+  
+  html += `
+    <button type="button" class="quick-date-btn" style="background: rgba(59,130,246,0.2); border-color: var(--sapphire);"
+            onclick="document.getElementById('meetingDate').showPicker()">
+      <i class="fa-solid fa-calendar-plus me-1"></i> تاريخ آخر
+    </button>
+  `;
+  
+  container.innerHTML = html;
+}
+
+function setQuickDate(dateStr) {
+  document.getElementById('meetingDate').value = dateStr;
 }
 
 let completedMeetingMonths = [];
