@@ -283,7 +283,7 @@
         <button class="nav-link" id="delayed-tab" data-bs-toggle="tab" data-bs-target="#delayedPane" type="button">
           <i class="fas fa-clock me-1"></i> المتأخرون
           <span class="badge bg-danger ms-1" id="delayedCount">0</span>
-          <span class="badge bg-secondary ms-1" id="delayedPeriodLabel" style="font-size: 0.65rem;">أسبوع</span>
+          <span class="badge bg-secondary ms-1" id="delayedPeriodLabel" style="font-size: 0.65rem;">3 أشهر</span>
         </button>
       </li>
       <li class="nav-item">
@@ -559,11 +559,11 @@
               <label class="form-label small fw-bold">الفترة الزمنية</label>
               <select class="form-select form-select-sm" id="delayedPeriodFilter" onchange="updateDelayedPeriodLabel()">
                 <option value="1">اليوم</option>
-                <option value="7" selected>آخر أسبوع</option>
+                <option value="7">آخر أسبوع</option>
                 <option value="14">آخر أسبوعين</option>
                 <option value="30">آخر شهر</option>
                 <option value="60">آخر شهرين</option>
-                <option value="90">آخر 3 أشهر</option>
+                <option value="90" selected>آخر 3 أشهر</option>
                 <option value="0">الكل</option>
               </select>
             </div>
@@ -1434,7 +1434,7 @@
     
     async function loadDelayedHistory() {
       try {
-        const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 7;
+        const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 90;
         const data = await callApi('getHistory', { days: days });
         
         // Filter entries that are delayed (Status contains 'متأخر' or has delay info)
@@ -1573,21 +1573,18 @@
         });
       }
       
-      // 2. Delays by Day (Bar) - excluding Friday (no work day)
+      // 2. Delays by Day (Bar) - using Saudi timezone (UTC+3)
       const dayCounts = {};
-      // الأيام بدون الجمعة (لا يوجد عمل الجمعة)
-      const dayNames = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
-      const allDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
       dayNames.forEach(d => dayCounts[d] = 0);
       data.forEach(d => {
         if (!d.Date) return;
-        const date = new Date(d.Date);
+        // Parse date and add 3 hours for Saudi timezone
+        let date = new Date(d.Date);
         if (!isNaN(date.getTime())) {
-          const dayName = allDays[date.getDay()];
-          // تجاهل الجمعة
-          if (dayName !== 'الجمعة') {
-            dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
-          }
+          // Add 3 hours to convert UTC to Saudi time (UTC+3)
+          date = new Date(date.getTime() + (3 * 60 * 60 * 1000));
+          dayCounts[dayNames[date.getUTCDay()]]++;
         }
       });
       
