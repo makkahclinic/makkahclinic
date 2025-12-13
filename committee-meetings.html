@@ -341,7 +341,7 @@
 <nav class="navbar navbar-expand-lg sticky-top">
   <div class="container">
     <a class="brand" href="mega.html">
-      <img src="attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg" alt="شعار">
+      <img src="logo-transparent.png" alt="شعار">
       <span>نظام اجتماعات اللجان</span>
     </a>
     <div id="committeeBadge" class="committee-badge ms-3"></div>
@@ -465,7 +465,35 @@
 
   <div id="tab-meeting" class="tab-pane fade">
     <div class="container py-4">
-      <div class="card-glass p-4">
+      <!-- رسالة اختيار اللجنة -->
+      <div id="selectCommitteePrompt" class="card-glass p-5 text-center">
+        <i class="fa-solid fa-hand-pointer fa-4x mb-4" style="color: var(--gold);"></i>
+        <h3 class="mb-4">اختر اللجنة أولاً</h3>
+        <p class="text-muted mb-4">يجب اختيار اللجنة لتسجيل الاجتماع</p>
+        <div class="committee-selector mb-0">
+          <button class="committee-btn meeting-comm-btn" data-committee="RM" style="--comm-color: var(--rm);">
+            <i class="fa-solid fa-exclamation-circle me-2"></i> إدارة المخاطر
+          </button>
+          <button class="committee-btn meeting-comm-btn" data-committee="FMS" style="--comm-color: var(--fms);">
+            <i class="fa-solid fa-building me-2"></i> السلامة والمرافق
+          </button>
+          <button class="committee-btn meeting-comm-btn" data-committee="PSC" style="--comm-color: var(--psc);">
+            <i class="fa-solid fa-heart me-2"></i> سلامة المرضى
+          </button>
+          <button class="committee-btn meeting-comm-btn" data-committee="IPC" style="--comm-color: var(--ipc);">
+            <i class="fa-solid fa-shield-virus me-2"></i> مكافحة العدوى
+          </button>
+          <button class="committee-btn meeting-comm-btn" data-committee="QI" style="--comm-color: var(--qi);">
+            <i class="fa-solid fa-chart-line me-2"></i> الجودة والتحسين
+          </button>
+          <button class="committee-btn meeting-comm-btn" data-committee="EOC" style="--comm-color: var(--eoc);">
+            <i class="fa-solid fa-first-aid me-2"></i> الطوارئ والكوارث
+          </button>
+        </div>
+      </div>
+
+      <!-- نموذج تسجيل الاجتماع (يظهر بعد اختيار اللجنة) -->
+      <div id="meetingFormContainer" class="card-glass p-4 d-none">
         <div class="d-flex justify-content-between align-items-center mb-4">
           <h4><i class="fa-solid fa-users me-2"></i> تسجيل الاجتماع</h4>
           <div id="meetingDateBadge" class="badge bg-warning text-dark fs-6"></div>
@@ -833,6 +861,12 @@ document.querySelectorAll('.committee-btn').forEach(btn => {
   });
 });
 
+document.querySelectorAll('.meeting-comm-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectCommittee(btn.dataset.committee);
+  });
+});
+
 document.getElementById('meetingType').addEventListener('change', (e) => {
   document.getElementById('zoomLinkContainer').style.display = 
     e.target.value === 'زوم' || e.target.value === 'مختلط' ? 'block' : 'none';
@@ -849,7 +883,8 @@ function selectCommittee(code) {
   const comm = COMMITTEES[code];
   
   document.querySelectorAll('.committee-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector(`[data-committee="${code}"]`).classList.add('active');
+  document.querySelectorAll('.meeting-comm-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll(`[data-committee="${code}"]`).forEach(b => b.classList.add('active'));
   
   document.getElementById('committeeBadge').innerHTML = `
     <span style="background: ${comm.color}; padding: 8px 16px; border-radius: 20px;">
@@ -860,6 +895,9 @@ function selectCommittee(code) {
   document.getElementById('homeContent').classList.remove('d-none');
   document.getElementById('kpiRequired').textContent = comm.required;
   document.getElementById('currentYear').textContent = new Date().getFullYear();
+  
+  document.getElementById('selectCommitteePrompt').classList.add('d-none');
+  document.getElementById('meetingFormContainer').classList.remove('d-none');
   
   renderScheduleGrid(comm);
   renderMembersPreview(comm);
