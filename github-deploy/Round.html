@@ -283,6 +283,7 @@
         <button class="nav-link" id="delayed-tab" data-bs-toggle="tab" data-bs-target="#delayedPane" type="button">
           <i class="fas fa-clock me-1"></i> المتأخرون
           <span class="badge bg-danger ms-1" id="delayedCount">0</span>
+          <span class="badge bg-secondary ms-1" id="delayedPeriodLabel" style="font-size: 0.65rem;">أسبوع</span>
         </button>
       </li>
       <li class="nav-item">
@@ -556,10 +557,10 @@
           <div class="row g-2 mb-3">
             <div class="col-md-3">
               <label class="form-label small fw-bold">الفترة الزمنية</label>
-              <select class="form-select form-select-sm" id="delayedPeriodFilter">
+              <select class="form-select form-select-sm" id="delayedPeriodFilter" onchange="updateDelayedPeriodLabel()">
                 <option value="1">اليوم</option>
-                <option value="7">آخر أسبوع</option>
-                <option value="14" selected>آخر أسبوعين</option>
+                <option value="7" selected>آخر أسبوع</option>
+                <option value="14">آخر أسبوعين</option>
                 <option value="30">آخر شهر</option>
                 <option value="60">آخر شهرين</option>
                 <option value="90">آخر 3 أشهر</option>
@@ -1433,7 +1434,7 @@
     
     async function loadDelayedHistory() {
       try {
-        const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 14;
+        const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 7;
         const data = await callApi('getHistory', { days: days });
         
         // Filter entries that are delayed (Status contains 'متأخر' or has delay info)
@@ -1447,6 +1448,23 @@
         applyDelayedFilters();
       } catch (err) {
         console.error('Delayed history error:', err);
+      }
+    }
+    
+    function updateDelayedPeriodLabel() {
+      const select = document.getElementById('delayedPeriodFilter');
+      const label = document.getElementById('delayedPeriodLabel');
+      if (select && label) {
+        const periodLabels = {
+          '1': 'اليوم',
+          '7': 'أسبوع',
+          '14': 'أسبوعين',
+          '30': 'شهر',
+          '60': 'شهرين',
+          '90': '3 أشهر',
+          '0': 'الكل'
+        };
+        label.textContent = periodLabels[select.value] || 'أسبوع';
       }
     }
     
@@ -1495,6 +1513,7 @@
       document.getElementById('delayedTotalCount').textContent = filtered.length;
       // تحديث رقم التبويب ليعكس إجمالي التأخيرات
       document.getElementById('delayedCount').textContent = filtered.length;
+      updateDelayedPeriodLabel();
       
       // Calculate average delay
       const delays = filtered.map(d => parseInt(d.Delay_Min) || 0).filter(d => d > 0);
