@@ -957,7 +957,7 @@
   
   // ==================== COMMITTEE MEETINGS APIs ====================
   
-  const MEETINGS_SHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc'; // نفس الـ Spreadsheet
+  const MEETINGS_SHEET_ID = '1BOq20XMppleeaVHhY0F2Hf_fUPENDvJgk9fP_BqMcJM'; // ملف منفصل للاجتماعات
   
   function getMeetingsSheet(name) {
     const ss = SpreadsheetApp.openById(MEETINGS_SHEET_ID);
