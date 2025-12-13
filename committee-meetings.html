@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>نظام اجتماعات اللجان – مجمع مكة الطبي بالزاهر</title>
 
+  <link rel="icon" type="image/png" href="logo-transparent.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
@@ -205,16 +206,71 @@
       transition: all 0.3s;
     }
     .schedule-card.current {
-      border-color: var(--gold);
-      box-shadow: 0 0 20px rgba(212,175,55,0.3);
+      border-color: var(--amber);
+      box-shadow: 0 0 20px rgba(245,158,11,0.3);
+      background: rgba(245,158,11,0.1);
     }
     .schedule-card.completed {
       border-color: var(--emerald);
-      background: rgba(16,185,129,0.1);
+      background: rgba(16,185,129,0.15);
     }
-    .schedule-card.overdue {
+    .schedule-card.missed {
       border-color: var(--ruby);
-      background: rgba(239,68,68,0.1);
+      background: rgba(239,68,68,0.15);
+    }
+    .schedule-card.future {
+      border-color: var(--sapphire);
+      background: rgba(59,130,246,0.08);
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+    }
+    .progress-segment {
+      height: 100%;
+      transition: width 0.5s ease;
+    }
+    .progress-segment.completed { background: var(--emerald); }
+    .progress-segment.missed { background: var(--ruby); }
+    .progress-segment.future { background: var(--sapphire); }
+    .progress-segment.current { background: var(--amber); }
+
+    .status-legend {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 15px;
+      font-size: 0.85rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .legend-dot.completed { background: var(--emerald); }
+    .legend-dot.missed { background: var(--ruby); }
+    .legend-dot.current { background: var(--amber); }
+    .legend-dot.future { background: var(--sapphire); }
+
+    .month-status-icon {
+      margin-top: 10px;
+      font-size: 1.2rem;
+    }
+    .month-status-text {
+      font-size: 0.75rem;
+      margin-top: 5px;
+      color: var(--muted);
     }
 
     .meeting-row {
@@ -455,6 +511,21 @@
 
         <div class="card-glass p-4 mb-4">
           <h5 class="mb-3"><i class="fa-solid fa-calendar me-2"></i> جدول الاجتماعات السنوي <span id="currentYear">2025</span></h5>
+          
+          <div class="mb-4">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="small">التقدم السنوي</span>
+              <span id="progressText" class="small fw-bold">0 / 0</span>
+            </div>
+            <div class="progress-bar-container" id="yearProgressBar"></div>
+            <div class="status-legend">
+              <div class="legend-item"><div class="legend-dot completed"></div> تم الاجتماع</div>
+              <div class="legend-item"><div class="legend-dot missed"></div> لم يتم</div>
+              <div class="legend-item"><div class="legend-dot current"></div> جاري</div>
+              <div class="legend-item"><div class="legend-dot future"></div> لم يحن الاستحقاق</div>
+            </div>
+          </div>
+          
           <div id="scheduleGrid" class="row g-3"></div>
         </div>
 
@@ -932,7 +1003,7 @@ function selectCommittee(code) {
   document.getElementById('selectCommitteePrompt').classList.add('d-none');
   document.getElementById('meetingFormContainer').classList.remove('d-none');
   
-  renderScheduleGrid(comm);
+  renderScheduleGrid(comm, []);
   renderMembersPreview(comm);
   renderAttendanceGrid(comm);
   renderRecommendationsGrid(comm);
@@ -941,8 +1012,13 @@ function selectCommittee(code) {
   loadCommitteeData(code);
 }
 
-function renderScheduleGrid(comm) {
+let completedMeetingMonths = [];
+
+function renderScheduleGrid(comm, completedMonths = []) {
   const grid = document.getElementById('scheduleGrid');
+  const progressBar = document.getElementById('yearProgressBar');
+  const progressText = document.getElementById('progressText');
+  
   const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
                   'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   
@@ -956,20 +1032,68 @@ function renderScheduleGrid(comm) {
   }
   
   const currentMonth = new Date().getMonth();
+  const total = meetingMonths.length;
   
-  grid.innerHTML = meetingMonths.map((m, idx) => {
-    const status = m < currentMonth ? 'completed' : m === currentMonth ? 'current' : '';
+  let completedCount = 0;
+  let missedCount = 0;
+  let currentCount = 0;
+  let futureCount = 0;
+  
+  const cardsHtml = meetingMonths.map((m, idx) => {
+    const isCompleted = completedMonths.includes(m);
+    let status = '';
+    let icon = '';
+    let statusText = '';
+    
+    if (isCompleted) {
+      status = 'completed';
+      icon = '<i class="fa-solid fa-check-circle month-status-icon" style="color: var(--emerald);"></i>';
+      statusText = 'تم الاجتماع';
+      completedCount++;
+    } else if (m < currentMonth) {
+      status = 'missed';
+      icon = '<i class="fa-solid fa-times-circle month-status-icon" style="color: var(--ruby);"></i>';
+      statusText = 'لم يتم';
+      missedCount++;
+    } else if (m === currentMonth) {
+      status = 'current';
+      icon = '<i class="fa-solid fa-clock month-status-icon" style="color: var(--amber);"></i>';
+      statusText = 'جاري';
+      currentCount++;
+    } else {
+      status = 'future';
+      icon = '<i class="fa-solid fa-hourglass-start month-status-icon" style="color: var(--sapphire);"></i>';
+      statusText = 'لم يحن الاستحقاق';
+      futureCount++;
+    }
+    
     return `
       <div class="col-6 col-md-4 col-lg-2">
         <div class="schedule-card ${status}">
           <div class="fs-5 fw-bold">${months[m]}</div>
           <div class="small text-muted">اجتماع ${idx + 1}</div>
-          ${status === 'completed' ? '<i class="fa-solid fa-check-circle mt-2" style="color: var(--emerald);"></i>' : ''}
-          ${status === 'current' ? '<span class="badge bg-warning text-dark mt-2">الحالي</span>' : ''}
+          ${icon}
+          <div class="month-status-text">${statusText}</div>
         </div>
       </div>
     `;
   }).join('');
+  
+  grid.innerHTML = cardsHtml;
+  
+  const completedPct = (completedCount / total) * 100;
+  const missedPct = (missedCount / total) * 100;
+  const currentPct = (currentCount / total) * 100;
+  const futurePct = (futureCount / total) * 100;
+  
+  progressBar.innerHTML = `
+    <div class="progress-segment completed" style="width: ${completedPct}%"></div>
+    <div class="progress-segment missed" style="width: ${missedPct}%"></div>
+    <div class="progress-segment current" style="width: ${currentPct}%"></div>
+    <div class="progress-segment future" style="width: ${futurePct}%"></div>
+  `;
+  
+  progressText.textContent = `${completedCount} / ${total} اجتماع`;
 }
 
 function renderMembersPreview(comm) {
@@ -1086,6 +1210,7 @@ function renderRecorderOptions(comm) {
 
 async function loadCommitteeData(code) {
   showToast('جاري تحميل البيانات...', 'info');
+  const comm = COMMITTEES[code];
   
   try {
     const data = await apiCall('getMeetingData', { committee: code });
@@ -1097,6 +1222,21 @@ async function loadCommitteeData(code) {
     
     meetingsData = data.meetings || [];
     
+    completedMeetingMonths = [];
+    if (meetingsData.length > 0) {
+      const currentYear = new Date().getFullYear();
+      meetingsData.forEach(m => {
+        if (m.date) {
+          const meetingDate = new Date(m.date);
+          if (meetingDate.getFullYear() === currentYear) {
+            completedMeetingMonths.push(meetingDate.getMonth());
+          }
+        }
+      });
+    }
+    
+    renderScheduleGrid(comm, completedMeetingMonths);
+    
     showToast('تم تحميل البيانات بنجاح', 'success');
   } catch (err) {
     console.error('Load error:', err);
@@ -1104,6 +1244,8 @@ async function loadCommitteeData(code) {
     document.getElementById('kpiDelayed').textContent = '0';
     document.getElementById('kpiOpenRecs').textContent = '0';
     document.getElementById('kpiAttendance').textContent = '0%';
+    
+    renderScheduleGrid(comm, []);
   }
   
   loadDelayedMeetings(code);
