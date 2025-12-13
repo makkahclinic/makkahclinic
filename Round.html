@@ -626,6 +626,67 @@
           </div>
         </div>
         
+        <!-- Charts Section -->
+        <div class="row g-3 mb-4">
+          <!-- Delays by Staff (Donut Chart) -->
+          <div class="col-lg-4">
+            <div class="card card-custom h-100">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-pie text-danger me-1"></i>التأخيرات حسب المسؤول</h6>
+              </div>
+              <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 200px;">
+                <canvas id="delayedByStaffChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <!-- Delays by Day (Bar Chart) -->
+          <div class="col-lg-4">
+            <div class="card card-custom h-100">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-bar text-primary me-1"></i>التأخيرات حسب اليوم</h6>
+              </div>
+              <div class="card-body p-2" style="height: 200px;">
+                <canvas id="delayedByDayChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <!-- Delay Trend (Line Chart) -->
+          <div class="col-lg-4">
+            <div class="card card-custom h-100">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-line text-success me-1"></i>اتجاه التأخيرات</h6>
+              </div>
+              <div class="card-body p-2" style="height: 200px;">
+                <canvas id="delayedTrendChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Top Delayed Rounds -->
+        <div class="row g-3 mb-4">
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-list-ol text-warning me-1"></i>أكثر الجولات تأخيراً</h6>
+              </div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="topDelayedRoundsChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-tachometer-alt text-info me-1"></i>توزيع مدة التأخير</h6>
+              </div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="delayDurationChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- Today's Delayed Section -->
         <div class="card card-custom mb-3">
           <div class="card-header bg-white border-0 py-2">
@@ -1449,10 +1510,183 @@
       const topStaff = Object.entries(staffCounts).sort((a,b) => b[1] - a[1])[0];
       document.getElementById('delayedTopStaff').textContent = topStaff ? topStaff[0] : '-';
       
-      // Render table
+      // Render charts and table
+      renderDelayedCharts(filtered);
       renderDelayedHistoryTable(filtered);
     }
     
+    // Chart instances for delayed tab
+    let delayedByStaffChartInstance = null;
+    let delayedByDayChartInstance = null;
+    let delayedTrendChartInstance = null;
+    let topDelayedRoundsChartInstance = null;
+    let delayDurationChartInstance = null;
+
+    function renderDelayedCharts(data) {
+      const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'];
+      
+      // 1. Delays by Staff (Donut)
+      const staffCounts = {};
+      data.forEach(d => {
+        const staff = d.Staff || d.Responsible_Role || 'غير محدد';
+        staffCounts[staff] = (staffCounts[staff] || 0) + 1;
+      });
+      
+      const staffCtx = document.getElementById('delayedByStaffChart');
+      if (staffCtx) {
+        if (delayedByStaffChartInstance) delayedByStaffChartInstance.destroy();
+        delayedByStaffChartInstance = new Chart(staffCtx, {
+          type: 'doughnut',
+          data: {
+            labels: Object.keys(staffCounts),
+            datasets: [{
+              data: Object.values(staffCounts),
+              backgroundColor: colors,
+              borderWidth: 2,
+              borderColor: '#fff'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } }
+          }
+        });
+      }
+      
+      // 2. Delays by Day (Bar)
+      const dayCounts = {};
+      const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      dayNames.forEach(d => dayCounts[d] = 0);
+      data.forEach(d => {
+        const date = new Date(d.Date);
+        if (!isNaN(date.getTime())) {
+          dayCounts[dayNames[date.getDay()]]++;
+        }
+      });
+      
+      const dayCtx = document.getElementById('delayedByDayChart');
+      if (dayCtx) {
+        if (delayedByDayChartInstance) delayedByDayChartInstance.destroy();
+        delayedByDayChartInstance = new Chart(dayCtx, {
+          type: 'bar',
+          data: {
+            labels: dayNames,
+            datasets: [{
+              label: 'عدد التأخيرات',
+              data: dayNames.map(d => dayCounts[d]),
+              backgroundColor: 'rgba(239, 68, 68, 0.7)',
+              borderColor: '#ef4444',
+              borderWidth: 1,
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+          }
+        });
+      }
+      
+      // 3. Delay Trend (Line)
+      const dateCounts = {};
+      data.forEach(d => {
+        const dateStr = d.Date?.split(' ')[0] || d.Date;
+        if (dateStr) dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+      });
+      const sortedDates = Object.keys(dateCounts).sort().slice(-14);
+      
+      const trendCtx = document.getElementById('delayedTrendChart');
+      if (trendCtx) {
+        if (delayedTrendChartInstance) delayedTrendChartInstance.destroy();
+        delayedTrendChartInstance = new Chart(trendCtx, {
+          type: 'line',
+          data: {
+            labels: sortedDates.map(d => d.slice(-5)),
+            datasets: [{
+              label: 'التأخيرات',
+              data: sortedDates.map(d => dateCounts[d]),
+              borderColor: '#22c55e',
+              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }
+      
+      // 4. Top Delayed Rounds (Horizontal Bar)
+      const roundCounts = {};
+      data.forEach(d => {
+        const round = d.Round_Name || d.Area || 'غير محدد';
+        roundCounts[round] = (roundCounts[round] || 0) + 1;
+      });
+      const topRounds = Object.entries(roundCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+      
+      const topCtx = document.getElementById('topDelayedRoundsChart');
+      if (topCtx) {
+        if (topDelayedRoundsChartInstance) topDelayedRoundsChartInstance.destroy();
+        topDelayedRoundsChartInstance = new Chart(topCtx, {
+          type: 'bar',
+          data: {
+            labels: topRounds.map(r => r[0].substring(0, 20)),
+            datasets: [{
+              data: topRounds.map(r => r[1]),
+              backgroundColor: colors.slice(0, 5),
+              borderRadius: 4
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+          }
+        });
+      }
+      
+      // 5. Delay Duration Distribution
+      const durationBuckets = { '0-15': 0, '16-30': 0, '31-60': 0, '61-120': 0, '120+': 0 };
+      data.forEach(d => {
+        const min = parseInt(d.Delay_Min) || 0;
+        if (min <= 15) durationBuckets['0-15']++;
+        else if (min <= 30) durationBuckets['16-30']++;
+        else if (min <= 60) durationBuckets['31-60']++;
+        else if (min <= 120) durationBuckets['61-120']++;
+        else durationBuckets['120+']++;
+      });
+      
+      const durCtx = document.getElementById('delayDurationChart');
+      if (durCtx) {
+        if (delayDurationChartInstance) delayDurationChartInstance.destroy();
+        delayDurationChartInstance = new Chart(durCtx, {
+          type: 'bar',
+          data: {
+            labels: Object.keys(durationBuckets).map(k => k + ' دقيقة'),
+            datasets: [{
+              data: Object.values(durationBuckets),
+              backgroundColor: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'],
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }
+    }
+
     function renderDelayedHistoryTable(data) {
       const tbody = document.getElementById('delayedHistoryBody');
       
