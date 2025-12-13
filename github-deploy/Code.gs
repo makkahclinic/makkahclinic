@@ -171,7 +171,7 @@
     const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
     
     const todayLog = roundsLog.filter(r => {
-      const logDate = r.Date ? new Date(r.Date) : null;
+      const logDate = parseLogDate(r.Date);
       if (!logDate) return false;
       const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
       return logStr === todayStr;
@@ -307,7 +307,7 @@
     const schedule = sheetToObjects(getSheet('Round_Schedule'));
     
     const todayLog = roundsLog.filter(r => {
-      const logDate = r.Date ? new Date(r.Date) : null;
+      const logDate = parseLogDate(r.Date);
       if (!logDate) return false;
       const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
       return logStr === todayStr;
@@ -463,6 +463,30 @@
     };
   }
   
+  // دالة تحليل التواريخ بمختلف التنسيقات
+  function parseLogDate(dateValue) {
+    if (!dateValue) return null;
+    if (dateValue instanceof Date) return dateValue;
+    
+    const str = String(dateValue).trim();
+    
+    // YYYY-MM-DD أو YYYY/MM/DD
+    let match = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if (match) {
+      return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+    }
+    
+    // DD-MM-YYYY أو DD/MM/YYYY
+    match = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+    if (match) {
+      return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+    }
+    
+    // المحاولة العادية
+    const d = new Date(dateValue);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  
   // دالة مساعدة لاستخراج البنود الفاشلة من النص
   function extractFailedItems(notes) {
     if (!notes) return [];
@@ -491,14 +515,14 @@
       const cutoff = getSaudiDate();
       cutoff.setDate(cutoff.getDate() - parseInt(params.days));
       filtered = filtered.filter(r => {
-        const logDate = r.Date ? new Date(r.Date) : null;
+        const logDate = parseLogDate(r.Date);
         return logDate && logDate >= cutoff;
       });
     }
     
     if (params.startDate) {
       filtered = filtered.filter(r => {
-        const logDate = r.Date ? new Date(r.Date) : null;
+        const logDate = parseLogDate(r.Date);
         if (!logDate) return false;
         return logDate >= new Date(params.startDate);
       });
@@ -506,7 +530,7 @@
     
     if (params.endDate) {
       filtered = filtered.filter(r => {
-        const logDate = r.Date ? new Date(r.Date) : null;
+        const logDate = parseLogDate(r.Date);
         if (!logDate) return false;
         return logDate <= new Date(params.endDate + 'T23:59:59');
       });
@@ -521,8 +545,11 @@
     }
     
     filtered.sort((a, b) => {
-      const dateA = new Date(a.Date + ' ' + (a.Actual_Time || ''));
-      const dateB = new Date(b.Date + ' ' + (b.Actual_Time || ''));
+      const dateA = parseLogDate(a.Date);
+      const dateB = parseLogDate(b.Date);
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
       return dateB - dateA;
     });
     
@@ -591,7 +618,7 @@
     cutoff.setDate(cutoff.getDate() - days);
     
     const filtered = roundsLog.filter(r => {
-      const logDate = r.Date ? new Date(r.Date) : null;
+      const logDate = parseLogDate(r.Date);
       return logDate && logDate >= cutoff;
     });
     
@@ -635,7 +662,8 @@
     const byStatus = {};
     
     filtered.forEach(r => {
-      const dateKey = r.Date ? new Date(r.Date).toISOString().split('T')[0] : 'unknown';
+      const parsedDate = parseLogDate(r.Date);
+      const dateKey = parsedDate ? `${parsedDate.getFullYear()}-${String(parsedDate.getMonth()+1).padStart(2,'0')}-${String(parsedDate.getDate()).padStart(2,'0')}` : 'unknown';
       const status = String(r.Status || '').toLowerCase().trim();
       const notes = String(r.Negative_Notes || '').toLowerCase();
       const isViol = String(r.Is_Violation || '').toLowerCase();
@@ -870,7 +898,7 @@
     
     // سجل اليوم
     const todayLog = roundsLog.filter(r => {
-      const logDate = r.Date ? new Date(r.Date) : null;
+      const logDate = parseLogDate(r.Date);
       if (!logDate) return false;
       const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
       return logStr === todayStr;
