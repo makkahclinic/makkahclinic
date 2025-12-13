@@ -97,6 +97,21 @@
         case 'addIncidentFollowup':
           result = addIncidentFollowup(payload);
           break;
+        case 'getIncidentStaff':
+          result = getIncidentStaff();
+          break;
+        case 'assignIncident':
+          result = assignIncident(payload);
+          break;
+        case 'escalateIncident':
+          result = escalateIncident(payload);
+          break;
+        case 'closeIncident':
+          result = closeIncident(payload);
+          break;
+        case 'saveRCA':
+          result = saveRCA(payload);
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }
@@ -1751,5 +1766,203 @@
       byStatus,
       monthlyStats
     };
+  }
+
+  // ==================== نظام المتابعين والتعيين ====================
+
+  function getIncidentStaff() {
+    let sheet = getIncidentsSheet('Incidents_Staff');
+    
+    if (!sheet) {
+      const ss = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID);
+      sheet = ss.insertSheet('Incidents_Staff');
+      sheet.appendRow(['Staff_Name', 'Email', 'Role', 'Active', 'Added_Date']);
+      sheet.appendRow(['د. خالد الخطيب', '', 'رئيس اللجنة', 'نعم', getTodayString()]);
+      sheet.appendRow(['منسق الجودة', '', 'منسق', 'نعم', getTodayString()]);
+      sheet.appendRow(['مسؤول السلامة', '', 'مسؤول', 'نعم', getTodayString()]);
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { staff: [] };
+    }
+    
+    const headers = data[0];
+    const staff = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const row = {};
+      for (let j = 0; j < headers.length; j++) {
+        row[headers[j]] = data[i][j];
+      }
+      if (row.Active === 'نعم' || row.Active === 'yes' || row.Active === true) {
+        staff.push({
+          name: row.Staff_Name || '',
+          email: row.Email || '',
+          role: row.Role || ''
+        });
+      }
+    }
+    
+    return { staff };
+  }
+
+  function assignIncident(params) {
+    const sheet = getIncidentsSheet('Incidents_Log');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const rowIndex = params.rowIndex;
+    if (!rowIndex || rowIndex < 2) {
+      return { success: false, error: 'صف غير صالح' };
+    }
+    
+    const now = getSaudiDate();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    const assignedCol = headers.indexOf('Assigned_To');
+    const statusCol = headers.indexOf('Status');
+    
+    if (assignedCol !== -1) {
+      sheet.getRange(rowIndex, assignedCol + 1).setValue(params.assignedTo);
+    }
+    
+    if (statusCol !== -1 && params.assignedTo) {
+      sheet.getRange(rowIndex, statusCol + 1).setValue('under_review');
+    }
+    
+    const followupSheet = getIncidentsSheet('Incidents_Followup');
+    const followupId = `FU-${Date.now()}`;
+    followupSheet.appendRow([
+      followupId,
+      params.incidentId,
+      dateStr,
+      `تم تعيين المسؤول: ${params.assignedTo}`,
+      params.assignedBy || 'النظام',
+      params.notes || '',
+      'completed'
+    ]);
+    
+    return { success: true, message: 'تم تعيين المسؤول بنجاح' };
+  }
+
+  function escalateIncident(params) {
+    const sheet = getIncidentsSheet('Incidents_Log');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const rowIndex = params.rowIndex;
+    if (!rowIndex || rowIndex < 2) {
+      return { success: false, error: 'صف غير صالح' };
+    }
+    
+    const now = getSaudiDate();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    const statusCol = headers.indexOf('Status');
+    const rcaCol = headers.indexOf('RCA_Required');
+    
+    if (statusCol !== -1) {
+      sheet.getRange(rowIndex, statusCol + 1).setValue('rca_required');
+    }
+    
+    if (rcaCol !== -1) {
+      sheet.getRange(rowIndex, rcaCol + 1).setValue('نعم');
+    }
+    
+    const followupSheet = getIncidentsSheet('Incidents_Followup');
+    const followupId = `FU-${Date.now()}`;
+    followupSheet.appendRow([
+      followupId,
+      params.incidentId,
+      dateStr,
+      `تم تصعيد الحادث - يتطلب تحليل السبب الجذري (RCA)`,
+      params.escalatedBy || 'النظام',
+      params.reason || '',
+      'pending'
+    ]);
+    
+    return { success: true, message: 'تم تصعيد الحادث بنجاح' };
+  }
+
+  function closeIncident(params) {
+    const sheet = getIncidentsSheet('Incidents_Log');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const rowIndex = params.rowIndex;
+    if (!rowIndex || rowIndex < 2) {
+      return { success: false, error: 'صف غير صالح' };
+    }
+    
+    const now = getSaudiDate();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    const statusCol = headers.indexOf('Status');
+    const closedDateCol = headers.indexOf('Closed_Date');
+    const closedByCol = headers.indexOf('Closed_By');
+    const correctiveCol = headers.indexOf('Corrective_Actions');
+    
+    if (statusCol !== -1) sheet.getRange(rowIndex, statusCol + 1).setValue('closed');
+    if (closedDateCol !== -1) sheet.getRange(rowIndex, closedDateCol + 1).setValue(dateStr);
+    if (closedByCol !== -1) sheet.getRange(rowIndex, closedByCol + 1).setValue(params.closedBy || '');
+    if (correctiveCol !== -1 && params.correctiveActions) {
+      sheet.getRange(rowIndex, correctiveCol + 1).setValue(params.correctiveActions);
+    }
+    
+    const followupSheet = getIncidentsSheet('Incidents_Followup');
+    const followupId = `FU-${Date.now()}`;
+    followupSheet.appendRow([
+      followupId,
+      params.incidentId,
+      dateStr,
+      `تم إغلاق البلاغ`,
+      params.closedBy || 'النظام',
+      params.summary || '',
+      'completed'
+    ]);
+    
+    return { success: true, message: 'تم إغلاق البلاغ بنجاح' };
+  }
+
+  function saveRCA(params) {
+    const sheet = getIncidentsSheet('Incidents_Log');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const rowIndex = params.rowIndex;
+    if (!rowIndex || rowIndex < 2) {
+      return { success: false, error: 'صف غير صالح' };
+    }
+    
+    const now = getSaudiDate();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    const rootCauseCol = headers.indexOf('Root_Cause');
+    const correctiveCol = headers.indexOf('Corrective_Actions');
+    const lessonsCol = headers.indexOf('Lessons_Learned');
+    const statusCol = headers.indexOf('Status');
+    
+    if (rootCauseCol !== -1) sheet.getRange(rowIndex, rootCauseCol + 1).setValue(params.rootCause || '');
+    if (correctiveCol !== -1) sheet.getRange(rowIndex, correctiveCol + 1).setValue(params.correctiveActions || '');
+    if (lessonsCol !== -1) sheet.getRange(rowIndex, lessonsCol + 1).setValue(params.lessonsLearned || '');
+    
+    if (statusCol !== -1) {
+      sheet.getRange(rowIndex, statusCol + 1).setValue('in_progress');
+    }
+    
+    const followupSheet = getIncidentsSheet('Incidents_Followup');
+    const followupId = `FU-${Date.now()}`;
+    followupSheet.appendRow([
+      followupId,
+      params.incidentId,
+      dateStr,
+      `تم إكمال تحليل السبب الجذري (RCA)`,
+      params.analyzedBy || 'النظام',
+      `السبب: ${(params.rootCause || '').substring(0, 100)}...`,
+      'completed'
+    ]);
+    
+    return { success: true, message: 'تم حفظ تحليل السبب الجذري بنجاح' };
   }
   
