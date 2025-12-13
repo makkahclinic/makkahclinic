@@ -1488,6 +1488,71 @@ document.getElementById('recFilter').addEventListener('change', (e) => {
   renderRecommendationsList(e.target.value);
 });
 
+// Archive Functions
+let archiveData = [];
+
+async function loadArchiveData() {
+  const year = document.getElementById('archiveYear').value;
+  const status = document.getElementById('archiveStatus').value;
+  const container = document.getElementById('archiveList');
+  
+  container.innerHTML = '<div class="text-center py-5"><div class="loading-spinner"></div><p class="mt-2">جاري تحميل السجل...</p></div>';
+  
+  try {
+    const result = await apiCall('getMeetingsArchive', { 
+      committee: currentCommittee || '', 
+      year: year,
+      status: status
+    });
+    
+    archiveData = result.meetings || [];
+    renderArchiveList();
+  } catch (err) {
+    console.error('Archive error:', err);
+    container.innerHTML = `<div class="text-center py-5 text-danger"><i class="fa-solid fa-exclamation-triangle fa-3x mb-3"></i><p>خطأ في تحميل البيانات</p></div>`;
+  }
+}
+
+function renderArchiveList() {
+  const container = document.getElementById('archiveList');
+  
+  if (!archiveData || archiveData.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-5 text-muted">
+        <i class="fa-solid fa-inbox fa-3x mb-3"></i>
+        <p class="fs-5">لا توجد اجتماعات مسجلة</p>
+      </div>`;
+    return;
+  }
+  
+  let html = '';
+  archiveData.forEach(meeting => {
+    const comm = COMMITTEES[meeting.committee] || {};
+    const statusClass = meeting.status === 'completed' ? 'emerald' : 'ruby';
+    const statusText = meeting.status === 'completed' ? 'مكتمل' : 'متأخر';
+    
+    html += `
+      <div class="meeting-row">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="badge" style="background: ${comm.color || '#666'};">${comm.name || meeting.committee}</span>
+            <span class="ms-2 fw-bold">${meeting.date}</span>
+          </div>
+          <span class="badge" style="background: var(--${statusClass});">${statusText}</span>
+        </div>
+        <div class="mt-2 small text-muted">
+          <i class="fa-solid fa-users me-1"></i> الحضور: ${meeting.attendeesCount || 0}
+          <span class="mx-2">|</span>
+          <i class="fa-solid fa-list-check me-1"></i> التوصيات: ${meeting.recommendationsCount || 0}
+        </div>
+      </div>`;
+  });
+  
+  container.innerHTML = html;
+}
+
+document.getElementById('btnSearchArchive').addEventListener('click', loadArchiveData);
+
 async function saveMeeting() {
   const comm = COMMITTEES[currentCommittee];
   const date = document.getElementById('meetingDate').value;
