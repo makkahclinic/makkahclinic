@@ -1347,7 +1347,7 @@
   // Patient Safety Incidents System
   // ============================================================
   
-  const INCIDENTS_SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
+  const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
   
   const INCIDENT_TYPES = {
     'medication_error': 'خطأ دوائي',

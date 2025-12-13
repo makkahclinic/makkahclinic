@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحليل ومتابعة الحوادث - مجمع مكة الطبي</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --crimson: #9E1B32;
+            --blue: #0056A3;
+            --blue-dark: #003E75;
+            --white: #FFFFFF;
+            --off-white: #F8F9FA;
+            --gray-light: #E9ECEF;
+            --gray: #6C757D;
+            --gray-dark: #343A40;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --orange: #fd7e14;
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+            --radius-md: 10px;
+            --radius-lg: 14px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--blue-dark), var(--crimson));
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-title h1 {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.4rem;
+        }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        .btn-light { background: rgba(255,255,255,0.2); color: white; }
+        .btn-light:hover { background: rgba(255,255,255,0.3); }
+        .btn-primary { background: var(--blue); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: #333; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-secondary { background: var(--gray-light); color: var(--gray-dark); }
+        .btn-sm { padding: 8px 14px; font-size: 0.85rem; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        .tabs {
+            display: flex;
+            gap: 5px;
+            background: var(--white);
+            padding: 6px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 600;
+            color: var(--gray);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .tab-btn:hover { background: var(--gray-light); }
+        .tab-btn.active { background: var(--blue); color: white; }
+        .tab-btn .count {
+            background: rgba(255,255,255,0.3);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+        }
+        .tab-btn.active .count { background: rgba(255,255,255,0.3); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            border-top: 4px solid var(--blue);
+        }
+        .stat-card.danger { border-top-color: var(--danger); }
+        .stat-card.warning { border-top-color: var(--warning); }
+        .stat-card.success { border-top-color: var(--success); }
+        .stat-card.orange { border-top-color: var(--orange); }
+        .stat-number {
+            font-family: 'Cairo', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--blue-dark);
+        }
+        .stat-label { color: var(--gray); font-size: 0.9rem; }
+        
+        .card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .card-title {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--blue-dark);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-title i { color: var(--crimson); }
+        .card-body { padding: 20px; }
+        
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .filter-row select, .filter-row input {
+            padding: 8px 12px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+        }
+        
+        .table-container { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: right;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        th {
+            background: var(--off-white);
+            font-weight: 600;
+            color: var(--blue-dark);
+            white-space: nowrap;
+        }
+        tr:hover { background: var(--off-white); }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-success { background: rgba(40,167,69,0.15); color: #28a745; }
+        .badge-warning { background: rgba(255,193,7,0.2); color: #856404; }
+        .badge-danger { background: rgba(220,53,69,0.15); color: #dc3545; }
+        .badge-info { background: rgba(0,86,163,0.15); color: #0056A3; }
+        .badge-secondary { background: var(--gray-light); color: var(--gray); }
+        .badge-dark { background: #343a40; color: white; }
+        
+        .severity-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, var(--blue), var(--crimson));
+            color: white;
+        }
+        .modal-header h3 { font-size: 1.2rem; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .modal-body { padding: 24px; }
+        
+        .detail-section {
+            margin-bottom: 25px;
+        }
+        .detail-section h4 {
+            font-size: 1rem;
+            color: var(--blue-dark);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .detail-item {
+            background: var(--off-white);
+            padding: 12px;
+            border-radius: var(--radius-md);
+        }
+        .detail-label {
+            font-size: 0.8rem;
+            color: var(--gray);
+            margin-bottom: 4px;
+        }
+        .detail-value { font-weight: 600; }
+        .detail-text {
+            background: var(--off-white);
+            padding: 14px;
+            border-radius: var(--radius-md);
+            line-height: 1.6;
+        }
+        
+        .action-section {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            margin-top: 20px;
+        }
+        .action-section h4 {
+            margin-bottom: 15px;
+            color: var(--crimson);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+        }
+        textarea.form-control { min-height: 80px; resize: vertical; }
+        
+        .timeline {
+            border-right: 3px solid var(--gray-light);
+            padding-right: 20px;
+            margin-right: 10px;
+        }
+        .timeline-item {
+            padding: 12px 0;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            right: -26px;
+            top: 16px;
+            width: 10px;
+            height: 10px;
+            background: var(--blue);
+            border-radius: 50%;
+        }
+        .timeline-date { font-size: 0.8rem; color: var(--gray); }
+        .timeline-action { font-weight: 600; margin: 4px 0; }
+        .timeline-by { font-size: 0.85rem; color: var(--gray); }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: var(--gray);
+        }
+        .loading i { font-size: 2rem; margin-bottom: 10px; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray);
+        }
+        .empty-state i { font-size: 4rem; margin-bottom: 15px; opacity: 0.3; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .fa-spin { animation: spin 1s linear infinite; }
+        
+        @media (max-width: 768px) {
+            .header { padding: 12px 15px; }
+            .header-title h1 { font-size: 1.1rem; }
+            .tab-btn span { display: none; }
+            .container { padding: 15px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .stat-number { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-title">
+            <i class="fas fa-shield-heart" style="font-size:1.8rem"></i>
+            <div>
+                <h1>تحليل ومتابعة حوادث سلامة المرضى</h1>
+                <small style="opacity:0.8">لجنة سلامة المرضى - مجمع مكة الطبي</small>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-light" onclick="loadData()">
+                <i class="fas fa-sync"></i> تحديث
+            </button>
+            <a href="incident-report.html" class="btn btn-light" target="_blank">
+                <i class="fas fa-plus"></i> نموذج التبليغ
+            </a>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="dashboard">
+                <i class="fas fa-chart-pie"></i>
+                <span>لوحة المتابعة</span>
+            </button>
+            <button class="tab-btn" data-tab="incidents">
+                <i class="fas fa-list"></i>
+                <span>البلاغات</span>
+                <span class="count" id="incidentsCount">0</span>
+            </button>
+            <button class="tab-btn" data-tab="rca">
+                <i class="fas fa-search"></i>
+                <span>تتطلب RCA</span>
+                <span class="count" id="rcaCount">0</span>
+            </button>
+        </div>
+        
+        <div id="dashboard" class="tab-content active">
+            <div class="stats-row" id="statsRow">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalIncidents">-</div>
+                    <div class="stat-label">إجمالي البلاغات</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-number" id="openIncidents">-</div>
+                    <div class="stat-label">بلاغات مفتوحة</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-number" id="closedIncidents">-</div>
+                    <div class="stat-label">بلاغات مغلقة</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-number" id="rcaRequired">-</div>
+                    <div class="stat-label">تتطلب RCA</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="nearMissPercent">-</div>
+                    <div class="stat-label">نسبة Near Miss</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-chart-bar"></i> توزيع البلاغات</h3>
+                </div>
+                <div class="card-body" id="chartsContainer">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>جاري تحميل البيانات...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="incidents" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-clipboard-list"></i> سجل البلاغات</h3>
+                </div>
+                <div class="card-body">
+                    <div class="filter-row">
+                        <select id="filterStatus">
+                            <option value="all">كل الحالات</option>
+                            <option value="new">جديد</option>
+                            <option value="under_review">قيد المراجعة</option>
+                            <option value="rca_required">يتطلب RCA</option>
+                            <option value="in_progress">قيد المعالجة</option>
+                            <option value="closed">مغلق</option>
+                        </select>
+                        <select id="filterSeverity">
+                            <option value="">كل مستويات الخطورة</option>
+                            <option value="none">بدون ضرر</option>
+                            <option value="minor">ضرر بسيط</option>
+                            <option value="moderate">ضرر متوسط</option>
+                            <option value="severe">ضرر جسيم</option>
+                            <option value="death">وفاة</option>
+                        </select>
+                        <select id="filterType">
+                            <option value="">كل الأنواع</option>
+                            <option value="medication_error">خطأ دوائي</option>
+                            <option value="patient_fall">سقوط مريض</option>
+                            <option value="infection">عدوى مكتسبة</option>
+                            <option value="near_miss">Near Miss</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="loadIncidents()">
+                            <i class="fas fa-filter"></i> تصفية
+                        </button>
+                    </div>
+                    <div class="table-container" id="incidentsTable">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="rca" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-search"></i> الحوادث التي تتطلب تحليل السبب الجذري (RCA)</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-container" id="rcaTable">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-medical"></i> تفاصيل البلاغ</h3>
+                <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbz-vImcmRIh0M86i44V5Rm1C0m23lrN4q1aql9R7HNfQZUgShVyg7JlYlD5xLK2H9Gurg/exec';
+        
+        const INCIDENT_TYPES = {
+            'medication_error': 'خطأ دوائي',
+            'patient_fall': 'سقوط مريض',
+            'infection': 'عدوى مكتسبة',
+            'diagnosis_error': 'خطأ تشخيصي',
+            'procedure_error': 'خطأ إجراءات',
+            'near_miss': 'كاد يحدث (Near Miss)',
+            'equipment_failure': 'عطل معدات',
+            'communication': 'خطأ تواصل',
+            'documentation': 'خطأ توثيق',
+            'patient_id_error': 'خطأ هوية مريض',
+            'delay_care': 'تأخر رعاية',
+            'other': 'أخرى'
+        };
+        
+        const SEVERITY = {
+            'none': { name: 'بدون ضرر', color: '#28a745', badge: 'success' },
+            'minor': { name: 'ضرر بسيط', color: '#ffc107', badge: 'warning' },
+            'moderate': { name: 'ضرر متوسط', color: '#fd7e14', badge: 'warning' },
+            'severe': { name: 'ضرر جسيم', color: '#dc3545', badge: 'danger' },
+            'death': { name: 'وفاة', color: '#000', badge: 'dark' }
+        };
+        
+        const STATUS = {
+            'new': { name: 'جديد', badge: 'info' },
+            'under_review': { name: 'قيد المراجعة', badge: 'warning' },
+            'rca_required': { name: 'يتطلب RCA', badge: 'danger' },
+            'in_progress': { name: 'قيد المعالجة', badge: 'warning' },
+            'closed': { name: 'مغلق', badge: 'success' }
+        };
+        
+        let currentIncident = null;
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+            });
+        });
+        
+        async function apiCall(action, payload = {}) {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action, payload })
+            });
+            return await response.json();
+        }
+        
+        async function loadData() {
+            loadStats();
+            loadIncidents();
+            loadRcaIncidents();
+        }
+        
+        async function loadStats() {
+            try {
+                const result = await apiCall('getIncidentStats', {});
+                if (result.ok) {
+                    document.getElementById('totalIncidents').textContent = result.total || 0;
+                    document.getElementById('openIncidents').textContent = result.open || 0;
+                    document.getElementById('closedIncidents').textContent = result.closed || 0;
+                    document.getElementById('rcaRequired').textContent = result.byStatus?.rca_required?.count || 0;
+                    document.getElementById('nearMissPercent').textContent = (result.nearMissPercentage || 0) + '%';
+                    
+                    document.getElementById('rcaCount').textContent = result.byStatus?.rca_required?.count || 0;
+                    
+                    renderCharts(result);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        function renderCharts(data) {
+            let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;">';
+            
+            html += '<div><h4 style="margin-bottom:15px;color:var(--blue-dark);">حسب النوع</h4><div style="display:flex;flex-direction:column;gap:8px;">';
+            for (const [code, info] of Object.entries(data.byType || {})) {
+                if (info.count > 0) {
+                    const pct = data.total > 0 ? Math.round((info.count / data.total) * 100) : 0;
+                    html += `<div style="display:flex;align-items:center;gap:10px;">
+                        <span style="flex:1">${info.name}</span>
+                        <div style="flex:2;background:var(--gray-light);height:20px;border-radius:10px;overflow:hidden;">
+                            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--blue),var(--crimson))"></div>
+                        </div>
+                        <span style="width:50px;text-align:left;font-weight:600;">${info.count}</span>
+                    </div>`;
+                }
+            }
+            html += '</div></div>';
+            
+            html += '<div><h4 style="margin-bottom:15px;color:var(--blue-dark);">حسب الخطورة</h4><div style="display:flex;flex-wrap:wrap;gap:10px;">';
+            for (const [code, info] of Object.entries(data.bySeverity || {})) {
+                html += `<div style="flex:1;min-width:100px;padding:15px;background:var(--off-white);border-radius:10px;text-align:center;border-top:4px solid ${info.color}">
+                    <div style="font-size:1.5rem;font-weight:700;">${info.count}</div>
+                    <div style="font-size:0.85rem;color:var(--gray);">${info.name}</div>
+                </div>`;
+            }
+            html += '</div></div>';
+            
+            html += '</div>';
+            
+            document.getElementById('chartsContainer').innerHTML = html;
+        }
+        
+        async function loadIncidents() {
+            const container = document.getElementById('incidentsTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            const params = {
+                status: document.getElementById('filterStatus').value,
+                severity: document.getElementById('filterSeverity').value,
+                incidentType: document.getElementById('filterType').value
+            };
+            
+            try {
+                const result = await apiCall('getIncidents', params);
+                if (!result.ok || !result.incidents?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد بلاغات</h3></div>';
+                    return;
+                }
+                
+                document.getElementById('incidentsCount').textContent = result.total || result.incidents.length;
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم البلاغ</th>
+                        <th>التاريخ</th>
+                        <th>القسم</th>
+                        <th>النوع</th>
+                        <th>الخطورة</th>
+                        <th>الحالة</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                result.incidents.forEach(inc => {
+                    const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d', badge: 'secondary' };
+                    const stat = STATUS[inc.status] || { name: inc.status, badge: 'secondary' };
+                    const typeName = INCIDENT_TYPES[inc.type] || inc.type;
+                    
+                    html += `<tr>
+                        <td><strong>${inc.id}</strong>${inc.rcaRequired ? ' <span class="badge badge-danger">RCA</span>' : ''}</td>
+                        <td>${inc.date}</td>
+                        <td>${inc.department}</td>
+                        <td>${typeName}</td>
+                        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+                        <td><span class="badge badge-${stat.badge}">${stat.name}</span></td>
+                        <td><button class="btn btn-secondary btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في التحميل</p></div>';
+            }
+        }
+        
+        async function loadRcaIncidents() {
+            const container = document.getElementById('rcaTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getIncidents', { status: 'rca_required' });
+                if (!result.ok || !result.incidents?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>لا توجد حوادث تتطلب RCA</h3></div>';
+                    document.getElementById('rcaCount').textContent = '0';
+                    return;
+                }
+                
+                document.getElementById('rcaCount').textContent = result.incidents.length;
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم البلاغ</th>
+                        <th>التاريخ</th>
+                        <th>القسم</th>
+                        <th>النوع</th>
+                        <th>الخطورة</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                result.incidents.forEach(inc => {
+                    const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
+                    html += `<tr>
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${inc.date}</td>
+                        <td>${inc.department}</td>
+                        <td>${INCIDENT_TYPES[inc.type] || inc.type}</td>
+                        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+                        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-search"></i> تحليل</button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        async function viewIncident(id) {
+            const modal = document.getElementById('detailModal');
+            const body = document.getElementById('modalBody');
+            modal.classList.add('active');
+            body.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getIncidentDetails', { incidentId: id });
+                if (!result.ok || !result.success) throw new Error(result.error);
+                
+                currentIncident = result.incident;
+                const inc = result.incident;
+                const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d' };
+                const stat = STATUS[inc.status] || { name: inc.status };
+                
+                let html = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:15px;margin-bottom:20px;padding:15px;background:var(--off-white);border-radius:10px;">
+                        <div>
+                            <h2 style="margin:0;color:var(--blue-dark);">${inc.id}</h2>
+                            <span class="badge badge-${STATUS[inc.status]?.badge || 'secondary'}">${stat.name}</span>
+                            ${inc.rcaRequired ? '<span class="badge badge-danger" style="margin-right:5px;">يتطلب RCA</span>' : ''}
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="severity-dot" style="background:${sev.color};width:16px;height:16px;"></span>
+                            <strong>${sev.name}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-info-circle"></i> معلومات الحادث</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item"><div class="detail-label">التاريخ</div><div class="detail-value">${inc.date} ${inc.time || ''}</div></div>
+                            <div class="detail-item"><div class="detail-label">القسم</div><div class="detail-value">${inc.department}</div></div>
+                            <div class="detail-item"><div class="detail-label">النوع</div><div class="detail-value">${inc.typeName}</div></div>
+                            <div class="detail-item"><div class="detail-label">المبلغ</div><div class="detail-value">${inc.anonymous ? 'مجهول الهوية' : (inc.reporterName || '-')}</div></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-align-left"></i> وصف الحادث</h4>
+                        <div class="detail-text">${inc.description || '-'}</div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-bolt"></i> الإجراءات الفورية</h4>
+                        <div class="detail-text">${inc.immediateAction || 'لم يتم تسجيل إجراءات فورية'}</div>
+                    </div>
+                `;
+                
+                if (inc.rootCause || inc.correctiveActions) {
+                    html += `
+                        <div class="detail-section">
+                            <h4><i class="fas fa-search"></i> التحليل والمعالجة</h4>
+                            ${inc.rootCause ? `<div class="detail-text" style="margin-bottom:10px;"><strong>السبب الجذري:</strong> ${inc.rootCause}</div>` : ''}
+                            ${inc.correctiveActions ? `<div class="detail-text"><strong>الإجراءات التصحيحية:</strong> ${inc.correctiveActions}</div>` : ''}
+                        </div>
+                    `;
+                }
+                
+                if (result.followups?.length) {
+                    html += `<div class="detail-section"><h4><i class="fas fa-history"></i> سجل المتابعات</h4><div class="timeline">`;
+                    result.followups.forEach(f => {
+                        html += `<div class="timeline-item">
+                            <div class="timeline-date">${f.date}</div>
+                            <div class="timeline-action">${f.action}</div>
+                            <div class="timeline-by">${f.by} - ${f.notes || ''}</div>
+                        </div>`;
+                    });
+                    html += '</div></div>';
+                }
+                
+                if (inc.status !== 'closed') {
+                    html += `
+                        <div class="action-section">
+                            <h4><i class="fas fa-edit"></i> اتخاذ إجراء</h4>
+                            <div class="form-group">
+                                <label>تغيير الحالة</label>
+                                <select class="form-control" id="newStatus">
+                                    <option value="">اختر الحالة الجديدة</option>
+                                    <option value="under_review">قيد المراجعة</option>
+                                    <option value="rca_required">يتطلب RCA</option>
+                                    <option value="in_progress">قيد المعالجة</option>
+                                    <option value="closed">إغلاق البلاغ</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>السبب الجذري (RCA)</label>
+                                <textarea class="form-control" id="rootCause" placeholder="تحليل السبب الجذري للحادث...">${inc.rootCause || ''}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>الإجراءات التصحيحية</label>
+                                <textarea class="form-control" id="correctiveActions" placeholder="الإجراءات المتخذة لمنع تكرار الحادث...">${inc.correctiveActions || ''}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>اسم المعالج</label>
+                                <input type="text" class="form-control" id="processedBy" placeholder="اسمك">
+                            </div>
+                            <button class="btn btn-primary" onclick="updateIncident()">
+                                <i class="fas fa-save"></i> حفظ التغييرات
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                body.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                body.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل التفاصيل</p></div>';
+            }
+        }
+        
+        async function updateIncident() {
+            if (!currentIncident) return;
+            
+            const newStatus = document.getElementById('newStatus').value;
+            const rootCause = document.getElementById('rootCause').value;
+            const correctiveActions = document.getElementById('correctiveActions').value;
+            const processedBy = document.getElementById('processedBy').value;
+            
+            if (!newStatus && !rootCause && !correctiveActions) {
+                alert('الرجاء إجراء تغيير واحد على الأقل');
+                return;
+            }
+            
+            try {
+                const result = await apiCall('updateIncidentStatus', {
+                    rowIndex: currentIncident.rowIndex,
+                    status: newStatus || undefined,
+                    rootCause: rootCause || undefined,
+                    correctiveActions: correctiveActions || undefined,
+                    closedBy: processedBy || undefined
+                });
+                
+                if (result.ok && result.success) {
+                    if (rootCause || correctiveActions) {
+                        await apiCall('addIncidentFollowup', {
+                            incidentId: currentIncident.id,
+                            action: newStatus === 'closed' ? 'إغلاق البلاغ' : 'تحديث البلاغ',
+                            by: processedBy,
+                            notes: rootCause ? 'تم إضافة تحليل RCA' : 'تم إضافة إجراءات تصحيحية'
+                        });
+                    }
+                    
+                    alert('تم حفظ التغييرات بنجاح');
+                    closeModal();
+                    loadData();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('حدث خطأ: ' + err.message);
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+            currentIncident = null;
+        }
+        
+        document.getElementById('detailModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+        
+        loadData();
+    </script>
+</body>
+</html>
