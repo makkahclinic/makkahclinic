@@ -1413,6 +1413,22 @@
   }
   
   function submitIncident(payload) {
+    if (!payload.incidentDate) {
+      return { success: false, error: 'تاريخ الحادث مطلوب' };
+    }
+    if (!payload.department) {
+      return { success: false, error: 'القسم مطلوب' };
+    }
+    if (!payload.incidentType) {
+      return { success: false, error: 'نوع الحادث مطلوب' };
+    }
+    if (!payload.severity) {
+      return { success: false, error: 'مستوى الخطورة مطلوب' };
+    }
+    if (!payload.description || payload.description.length < 10) {
+      return { success: false, error: 'وصف الحادث مطلوب (10 أحرف على الأقل)' };
+    }
+    
     const sheet = getIncidentsSheet('Incidents_Log');
     const now = getSaudiDate();
     
@@ -1422,7 +1438,8 @@
     
     const isAnonymous = payload.anonymous === true || payload.anonymous === 'true';
     const severity = payload.severity || 'none';
-    const requiresRCA = ['severe', 'death'].includes(severity);
+    const requiresRCA = ['severe', 'death', 'moderate'].includes(severity);
+    const isSentinel = ['severe', 'death'].includes(severity);
     
     sheet.appendRow([
       incidentId,
@@ -1439,7 +1456,7 @@
       payload.patientNotified || 'لا',
       isAnonymous ? 'نعم' : 'لا',
       isAnonymous ? '' : (payload.reporterName || ''),
-      'new',
+      isSentinel ? 'rca_required' : 'new',
       '',
       requiresRCA ? 'نعم' : 'لا',
       '',
