@@ -225,9 +225,6 @@ function submitIncident(payload) {
   if (!payload.severity) {
     return { success: false, error: 'مستوى الخطورة مطلوب' };
   }
-  if (!payload.description || payload.description.length < 10) {
-    return { success: false, error: 'وصف الحادث مطلوب (10 أحرف على الأقل)' };
-  }
   
   const sheet = getIncidentsSheet('Incidents_Log');
   const now = getSaudiDate();
