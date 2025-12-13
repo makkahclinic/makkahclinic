@@ -1118,6 +1118,22 @@
     let DELAYED_LIST = [];
     let VIOLATIONS_DATA = { violations: [], repeated: [] };
 
+    // الحصول على التاريخ بتوقيت السعودية (UTC+3)
+    function getSaudiDate() {
+      const now = new Date();
+      // تحويل إلى UTC ثم إضافة 3 ساعات للسعودية
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      return new Date(utc + (3 * 60 * 60000));
+    }
+    
+    // الحصول على تاريخ اليوم بتنسيق YYYY-MM-DD بتوقيت السعودية
+    function getSaudiTodayStr() {
+      const d = getSaudiDate();
+      return d.getFullYear() + '-' + 
+             String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+             String(d.getDate()).padStart(2, '0');
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       updateTodayHeader();
       loadAllData();
@@ -1252,7 +1268,7 @@
     }
 
     function updateTodayHeader() {
-      const today = new Date();
+      const today = getSaudiDate();
       const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
       document.getElementById('todayInfoText').textContent = today.toLocaleDateString('ar-SA', options);
     }
@@ -1396,7 +1412,7 @@
       
       // Filter by date
       if (days > 0) {
-        const cutoff = new Date();
+        const cutoff = getSaudiDate();
         cutoff.setDate(cutoff.getDate() - days);
         filtered = filtered.filter(d => {
           const date = new Date(d.Date);
@@ -1475,10 +1491,10 @@
     }
 
     function updateStats() {
-      const todayStr = new Date().toLocaleDateString('en-CA');
+      const todayStr = getSaudiTodayStr();
       const todayTasks = MASTER_TASKS.filter(t => {
         const dayMap = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
-        const today = new Date().getDay();
+        const today = getSaudiDate().getDay();
         const dayKey = dayMap[today];
         return t[dayKey] && t[dayKey].toLowerCase() === 'yes';
       });
@@ -1793,10 +1809,10 @@
         status = 'خلل';
       }
       
-      const now = new Date();
+      const now = getSaudiDate();
       const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
       const payload = {
-        date: now.toLocaleDateString('en-US'),
+        date: getSaudiTodayStr(),
         time: timeStr,
         roundName: currentChecklist.roundName,
         staff: selectedStaffData?.name || '',
@@ -2204,7 +2220,7 @@
       
       // Filter by period
       if (period > 0) {
-        const cutoff = new Date();
+        const cutoff = getSaudiDate();
         cutoff.setDate(cutoff.getDate() - period);
         cutoff.setHours(0, 0, 0, 0);
         filtered = filtered.filter(v => {
@@ -2302,10 +2318,10 @@
         return;
       }
       
-      const now = new Date();
+      const now = getSaudiDate();
       const defaultTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
       const payload = {
-        date: now.toLocaleDateString('en-US'),
+        date: getSaudiTodayStr(),
         time: document.getElementById('formTime').value || defaultTime,
         roundName: roundName,
         staff: staff,
@@ -2348,8 +2364,8 @@
     let HISTORY_DATA = [];
     
     function setHistoryRange(range) {
-      const today = new Date();
-      const endDate = today.toISOString().split('T')[0];
+      const today = getSaudiDate();
+      const endDate = getSaudiTodayStr();
       let startDate;
       
       document.querySelectorAll('.date-range-btn').forEach(btn => {
@@ -2363,6 +2379,9 @@
         activeBtn.classList.add('active', 'btn-primary');
       }
       
+      // Helper to format date as YYYY-MM-DD
+      const formatDateStr = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      
       switch(range) {
         case 'today':
           startDate = endDate;
@@ -2370,32 +2389,32 @@
         case 'week':
           const weekAgo = new Date(today);
           weekAgo.setDate(today.getDate() - 7);
-          startDate = weekAgo.toISOString().split('T')[0];
+          startDate = formatDateStr(weekAgo);
           break;
         case '2weeks':
           const twoWeeksAgo = new Date(today);
           twoWeeksAgo.setDate(today.getDate() - 14);
-          startDate = twoWeeksAgo.toISOString().split('T')[0];
+          startDate = formatDateStr(twoWeeksAgo);
           break;
         case 'month':
           const monthAgo = new Date(today);
           monthAgo.setMonth(today.getMonth() - 1);
-          startDate = monthAgo.toISOString().split('T')[0];
+          startDate = formatDateStr(monthAgo);
           break;
         case '2months':
           const twoMonthsAgo = new Date(today);
           twoMonthsAgo.setMonth(today.getMonth() - 2);
-          startDate = twoMonthsAgo.toISOString().split('T')[0];
+          startDate = formatDateStr(twoMonthsAgo);
           break;
         case '3months':
           const threeMonthsAgo = new Date(today);
           threeMonthsAgo.setMonth(today.getMonth() - 3);
-          startDate = threeMonthsAgo.toISOString().split('T')[0];
+          startDate = formatDateStr(threeMonthsAgo);
           break;
         case 'year':
           const yearAgo = new Date(today);
           yearAgo.setFullYear(today.getFullYear() - 1);
-          startDate = yearAgo.toISOString().split('T')[0];
+          startDate = formatDateStr(yearAgo);
           break;
         default:
           startDate = endDate;
