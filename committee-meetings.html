@@ -1088,7 +1088,7 @@ function setQuickDate(dateStr) {
 let completedMeetingMonths = [];
 let meetingsPerMonth = {}; // عدد الاجتماعات لكل شهر
 
-function renderScheduleGrid(comm, completedMonths = [], monthCounts = {}) {
+function renderScheduleGrid(comm, completedMonths = [], monthCounts = {}, monthDates = {}) {
   const grid = document.getElementById('scheduleGrid');
   const progressBar = document.getElementById('yearProgressBar');
   const progressText = document.getElementById('progressText');
@@ -1160,26 +1160,35 @@ function renderScheduleGrid(comm, completedMonths = [], monthCounts = {}) {
       </div>
     `;
     
-    // إضافة مربعات الاجتماعات الاستثنائية
+    // إضافة عدد الاجتماعات الإضافية في نفس الشهر
     if (hasExceptional) {
       const extraMeetings = monthMeetingCount - 1;
-      for (let e = 0; e < extraMeetings; e++) {
-        exceptionalCount++;
-        cardsHtml += `
-          <div class="col-6 col-md-4 col-lg-2">
-            <div class="schedule-card" style="border-color: #22c55e; background: rgba(34,197,94,0.2); box-shadow: 0 0 15px rgba(34,197,94,0.3);">
-              <div class="fs-5 fw-bold" style="color: #86efac;">${months[m]}</div>
-              <div class="small" style="color: #22c55e;">اجتماع استثنائي ${extraMeetings > 1 ? (e + 1) : ''}</div>
-              <i class="fa-solid fa-star month-status-icon" style="color: #22c55e;"></i>
-              <div class="month-status-text" style="color: #86efac;">استثنائي</div>
-            </div>
-          </div>
-        `;
-      }
+      exceptionalCount += extraMeetings;
     }
   });
   
-  grid.innerHTML = cardsHtml;
+  // إضافة مربعات للأشهر الاستثنائية (خارج الجدول)
+  const exceptionalMonthsHtml = [];
+  for (const [monthStr, count] of Object.entries(monthCounts)) {
+    const m = parseInt(monthStr);
+    if (!meetingMonths.includes(m)) {
+      // هذا شهر خارج الجدول = كل اجتماعاته استثنائية
+      const dates = (monthDates[m] || []).join(' | ');
+      exceptionalCount += count;
+      exceptionalMonthsHtml.push(`
+        <div class="col-6 col-md-4 col-lg-2">
+          <div class="schedule-card" style="border-color: #22c55e; background: rgba(34,197,94,0.2); box-shadow: 0 0 15px rgba(34,197,94,0.3);">
+            <div class="fs-5 fw-bold" style="color: #86efac;">${months[m]}</div>
+            <div class="small" style="color: #22c55e;">اجتماع استثنائي</div>
+            <div class="badge bg-success mt-2" style="font-size: 1.1rem;">${count}</div>
+            <div class="month-status-text" style="color: #86efac; font-size: 0.7rem;">${dates || 'استثنائي'}</div>
+          </div>
+        </div>
+      `);
+    }
+  }
+  
+  grid.innerHTML = cardsHtml + exceptionalMonthsHtml.join('');
   
   const completedPct = (completedCount / total) * 100;
   const missedPct = (missedCount / total) * 100;
@@ -1325,6 +1334,7 @@ async function loadCommitteeData(code) {
     
     completedMeetingMonths = [];
     const monthCounts = {}; // عدد الاجتماعات لكل شهر
+    const monthDates = {}; // تواريخ الاجتماعات لكل شهر
     
     if (meetingsData.length > 0) {
       const currentYear = new Date().getFullYear();
@@ -1337,12 +1347,16 @@ async function loadCommitteeData(code) {
               completedMeetingMonths.push(month);
             }
             monthCounts[month] = (monthCounts[month] || 0) + 1;
+            // حفظ التاريخ
+            if (!monthDates[month]) monthDates[month] = [];
+            const day = meetingDate.getDate();
+            monthDates[month].push(day);
           }
         }
       });
     }
     
-    renderScheduleGrid(comm, completedMeetingMonths, monthCounts);
+    renderScheduleGrid(comm, completedMeetingMonths, monthCounts, monthDates);
     
     showToast('تم تحميل البيانات بنجاح', 'success');
   } catch (err) {
