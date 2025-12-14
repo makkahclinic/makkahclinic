@@ -823,6 +823,26 @@
             return { hours, days };
         }
         
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+            try {
+                if (dateStr.includes('1899') || dateStr.includes('1900')) return '-';
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return dateStr;
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const year = date.getFullYear();
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                if (hours === '00' && minutes === '00') {
+                    return `${year}/${month}/${day}`;
+                }
+                return `${year}/${month}/${day} - ${hours}:${minutes}`;
+            } catch (e) {
+                return dateStr;
+            }
+        }
+        
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1185,8 +1205,8 @@
                     <div class="detail-section">
                         <h4><i class="fas fa-info-circle"></i> معلومات الحادث</h4>
                         <div class="detail-grid">
-                            <div class="detail-item"><div class="detail-label">التاريخ</div><div class="detail-value">${inc.date} ${inc.time || ''}</div></div>
-                            <div class="detail-item"><div class="detail-label">تاريخ التبليغ</div><div class="detail-value">${inc.reportDate || '-'}</div></div>
+                            <div class="detail-item"><div class="detail-label">التاريخ</div><div class="detail-value">${formatDate(inc.date)}</div></div>
+                            <div class="detail-item"><div class="detail-label">تاريخ التبليغ</div><div class="detail-value">${formatDate(inc.reportDate)}</div></div>
                             <div class="detail-item"><div class="detail-label">القسم</div><div class="detail-value">${inc.department}</div></div>
                             <div class="detail-item"><div class="detail-label">النوع</div><div class="detail-value">${inc.typeName}</div></div>
                             <div class="detail-item"><div class="detail-label">طريقة الاكتشاف</div><div class="detail-value">${inc.discoveryMethod || '-'}</div></div>
@@ -1241,7 +1261,7 @@
                                 </strong>
                                 
                                 <button class="btn btn-primary" onclick="showAssignSection()">
-                                    <i class="fas fa-user-plus"></i> تعيين مسؤول
+                                    <i class="fas fa-user-check"></i> تعيين متابعة الحالة
                                 </button>
                                 
                                 ${!isEscalated ? `
@@ -1271,7 +1291,7 @@
                         </div>
                         
                         <div id="assignSection" class="action-section" style="display:none;">
-                            <h4><i class="fas fa-user-plus"></i> تعيين مسؤول للمتابعة</h4>
+                            <h4><i class="fas fa-user-check"></i> تعيين متابعة الحالة</h4>
                             <div class="form-group">
                                 <label>اختر المسؤول</label>
                                 <select class="form-control" id="assignTo">
