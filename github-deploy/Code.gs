@@ -1780,7 +1780,7 @@
   }
 
   // ==================== نظام المتابعين والتعيين ====================
-  // يقرأ من شيت On_Charge: عمود A=Name, B=Code, C=Escalate
+  // يقرأ من شيت On_Charge: عمود A=الاسم, B=الرمز, C=التصعيد
 
   function getIncidentStaff() {
     const ss = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID);
@@ -1795,26 +1795,21 @@
       return { staff: [], escalationList: [] };
     }
     
-    const headers = data[0];
-    const nameCol = headers.indexOf('Name');
-    const codeCol = headers.indexOf('Code');
-    const escalateCol = headers.indexOf('Escalate');
-    
+    // أرقام الأعمدة مباشرة: A=0, B=1, C=2
     const staff = [];
     const escalationList = [];
     
     for (let i = 1; i < data.length; i++) {
-      const name = data[i][nameCol] || '';
-      const code = data[i][codeCol] || '';
-      const escalateTo = data[i][escalateCol] || '';
+      const name = String(data[i][0] || '').trim();      // عمود A - الاسم
+      const code = String(data[i][1] || '').trim();      // عمود B - الرمز
+      const escalateTo = String(data[i][2] || '').trim(); // عمود C - التصعيد
       
       if (name) {
         staff.push({
           name: name,
-          hasCode: code ? true : false
+          hasCode: code.length > 0
         });
         
-        // قائمة التصعيد = الأشخاص الذين لديهم قيمة في عمود Escalate
         if (escalateTo) {
           escalationList.push({
             name: escalateTo,
@@ -1824,7 +1819,7 @@
       }
     }
     
-    // إزالة التكرارات من قائمة التصعيد
+    // إزالة التكرارات
     const uniqueEscalation = [...new Map(escalationList.map(e => [e.name, e])).values()];
     
     return { staff, escalationList: uniqueEscalation };
@@ -1843,13 +1838,9 @@
       return { verified: false, error: 'لا توجد بيانات' };
     }
     
-    const headers = data[0];
-    const nameCol = headers.indexOf('Name');
-    const codeCol = headers.indexOf('Code');
-    
     for (let i = 1; i < data.length; i++) {
-      const name = String(data[i][nameCol] || '').trim();
-      const code = String(data[i][codeCol] || '').trim();
+      const name = String(data[i][0] || '').trim();  // عمود A
+      const code = String(data[i][1] || '').trim();  // عمود B
       
       if (name === staffName && code === String(passcode).trim()) {
         return { verified: true, staffName: name };
