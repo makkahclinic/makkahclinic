@@ -521,6 +521,41 @@
             color: var(--danger);
         }
         
+        .row-delay-warning {
+            background: rgba(255,193,7,0.15) !important;
+            border-right: 4px solid var(--warning) !important;
+        }
+        .row-delay-danger {
+            background: rgba(220,53,69,0.15) !important;
+            border-right: 4px solid var(--danger) !important;
+        }
+        .row-escalated {
+            background: rgba(220,53,69,0.1) !important;
+            border-right: 4px solid var(--crimson) !important;
+        }
+        .delay-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .delay-badge.warning {
+            background: rgba(255,193,7,0.2);
+            color: #856404;
+        }
+        .delay-badge.danger {
+            background: rgba(220,53,69,0.2);
+            color: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
         @media (max-width: 768px) {
             .header { padding: 12px 15px; }
             .header-title h1 { font-size: 1.1rem; }
@@ -652,9 +687,13 @@
                             <option value="all">كل الحالات</option>
                             <option value="new">جديد</option>
                             <option value="under_review">قيد المراجعة</option>
+                            <option value="escalated">تصعيد إداري</option>
                             <option value="rca_required">يتطلب RCA</option>
+                            <option value="rca_in_progress">قيد التحليل العميق</option>
                             <option value="in_progress">قيد المعالجة</option>
                             <option value="closed">مغلق</option>
+                            <option value="delayed_24">متأخرة 24-48 ساعة</option>
+                            <option value="delayed_48">متأخرة +48 ساعة</option>
                         </select>
                         <select id="filterSeverity">
                             <option value="">كل مستويات الخطورة</option>
@@ -761,7 +800,9 @@
         const STATUS = {
             'new': { name: 'جديد', badge: 'info' },
             'under_review': { name: 'قيد المراجعة', badge: 'warning' },
+            'escalated': { name: 'تصعيد إداري', badge: 'danger' },
             'rca_required': { name: 'يتطلب RCA', badge: 'danger' },
+            'rca_in_progress': { name: 'قيد التحليل العميق', badge: 'purple' },
             'in_progress': { name: 'قيد المعالجة', badge: 'purple' },
             'closed': { name: 'مغلق', badge: 'success' }
         };
@@ -769,6 +810,18 @@
         let currentUser = null;
         let staffList = [];
         let currentIncident = null;
+        
+        function calculateDelay(incidentDate, status, lastActionDate) {
+            if (status === 'closed') return { hours: 0, days: 0 };
+            
+            const referenceDate = lastActionDate ? new Date(lastActionDate) : new Date(incidentDate);
+            const now = new Date();
+            const diffMs = now - referenceDate;
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            const days = Math.floor(hours / 24);
+            
+            return { hours, days };
+        }
         
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -909,8 +962,11 @@
             const container = document.getElementById('incidentsTable');
             container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
             
+            const filterStatus = document.getElementById('filterStatus').value;
+            const isDelayFilter = filterStatus === 'delayed_24' || filterStatus === 'delayed_48';
+            
             const params = {
-                status: document.getElementById('filterStatus').value,
+                status: isDelayFilter ? 'all' : filterStatus,
                 severity: document.getElementById('filterSeverity').value,
                 incidentType: document.getElementById('filterType').value
             };
@@ -922,7 +978,24 @@
                     return;
                 }
                 
-                document.getElementById('incidentsCount').textContent = result.total || result.incidents.length;
+                let incidents = result.incidents;
+                
+                if (isDelayFilter) {
+                    incidents = incidents.filter(inc => {
+                        if (inc.status === 'closed') return false;
+                        const delay = calculateDelay(inc.date, inc.status, inc.lastActionDate);
+                        if (filterStatus === 'delayed_24') return delay.hours >= 24 && delay.hours < 48;
+                        if (filterStatus === 'delayed_48') return delay.hours >= 48;
+                        return true;
+                    });
+                }
+                
+                if (!incidents.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد بلاغات بهذا الفلتر</h3></div>';
+                    return;
+                }
+                
+                document.getElementById('incidentsCount').textContent = incidents.length;
                 
                 let html = `<table>
                     <thead><tr>
@@ -936,14 +1009,32 @@
                         <th>إجراء</th>
                     </tr></thead><tbody>`;
                 
-                result.incidents.forEach(inc => {
+                incidents.forEach(inc => {
                     const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d', badge: 'secondary' };
                     const stat = STATUS[inc.status] || { name: inc.status, badge: 'secondary' };
                     const typeName = INCIDENT_TYPES[inc.type] || inc.type;
                     
-                    html += `<tr>
-                        <td><strong>${inc.id}</strong>${inc.rcaRequired ? ' <span class="badge badge-danger">RCA</span>' : ''}</td>
-                        <td>${inc.date}</td>
+                    const delayInfo = calculateDelay(inc.date, inc.status, inc.lastActionDate);
+                    let rowClass = '';
+                    let delayBadge = '';
+                    
+                    if (inc.status === 'escalated') {
+                        rowClass = 'row-escalated';
+                    } else if (delayInfo.hours > 48 && inc.status !== 'closed') {
+                        rowClass = 'row-delay-danger';
+                        delayBadge = `<span class="delay-badge danger"><i class="fas fa-clock"></i> متأخر ${delayInfo.days} يوم</span>`;
+                    } else if (delayInfo.hours > 24 && inc.status !== 'closed') {
+                        rowClass = 'row-delay-warning';
+                        delayBadge = `<span class="delay-badge warning"><i class="fas fa-clock"></i> ${delayInfo.hours} ساعة</span>`;
+                    }
+                    
+                    let badges = '';
+                    if (inc.rcaRequired) badges += ' <span class="badge badge-danger">RCA</span>';
+                    if (inc.status === 'escalated') badges += ` <span class="badge badge-danger"><i class="fas fa-arrow-up"></i> مصعّد</span>`;
+                    
+                    html += `<tr class="${rowClass}">
+                        <td><strong>${inc.id}</strong>${badges}</td>
+                        <td>${inc.date} ${delayBadge}</td>
                         <td>${inc.department}</td>
                         <td>${typeName}</td>
                         <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
@@ -1138,30 +1229,45 @@
                 }
                 
                 if (inc.status !== 'closed') {
+                    const isEscalated = inc.status === 'escalated';
+                    const isRcaInProgress = inc.status === 'rca_in_progress' || inc.status === 'rca_required';
+                    const canUserClose = !isEscalated || (isEscalated && inc.escalatedTo === currentUser?.name);
+                    
                     html += `
-                        <div class="action-buttons">
-                            <button class="btn btn-primary" onclick="showAssignSection()">
-                                <i class="fas fa-user-plus"></i> تعيين مسؤول
-                            </button>
-                            ${needsEscalation ? `
-                                <button class="btn btn-danger" onclick="escalateIncident()">
-                                    <i class="fas fa-arrow-up"></i> تصعيد للإدارة (RCA)
+                        <div class="action-buttons" style="flex-direction:column;gap:15px;">
+                            <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                                <strong style="width:100%;margin-bottom:5px;color:var(--blue-dark);">
+                                    <i class="fas fa-cogs"></i> تغيير حالة البلاغ:
+                                </strong>
+                                
+                                <button class="btn btn-primary" onclick="showAssignSection()">
+                                    <i class="fas fa-user-plus"></i> تعيين مسؤول
                                 </button>
-                            ` : ''}
-                            ${inc.rcaRequired || inc.status === 'rca_required' ? `
+                                
+                                ${!isEscalated ? `
+                                    <button class="btn btn-danger" onclick="showEscalationSection()">
+                                        <i class="fas fa-arrow-up"></i> تصعيد إداري
+                                    </button>
+                                ` : `
+                                    <span class="badge badge-danger" style="padding:10px 15px;font-size:0.95rem;">
+                                        <i class="fas fa-exclamation-triangle"></i> مصعّد إلى: ${inc.escalatedTo || 'الإدارة'}
+                                    </span>
+                                `}
+                                
                                 <button class="btn btn-warning" onclick="showRCASection()">
-                                    <i class="fas fa-search"></i> تحليل السبب الجذري
+                                    <i class="fas fa-search"></i> ${isRcaInProgress ? 'متابعة التحليل العميق' : 'بدء التحليل العميق (RCA)'}
                                 </button>
-                            ` : ''}
-                            ${canClose ? `
-                                <button class="btn btn-success" onclick="showCloseSection()">
-                                    <i class="fas fa-check"></i> إغلاق مباشر
-                                </button>
-                            ` : `
-                                <button class="btn btn-success" onclick="showCloseSection()">
-                                    <i class="fas fa-check-double"></i> إغلاق البلاغ
-                                </button>
-                            `}
+                                
+                                ${canUserClose ? `
+                                    <button class="btn btn-success" onclick="showCloseSection()">
+                                        <i class="fas fa-check-double"></i> إغلاق البلاغ
+                                    </button>
+                                ` : `
+                                    <span class="badge badge-secondary" style="padding:10px 15px;font-size:0.95rem;">
+                                        <i class="fas fa-lock"></i> الإغلاق متاح فقط لـ ${inc.escalatedTo}
+                                    </span>
+                                `}
+                            </div>
                         </div>
                         
                         <div id="assignSection" class="action-section" style="display:none;">
@@ -1182,29 +1288,143 @@
                             </button>
                         </div>
                         
+                        <div id="escalationSection" class="action-section" style="display:none;background:linear-gradient(135deg,#fff5f5,#ffe8e8);border:2px solid var(--danger);">
+                            <h4 style="color:var(--danger);"><i class="fas fa-arrow-up"></i> تصعيد إداري</h4>
+                            <div class="alert alert-danger" style="margin-bottom:15px;">
+                                <i class="fas fa-info-circle"></i>
+                                التصعيد الإداري يعني نقل مسؤولية الحالة لمسؤول أعلى. فقط المسؤول المعين يمكنه إغلاق الحالة.
+                            </div>
+                            <div class="form-group">
+                                <label>اختر المسؤول للتصعيد</label>
+                                <select class="form-control" id="escalateTo">
+                                    <option value="">اختر المسؤول</option>
+                                    ${renderStaffOptions()}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>سبب التصعيد</label>
+                                <textarea class="form-control" id="escalationReason" placeholder="اذكر سبب التصعيد..."></textarea>
+                            </div>
+                            <button class="btn btn-danger" onclick="submitEscalation()">
+                                <i class="fas fa-arrow-up"></i> تأكيد التصعيد
+                            </button>
+                        </div>
+                        
                         <div id="rcaSection" class="rca-section" style="display:none;">
-                            <h4><i class="fas fa-search"></i> تحليل السبب الجذري (Root Cause Analysis)</h4>
-                            <div class="rca-grid">
+                            <h4><i class="fas fa-search"></i> التحليل العميق - Root Cause Analysis (RCA)</h4>
+                            
+                            <div style="display:flex;gap:10px;margin-bottom:20px;">
+                                <button class="btn btn-sm ${inc.rcaMethod === 'fiveWhys' ? 'btn-warning' : 'btn-secondary'}" onclick="showRCAMethod('fiveWhys')">
+                                    <i class="fas fa-question"></i> طريقة 5 Whys
+                                </button>
+                                <button class="btn btn-sm ${inc.rcaMethod === 'fishbone' ? 'btn-warning' : 'btn-secondary'}" onclick="showRCAMethod('fishbone')">
+                                    <i class="fas fa-fish"></i> Fishbone (Ishikawa)
+                                </button>
+                            </div>
+                            
+                            <div id="fiveWhysMethod" style="display:block;">
+                                <div class="alert alert-warning" style="margin-bottom:15px;">
+                                    <strong><i class="fas fa-lightbulb"></i> طريقة الـ 5 Whys:</strong>
+                                    اسأل "لماذا؟" 5 مرات للوصول للسبب الجذري.
+                                    <div style="background:#fff;padding:10px;border-radius:8px;margin-top:10px;font-size:0.9rem;">
+                                        <strong>مثال - خطأ دوائي:</strong><br>
+                                        ❓ <strong>لماذا 1:</strong> لماذا أُعطي المريض جرعة خاطئة؟ ← <em>لأن الممرض قرأ الوصفة بشكل خاطئ</em><br>
+                                        ❓ <strong>لماذا 2:</strong> لماذا قرأها خطأ؟ ← <em>لأن خط الطبيب غير واضح</em><br>
+                                        ❓ <strong>لماذا 3:</strong> لماذا لم يتحقق من الصيدلي؟ ← <em>لأن لا يوجد إجراء للتحقق المزدوج</em><br>
+                                        ❓ <strong>لماذا 4:</strong> لماذا لا يوجد إجراء؟ ← <em>لأنه لم يتم وضع سياسة للتحقق</em><br>
+                                        ❓ <strong>لماذا 5:</strong> لماذا لم توضع؟ ← <em>لأن إدارة الجودة لم تراجع البروتوكولات</em><br>
+                                        ✅ <strong>السبب الجذري:</strong> غياب مراجعة دورية لبروتوكولات صرف الأدوية
+                                    </div>
+                                </div>
+                                
                                 <div class="form-group">
-                                    <label>ما الذي حدث؟</label>
-                                    <textarea class="form-control" id="rcaWhat" placeholder="وصف دقيق للحادث...">${inc.description || ''}</textarea>
+                                    <label>لماذا حدث؟ (Why 1)</label>
+                                    <textarea class="form-control" id="rcaWhy1" placeholder="السبب المباشر...">${inc.rcaWhy1 || ''}</textarea>
                                 </div>
                                 <div class="form-group">
-                                    <label>لماذا حدث؟ (السبب الجذري)</label>
-                                    <textarea class="form-control" id="rcaWhy" placeholder="تحليل الأسباب الجذرية...">${inc.rootCause || ''}</textarea>
+                                    <label>لماذا؟ (Why 2)</label>
+                                    <textarea class="form-control" id="rcaWhy2" placeholder="لماذا حدث السبب السابق؟...">${inc.rcaWhy2 || ''}</textarea>
                                 </div>
                                 <div class="form-group">
-                                    <label>الإجراءات التصحيحية</label>
-                                    <textarea class="form-control" id="rcaActions" placeholder="ما الإجراءات المتخذة لمنع التكرار...">${inc.correctiveActions || ''}</textarea>
+                                    <label>لماذا؟ (Why 3)</label>
+                                    <textarea class="form-control" id="rcaWhy3" placeholder="تعمق أكثر...">${inc.rcaWhy3 || ''}</textarea>
                                 </div>
                                 <div class="form-group">
-                                    <label>الدروس المستفادة</label>
-                                    <textarea class="form-control" id="rcaLessons" placeholder="ما الدروس المستفادة من هذا الحادث...">${inc.lessonsLearned || ''}</textarea>
+                                    <label>لماذا؟ (Why 4)</label>
+                                    <textarea class="form-control" id="rcaWhy4" placeholder="استمر في التحليل...">${inc.rcaWhy4 || ''}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>لماذا؟ (Why 5) - السبب الجذري</label>
+                                    <textarea class="form-control" id="rcaWhy5" placeholder="السبب الجذري النهائي...">${inc.rcaWhy5 || ''}</textarea>
                                 </div>
                             </div>
-                            <button class="btn btn-warning" onclick="submitRCA()">
-                                <i class="fas fa-save"></i> حفظ تحليل RCA
-                            </button>
+                            
+                            <div id="fishboneMethod" style="display:none;">
+                                <div class="alert alert-warning" style="margin-bottom:15px;">
+                                    <strong><i class="fas fa-fish"></i> مخطط Fishbone (عظمة السمكة):</strong>
+                                    تحليل الأسباب ضمن 6 فئات رئيسية (6Ms).
+                                    <div style="background:#fff;padding:10px;border-radius:8px;margin-top:10px;font-size:0.9rem;">
+                                        <strong>مثال - سقوط مريض:</strong><br>
+                                        👤 <strong>Man (الأفراد):</strong> نقص تدريب على تقييم مخاطر السقوط<br>
+                                        ⚙️ <strong>Machine (المعدات):</strong> سرير بدون حواجز جانبية فعالة<br>
+                                        📋 <strong>Method (الطريقة):</strong> عدم وجود بروتوكول تقييم واضح<br>
+                                        📦 <strong>Material (المواد):</strong> أرضية زلقة في الغرفة<br>
+                                        🌍 <strong>Environment (البيئة):</strong> إضاءة ضعيفة في الممرات<br>
+                                        📏 <strong>Measurement (القياس):</strong> عدم توثيق تقييم خطر السقوط
+                                    </div>
+                                </div>
+                                
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:15px;">
+                                    <div class="form-group">
+                                        <label>👤 Man (الأفراد/الكوادر)</label>
+                                        <textarea class="form-control" id="fishMan" placeholder="مشاكل متعلقة بالموظفين، التدريب، الكفاءة...">${inc.fishMan || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>⚙️ Machine (المعدات/الأجهزة)</label>
+                                        <textarea class="form-control" id="fishMachine" placeholder="مشاكل في المعدات أو الأجهزة...">${inc.fishMachine || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>📋 Method (الطريقة/الإجراءات)</label>
+                                        <textarea class="form-control" id="fishMethod" placeholder="مشاكل في السياسات أو الإجراءات...">${inc.fishMethod || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>📦 Material (المواد/المستلزمات)</label>
+                                        <textarea class="form-control" id="fishMaterial" placeholder="مشاكل في المواد أو المستلزمات...">${inc.fishMaterial || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>🌍 Environment (البيئة)</label>
+                                        <textarea class="form-control" id="fishEnvironment" placeholder="عوامل بيئية مثل الإضاءة، الحرارة، المساحة...">${inc.fishEnvironment || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>📏 Measurement (القياس/التوثيق)</label>
+                                        <textarea class="form-control" id="fishMeasurement" placeholder="مشاكل في القياس أو التوثيق...">${inc.fishMeasurement || ''}</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr style="margin:20px 0;">
+                            
+                            <div class="form-group">
+                                <label><strong>السبب الجذري النهائي (ملخص)</strong></label>
+                                <textarea class="form-control" id="rcaRootCause" placeholder="اكتب السبب الجذري النهائي بعد التحليل...">${inc.rootCause || ''}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label><strong>الإجراءات التصحيحية</strong></label>
+                                <textarea class="form-control" id="rcaActions" placeholder="ما الإجراءات المتخذة لمنع التكرار...">${inc.correctiveActions || ''}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label><strong>الدروس المستفادة</strong></label>
+                                <textarea class="form-control" id="rcaLessons" placeholder="ما الدروس المستفادة من هذا الحادث...">${inc.lessonsLearned || ''}</textarea>
+                            </div>
+                            
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                <button class="btn btn-warning" onclick="submitRCA(false)">
+                                    <i class="fas fa-save"></i> حفظ التحليل (قيد التحليل)
+                                </button>
+                                <button class="btn btn-success" onclick="submitRCA(true)">
+                                    <i class="fas fa-check"></i> اكتمل التحليل
+                                </button>
+                            </div>
                         </div>
                         
                         <div id="closeSection" class="action-section" style="display:none;">
@@ -1235,22 +1455,36 @@
             }
         }
         
-        function showAssignSection() {
-            document.getElementById('assignSection').style.display = 'block';
+        function hideAllSections() {
+            document.getElementById('assignSection').style.display = 'none';
+            document.getElementById('escalationSection').style.display = 'none';
             document.getElementById('rcaSection').style.display = 'none';
             document.getElementById('closeSection').style.display = 'none';
+        }
+        
+        function showAssignSection() {
+            hideAllSections();
+            document.getElementById('assignSection').style.display = 'block';
+        }
+        
+        function showEscalationSection() {
+            hideAllSections();
+            document.getElementById('escalationSection').style.display = 'block';
         }
         
         function showRCASection() {
-            document.getElementById('assignSection').style.display = 'none';
+            hideAllSections();
             document.getElementById('rcaSection').style.display = 'block';
-            document.getElementById('closeSection').style.display = 'none';
         }
         
         function showCloseSection() {
-            document.getElementById('assignSection').style.display = 'none';
-            document.getElementById('rcaSection').style.display = 'none';
+            hideAllSections();
             document.getElementById('closeSection').style.display = 'block';
+        }
+        
+        function showRCAMethod(method) {
+            document.getElementById('fiveWhysMethod').style.display = method === 'fiveWhys' ? 'block' : 'none';
+            document.getElementById('fishboneMethod').style.display = method === 'fishbone' ? 'block' : 'none';
         }
         
         async function submitAssign() {
@@ -1283,19 +1517,28 @@
             }
         }
         
-        async function escalateIncident() {
-            if (!confirm('هل تريد تصعيد هذا الحادث؟ سيتطلب تحليل السبب الجذري (RCA)')) return;
+        async function submitEscalation() {
+            const escalateTo = document.getElementById('escalateTo').value;
+            const reason = document.getElementById('escalationReason').value;
+            
+            if (!escalateTo) {
+                alert('الرجاء اختيار المسؤول للتصعيد');
+                return;
+            }
+            
+            if (!confirm(`هل تريد تصعيد هذا البلاغ إلى ${escalateTo}؟ فقط المسؤول المعين سيتمكن من إغلاقه.`)) return;
             
             try {
                 const result = await apiCall('escalateIncident', {
                     incidentId: currentIncident.id,
                     rowIndex: currentIncident.rowIndex,
                     escalatedBy: currentUser?.name || 'النظام',
-                    reason: 'خطورة عالية تتطلب تحليل'
+                    escalatedTo: escalateTo,
+                    reason: reason || 'تصعيد إداري'
                 });
                 
                 if (result.ok && result.success) {
-                    alert('تم تصعيد الحادث بنجاح');
+                    alert(`تم تصعيد البلاغ إلى ${escalateTo} بنجاح`);
                     closeModal();
                     loadData();
                 } else {
@@ -1306,15 +1549,34 @@
             }
         }
         
-        async function submitRCA() {
-            const rootCause = document.getElementById('rcaWhy').value;
-            const correctiveActions = document.getElementById('rcaActions').value;
-            const lessonsLearned = document.getElementById('rcaLessons').value;
+        async function submitRCA(isComplete = false) {
+            const rootCause = document.getElementById('rcaRootCause')?.value || '';
+            const correctiveActions = document.getElementById('rcaActions')?.value || '';
+            const lessonsLearned = document.getElementById('rcaLessons')?.value || '';
             
-            if (!rootCause || !correctiveActions) {
-                alert('الرجاء إكمال السبب الجذري والإجراءات التصحيحية');
+            const fiveWhysData = {
+                why1: document.getElementById('rcaWhy1')?.value || '',
+                why2: document.getElementById('rcaWhy2')?.value || '',
+                why3: document.getElementById('rcaWhy3')?.value || '',
+                why4: document.getElementById('rcaWhy4')?.value || '',
+                why5: document.getElementById('rcaWhy5')?.value || ''
+            };
+            
+            const fishboneData = {
+                man: document.getElementById('fishMan')?.value || '',
+                machine: document.getElementById('fishMachine')?.value || '',
+                method: document.getElementById('fishMethod')?.value || '',
+                material: document.getElementById('fishMaterial')?.value || '',
+                environment: document.getElementById('fishEnvironment')?.value || '',
+                measurement: document.getElementById('fishMeasurement')?.value || ''
+            };
+            
+            if (isComplete && (!rootCause || !correctiveActions)) {
+                alert('الرجاء إكمال السبب الجذري والإجراءات التصحيحية قبل اكتمال التحليل');
                 return;
             }
+            
+            const newStatus = isComplete ? 'in_progress' : 'rca_in_progress';
             
             try {
                 const result = await apiCall('saveRCA', {
@@ -1323,11 +1585,15 @@
                     rootCause: rootCause,
                     correctiveActions: correctiveActions,
                     lessonsLearned: lessonsLearned,
-                    analyzedBy: currentUser?.name || 'النظام'
+                    fiveWhys: JSON.stringify(fiveWhysData),
+                    fishbone: JSON.stringify(fishboneData),
+                    analyzedBy: currentUser?.name || 'النظام',
+                    status: newStatus,
+                    rcaComplete: isComplete
                 });
                 
                 if (result.ok && result.success) {
-                    alert('تم حفظ تحليل السبب الجذري بنجاح');
+                    alert(isComplete ? 'تم اكتمال تحليل السبب الجذري بنجاح' : 'تم حفظ التحليل (قيد التحليل)');
                     closeModal();
                     loadData();
                 } else {
