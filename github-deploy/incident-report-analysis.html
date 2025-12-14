@@ -581,9 +581,12 @@
                 <option value="">جاري التحميل...</option>
             </select>
             
+            <input type="password" id="passcodeInput" class="login-select" placeholder="الرمز السري" style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+            
             <button id="loginBtn" class="login-btn" onclick="login()" disabled>
                 <i class="fas fa-sign-in-alt"></i> دخول
             </button>
+            <p id="loginError" style="color:#dc3545; margin-top:10px; display:none;"></p>
         </div>
     </div>
 
@@ -861,15 +864,19 @@
             return await response.json();
         }
         
+        let escalationList = [];
+        
         async function loadStaffList() {
             try {
                 const result = await apiCall('getIncidentStaff', {});
                 if (result.ok && result.staff) {
                     staffList = result.staff;
+                    escalationList = result.escalationList || [];
                     const select = document.getElementById('staffSelect');
                     select.innerHTML = '<option value="">اختر اسمك للدخول</option>';
-                    staffList.forEach(s => {
-                        select.innerHTML += `<option value="${s.name}" data-email="${s.email}" data-role="${s.role}">${s.name} ${s.role ? '(' + s.role + ')' : ''}</option>`;
+                    // فقط الموظفين الذين لديهم رمز سري
+                    staffList.filter(s => s.hasCode).forEach(s => {
+                        select.innerHTML += `<option value="${s.name}">${s.name}</option>`;
                     });
                     document.getElementById('loginBtn').disabled = false;
                 }
@@ -879,27 +886,53 @@
             }
         }
         
-        function login() {
+        async function login() {
             const select = document.getElementById('staffSelect');
             const name = select.value;
+            const passcode = document.getElementById('passcodeInput').value;
+            const errorEl = document.getElementById('loginError');
+            
             if (!name) {
-                alert('الرجاء اختيار اسمك');
+                errorEl.textContent = 'الرجاء اختيار اسمك';
+                errorEl.style.display = 'block';
                 return;
             }
             
-            const option = select.options[select.selectedIndex];
-            currentUser = {
-                name: name,
-                email: option.dataset.email || '',
-                role: option.dataset.role || ''
-            };
+            if (!passcode) {
+                errorEl.textContent = 'الرجاء إدخال الرمز السري';
+                errorEl.style.display = 'block';
+                return;
+            }
             
-            localStorage.setItem('incidentUser', JSON.stringify(currentUser));
+            document.getElementById('loginBtn').disabled = true;
+            document.getElementById('loginBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
             
-            document.getElementById('loginOverlay').classList.add('hidden');
-            document.getElementById('currentUserName').textContent = currentUser.name;
+            try {
+                const result = await apiCall('verifyIncidentPasscode', { staffName: name, passcode: passcode });
+                
+                if (result.ok && result.verified) {
+                    currentUser = {
+                        name: name
+                    };
+                    
+                    localStorage.setItem('incidentUser', JSON.stringify(currentUser));
+                    errorEl.style.display = 'none';
+                    
+                    document.getElementById('loginOverlay').classList.add('hidden');
+                    document.getElementById('currentUserName').textContent = currentUser.name;
+                    
+                    loadData();
+                } else {
+                    errorEl.textContent = result.error || 'الاسم أو الرمز غير صحيح';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = 'خطأ في الاتصال بالسيرفر';
+                errorEl.style.display = 'block';
+            }
             
-            loadData();
+            document.getElementById('loginBtn').disabled = false;
+            document.getElementById('loginBtn').innerHTML = '<i class="fas fa-sign-in-alt"></i> دخول';
         }
         
         function logout() {
@@ -1167,7 +1200,15 @@
         }
         
         function renderStaffOptions() {
-            return staffList.map(s => `<option value="${s.name}">${s.name} ${s.role ? '(' + s.role + ')' : ''}</option>`).join('');
+            return staffList.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+        }
+        
+        function renderEscalationOptions() {
+            if (escalationList && escalationList.length > 0) {
+                return escalationList.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+            }
+            // fallback للموظفين إذا لم تكن هناك قائمة تصعيد
+            return renderStaffOptions();
         }
         
         async function viewIncident(id) {
@@ -1318,7 +1359,7 @@
                                 <label>اختر المسؤول للتصعيد</label>
                                 <select class="form-control" id="escalateTo">
                                     <option value="">اختر المسؤول</option>
-                                    ${renderStaffOptions()}
+                                    ${renderEscalationOptions()}
                                 </select>
                             </div>
                             <div class="form-group">

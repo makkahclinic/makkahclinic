@@ -105,6 +105,12 @@
         case 'getIncidentStaff':
           result = getIncidentStaff();
           break;
+        case 'verifyIncidentPasscode':
+          result = verifyIncidentPasscode(payload.staffName, payload.passcode);
+          break;
+        case 'getEscalationList':
+          result = getEscalationList();
+          break;
         case 'assignIncident':
           result = assignIncident(payload);
           break;
@@ -1774,42 +1780,88 @@
   }
 
   // ==================== نظام المتابعين والتعيين ====================
+  // يقرأ من شيت On_Charge: عمود A=Name, B=Code, C=Escalate
 
   function getIncidentStaff() {
-    let sheet = getIncidentsSheet('Incidents_Staff');
+    const ss = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('On_Charge');
     
     if (!sheet) {
-      const ss = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID);
-      sheet = ss.insertSheet('Incidents_Staff');
-      sheet.appendRow(['Staff_Name', 'Email', 'Role', 'Active', 'Added_Date']);
-      sheet.appendRow(['د. خالد الخطيب', '', 'رئيس اللجنة', 'نعم', getTodayString()]);
-      sheet.appendRow(['منسق الجودة', '', 'منسق', 'نعم', getTodayString()]);
-      sheet.appendRow(['مسؤول السلامة', '', 'مسؤول', 'نعم', getTodayString()]);
+      return { staff: [], escalationList: [] };
     }
     
     const data = sheet.getDataRange().getValues();
     if (data.length < 2) {
-      return { staff: [] };
+      return { staff: [], escalationList: [] };
     }
     
     const headers = data[0];
+    const nameCol = headers.indexOf('Name');
+    const codeCol = headers.indexOf('Code');
+    const escalateCol = headers.indexOf('Escalate');
+    
     const staff = [];
+    const escalationList = [];
     
     for (let i = 1; i < data.length; i++) {
-      const row = {};
-      for (let j = 0; j < headers.length; j++) {
-        row[headers[j]] = data[i][j];
-      }
-      if (row.Active === 'نعم' || row.Active === 'yes' || row.Active === true) {
+      const name = data[i][nameCol] || '';
+      const code = data[i][codeCol] || '';
+      const escalateTo = data[i][escalateCol] || '';
+      
+      if (name) {
         staff.push({
-          name: row.Staff_Name || '',
-          email: row.Email || '',
-          role: row.Role || ''
+          name: name,
+          hasCode: code ? true : false
         });
+        
+        // قائمة التصعيد = الأشخاص الذين لديهم قيمة في عمود Escalate
+        if (escalateTo) {
+          escalationList.push({
+            name: escalateTo,
+            role: 'مسؤول تصعيد'
+          });
+        }
       }
     }
     
-    return { staff };
+    // إزالة التكرارات من قائمة التصعيد
+    const uniqueEscalation = [...new Map(escalationList.map(e => [e.name, e])).values()];
+    
+    return { staff, escalationList: uniqueEscalation };
+  }
+
+  function verifyIncidentPasscode(staffName, passcode) {
+    const ss = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('On_Charge');
+    
+    if (!sheet) {
+      return { verified: false, error: 'شيت On_Charge غير موجود' };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { verified: false, error: 'لا توجد بيانات' };
+    }
+    
+    const headers = data[0];
+    const nameCol = headers.indexOf('Name');
+    const codeCol = headers.indexOf('Code');
+    
+    for (let i = 1; i < data.length; i++) {
+      const name = String(data[i][nameCol] || '').trim();
+      const code = String(data[i][codeCol] || '').trim();
+      
+      if (name === staffName && code === String(passcode).trim()) {
+        return { verified: true, staffName: name };
+      }
+    }
+    
+    return { verified: false, error: 'الاسم أو الرمز غير صحيح' };
+  }
+
+  function getEscalationList() {
+    const result = getIncidentStaff();
+    return { escalationList: result.escalationList || [] };
   }
 
   function assignIncident(params) {
