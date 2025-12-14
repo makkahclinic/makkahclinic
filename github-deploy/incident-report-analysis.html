@@ -6,6 +6,7 @@
     <title>تحليل ومتابعة الحوادث - مجمع مكة الطبي</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --crimson: #9E1B32;
@@ -636,6 +637,10 @@
                 <span>تتطلب RCA</span>
                 <span class="count" id="rcaCount">0</span>
             </button>
+            <button class="tab-btn" data-tab="history">
+                <i class="fas fa-file-alt"></i>
+                <span>التقرير التاريخي</span>
+            </button>
         </div>
         
         <div id="dashboard" class="tab-content active">
@@ -758,6 +763,94 @@
                             <i class="fas fa-spinner fa-spin"></i>
                             <p>جاري التحميل...</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="history" class="tab-content">
+            <div class="card no-print-card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-filter"></i> فلترة التقرير</h3>
+                </div>
+                <div class="card-body">
+                    <div class="filter-row" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">من تاريخ</label>
+                            <input type="date" id="historyDateFrom" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">إلى تاريخ</label>
+                            <input type="date" id="historyDateTo" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">القسم</label>
+                            <select id="historyDepartment" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                                <option value="">الكل</option>
+                                <option value="الطوارئ">الطوارئ</option>
+                                <option value="العيادات الخارجية">العيادات الخارجية</option>
+                                <option value="المختبر">المختبر</option>
+                                <option value="الأشعة">الأشعة</option>
+                                <option value="الصيدلية">الصيدلية</option>
+                                <option value="التمريض">التمريض</option>
+                                <option value="الاستقبال">الاستقبال</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">الخطورة</label>
+                            <select id="historySeverity" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                                <option value="">الكل</option>
+                                <option value="none">بدون ضرر</option>
+                                <option value="minor">ضرر بسيط</option>
+                                <option value="moderate">ضرر متوسط</option>
+                                <option value="severe">ضرر جسيم</option>
+                                <option value="death">وفاة</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">الحالة</label>
+                            <select id="historyStatus" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                                <option value="">الكل</option>
+                                <option value="new">جديد</option>
+                                <option value="under_review">قيد المراجعة</option>
+                                <option value="escalated">تصعيد إداري</option>
+                                <option value="rca_required">يتطلب RCA</option>
+                                <option value="rca_in_progress">قيد التحليل</option>
+                                <option value="in_progress">قيد المعالجة</option>
+                                <option value="closed">مغلق</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:15px; padding-top:15px; border-top:1px solid var(--gray-light);">
+                        <button class="btn btn-secondary btn-sm" onclick="resetHistoryFilters()">
+                            <i class="fas fa-undo"></i> إعادة تعيين
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="loadHistoryReport()">
+                            <i class="fas fa-search"></i> عرض التقرير
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="historyStats" class="stats-row" style="display:none;"></div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-clipboard-list"></i> تفاصيل الحوادث <span id="historyCount" style="font-weight:400; color:var(--gray);"></span></h3>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-success btn-sm" onclick="exportHistoryExcel()">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="printHistory()">
+                            <i class="fas fa-print"></i> طباعة
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body" id="historyContent">
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>اختر معايير الفلترة</h3>
+                        <p>حدد الفترة الزمنية ثم اضغط "عرض التقرير"</p>
                     </div>
                 </div>
             </div>
@@ -1711,6 +1804,202 @@
         
         document.getElementById('detailModal').addEventListener('click', function(e) {
             if (e.target === this) closeModal();
+        });
+        
+        let historyIncidents = [];
+        
+        function initHistoryDates() {
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            document.getElementById('historyDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('historyDateFrom').value = firstDay.toISOString().split('T')[0];
+        }
+        
+        function resetHistoryFilters() {
+            document.getElementById('historyDepartment').value = '';
+            document.getElementById('historySeverity').value = '';
+            document.getElementById('historyStatus').value = '';
+            initHistoryDates();
+        }
+        
+        async function loadHistoryReport() {
+            const content = document.getElementById('historyContent');
+            content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>جاري تحميل البيانات...</p></div>';
+            
+            try {
+                const params = {
+                    dateFrom: document.getElementById('historyDateFrom').value,
+                    dateTo: document.getElementById('historyDateTo').value,
+                    department: document.getElementById('historyDepartment').value,
+                    severity: document.getElementById('historySeverity').value,
+                    status: document.getElementById('historyStatus').value,
+                    limit: 500
+                };
+                
+                const result = await apiCall('getIncidents', params);
+                if (!result.ok) throw new Error(result.error || 'فشل');
+                
+                historyIncidents = result.incidents || [];
+                
+                if (historyIncidents.length === 0) {
+                    content.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد نتائج</h3></div>';
+                    document.getElementById('historyStats').style.display = 'none';
+                    document.getElementById('historyCount').textContent = '';
+                    return;
+                }
+                
+                renderHistoryStats();
+                await renderHistoryReport();
+                
+            } catch (err) {
+                console.error(err);
+                content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>' + err.message + '</p></div>';
+            }
+        }
+        
+        function renderHistoryStats() {
+            const stats = document.getElementById('historyStats');
+            const total = historyIncidents.length;
+            const closed = historyIncidents.filter(i => i.status === 'closed').length;
+            const open = total - closed;
+            const rcaReq = historyIncidents.filter(i => i.rcaRequired).length;
+            const escalated = historyIncidents.filter(i => i.status === 'escalated').length;
+            
+            stats.innerHTML = `
+                <div class="stat-card"><div class="stat-number">${total}</div><div class="stat-label">إجمالي</div></div>
+                <div class="stat-card warning"><div class="stat-number">${open}</div><div class="stat-label">مفتوحة</div></div>
+                <div class="stat-card success"><div class="stat-number">${closed}</div><div class="stat-label">مغلقة</div></div>
+                <div class="stat-card danger"><div class="stat-number">${rcaReq}</div><div class="stat-label">تتطلب RCA</div></div>
+                <div class="stat-card purple"><div class="stat-number">${escalated}</div><div class="stat-label">مصعدة</div></div>
+            `;
+            stats.style.display = 'grid';
+            document.getElementById('historyCount').textContent = '(' + total + ' حالة)';
+        }
+        
+        async function renderHistoryReport() {
+            const content = document.getElementById('historyContent');
+            let html = '';
+            
+            for (const inc of historyIncidents) {
+                const sevInfo = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d' };
+                const statInfo = STATUS[inc.status] || { name: inc.status, badge: 'secondary' };
+                const typeName = INCIDENT_TYPES[inc.type] || inc.typeName || inc.type;
+                
+                html += `
+                    <div style="border:1px solid var(--gray-light); border-radius:10px; margin-bottom:20px; overflow:hidden; page-break-inside:avoid;">
+                        <div style="background:linear-gradient(135deg, var(--blue-dark), var(--crimson)); color:white; padding:12px 20px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                            <strong><i class="fas fa-hashtag"></i> ${inc.id}</strong>
+                            <div style="display:flex; gap:8px;">
+                                <span style="background:${sevInfo.color}; padding:3px 10px; border-radius:15px; font-size:0.8rem;">${sevInfo.name}</span>
+                                <span class="badge badge-${statInfo.badge}">${statInfo.name}</span>
+                                ${inc.rcaRequired ? '<span class="badge badge-danger">RCA</span>' : ''}
+                            </div>
+                        </div>
+                        <div style="padding:15px;">
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:12px;">
+                                <div style="background:var(--off-white); padding:10px; border-radius:8px;">
+                                    <div style="font-size:0.75rem; color:var(--gray);">تاريخ الحادث</div>
+                                    <div style="font-weight:600;">${inc.date || '-'}</div>
+                                </div>
+                                <div style="background:var(--off-white); padding:10px; border-radius:8px;">
+                                    <div style="font-size:0.75rem; color:var(--gray);">القسم</div>
+                                    <div style="font-weight:600;">${inc.department || '-'}</div>
+                                </div>
+                                <div style="background:var(--off-white); padding:10px; border-radius:8px;">
+                                    <div style="font-size:0.75rem; color:var(--gray);">نوع الحادث</div>
+                                    <div style="font-weight:600;">${typeName}</div>
+                                </div>
+                                ${inc.assignedTo ? `<div style="background:var(--off-white); padding:10px; border-radius:8px;"><div style="font-size:0.75rem; color:var(--gray);">المسؤول</div><div style="font-weight:600;">${inc.assignedTo}</div></div>` : ''}
+                            </div>
+                            <div style="background:var(--off-white); padding:12px; border-radius:8px; line-height:1.6;">
+                                <div style="font-size:0.75rem; color:var(--gray); margin-bottom:5px;">الوصف</div>
+                                ${inc.description || 'لا يوجد وصف'}
+                            </div>
+                            ${inc.escalatedTo ? `<div style="background:#fff5f5; padding:10px; border-radius:8px; margin-top:10px; border-right:4px solid var(--danger);"><strong style="color:var(--danger);"><i class="fas fa-arrow-up"></i> تصعيد:</strong> ${inc.escalatedTo}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            content.innerHTML = html;
+        }
+        
+        function exportHistoryExcel() {
+            if (historyIncidents.length === 0) {
+                alert('لا توجد بيانات للتصدير');
+                return;
+            }
+            
+            const data = historyIncidents.map(inc => ({
+                'رقم الحادث': inc.id,
+                'تاريخ الحادث': inc.date,
+                'تاريخ التبليغ': inc.reportDate,
+                'القسم': inc.department,
+                'نوع الحادث': INCIDENT_TYPES[inc.type] || inc.type,
+                'الخطورة': SEVERITY[inc.severity]?.name || inc.severity,
+                'الحالة': STATUS[inc.status]?.name || inc.status,
+                'الوصف': inc.description || '',
+                'المسؤول': inc.assignedTo || '',
+                'تصعيد إلى': inc.escalatedTo || '',
+                'يتطلب RCA': inc.rcaRequired ? 'نعم' : 'لا'
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'تقرير الحوادث');
+            
+            const fromDate = document.getElementById('historyDateFrom').value || 'all';
+            const toDate = document.getElementById('historyDateTo').value || 'all';
+            XLSX.writeFile(wb, 'تقرير_الحوادث_' + fromDate + '_' + toDate + '.xlsx');
+        }
+        
+        function printHistory() {
+            const content = document.getElementById('historyContent').innerHTML;
+            const stats = document.getElementById('historyStats').innerHTML;
+            const printWin = window.open('', '_blank');
+            printWin.document.write(`
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>التقرير التاريخي - حوادث السلامة</title>
+                    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;600&display=swap" rel="stylesheet">
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+                    <style>
+                        * { margin:0; padding:0; box-sizing:border-box; }
+                        body { font-family:'Tajawal',sans-serif; padding:20px; }
+                        .header { background:#003E75; color:white; padding:15px 20px; margin-bottom:20px; border-radius:10px; text-align:center; }
+                        .stats-row { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
+                        .stat-card { background:#f8f9fa; padding:15px; text-align:center; border-radius:8px; border-top:4px solid #0056A3; }
+                        .stat-number { font-size:1.5rem; font-weight:800; color:#003E75; }
+                        .stat-label { font-size:0.8rem; color:#6c757d; }
+                        .badge { display:inline-block; padding:3px 8px; border-radius:15px; font-size:0.75rem; }
+                        .badge-success { background:rgba(40,167,69,0.15); color:#28a745; }
+                        .badge-warning { background:rgba(255,193,7,0.2); color:#856404; }
+                        .badge-danger { background:rgba(220,53,69,0.15); color:#dc3545; }
+                        @media print { body { padding:10px; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>التقرير التاريخي - حوادث سلامة المرضى</h1>
+                        <p>مجمع مكة الطبي بالزاهر</p>
+                    </div>
+                    <div class="stats-row">${stats}</div>
+                    ${content}
+                    <script>window.onload = function() { window.print(); }</script>
+                </body>
+                </html>
+            `);
+            printWin.document.close();
+        }
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (this.dataset.tab === 'history') {
+                    initHistoryDates();
+                }
+            });
         });
         
         checkLogin();
