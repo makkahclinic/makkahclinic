@@ -36,7 +36,9 @@
 | `cbahi-portal.html` | بوابة سباهي الإلكترونية (4114 سطر) | ✅ مكتمل |
 | `Round.html` | نظام جولات السلامة (2071 سطر) | ✅ مكتمل |
 | `calibration.html` | سجل معايرة الأجهزة (CAL) | ✅ مكتمل |
-| `report.html` | نموذج الإبلاغ الموحد | ✅ مكتمل |
+| `report.html` | نموذج رفع شكوى | ✅ مكتمل |
+| `complaint_analysis.html` | نظام تحليل ومتابعة الشكاوى | ✅ مكتمل |
+| `mega.html` | المركز الرقمي للجودة | ✅ مكتمل |
 
 ### مكافحة العدوى (IPC)
 | الملف | الوصف | الحالة |
@@ -102,6 +104,18 @@
 | `getChecklist` | بنود الفحص (R01-R15) |
 | `verifyPasscode` | التحقق من رمز الموظف |
 | `resolveViolation` | إغلاق مخالفة |
+
+### APIs الشكاوى (Code.gs)
+| Action | الوظيفة |
+|--------|---------|
+| `submitComplaint` | إرسال شكوى جديدة |
+| `getComplaintStaff` | قائمة موظفي الشكاوى |
+| `verifyComplaintPasscode` | التحقق من رمز الموظف |
+| `getComplaintStats` | إحصائيات الشكاوى |
+| `getComplaints` | قائمة الشكاوى |
+| `getComplaintDetails` | تفاصيل شكوى |
+| `updateComplaint` | تحديث شكوى |
+| `getComplaintHistory` | سجل متابعة الشكوى |
 
 ---
 
