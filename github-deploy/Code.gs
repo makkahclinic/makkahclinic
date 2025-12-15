@@ -2043,7 +2043,7 @@
   // نظام الشكاوى - Complaints System
   // ============================================
   
-  const COMPLAINTS_SPREADSHEET_ID = '1zVzjvVBh8F7Gvut0kX8fTq2GyKrYo3fBop8jUBEsV3Q';
+  const COMPLAINTS_SPREADSHEET_ID = '1d4BRDY6qAa2u7zKRwwhtXKHIjDn16Yf0NuWA0FWLdMQ';
   
   function getComplaintsSheet(sheetName) {
     const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
