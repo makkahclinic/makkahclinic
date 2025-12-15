@@ -511,7 +511,7 @@
 <body>
     <div id="loginOverlay" class="login-overlay">
         <div class="login-card">
-            <div class="login-logo"><i class="fas fa-comments"></i></div>
+            <img src="logo-transparent.png" alt="شعار المجمع" style="width:100px; height:100px; margin-bottom:15px;">
             <h2 class="login-title">نظام تحليل الشكاوى</h2>
             <p class="login-subtitle">مجمع مكة الطبي بالزاهر</p>
             <select id="staffSelect" class="login-select">
@@ -528,7 +528,7 @@
     <div id="mainApp" style="display:none;">
         <header class="header">
             <div class="header-title">
-                <i class="fas fa-comments" style="font-size:1.5rem;"></i>
+                <img src="logo-transparent.png" alt="الشعار" style="width:45px; height:45px;">
                 <h1>تحليل ومتابعة الشكاوى</h1>
                 <span style="font-size:0.8rem; opacity:0.8;">لجنة إدارة المخاطر</span>
             </div>
@@ -709,9 +709,19 @@
                         <h3 class="card-title"><i class="fas fa-history"></i> التقرير التاريخي</h3>
                     </div>
                     <div class="card-body">
+                        <div style="margin-bottom:15px; display:flex; flex-wrap:wrap; gap:8px;">
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(0)">اليوم</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(7)">أسبوع</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(14)">أسبوعين</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(21)">3 أسابيع</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(30)">شهر</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(60)">شهرين</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(90)">3 أشهر</button>
+                            <button class="btn btn-secondary btn-sm" onclick="setDateRange(365)">سنة</button>
+                        </div>
                         <div class="filter-row">
-                            <input type="date" id="historyFrom" onchange="loadHistory()">
-                            <input type="date" id="historyTo" onchange="loadHistory()">
+                            <input type="date" id="historyFrom">
+                            <input type="date" id="historyTo">
                             <button class="btn btn-primary" onclick="loadHistory()">
                                 <i class="fas fa-search"></i> بحث
                             </button>
@@ -729,6 +739,7 @@
                                         <th>الشاكي</th>
                                         <th>الحالة</th>
                                         <th>المكلف</th>
+                                        <th>جذر المشكلة</th>
                                         <th>الحل</th>
                                     </tr>
                                 </thead>
@@ -1149,8 +1160,32 @@
             document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-check-circle"></i> إغلاق الشكوى';
             document.getElementById('actionModalBody').innerHTML = `
                 <div class="form-group">
+                    <label>تصنيف جذر المشكلة</label>
+                    <select id="rootCauseCategory">
+                        <option value="">اختر التصنيف</option>
+                        <option value="سلوك الموظفين">سلوك الموظفين</option>
+                        <option value="جودة الخدمة">جودة الخدمة</option>
+                        <option value="وقت الانتظار">وقت الانتظار</option>
+                        <option value="نظافة المرافق">نظافة المرافق</option>
+                        <option value="الإجراءات الإدارية">الإجراءات الإدارية</option>
+                        <option value="الأجهزة والمعدات">الأجهزة والمعدات</option>
+                        <option value="التواصل">التواصل</option>
+                        <option value="الموعد">الموعد</option>
+                        <option value="الفواتير والتأمين">الفواتير والتأمين</option>
+                        <option value="أخرى">أخرى</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>تحليل جذر المشكلة (Root Cause Analysis)</label>
+                    <textarea id="rootCauseAnalysis" placeholder="اكتب تحليل جذر المشكلة..."></textarea>
+                </div>
+                <div class="form-group">
                     <label>الحل المتخذ</label>
                     <textarea id="resolution" placeholder="اكتب الحل المتخذ..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>الإجراء التصحيحي</label>
+                    <textarea id="correctiveAction" placeholder="الإجراء التصحيحي لمنع تكرار المشكلة..."></textarea>
                 </div>
                 <div class="form-group">
                     <label>هل تم إبلاغ الشاكي؟</label>
@@ -1165,12 +1200,21 @@
         }
 
         async function submitClose() {
+            const rootCauseCategory = document.getElementById('rootCauseCategory').value;
+            const rootCauseAnalysis = document.getElementById('rootCauseAnalysis').value;
             const resolution = document.getElementById('resolution').value;
+            const correctiveAction = document.getElementById('correctiveAction').value;
             const responseSent = document.getElementById('responseSent').value;
+            
+            if (!rootCauseCategory) { alert('يرجى اختيار تصنيف جذر المشكلة'); return; }
             if (!resolution) { alert('يرجى كتابة الحل المتخذ'); return; }
+            
             const result = await apiCall('closeComplaint', {
                 complaintId: currentComplaintId,
+                rootCauseCategory: rootCauseCategory,
+                rootCauseAnalysis: rootCauseAnalysis,
                 resolution: resolution,
+                correctiveAction: correctiveAction,
                 closedBy: currentUser,
                 responseSent: responseSent
             });
@@ -1220,18 +1264,37 @@
             }
         }
 
+        function setDateRange(days) {
+            const today = new Date();
+            const from = new Date();
+            from.setDate(today.getDate() - days);
+            
+            document.getElementById('historyFrom').value = from.toISOString().split('T')[0];
+            document.getElementById('historyTo').value = today.toISOString().split('T')[0];
+            loadHistory();
+        }
+
+        let historyData = [];
+        
         async function loadHistory() {
             const from = document.getElementById('historyFrom').value;
             const to = document.getElementById('historyTo').value;
+            
+            if (!from || !to) {
+                alert('يرجى تحديد الفترة الزمنية');
+                return;
+            }
+            
             const result = await apiCall('getComplaints', { startDate: from, endDate: to });
             if (result.ok && result.complaints) {
+                historyData = result.complaints;
                 const tbody = document.getElementById('historyTable');
-                if (!result.complaints.length) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;">لا توجد شكاوى في هذه الفترة</td></tr>';
+                if (!historyData.length) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;">لا توجد شكاوى في هذه الفترة</td></tr>';
                     return;
                 }
                 let html = '';
-                result.complaints.forEach(c => {
+                historyData.forEach(c => {
                     const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
                     html += `<tr>
                         <td>${c.id}</td>
@@ -1240,7 +1303,8 @@
                         <td>${c.complainant || '-'}</td>
                         <td><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
                         <td>${c.assignedTo || '-'}</td>
-                        <td>${(c.description || '').substring(0, 30)}...</td>
+                        <td>${c.rootCauseCategory || '-'}</td>
+                        <td>${(c.resolution || c.description || '').substring(0, 30)}...</td>
                     </tr>`;
                 });
                 tbody.innerHTML = html;
@@ -1266,26 +1330,29 @@
         }
 
         function exportHistory() {
-            const rows = document.querySelectorAll('#historyTable tr');
-            if (rows.length <= 1) { alert('لا توجد بيانات'); return; }
-            const data = [];
-            rows.forEach((row, i) => {
-                if (i === 0) return;
-                const cells = row.querySelectorAll('td');
-                data.push({
-                    'رقم الشكوى': cells[0]?.textContent,
-                    'التاريخ': cells[1]?.textContent,
-                    'النوع': cells[2]?.textContent,
-                    'الشاكي': cells[3]?.textContent,
-                    'الحالة': cells[4]?.textContent,
-                    'المكلف': cells[5]?.textContent,
-                    'الحل': cells[6]?.textContent
-                });
-            });
+            if (!historyData.length) { 
+                alert('لا توجد بيانات للتصدير. قم بالبحث أولاً.'); 
+                return; 
+            }
+            const data = historyData.map(c => ({
+                'رقم الشكوى': c.id,
+                'التاريخ': c.date,
+                'النوع': c.type || '-',
+                'الشاكي': c.complainant || '-',
+                'الحالة': STATUS[c.status]?.name || c.status,
+                'المكلف': c.assignedTo || '-',
+                'تصنيف جذر المشكلة': c.rootCauseCategory || '-',
+                'تحليل جذر المشكلة': c.rootCauseAnalysis || '-',
+                'الحل': c.resolution || '-',
+                'الإجراء التصحيحي': c.correctiveAction || '-',
+                'الوصف': c.description || '-'
+            }));
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'التقرير');
-            XLSX.writeFile(wb, 'history_report.xlsx');
+            const from = document.getElementById('historyFrom').value;
+            const to = document.getElementById('historyTo').value;
+            XLSX.writeFile(wb, `complaints_report_${from}_to_${to}.xlsx`);
         }
 
         function refreshData() { loadDashboard(); }
