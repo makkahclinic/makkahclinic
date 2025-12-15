@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحليل ومتابعة الحوادث - مجمع مكة الطبي</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --crimson: #9E1B32;
+            --blue: #0056A3;
+            --blue-dark: #003E75;
+            --white: #FFFFFF;
+            --off-white: #F8F9FA;
+            --gray-light: #E9ECEF;
+            --gray: #6C757D;
+            --gray-dark: #343A40;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --orange: #fd7e14;
+            --purple: #6f42c1;
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.18);
+            --radius-md: 10px;
+            --radius-lg: 14px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--blue-dark) 0%, var(--crimson) 100%);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .login-overlay.hidden { display: none; }
+        .login-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+        .login-logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--blue), var(--crimson));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            color: white;
+            font-size: 2rem;
+        }
+        .login-title {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.4rem;
+            color: var(--blue-dark);
+            margin-bottom: 8px;
+        }
+        .login-subtitle {
+            color: var(--gray);
+            margin-bottom: 30px;
+        }
+        .login-select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .login-select:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--blue), var(--crimson));
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--blue-dark), var(--crimson));
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-title h1 {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.4rem;
+        }
+        .header-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 15px;
+            border-radius: 25px;
+        }
+        .header-user i { font-size: 1.2rem; }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        .btn-light { background: rgba(255,255,255,0.2); color: white; }
+        .btn-light:hover { background: rgba(255,255,255,0.3); }
+        .btn-primary { background: var(--blue); color: white; }
+        .btn-primary:hover { background: var(--blue-dark); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: #333; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-secondary { background: var(--gray-light); color: var(--gray-dark); }
+        .btn-purple { background: var(--purple); color: white; }
+        .btn-sm { padding: 8px 14px; font-size: 0.85rem; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        .tabs {
+            display: flex;
+            gap: 5px;
+            background: var(--white);
+            padding: 6px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+            overflow-x: auto;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 600;
+            color: var(--gray);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+        .tab-btn:hover { background: var(--gray-light); }
+        .tab-btn.active { background: var(--blue); color: white; }
+        .tab-btn .count {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+        }
+        .tab-btn.active .count { background: rgba(255,255,255,0.3); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            border-top: 4px solid var(--blue);
+        }
+        .stat-card.danger { border-top-color: var(--danger); }
+        .stat-card.warning { border-top-color: var(--warning); }
+        .stat-card.success { border-top-color: var(--success); }
+        .stat-card.orange { border-top-color: var(--orange); }
+        .stat-card.purple { border-top-color: var(--purple); }
+        .stat-number {
+            font-family: 'Cairo', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--blue-dark);
+        }
+        .stat-label { color: var(--gray); font-size: 0.9rem; }
+        
+        .card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .card-title {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--blue-dark);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-title i { color: var(--crimson); }
+        .card-body { padding: 20px; }
+        
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .filter-row select, .filter-row input {
+            padding: 8px 12px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+        }
+        
+        .table-container { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: right;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        th {
+            background: var(--off-white);
+            font-weight: 600;
+            color: var(--blue-dark);
+            white-space: nowrap;
+        }
+        tr:hover { background: var(--off-white); }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-success { background: rgba(40,167,69,0.15); color: #28a745; }
+        .badge-warning { background: rgba(255,193,7,0.2); color: #856404; }
+        .badge-danger { background: rgba(220,53,69,0.15); color: #dc3545; }
+        .badge-info { background: rgba(0,86,163,0.15); color: #0056A3; }
+        .badge-secondary { background: var(--gray-light); color: var(--gray); }
+        .badge-dark { background: #343a40; color: white; }
+        .badge-purple { background: rgba(111,66,193,0.15); color: #6f42c1; }
+        
+        .severity-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 5px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            max-width: 950px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, var(--blue), var(--crimson));
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .modal-header h3 { font-size: 1.2rem; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .modal-body { padding: 24px; }
+        
+        .detail-section {
+            margin-bottom: 25px;
+        }
+        .detail-section h4 {
+            font-size: 1rem;
+            color: var(--blue-dark);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .detail-item {
+            background: var(--off-white);
+            padding: 12px;
+            border-radius: var(--radius-md);
+        }
+        .detail-label {
+            font-size: 0.8rem;
+            color: var(--gray);
+            margin-bottom: 4px;
+        }
+        .detail-value { font-weight: 600; }
+        .detail-text {
+            background: var(--off-white);
+            padding: 14px;
+            border-radius: var(--radius-md);
+            line-height: 1.6;
+        }
+        
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: var(--radius-md);
+        }
+        
+        .action-section {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            margin-top: 20px;
+        }
+        .action-section h4 {
+            margin-bottom: 15px;
+            color: var(--crimson);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+        textarea.form-control { min-height: 80px; resize: vertical; }
+        
+        .rca-section {
+            background: linear-gradient(135deg, #fff5f5, #ffe0e0);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            margin-top: 20px;
+            border: 2px solid var(--danger);
+        }
+        .rca-section h4 {
+            color: var(--danger);
+            margin-bottom: 20px;
+        }
+        .rca-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        
+        .timeline {
+            border-right: 3px solid var(--gray-light);
+            padding-right: 20px;
+            margin-right: 10px;
+        }
+        .timeline-item {
+            padding: 12px 0;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            right: -26px;
+            top: 16px;
+            width: 10px;
+            height: 10px;
+            background: var(--blue);
+            border-radius: 50%;
+        }
+        .timeline-date { font-size: 0.8rem; color: var(--gray); }
+        .timeline-action { font-weight: 600; margin: 4px 0; }
+        .timeline-by { font-size: 0.85rem; color: var(--gray); }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: var(--gray);
+        }
+        .loading i { font-size: 2rem; margin-bottom: 10px; display: block; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray);
+        }
+        .empty-state i { font-size: 4rem; margin-bottom: 15px; opacity: 0.3; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .fa-spin { animation: spin 1s linear infinite; }
+        
+        .alert {
+            padding: 15px;
+            border-radius: var(--radius-md);
+            margin-bottom: 15px;
+        }
+        .alert-warning {
+            background: rgba(255,193,7,0.15);
+            border: 1px solid var(--warning);
+            color: #856404;
+        }
+        .alert-danger {
+            background: rgba(220,53,69,0.15);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+        
+        .row-delay-warning {
+            background: rgba(255,193,7,0.15) !important;
+            border-right: 4px solid var(--warning) !important;
+        }
+        .row-delay-danger {
+            background: rgba(220,53,69,0.15) !important;
+            border-right: 4px solid var(--danger) !important;
+        }
+        .row-escalated {
+            background: rgba(220,53,69,0.1) !important;
+            border-right: 4px solid var(--crimson) !important;
+        }
+        .delay-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .delay-badge.warning {
+            background: rgba(255,193,7,0.2);
+            color: #856404;
+        }
+        .delay-badge.danger {
+            background: rgba(220,53,69,0.2);
+            color: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        @media (max-width: 768px) {
+            .header { padding: 12px 15px; }
+            .header-title h1 { font-size: 1.1rem; }
+            .tab-btn span { display: none; }
+            .container { padding: 15px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .stat-number { font-size: 1.5rem; }
+            .action-buttons { flex-direction: column; }
+            .action-buttons .btn { width: 100%; justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-card">
+            <div class="login-logo">
+                <i class="fas fa-shield-heart"></i>
+            </div>
+            <h2 class="login-title">نظام تحليل حوادث السلامة</h2>
+            <p class="login-subtitle">مجمع مكة الطبي بالزاهر</p>
+            
+            <select id="staffSelect" class="login-select">
+                <option value="">جاري التحميل...</option>
+            </select>
+            
+            <input type="password" id="passcodeInput" class="login-select" placeholder="الرمز السري" style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+            
+            <button id="loginBtn" class="login-btn" onclick="login()" disabled>
+                <i class="fas fa-sign-in-alt"></i> دخول
+            </button>
+            <p id="loginError" style="color:#dc3545; margin-top:10px; display:none;"></p>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="header-title">
+            <i class="fas fa-shield-heart" style="font-size:1.8rem"></i>
+            <div>
+                <h1>تحليل ومتابعة حوادث سلامة المرضى</h1>
+                <small style="opacity:0.8">لجنة سلامة المرضى - مجمع مكة الطبي</small>
+            </div>
+        </div>
+        <div class="header-user" id="currentUserDisplay">
+            <i class="fas fa-user-circle"></i>
+            <span id="currentUserName">-</span>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-light" onclick="loadData()">
+                <i class="fas fa-sync"></i> تحديث
+            </button>
+            <a href="incident-report.html" class="btn btn-light" target="_blank">
+                <i class="fas fa-plus"></i> نموذج التبليغ
+            </a>
+            <button class="btn btn-light" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="dashboard">
+                <i class="fas fa-chart-pie"></i>
+                <span>لوحة المتابعة</span>
+            </button>
+            <button class="tab-btn" data-tab="incidents">
+                <i class="fas fa-list"></i>
+                <span>البلاغات</span>
+                <span class="count" id="incidentsCount">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pending">
+                <i class="fas fa-clock"></i>
+                <span>تحتاج تعيين</span>
+                <span class="count" id="pendingCount">0</span>
+            </button>
+            <button class="tab-btn" data-tab="rca">
+                <i class="fas fa-search"></i>
+                <span>تتطلب RCA</span>
+                <span class="count" id="rcaCount">0</span>
+            </button>
+            <button class="tab-btn" data-tab="history">
+                <i class="fas fa-file-alt"></i>
+                <span>التقرير التاريخي</span>
+            </button>
+        </div>
+        
+        <div id="dashboard" class="tab-content active">
+            <div class="stats-row" id="statsRow">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalIncidents">-</div>
+                    <div class="stat-label">إجمالي البلاغات</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-number" id="openIncidents">-</div>
+                    <div class="stat-label">بلاغات مفتوحة</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-number" id="closedIncidents">-</div>
+                    <div class="stat-label">بلاغات مغلقة</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-number" id="rcaRequired">-</div>
+                    <div class="stat-label">تتطلب RCA</div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="stat-number" id="avgClosure">-</div>
+                    <div class="stat-label">متوسط الإغلاق (يوم)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="nearMissPercent">-</div>
+                    <div class="stat-label">نسبة Near Miss</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-chart-bar"></i> توزيع البلاغات</h3>
+                </div>
+                <div class="card-body" id="chartsContainer">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>جاري تحميل البيانات...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="incidents" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-clipboard-list"></i> سجل البلاغات</h3>
+                </div>
+                <div class="card-body">
+                    <div class="filter-row">
+                        <select id="filterStatus">
+                            <option value="all">كل الحالات</option>
+                            <option value="new">جديد</option>
+                            <option value="under_review">قيد المراجعة</option>
+                            <option value="escalated">تصعيد إداري</option>
+                            <option value="rca_required">يتطلب RCA</option>
+                            <option value="rca_in_progress">قيد التحليل العميق</option>
+                            <option value="in_progress">قيد المعالجة</option>
+                            <option value="closed">مغلق</option>
+                            <option value="delayed_24">متأخرة 24-48 ساعة</option>
+                            <option value="delayed_48">متأخرة +48 ساعة</option>
+                        </select>
+                        <select id="filterSeverity">
+                            <option value="">كل مستويات الخطورة</option>
+                            <option value="none">بدون ضرر</option>
+                            <option value="minor">ضرر بسيط</option>
+                            <option value="moderate">ضرر متوسط</option>
+                            <option value="severe">ضرر جسيم</option>
+                            <option value="death">وفاة</option>
+                        </select>
+                        <select id="filterType">
+                            <option value="">كل الأنواع</option>
+                            <option value="medication_error">خطأ دوائي</option>
+                            <option value="patient_fall">سقوط مريض</option>
+                            <option value="infection">عدوى مكتسبة</option>
+                            <option value="near_miss">Near Miss</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="loadIncidents()">
+                            <i class="fas fa-filter"></i> تصفية
+                        </button>
+                    </div>
+                    <div class="table-container" id="incidentsTable">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="pending" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-user-plus"></i> بلاغات تحتاج تعيين مسؤول</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-container" id="pendingTable">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="rca" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-search"></i> الحوادث التي تتطلب تحليل السبب الجذري (RCA)</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        هذه الحوادث تتطلب تحليل السبب الجذري بسبب خطورتها أو تكرارها. يجب إكمال التحليل خلال 45 يوم.
+                    </div>
+                    <div class="table-container" id="rcaTable">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="history" class="tab-content">
+            <div class="card no-print-card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-filter"></i> فلترة التقرير</h3>
+                </div>
+                <div class="card-body">
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px; padding-bottom:15px; border-bottom:1px solid var(--gray-light);">
+                        <span style="font-weight:600; color:var(--gray-dark); display:flex; align-items:center; margin-left:10px;"><i class="fas fa-bolt" style="margin-left:5px; color:var(--warning);"></i> فلترة سريعة:</span>
+                        <button class="btn btn-sm" onclick="setQuickFilter('today')" style="background:var(--blue); color:white;">اليوم</button>
+                        <button class="btn btn-sm" onclick="setQuickFilter('week')" style="background:#17a2b8; color:white;">أسبوع</button>
+                        <button class="btn btn-sm" onclick="setQuickFilter('2weeks')" style="background:#20c997; color:white;">أسبوعين</button>
+                        <button class="btn btn-sm" onclick="setQuickFilter('month')" style="background:#6f42c1; color:white;">شهر</button>
+                        <button class="btn btn-sm" onclick="setQuickFilter('2months')" style="background:#fd7e14; color:white;">شهرين</button>
+                        <button class="btn btn-sm" onclick="setQuickFilter('3months')" style="background:var(--crimson); color:white;">3 أشهر</button>
+                    </div>
+                    <div class="filter-row" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">من تاريخ</label>
+                            <input type="date" id="historyDateFrom" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">إلى تاريخ</label>
+                            <input type="date" id="historyDateTo" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">القسم</label>
+                            <select id="historyDepartment" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                                <option value="">الكل</option>
+                                <option value="الطوارئ">الطوارئ</option>
+                                <option value="العيادات الخارجية">العيادات الخارجية</option>
+                                <option value="المختبر">المختبر</option>
+                                <option value="الأشعة">الأشعة</option>
+                                <option value="الصيدلية">الصيدلية</option>
+                                <option value="التمريض">التمريض</option>
+                                <option value="الاستقبال">الاستقبال</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">الخطورة</label>
+                            <select id="historySeverity" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                                <option value="">الكل</option>
+                                <option value="none">بدون ضرر</option>
+                                <option value="minor">ضرر بسيط</option>
+                                <option value="moderate">ضرر متوسط</option>
+                                <option value="severe">ضرر جسيم</option>
+                                <option value="death">وفاة</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:5px;">الحالة</label>
+                            <select id="historyStatus" style="width:100%; padding:8px; border:1px solid var(--gray-light); border-radius:8px;">
+                                <option value="">الكل</option>
+                                <option value="new">جديد</option>
+                                <option value="under_review">قيد المراجعة</option>
+                                <option value="escalated">تصعيد إداري</option>
+                                <option value="rca_required">يتطلب RCA</option>
+                                <option value="rca_in_progress">قيد التحليل</option>
+                                <option value="in_progress">قيد المعالجة</option>
+                                <option value="closed">مغلق</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:15px; padding-top:15px; border-top:1px solid var(--gray-light);">
+                        <button class="btn btn-secondary btn-sm" onclick="resetHistoryFilters()">
+                            <i class="fas fa-undo"></i> إعادة تعيين
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="loadHistoryReport()">
+                            <i class="fas fa-search"></i> عرض التقرير
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="historyStats" class="stats-row" style="display:none;"></div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-clipboard-list"></i> تفاصيل الحوادث <span id="historyCount" style="font-weight:400; color:var(--gray);"></span></h3>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-success btn-sm" onclick="exportHistoryExcel()">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="printHistory()">
+                            <i class="fas fa-print"></i> طباعة
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body" id="historyContent">
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>اختر معايير الفلترة</h3>
+                        <p>حدد الفترة الزمنية ثم اضغط "عرض التقرير"</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-medical"></i> تفاصيل البلاغ</h3>
+                <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbz-vImcmRIh0M86i44V5Rm1C0m23lrN4q1aql9R7HNfQZUgShVyg7JlYlD5xLK2H9Gurg/exec';
+        
+        const INCIDENT_TYPES = {
+            'medication_error': 'خطأ دوائي',
+            'patient_fall': 'سقوط مريض',
+            'infection': 'عدوى مكتسبة',
+            'diagnosis_error': 'خطأ تشخيصي',
+            'procedure_error': 'خطأ إجراءات',
+            'near_miss': 'كاد يحدث (Near Miss)',
+            'equipment_failure': 'عطل معدات',
+            'communication': 'خطأ تواصل',
+            'documentation': 'خطأ توثيق',
+            'patient_id_error': 'خطأ هوية مريض',
+            'delay_care': 'تأخر رعاية',
+            'other': 'أخرى'
+        };
+        
+        const SEVERITY = {
+            'none': { name: 'بدون ضرر', color: '#28a745', badge: 'success' },
+            'minor': { name: 'ضرر بسيط', color: '#ffc107', badge: 'warning' },
+            'moderate': { name: 'ضرر متوسط', color: '#fd7e14', badge: 'warning' },
+            'severe': { name: 'ضرر جسيم', color: '#dc3545', badge: 'danger' },
+            'death': { name: 'وفاة', color: '#000', badge: 'dark' }
+        };
+        
+        const STATUS = {
+            'new': { name: 'جديد', badge: 'info' },
+            'under_review': { name: 'قيد المراجعة', badge: 'warning' },
+            'escalated': { name: 'تصعيد إداري', badge: 'danger' },
+            'rca_required': { name: 'يتطلب RCA', badge: 'danger' },
+            'rca_in_progress': { name: 'قيد التحليل العميق', badge: 'purple' },
+            'in_progress': { name: 'قيد المعالجة', badge: 'purple' },
+            'closed': { name: 'مغلق', badge: 'success' }
+        };
+        
+        let currentUser = null;
+        let staffList = [];
+        let currentIncident = null;
+        
+        function calculateDelay(incidentDate, status, lastActionDate) {
+            if (status === 'closed') return { hours: 0, days: 0 };
+            
+            const referenceDate = lastActionDate ? new Date(lastActionDate) : new Date(incidentDate);
+            const now = new Date();
+            const diffMs = now - referenceDate;
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            const days = Math.floor(hours / 24);
+            
+            return { hours, days };
+        }
+        
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+            try {
+                if (dateStr.includes('1899') || dateStr.includes('1900')) return '-';
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return dateStr;
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const year = date.getFullYear();
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                if (hours === '00' && minutes === '00') {
+                    return `${year}/${month}/${day}`;
+                }
+                return `${year}/${month}/${day} - ${hours}:${minutes}`;
+            } catch (e) {
+                return dateStr;
+            }
+        }
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+            });
+        });
+        
+        async function apiCall(action, payload = {}) {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action, payload })
+            });
+            return await response.json();
+        }
+        
+        let escalationList = [];
+        
+        async function loadStaffList() {
+            try {
+                const result = await apiCall('getIncidentStaff', {});
+                if (result.ok && result.staff) {
+                    staffList = result.staff;
+                    escalationList = result.escalationList || [];
+                    const select = document.getElementById('staffSelect');
+                    select.innerHTML = '<option value="">اختر اسمك للدخول</option>';
+                    // فقط الموظفين الذين لديهم رمز سري
+                    staffList.filter(s => s.hasCode).forEach(s => {
+                        select.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+                    });
+                    document.getElementById('loginBtn').disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('staffSelect').innerHTML = '<option value="">خطأ في التحميل</option>';
+            }
+        }
+        
+        async function login() {
+            const select = document.getElementById('staffSelect');
+            const name = select.value;
+            const passcode = document.getElementById('passcodeInput').value;
+            const errorEl = document.getElementById('loginError');
+            
+            if (!name) {
+                errorEl.textContent = 'الرجاء اختيار اسمك';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            if (!passcode) {
+                errorEl.textContent = 'الرجاء إدخال الرمز السري';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('loginBtn').disabled = true;
+            document.getElementById('loginBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+            
+            try {
+                const result = await apiCall('verifyIncidentPasscode', { staffName: name, passcode: passcode });
+                
+                if (result.ok && result.verified) {
+                    currentUser = {
+                        name: name
+                    };
+                    
+                    localStorage.setItem('incidentUser', JSON.stringify(currentUser));
+                    errorEl.style.display = 'none';
+                    
+                    document.getElementById('loginOverlay').classList.add('hidden');
+                    document.getElementById('currentUserName').textContent = currentUser.name;
+                    
+                    loadData();
+                } else {
+                    errorEl.textContent = result.error || 'الاسم أو الرمز غير صحيح';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = 'خطأ في الاتصال بالسيرفر';
+                errorEl.style.display = 'block';
+            }
+            
+            document.getElementById('loginBtn').disabled = false;
+            document.getElementById('loginBtn').innerHTML = '<i class="fas fa-sign-in-alt"></i> دخول';
+        }
+        
+        function logout() {
+            localStorage.removeItem('incidentUser');
+            currentUser = null;
+            document.getElementById('loginOverlay').classList.remove('hidden');
+        }
+        
+        function checkLogin() {
+            const saved = localStorage.getItem('incidentUser');
+            if (saved) {
+                currentUser = JSON.parse(saved);
+                document.getElementById('loginOverlay').classList.add('hidden');
+                document.getElementById('currentUserName').textContent = currentUser.name;
+                loadData();
+            }
+            loadStaffList();
+        }
+        
+        async function loadData() {
+            loadStats();
+            loadIncidents();
+            loadPendingIncidents();
+            loadRcaIncidents();
+        }
+        
+        async function loadStats() {
+            try {
+                const result = await apiCall('getIncidentStats', {});
+                if (result.ok) {
+                    document.getElementById('totalIncidents').textContent = result.total || 0;
+                    document.getElementById('openIncidents').textContent = result.open || 0;
+                    document.getElementById('closedIncidents').textContent = result.closed || 0;
+                    document.getElementById('rcaRequired').textContent = result.byStatus?.rca_required?.count || 0;
+                    document.getElementById('avgClosure').textContent = result.avgClosureTime || 0;
+                    document.getElementById('nearMissPercent').textContent = (result.nearMissPercentage || 0) + '%';
+                    
+                    document.getElementById('rcaCount').textContent = result.byStatus?.rca_required?.count || 0;
+                    
+                    renderCharts(result);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        function renderCharts(data) {
+            let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;">';
+            
+            html += '<div><h4 style="margin-bottom:15px;color:var(--blue-dark);">حسب النوع</h4><div style="display:flex;flex-direction:column;gap:8px;">';
+            for (const [code, info] of Object.entries(data.byType || {})) {
+                if (info.count > 0) {
+                    const pct = data.total > 0 ? Math.round((info.count / data.total) * 100) : 0;
+                    html += `<div style="display:flex;align-items:center;gap:10px;">
+                        <span style="flex:1">${info.name}</span>
+                        <div style="flex:2;background:var(--gray-light);height:20px;border-radius:10px;overflow:hidden;">
+                            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--blue),var(--crimson))"></div>
+                        </div>
+                        <span style="width:50px;text-align:left;font-weight:600;">${info.count}</span>
+                    </div>`;
+                }
+            }
+            html += '</div></div>';
+            
+            html += '<div><h4 style="margin-bottom:15px;color:var(--blue-dark);">حسب الخطورة</h4><div style="display:flex;flex-wrap:wrap;gap:10px;">';
+            for (const [code, info] of Object.entries(data.bySeverity || {})) {
+                html += `<div style="flex:1;min-width:100px;padding:15px;background:var(--off-white);border-radius:10px;text-align:center;border-top:4px solid ${info.color}">
+                    <div style="font-size:1.5rem;font-weight:700;">${info.count}</div>
+                    <div style="font-size:0.85rem;color:var(--gray);">${info.name}</div>
+                </div>`;
+            }
+            html += '</div></div>';
+            
+            html += '</div>';
+            
+            document.getElementById('chartsContainer').innerHTML = html;
+        }
+        
+        async function loadIncidents() {
+            const container = document.getElementById('incidentsTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            const filterStatus = document.getElementById('filterStatus').value;
+            const isDelayFilter = filterStatus === 'delayed_24' || filterStatus === 'delayed_48';
+            
+            const params = {
+                status: isDelayFilter ? 'all' : filterStatus,
+                severity: document.getElementById('filterSeverity').value,
+                incidentType: document.getElementById('filterType').value
+            };
+            
+            try {
+                const result = await apiCall('getIncidents', params);
+                if (!result.ok || !result.incidents?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد بلاغات</h3></div>';
+                    return;
+                }
+                
+                let incidents = result.incidents;
+                
+                if (isDelayFilter) {
+                    incidents = incidents.filter(inc => {
+                        if (inc.status === 'closed') return false;
+                        const delay = calculateDelay(inc.date, inc.status, inc.lastActionDate);
+                        if (filterStatus === 'delayed_24') return delay.hours >= 24 && delay.hours < 48;
+                        if (filterStatus === 'delayed_48') return delay.hours >= 48;
+                        return true;
+                    });
+                }
+                
+                if (!incidents.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد بلاغات بهذا الفلتر</h3></div>';
+                    return;
+                }
+                
+                document.getElementById('incidentsCount').textContent = incidents.length;
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم البلاغ</th>
+                        <th>التاريخ</th>
+                        <th>القسم</th>
+                        <th>النوع</th>
+                        <th>الخطورة</th>
+                        <th>المسؤول</th>
+                        <th>الحالة</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                incidents.forEach(inc => {
+                    const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d', badge: 'secondary' };
+                    const stat = STATUS[inc.status] || { name: inc.status, badge: 'secondary' };
+                    const typeName = INCIDENT_TYPES[inc.type] || inc.type;
+                    
+                    const delayInfo = calculateDelay(inc.date, inc.status, inc.lastActionDate);
+                    let rowClass = '';
+                    let delayBadge = '';
+                    
+                    if (inc.status === 'escalated') {
+                        rowClass = 'row-escalated';
+                    } else if (delayInfo.hours > 48 && inc.status !== 'closed') {
+                        rowClass = 'row-delay-danger';
+                        delayBadge = `<span class="delay-badge danger"><i class="fas fa-clock"></i> متأخر ${delayInfo.days} يوم</span>`;
+                    } else if (delayInfo.hours > 24 && inc.status !== 'closed') {
+                        rowClass = 'row-delay-warning';
+                        delayBadge = `<span class="delay-badge warning"><i class="fas fa-clock"></i> ${delayInfo.hours} ساعة</span>`;
+                    }
+                    
+                    let badges = '';
+                    if (inc.rcaRequired) badges += ' <span class="badge badge-danger">RCA</span>';
+                    if (inc.status === 'escalated') badges += ` <span class="badge badge-danger"><i class="fas fa-arrow-up"></i> مصعّد</span>`;
+                    
+                    html += `<tr class="${rowClass}">
+                        <td><strong>${inc.id}</strong>${badges}</td>
+                        <td>${inc.date} ${delayBadge}</td>
+                        <td>${inc.department}</td>
+                        <td>${typeName}</td>
+                        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+                        <td>${inc.assignedTo || '<span style="color:var(--gray);">غير معين</span>'}</td>
+                        <td><span class="badge badge-${stat.badge}">${stat.name}</span></td>
+                        <td><button class="btn btn-secondary btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في التحميل</p></div>';
+            }
+        }
+        
+        async function loadPendingIncidents() {
+            const container = document.getElementById('pendingTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getIncidents', { status: 'new' });
+                if (!result.ok || !result.incidents?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>لا توجد بلاغات تحتاج تعيين</h3></div>';
+                    document.getElementById('pendingCount').textContent = '0';
+                    return;
+                }
+                
+                const pending = result.incidents.filter(i => !i.assignedTo);
+                document.getElementById('pendingCount').textContent = pending.length;
+                
+                if (!pending.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>كل البلاغات معينة</h3></div>';
+                    return;
+                }
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم البلاغ</th>
+                        <th>التاريخ</th>
+                        <th>القسم</th>
+                        <th>النوع</th>
+                        <th>الخطورة</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                pending.forEach(inc => {
+                    const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d' };
+                    html += `<tr>
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${inc.date}</td>
+                        <td>${inc.department}</td>
+                        <td>${INCIDENT_TYPES[inc.type] || inc.type}</td>
+                        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+                        <td><button class="btn btn-primary btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-user-plus"></i> تعيين</button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        async function loadRcaIncidents() {
+            const container = document.getElementById('rcaTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getIncidents', { status: 'rca_required' });
+                if (!result.ok || !result.incidents?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>لا توجد حوادث تتطلب RCA</h3></div>';
+                    document.getElementById('rcaCount').textContent = '0';
+                    return;
+                }
+                
+                document.getElementById('rcaCount').textContent = result.incidents.length;
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم البلاغ</th>
+                        <th>التاريخ</th>
+                        <th>القسم</th>
+                        <th>النوع</th>
+                        <th>الخطورة</th>
+                        <th>المسؤول</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                result.incidents.forEach(inc => {
+                    const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
+                    html += `<tr>
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${inc.date}</td>
+                        <td>${inc.department}</td>
+                        <td>${INCIDENT_TYPES[inc.type] || inc.type}</td>
+                        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+                        <td>${inc.assignedTo || '-'}</td>
+                        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-search"></i> تحليل RCA</button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        function renderStaffOptions() {
+            return staffList.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+        }
+        
+        function renderEscalationOptions() {
+            if (escalationList && escalationList.length > 0) {
+                return escalationList.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+            }
+            // fallback للموظفين إذا لم تكن هناك قائمة تصعيد
+            return renderStaffOptions();
+        }
+        
+        async function viewIncident(id) {
+            const modal = document.getElementById('detailModal');
+            const body = document.getElementById('modalBody');
+            modal.classList.add('active');
+            body.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getIncidentDetails', { incidentId: id });
+                if (!result.ok || !result.success) throw new Error(result.error);
+                
+                currentIncident = result.incident;
+                const inc = result.incident;
+                const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d' };
+                const stat = STATUS[inc.status] || { name: inc.status };
+                
+                const needsEscalation = ['severe', 'death'].includes(inc.severity);
+                const canClose = ['none', 'minor'].includes(inc.severity) && !inc.rcaRequired;
+                
+                let html = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:15px;margin-bottom:20px;padding:15px;background:var(--off-white);border-radius:10px;">
+                        <div>
+                            <h2 style="margin:0;color:var(--blue-dark);">${inc.id}</h2>
+                            <span class="badge badge-${STATUS[inc.status]?.badge || 'secondary'}">${stat.name}</span>
+                            ${inc.rcaRequired ? '<span class="badge badge-danger" style="margin-right:5px;">يتطلب RCA</span>' : ''}
+                            ${inc.assignedTo ? `<span class="badge badge-purple" style="margin-right:5px;">المسؤول: ${inc.assignedTo}</span>` : ''}
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="severity-dot" style="background:${sev.color};width:16px;height:16px;"></span>
+                            <strong>${sev.name}</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-info-circle"></i> معلومات الحادث</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item"><div class="detail-label">التاريخ</div><div class="detail-value">${formatDate(inc.date)}</div></div>
+                            <div class="detail-item"><div class="detail-label">تاريخ التبليغ</div><div class="detail-value">${formatDate(inc.reportDate)}</div></div>
+                            <div class="detail-item"><div class="detail-label">القسم</div><div class="detail-value">${inc.department}</div></div>
+                            <div class="detail-item"><div class="detail-label">النوع</div><div class="detail-value">${inc.typeName}</div></div>
+                            <div class="detail-item"><div class="detail-label">طريقة الاكتشاف</div><div class="detail-value">${inc.discoveryMethod || '-'}</div></div>
+                            <div class="detail-item"><div class="detail-label">المبلغ</div><div class="detail-value">${inc.anonymous ? 'مجهول الهوية' : (inc.reporterName || '-')}</div></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-align-left"></i> وصف الحادث</h4>
+                        <div class="detail-text">${inc.description || '-'}</div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-bolt"></i> الإجراءات الفورية</h4>
+                        <div class="detail-text">${inc.immediateAction || 'لم يتم تسجيل إجراءات فورية'}</div>
+                    </div>
+                `;
+                
+                if (inc.rootCause || inc.correctiveActions || inc.lessonsLearned) {
+                    html += `
+                        <div class="detail-section">
+                            <h4><i class="fas fa-search"></i> التحليل والمعالجة</h4>
+                            ${inc.rootCause ? `<div class="detail-text" style="margin-bottom:10px;"><strong>السبب الجذري:</strong> ${inc.rootCause}</div>` : ''}
+                            ${inc.correctiveActions ? `<div class="detail-text" style="margin-bottom:10px;"><strong>الإجراءات التصحيحية:</strong> ${inc.correctiveActions}</div>` : ''}
+                            ${inc.lessonsLearned ? `<div class="detail-text"><strong>الدروس المستفادة:</strong> ${inc.lessonsLearned}</div>` : ''}
+                        </div>
+                    `;
+                }
+                
+                if (result.followups?.length) {
+                    html += `<div class="detail-section"><h4><i class="fas fa-history"></i> سجل المتابعات</h4><div class="timeline">`;
+                    result.followups.forEach(f => {
+                        html += `<div class="timeline-item">
+                            <div class="timeline-date">${f.date}</div>
+                            <div class="timeline-action">${f.action}</div>
+                            <div class="timeline-by">${f.by} ${f.notes ? '- ' + f.notes : ''}</div>
+                        </div>`;
+                    });
+                    html += '</div></div>';
+                }
+                
+                if (inc.status !== 'closed') {
+                    const isEscalated = inc.status === 'escalated';
+                    const isRcaInProgress = inc.status === 'rca_in_progress' || inc.status === 'rca_required';
+                    const canUserClose = !isEscalated || (isEscalated && inc.escalatedTo === currentUser?.name);
+                    
+                    html += `
+                        <div class="action-buttons" style="flex-direction:column;gap:15px;">
+                            <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                                <strong style="width:100%;margin-bottom:5px;color:var(--blue-dark);">
+                                    <i class="fas fa-cogs"></i> تغيير حالة البلاغ:
+                                </strong>
+                                
+                                <button class="btn btn-primary" onclick="showAssignSection()">
+                                    <i class="fas fa-user-check"></i> تعيين متابعة الحالة
+                                </button>
+                                
+                                ${!isEscalated ? `
+                                    <button class="btn btn-danger" onclick="showEscalationSection()">
+                                        <i class="fas fa-arrow-up"></i> تصعيد إداري
+                                    </button>
+                                ` : `
+                                    <span class="badge badge-danger" style="padding:10px 15px;font-size:0.95rem;">
+                                        <i class="fas fa-exclamation-triangle"></i> مصعّد إلى: ${inc.escalatedTo || 'الإدارة'}
+                                    </span>
+                                `}
+                                
+                                <button class="btn btn-warning" onclick="showRCASection()">
+                                    <i class="fas fa-search"></i> ${isRcaInProgress ? 'متابعة التحليل العميق' : 'بدء التحليل العميق (RCA)'}
+                                </button>
+                                
+                                ${canUserClose ? `
+                                    <button class="btn btn-success" onclick="showCloseSection()">
+                                        <i class="fas fa-check-double"></i> إغلاق البلاغ
+                                    </button>
+                                ` : `
+                                    <span class="badge badge-secondary" style="padding:10px 15px;font-size:0.95rem;">
+                                        <i class="fas fa-lock"></i> الإغلاق متاح فقط لـ ${inc.escalatedTo}
+                                    </span>
+                                `}
+                            </div>
+                        </div>
+                        
+                        <div id="assignSection" class="action-section" style="display:none;">
+                            <h4><i class="fas fa-user-check"></i> تعيين متابعة الحالة</h4>
+                            <div class="form-group">
+                                <label>اختر المسؤول</label>
+                                <select class="form-control" id="assignTo">
+                                    <option value="">اختر المسؤول</option>
+                                    ${renderStaffOptions()}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>ملاحظات</label>
+                                <textarea class="form-control" id="assignNotes" placeholder="ملاحظات للمسؤول..."></textarea>
+                            </div>
+                            <button class="btn btn-primary" onclick="submitAssign()">
+                                <i class="fas fa-save"></i> تعيين
+                            </button>
+                        </div>
+                        
+                        <div id="escalationSection" class="action-section" style="display:none;background:linear-gradient(135deg,#fff5f5,#ffe8e8);border:2px solid var(--danger);">
+                            <h4 style="color:var(--danger);"><i class="fas fa-arrow-up"></i> تصعيد إداري</h4>
+                            <div class="alert alert-danger" style="margin-bottom:15px;">
+                                <i class="fas fa-info-circle"></i>
+                                التصعيد الإداري يعني نقل مسؤولية الحالة لمسؤول أعلى. فقط المسؤول المعين يمكنه إغلاق الحالة.
+                            </div>
+                            <div class="form-group">
+                                <label>اختر المسؤول للتصعيد</label>
+                                <select class="form-control" id="escalateTo">
+                                    <option value="">اختر المسؤول</option>
+                                    ${renderEscalationOptions()}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>سبب التصعيد</label>
+                                <textarea class="form-control" id="escalationReason" placeholder="اذكر سبب التصعيد..."></textarea>
+                            </div>
+                            <button class="btn btn-danger" onclick="submitEscalation()">
+                                <i class="fas fa-arrow-up"></i> تأكيد التصعيد
+                            </button>
+                        </div>
+                        
+                        <div id="rcaSection" class="rca-section" style="display:none;">
+                            <h4><i class="fas fa-search"></i> التحليل العميق - Root Cause Analysis (RCA)</h4>
+                            
+                            <div style="display:flex;gap:10px;margin-bottom:20px;">
+                                <button class="btn btn-sm ${inc.rcaMethod === 'fiveWhys' ? 'btn-warning' : 'btn-secondary'}" onclick="showRCAMethod('fiveWhys')">
+                                    <i class="fas fa-question"></i> طريقة 5 Whys
+                                </button>
+                                <button class="btn btn-sm ${inc.rcaMethod === 'fishbone' ? 'btn-warning' : 'btn-secondary'}" onclick="showRCAMethod('fishbone')">
+                                    <i class="fas fa-fish"></i> Fishbone (Ishikawa)
+                                </button>
+                            </div>
+                            
+                            <div id="fiveWhysMethod" style="display:block;">
+                                <div class="alert alert-warning" style="margin-bottom:15px;">
+                                    <strong><i class="fas fa-lightbulb"></i> طريقة الـ 5 Whys:</strong>
+                                    اسأل "لماذا؟" 5 مرات للوصول للسبب الجذري.
+                                    <div style="background:#fff;padding:10px;border-radius:8px;margin-top:10px;font-size:0.9rem;">
+                                        <strong>مثال - خطأ دوائي:</strong><br>
+                                        ❓ <strong>لماذا 1:</strong> لماذا أُعطي المريض جرعة خاطئة؟ ← <em>لأن الممرض قرأ الوصفة بشكل خاطئ</em><br>
+                                        ❓ <strong>لماذا 2:</strong> لماذا قرأها خطأ؟ ← <em>لأن خط الطبيب غير واضح</em><br>
+                                        ❓ <strong>لماذا 3:</strong> لماذا لم يتحقق من الصيدلي؟ ← <em>لأن لا يوجد إجراء للتحقق المزدوج</em><br>
+                                        ❓ <strong>لماذا 4:</strong> لماذا لا يوجد إجراء؟ ← <em>لأنه لم يتم وضع سياسة للتحقق</em><br>
+                                        ❓ <strong>لماذا 5:</strong> لماذا لم توضع؟ ← <em>لأن إدارة الجودة لم تراجع البروتوكولات</em><br>
+                                        ✅ <strong>السبب الجذري:</strong> غياب مراجعة دورية لبروتوكولات صرف الأدوية
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>لماذا حدث؟ (Why 1)</label>
+                                    <textarea class="form-control" id="rcaWhy1" placeholder="السبب المباشر...">${inc.rcaWhy1 || ''}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>لماذا؟ (Why 2)</label>
+                                    <textarea class="form-control" id="rcaWhy2" placeholder="لماذا حدث السبب السابق؟...">${inc.rcaWhy2 || ''}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>لماذا؟ (Why 3)</label>
+                                    <textarea class="form-control" id="rcaWhy3" placeholder="تعمق أكثر...">${inc.rcaWhy3 || ''}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>لماذا؟ (Why 4)</label>
+                                    <textarea class="form-control" id="rcaWhy4" placeholder="استمر في التحليل...">${inc.rcaWhy4 || ''}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label>لماذا؟ (Why 5) - السبب الجذري</label>
+                                    <textarea class="form-control" id="rcaWhy5" placeholder="السبب الجذري النهائي...">${inc.rcaWhy5 || ''}</textarea>
+                                </div>
+                            </div>
+                            
+                            <div id="fishboneMethod" style="display:none;">
+                                <div class="alert alert-warning" style="margin-bottom:15px;">
+                                    <strong><i class="fas fa-fish"></i> مخطط Fishbone (عظمة السمكة):</strong>
+                                    تحليل الأسباب ضمن 6 فئات رئيسية (6Ms).
+                                    <div style="background:#fff;padding:10px;border-radius:8px;margin-top:10px;font-size:0.9rem;">
+                                        <strong>مثال - سقوط مريض:</strong><br>
+                                        👤 <strong>Man (الأفراد):</strong> نقص تدريب على تقييم مخاطر السقوط<br>
+                                        ⚙️ <strong>Machine (المعدات):</strong> سرير بدون حواجز جانبية فعالة<br>
+                                        📋 <strong>Method (الطريقة):</strong> عدم وجود بروتوكول تقييم واضح<br>
+                                        📦 <strong>Material (المواد):</strong> أرضية زلقة في الغرفة<br>
+                                        🌍 <strong>Environment (البيئة):</strong> إضاءة ضعيفة في الممرات<br>
+                                        📏 <strong>Measurement (القياس):</strong> عدم توثيق تقييم خطر السقوط
+                                    </div>
+                                </div>
+                                
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:15px;">
+                                    <div class="form-group">
+                                        <label>👤 Man (الأفراد/الكوادر)</label>
+                                        <textarea class="form-control" id="fishMan" placeholder="مشاكل متعلقة بالموظفين، التدريب، الكفاءة...">${inc.fishMan || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>⚙️ Machine (المعدات/الأجهزة)</label>
+                                        <textarea class="form-control" id="fishMachine" placeholder="مشاكل في المعدات أو الأجهزة...">${inc.fishMachine || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>📋 Method (الطريقة/الإجراءات)</label>
+                                        <textarea class="form-control" id="fishMethod" placeholder="مشاكل في السياسات أو الإجراءات...">${inc.fishMethod || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>📦 Material (المواد/المستلزمات)</label>
+                                        <textarea class="form-control" id="fishMaterial" placeholder="مشاكل في المواد أو المستلزمات...">${inc.fishMaterial || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>🌍 Environment (البيئة)</label>
+                                        <textarea class="form-control" id="fishEnvironment" placeholder="عوامل بيئية مثل الإضاءة، الحرارة، المساحة...">${inc.fishEnvironment || ''}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>📏 Measurement (القياس/التوثيق)</label>
+                                        <textarea class="form-control" id="fishMeasurement" placeholder="مشاكل في القياس أو التوثيق...">${inc.fishMeasurement || ''}</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr style="margin:20px 0;">
+                            
+                            <div class="form-group">
+                                <label><strong>السبب الجذري النهائي (ملخص)</strong></label>
+                                <textarea class="form-control" id="rcaRootCause" placeholder="اكتب السبب الجذري النهائي بعد التحليل...">${inc.rootCause || ''}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label><strong>الإجراءات التصحيحية</strong></label>
+                                <textarea class="form-control" id="rcaActions" placeholder="ما الإجراءات المتخذة لمنع التكرار...">${inc.correctiveActions || ''}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label><strong>الدروس المستفادة</strong></label>
+                                <textarea class="form-control" id="rcaLessons" placeholder="ما الدروس المستفادة من هذا الحادث...">${inc.lessonsLearned || ''}</textarea>
+                            </div>
+                            
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                <button class="btn btn-warning" onclick="submitRCA(false)">
+                                    <i class="fas fa-save"></i> حفظ التحليل (قيد التحليل)
+                                </button>
+                                <button class="btn btn-success" onclick="submitRCA(true)">
+                                    <i class="fas fa-check"></i> اكتمل التحليل
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="closeSection" class="action-section" style="display:none;">
+                            <h4><i class="fas fa-check-circle"></i> إغلاق البلاغ</h4>
+                            <div class="form-group">
+                                <label>ملخص الإجراءات المتخذة</label>
+                                <textarea class="form-control" id="closeSummary" placeholder="ملخص ما تم من إجراءات...">${inc.correctiveActions || ''}</textarea>
+                            </div>
+                            <button class="btn btn-success" onclick="submitClose()">
+                                <i class="fas fa-check"></i> إغلاق نهائي
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div style="padding:20px;background:rgba(40,167,69,0.1);border-radius:10px;text-align:center;margin-top:20px;">
+                            <i class="fas fa-check-circle" style="font-size:3rem;color:var(--success);margin-bottom:10px;"></i>
+                            <h3 style="color:var(--success);">تم إغلاق البلاغ</h3>
+                            <p>بتاريخ: ${inc.closedDate || '-'} | بواسطة: ${inc.closedBy || '-'}</p>
+                        </div>
+                    `;
+                }
+                
+                body.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                body.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل التفاصيل</p></div>';
+            }
+        }
+        
+        function hideAllSections() {
+            document.getElementById('assignSection').style.display = 'none';
+            document.getElementById('escalationSection').style.display = 'none';
+            document.getElementById('rcaSection').style.display = 'none';
+            document.getElementById('closeSection').style.display = 'none';
+        }
+        
+        function showAssignSection() {
+            hideAllSections();
+            const section = document.getElementById('assignSection');
+            section.style.display = 'block';
+            setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+        }
+        
+        function showEscalationSection() {
+            hideAllSections();
+            const section = document.getElementById('escalationSection');
+            section.style.display = 'block';
+            setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+        }
+        
+        function showRCASection() {
+            hideAllSections();
+            const section = document.getElementById('rcaSection');
+            section.style.display = 'block';
+            setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+        }
+        
+        function showCloseSection() {
+            hideAllSections();
+            const section = document.getElementById('closeSection');
+            section.style.display = 'block';
+            setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+        }
+        
+        function showRCAMethod(method) {
+            document.getElementById('fiveWhysMethod').style.display = method === 'fiveWhys' ? 'block' : 'none';
+            document.getElementById('fishboneMethod').style.display = method === 'fishbone' ? 'block' : 'none';
+        }
+        
+        async function submitAssign() {
+            const assignTo = document.getElementById('assignTo').value;
+            const notes = document.getElementById('assignNotes').value;
+            
+            if (!assignTo) {
+                alert('الرجاء اختيار المسؤول');
+                return;
+            }
+            
+            try {
+                const result = await apiCall('assignIncident', {
+                    incidentId: currentIncident.id,
+                    rowIndex: currentIncident.rowIndex,
+                    assignedTo: assignTo,
+                    assignedBy: currentUser?.name || 'النظام',
+                    notes: notes
+                });
+                
+                if (result.ok && result.success) {
+                    alert('تم تعيين المسؤول بنجاح');
+                    closeModal();
+                    loadData();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                alert('حدث خطأ: ' + err.message);
+            }
+        }
+        
+        async function submitEscalation() {
+            const escalateTo = document.getElementById('escalateTo').value;
+            const reason = document.getElementById('escalationReason').value;
+            
+            if (!escalateTo) {
+                alert('الرجاء اختيار المسؤول للتصعيد');
+                return;
+            }
+            
+            if (!confirm(`هل تريد تصعيد هذا البلاغ إلى ${escalateTo}؟ فقط المسؤول المعين سيتمكن من إغلاقه.`)) return;
+            
+            try {
+                const result = await apiCall('escalateIncident', {
+                    incidentId: currentIncident.id,
+                    rowIndex: currentIncident.rowIndex,
+                    escalatedBy: currentUser?.name || 'النظام',
+                    escalatedTo: escalateTo,
+                    reason: reason || 'تصعيد إداري'
+                });
+                
+                if (result.ok && result.success) {
+                    alert(`تم تصعيد البلاغ إلى ${escalateTo} بنجاح`);
+                    closeModal();
+                    loadData();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                alert('حدث خطأ: ' + err.message);
+            }
+        }
+        
+        async function submitRCA(isComplete = false) {
+            const rootCause = document.getElementById('rcaRootCause')?.value || '';
+            const correctiveActions = document.getElementById('rcaActions')?.value || '';
+            const lessonsLearned = document.getElementById('rcaLessons')?.value || '';
+            
+            const fiveWhysData = {
+                why1: document.getElementById('rcaWhy1')?.value || '',
+                why2: document.getElementById('rcaWhy2')?.value || '',
+                why3: document.getElementById('rcaWhy3')?.value || '',
+                why4: document.getElementById('rcaWhy4')?.value || '',
+                why5: document.getElementById('rcaWhy5')?.value || ''
+            };
+            
+            const fishboneData = {
+                man: document.getElementById('fishMan')?.value || '',
+                machine: document.getElementById('fishMachine')?.value || '',
+                method: document.getElementById('fishMethod')?.value || '',
+                material: document.getElementById('fishMaterial')?.value || '',
+                environment: document.getElementById('fishEnvironment')?.value || '',
+                measurement: document.getElementById('fishMeasurement')?.value || ''
+            };
+            
+            if (isComplete && (!rootCause || !correctiveActions)) {
+                alert('الرجاء إكمال السبب الجذري والإجراءات التصحيحية قبل اكتمال التحليل');
+                return;
+            }
+            
+            const newStatus = isComplete ? 'in_progress' : 'rca_in_progress';
+            
+            try {
+                const result = await apiCall('saveRCA', {
+                    incidentId: currentIncident.id,
+                    rowIndex: currentIncident.rowIndex,
+                    rootCause: rootCause,
+                    correctiveActions: correctiveActions,
+                    lessonsLearned: lessonsLearned,
+                    fiveWhys: JSON.stringify(fiveWhysData),
+                    fishbone: JSON.stringify(fishboneData),
+                    analyzedBy: currentUser?.name || 'النظام',
+                    status: newStatus,
+                    rcaComplete: isComplete
+                });
+                
+                if (result.ok && result.success) {
+                    alert(isComplete ? 'تم اكتمال تحليل السبب الجذري بنجاح' : 'تم حفظ التحليل (قيد التحليل)');
+                    closeModal();
+                    loadData();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                alert('حدث خطأ: ' + err.message);
+            }
+        }
+        
+        async function submitClose() {
+            const summary = document.getElementById('closeSummary').value;
+            
+            if (!summary) {
+                alert('الرجاء كتابة ملخص الإجراءات');
+                return;
+            }
+            
+            if (!confirm('هل تريد إغلاق هذا البلاغ نهائياً؟')) return;
+            
+            try {
+                const result = await apiCall('closeIncident', {
+                    incidentId: currentIncident.id,
+                    rowIndex: currentIncident.rowIndex,
+                    closedBy: currentUser?.name || 'النظام',
+                    correctiveActions: summary,
+                    summary: summary
+                });
+                
+                if (result.ok && result.success) {
+                    alert('تم إغلاق البلاغ بنجاح');
+                    closeModal();
+                    loadData();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                alert('حدث خطأ: ' + err.message);
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+            currentIncident = null;
+        }
+        
+        document.getElementById('detailModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+        
+        let historyIncidents = [];
+        
+        function initHistoryDates() {
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            document.getElementById('historyDateTo').value = today.toISOString().split('T')[0];
+            document.getElementById('historyDateFrom').value = firstDay.toISOString().split('T')[0];
+        }
+        
+        function resetHistoryFilters() {
+            document.getElementById('historyDepartment').value = '';
+            document.getElementById('historySeverity').value = '';
+            document.getElementById('historyStatus').value = '';
+            initHistoryDates();
+        }
+        
+        function setQuickFilter(period) {
+            const today = new Date();
+            today.setHours(12, 0, 0, 0);
+            let fromDate = new Date(today);
+            
+            switch(period) {
+                case 'today':
+                    break;
+                case 'week':
+                    fromDate.setDate(fromDate.getDate() - 7);
+                    break;
+                case '2weeks':
+                    fromDate.setDate(fromDate.getDate() - 14);
+                    break;
+                case 'month':
+                    fromDate.setDate(1);
+                    fromDate.setMonth(fromDate.getMonth() - 1);
+                    break;
+                case '2months':
+                    fromDate.setDate(1);
+                    fromDate.setMonth(fromDate.getMonth() - 2);
+                    break;
+                case '3months':
+                    fromDate.setDate(1);
+                    fromDate.setMonth(fromDate.getMonth() - 3);
+                    break;
+            }
+            
+            const formatDate = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            
+            document.getElementById('historyDateFrom').value = formatDate(fromDate);
+            document.getElementById('historyDateTo').value = formatDate(today);
+            document.getElementById('historyDepartment').value = '';
+            document.getElementById('historySeverity').value = '';
+            document.getElementById('historyStatus').value = '';
+            
+            loadHistoryReport();
+        }
+        
+        async function loadHistoryReport() {
+            const content = document.getElementById('historyContent');
+            content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>جاري تحميل البيانات...</p></div>';
+            
+            try {
+                const params = {
+                    dateFrom: document.getElementById('historyDateFrom').value,
+                    dateTo: document.getElementById('historyDateTo').value,
+                    department: document.getElementById('historyDepartment').value,
+                    severity: document.getElementById('historySeverity').value,
+                    status: document.getElementById('historyStatus').value,
+                    limit: 500
+                };
+                
+                const result = await apiCall('getIncidents', params);
+                if (!result.ok) throw new Error(result.error || 'فشل');
+                
+                historyIncidents = result.incidents || [];
+                
+                if (historyIncidents.length === 0) {
+                    content.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد نتائج</h3></div>';
+                    document.getElementById('historyStats').style.display = 'none';
+                    document.getElementById('historyCount').textContent = '';
+                    return;
+                }
+                
+                renderHistoryStats();
+                await renderHistoryReport();
+                
+            } catch (err) {
+                console.error(err);
+                content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>' + err.message + '</p></div>';
+            }
+        }
+        
+        function renderHistoryStats() {
+            const stats = document.getElementById('historyStats');
+            const total = historyIncidents.length;
+            const closed = historyIncidents.filter(i => i.status === 'closed').length;
+            const open = total - closed;
+            const rcaReq = historyIncidents.filter(i => i.rcaRequired).length;
+            const escalated = historyIncidents.filter(i => i.status === 'escalated').length;
+            
+            stats.innerHTML = `
+                <div class="stat-card"><div class="stat-number">${total}</div><div class="stat-label">إجمالي</div></div>
+                <div class="stat-card warning"><div class="stat-number">${open}</div><div class="stat-label">مفتوحة</div></div>
+                <div class="stat-card success"><div class="stat-number">${closed}</div><div class="stat-label">مغلقة</div></div>
+                <div class="stat-card danger"><div class="stat-number">${rcaReq}</div><div class="stat-label">تتطلب RCA</div></div>
+                <div class="stat-card purple"><div class="stat-number">${escalated}</div><div class="stat-label">مصعدة</div></div>
+            `;
+            stats.style.display = 'grid';
+            document.getElementById('historyCount').textContent = '(' + total + ' حالة)';
+        }
+        
+        async function renderHistoryReport() {
+            const content = document.getElementById('historyContent');
+            let html = '';
+            
+            for (const inc of historyIncidents) {
+                const sevInfo = SEVERITY[inc.severity] || { name: inc.severity, color: '#6c757d' };
+                const statInfo = STATUS[inc.status] || { name: inc.status, badge: 'secondary' };
+                const typeName = INCIDENT_TYPES[inc.type] || inc.typeName || inc.type;
+                
+                html += `
+                    <div style="border:1px solid var(--gray-light); border-radius:10px; margin-bottom:20px; overflow:hidden; page-break-inside:avoid;">
+                        <div style="background:linear-gradient(135deg, var(--blue-dark), var(--crimson)); color:white; padding:12px 20px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                            <strong><i class="fas fa-hashtag"></i> ${inc.id}</strong>
+                            <div style="display:flex; gap:8px;">
+                                <span style="background:${sevInfo.color}; padding:3px 10px; border-radius:15px; font-size:0.8rem;">${sevInfo.name}</span>
+                                <span class="badge badge-${statInfo.badge}">${statInfo.name}</span>
+                                ${inc.rcaRequired ? '<span class="badge badge-danger">RCA</span>' : ''}
+                            </div>
+                        </div>
+                        <div style="padding:15px;">
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:12px;">
+                                <div style="background:var(--off-white); padding:10px; border-radius:8px;">
+                                    <div style="font-size:0.75rem; color:var(--gray);">تاريخ الحادث</div>
+                                    <div style="font-weight:600;">${inc.date || '-'}</div>
+                                </div>
+                                <div style="background:var(--off-white); padding:10px; border-radius:8px;">
+                                    <div style="font-size:0.75rem; color:var(--gray);">القسم</div>
+                                    <div style="font-weight:600;">${inc.department || '-'}</div>
+                                </div>
+                                <div style="background:var(--off-white); padding:10px; border-radius:8px;">
+                                    <div style="font-size:0.75rem; color:var(--gray);">نوع الحادث</div>
+                                    <div style="font-weight:600;">${typeName}</div>
+                                </div>
+                                ${inc.assignedTo ? `<div style="background:var(--off-white); padding:10px; border-radius:8px;"><div style="font-size:0.75rem; color:var(--gray);">المسؤول</div><div style="font-weight:600;">${inc.assignedTo}</div></div>` : ''}
+                            </div>
+                            <div style="background:var(--off-white); padding:12px; border-radius:8px; line-height:1.6;">
+                                <div style="font-size:0.75rem; color:var(--gray); margin-bottom:5px;">الوصف</div>
+                                ${inc.description || 'لا يوجد وصف'}
+                            </div>
+                            ${inc.escalatedTo ? `<div style="background:#fff5f5; padding:10px; border-radius:8px; margin-top:10px; border-right:4px solid var(--danger);"><strong style="color:var(--danger);"><i class="fas fa-arrow-up"></i> تصعيد:</strong> ${inc.escalatedTo}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            content.innerHTML = html;
+        }
+        
+        function exportHistoryExcel() {
+            if (historyIncidents.length === 0) {
+                alert('لا توجد بيانات للتصدير');
+                return;
+            }
+            
+            const data = historyIncidents.map(inc => ({
+                'رقم الحادث': inc.id,
+                'تاريخ الحادث': inc.date,
+                'تاريخ التبليغ': inc.reportDate,
+                'القسم': inc.department,
+                'نوع الحادث': INCIDENT_TYPES[inc.type] || inc.type,
+                'الخطورة': SEVERITY[inc.severity]?.name || inc.severity,
+                'الحالة': STATUS[inc.status]?.name || inc.status,
+                'الوصف': inc.description || '',
+                'المسؤول': inc.assignedTo || '',
+                'تصعيد إلى': inc.escalatedTo || '',
+                'يتطلب RCA': inc.rcaRequired ? 'نعم' : 'لا'
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'تقرير الحوادث');
+            
+            const fromDate = document.getElementById('historyDateFrom').value || 'all';
+            const toDate = document.getElementById('historyDateTo').value || 'all';
+            XLSX.writeFile(wb, 'تقرير_الحوادث_' + fromDate + '_' + toDate + '.xlsx');
+        }
+        
+        function printHistory() {
+            const content = document.getElementById('historyContent').innerHTML;
+            const stats = document.getElementById('historyStats').innerHTML;
+            const printWin = window.open('', '_blank');
+            printWin.document.write(`
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>التقرير التاريخي - حوادث السلامة</title>
+                    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;600&display=swap" rel="stylesheet">
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+                    <style>
+                        * { margin:0; padding:0; box-sizing:border-box; }
+                        body { font-family:'Tajawal',sans-serif; padding:20px; }
+                        .header { background:#003E75; color:white; padding:15px 20px; margin-bottom:20px; border-radius:10px; text-align:center; }
+                        .stats-row { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
+                        .stat-card { background:#f8f9fa; padding:15px; text-align:center; border-radius:8px; border-top:4px solid #0056A3; }
+                        .stat-number { font-size:1.5rem; font-weight:800; color:#003E75; }
+                        .stat-label { font-size:0.8rem; color:#6c757d; }
+                        .badge { display:inline-block; padding:3px 8px; border-radius:15px; font-size:0.75rem; }
+                        .badge-success { background:rgba(40,167,69,0.15); color:#28a745; }
+                        .badge-warning { background:rgba(255,193,7,0.2); color:#856404; }
+                        .badge-danger { background:rgba(220,53,69,0.15); color:#dc3545; }
+                        @media print { body { padding:10px; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>التقرير التاريخي - حوادث سلامة المرضى</h1>
+                        <p>مجمع مكة الطبي بالزاهر</p>
+                    </div>
+                    <div class="stats-row">${stats}</div>
+                    ${content}
+                    <script>window.onload = function() { window.print(); }<\/script>
+                </body>
+                </html>
+            `);
+            printWin.document.close();
+        }
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (this.dataset.tab === 'history') {
+                    initHistoryDates();
+                }
+            });
+        });
+        
+        checkLogin();
+    </script>
+</body>
+</html>
