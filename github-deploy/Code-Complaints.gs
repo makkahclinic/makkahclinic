@@ -186,14 +186,21 @@ function debugInfo() {
 }
 
 // ============================================
-// دالة اختبار الصلاحيات - شغّل هذه الدالة أولاً!
+// دوال التفويض والاختبار - شغّل هذه الدوال أولاً!
 // ============================================
+
+// دالة تفويض Drive - شغّلها أولاً!
+function authorizeDriveNow() {
+  const folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
+  Logger.log("✅ Drive OK: " + folder.getName());
+  return { success: true, folderName: folder.getName() };
+}
+
+// دالة اختبار الصلاحيات الكاملة
 function testDriveAccess() {
-  // هذه الدالة تطلب صلاحيات Drive
   const folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
   const folderName = folder.getName();
   
-  // اختبار Spreadsheet
   const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
   const sheetName = ss.getName();
   
@@ -337,8 +344,13 @@ function submitComplaint(payload) {
   
   let attachmentsInfo = '';
   if (payload.files && payload.files.length > 0) {
-    const uploadedFiles = uploadFilesToDrive(payload.files, complaintId);
-    attachmentsInfo = uploadedFiles.map(f => f.url).join('\n');
+    try {
+      const uploadedFiles = uploadFilesToDrive(payload.files, complaintId);
+      attachmentsInfo = uploadedFiles.map(f => f.url).join('\n');
+    } catch (e) {
+      console.error('Attachment upload failed:', e);
+      attachmentsInfo = 'فشل رفع المرفقات: ' + e.message;
+    }
   }
   
   sheet.appendRow([
