@@ -123,6 +123,31 @@
         case 'saveRCA':
           result = saveRCA(payload);
           break;
+        // Complaints APIs
+        case 'submitComplaint':
+          result = submitComplaint(payload);
+          break;
+        case 'getComplaintStaff':
+          result = getComplaintStaff();
+          break;
+        case 'verifyComplaintPasscode':
+          result = verifyComplaintPasscode(payload.staffName, payload.passcode);
+          break;
+        case 'getComplaintStats':
+          result = getComplaintStats(payload);
+          break;
+        case 'getComplaints':
+          result = getComplaints(payload);
+          break;
+        case 'getComplaintDetails':
+          result = getComplaintDetails(payload.complaintId);
+          break;
+        case 'updateComplaint':
+          result = updateComplaint(payload);
+          break;
+        case 'getComplaintHistory':
+          result = getComplaintHistory(payload.complaintId);
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }
@@ -2012,5 +2037,383 @@
     ]);
     
     return { success: true, message: 'تم حفظ تحليل السبب الجذري بنجاح' };
+  }
+
+  // ============================================
+  // نظام الشكاوى - Complaints System
+  // ============================================
+  
+  const COMPLAINTS_SPREADSHEET_ID = '1zVzjvVBh8F7Gvut0kX8fTq2GyKrYo3fBop8jUBEsV3Q';
+  
+  function getComplaintsSheet(sheetName) {
+    const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      if (sheetName === 'Complaints_Log') {
+        sheet.appendRow([
+          'Complaint_ID', 'Submit_Date', 'Submit_Time', 'Complaint_Type', 'Complainant_Name',
+          'Complainant_Phone', 'Complainant_Email', 'Complaint_DateTime', 'Locations',
+          'Description', 'Complaint_Against', 'Attachments', 'Additional_Notes',
+          'Status', 'Priority', 'Assigned_To', 'Assigned_Date', 'Resolution',
+          'Resolution_Date', 'Closed_By', 'Response_Sent', 'Days_Open'
+        ]);
+      } else if (sheetName === 'Complaints_Followup') {
+        sheet.appendRow(['Followup_ID', 'Complaint_ID', 'Date', 'Action', 'Action_By', 'Notes', 'Status']);
+      } else if (sheetName === 'Complaints_Staff') {
+        sheet.appendRow(['Name', 'Passcode', 'Role', 'Active']);
+        sheet.appendRow(['مدير الجودة', '1234', 'admin', 'نعم']);
+        sheet.appendRow(['مسؤول الشكاوى', '5678', 'analyst', 'نعم']);
+      }
+    }
+    
+    return sheet;
+  }
+  
+  function submitComplaint(payload) {
+    const sheet = getComplaintsSheet('Complaints_Log');
+    const now = getSaudiDate();
+    
+    const complaintId = `CMP-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${Date.now().toString().slice(-6)}`;
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    
+    const locations = Array.isArray(payload.locations) ? payload.locations.join(', ') : (payload.locations || '');
+    
+    sheet.appendRow([
+      complaintId,
+      dateStr,
+      timeStr,
+      payload.complaintType || '',
+      payload.complainantName || '',
+      payload.complainantPhone || '',
+      payload.complainantEmail || '',
+      payload.complaintDateTime || '',
+      locations,
+      payload.description || '',
+      payload.complaintAgainst || '',
+      '', // Attachments
+      payload.additionalNotes || '',
+      'new', // Status
+      'medium', // Priority
+      '', // Assigned_To
+      '', // Assigned_Date
+      '', // Resolution
+      '', // Resolution_Date
+      '', // Closed_By
+      'no', // Response_Sent
+      0  // Days_Open
+    ]);
+    
+    return { 
+      success: true, 
+      complaintId: complaintId,
+      message: 'تم استلام شكواك بنجاح'
+    };
+  }
+  
+  function getComplaintStaff() {
+    const sheet = getComplaintsSheet('Complaints_Staff');
+    const data = sheetToObjects(sheet);
+    
+    const staff = data
+      .filter(s => s.Active === 'نعم' || s.Active === 'yes')
+      .map(s => ({
+        name: s.Name,
+        role: s.Role
+      }));
+    
+    return { staff };
+  }
+  
+  function verifyComplaintPasscode(staffName, passcode) {
+    const sheet = getComplaintsSheet('Complaints_Staff');
+    const data = sheetToObjects(sheet);
+    
+    const found = data.find(s => 
+      s.Name === staffName && 
+      String(s.Passcode) === String(passcode) &&
+      (s.Active === 'نعم' || s.Active === 'yes')
+    );
+    
+    if (found) {
+      return { valid: true, role: found.Role, name: found.Name };
+    }
+    
+    return { valid: false, error: 'اسم المستخدم أو الرمز غير صحيح' };
+  }
+  
+  function getComplaintStats(params) {
+    const sheet = getComplaintsSheet('Complaints_Log');
+    const data = sheetToObjects(sheet);
+    
+    const now = getSaudiDate();
+    let filtered = data;
+    
+    // فلترة حسب الفترة
+    if (params && params.days) {
+      const cutoff = new Date(now);
+      cutoff.setDate(cutoff.getDate() - parseInt(params.days));
+      filtered = data.filter(c => {
+        const d = parseLogDate(c.Submit_Date);
+        return d && d >= cutoff;
+      });
+    }
+    
+    const total = filtered.length;
+    const newCount = filtered.filter(c => c.Status === 'new').length;
+    const inProgress = filtered.filter(c => c.Status === 'in_progress').length;
+    const closed = filtered.filter(c => c.Status === 'closed').length;
+    
+    // حساب متوسط أيام الحل
+    const closedWithDays = filtered.filter(c => c.Status === 'closed' && c.Days_Open);
+    const avgDays = closedWithDays.length > 0 
+      ? Math.round(closedWithDays.reduce((sum, c) => sum + (parseInt(c.Days_Open) || 0), 0) / closedWithDays.length)
+      : 0;
+    
+    // توزيع حسب النوع
+    const byType = {};
+    filtered.forEach(c => {
+      const type = c.Complaint_Type || 'غير محدد';
+      byType[type] = (byType[type] || 0) + 1;
+    });
+    
+    // توزيع حسب الحالة
+    const byStatus = {
+      new: newCount,
+      in_progress: inProgress,
+      closed: closed
+    };
+    
+    return {
+      total,
+      new: newCount,
+      inProgress,
+      closed,
+      avgResolution: avgDays,
+      byType,
+      byStatus
+    };
+  }
+  
+  function getComplaints(params) {
+    const sheet = getComplaintsSheet('Complaints_Log');
+    const data = sheetToObjects(sheet);
+    
+    let filtered = data;
+    
+    // فلترة حسب الحالة
+    if (params && params.status && params.status !== 'all') {
+      filtered = filtered.filter(c => c.Status === params.status);
+    }
+    
+    // فلترة حسب النوع
+    if (params && params.type && params.type !== 'all') {
+      filtered = filtered.filter(c => c.Complaint_Type === params.type);
+    }
+    
+    // فلترة حسب التاريخ
+    if (params && params.startDate) {
+      filtered = filtered.filter(c => {
+        const d = parseLogDate(c.Submit_Date);
+        return d && d >= new Date(params.startDate);
+      });
+    }
+    
+    if (params && params.endDate) {
+      filtered = filtered.filter(c => {
+        const d = parseLogDate(c.Submit_Date);
+        return d && d <= new Date(params.endDate + 'T23:59:59');
+      });
+    }
+    
+    // ترتيب من الأحدث للأقدم
+    filtered.sort((a, b) => {
+      const dateA = parseLogDate(a.Submit_Date);
+      const dateB = parseLogDate(b.Submit_Date);
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateB - dateA;
+    });
+    
+    // تحديث أيام الفتح للشكاوى المفتوحة
+    const now = getSaudiDate();
+    const complaints = filtered.map(c => {
+      let daysOpen = parseInt(c.Days_Open) || 0;
+      if (c.Status !== 'closed') {
+        const submitDate = parseLogDate(c.Submit_Date);
+        if (submitDate) {
+          daysOpen = Math.floor((now - submitDate) / (1000 * 60 * 60 * 24));
+        }
+      }
+      
+      return {
+        id: c.Complaint_ID,
+        _rowIndex: c._rowIndex,
+        submitDate: formatDate(c.Submit_Date),
+        submitTime: c.Submit_Time || '',
+        type: c.Complaint_Type,
+        complainantName: c.Complainant_Name,
+        complainantPhone: c.Complainant_Phone || '',
+        locations: c.Locations,
+        description: (c.Description || '').substring(0, 100) + ((c.Description || '').length > 100 ? '...' : ''),
+        complaintAgainst: c.Complaint_Against || '',
+        status: c.Status,
+        priority: c.Priority || 'medium',
+        assignedTo: c.Assigned_To || '',
+        daysOpen: daysOpen
+      };
+    });
+    
+    return { complaints };
+  }
+  
+  function getComplaintDetails(complaintId) {
+    const sheet = getComplaintsSheet('Complaints_Log');
+    const data = sheetToObjects(sheet);
+    
+    const complaint = data.find(c => c.Complaint_ID === complaintId);
+    
+    if (!complaint) {
+      return { error: 'الشكوى غير موجودة' };
+    }
+    
+    // حساب أيام الفتح
+    const now = getSaudiDate();
+    let daysOpen = parseInt(complaint.Days_Open) || 0;
+    if (complaint.Status !== 'closed') {
+      const submitDate = parseLogDate(complaint.Submit_Date);
+      if (submitDate) {
+        daysOpen = Math.floor((now - submitDate) / (1000 * 60 * 60 * 24));
+      }
+    }
+    
+    // جلب سجل المتابعة
+    const followupSheet = getComplaintsSheet('Complaints_Followup');
+    const followups = sheetToObjects(followupSheet)
+      .filter(f => f.Complaint_ID === complaintId)
+      .map(f => ({
+        date: formatDate(f.Date),
+        action: f.Action,
+        actionBy: f.Action_By,
+        notes: f.Notes,
+        status: f.Status
+      }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    return {
+      complaint: {
+        id: complaint.Complaint_ID,
+        _rowIndex: complaint._rowIndex,
+        submitDate: formatDate(complaint.Submit_Date),
+        submitTime: complaint.Submit_Time || '',
+        type: complaint.Complaint_Type,
+        complainantName: complaint.Complainant_Name,
+        complainantPhone: complaint.Complainant_Phone || '',
+        complainantEmail: complaint.Complainant_Email || '',
+        complaintDateTime: complaint.Complaint_DateTime || '',
+        locations: complaint.Locations,
+        description: complaint.Description,
+        complaintAgainst: complaint.Complaint_Against || '',
+        additionalNotes: complaint.Additional_Notes || '',
+        status: complaint.Status,
+        priority: complaint.Priority || 'medium',
+        assignedTo: complaint.Assigned_To || '',
+        assignedDate: formatDate(complaint.Assigned_Date),
+        resolution: complaint.Resolution || '',
+        resolutionDate: formatDate(complaint.Resolution_Date),
+        closedBy: complaint.Closed_By || '',
+        responseSent: complaint.Response_Sent || 'no',
+        daysOpen: daysOpen
+      },
+      followups
+    };
+  }
+  
+  function updateComplaint(params) {
+    const sheet = getComplaintsSheet('Complaints_Log');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const rowIndex = params.rowIndex;
+    if (!rowIndex || rowIndex < 2) {
+      return { success: false, error: 'صف غير صالح' };
+    }
+    
+    const now = getSaudiDate();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    // تحديث الحقول المطلوبة
+    const updates = {
+      'Status': params.status,
+      'Priority': params.priority,
+      'Assigned_To': params.assignedTo,
+      'Resolution': params.resolution,
+      'Response_Sent': params.responseSent
+    };
+    
+    // إذا تم تعيين مسؤول
+    if (params.assignedTo && !params.skipAssignDate) {
+      updates['Assigned_Date'] = dateStr;
+    }
+    
+    // إذا تم الإغلاق
+    if (params.status === 'closed') {
+      updates['Resolution_Date'] = dateStr;
+      updates['Closed_By'] = params.closedBy || params.actionBy || '';
+      
+      // حساب أيام الفتح
+      const submitDateCol = headers.indexOf('Submit_Date');
+      if (submitDateCol !== -1) {
+        const submitDate = parseLogDate(data[rowIndex - 1][submitDateCol]);
+        if (submitDate) {
+          updates['Days_Open'] = Math.floor((now - submitDate) / (1000 * 60 * 60 * 24));
+        }
+      }
+    }
+    
+    // تطبيق التحديثات
+    for (const [field, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        const colIndex = headers.indexOf(field);
+        if (colIndex !== -1) {
+          sheet.getRange(rowIndex, colIndex + 1).setValue(value);
+        }
+      }
+    }
+    
+    // إضافة سجل متابعة
+    const followupSheet = getComplaintsSheet('Complaints_Followup');
+    const followupId = `CF-${Date.now()}`;
+    followupSheet.appendRow([
+      followupId,
+      params.complaintId,
+      dateStr,
+      params.action || 'تحديث الشكوى',
+      params.actionBy || 'النظام',
+      params.notes || '',
+      'completed'
+    ]);
+    
+    return { success: true, message: 'تم تحديث الشكوى بنجاح' };
+  }
+  
+  function getComplaintHistory(complaintId) {
+    const followupSheet = getComplaintsSheet('Complaints_Followup');
+    const data = sheetToObjects(followupSheet);
+    
+    const history = data
+      .filter(f => f.Complaint_ID === complaintId)
+      .map(f => ({
+        date: formatDate(f.Date),
+        action: f.Action,
+        actionBy: f.Action_By,
+        notes: f.Notes,
+        status: f.Status
+      }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    return { history };
   }
   
