@@ -389,11 +389,17 @@ function getIncidents(params) {
   }
   
   if (params.dateFrom) {
-    filtered = filtered.filter(i => i.Date >= params.dateFrom);
+    filtered = filtered.filter(i => {
+      const incDate = formatDate(i.Date);
+      return incDate >= params.dateFrom;
+    });
   }
   
   if (params.dateTo) {
-    filtered = filtered.filter(i => i.Date <= params.dateTo);
+    filtered = filtered.filter(i => {
+      const incDate = formatDate(i.Date);
+      return incDate <= params.dateTo;
+    });
   }
   
   filtered.sort((a, b) => new Date(b.Report_Date) - new Date(a.Report_Date));
