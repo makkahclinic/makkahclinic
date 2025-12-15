@@ -7,7 +7,6 @@
  */
 
 const COMPLAINTS_SPREADSHEET_ID = '1d4BRDY6qAa2u7zKRwwhtXKHIjDn16Yf0NuWA0FWLdMQ';
-const COMPLAINTS_DRIVE_FOLDER_ID = '11WkMirtdIq48n5KHZkz4w0VGLj7ig6_8';
 
 function doPost(e) {
   try {
@@ -180,39 +179,6 @@ function debugInfo() {
 }
 
 // ============================================
-// دوال رفع الملفات
-// ============================================
-
-function uploadFilesToDrive(files, complaintId) {
-  if (!files || files.length === 0) return [];
-  
-  const folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
-  const complaintFolder = folder.createFolder(complaintId);
-  const uploadedFiles = [];
-  
-  files.forEach((file, index) => {
-    try {
-      const blob = Utilities.newBlob(
-        Utilities.base64Decode(file.data),
-        file.mimeType,
-        file.name
-      );
-      const driveFile = complaintFolder.createFile(blob);
-      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      uploadedFiles.push({
-        name: file.name,
-        url: driveFile.getUrl(),
-        id: driveFile.getId()
-      });
-    } catch (err) {
-      console.error('File upload error:', err);
-    }
-  });
-  
-  return uploadedFiles;
-}
-
-// ============================================
 // دوال الموظفين والتحقق
 // ============================================
 
@@ -300,12 +266,6 @@ function submitComplaint(payload) {
   
   const locations = Array.isArray(payload.locations) ? payload.locations.join(', ') : (payload.locations || '');
   
-  let attachmentsInfo = '';
-  if (payload.files && payload.files.length > 0) {
-    const uploadedFiles = uploadFilesToDrive(payload.files, complaintId);
-    attachmentsInfo = uploadedFiles.map(f => f.url).join('\n');
-  }
-  
   sheet.appendRow([
     complaintId,
     dateStr,
@@ -318,7 +278,7 @@ function submitComplaint(payload) {
     locations,
     payload.description || '',
     payload.complaintAgainst || '',
-    attachmentsInfo,
+    '',
     payload.additionalNotes || '',
     'new',
     payload.priority || 'medium',
