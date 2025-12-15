@@ -6,6 +6,7 @@
     <title>تحليل ومتابعة الشكاوى - مجمع مكة الطبي</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --crimson: #9E1B32;
@@ -36,10 +37,7 @@
         
         .login-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background: linear-gradient(135deg, var(--blue-dark) 0%, var(--crimson) 100%);
             z-index: 9999;
             display: flex;
@@ -58,8 +56,7 @@
             text-align: center;
         }
         .login-logo {
-            width: 80px;
-            height: 80px;
+            width: 80px; height: 80px;
             background: linear-gradient(135deg, var(--blue), var(--crimson));
             border-radius: 50%;
             display: flex;
@@ -75,22 +72,18 @@
             color: var(--blue-dark);
             margin-bottom: 8px;
         }
-        .login-subtitle {
-            color: var(--gray);
-            margin-bottom: 30px;
-        }
-        .login-select {
+        .login-subtitle { color: var(--gray); margin-bottom: 30px; }
+        .login-select, .login-input {
             width: 100%;
             padding: 14px 16px;
             border: 2px solid var(--gray-light);
             border-radius: var(--radius-md);
             font-family: 'Tajawal', sans-serif;
             font-size: 1rem;
-            margin-bottom: 20px;
-            cursor: pointer;
+            margin-bottom: 15px;
             transition: border-color 0.3s;
         }
-        .login-select:focus {
+        .login-select:focus, .login-input:focus {
             outline: none;
             border-color: var(--blue);
         }
@@ -107,20 +100,9 @@
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-        .login-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .login-error {
-            color: var(--danger);
-            margin-top: 15px;
-            display: none;
-        }
+        .login-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .login-error { color: var(--danger); margin-top: 15px; display: none; }
         
         .header {
             background: linear-gradient(135deg, var(--blue-dark), var(--crimson));
@@ -132,15 +114,8 @@
             flex-wrap: wrap;
             gap: 15px;
         }
-        .header-title {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .header-title h1 {
-            font-family: 'Cairo', sans-serif;
-            font-size: 1.4rem;
-        }
+        .header-title { display: flex; align-items: center; gap: 12px; }
+        .header-title h1 { font-family: 'Cairo', sans-serif; font-size: 1.4rem; }
         .header-user {
             display: flex;
             align-items: center;
@@ -149,11 +124,8 @@
             padding: 8px 15px;
             border-radius: 25px;
         }
-        .header-user i { font-size: 1.2rem; }
-        .header-actions {
-            display: flex;
-            gap: 10px;
-        }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        
         .btn {
             padding: 10px 18px;
             border: none;
@@ -165,6 +137,7 @@
             align-items: center;
             gap: 8px;
             transition: all 0.3s;
+            text-decoration: none;
         }
         .btn-light { background: rgba(255,255,255,0.2); color: white; }
         .btn-light:hover { background: rgba(255,255,255,0.3); }
@@ -174,7 +147,9 @@
         .btn-warning { background: var(--warning); color: #333; }
         .btn-danger { background: var(--danger); color: white; }
         .btn-secondary { background: var(--gray-light); color: var(--gray-dark); }
+        .btn-purple { background: var(--purple); color: white; }
         .btn-sm { padding: 8px 14px; font-size: 0.85rem; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
         
@@ -272,11 +247,22 @@
         .card-title i { color: var(--crimson); }
         .card-body { padding: 20px; }
         
-        .table-container { overflow-x: auto; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
         }
+        .filter-row select, .filter-row input {
+            padding: 10px 14px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            min-width: 150px;
+        }
+        
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
         th, td {
             padding: 12px;
             text-align: right;
@@ -302,14 +288,12 @@
         .badge-danger { background: rgba(220,53,69,0.15); color: #dc3545; }
         .badge-info { background: rgba(0,86,163,0.15); color: #0056A3; }
         .badge-secondary { background: var(--gray-light); color: var(--gray); }
+        .badge-purple { background: rgba(111,66,193,0.15); color: #6f42c1; }
         
         .modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5);
             z-index: 1000;
             align-items: center;
@@ -320,7 +304,7 @@
         .modal-content {
             background: var(--white);
             border-radius: var(--radius-lg);
-            max-width: 800px;
+            max-width: 900px;
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
@@ -346,11 +330,21 @@
         }
         .modal-body { padding: 24px; }
         
+        .detail-section { margin-bottom: 25px; }
+        .detail-section h4 {
+            font-size: 1rem;
+            color: var(--blue-dark);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .detail-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 12px;
         }
         .detail-item {
             background: var(--off-white);
@@ -363,35 +357,80 @@
             color: var(--gray);
             margin-bottom: 4px;
         }
-        .detail-item span {
+        .detail-item span, .detail-item p {
             font-weight: 600;
             color: var(--gray-dark);
         }
         
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--gray);
-        }
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 15px;
-            opacity: 0.3;
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--gray-light);
         }
         
-        .loading {
-            text-align: center;
-            padding: 40px;
+        .timeline {
+            position: relative;
+            padding-right: 30px;
         }
-        .loading i {
-            font-size: 2rem;
-            color: var(--blue);
-            animation: spin 1s linear infinite;
+        .timeline::before {
+            content: '';
+            position: absolute;
+            right: 10px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--gray-light);
         }
-        @keyframes spin {
-            100% { transform: rotate(360deg); }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 20px;
         }
-
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            right: -26px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            background: var(--blue);
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px var(--blue);
+        }
+        .timeline-date {
+            font-size: 0.8rem;
+            color: var(--gray);
+            margin-bottom: 4px;
+        }
+        .timeline-content {
+            background: var(--off-white);
+            padding: 12px;
+            border-radius: var(--radius-md);
+        }
+        .timeline-action { font-weight: 600; color: var(--blue-dark); }
+        .timeline-by { font-size: 0.85rem; color: var(--gray); }
+        .timeline-notes { font-size: 0.9rem; margin-top: 8px; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: var(--gray-dark);
+        }
+        .form-group select, .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1rem;
+        }
+        .form-group textarea { resize: vertical; min-height: 100px; }
+        
         .chart-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -410,21 +449,9 @@
             margin-bottom: 15px;
             text-align: center;
         }
-        .bar-chart {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .bar-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .bar-label {
-            min-width: 100px;
-            font-size: 0.85rem;
-            color: var(--gray-dark);
-        }
+        .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+        .bar-item { display: flex; align-items: center; gap: 10px; }
+        .bar-label { min-width: 100px; font-size: 0.85rem; color: var(--gray-dark); }
         .bar-wrapper {
             flex: 1;
             height: 24px;
@@ -444,31 +471,53 @@
             font-weight: 600;
             min-width: 30px;
         }
-
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray);
+        }
+        .empty-state i { font-size: 4rem; margin-bottom: 15px; opacity: 0.3; }
+        
+        .loading { text-align: center; padding: 40px; }
+        .loading i {
+            font-size: 2rem;
+            color: var(--blue);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: var(--radius-md);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .alert-danger { background: rgba(220,53,69,0.1); color: var(--danger); border: 1px solid var(--danger); }
+        .alert-success { background: rgba(40,167,69,0.1); color: var(--success); border: 1px solid var(--success); }
+        
         @media (max-width: 768px) {
             .header { padding: 12px 15px; }
             .header-title h1 { font-size: 1.1rem; }
             .container { padding: 15px; }
             .stats-row { grid-template-columns: repeat(2, 1fr); }
             .stat-number { font-size: 1.5rem; }
+            .filter-row select, .filter-row input { min-width: 100%; }
         }
     </style>
 </head>
 <body>
     <div id="loginOverlay" class="login-overlay">
         <div class="login-card">
-            <div class="login-logo">
-                <i class="fas fa-comments"></i>
-            </div>
+            <div class="login-logo"><i class="fas fa-comments"></i></div>
             <h2 class="login-title">نظام تحليل الشكاوى</h2>
             <p class="login-subtitle">مجمع مكة الطبي بالزاهر</p>
-            
             <select id="staffSelect" class="login-select">
                 <option value="">جاري التحميل...</option>
             </select>
-            
-            <input type="password" id="passcodeInput" class="login-select" placeholder="الرمز السري" style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
-            
+            <input type="password" id="passcodeInput" class="login-input" placeholder="الرمز السري" style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
             <button id="loginBtn" class="login-btn" onclick="login()" disabled>
                 <i class="fas fa-sign-in-alt"></i> دخول
             </button>
@@ -481,6 +530,7 @@
             <div class="header-title">
                 <i class="fas fa-comments" style="font-size:1.5rem;"></i>
                 <h1>تحليل ومتابعة الشكاوى</h1>
+                <span style="font-size:0.8rem; opacity:0.8;">لجنة إدارة المخاطر</span>
             </div>
             <div class="header-user">
                 <i class="fas fa-user"></i>
@@ -493,23 +543,34 @@
                 <a href="report.html" class="btn btn-light">
                     <i class="fas fa-plus"></i> رفع شكوى
                 </a>
+                <button class="btn btn-light" onclick="exportToExcel()">
+                    <i class="fas fa-file-excel"></i> تصدير
+                </button>
             </div>
         </header>
 
         <div class="container">
             <div class="tabs">
-                <button class="tab-btn active" onclick="showTab('dashboard')">
+                <button class="tab-btn active" onclick="showTab('dashboard', this)">
                     <i class="fas fa-chart-pie"></i> لوحة المتابعة
                 </button>
-                <button class="tab-btn" onclick="showTab('complaints')">
+                <button class="tab-btn" onclick="showTab('complaints', this)">
                     <i class="fas fa-list"></i> الشكاوى <span class="count" id="complaintsCount">0</span>
                 </button>
-                <button class="tab-btn" onclick="showTab('new')">
+                <button class="tab-btn" onclick="showTab('new', this)">
                     <i class="fas fa-bell"></i> جديدة <span class="count" id="newCount">0</span>
                 </button>
-                <button class="tab-btn" onclick="showTab('inprogress')">
+                <button class="tab-btn" onclick="showTab('inprogress', this)">
                     <i class="fas fa-spinner"></i> قيد المعالجة <span class="count" id="inprogressCount">0</span>
                 </button>
+                <button class="tab-btn" onclick="showTab('history', this)">
+                    <i class="fas fa-history"></i> التقرير التاريخي
+                </button>
+            </div>
+
+            <div id="apiError" class="alert alert-danger" style="display:none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>خطأ في الاتصال بالسيرفر. تأكد من نشر Apps Script بشكل صحيح (New deployment).</span>
             </div>
 
             <div id="dashboard" class="tab-content active">
@@ -538,7 +599,7 @@
 
                 <div class="chart-container">
                     <div class="chart-card">
-                        <div class="chart-title"><i class="fas fa-chart-bar"></i> توزيع الشكاوى</div>
+                        <div class="chart-title"><i class="fas fa-chart-bar"></i> توزيع الشكاوى حسب نوع الشاكي</div>
                         <div id="typeChart" class="bar-chart"></div>
                     </div>
                     <div class="chart-card">
@@ -552,8 +613,25 @@
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title"><i class="fas fa-list"></i> جميع الشكاوى</h3>
+                        <span id="totalBadge" class="badge badge-info">0 شكوى</span>
                     </div>
                     <div class="card-body">
+                        <div class="filter-row">
+                            <select id="filterStatus" onchange="applyFilters()">
+                                <option value="all">جميع الحالات</option>
+                                <option value="new">جديدة</option>
+                                <option value="in_progress">قيد المعالجة</option>
+                                <option value="closed">مغلقة</option>
+                            </select>
+                            <select id="filterType" onchange="applyFilters()">
+                                <option value="all">جميع الأنواع</option>
+                                <option value="شكوى موظف">شكوى موظف</option>
+                                <option value="شكوى مريض">شكوى مريض</option>
+                                <option value="شكوى زائر">شكوى زائر</option>
+                                <option value="أخرى">أخرى</option>
+                            </select>
+                            <input type="text" id="filterSearch" placeholder="بحث..." oninput="applyFilters()">
+                        </div>
                         <div class="table-container">
                             <table>
                                 <thead>
@@ -562,7 +640,9 @@
                                         <th>التاريخ</th>
                                         <th>النوع</th>
                                         <th>الشاكي</th>
+                                        <th>الموقع</th>
                                         <th>الحالة</th>
+                                        <th>المكلف</th>
                                         <th>إجراء</th>
                                     </tr>
                                 </thead>
@@ -576,7 +656,7 @@
             <div id="new" class="tab-content">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-bell"></i> شكاوى جديدة</h3>
+                        <h3 class="card-title"><i class="fas fa-bell"></i> شكاوى جديدة تحتاج إجراء</h3>
                     </div>
                     <div class="card-body">
                         <div class="table-container">
@@ -587,6 +667,7 @@
                                         <th>التاريخ</th>
                                         <th>النوع</th>
                                         <th>الشاكي</th>
+                                        <th>الوصف</th>
                                         <th>إجراء</th>
                                     </tr>
                                 </thead>
@@ -600,7 +681,7 @@
             <div id="inprogress" class="tab-content">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-spinner"></i> قيد المعالجة</h3>
+                        <h3 class="card-title"><i class="fas fa-spinner"></i> شكاوى قيد المعالجة</h3>
                     </div>
                     <div class="card-body">
                         <div class="table-container">
@@ -610,11 +691,48 @@
                                         <th>رقم الشكوى</th>
                                         <th>التاريخ</th>
                                         <th>النوع</th>
-                                        <th>المكلف</th>
+                                        <th>المكلف بالمتابعة</th>
+                                        <th>أيام منذ التكليف</th>
                                         <th>إجراء</th>
                                     </tr>
                                 </thead>
                                 <tbody id="inprogressTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="history" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-history"></i> التقرير التاريخي</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="filter-row">
+                            <input type="date" id="historyFrom" onchange="loadHistory()">
+                            <input type="date" id="historyTo" onchange="loadHistory()">
+                            <button class="btn btn-primary" onclick="loadHistory()">
+                                <i class="fas fa-search"></i> بحث
+                            </button>
+                            <button class="btn btn-success" onclick="exportHistory()">
+                                <i class="fas fa-file-excel"></i> تصدير
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>رقم الشكوى</th>
+                                        <th>التاريخ</th>
+                                        <th>النوع</th>
+                                        <th>الشاكي</th>
+                                        <th>الحالة</th>
+                                        <th>المكلف</th>
+                                        <th>الحل</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTable"></tbody>
                             </table>
                         </div>
                     </div>
@@ -633,6 +751,16 @@
         </div>
     </div>
 
+    <div id="actionModal" class="modal">
+        <div class="modal-content" style="max-width:500px;">
+            <div class="modal-header">
+                <h3 id="actionModalTitle"><i class="fas fa-tasks"></i> إجراء</h3>
+                <button class="modal-close" onclick="closeActionModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="actionModalBody"></div>
+        </div>
+    </div>
+
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec";
         
@@ -645,6 +773,9 @@
         
         let currentUser = null;
         let allComplaints = [];
+        let assignmentList = [];
+        let escalationList = [];
+        let currentComplaintId = null;
 
         async function apiCall(action, payload = {}) {
             try {
@@ -655,29 +786,40 @@
                     redirect: 'follow'
                 });
                 const text = await response.text();
-                return JSON.parse(text);
+                try {
+                    const result = JSON.parse(text);
+                    if (result.ok) {
+                        document.getElementById('apiError').style.display = 'none';
+                    }
+                    return result;
+                } catch (e) {
+                    console.error('Parse error:', text);
+                    document.getElementById('apiError').style.display = 'flex';
+                    return { ok: false, error: 'استجابة غير صالحة من السيرفر' };
+                }
             } catch (err) {
                 console.error('API Error:', err);
+                document.getElementById('apiError').style.display = 'flex';
                 return { ok: false, error: err.message };
             }
         }
 
         async function loadStaff() {
-            try {
-                const result = await apiCall('getComplaintStaff');
-                if (result.ok && result.staff && result.staff.length > 0) {
-                    const select = document.getElementById('staffSelect');
-                    select.innerHTML = '<option value="">اختر اسمك للدخول</option>';
-                    result.staff.forEach(s => {
-                        select.innerHTML += `<option value="${s.name}">${s.name}</option>`;
-                    });
-                    document.getElementById('loginBtn').disabled = false;
-                } else {
-                    document.getElementById('staffSelect').innerHTML = '<option value="">لا يوجد موظفين</option>';
-                }
-            } catch (err) {
-                console.error(err);
-                document.getElementById('staffSelect').innerHTML = '<option value="">خطأ في التحميل</option>';
+            const result = await apiCall('getComplaintStaff');
+            if (result.ok && result.staff && result.staff.length > 0) {
+                const select = document.getElementById('staffSelect');
+                select.innerHTML = '<option value="">اختر اسمك للدخول</option>';
+                result.staff.forEach(s => {
+                    select.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+                });
+                document.getElementById('loginBtn').disabled = false;
+                
+                assignmentList = result.assignment || [];
+                escalationList = result.escalation || [];
+            } else {
+                document.getElementById('staffSelect').innerHTML = '<option value="">خطأ في تحميل الموظفين</option>';
+                document.getElementById('loginError').textContent = 'تأكد من نشر Apps Script بشكل صحيح (New deployment)';
+                document.getElementById('loginError').style.display = 'block';
             }
         }
 
@@ -686,89 +828,59 @@
             const passcode = document.getElementById('passcodeInput').value;
             const errorEl = document.getElementById('loginError');
             
-            if (!staffName) {
-                errorEl.textContent = 'اختر اسمك';
-                errorEl.style.display = 'block';
-                return;
-            }
-            if (!passcode) {
-                errorEl.textContent = 'أدخل الرمز السري';
-                errorEl.style.display = 'block';
-                return;
-            }
+            if (!staffName) { errorEl.textContent = 'اختر اسمك'; errorEl.style.display = 'block'; return; }
+            if (!passcode) { errorEl.textContent = 'أدخل الرمز السري'; errorEl.style.display = 'block'; return; }
             
-            try {
-                const result = await apiCall('verifyComplaintPasscode', { staffName, passcode });
-                if (result.ok && result.verified) {
-                    currentUser = staffName;
-                    document.getElementById('loginOverlay').classList.add('hidden');
-                    document.getElementById('mainApp').style.display = 'block';
-                    document.getElementById('userName').textContent = staffName;
-                    loadDashboard();
-                } else {
-                    errorEl.textContent = result.error || 'الاسم أو الرمز غير صحيح';
-                    errorEl.style.display = 'block';
-                }
-            } catch (err) {
-                errorEl.textContent = 'خطأ في الاتصال بالسيرفر';
+            const result = await apiCall('verifyComplaintPasscode', { staffName, passcode });
+            if (result.ok && result.verified) {
+                currentUser = staffName;
+                document.getElementById('loginOverlay').classList.add('hidden');
+                document.getElementById('mainApp').style.display = 'block';
+                document.getElementById('userName').textContent = staffName;
+                loadDashboard();
+            } else {
+                errorEl.textContent = result.error || 'الاسم أو الرمز غير صحيح';
                 errorEl.style.display = 'block';
             }
         }
 
-        function showTab(tabId) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            event.target.closest('.tab-btn').classList.add('active');
+        function showTab(tabId, btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
             document.getElementById(tabId).classList.add('active');
         }
 
         async function loadDashboard() {
-            try {
-                const statsResult = await apiCall('getComplaintStats', {});
-                if (statsResult.ok) {
-                    document.getElementById('totalComplaints').textContent = statsResult.total || 0;
-                    document.getElementById('newComplaints').textContent = statsResult.new || 0;
-                    document.getElementById('inProgressComplaints').textContent = statsResult.in_progress || 0;
-                    document.getElementById('closedComplaints').textContent = statsResult.closed || 0;
-                    document.getElementById('avgDays').textContent = statsResult.avgResolutionTime || 0;
-                    
-                    document.getElementById('complaintsCount').textContent = statsResult.total || 0;
-                    document.getElementById('newCount').textContent = statsResult.new || 0;
-                    document.getElementById('inprogressCount').textContent = statsResult.in_progress || 0;
-                    
-                    renderCharts(statsResult);
-                }
+            const statsResult = await apiCall('getComplaintStats', {});
+            if (statsResult.ok) {
+                document.getElementById('totalComplaints').textContent = statsResult.total || 0;
+                document.getElementById('newComplaints').textContent = statsResult.new || 0;
+                document.getElementById('inProgressComplaints').textContent = statsResult.in_progress || 0;
+                document.getElementById('closedComplaints').textContent = statsResult.closed || 0;
+                document.getElementById('avgDays').textContent = statsResult.avgResolutionTime || 0;
                 
-                loadAllComplaints();
-            } catch (err) {
-                console.error(err);
+                document.getElementById('complaintsCount').textContent = statsResult.total || 0;
+                document.getElementById('newCount').textContent = statsResult.new || 0;
+                document.getElementById('inprogressCount').textContent = statsResult.in_progress || 0;
+                
+                renderCharts(statsResult);
             }
+            loadAllComplaints();
         }
 
         function renderCharts(stats) {
-            const typeChart = document.getElementById('typeChart');
-            const statusChart = document.getElementById('statusChart');
-            
             const colors = ['#0056A3', '#9E1B32', '#28a745', '#ffc107', '#6f42c1', '#fd7e14'];
             
             if (stats.byType) {
                 let typeHtml = '';
                 const types = Object.entries(stats.byType);
-                const maxType = Math.max(...types.map(t => t[1]));
-                
+                const maxType = Math.max(...types.map(t => t[1]), 1);
                 types.forEach(([type, count], i) => {
-                    const pct = maxType > 0 ? (count / maxType * 100) : 0;
-                    typeHtml += `
-                        <div class="bar-item">
-                            <span class="bar-label">${type}</span>
-                            <div class="bar-wrapper">
-                                <div class="bar-fill" style="width:${pct}%; background:${colors[i % colors.length]}">${count}</div>
-                            </div>
-                        </div>
-                    `;
+                    const pct = (count / maxType * 100);
+                    typeHtml += `<div class="bar-item"><span class="bar-label">${type}</span><div class="bar-wrapper"><div class="bar-fill" style="width:${pct}%; background:${colors[i % colors.length]}">${count}</div></div></div>`;
                 });
-                typeChart.innerHTML = typeHtml || '<p style="text-align:center;color:#999;">لا توجد بيانات</p>';
+                document.getElementById('typeChart').innerHTML = typeHtml || '<p style="text-align:center;color:#999;">لا توجد بيانات</p>';
             }
             
             const statusData = [
@@ -776,130 +888,410 @@
                 { name: 'قيد المعالجة', count: stats.in_progress || 0, color: '#0056A3' },
                 { name: 'تم الحل', count: stats.closed || 0, color: '#28a745' }
             ];
-            const maxStatus = Math.max(...statusData.map(s => s.count));
-            
+            const maxStatus = Math.max(...statusData.map(s => s.count), 1);
             let statusHtml = '';
             statusData.forEach(s => {
-                const pct = maxStatus > 0 ? (s.count / maxStatus * 100) : 0;
-                statusHtml += `
-                    <div class="bar-item">
-                        <span class="bar-label">${s.name}</span>
-                        <div class="bar-wrapper">
-                            <div class="bar-fill" style="width:${pct}%; background:${s.color}">${s.count}</div>
-                        </div>
-                    </div>
-                `;
+                const pct = (s.count / maxStatus * 100);
+                statusHtml += `<div class="bar-item"><span class="bar-label">${s.name}</span><div class="bar-wrapper"><div class="bar-fill" style="width:${pct}%; background:${s.color}">${s.count}</div></div></div>`;
             });
-            statusChart.innerHTML = statusHtml;
+            document.getElementById('statusChart').innerHTML = statusHtml;
         }
 
         async function loadAllComplaints() {
-            try {
-                const result = await apiCall('getComplaints', {});
-                if (result.ok && result.complaints) {
-                    allComplaints = result.complaints;
-                    renderTable('complaintsTable', allComplaints);
-                    renderTable('newTable', allComplaints.filter(c => c.status === 'new'));
-                    renderTable('inprogressTable', allComplaints.filter(c => c.status === 'in_progress'));
-                }
-            } catch (err) {
-                console.error(err);
+            const result = await apiCall('getComplaints', {});
+            if (result.ok && result.complaints) {
+                allComplaints = result.complaints;
+                document.getElementById('totalBadge').textContent = allComplaints.length + ' شكوى';
+                applyFilters();
+                renderNewTable();
+                renderInProgressTable();
             }
         }
 
-        function renderTable(tableId, complaints) {
+        function applyFilters() {
+            const status = document.getElementById('filterStatus').value;
+            const type = document.getElementById('filterType').value;
+            const search = document.getElementById('filterSearch').value.toLowerCase();
+            
+            let filtered = allComplaints;
+            if (status !== 'all') filtered = filtered.filter(c => c.status === status);
+            if (type !== 'all') filtered = filtered.filter(c => c.type === type);
+            if (search) filtered = filtered.filter(c => 
+                (c.id && c.id.toLowerCase().includes(search)) ||
+                (c.complainant && c.complainant.toLowerCase().includes(search)) ||
+                (c.description && c.description.toLowerCase().includes(search))
+            );
+            
+            renderTable('complaintsTable', filtered, true);
+        }
+
+        function renderTable(tableId, complaints, showAll = false) {
             const tbody = document.getElementById(tableId);
             if (!complaints || complaints.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999;">لا توجد شكاوى</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#999;">لا توجد شكاوى</td></tr>';
                 return;
             }
             
             let html = '';
             complaints.forEach(c => {
                 const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
-                html += `
-                    <tr>
-                        <td>${c.id}</td>
-                        <td>${c.date}</td>
-                        <td>${c.type}</td>
-                        <td>${c.complainant || 'مجهول'}</td>
-                        <td><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
-                        <td><button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button></td>
-                    </tr>
-                `;
+                html += `<tr>
+                    <td><strong>${c.id}</strong></td>
+                    <td>${c.date}</td>
+                    <td>${c.type || '-'}</td>
+                    <td>${c.complainant || 'مجهول'}</td>
+                    <td>${c.location || '-'}</td>
+                    <td><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
+                    <td>${c.assignedTo || '-'}</td>
+                    <td><button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i> عرض</button></td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderNewTable() {
+            const newComplaints = allComplaints.filter(c => c.status === 'new');
+            const tbody = document.getElementById('newTable');
+            if (!newComplaints.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999;">لا توجد شكاوى جديدة</td></tr>';
+                return;
+            }
+            let html = '';
+            newComplaints.forEach(c => {
+                html += `<tr>
+                    <td><strong>${c.id}</strong></td>
+                    <td>${c.date}</td>
+                    <td>${c.type || '-'}</td>
+                    <td>${c.complainant || 'مجهول'}</td>
+                    <td>${(c.description || '').substring(0, 50)}...</td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-success btn-sm" onclick="showAssignModal('${c.id}')"><i class="fas fa-user-plus"></i> تكليف</button>
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderInProgressTable() {
+            const inProgress = allComplaints.filter(c => c.status === 'in_progress');
+            const tbody = document.getElementById('inprogressTable');
+            if (!inProgress.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999;">لا توجد شكاوى قيد المعالجة</td></tr>';
+                return;
+            }
+            let html = '';
+            inProgress.forEach(c => {
+                html += `<tr>
+                    <td><strong>${c.id}</strong></td>
+                    <td>${c.date}</td>
+                    <td>${c.type || '-'}</td>
+                    <td>${c.assignedTo || '-'}</td>
+                    <td>${c.daysOpen || 0} يوم</td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-success btn-sm" onclick="showCloseModal('${c.id}')"><i class="fas fa-check"></i> إغلاق</button>
+                    </td>
+                </tr>`;
             });
             tbody.innerHTML = html;
         }
 
         async function viewDetails(complaintId) {
-            try {
-                const result = await apiCall('getComplaintDetails', { complaintId });
-                if (result.ok && result.complaint) {
-                    const c = result.complaint;
-                    const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
-                    
-                    let html = `
-                        <div class="detail-grid">
-                            <div class="detail-item">
-                                <label>رقم الشكوى</label>
-                                <span>${c.id}</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>تاريخ التقديم</label>
-                                <span>${c.submitDate} ${c.submitTime}</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>نوع الشكوى</label>
-                                <span>${c.type}</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>الحالة</label>
-                                <span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>اسم الشاكي</label>
-                                <span>${c.complainantName || 'غير محدد'}</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>رقم الهاتف</label>
-                                <span>${c.complainantPhone || 'غير محدد'}</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>الموقع</label>
-                                <span>${c.locations || 'غير محدد'}</span>
-                            </div>
-                            <div class="detail-item">
-                                <label>المكلف</label>
-                                <span>${c.assignedTo || 'غير مكلف'}</span>
-                            </div>
+            currentComplaintId = complaintId;
+            const result = await apiCall('getComplaintDetails', { complaintId });
+            if (!result.ok || !result.complaint) {
+                alert('خطأ في تحميل التفاصيل');
+                return;
+            }
+            
+            const c = result.complaint;
+            const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
+            
+            let html = `
+                <div class="detail-section">
+                    <h4><i class="fas fa-info-circle"></i> معلومات الشكوى</h4>
+                    <div class="detail-grid">
+                        <div class="detail-item"><label>رقم الشكوى</label><span>${c.id}</span></div>
+                        <div class="detail-item"><label>تاريخ التقديم</label><span>${c.submitDate} ${c.submitTime}</span></div>
+                        <div class="detail-item"><label>نوع الشكوى</label><span>${c.type || '-'}</span></div>
+                        <div class="detail-item"><label>الحالة</label><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></div>
+                        <div class="detail-item"><label>الأولوية</label><span>${c.priority === 'high' ? 'عالية' : c.priority === 'low' ? 'منخفضة' : 'متوسطة'}</span></div>
+                        <div class="detail-item"><label>المكلف</label><span>${c.assignedTo || 'غير مكلف'}</span></div>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4><i class="fas fa-user"></i> معلومات الشاكي</h4>
+                    <div class="detail-grid">
+                        <div class="detail-item"><label>الاسم</label><span>${c.complainantName || 'غير محدد'}</span></div>
+                        <div class="detail-item"><label>الهاتف</label><span>${c.complainantPhone || '-'}</span></div>
+                        <div class="detail-item"><label>البريد</label><span>${c.complainantEmail || '-'}</span></div>
+                        <div class="detail-item"><label>الموقع</label><span>${c.locations || '-'}</span></div>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4><i class="fas fa-align-left"></i> تفاصيل الشكوى</h4>
+                    <div class="detail-item"><label>الوصف</label><p style="margin-top:8px;line-height:1.8;">${c.description || 'لا يوجد وصف'}</p></div>
+                    ${c.complaintAgainst ? `<div class="detail-item" style="margin-top:10px;"><label>الشكوى ضد</label><span>${c.complaintAgainst}</span></div>` : ''}
+                    ${c.additionalNotes ? `<div class="detail-item" style="margin-top:10px;"><label>ملاحظات إضافية</label><p>${c.additionalNotes}</p></div>` : ''}
+                </div>
+                
+                ${c.resolution ? `<div class="detail-section"><h4><i class="fas fa-check-circle"></i> الحل</h4><div class="detail-item"><p>${c.resolution}</p></div></div>` : ''}
+            `;
+            
+            if (result.followups && result.followups.length > 0) {
+                html += `<div class="detail-section"><h4><i class="fas fa-history"></i> سجل المتابعة</h4><div class="timeline">`;
+                result.followups.forEach(f => {
+                    html += `<div class="timeline-item">
+                        <div class="timeline-date">${f.date}</div>
+                        <div class="timeline-content">
+                            <div class="timeline-action">${f.action}</div>
+                            <div class="timeline-by">بواسطة: ${f.actionBy}</div>
+                            ${f.notes ? `<div class="timeline-notes">${f.notes}</div>` : ''}
                         </div>
-                        <div class="detail-item" style="margin-bottom:15px;">
-                            <label>وصف الشكوى</label>
-                            <p style="margin-top:8px;line-height:1.8;">${c.description || 'لا يوجد وصف'}</p>
-                        </div>
-                    `;
-                    
-                    document.getElementById('modalBody').innerHTML = html;
-                    document.getElementById('detailModal').classList.add('active');
-                }
-            } catch (err) {
-                console.error(err);
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+            
+            html += `<div class="action-buttons">
+                ${c.status === 'new' ? `<button class="btn btn-success" onclick="showAssignModal('${c.id}')"><i class="fas fa-user-plus"></i> تكليف موظف</button>` : ''}
+                ${c.status === 'in_progress' ? `<button class="btn btn-success" onclick="showCloseModal('${c.id}')"><i class="fas fa-check"></i> إغلاق الشكوى</button>` : ''}
+                <button class="btn btn-warning" onclick="showEscalateModal('${c.id}')"><i class="fas fa-level-up-alt"></i> تصعيد</button>
+                <button class="btn btn-purple" onclick="showAddNoteModal('${c.id}')"><i class="fas fa-sticky-note"></i> إضافة ملاحظة</button>
+            </div>`;
+            
+            document.getElementById('modalBody').innerHTML = html;
+            document.getElementById('detailModal').classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('detailModal').classList.remove('active'); }
+        function closeActionModal() { document.getElementById('actionModal').classList.remove('active'); }
+
+        function showAssignModal(complaintId) {
+            currentComplaintId = complaintId;
+            let options = assignmentList.map(a => `<option value="${a}">${a}</option>`).join('');
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-user-plus"></i> تكليف موظف';
+            document.getElementById('actionModalBody').innerHTML = `
+                <div class="form-group">
+                    <label>اختر الموظف المكلف</label>
+                    <select id="assignTo">${options || '<option>لا يوجد موظفين</option>'}</select>
+                </div>
+                <div class="form-group">
+                    <label>ملاحظات</label>
+                    <textarea id="assignNotes" placeholder="ملاحظات التكليف..."></textarea>
+                </div>
+                <button class="btn btn-success" onclick="submitAssign()" style="width:100%;"><i class="fas fa-check"></i> تأكيد التكليف</button>
+            `;
+            document.getElementById('actionModal').classList.add('active');
+        }
+
+        async function submitAssign() {
+            const assignTo = document.getElementById('assignTo').value;
+            const notes = document.getElementById('assignNotes').value;
+            const result = await apiCall('assignComplaint', {
+                complaintId: currentComplaintId,
+                assignedTo: assignTo,
+                assignedBy: currentUser,
+                notes: notes
+            });
+            if (result.ok) {
+                alert('تم التكليف بنجاح');
+                closeActionModal();
+                closeModal();
+                loadDashboard();
+            } else {
+                alert('خطأ: ' + (result.error || 'فشل التكليف'));
             }
         }
 
-        function closeModal() {
-            document.getElementById('detailModal').classList.remove('active');
+        function showEscalateModal(complaintId) {
+            currentComplaintId = complaintId;
+            let options = escalationList.map(e => `<option value="${e}">${e}</option>`).join('');
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-level-up-alt"></i> تصعيد الشكوى';
+            document.getElementById('actionModalBody').innerHTML = `
+                <div class="form-group">
+                    <label>تصعيد إلى</label>
+                    <select id="escalateTo">${options || '<option>لا يوجد</option>'}</select>
+                </div>
+                <div class="form-group">
+                    <label>سبب التصعيد</label>
+                    <textarea id="escalateReason" placeholder="سبب التصعيد..."></textarea>
+                </div>
+                <button class="btn btn-warning" onclick="submitEscalate()" style="width:100%;"><i class="fas fa-check"></i> تأكيد التصعيد</button>
+            `;
+            document.getElementById('actionModal').classList.add('active');
         }
 
-        function refreshData() {
-            loadDashboard();
+        async function submitEscalate() {
+            const escalateTo = document.getElementById('escalateTo').value;
+            const reason = document.getElementById('escalateReason').value;
+            const result = await apiCall('escalateComplaint', {
+                complaintId: currentComplaintId,
+                escalateTo: escalateTo,
+                escalatedBy: currentUser,
+                reason: reason
+            });
+            if (result.ok) {
+                alert('تم التصعيد بنجاح');
+                closeActionModal();
+                closeModal();
+                loadDashboard();
+            } else {
+                alert('خطأ: ' + (result.error || 'فشل التصعيد'));
+            }
         }
+
+        function showCloseModal(complaintId) {
+            currentComplaintId = complaintId;
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-check-circle"></i> إغلاق الشكوى';
+            document.getElementById('actionModalBody').innerHTML = `
+                <div class="form-group">
+                    <label>الحل المتخذ</label>
+                    <textarea id="resolution" placeholder="اكتب الحل المتخذ..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>هل تم إبلاغ الشاكي؟</label>
+                    <select id="responseSent">
+                        <option value="yes">نعم</option>
+                        <option value="no">لا</option>
+                    </select>
+                </div>
+                <button class="btn btn-success" onclick="submitClose()" style="width:100%;"><i class="fas fa-check"></i> إغلاق الشكوى</button>
+            `;
+            document.getElementById('actionModal').classList.add('active');
+        }
+
+        async function submitClose() {
+            const resolution = document.getElementById('resolution').value;
+            const responseSent = document.getElementById('responseSent').value;
+            if (!resolution) { alert('يرجى كتابة الحل المتخذ'); return; }
+            const result = await apiCall('closeComplaint', {
+                complaintId: currentComplaintId,
+                resolution: resolution,
+                closedBy: currentUser,
+                responseSent: responseSent
+            });
+            if (result.ok) {
+                alert('تم إغلاق الشكوى بنجاح');
+                closeActionModal();
+                closeModal();
+                loadDashboard();
+            } else {
+                alert('خطأ: ' + (result.error || 'فشل الإغلاق'));
+            }
+        }
+
+        function showAddNoteModal(complaintId) {
+            currentComplaintId = complaintId;
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-sticky-note"></i> إضافة ملاحظة';
+            document.getElementById('actionModalBody').innerHTML = `
+                <div class="form-group">
+                    <label>الإجراء</label>
+                    <input type="text" id="noteAction" placeholder="مثال: اتصال هاتفي، اجتماع...">
+                </div>
+                <div class="form-group">
+                    <label>الملاحظة</label>
+                    <textarea id="noteText" placeholder="تفاصيل الملاحظة..."></textarea>
+                </div>
+                <button class="btn btn-purple" onclick="submitNote()" style="width:100%;"><i class="fas fa-check"></i> إضافة</button>
+            `;
+            document.getElementById('actionModal').classList.add('active');
+        }
+
+        async function submitNote() {
+            const action = document.getElementById('noteAction').value;
+            const notes = document.getElementById('noteText').value;
+            if (!action) { alert('يرجى كتابة الإجراء'); return; }
+            const result = await apiCall('updateComplaint', {
+                complaintId: currentComplaintId,
+                action: action,
+                actionBy: currentUser,
+                notes: notes
+            });
+            if (result.ok) {
+                alert('تم إضافة الملاحظة');
+                closeActionModal();
+                viewDetails(currentComplaintId);
+            } else {
+                alert('خطأ: ' + (result.error || 'فشل الإضافة'));
+            }
+        }
+
+        async function loadHistory() {
+            const from = document.getElementById('historyFrom').value;
+            const to = document.getElementById('historyTo').value;
+            const result = await apiCall('getComplaints', { startDate: from, endDate: to });
+            if (result.ok && result.complaints) {
+                const tbody = document.getElementById('historyTable');
+                if (!result.complaints.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;">لا توجد شكاوى في هذه الفترة</td></tr>';
+                    return;
+                }
+                let html = '';
+                result.complaints.forEach(c => {
+                    const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
+                    html += `<tr>
+                        <td>${c.id}</td>
+                        <td>${c.date}</td>
+                        <td>${c.type || '-'}</td>
+                        <td>${c.complainant || '-'}</td>
+                        <td><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
+                        <td>${c.assignedTo || '-'}</td>
+                        <td>${(c.description || '').substring(0, 30)}...</td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            }
+        }
+
+        function exportToExcel() {
+            if (!allComplaints.length) { alert('لا توجد بيانات للتصدير'); return; }
+            const data = allComplaints.map(c => ({
+                'رقم الشكوى': c.id,
+                'التاريخ': c.date,
+                'النوع': c.type,
+                'الشاكي': c.complainant,
+                'الموقع': c.location,
+                'الحالة': STATUS[c.status]?.name || c.status,
+                'المكلف': c.assignedTo,
+                'الوصف': c.description
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'الشكاوى');
+            XLSX.writeFile(wb, 'complaints_report.xlsx');
+        }
+
+        function exportHistory() {
+            const rows = document.querySelectorAll('#historyTable tr');
+            if (rows.length <= 1) { alert('لا توجد بيانات'); return; }
+            const data = [];
+            rows.forEach((row, i) => {
+                if (i === 0) return;
+                const cells = row.querySelectorAll('td');
+                data.push({
+                    'رقم الشكوى': cells[0]?.textContent,
+                    'التاريخ': cells[1]?.textContent,
+                    'النوع': cells[2]?.textContent,
+                    'الشاكي': cells[3]?.textContent,
+                    'الحالة': cells[4]?.textContent,
+                    'المكلف': cells[5]?.textContent,
+                    'الحل': cells[6]?.textContent
+                });
+            });
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'التقرير');
+            XLSX.writeFile(wb, 'history_report.xlsx');
+        }
+
+        function refreshData() { loadDashboard(); }
 
         document.addEventListener('DOMContentLoaded', loadStaff);
-        
-        document.getElementById('passcodeInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') login();
-        });
+        document.getElementById('passcodeInput').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
     </script>
 </body>
 </html>
