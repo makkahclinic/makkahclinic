@@ -722,11 +722,14 @@
                         <div class="filter-row">
                             <input type="date" id="historyFrom">
                             <input type="date" id="historyTo">
-                            <button class="btn btn-primary" onclick="loadHistory()">
+                            <button class="btn btn-primary" id="searchHistoryBtn" onclick="loadHistory()">
                                 <i class="fas fa-search"></i> بحث
                             </button>
                             <button class="btn btn-success" onclick="exportHistory()">
                                 <i class="fas fa-file-excel"></i> تصدير
+                            </button>
+                            <button class="btn btn-secondary" onclick="printHistory()">
+                                <i class="fas fa-print"></i> طباعة
                             </button>
                         </div>
                         <div class="table-container">
@@ -946,13 +949,14 @@
             let html = '';
             complaints.forEach(c => {
                 const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
+                const escalatedBadge = c.escalatedTo ? `<span class="badge badge-danger" style="margin-right:5px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>` : '';
                 html += `<tr>
                     <td><strong>${c.id}</strong></td>
                     <td>${c.date}</td>
                     <td>${c.type || '-'}</td>
                     <td>${c.complainant || 'مجهول'}</td>
                     <td>${c.location || '-'}</td>
-                    <td><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
+                    <td>${escalatedBadge}<span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
                     <td>${c.assignedTo || '-'}</td>
                     <td><button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i> عرض</button></td>
                 </tr>`;
@@ -1285,7 +1289,15 @@
                 return;
             }
             
+            const btn = document.getElementById('searchHistoryBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري البحث...';
+            
             const result = await apiCall('getComplaints', { startDate: from, endDate: to });
+            
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> بحث';
+            
             if (result.ok && result.complaints) {
                 historyData = result.complaints;
                 const tbody = document.getElementById('historyTable');
@@ -1296,12 +1308,13 @@
                 let html = '';
                 historyData.forEach(c => {
                     const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
+                    const escalatedBadge = c.escalatedTo ? `<span class="badge badge-danger" style="margin-left:5px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>` : '';
                     html += `<tr>
                         <td>${c.id}</td>
                         <td>${c.date}</td>
                         <td>${c.type || '-'}</td>
                         <td>${c.complainant || '-'}</td>
-                        <td><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
+                        <td>${escalatedBadge}<span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
                         <td>${c.assignedTo || '-'}</td>
                         <td>${c.rootCauseCategory || '-'}</td>
                         <td>${(c.resolution || c.description || '').substring(0, 30)}...</td>
@@ -1340,6 +1353,7 @@
                 'النوع': c.type || '-',
                 'الشاكي': c.complainant || '-',
                 'الحالة': STATUS[c.status]?.name || c.status,
+                'مُصعّدة': c.escalatedTo ? 'نعم - إلى: ' + c.escalatedTo : 'لا',
                 'المكلف': c.assignedTo || '-',
                 'تصنيف جذر المشكلة': c.rootCauseCategory || '-',
                 'تحليل جذر المشكلة': c.rootCauseAnalysis || '-',
@@ -1353,6 +1367,99 @@
             const from = document.getElementById('historyFrom').value;
             const to = document.getElementById('historyTo').value;
             XLSX.writeFile(wb, `complaints_report_${from}_to_${to}.xlsx`);
+        }
+
+        function printHistory() {
+            if (!historyData.length) { 
+                alert('لا توجد بيانات للطباعة. قم بالبحث أولاً.'); 
+                return; 
+            }
+            
+            const from = document.getElementById('historyFrom').value;
+            const to = document.getElementById('historyTo').value;
+            
+            let printContent = `
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <title>تقرير الشكاوى</title>
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700&display=swap');
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: 'Tajawal', sans-serif; padding: 20px; direction: rtl; }
+                    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #1e3a5f; padding-bottom: 20px; }
+                    .logo { width: 80px; height: 80px; margin-bottom: 10px; }
+                    h1 { color: #1e3a5f; font-size: 1.5rem; margin-bottom: 5px; }
+                    .subtitle { color: #666; font-size: 0.9rem; }
+                    .date-range { background: #f5f5f5; padding: 10px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
+                    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+                    th { background: #1e3a5f; color: white; }
+                    tr:nth-child(even) { background: #f9f9f9; }
+                    .escalated { background: #ffebee !important; }
+                    .escalated-badge { background: #dc3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; }
+                    .footer { margin-top: 30px; text-align: center; color: #666; font-size: 0.8rem; border-top: 1px solid #ddd; padding-top: 15px; }
+                    @media print { 
+                        body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+                        .no-print { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <img src="logo-transparent.png" class="logo" alt="الشعار" onerror="this.style.display='none'">
+                    <h1>مجمع مكة الطبي بالزاهر</h1>
+                    <p class="subtitle">تقرير الشكاوى والمتابعة</p>
+                </div>
+                <div class="date-range">
+                    <strong>الفترة:</strong> من ${from} إلى ${to} | <strong>عدد الشكاوى:</strong> ${historyData.length}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>رقم الشكوى</th>
+                            <th>التاريخ</th>
+                            <th>النوع</th>
+                            <th>الشاكي</th>
+                            <th>الحالة</th>
+                            <th>المكلف</th>
+                            <th>جذر المشكلة</th>
+                            <th>الحل</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            historyData.forEach(c => {
+                const statusInfo = STATUS[c.status] || { name: c.status };
+                const isEscalated = c.escalatedTo ? 'escalated' : '';
+                const escalatedBadge = c.escalatedTo ? '<span class="escalated-badge">مُصعّدة</span> ' : '';
+                printContent += `
+                        <tr class="${isEscalated}">
+                            <td>${c.id}</td>
+                            <td>${c.date}</td>
+                            <td>${c.type || '-'}</td>
+                            <td>${c.complainant || '-'}</td>
+                            <td>${escalatedBadge}${statusInfo.name}</td>
+                            <td>${c.assignedTo || '-'}</td>
+                            <td>${c.rootCauseCategory || '-'}</td>
+                            <td>${(c.resolution || c.description || '').substring(0, 50)}${(c.resolution || c.description || '').length > 50 ? '...' : ''}</td>
+                        </tr>`;
+            });
+            
+            printContent += `
+                    </tbody>
+                </table>
+                <div class="footer">
+                    تم إنشاء هذا التقرير بتاريخ ${new Date().toLocaleDateString('ar-SA')} الساعة ${new Date().toLocaleTimeString('ar-SA')}
+                </div>
+                <script>window.onload = function() { window.print(); }</script>
+            </body>
+            </html>`;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
         }
 
         function refreshData() { loadDashboard(); }
