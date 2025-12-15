@@ -1280,6 +1280,20 @@
 
         let historyData = [];
         
+        function parseDate(dateStr) {
+            if (!dateStr) return null;
+            // Handle formats: yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy
+            if (dateStr.includes('-') && dateStr.indexOf('-') === 4) {
+                return new Date(dateStr); // yyyy-MM-dd
+            }
+            const parts = dateStr.split(/[\/\-]/);
+            if (parts.length === 3) {
+                // dd/MM/yyyy or dd-MM-yyyy
+                return new Date(parts[2], parts[1] - 1, parts[0]);
+            }
+            return new Date(dateStr);
+        }
+        
         async function loadHistory() {
             const from = document.getElementById('historyFrom').value;
             const to = document.getElementById('historyTo').value;
@@ -1293,35 +1307,47 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري البحث...';
             
-            const result = await apiCall('getComplaints', { startDate: from, endDate: to });
+            // إذا لم تكن البيانات محملة، حمّلها أولاً
+            if (!allComplaints.length) {
+                await loadDashboard();
+            }
+            
+            const fromDate = new Date(from);
+            const toDate = new Date(to);
+            toDate.setHours(23, 59, 59); // نهاية اليوم
+            
+            // فلترة البيانات محلياً
+            historyData = allComplaints.filter(c => {
+                const complaintDate = parseDate(c.date || c.submitDate);
+                if (!complaintDate || isNaN(complaintDate)) return true; // إذا لم نستطع تحليل التاريخ، نضمّه
+                return complaintDate >= fromDate && complaintDate <= toDate;
+            });
             
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-search"></i> بحث';
             
-            if (result.ok && result.complaints) {
-                historyData = result.complaints;
-                const tbody = document.getElementById('historyTable');
-                if (!historyData.length) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;">لا توجد شكاوى في هذه الفترة</td></tr>';
-                    return;
-                }
-                let html = '';
-                historyData.forEach(c => {
-                    const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
-                    const escalatedBadge = c.escalatedTo ? `<span class="badge badge-danger" style="margin-left:5px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>` : '';
-                    html += `<tr>
-                        <td>${c.id}</td>
-                        <td>${c.date}</td>
-                        <td>${c.type || '-'}</td>
-                        <td>${c.complainant || '-'}</td>
-                        <td>${escalatedBadge}<span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
-                        <td>${c.assignedTo || '-'}</td>
-                        <td>${c.rootCauseCategory || '-'}</td>
-                        <td>${(c.resolution || c.description || '').substring(0, 30)}...</td>
-                    </tr>`;
-                });
-                tbody.innerHTML = html;
+            const tbody = document.getElementById('historyTable');
+            if (!historyData.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;">لا توجد شكاوى في هذه الفترة</td></tr>';
+                return;
             }
+            
+            let html = '';
+            historyData.forEach(c => {
+                const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
+                const escalatedBadge = c.escalatedTo ? `<span class="badge badge-danger" style="margin-left:5px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>` : '';
+                html += `<tr>
+                    <td>${c.id}</td>
+                    <td>${c.date}</td>
+                    <td>${c.type || '-'}</td>
+                    <td>${c.complainant || '-'}</td>
+                    <td>${escalatedBadge}<span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
+                    <td>${c.assignedTo || '-'}</td>
+                    <td>${c.rootCauseCategory || '-'}</td>
+                    <td>${(c.resolution || c.description || '').substring(0, 30)}...</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
         }
 
         function exportToExcel() {
