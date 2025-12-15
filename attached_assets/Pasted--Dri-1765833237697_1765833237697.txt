@@ -1,0 +1,120 @@
+مشكلة عدم وصول الصور أو المرفقات رغم أن البيانات النصية تصل عادة ما تكون بسبب أذونات جوجل درايف (Drive Permissions) أو خطأ مخفي في معالجة الكود (Silent Error) لأن دالة الرفع الحالية تخفي الأخطاء.
+
+إليك الحلول بالترتيب، يرجى تطبيقها خطوة بخطوة:
+
+1. تصحيح دالة الرفع في ملف Google Apps Script (Backend)
+الدالة الحالية تحتوي على try...catch يقوم بطباعة الخطأ في الكونسول الداخلي ولا يخبرك به، مما يجعلك تظن أن العملية نجحت بينما هي فشلت في الخلفية.
+
+استبدل دالة uploadFilesToDrive في ملف السكريبت (Google Apps Script) بالكود التالي المعدل، والذي سيقوم بكشف الخطأ وإصلاح مشكلة ترميز الصور:
+
+JavaScript
+
+// استبدل دالة uploadFilesToDrive القديمة بهذا الكود
+function uploadFilesToDrive(files, complaintId) {
+  if (!files || files.length === 0) return [];
+  
+  // التأكد من وجود المجلد
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
+  } catch (e) {
+    throw new Error("لم يتم العثور على مجلد جوجل درايف. تأكد من صحة Folder ID في الكود.");
+  }
+
+  // إنشاء مجلد فرعي للشكوى
+  let complaintFolder;
+  try {
+    complaintFolder = folder.createFolder(complaintId);
+  } catch (e) {
+    throw new Error("فشل إنشاء مجلد للشكوى. تأكد من صلاحيات التعديل للحساب المشغل للسكربت.");
+  }
+
+  const uploadedFiles = [];
+  
+  files.forEach((file, index) => {
+    try {
+      let base64Data = file.data;
+      // تنظيف البيانات في حال وصلت مع الترويسة بالخطأ
+      if (base64Data.includes(',')) {
+        base64Data = base64Data.split(',')[1];
+      }
+      
+      // فك التشفير وإنشاء الملف
+      const decoded = Utilities.base64Decode(base64Data);
+      const blob = Utilities.newBlob(
+        decoded,
+        file.mimeType || 'application/octet-stream',
+        file.name || ('attachment_' + (index + 1))
+      );
+      
+      const driveFile = complaintFolder.createFile(blob);
+      
+      // جعل الملف قابلاً للعرض من قبل أي شخص لديه الرابط (اختياري حسب سياستكم)
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      
+      uploadedFiles.push({
+        name: file.name,
+        url: driveFile.getUrl(),
+        id: driveFile.getId()
+      });
+    } catch (err) {
+      // هنا نجعل الخطأ يظهر ولا يتم تجاهله
+      throw new Error("فشل رفع الملف (" + file.name + "): " + err.message);
+    }
+  });
+  
+  return uploadedFiles;
+}
+2. تحديث ملف appsscript.json (مهم جداً للصلاحيات)
+في محرر Google Apps Script، غالباً ما لا يتم طلب إذن الوصول لـ Drive تلقائياً إذا تمت إضافة الكود لاحقاً.
+
+في محرر السكريبت، اضغط على أيقونة "إعدادات المشروع" (الترس ⚙️) على اليسار.
+
+ضع علامة صح بجانب "Show 'appsscript.json' manifest file in editor".
+
+ارجع إلى قائمة الملفات، ستجد ملفاً اسمه appsscript.json.
+
+تأكد من أن قسم oauthScopes يحتوي على السطر الخاص بـ Drive كما هو موضح أدناه:
+
+JSON
+
+{
+  "timeZone": "Asia/Riyadh",
+  "dependencies": {},
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/script.external_request"
+  ]
+}
+إذا لم يكن السطر https://www.googleapis.com/auth/drive موجوداً، أضفه واحفظ الملف.
+
+3. إعادة النشر (Deploy) - خطوة حاسمة
+بعد تعديل الكود، لن تعمل التعديلات إلا إذا قمت بعمل Deploy جديد.
+
+اضغط على زر Deploy (نشر) > New deployment (نشر جديد).
+
+تأكد من اختيار النوع: Web app.
+
+في خانة Execute as: اختر Me (أنا).
+
+في خانة Who has access: اختر Anyone (أي شخص).
+
+اضغط Deploy.
+
+هام: قد يطلب منك جوجل إعادة منح الصلاحيات (Authorize Access). وافق عليها، وتأكد من أنه يطلب صلاحية الوصول إلى Google Drive.
+
+انسخ الرابط الجديد (أو سيعمل الرابط القديم تلقائياً إذا كنت تستخدم النسخة exec المحدثة).
+
+4. التأكد من COMPLAINTS_DRIVE_FOLDER_ID
+في أول سطر من كود GAS، تأكد أن المتغير:
+
+JavaScript
+
+const COMPLAINTS_DRIVE_FOLDER_ID = '11WkMirtdIq48n5KHZkz4w0VGLj7ig6_8';
+هو معرف (ID) صحيح لمجلد موجود في الدرايف الخاص بالحساب الذي قمت بعمل Deploy منه، وأن هذا المجلد ليس في سلة المهملات.
+
+ملخص المشكلة المتوقعة
+غالباً المشكلة لديك هي أن السكريبت يعمل بصلاحيات "Spreadsheet" فقط، وعندما يحاول الوصول لـ DriveApp لرفع الصورة، يفشل بصمت (Silently Fails) بسبب try...catch القديمة. الخطوات أعلاه ستجبر النظام على طلب صلاحية Drive وتظهر لك أي خطأ آخر بوضوح.
