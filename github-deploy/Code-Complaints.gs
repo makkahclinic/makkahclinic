@@ -198,10 +198,15 @@ function uploadFilesToDrive(files, complaintId) {
   
   files.forEach((file, index) => {
     try {
+      let base64Data = file.data;
+      if (base64Data.includes(',')) {
+        base64Data = base64Data.split(',')[1];
+      }
+      
       const blob = Utilities.newBlob(
-        Utilities.base64Decode(file.data),
-        file.mimeType,
-        file.name
+        Utilities.base64Decode(base64Data),
+        file.mimeType || 'application/octet-stream',
+        file.name || ('attachment_' + (index + 1))
       );
       const driveFile = complaintFolder.createFile(blob);
       driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
