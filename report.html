@@ -304,6 +304,18 @@
             setTimeout(() => toast.classList.add('translate-x-[150%]'), 3000);
         };
 
+        const fileToBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve({ name: file.name, mimeType: file.type, data: base64 });
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        };
+
         const handleFileSelect = (e) => {
             const files = Array.from(e.target.files);
             const fileList = document.getElementById('fileList');
@@ -345,18 +357,29 @@
             const locationSelector = document.getElementById('locationSelector');
             const checkedLocations = Array.from(locationSelector.querySelectorAll('input:checked')).map(cb => cb.value);
             
+            let filesBase64 = [];
+            if (attachedFiles.length > 0) {
+                try {
+                    filesBase64 = await Promise.all(attachedFiles.map(f => fileToBase64(f)));
+                } catch (err) {
+                    console.error('File conversion error:', err);
+                }
+            }
+            
             const formData = {
                 action: 'submitComplaint',
-                complaintType: document.getElementById('complaintType').value,
-                complainantName: document.getElementById('complainantName').value,
-                complainantPhone: document.getElementById('complainantPhone').value || '',
-                complainantEmail: document.getElementById('complainantEmail').value || '',
-                complaintDateTime: document.getElementById('complaintDateTime').value,
-                locations: checkedLocations.join(', '),
-                complaintDescription: document.getElementById('complaintDescription').value,
-                complaintAgainst: document.getElementById('complaintAgainst').value || '',
-                additionalNotes: document.getElementById('additionalNotes').value || '',
-                timestamp: new Date().toISOString()
+                payload: {
+                    complaintType: document.getElementById('complaintType').value,
+                    complainantName: document.getElementById('complainantName').value,
+                    complainantPhone: document.getElementById('complainantPhone').value || '',
+                    complainantEmail: document.getElementById('complainantEmail').value || '',
+                    complaintDateTime: document.getElementById('complaintDateTime').value,
+                    locations: checkedLocations.join(', '),
+                    description: document.getElementById('complaintDescription').value,
+                    complaintAgainst: document.getElementById('complaintAgainst').value || '',
+                    additionalNotes: document.getElementById('additionalNotes').value || '',
+                    files: filesBase64
+                }
             };
             
             try {
