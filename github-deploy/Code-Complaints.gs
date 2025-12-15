@@ -186,6 +186,30 @@ function debugInfo() {
 }
 
 // ============================================
+// دالة اختبار الصلاحيات - شغّل هذه الدالة أولاً!
+// ============================================
+function testDriveAccess() {
+  // هذه الدالة تطلب صلاحيات Drive
+  const folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
+  const folderName = folder.getName();
+  
+  // اختبار Spreadsheet
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  const sheetName = ss.getName();
+  
+  Logger.log('✅ Drive Folder: ' + folderName);
+  Logger.log('✅ Spreadsheet: ' + sheetName);
+  Logger.log('✅ All permissions granted!');
+  
+  return {
+    success: true,
+    driveFolder: folderName,
+    spreadsheet: sheetName,
+    message: 'تم التحقق من الصلاحيات بنجاح!'
+  };
+}
+
+// ============================================
 // دوال رفع الملفات
 // ============================================
 
