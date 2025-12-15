@@ -769,10 +769,22 @@
         let currentComplaint = null;
         let historyComplaints = [];
         
-        async function apiCall(action, params = {}) {
-            const url = `${SCRIPT_URL}?action=${action}&${new URLSearchParams(params)}`;
-            const response = await fetch(url);
-            return response.json();
+        let assignmentList = [];
+        let escalationList = [];
+        
+        async function apiCall(action, payload = {}) {
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, payload }),
+                    mode: 'cors'
+                });
+                return response.json();
+            } catch (err) {
+                console.error('API Error:', err);
+                return { ok: false, error: err.message };
+            }
         }
         
         async function loadStaffList() {
@@ -780,6 +792,9 @@
                 const result = await apiCall('getComplaintStaff');
                 if (result.ok) {
                     staffList = result.staff || [];
+                    assignmentList = result.assignment || [];
+                    escalationList = result.escalation || [];
+                    
                     const select = document.getElementById('staffSelect');
                     select.innerHTML = '<option value="">اختر اسمك للدخول</option>';
                     staffList.filter(s => s.hasCode).forEach(s => {
@@ -837,6 +852,25 @@
             document.getElementById('loginBtn').innerHTML = '<i class="fas fa-sign-in-alt"></i> دخول';
         }
         
+        function populateAssignmentDropdowns() {
+            const assignSelects = document.querySelectorAll('.assign-select');
+            const escalateSelects = document.querySelectorAll('.escalate-select');
+            
+            assignSelects.forEach(select => {
+                select.innerHTML = '<option value="">اختر المكلف...</option>';
+                assignmentList.forEach(name => {
+                    select.innerHTML += `<option value="${name}">${name}</option>`;
+                });
+            });
+            
+            escalateSelects.forEach(select => {
+                select.innerHTML = '<option value="">اختر للتصعيد...</option>';
+                escalationList.forEach(name => {
+                    select.innerHTML += `<option value="${name}">${name}</option>`;
+                });
+            });
+        }
+        
         function logout() {
             localStorage.removeItem('complaintUser');
             currentUser = null;
@@ -859,6 +893,7 @@
             loadComplaints();
             loadPendingComplaints();
             loadInProgressComplaints();
+            populateAssignmentDropdowns();
         }
         
         async function loadStats() {

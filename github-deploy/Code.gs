@@ -148,6 +148,12 @@
         case 'getComplaintHistory':
           result = getComplaintHistory(payload.complaintId);
           break;
+        case 'getComplaintAssignmentList':
+          result = getComplaintAssignmentList();
+          break;
+        case 'getComplaintEscalationList':
+          result = getComplaintEscalationList();
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }
@@ -2114,34 +2120,78 @@
   }
   
   function getComplaintStaff() {
-    const sheet = getComplaintsSheet('Complaints_Staff');
-    const data = sheetToObjects(sheet);
+    const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('Master');
     
-    const staff = data
-      .filter(s => s.Active === 'نعم' || s.Active === 'yes')
-      .map(s => ({
-        name: s.Name,
-        role: s.Role
-      }));
+    if (!sheet) {
+      return { staff: [], assignment: [], escalation: [] };
+    }
     
-    return { staff };
+    const data = sheet.getDataRange().getValues();
+    const staff = [];
+    const assignment = [];
+    const escalation = [];
+    
+    // بدءاً من الصف الثاني (بعد العناوين)
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      // عمود A: أسماء مديري الشكاوى
+      if (row[0] && String(row[0]).trim()) {
+        staff.push({
+          name: String(row[0]).trim(),
+          hasCode: row[1] ? true : false
+        });
+      }
+      // عمود C: أسماء التكليف
+      if (row[2] && String(row[2]).trim()) {
+        const assignName = String(row[2]).trim();
+        if (!assignment.includes(assignName)) {
+          assignment.push(assignName);
+        }
+      }
+      // عمود D: أسماء التصعيد
+      if (row[3] && String(row[3]).trim()) {
+        const escalateName = String(row[3]).trim();
+        if (!escalation.includes(escalateName)) {
+          escalation.push(escalateName);
+        }
+      }
+    }
+    
+    return { staff, assignment, escalation };
   }
   
   function verifyComplaintPasscode(staffName, passcode) {
-    const sheet = getComplaintsSheet('Complaints_Staff');
-    const data = sheetToObjects(sheet);
+    const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('Master');
     
-    const found = data.find(s => 
-      s.Name === staffName && 
-      String(s.Passcode) === String(passcode) &&
-      (s.Active === 'نعم' || s.Active === 'yes')
-    );
-    
-    if (found) {
-      return { valid: true, role: found.Role, name: found.Name };
+    if (!sheet) {
+      return { verified: false, error: 'ورقة Master غير موجودة' };
     }
     
-    return { valid: false, error: 'اسم المستخدم أو الرمز غير صحيح' };
+    const data = sheet.getDataRange().getValues();
+    
+    // البحث في عمود A (الاسم) وعمود B (الرمز)
+    for (let i = 1; i < data.length; i++) {
+      const name = String(data[i][0] || '').trim();
+      const code = String(data[i][1] || '').trim();
+      
+      if (name === staffName && code === String(passcode)) {
+        return { verified: true, name: name };
+      }
+    }
+    
+    return { verified: false, error: 'الاسم أو الرمز السري غير صحيح' };
+  }
+  
+  function getComplaintAssignmentList() {
+    const result = getComplaintStaff();
+    return { assignment: result.assignment || [] };
+  }
+  
+  function getComplaintEscalationList() {
+    const result = getComplaintStaff();
+    return { escalation: result.escalation || [] };
   }
   
   function getComplaintStats(params) {
