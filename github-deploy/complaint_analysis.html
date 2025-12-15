@@ -776,11 +776,17 @@
             try {
                 const response = await fetch(SCRIPT_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({ action, payload }),
-                    mode: 'cors'
+                    redirect: 'follow'
                 });
-                return response.json();
+                const text = await response.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Parse error:', text);
+                    return { ok: false, error: 'Invalid response' };
+                }
             } catch (err) {
                 console.error('API Error:', err);
                 return { ok: false, error: err.message };

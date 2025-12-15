@@ -11,7 +11,13 @@ const COMPLAINTS_DRIVE_FOLDER_ID = '11WkMirtdIq48n5KHZkz4w0VGLj7ig6_8';
 
 function doPost(e) {
   try {
-    const body = JSON.parse(e.postData.contents);
+    let body;
+    try {
+      body = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'Invalid JSON: ' + parseErr.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     const action = body.action;
     const payload = body.payload || {};
     
