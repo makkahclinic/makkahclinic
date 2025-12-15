@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحليل ومتابعة الشكاوى - مجمع مكة الطبي</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --crimson: #9E1B32;
+            --blue: #0056A3;
+            --blue-dark: #003E75;
+            --white: #FFFFFF;
+            --off-white: #F8F9FA;
+            --gray-light: #E9ECEF;
+            --gray: #6C757D;
+            --gray-dark: #343A40;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --orange: #fd7e14;
+            --purple: #6f42c1;
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.18);
+            --radius-md: 10px;
+            --radius-lg: 14px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--blue-dark) 0%, var(--crimson) 100%);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .login-overlay.hidden { display: none; }
+        .login-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+        .login-logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--blue), var(--crimson));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            color: white;
+            font-size: 2rem;
+        }
+        .login-title {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.4rem;
+            color: var(--blue-dark);
+            margin-bottom: 8px;
+        }
+        .login-subtitle {
+            color: var(--gray);
+            margin-bottom: 30px;
+        }
+        .login-select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .login-select:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--blue), var(--crimson));
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--blue-dark), var(--crimson));
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-title h1 {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.4rem;
+        }
+        .header-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 15px;
+            border-radius: 25px;
+        }
+        .header-user i { font-size: 1.2rem; }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        .btn-light { background: rgba(255,255,255,0.2); color: white; }
+        .btn-light:hover { background: rgba(255,255,255,0.3); }
+        .btn-primary { background: var(--blue); color: white; }
+        .btn-primary:hover { background: var(--blue-dark); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: #333; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-secondary { background: var(--gray-light); color: var(--gray-dark); }
+        .btn-purple { background: var(--purple); color: white; }
+        .btn-sm { padding: 8px 14px; font-size: 0.85rem; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        .tabs {
+            display: flex;
+            gap: 5px;
+            background: var(--white);
+            padding: 6px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+            overflow-x: auto;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 600;
+            color: var(--gray);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+        .tab-btn:hover { background: var(--gray-light); }
+        .tab-btn.active { background: var(--blue); color: white; }
+        .tab-btn .count {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+        }
+        .tab-btn.active .count { background: rgba(255,255,255,0.3); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            border-top: 4px solid var(--blue);
+        }
+        .stat-card.danger { border-top-color: var(--danger); }
+        .stat-card.warning { border-top-color: var(--warning); }
+        .stat-card.success { border-top-color: var(--success); }
+        .stat-card.orange { border-top-color: var(--orange); }
+        .stat-card.purple { border-top-color: var(--purple); }
+        .stat-number {
+            font-family: 'Cairo', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--blue-dark);
+        }
+        .stat-label { color: var(--gray); font-size: 0.9rem; }
+        
+        .card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .card-title {
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--blue-dark);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-title i { color: var(--crimson); }
+        .card-body { padding: 20px; }
+        
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .filter-row select, .filter-row input {
+            padding: 8px 12px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+        }
+        
+        .table-container { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: right;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        th {
+            background: var(--off-white);
+            font-weight: 600;
+            color: var(--blue-dark);
+            white-space: nowrap;
+        }
+        tr:hover { background: var(--off-white); }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-success { background: rgba(40,167,69,0.15); color: #28a745; }
+        .badge-warning { background: rgba(255,193,7,0.2); color: #856404; }
+        .badge-danger { background: rgba(220,53,69,0.15); color: #dc3545; }
+        .badge-info { background: rgba(0,86,163,0.15); color: #0056A3; }
+        .badge-secondary { background: var(--gray-light); color: var(--gray); }
+        .badge-dark { background: #343a40; color: white; }
+        .badge-purple { background: rgba(111,66,193,0.15); color: #6f42c1; }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, var(--blue), var(--crimson));
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .modal-header h3 { font-size: 1.2rem; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .modal-body { padding: 24px; }
+        
+        .detail-section {
+            margin-bottom: 25px;
+        }
+        .detail-section h4 {
+            font-size: 1rem;
+            color: var(--blue-dark);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--gray-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .detail-item {
+            background: var(--off-white);
+            padding: 12px;
+            border-radius: var(--radius-md);
+        }
+        .detail-label {
+            font-size: 0.8rem;
+            color: var(--gray);
+            margin-bottom: 4px;
+        }
+        .detail-value { font-weight: 600; }
+        .detail-text {
+            background: var(--off-white);
+            padding: 14px;
+            border-radius: var(--radius-md);
+            line-height: 1.6;
+        }
+        
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: var(--radius-md);
+        }
+        
+        .action-section {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            margin-top: 20px;
+        }
+        .action-section h4 {
+            margin-bottom: 15px;
+            color: var(--crimson);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--radius-md);
+            font-family: 'Tajawal', sans-serif;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+        textarea.form-control { min-height: 80px; resize: vertical; }
+        
+        .timeline {
+            border-right: 3px solid var(--gray-light);
+            padding-right: 20px;
+            margin-right: 10px;
+        }
+        .timeline-item {
+            padding: 12px 0;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            right: -26px;
+            top: 16px;
+            width: 10px;
+            height: 10px;
+            background: var(--blue);
+            border-radius: 50%;
+        }
+        .timeline-date { font-size: 0.8rem; color: var(--gray); }
+        .timeline-action { font-weight: 600; margin: 4px 0; }
+        .timeline-by { font-size: 0.85rem; color: var(--gray); }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: var(--gray);
+        }
+        .loading i { font-size: 2rem; margin-bottom: 10px; display: block; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray);
+        }
+        .empty-state i { font-size: 4rem; margin-bottom: 15px; opacity: 0.3; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .fa-spin { animation: spin 1s linear infinite; }
+        
+        .row-delay-warning {
+            background: rgba(255,193,7,0.15) !important;
+            border-right: 4px solid var(--warning) !important;
+        }
+        .row-delay-danger {
+            background: rgba(220,53,69,0.15) !important;
+            border-right: 4px solid var(--danger) !important;
+        }
+        .delay-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .delay-badge.warning {
+            background: rgba(255,193,7,0.2);
+            color: #856404;
+        }
+        .delay-badge.danger {
+            background: rgba(220,53,69,0.2);
+            color: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        @media (max-width: 768px) {
+            .header { padding: 12px 15px; }
+            .header-title h1 { font-size: 1.1rem; }
+            .tab-btn span { display: none; }
+            .container { padding: 15px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .stat-number { font-size: 1.5rem; }
+            .action-buttons { flex-direction: column; }
+            .action-buttons .btn { width: 100%; justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-card">
+            <div class="login-logo">
+                <i class="fas fa-comments"></i>
+            </div>
+            <h2 class="login-title">نظام تحليل الشكاوى</h2>
+            <p class="login-subtitle">مجمع مكة الطبي بالزاهر</p>
+            
+            <select id="staffSelect" class="login-select">
+                <option value="">جاري التحميل...</option>
+            </select>
+            
+            <input type="password" id="passcodeInput" class="login-select" placeholder="الرمز السري" style="text-align:center; letter-spacing:8px; font-size:1.2rem;">
+            
+            <button id="loginBtn" class="login-btn" onclick="login()" disabled>
+                <i class="fas fa-sign-in-alt"></i> دخول
+            </button>
+            <p id="loginError" style="color:#dc3545; margin-top:10px; display:none;"></p>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="header-title">
+            <i class="fas fa-comments" style="font-size:1.8rem"></i>
+            <div>
+                <h1>تحليل ومتابعة الشكاوى</h1>
+                <small style="opacity:0.8">لجنة إدارة المخاطر - مجمع مكة الطبي</small>
+            </div>
+        </div>
+        <div class="header-user" id="currentUserDisplay">
+            <i class="fas fa-user-circle"></i>
+            <span id="currentUserName">-</span>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-light" onclick="loadData()">
+                <i class="fas fa-sync"></i> تحديث
+            </button>
+            <a href="report.html" class="btn btn-light" target="_blank">
+                <i class="fas fa-plus"></i> رفع شكوى
+            </a>
+            <button class="btn btn-light" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="dashboard">
+                <i class="fas fa-chart-pie"></i>
+                <span>لوحة المتابعة</span>
+            </button>
+            <button class="tab-btn" data-tab="complaints">
+                <i class="fas fa-list"></i>
+                <span>الشكاوى</span>
+                <span class="count" id="complaintsCount">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pending">
+                <i class="fas fa-clock"></i>
+                <span>جديدة</span>
+                <span class="count" id="pendingCount">0</span>
+            </button>
+            <button class="tab-btn" data-tab="inprogress">
+                <i class="fas fa-spinner"></i>
+                <span>قيد المعالجة</span>
+                <span class="count" id="inprogressCount">0</span>
+            </button>
+            <button class="tab-btn" data-tab="history">
+                <i class="fas fa-file-alt"></i>
+                <span>التقرير التاريخي</span>
+            </button>
+        </div>
+        
+        <div id="dashboard" class="tab-content active">
+            <div class="stats-row" id="statsRow">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalComplaints">-</div>
+                    <div class="stat-label">إجمالي الشكاوى</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-number" id="newComplaints">-</div>
+                    <div class="stat-label">شكاوى جديدة</div>
+                </div>
+                <div class="stat-card orange">
+                    <div class="stat-number" id="inProgressComplaints">-</div>
+                    <div class="stat-label">قيد المعالجة</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-number" id="closedComplaints">-</div>
+                    <div class="stat-label">تم الحل</div>
+                </div>
+                <div class="stat-card purple">
+                    <div class="stat-number" id="avgResolution">-</div>
+                    <div class="stat-label">متوسط أيام الحل</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-chart-bar"></i> توزيع الشكاوى</h3>
+                </div>
+                <div class="card-body" id="chartsContainer">
+                    <div class="loading"><i class="fas fa-spinner fa-spin"></i></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="complaints" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-list"></i> جميع الشكاوى</h3>
+                </div>
+                <div class="card-body">
+                    <div class="filter-row">
+                        <select id="filterStatus" onchange="loadComplaints()">
+                            <option value="all">كل الحالات</option>
+                            <option value="new">جديدة</option>
+                            <option value="in_progress">قيد المعالجة</option>
+                            <option value="resolved">تم الحل</option>
+                            <option value="closed">مغلقة</option>
+                        </select>
+                        <select id="filterType" onchange="loadComplaints()">
+                            <option value="all">كل الأنواع</option>
+                            <option value="شكوى موظف">شكوى موظف</option>
+                            <option value="شكوى مريض">شكوى مريض</option>
+                            <option value="شكوى زائر">شكوى زائر</option>
+                        </select>
+                    </div>
+                    <div class="table-container" id="complaintsTable">
+                        <div class="loading"><i class="fas fa-spinner fa-spin"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="pending" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-clock"></i> الشكاوى الجديدة</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-container" id="pendingTable">
+                        <div class="loading"><i class="fas fa-spinner fa-spin"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="inprogress" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-spinner"></i> الشكاوى قيد المعالجة</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-container" id="inprogressTable">
+                        <div class="loading"><i class="fas fa-spinner fa-spin"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="history" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-filter"></i> فلترة التقرير</h3>
+                </div>
+                <div class="card-body">
+                    <div class="filter-row">
+                        <div>
+                            <label style="display:block;margin-bottom:5px;font-weight:600;">من تاريخ</label>
+                            <input type="date" id="historyDateFrom">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:5px;font-weight:600;">إلى تاريخ</label>
+                            <input type="date" id="historyDateTo">
+                        </div>
+                        <select id="historyType">
+                            <option value="all">كل الأنواع</option>
+                            <option value="شكوى موظف">شكوى موظف</option>
+                            <option value="شكوى مريض">شكوى مريض</option>
+                            <option value="شكوى زائر">شكوى زائر</option>
+                        </select>
+                        <select id="historyStatus">
+                            <option value="all">كل الحالات</option>
+                            <option value="new">جديدة</option>
+                            <option value="in_progress">قيد المعالجة</option>
+                            <option value="resolved">تم الحل</option>
+                            <option value="closed">مغلقة</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadHistoryReport()">
+                            <i class="fas fa-search"></i> بحث
+                        </button>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:15px;">
+                        <button class="btn btn-success" onclick="exportHistoryExcel()">
+                            <i class="fas fa-file-excel"></i> تصدير Excel
+                        </button>
+                        <button class="btn btn-secondary" onclick="printHistory()">
+                            <i class="fas fa-print"></i> طباعة
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-file-alt"></i> نتائج البحث</h3>
+                    <span id="historyResultCount" class="badge badge-info">0 شكوى</span>
+                </div>
+                <div class="card-body" id="historyContent">
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>اختر الفلاتر واضغط بحث</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-alt"></i> تفاصيل الشكوى</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwfk24916jQVXpzgPG0vddTvD5DIIe0b49tBa_bkfH-qAKoyuuy7GG6HuFb8CpZuoPf/exec";
+        
+        const STATUS = {
+            'new': { name: 'جديدة', badge: 'warning' },
+            'in_progress': { name: 'قيد المعالجة', badge: 'info' },
+            'resolved': { name: 'تم الحل', badge: 'success' },
+            'closed': { name: 'مغلقة', badge: 'secondary' }
+        };
+        
+        let currentUser = null;
+        let staffList = [];
+        let currentComplaint = null;
+        let historyComplaints = [];
+        
+        let assignmentList = [];
+        let escalationList = [];
+        
+        async function apiCall(action, payload = {}) {
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action, payload }),
+                    redirect: 'follow'
+                });
+                const text = await response.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Parse error:', text);
+                    return { ok: false, error: 'Invalid response' };
+                }
+            } catch (err) {
+                console.error('API Error:', err);
+                return { ok: false, error: err.message };
+            }
+        }
+        
+        async function loadStaffList() {
+            try {
+                const result = await apiCall('getComplaintStaff');
+                if (result.ok) {
+                    staffList = result.staff || [];
+                    assignmentList = result.assignment || [];
+                    escalationList = result.escalation || [];
+                    
+                    const select = document.getElementById('staffSelect');
+                    select.innerHTML = '<option value="">اختر اسمك للدخول</option>';
+                    staffList.filter(s => s.hasCode).forEach(s => {
+                        select.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+                    });
+                    document.getElementById('loginBtn').disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('staffSelect').innerHTML = '<option value="">خطأ في التحميل</option>';
+            }
+        }
+        
+        async function login() {
+            const select = document.getElementById('staffSelect');
+            const name = select.value;
+            const passcode = document.getElementById('passcodeInput').value;
+            const errorEl = document.getElementById('loginError');
+            
+            if (!name) {
+                errorEl.textContent = 'الرجاء اختيار اسمك';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            if (!passcode) {
+                errorEl.textContent = 'الرجاء إدخال الرمز السري';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('loginBtn').disabled = true;
+            document.getElementById('loginBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+            
+            try {
+                const result = await apiCall('verifyComplaintPasscode', { staffName: name, passcode: passcode });
+                
+                if (result.ok && result.verified) {
+                    currentUser = { name: name };
+                    localStorage.setItem('complaintUser', JSON.stringify(currentUser));
+                    errorEl.style.display = 'none';
+                    document.getElementById('loginOverlay').classList.add('hidden');
+                    document.getElementById('currentUserName').textContent = currentUser.name;
+                    loadData();
+                } else {
+                    errorEl.textContent = result.error || 'الاسم أو الرمز غير صحيح';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = 'خطأ في الاتصال بالسيرفر';
+                errorEl.style.display = 'block';
+            }
+            
+            document.getElementById('loginBtn').disabled = false;
+            document.getElementById('loginBtn').innerHTML = '<i class="fas fa-sign-in-alt"></i> دخول';
+        }
+        
+        function populateAssignmentDropdowns() {
+            const assignSelects = document.querySelectorAll('.assign-select');
+            const escalateSelects = document.querySelectorAll('.escalate-select');
+            
+            assignSelects.forEach(select => {
+                select.innerHTML = '<option value="">اختر المكلف...</option>';
+                assignmentList.forEach(name => {
+                    select.innerHTML += `<option value="${name}">${name}</option>`;
+                });
+            });
+            
+            escalateSelects.forEach(select => {
+                select.innerHTML = '<option value="">اختر للتصعيد...</option>';
+                escalationList.forEach(name => {
+                    select.innerHTML += `<option value="${name}">${name}</option>`;
+                });
+            });
+        }
+        
+        function logout() {
+            localStorage.removeItem('complaintUser');
+            currentUser = null;
+            document.getElementById('loginOverlay').classList.remove('hidden');
+        }
+        
+        function checkLogin() {
+            const saved = localStorage.getItem('complaintUser');
+            if (saved) {
+                currentUser = JSON.parse(saved);
+                document.getElementById('loginOverlay').classList.add('hidden');
+                document.getElementById('currentUserName').textContent = currentUser.name;
+                loadData();
+            }
+            loadStaffList();
+        }
+        
+        async function loadData() {
+            loadStats();
+            loadComplaints();
+            loadPendingComplaints();
+            loadInProgressComplaints();
+            populateAssignmentDropdowns();
+        }
+        
+        async function loadStats() {
+            try {
+                const result = await apiCall('getComplaintStats', {});
+                if (result.ok) {
+                    document.getElementById('totalComplaints').textContent = result.total || 0;
+                    document.getElementById('newComplaints').textContent = result.new || 0;
+                    document.getElementById('inProgressComplaints').textContent = result.in_progress || 0;
+                    document.getElementById('closedComplaints').textContent = result.closed || 0;
+                    document.getElementById('avgResolution').textContent = result.avgResolutionTime || 0;
+                    
+                    renderCharts(result);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        function renderCharts(data) {
+            let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;">';
+            
+            html += '<div><h4 style="margin-bottom:15px;color:var(--blue-dark);">حسب نوع الشاكي</h4><div style="display:flex;flex-direction:column;gap:8px;">';
+            for (const [type, count] of Object.entries(data.byType || {})) {
+                if (count > 0) {
+                    const pct = data.total > 0 ? Math.round((count / data.total) * 100) : 0;
+                    html += `<div style="display:flex;align-items:center;gap:10px;">
+                        <span style="flex:1">${type}</span>
+                        <div style="flex:2;background:var(--gray-light);height:20px;border-radius:10px;overflow:hidden;">
+                            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--blue),var(--crimson))"></div>
+                        </div>
+                        <span style="width:50px;text-align:left;font-weight:600;">${count}</span>
+                    </div>`;
+                }
+            }
+            html += '</div></div>';
+            
+            html += '<div><h4 style="margin-bottom:15px;color:var(--blue-dark);">حسب الحالة</h4><div style="display:flex;flex-wrap:wrap;gap:10px;">';
+            const statusColors = { 'new': '#ffc107', 'in_progress': '#0056A3', 'resolved': '#28a745', 'closed': '#6c757d' };
+            for (const [status, count] of Object.entries(data.byStatus || {})) {
+                const statusInfo = STATUS[status] || { name: status };
+                html += `<div style="flex:1;min-width:100px;padding:15px;background:var(--off-white);border-radius:10px;text-align:center;border-top:4px solid ${statusColors[status] || '#6c757d'}">
+                    <div style="font-size:1.5rem;font-weight:700;">${count}</div>
+                    <div style="font-size:0.85rem;color:var(--gray);">${statusInfo.name}</div>
+                </div>`;
+            }
+            html += '</div></div>';
+            
+            html += '</div>';
+            
+            document.getElementById('chartsContainer').innerHTML = html;
+        }
+        
+        function calculateDelay(dateStr, status) {
+            if (status === 'closed' || status === 'resolved') return { hours: 0, days: 0 };
+            const incDate = new Date(dateStr);
+            const now = new Date();
+            const diff = now - incDate;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const days = Math.floor(hours / 24);
+            return { hours, days };
+        }
+        
+        async function loadComplaints() {
+            const container = document.getElementById('complaintsTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            const params = {
+                status: document.getElementById('filterStatus').value,
+                complaintType: document.getElementById('filterType').value
+            };
+            
+            try {
+                const result = await apiCall('getComplaints', params);
+                if (!result.ok || !result.complaints?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد شكاوى</h3></div>';
+                    return;
+                }
+                
+                document.getElementById('complaintsCount').textContent = result.complaints.length;
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم الشكوى</th>
+                        <th>التاريخ</th>
+                        <th>النوع</th>
+                        <th>مقدم الشكوى</th>
+                        <th>الموقع</th>
+                        <th>المسؤول</th>
+                        <th>الحالة</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                result.complaints.forEach(comp => {
+                    const stat = STATUS[comp.status] || { name: comp.status, badge: 'secondary' };
+                    const delayInfo = calculateDelay(comp.date, comp.status);
+                    let rowClass = '';
+                    let delayBadge = '';
+                    
+                    if (delayInfo.hours > 48 && comp.status !== 'closed' && comp.status !== 'resolved') {
+                        rowClass = 'row-delay-danger';
+                        delayBadge = `<span class="delay-badge danger"><i class="fas fa-clock"></i> ${delayInfo.days} يوم</span>`;
+                    } else if (delayInfo.hours > 24 && comp.status !== 'closed' && comp.status !== 'resolved') {
+                        rowClass = 'row-delay-warning';
+                        delayBadge = `<span class="delay-badge warning"><i class="fas fa-clock"></i> ${delayInfo.hours}س</span>`;
+                    }
+                    
+                    html += `<tr class="${rowClass}">
+                        <td><strong>${comp.id}</strong></td>
+                        <td>${comp.date} ${delayBadge}</td>
+                        <td>${comp.complaintType}</td>
+                        <td>${comp.complainantName}</td>
+                        <td>${comp.locations || '-'}</td>
+                        <td>${comp.assignedTo || '<span style="color:var(--gray);">غير معين</span>'}</td>
+                        <td><span class="badge badge-${stat.badge}">${stat.name}</span></td>
+                        <td><button class="btn btn-secondary btn-sm" onclick="viewComplaint('${comp.id}')"><i class="fas fa-eye"></i></button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في التحميل</p></div>';
+            }
+        }
+        
+        async function loadPendingComplaints() {
+            const container = document.getElementById('pendingTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getComplaints', { status: 'new' });
+                if (!result.ok || !result.complaints?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>لا توجد شكاوى جديدة</h3></div>';
+                    document.getElementById('pendingCount').textContent = '0';
+                    return;
+                }
+                
+                document.getElementById('pendingCount').textContent = result.complaints.length;
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم الشكوى</th>
+                        <th>التاريخ</th>
+                        <th>النوع</th>
+                        <th>مقدم الشكوى</th>
+                        <th>الموقع</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                result.complaints.forEach(comp => {
+                    html += `<tr>
+                        <td><strong>${comp.id}</strong></td>
+                        <td>${comp.date}</td>
+                        <td>${comp.complaintType}</td>
+                        <td>${comp.complainantName}</td>
+                        <td>${comp.locations || '-'}</td>
+                        <td><button class="btn btn-primary btn-sm" onclick="viewComplaint('${comp.id}')"><i class="fas fa-user-plus"></i> معالجة</button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        async function loadInProgressComplaints() {
+            const container = document.getElementById('inprogressTable');
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getComplaints', { status: 'in_progress' });
+                if (!result.ok || !result.complaints?.length) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>لا توجد شكاوى قيد المعالجة</h3></div>';
+                    document.getElementById('inprogressCount').textContent = '0';
+                    return;
+                }
+                
+                document.getElementById('inprogressCount').textContent = result.complaints.length;
+                
+                let html = `<table>
+                    <thead><tr>
+                        <th>رقم الشكوى</th>
+                        <th>التاريخ</th>
+                        <th>النوع</th>
+                        <th>مقدم الشكوى</th>
+                        <th>المسؤول</th>
+                        <th>إجراء</th>
+                    </tr></thead><tbody>`;
+                
+                result.complaints.forEach(comp => {
+                    html += `<tr>
+                        <td><strong>${comp.id}</strong></td>
+                        <td>${comp.date}</td>
+                        <td>${comp.complaintType}</td>
+                        <td>${comp.complainantName}</td>
+                        <td>${comp.assignedTo || '-'}</td>
+                        <td><button class="btn btn-success btn-sm" onclick="viewComplaint('${comp.id}')"><i class="fas fa-check"></i> متابعة</button></td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        
+        async function viewComplaint(id) {
+            const modal = document.getElementById('detailModal');
+            const body = document.getElementById('modalBody');
+            modal.classList.add('active');
+            body.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const result = await apiCall('getComplaintDetails', { complaintId: id });
+                if (!result.ok || !result.success) throw new Error(result.error);
+                
+                currentComplaint = result.complaint;
+                const comp = result.complaint;
+                const stat = STATUS[comp.status] || { name: comp.status };
+                
+                let html = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:15px;margin-bottom:20px;padding:15px;background:var(--off-white);border-radius:10px;">
+                        <div>
+                            <h2 style="margin:0;color:var(--blue-dark);">${comp.id}</h2>
+                            <span class="badge badge-${STATUS[comp.status]?.badge || 'secondary'}">${stat.name}</span>
+                            ${comp.assignedTo ? `<span class="badge badge-purple" style="margin-right:5px;">المسؤول: ${comp.assignedTo}</span>` : ''}
+                        </div>
+                        <div>
+                            <span class="badge badge-info">${comp.complaintType}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-user"></i> معلومات مقدم الشكوى</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item"><div class="detail-label">الاسم</div><div class="detail-value">${comp.complainantName}</div></div>
+                            <div class="detail-item"><div class="detail-label">الجوال</div><div class="detail-value">${comp.complainantPhone || '-'}</div></div>
+                            <div class="detail-item"><div class="detail-label">البريد</div><div class="detail-value">${comp.complainantEmail || '-'}</div></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-info-circle"></i> تفاصيل الشكوى</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item"><div class="detail-label">التاريخ والوقت</div><div class="detail-value">${comp.complaintDateTime || comp.date}</div></div>
+                            <div class="detail-item"><div class="detail-label">الموقع</div><div class="detail-value">${comp.locations || '-'}</div></div>
+                            <div class="detail-item"><div class="detail-label">الشكوى ضد</div><div class="detail-value">${comp.complaintAgainst || '-'}</div></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-align-left"></i> وصف الشكوى</h4>
+                        <div class="detail-text">${comp.complaintDescription || '-'}</div>
+                    </div>
+                    
+                    ${comp.additionalNotes ? `
+                    <div class="detail-section">
+                        <h4><i class="fas fa-sticky-note"></i> ملاحظات إضافية</h4>
+                        <div class="detail-text">${comp.additionalNotes}</div>
+                    </div>
+                    ` : ''}
+                    
+                    ${comp.resolution ? `
+                    <div class="detail-section">
+                        <h4><i class="fas fa-check-circle"></i> الحل والإجراءات</h4>
+                        <div class="detail-text">${comp.resolution}</div>
+                    </div>
+                    ` : ''}
+                `;
+                
+                if (result.followups?.length) {
+                    html += `<div class="detail-section"><h4><i class="fas fa-history"></i> سجل المتابعات</h4><div class="timeline">`;
+                    result.followups.forEach(f => {
+                        html += `<div class="timeline-item">
+                            <div class="timeline-date">${f.date}</div>
+                            <div class="timeline-action">${f.action}</div>
+                            <div class="timeline-by">${f.by} ${f.notes ? '- ' + f.notes : ''}</div>
+                        </div>`;
+                    });
+                    html += '</div></div>';
+                }
+                
+                if (comp.status !== 'closed') {
+                    html += `
+                        <div class="action-section" id="actionSection">
+                            <h4><i class="fas fa-cogs"></i> إجراءات المتابعة</h4>
+                            <div class="form-group">
+                                <label>تعيين مسؤول</label>
+                                <select id="assignSelect" class="form-control">
+                                    <option value="">اختر المسؤول...</option>
+                                    ${staffList.map(s => `<option value="${s.name}" ${comp.assignedTo === s.name ? 'selected' : ''}>${s.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>تغيير الحالة</label>
+                                <select id="statusSelect" class="form-control">
+                                    <option value="new" ${comp.status === 'new' ? 'selected' : ''}>جديدة</option>
+                                    <option value="in_progress" ${comp.status === 'in_progress' ? 'selected' : ''}>قيد المعالجة</option>
+                                    <option value="resolved" ${comp.status === 'resolved' ? 'selected' : ''}>تم الحل</option>
+                                    <option value="closed" ${comp.status === 'closed' ? 'selected' : ''}>مغلقة</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>الحل أو الإجراء المتخذ</label>
+                                <textarea id="resolutionText" class="form-control" rows="4" placeholder="اكتب الحل أو الإجراء المتخذ...">${comp.resolution || ''}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>ملاحظات المتابعة</label>
+                                <textarea id="followupNotes" class="form-control" rows="2" placeholder="أي ملاحظات إضافية..."></textarea>
+                            </div>
+                            <button class="btn btn-success" onclick="saveComplaintAction('${comp.id}')">
+                                <i class="fas fa-save"></i> حفظ التغييرات
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                body.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                body.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل البيانات</p></div>';
+            }
+        }
+        
+        async function saveComplaintAction(id) {
+            const assignedTo = document.getElementById('assignSelect')?.value || '';
+            const status = document.getElementById('statusSelect')?.value || '';
+            const resolution = document.getElementById('resolutionText')?.value || '';
+            const notes = document.getElementById('followupNotes')?.value || '';
+            
+            try {
+                const result = await apiCall('updateComplaint', {
+                    complaintId: id,
+                    assignedTo: assignedTo,
+                    status: status,
+                    resolution: resolution,
+                    notes: notes,
+                    actionBy: currentUser?.name || ''
+                });
+                
+                if (result.ok) {
+                    alert('تم الحفظ بنجاح');
+                    closeModal();
+                    loadData();
+                } else {
+                    alert('خطأ: ' + (result.error || 'فشل في الحفظ'));
+                }
+            } catch (err) {
+                alert('خطأ في الاتصال بالسيرفر');
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+            currentComplaint = null;
+        }
+        
+        function initHistoryDates() {
+            const today = new Date();
+            const monthAgo = new Date(today);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            
+            document.getElementById('historyDateFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('historyDateTo').value = today.toISOString().split('T')[0];
+        }
+        
+        async function loadHistoryReport() {
+            const content = document.getElementById('historyContent');
+            content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            const params = {
+                dateFrom: document.getElementById('historyDateFrom').value,
+                dateTo: document.getElementById('historyDateTo').value,
+                complaintType: document.getElementById('historyType').value,
+                status: document.getElementById('historyStatus').value
+            };
+            
+            try {
+                const result = await apiCall('getComplaintHistory', params);
+                if (!result.ok || !result.complaints?.length) {
+                    content.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>لا توجد شكاوى في هذه الفترة</h3></div>';
+                    document.getElementById('historyResultCount').textContent = '0 شكوى';
+                    historyComplaints = [];
+                    return;
+                }
+                
+                historyComplaints = result.complaints;
+                document.getElementById('historyResultCount').textContent = `${result.complaints.length} شكوى`;
+                
+                let html = '';
+                result.complaints.forEach(comp => {
+                    const statInfo = STATUS[comp.status] || { name: comp.status };
+                    html += `
+                        <div style="background:var(--off-white); border-radius:var(--radius-md); margin-bottom:10px; overflow:hidden;">
+                            <div style="padding:12px 15px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; border-bottom:1px solid var(--gray-light);">
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <strong style="color:var(--blue-dark);">${comp.id}</strong>
+                                    <span class="badge badge-${STATUS[comp.status]?.badge || 'secondary'}">${statInfo.name}</span>
+                                    <span class="badge badge-info">${comp.complaintType}</span>
+                                </div>
+                                <button class="btn btn-sm btn-secondary" onclick="viewComplaint('${comp.id}')">
+                                    <i class="fas fa-eye"></i> عرض
+                                </button>
+                            </div>
+                            <div style="padding:15px;">
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:12px;">
+                                    <div style="background:white; padding:10px; border-radius:8px;">
+                                        <div style="font-size:0.75rem; color:var(--gray);">التاريخ</div>
+                                        <div style="font-weight:600;">${comp.date || '-'}</div>
+                                    </div>
+                                    <div style="background:white; padding:10px; border-radius:8px;">
+                                        <div style="font-size:0.75rem; color:var(--gray);">مقدم الشكوى</div>
+                                        <div style="font-weight:600;">${comp.complainantName || '-'}</div>
+                                    </div>
+                                    <div style="background:white; padding:10px; border-radius:8px;">
+                                        <div style="font-size:0.75rem; color:var(--gray);">الموقع</div>
+                                        <div style="font-weight:600;">${comp.locations || '-'}</div>
+                                    </div>
+                                    ${comp.assignedTo ? `<div style="background:white; padding:10px; border-radius:8px;"><div style="font-size:0.75rem; color:var(--gray);">المسؤول</div><div style="font-weight:600;">${comp.assignedTo}</div></div>` : ''}
+                                </div>
+                                <div style="background:white; padding:12px; border-radius:8px; line-height:1.6;">
+                                    <div style="font-size:0.75rem; color:var(--gray); margin-bottom:5px;">الوصف</div>
+                                    ${(comp.complaintDescription || 'لا يوجد وصف').substring(0, 200)}${(comp.complaintDescription || '').length > 200 ? '...' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                content.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في التحميل</p></div>';
+            }
+        }
+        
+        function exportHistoryExcel() {
+            if (historyComplaints.length === 0) {
+                alert('لا توجد بيانات للتصدير');
+                return;
+            }
+            
+            const data = historyComplaints.map(comp => ({
+                'رقم الشكوى': comp.id,
+                'التاريخ': comp.date,
+                'نوع الشكوى': comp.complaintType,
+                'مقدم الشكوى': comp.complainantName,
+                'الجوال': comp.complainantPhone || '',
+                'الموقع': comp.locations || '',
+                'الشكوى ضد': comp.complaintAgainst || '',
+                'الوصف': comp.complaintDescription || '',
+                'الحالة': STATUS[comp.status]?.name || comp.status,
+                'المسؤول': comp.assignedTo || '',
+                'الحل': comp.resolution || ''
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'تقرير الشكاوى');
+            
+            const fromDate = document.getElementById('historyDateFrom').value || 'all';
+            const toDate = document.getElementById('historyDateTo').value || 'all';
+            XLSX.writeFile(wb, 'تقرير_الشكاوى_' + fromDate + '_' + toDate + '.xlsx');
+        }
+        
+        function printHistory() {
+            if (historyComplaints.length === 0) {
+                alert('لا توجد بيانات للطباعة');
+                return;
+            }
+            
+            const fromDate = document.getElementById('historyDateFrom').value;
+            const toDate = document.getElementById('historyDateTo').value;
+            const today = new Date().toLocaleDateString('ar-SA');
+            
+            const total = historyComplaints.length;
+            const closed = historyComplaints.filter(i => i.status === 'closed' || i.status === 'resolved').length;
+            const open = total - closed;
+            
+            let tableRows = '';
+            historyComplaints.forEach((comp, idx) => {
+                const statInfo = STATUS[comp.status] || { name: comp.status };
+                tableRows += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><strong>${comp.id}</strong></td>
+                        <td>${comp.date || '-'}</td>
+                        <td>${comp.complaintType}</td>
+                        <td>${comp.complainantName || '-'}</td>
+                        <td>${comp.locations || '-'}</td>
+                        <td>${statInfo.name}</td>
+                        <td>${comp.assignedTo || '-'}</td>
+                    </tr>
+                `;
+            });
+            
+            const printWin = window.open('', '_blank');
+            printWin.document.write(`
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>تقرير الشكاوى</title>
+                    <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;600;700&display=swap');
+                        * { margin:0; padding:0; box-sizing:border-box; }
+                        body { font-family:'Tajawal',sans-serif; padding:15px; background:#fff; color:#333; font-size:11px; }
+                        
+                        .report-header {
+                            display:flex;
+                            align-items:center;
+                            justify-content:space-between;
+                            border-bottom:3px solid #003E75;
+                            padding-bottom:15px;
+                            margin-bottom:20px;
+                        }
+                        .logo-section {
+                            display:flex;
+                            align-items:center;
+                            gap:12px;
+                        }
+                        .logo {
+                            width:70px;
+                            height:70px;
+                            object-fit:contain;
+                        }
+                        .org-info h1 {
+                            font-family:'Cairo',sans-serif;
+                            font-size:18px;
+                            color:#003E75;
+                            margin-bottom:2px;
+                        }
+                        .org-info p {
+                            color:#666;
+                            font-size:11px;
+                        }
+                        .report-info {
+                            text-align:left;
+                            font-size:10px;
+                            color:#666;
+                        }
+                        .report-info strong { color:#003E75; }
+                        
+                        .report-title {
+                            background:linear-gradient(135deg, #003E75, #9E1B32);
+                            color:white;
+                            padding:12px 20px;
+                            border-radius:8px;
+                            text-align:center;
+                            margin-bottom:15px;
+                        }
+                        .report-title h2 {
+                            font-family:'Cairo',sans-serif;
+                            font-size:16px;
+                            margin-bottom:4px;
+                        }
+                        .report-title p { font-size:11px; opacity:0.9; }
+                        
+                        .stats-grid {
+                            display:grid;
+                            grid-template-columns:repeat(3,1fr);
+                            gap:10px;
+                            margin-bottom:20px;
+                        }
+                        .stat-box {
+                            background:#f8f9fa;
+                            border:1px solid #e9ecef;
+                            border-radius:6px;
+                            padding:10px;
+                            text-align:center;
+                        }
+                        .stat-box.primary { border-top:3px solid #0056A3; }
+                        .stat-box.warning { border-top:3px solid #ffc107; }
+                        .stat-box.success { border-top:3px solid #28a745; }
+                        .stat-num {
+                            font-family:'Cairo',sans-serif;
+                            font-size:22px;
+                            font-weight:800;
+                            color:#003E75;
+                        }
+                        .stat-lbl { font-size:10px; color:#666; }
+                        
+                        table {
+                            width:100%;
+                            border-collapse:collapse;
+                            margin-bottom:20px;
+                            font-size:10px;
+                        }
+                        th {
+                            background:#003E75;
+                            color:white;
+                            padding:8px 6px;
+                            text-align:right;
+                            font-weight:600;
+                            white-space:nowrap;
+                        }
+                        td {
+                            padding:7px 6px;
+                            border-bottom:1px solid #e9ecef;
+                            vertical-align:top;
+                        }
+                        tr:nth-child(even) { background:#f8f9fa; }
+                        
+                        .footer {
+                            border-top:2px solid #e9ecef;
+                            padding-top:10px;
+                            display:flex;
+                            justify-content:space-between;
+                            font-size:9px;
+                            color:#666;
+                        }
+                        
+                        @media print {
+                            body { padding:10px; }
+                            table { page-break-inside:auto; }
+                            tr { page-break-inside:avoid; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-header">
+                        <div class="logo-section">
+                            <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" class="logo" alt="شعار مجمع مكة الطبي">
+                            <div class="org-info">
+                                <h1>مجمع مكة الطبي بالزاهر</h1>
+                                <p>لجنة إدارة المخاطر - إدارة الجودة</p>
+                            </div>
+                        </div>
+                        <div class="report-info">
+                            <p><strong>تاريخ التقرير:</strong> ${today}</p>
+                            <p><strong>الفترة:</strong> ${fromDate} إلى ${toDate}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="report-title">
+                        <h2>التقرير التاريخي للشكاوى</h2>
+                        <p>Complaints Historical Report</p>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-box primary">
+                            <div class="stat-num">${total}</div>
+                            <div class="stat-lbl">إجمالي الشكاوى</div>
+                        </div>
+                        <div class="stat-box warning">
+                            <div class="stat-num">${open}</div>
+                            <div class="stat-lbl">شكاوى مفتوحة</div>
+                        </div>
+                        <div class="stat-box success">
+                            <div class="stat-num">${closed}</div>
+                            <div class="stat-lbl">شكاوى محلولة</div>
+                        </div>
+                    </div>
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>رقم الشكوى</th>
+                                <th>التاريخ</th>
+                                <th>النوع</th>
+                                <th>مقدم الشكوى</th>
+                                <th>الموقع</th>
+                                <th>الحالة</th>
+                                <th>المسؤول</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                    
+                    <div class="footer">
+                        <div>
+                            <strong>مجمع مكة الطبي بالزاهر</strong> - نظام إدارة الشكاوى
+                        </div>
+                        <div>
+                            صفحة 1 | تم الإنشاء: ${today}
+                        </div>
+                    </div>
+                    
+                    <script>
+                        window.onload = function() { 
+                            setTimeout(function() { window.print(); }, 500);
+                        };
+                    <\/script>
+                </body>
+                </html>
+            `);
+            printWin.document.close();
+        }
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                this.classList.add('active');
+                document.getElementById(this.dataset.tab).classList.add('active');
+                
+                if (this.dataset.tab === 'history') {
+                    initHistoryDates();
+                }
+            });
+        });
+        
+        checkLogin();
+    </script>
+</body>
+</html>
