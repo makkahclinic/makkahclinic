@@ -2007,40 +2007,259 @@
         }
         
         function printHistory() {
-            const content = document.getElementById('historyContent').innerHTML;
-            const stats = document.getElementById('historyStats').innerHTML;
+            if (historyIncidents.length === 0) {
+                alert('لا توجد بيانات للطباعة');
+                return;
+            }
+            
+            const fromDate = document.getElementById('historyDateFrom').value;
+            const toDate = document.getElementById('historyDateTo').value;
+            const today = new Date().toLocaleDateString('ar-SA');
+            
+            const total = historyIncidents.length;
+            const closed = historyIncidents.filter(i => i.status === 'closed').length;
+            const open = total - closed;
+            const rcaReq = historyIncidents.filter(i => i.rcaRequired).length;
+            const escalated = historyIncidents.filter(i => i.status === 'escalated').length;
+            
+            let tableRows = '';
+            historyIncidents.forEach((inc, idx) => {
+                const sevInfo = SEVERITY[inc.severity] || { name: inc.severity };
+                const statInfo = STATUS[inc.status] || { name: inc.status };
+                const typeName = INCIDENT_TYPES[inc.type] || inc.typeName || inc.type;
+                tableRows += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${inc.date || '-'}</td>
+                        <td>${inc.department || '-'}</td>
+                        <td>${typeName}</td>
+                        <td><span class="sev-badge" style="background:${sevInfo.color || '#6c757d'}; color:white;">${sevInfo.name}</span></td>
+                        <td>${statInfo.name}</td>
+                        <td>${inc.assignedTo || '-'}</td>
+                        <td style="max-width:200px; font-size:0.75rem;">${(inc.description || '').substring(0, 80)}${(inc.description || '').length > 80 ? '...' : ''}</td>
+                    </tr>
+                `;
+            });
+            
             const printWin = window.open('', '_blank');
             printWin.document.write(`
                 <!DOCTYPE html>
                 <html lang="ar" dir="rtl">
                 <head>
                     <meta charset="UTF-8">
-                    <title>التقرير التاريخي - حوادث السلامة</title>
-                    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;600&display=swap" rel="stylesheet">
-                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+                    <title>تقرير حوادث سلامة المرضى</title>
                     <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;600;700&display=swap');
                         * { margin:0; padding:0; box-sizing:border-box; }
-                        body { font-family:'Tajawal',sans-serif; padding:20px; }
-                        .header { background:#003E75; color:white; padding:15px 20px; margin-bottom:20px; border-radius:10px; text-align:center; }
-                        .stats-row { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
-                        .stat-card { background:#f8f9fa; padding:15px; text-align:center; border-radius:8px; border-top:4px solid #0056A3; }
-                        .stat-number { font-size:1.5rem; font-weight:800; color:#003E75; }
-                        .stat-label { font-size:0.8rem; color:#6c757d; }
-                        .badge { display:inline-block; padding:3px 8px; border-radius:15px; font-size:0.75rem; }
-                        .badge-success { background:rgba(40,167,69,0.15); color:#28a745; }
-                        .badge-warning { background:rgba(255,193,7,0.2); color:#856404; }
-                        .badge-danger { background:rgba(220,53,69,0.15); color:#dc3545; }
-                        @media print { body { padding:10px; } }
+                        body { font-family:'Tajawal',sans-serif; padding:15px; background:#fff; color:#333; font-size:11px; }
+                        
+                        .report-header {
+                            display:flex;
+                            align-items:center;
+                            justify-content:space-between;
+                            border-bottom:3px solid #003E75;
+                            padding-bottom:15px;
+                            margin-bottom:20px;
+                        }
+                        .logo-section {
+                            display:flex;
+                            align-items:center;
+                            gap:12px;
+                        }
+                        .logo {
+                            width:70px;
+                            height:70px;
+                            background:linear-gradient(135deg, #003E75, #9E1B32);
+                            border-radius:50%;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            color:white;
+                            font-size:28px;
+                            font-weight:bold;
+                        }
+                        .org-info h1 {
+                            font-family:'Cairo',sans-serif;
+                            font-size:18px;
+                            color:#003E75;
+                            margin-bottom:2px;
+                        }
+                        .org-info p {
+                            color:#666;
+                            font-size:11px;
+                        }
+                        .report-info {
+                            text-align:left;
+                            font-size:10px;
+                            color:#666;
+                        }
+                        .report-info strong { color:#003E75; }
+                        
+                        .report-title {
+                            background:linear-gradient(135deg, #003E75, #9E1B32);
+                            color:white;
+                            padding:12px 20px;
+                            border-radius:8px;
+                            text-align:center;
+                            margin-bottom:15px;
+                        }
+                        .report-title h2 {
+                            font-family:'Cairo',sans-serif;
+                            font-size:16px;
+                            margin-bottom:4px;
+                        }
+                        .report-title p { font-size:11px; opacity:0.9; }
+                        
+                        .stats-grid {
+                            display:grid;
+                            grid-template-columns:repeat(5,1fr);
+                            gap:10px;
+                            margin-bottom:20px;
+                        }
+                        .stat-box {
+                            background:#f8f9fa;
+                            border:1px solid #e9ecef;
+                            border-radius:6px;
+                            padding:10px;
+                            text-align:center;
+                        }
+                        .stat-box.primary { border-top:3px solid #0056A3; }
+                        .stat-box.warning { border-top:3px solid #ffc107; }
+                        .stat-box.success { border-top:3px solid #28a745; }
+                        .stat-box.danger { border-top:3px solid #dc3545; }
+                        .stat-box.purple { border-top:3px solid #6f42c1; }
+                        .stat-num {
+                            font-family:'Cairo',sans-serif;
+                            font-size:22px;
+                            font-weight:800;
+                            color:#003E75;
+                        }
+                        .stat-lbl { font-size:10px; color:#666; }
+                        
+                        table {
+                            width:100%;
+                            border-collapse:collapse;
+                            margin-bottom:20px;
+                            font-size:10px;
+                        }
+                        th {
+                            background:#003E75;
+                            color:white;
+                            padding:8px 6px;
+                            text-align:right;
+                            font-weight:600;
+                            white-space:nowrap;
+                        }
+                        td {
+                            padding:7px 6px;
+                            border-bottom:1px solid #e9ecef;
+                            vertical-align:top;
+                        }
+                        tr:nth-child(even) { background:#f8f9fa; }
+                        tr:hover { background:#e9ecef; }
+                        
+                        .sev-badge {
+                            display:inline-block;
+                            padding:2px 8px;
+                            border-radius:10px;
+                            font-size:9px;
+                            font-weight:600;
+                        }
+                        
+                        .footer {
+                            border-top:2px solid #e9ecef;
+                            padding-top:10px;
+                            display:flex;
+                            justify-content:space-between;
+                            font-size:9px;
+                            color:#666;
+                        }
+                        
+                        @media print {
+                            body { padding:10px; }
+                            .report-header { page-break-after:avoid; }
+                            table { page-break-inside:auto; }
+                            tr { page-break-inside:avoid; }
+                        }
                     </style>
                 </head>
                 <body>
-                    <div class="header">
-                        <h1>التقرير التاريخي - حوادث سلامة المرضى</h1>
-                        <p>مجمع مكة الطبي بالزاهر</p>
+                    <div class="report-header">
+                        <div class="logo-section">
+                            <div class="logo">م</div>
+                            <div class="org-info">
+                                <h1>مجمع مكة الطبي بالزاهر</h1>
+                                <p>لجنة سلامة المرضى - إدارة الجودة</p>
+                            </div>
+                        </div>
+                        <div class="report-info">
+                            <p><strong>تاريخ التقرير:</strong> ${today}</p>
+                            <p><strong>الفترة:</strong> ${fromDate} إلى ${toDate}</p>
+                        </div>
                     </div>
-                    <div class="stats-row">${stats}</div>
-                    ${content}
-                    <script>window.onload = function() { window.print(); }<\/script>
+                    
+                    <div class="report-title">
+                        <h2>التقرير التاريخي لحوادث سلامة المرضى</h2>
+                        <p>Patient Safety Incidents Historical Report</p>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-box primary">
+                            <div class="stat-num">${total}</div>
+                            <div class="stat-lbl">إجمالي الحوادث</div>
+                        </div>
+                        <div class="stat-box warning">
+                            <div class="stat-num">${open}</div>
+                            <div class="stat-lbl">حوادث مفتوحة</div>
+                        </div>
+                        <div class="stat-box success">
+                            <div class="stat-num">${closed}</div>
+                            <div class="stat-lbl">حوادث مغلقة</div>
+                        </div>
+                        <div class="stat-box danger">
+                            <div class="stat-num">${rcaReq}</div>
+                            <div class="stat-lbl">تتطلب RCA</div>
+                        </div>
+                        <div class="stat-box purple">
+                            <div class="stat-num">${escalated}</div>
+                            <div class="stat-lbl">مصعدة</div>
+                        </div>
+                    </div>
+                    
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>رقم الحادث</th>
+                                <th>التاريخ</th>
+                                <th>القسم</th>
+                                <th>النوع</th>
+                                <th>الخطورة</th>
+                                <th>الحالة</th>
+                                <th>المسؤول</th>
+                                <th>الوصف</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                    
+                    <div class="footer">
+                        <div>
+                            <strong>مجمع مكة الطبي بالزاهر</strong> - نظام إدارة حوادث سلامة المرضى
+                        </div>
+                        <div>
+                            صفحة 1 | تم الإنشاء: ${today}
+                        </div>
+                    </div>
+                    
+                    <script>
+                        window.onload = function() { 
+                            setTimeout(function() { window.print(); }, 500);
+                        };
+                    <\/script>
                 </body>
                 </html>
             `);
