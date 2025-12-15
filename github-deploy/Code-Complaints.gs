@@ -217,37 +217,57 @@ function testDriveAccess() {
 }
 
 // ============================================
-// دوال رفع الملفات
+// دوال رفع الملفات - نسخة محسنة تظهر الأخطاء
 // ============================================
 
 function uploadFilesToDrive(files, complaintId) {
   if (!files || files.length === 0) return [];
   
-  const folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
-  const complaintFolder = folder.createFolder(complaintId);
+  // التأكد من وجود المجلد
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(COMPLAINTS_DRIVE_FOLDER_ID);
+  } catch (e) {
+    throw new Error("لم يتم العثور على مجلد Drive. تأكد من صحة Folder ID: " + e.message);
+  }
+
+  // إنشاء مجلد فرعي للشكوى
+  let complaintFolder;
+  try {
+    complaintFolder = folder.createFolder(complaintId);
+  } catch (e) {
+    throw new Error("فشل إنشاء مجلد للشكوى: " + e.message);
+  }
+
   const uploadedFiles = [];
   
   files.forEach((file, index) => {
     try {
       let base64Data = file.data;
+      // تنظيف البيانات في حال وصلت مع الترويسة
       if (base64Data.includes(',')) {
         base64Data = base64Data.split(',')[1];
       }
       
+      // فك التشفير وإنشاء الملف
+      const decoded = Utilities.base64Decode(base64Data);
       const blob = Utilities.newBlob(
-        Utilities.base64Decode(base64Data),
+        decoded,
         file.mimeType || 'application/octet-stream',
         file.name || ('attachment_' + (index + 1))
       );
+      
       const driveFile = complaintFolder.createFile(blob);
       driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      
       uploadedFiles.push({
         name: file.name,
         url: driveFile.getUrl(),
         id: driveFile.getId()
       });
     } catch (err) {
-      console.error('File upload error:', err);
+      // الخطأ يظهر بوضوح
+      throw new Error("فشل رفع الملف (" + file.name + "): " + err.message);
     }
   });
   
