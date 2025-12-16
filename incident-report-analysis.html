@@ -1634,14 +1634,29 @@
             container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
             
             try {
-                const result = await apiCall('getIncidents', { status: 'rca_required' });
-                if (!result.ok || !result.incidents?.length) {
+                const all = await loadAllIncidentsCached();
+                // فلترة الحوادث التي تتطلب RCA
+                const rcaIncidents = all.filter(i => {
+                    const status = normStatus(i);
+                    const severity = norm(i.severity).toLowerCase();
+                    const requiresRca = i.requiresRca || i.requires_rca || i.RCA_Required || false;
+                    
+                    // RCA مطلوب إذا: الحالة rca_required/rca_in_progress، أو الخطورة عالية (severe/death)، أو علامة requiresRca
+                    return status === 'rca_required' || 
+                           status === 'rca_in_progress' || 
+                           status === 'requires_rca' ||
+                           (requiresRca && status !== 'closed') ||
+                           ((severity === 'severe' || severity === 'death') && status !== 'closed');
+                });
+                
+                if (!rcaIncidents.length) {
                     container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h3>لا توجد حوادث تتطلب RCA</h3></div>';
                     document.getElementById('rcaCount').textContent = '0';
                     return;
                 }
                 
-                document.getElementById('rcaCount').textContent = result.incidents.length;
+                document.getElementById('rcaCount').textContent = rcaIncidents.length;
+                const result = { incidents: rcaIncidents };
                 
                 let html = `<table>
                     <thead><tr>
