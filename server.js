@@ -787,22 +787,22 @@ app.get('/api/rounds/metrics', async (req, res) => {
 });
 
 // ============================================
-// Complaints System API - Get Locations from Sheet
+// Complaints System API - Get Locations from Sheet (العمود F و G)
 // ============================================
 app.get('/api/complaints/locations', async (req, res) => {
   try {
     const sheets = await getGoogleSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: COMPLAINTS_SPREADSHEET_ID,
-      range: 'Master!E:F',
+      range: 'Master!F:G', // Room Code و Room Description
     });
     
     const data = response.data.values || [];
     const locations = [];
     
     for (let i = 1; i < data.length; i++) {
-      const code = (data[i][0] || '').trim();
-      const name = (data[i][1] || '').trim();
+      const code = (data[i][0] || '').trim(); // F = Room Code
+      const name = (data[i][1] || '').trim(); // G = Room Description
       if (code && name) {
         locations.push({ code, name });
       }
@@ -812,6 +812,103 @@ app.get('/api/complaints/locations', async (req, res) => {
   } catch (err) {
     console.error('Error fetching locations:', err.message);
     res.status(500).json({ ok: false, error: err.message, locations: [] });
+  }
+});
+
+// ============================================
+// Complaints System API - Get Routing & Escalation from Master
+// ============================================
+app.get('/api/complaints/routing', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: COMPLAINTS_SPREADSHEET_ID,
+      range: 'Master!C:E', // Assign, type of complain, Escalation
+    });
+    
+    const data = response.data.values || [];
+    const routing = {};       // { "شكوى مالية": "أ. صابر عبده", ... }
+    const escalationSet = new Set();
+    const assignmentSet = new Set();
+    
+    for (let i = 1; i < data.length; i++) {
+      const assignName = (data[i][0] || '').trim();    // C - Assign
+      const complaintType = (data[i][1] || '').trim(); // D - type of complain
+      const escName = (data[i][2] || '').trim();       // E - Escalation
+      
+      if (complaintType && assignName) {
+        routing[complaintType] = assignName;
+      }
+      if (assignName) {
+        assignmentSet.add(assignName);
+      }
+      if (escName) {
+        escalationSet.add(escName);
+      }
+    }
+    
+    // ثابتين دائمًا للتصعيد
+    escalationSet.add('حسين بابصيل');
+    escalationSet.add('أ. بلال نتو');
+    
+    res.json({ 
+      ok: true, 
+      routing,
+      assignment: Array.from(assignmentSet),
+      escalation: Array.from(escalationSet)
+    });
+  } catch (err) {
+    console.error('Error fetching routing:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================
+// Complaints System API - Get Staff from Master
+// ============================================
+app.get('/api/complaints/staff', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: COMPLAINTS_SPREADSHEET_ID,
+      range: 'Master!A:E', // Name, Passcode, Assign, Type, Escalation
+    });
+    
+    const data = response.data.values || [];
+    const staff = [];
+    const assignmentSet = new Set();
+    const escalationSet = new Set();
+    
+    for (let i = 1; i < data.length; i++) {
+      const name = (data[i][0] || '').trim();   // A - اسم الموظف
+      const pass = (data[i][1] || '').trim();   // B - الرقم السري
+      const assign = (data[i][2] || '').trim(); // C - Assign
+      const escName = (data[i][4] || '').trim(); // E - Escalation
+      
+      if (name) {
+        staff.push({ name, hasCode: !!pass });
+      }
+      if (assign) {
+        assignmentSet.add(assign);
+      }
+      if (escName) {
+        escalationSet.add(escName);
+      }
+    }
+    
+    // ثابتين للتصعيد
+    escalationSet.add('حسين بابصيل');
+    escalationSet.add('أ. بلال نتو');
+    
+    res.json({ 
+      ok: true, 
+      staff,
+      assignment: Array.from(assignmentSet),
+      escalation: Array.from(escalationSet)
+    });
+  } catch (err) {
+    console.error('Error fetching staff:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
