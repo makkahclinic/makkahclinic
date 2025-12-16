@@ -80,7 +80,56 @@
         let selectedLocations = [];
         let attachedFiles = [];
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec";
-        const locations = [ { code: "DIR-B-01", name: "المدير العام" }, { code: "ADM-B-01", name: "بلال" }, { code: "ADM-B-02", name: "أ/ عدنان" }, { code: "INS-B-01", name: "أ/ صابر" }, { code: "INS-B-02", name: "الموافقات الطبية" }, { code: "CSSD-B-01", name: "التعقييم" }, { code: "CSSD-B-02", name: "الغسيل" }, { code: "RAD-B-01", name: "استقبال الاشعة" }, { code: "RAD-B-02", name: "Ultrasound" }, { code: "RAD-B-03", name: "X-ray and Panorama" }, { code: "FAC-B-01", name: "دورة مياه" }, { code: "LAB-B-01", name: "امراض الدم" }, { code: "LAB-B-02", name: "الكيمياء الحيوية" }, { code: "LAB-B-03", name: "علم الطفيليات" }, { code: "ADM-B-03", name: "مكتب لتخزين ملفات الحسابات" }, { code: "REC-G-01", name: "استقبال الاول" }, { code: "FAC-G-01", name: "استراحة الموظفات" }, { code: "GP-G-01", name: "دكتور جعفر وحسن" }, { code: "WMF-G-01", name: "انتظار النساء" }, { code: "WMR-G-01", name: "انتظار الرجال" }, { code: "MED-G-01", name: "دكتور محمد" }, { code: "MED-G-02", name: "دكتور مجدي" }, { code: "ER-G-01", name: "غرفة الانعاش القلبي الرئوي" }, { code: "VS-G-01", name: "العلامات الحيوية" }, { code: "BD-G-01", name: "غرفة سحب العينات" }, { code: "OBG-G-01", name: "غرفة الكشف الطبي" }, { code: "OBG-G-02", name: "غرفة الولادة" }, { code: "OBG-G-03", name: "غرفة مابعد الولادة" }, { code: "ER-G-01", name: "طوارئ رجال" }, { code: "ER-G-02", name: "طوارئ نساء" }, { code: "FAC-G-02", name: "دورة مياه رجال" }, { code: "FAC-G-03", name: "دورة مياه نساء" }, { code: "FAC-G-04", name: "دورة مياه نساء" }, { code: "REC-1-01", name: "استقبال قسم الاسنان" }, { code: "DEN-1-01", name: "عيادة د/معاذ" }, { code: "DEN-1-02", name: "عيادة د/معاذ" }, { code: "DEN-1-03", name: "عيادة د/عزام الياسي" }, { code: "DEN-1-04", name: "عيادة د/نورا حبشي" }, { code: "DEN-1-05", name: "عيادة د/العنود الزبيدي" }, { code: "DEN-1-06", name: "عيادة د/رشا رجب" }, { code: "ORTH-1-07", name: "عيادة د/ربيعة تبسم" }, { code: "ADM-1-01", name: "مكتب د/خالد" }, { code: "WMR-1-01", name: "انتظار قسم الاسنان" }, { code: "WMR-1-02", name: "انتظار قسم الباطنة-العيون-العظام" }, { code: "WMF-1-01", name: "انتظار النساء" }, { code: "FAC-1-01", name: "دورة مياه النساء" }, { code: "FAC-1-02", name: "دورة مياه الرجال" }, { code: "OPH-1-01", name: "عيادة/ شذا" }, { code: "MED-1-01", name: "عيادة د/حمادة نجاح" }, { code: "MED-1-02", name: "عيادة اضافية للدكتور حمادة" }, { code: "MED-1-03", name: "عيادة مجهزة" }, { code: "ADM-1-02", name: "مكتب فارغ" }, { code: "FAC-1-03", name: "استراحة موظفات" } ];
+        
+        // المواقع - تُحمّل من Google Sheet ديناميكياً
+        let locations = [];
+        let locationsLoaded = false;
+        
+        async function loadLocationsFromSheet() {
+            try {
+                const response = await fetch(SCRIPT_URL + '?action=getLocations');
+                const data = await response.json();
+                if (data.ok && data.locations && data.locations.length > 0) {
+                    locations = data.locations;
+                    locationsLoaded = true;
+                    console.log('✅ تم تحميل', locations.length, 'موقع من الشيت');
+                    // تحديث العرض إذا كانت الخطوة 3 ظاهرة
+                    updateLocationSelector();
+                } else {
+                    console.warn('⚠️ لم يتم العثور على مواقع، استخدام القائمة الافتراضية');
+                    useDefaultLocations();
+                }
+            } catch (err) {
+                console.error('❌ فشل تحميل المواقع:', err);
+                useDefaultLocations();
+            }
+        }
+        
+        function useDefaultLocations() {
+            locations = [
+                { code: "DENTAL", name: "قسم الأسنان" },
+                { code: "RAD", name: "قسم الأشعة" },
+                { code: "OBGYN", name: "قسم النساء والولادة" },
+                { code: "LAB", name: "المختبر" },
+                { code: "ER", name: "الطوارئ" },
+                { code: "CSSD", name: "التعقيم" },
+                { code: "EYES", name: "قسم العيون" },
+                { code: "PHARMACY", name: "الصيدلية" }
+            ];
+            locationsLoaded = true;
+        }
+        
+        function updateLocationSelector() {
+            const selector = document.getElementById('locationSelector');
+            if (selector && locations.length > 0) {
+                selector.innerHTML = locations.map(loc => `
+                    <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" name="locations" value="${loc.code}" class="location-checkbox w-4 h-4 accent-[var(--primary)]">
+                        <span class="text-sm">${loc.name}</span>
+                    </label>
+                `).join('');
+            }
+        }
 
         const dom = {
             form: document.getElementById('unifiedForm'),
@@ -544,7 +593,10 @@
             }
         };
 
-        const init = () => {
+        const init = async () => {
+            // تحميل المواقع من الشيت أولاً
+            await loadLocationsFromSheet();
+            
             renderProgressBar();
             renderStepContent();
             showStep(1);
