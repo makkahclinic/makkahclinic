@@ -1,0 +1,257 @@
+الآن المطلوب:
+
+في فرونت رفع الشكوى:
+
+إضافة اختيار القسم (Select واحد) من نفس الشيت
+
+وموقع الحدث Checklist (واحد أو أكثر) من نفس الشيت
+
+إزالة useDefaultLocations() نهائيًا
+
+في Apps Script:
+
+استقبال departmentCode/departmentName وكتابتها في الشيت (اختياري لكن أنصح به)
+
+استقبال locations كـ array وليس نص
+
+حفظها في عمود Locations كنص مرتب
+
+سأعطيك “التغييرات المطلوبة” واضحة وبالكود.
+
+A) تعديلات Apps Script (مهم – لتخزين القسم بشكل صحيح)
+A1) أضف أعمدة للقسم في Complaints_Log
+
+في دالة getComplaintsSheet() داخل جزء إنشاء الهيدر لورقة Complaints_Log
+أضف عمودين بعد Locations مباشرة:
+
+'Locations',
+'Department_Code', 'Department_Name',
+'Description',
+
+
+يعني يصبح جزء الهيدر هكذا (قصّ ولصق):
+
+sheet.appendRow([
+  'Complaint_ID', 'Submit_Date', 'Submit_Time', 'Complaint_Type', 'Complainant_Name',
+  'Complainant_Phone', 'Complainant_Email', 'Complaint_DateTime',
+  'Locations', 'Department_Code', 'Department_Name',
+  'Description', 'Complaint_Against', 'Attachments', 'Additional_Notes',
+  'Status', 'Priority', 'Assigned_To', 'Assigned_Date', 'Resolution',
+  'Resolution_Date', 'Closed_By', 'Response_Sent', 'Days_Open',
+  'Escalated_To', 'Escalated_By', 'Escalation_Date', 'Escalation_Reason', 'Escalation_Count',
+  'Root_Cause_Category', 'Root_Cause_Details'
+]);
+
+
+ملاحظة: Apps Script يعتمد على أسماء الأعمدة حرفيًا عند القراءة/الكتابة (headers indexOf)، لذلك إضافة الأعمدة بهذا الشكل هي الأفضل. 
+Google for Developers
+
+A2) عدّل submitComplaint لتستقبل locations كـ Array + القسم
+
+داخل submitComplaint(payload) استبدل حساب locations الحالي بهذا:
+
+const locationsArr = Array.isArray(payload.locations) ? payload.locations : [];
+const locations = locationsArr.join(', ');
+
+const departmentCode = payload.departmentCode || '';
+const departmentName = payload.departmentName || '';
+
+
+ثم عدّل appendRow بحيث يضيف عمودين القسم بعد Locations:
+
+sheet.appendRow([
+  complaintId,
+  dateStr,
+  timeStr,
+  payload.complaintType || '',
+  payload.complainantName || '',
+  payload.complainantPhone || '',
+  payload.complainantEmail || '',
+  payload.complaintDateTime || '',
+  locations,
+  departmentCode,
+  departmentName,
+  payload.description || '',
+  payload.complaintAgainst || '',
+  attachmentsInfo,
+  payload.additionalNotes || '',
+  'new',
+  payload.priority || 'medium',
+  '',
+  '',
+  '',
+  '',
+  '',
+  'no',
+  0
+]);
+
+A3) عدّل getComplaints ليُرجع القسم (عشان يظهر لاحقًا)
+
+داخل getComplaints() في complaints = filtered.map(...) أضف:
+
+departmentCode: c.Department_Code || '',
+departmentName: c.Department_Name || '',
+
+B) تعديلات فرونت “رفع الشكوى” (اللي أرسلت كوده)
+B1) احذف useDefaultLocations نهائيًا
+
+احذف الدالة كاملة:
+
+function useDefaultLocations() { ... }
+
+
+وفي loadLocationsFromSheet() استبدل الفشل بأن يجعل القائمة فارغة + رسالة:
+
+async function loadLocationsFromSheet() {
+  try {
+    const response = await fetch(SCRIPT_URL + '?action=getLocations');
+    const data = await response.json();
+    if (data.ok && Array.isArray(data.locations)) {
+      locations = data.locations;
+      locationsLoaded = true;
+      updateLocationSelector();
+      updateDepartmentSelector();
+      return;
+    }
+    throw new Error('No locations returned');
+  } catch (err) {
+    console.error('❌ فشل تحميل المواقع:', err);
+    locations = [];
+    locationsLoaded = true;
+    updateLocationSelector();
+    updateDepartmentSelector();
+  }
+}
+
+
+doGet(e) يستقبل query parameters مثل ?action=getLocations عبر e.parameter عند نشره كـ Web App. 
+Google for Developers
+
+B2) أضف “اختيار القسم” في Step 3 (Select)
+
+في renderStepContent() داخل Step 3، أضف قبل “موقع الحدث” هذا البلوك:
+
+<div class="form-group">
+  <label class="form-label required">القسم</label>
+  <select id="departmentSelect" class="form-select" required>
+    <option value="" disabled selected>اختر القسم...</option>
+  </select>
+  <p class="error-message"></p>
+</div>
+
+B3) اجعل موقع الحدث يُبنى ديناميكيًا (بدون ما تكتب locations.map داخل template)
+
+استبدل محتوى locationSelector داخل Step 3 بهذا فقط:
+
+<div id="locationSelector" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-3">
+  <div class="text-slate-500 text-sm">جاري تحميل المواقع...</div>
+</div>
+<p class="error-message"></p>
+
+B4) أضف دالتين لتعبئة القسم + المواقع
+
+ضع هاتين الدالتين بجانب updateLocationSelector():
+
+function updateDepartmentSelector() {
+  const sel = document.getElementById('departmentSelect');
+  if (!sel) return;
+
+  if (!locationsLoaded) {
+    sel.innerHTML = `<option value="" disabled selected>جاري التحميل...</option>`;
+    return;
+  }
+
+  if (!locations.length) {
+    sel.innerHTML = `<option value="" disabled selected>لا توجد أقسام في Master</option>`;
+    return;
+  }
+
+  sel.innerHTML = `<option value="" disabled selected>اختر القسم...</option>` +
+    locations.map(loc => `<option value="${loc.code}">${loc.name} (${loc.code})</option>`).join('');
+}
+
+function updateLocationSelector() {
+  const selector = document.getElementById('locationSelector');
+  if (!selector) return;
+
+  if (!locationsLoaded) {
+    selector.innerHTML = `<div class="text-slate-500 text-sm">جاري تحميل المواقع...</div>`;
+    return;
+  }
+
+  if (!locations.length) {
+    selector.innerHTML = `<div class="text-red-600 text-sm">لا توجد مواقع في Master (E/F)</div>`;
+    return;
+  }
+
+  selector.innerHTML = locations.map(loc => `
+    <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
+      <input type="checkbox" name="locations" value="${loc.code}" class="location-checkbox w-4 h-4 accent-[var(--primary)]">
+      <span class="text-sm">${loc.name} <span class="text-slate-400">(${loc.code})</span></span>
+    </label>
+  `).join('');
+}
+
+B5) مهم جدًا: نادِ updateDepartmentSelector/updateLocationSelector عند عرض Step 3
+
+داخل showStep(step) بعد إظهار الخطوة، أضف:
+
+if (step === 3) {
+  updateDepartmentSelector();
+  updateLocationSelector();
+}
+
+
+هذا يحل مشكلة “المواقع تتحمّل قبل ما يتولد HTML”.
+
+B6) تعديل validation في Step 3 ليشمل القسم
+
+داخل validateStep(3) أضف فحص القسم:
+
+const dept = document.getElementById('departmentSelect');
+if (!dept || !dept.value) {
+  dept.classList.add('invalid');
+  dept.nextElementSibling.textContent = 'يرجى اختيار القسم';
+  isValid = false;
+}
+
+B7) تعديل submitForm لإرسال locations كـ Array + بيانات القسم
+
+في submitForm بدّل:
+
+const checkedLocations = Array.from(locationSelector.querySelectorAll('input:checked')).map(cb => cb.value);
+
+
+ثم أضف:
+
+const deptCode = document.getElementById('departmentSelect').value;
+const deptObj = locations.find(x => x.code === deptCode);
+const deptName = deptObj ? deptObj.name : '';
+
+
+ثم في payload بدّل locations من string إلى array، وأضف القسم:
+
+payload: {
+  ...
+  departmentCode: deptCode,
+  departmentName: deptName,
+  locations: checkedLocations,   // ✅ Array
+  ...
+}
+
+C) ملاحظة صغيرة (أنت كتبت locations.join(', ') سابقًا)
+
+في كودك الحالي عند الإرسال كتبت:
+
+locations: checkedLocations.join(', ')
+
+
+هذا يخرب عليك “Heatmap/تحليلات” لاحقًا لأنه يصير نص.
+الآن خليناه Array، والسيرفر يحوله لنص عند التخزين.
+
+إذا طبقت الخطوات أعلاه، يصير:
+
+القسم + موقع الحدث 100% من الشيت Master
+
+لا يوجد أي موقع مخزن في الكود

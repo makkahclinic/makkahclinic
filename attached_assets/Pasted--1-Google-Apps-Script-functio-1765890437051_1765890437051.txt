@@ -1,0 +1,90 @@
+المرحلة 1️⃣: كود يبني الهيدر إذا غير مطابق (مرة واحدة)
+أضف هذه الدالة في Google Apps Script:
+function ensureComplaintsLogHeader() {
+  const sheet = getComplaintsSheet('Complaints_Log');
+
+  const EXPECTED_HEADER = [
+    'Complaint_ID','Submit_Date','Submit_Time','Complaint_Type',
+    'Primary_Category','Subcategory','Severity','Severity_Label',
+    'Complainant_Name','Complainant_Phone','Complainant_Email','Complaint_DateTime',
+    'Locations',
+    'Description','Complaint_Against','Attachments','Additional_Notes',
+    'Status','Priority','Assigned_To','Assigned_Date',
+    'Resolution','Resolution_Date','Closed_By','Response_Sent','Days_Open',
+    'Escalated_To','Escalated_By','Escalation_Date','Escalation_Reason','Escalation_Count',
+    'Root_Cause_Category','Root_Cause_Details'
+  ];
+
+  const currentHeader = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+
+  // لو الهيدر مطابق → لا تعمل شيء
+  if (JSON.stringify(currentHeader) === JSON.stringify(EXPECTED_HEADER)) {
+    Logger.log('Header already correct');
+    return;
+  }
+
+  // لو الورقة فاضية
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(EXPECTED_HEADER);
+    return;
+  }
+
+  // لو فيها بيانات → نعمل Replace للهيدر فقط
+  sheet.getRange(1,1,1,EXPECTED_HEADER.length).setValues([EXPECTED_HEADER]);
+}
+
+ثم:
+
+شغّل ensureComplaintsLogHeader() يدويًا مرة واحدة
+
+لا تعيد تشغيلها مرة ثانية
+
+المرحلة 2️⃣: تعديل submitComplaint لملء الأعمدة الجديدة
+
+في submitComplaint(payload)
+استبدل appendRow بالكامل بهذا الترتيب:
+
+sheet.appendRow([
+  complaintId,
+  dateStr,
+  timeStr,
+  payload.complaintType || '',
+  payload.primaryCategory || '',
+  payload.subcategory || '',
+  payload.severity || '',
+  payload.severityLabel || '',
+  payload.complainantName || '',
+  payload.complainantPhone || '',
+  payload.complainantEmail || '',
+  payload.complaintDateTime || '',
+  locations,
+  payload.description || '',
+  payload.complaintAgainst || '',
+  attachmentsInfo,
+  payload.additionalNotes || '',
+  'new',
+  payload.severity === 'high' ? 'high' : 'medium',
+  '', '',
+  '', '', '', 'no', 0,
+  '', '', '', '', 0,
+  '', ''
+]);
+
+المرحلة 3️⃣: اعتماد كامل على Excel (بدون أسماء في الكود)
+أنت فعلت الشي الصح هنا 👇
+
+Assign
+
+Escalation
+
+Type of complaint
+
+النتيجة:
+
+تغيير الاسم = تعديل Excel فقط
+
+لا إعادة نشر كود
+
+لا مخاطرة
+
+⬅️ هذا Enterprise-grade Design 👍

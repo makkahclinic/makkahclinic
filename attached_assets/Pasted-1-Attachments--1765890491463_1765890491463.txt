@@ -1,0 +1,102 @@
+1) تأكيد إعادة إنشاء الهيدر بعد حذفه
+
+أنت قلت إن الهيدر القديم كان بهذا الشكل (وفيه Attachments). ممتاز.
+
+✅ في getComplaintsSheet('Complaints_Log') لازم الهيدر يحتوي Attachments حرفيًا.
+خليه مثل ما ذكرت أنت (ونضيف له بقية أعمدة التصعيد والعداد إن كنت تستخدمها). مثال مطابق لك:
+
+sheet.appendRow([
+  'Complaint_ID','Submit_Date','Submit_Time','Complaint_Type',
+  'Complainant_Name','Complainant_Phone','Complainant_Email','Complaint_DateTime',
+  'Locations','Description','Complaint_Against','Attachments','Additional_Notes',
+  'Status','Priority','Assigned_To','Assigned_Date',
+  'Resolution','Resolution_Date','Closed_By','Response_Sent','Days_Open',
+  'Escalated_To','Escalated_By','Escalation_Date','Escalation_Reason','Escalation_Count'
+]);
+
+
+إذا ما تبغى Escalation_Count احذفه من الهيدر ومن أي كود يرجّعه.
+
+2) تأكيد كتابة نفس ترتيب الأعمدة داخل submitComplaint
+
+عدّل submitComplaint بحيث يكتب Attachments داخل العمود الصحيح:
+
+sheet.appendRow([
+  complaintId,
+  dateStr,
+  timeStr,
+  payload.complaintType || '',
+  payload.complainantName || '',
+  payload.complainantPhone || '',
+  payload.complainantEmail || '',
+  payload.complaintDateTime || '',
+  locations,
+  payload.description || '',
+  payload.complaintAgainst || '',
+  attachmentsInfo,                 // ✅ Attachments هنا
+  payload.additionalNotes || '',
+  'new',
+  payload.priority || 'medium',
+  '',
+  '',
+  '',
+  '',
+  '',
+  'no',
+  0,
+  '', '', '', '', 0
+]);
+
+
+✅ كذا حتى بعد حذف الهيدر، أول شكوى جديدة ستعيد بناء الجدول صح وتكتب المرفقات.
+
+3) لماذا المرفقات لا تظهر في صفحة التحليل؟
+
+لأن الفرونت (التحليل) لا يعرض attachments في viewDetails.
+هو يعرض الوصف والحالة… لكنه ما يسوي parsing لروابط Drive.
+
+4) إضافة عرض المرفقات في التحليل (Front-End)
+
+في viewDetails() بعد قسم “تفاصيل الشكوى” أو قبل “سجل المتابعة” أضف هذا البلوك:
+
+✅ أضف هذا داخل viewDetails() بعد ما تعمل const c = result.complaint;
+function renderAttachments(attachmentsText) {
+  const txt = (attachmentsText || '').trim();
+  if (!txt || txt.startsWith('فشل رفع')) {
+    return txt ? `<div class="alert alert-danger"><i class="fas fa-paperclip"></i> ${txt}</div>` : '';
+  }
+  const links = txt.split('\n').map(x => x.trim()).filter(Boolean);
+  if (!links.length) return '';
+
+  return `
+    <div class="detail-section">
+      <h4><i class="fas fa-paperclip"></i> المرفقات</h4>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${links.map((url, i) => `
+          <a href="${url}" target="_blank" class="btn btn-secondary btn-sm" style="justify-content:flex-start;">
+            <i class="fas fa-link"></i> فتح المرفق ${i+1}
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+
+ثم داخل الـ HTML النهائي في viewDetails أضف:
+
+${renderAttachments(c.attachments)}
+
+
+لكن هذا يتطلب أن getComplaintDetails يرجّع attachments.
+
+5) تعديل Apps Script: أرجع attachments في getComplaintDetails
+
+داخل getComplaintDetails() أضف هذا الحقل داخل complaint::
+
+attachments: complaint.Attachments || '',
+
+
+وأيضًا داخل getComplaints() (اختياري للتقارير) أضف:
+
+attachments: c.Attachments || '',

@@ -99,7 +99,7 @@ function doGet(e) {
 }
 
 // ============================================
-// دالة جلب المواقع من الشيت (العمود E و F)
+// دالة جلب المواقع من الشيت (العمود F و G)
 // ============================================
 function getLocations() {
   const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
@@ -113,8 +113,8 @@ function getLocations() {
   const locations = [];
   
   for (let i = 1; i < data.length; i++) {
-    const code = String(data[i][4] || '').trim(); // العمود E (index 4)
-    const name = String(data[i][5] || '').trim(); // العمود F (index 5)
+    const code = String(data[i][5] || '').trim(); // العمود F (index 5) - Room Code
+    const name = String(data[i][6] || '').trim(); // العمود G (index 6) - Room Description
     
     if (code && name) {
       locations.push({ code: code, name: name });
@@ -122,6 +122,41 @@ function getLocations() {
   }
   
   return { locations: locations };
+}
+
+// ============================================
+// دالة التوزيع التلقائي من الشيت Master
+// ============================================
+function getRoutingFromMaster() {
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('Master');
+  
+  if (!sheet) {
+    return { routing: {}, escalation: [] };
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  const routing = {};       // { "شكوى مالية": "أ. صابر عبده", ... }
+  const escalationSet = new Set();
+  
+  for (let i = 1; i < data.length; i++) {
+    const assignName = String(data[i][2] || '').trim();    // العمود C - Assign
+    const complaintType = String(data[i][3] || '').trim(); // العمود D - type of complain
+    const escName = String(data[i][4] || '').trim();       // العمود E - Escalation
+    
+    if (complaintType && assignName) {
+      routing[complaintType] = assignName;
+    }
+    if (escName) {
+      escalationSet.add(escName);
+    }
+  }
+  
+  // ثابتين دائمًا للتصعيد
+  escalationSet.add('حسين بابصيل');
+  escalationSet.add('أ. بلال نتو');
+  
+  return { routing, escalation: Array.from(escalationSet) };
 }
 
 // ============================================
@@ -161,6 +196,19 @@ function parseLogDate(value) {
   return null;
 }
 
+// الهيدر الموحد الجديد لـ Complaints_Log
+const COMPLAINTS_LOG_HEADER = [
+  'Complaint_ID', 'Submit_Date', 'Submit_Time', 'Complaint_Type',
+  'Primary_Category', 'Subcategory', 'Severity', 'Severity_Label',
+  'Complainant_Name', 'Complainant_Phone', 'Complainant_Email', 'Complaint_DateTime',
+  'Locations',
+  'Description', 'Complaint_Against', 'Attachments', 'Additional_Notes',
+  'Status', 'Priority', 'Assigned_To', 'Assigned_Date',
+  'Resolution', 'Resolution_Date', 'Closed_By', 'Response_Sent', 'Days_Open',
+  'Escalated_To', 'Escalated_By', 'Escalation_Date', 'Escalation_Reason', 'Escalation_Count',
+  'Root_Cause_Category', 'Root_Cause_Details'
+];
+
 function getComplaintsSheet(sheetName) {
   const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
   let sheet = ss.getSheetByName(sheetName);
@@ -168,21 +216,36 @@ function getComplaintsSheet(sheetName) {
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
     if (sheetName === 'Complaints_Log') {
-      sheet.appendRow([
-        'Complaint_ID', 'Submit_Date', 'Submit_Time', 'Complaint_Type', 'Complainant_Name',
-        'Complainant_Phone', 'Complainant_Email', 'Complaint_DateTime', 'Locations',
-        'Description', 'Complaint_Against', 'Attachments', 'Additional_Notes',
-        'Status', 'Priority', 'Assigned_To', 'Assigned_Date', 'Resolution',
-        'Resolution_Date', 'Closed_By', 'Response_Sent', 'Days_Open',
-        'Escalated_To', 'Escalated_By', 'Escalation_Date', 'Escalation_Reason', 'Escalation_Count',
-        'Root_Cause_Category', 'Root_Cause_Details'
-      ]);
+      sheet.appendRow(COMPLAINTS_LOG_HEADER);
     } else if (sheetName === 'Complaints_Followup') {
       sheet.appendRow(['Followup_ID', 'Complaint_ID', 'Date', 'Action', 'Action_By', 'Notes', 'Status']);
     }
   }
   
   return sheet;
+}
+
+// دالة إصلاح الهيدر - تُشغّل مرة واحدة يدوياً
+function ensureComplaintsLogHeader() {
+  const sheet = getComplaintsSheet('Complaints_Log');
+  
+  const currentHeader = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  // لو الهيدر مطابق → لا تعمل شيء
+  if (JSON.stringify(currentHeader) === JSON.stringify(COMPLAINTS_LOG_HEADER)) {
+    Logger.log('Header already correct');
+    return { success: true, message: 'الهيدر صحيح' };
+  }
+  
+  // لو الورقة فاضية
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(COMPLAINTS_LOG_HEADER);
+    return { success: true, message: 'تم إضافة الهيدر' };
+  }
+  
+  // لو فيها بيانات → نعمل Replace للهيدر فقط
+  sheet.getRange(1, 1, 1, COMPLAINTS_LOG_HEADER.length).setValues([COMPLAINTS_LOG_HEADER]);
+  return { success: true, message: 'تم تحديث الهيدر' };
 }
 
 function sheetToObjects(sheet) {
@@ -322,32 +385,29 @@ function getComplaintStaff() {
   
   const data = sheet.getDataRange().getValues();
   const staff = [];
-  const assignment = [];
-  const escalation = [];
+  const assignmentSet = new Set();
   
   for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (row[0] && String(row[0]).trim()) {
-      staff.push({
-        name: String(row[0]).trim(),
-        hasCode: row[1] ? true : false
-      });
+    const name = String(data[i][0] || '').trim();  // العمود A - اسم الموظف
+    const pass = String(data[i][1] || '').trim();  // العمود B - الرقم السري
+    const assign = String(data[i][2] || '').trim(); // العمود C - Assign
+    
+    if (name) {
+      staff.push({ name, hasCode: !!pass });
     }
-    if (row[2] && String(row[2]).trim()) {
-      const assignName = String(row[2]).trim();
-      if (!assignment.includes(assignName)) {
-        assignment.push(assignName);
-      }
-    }
-    if (row[3] && String(row[3]).trim()) {
-      const escalateName = String(row[3]).trim();
-      if (!escalation.includes(escalateName)) {
-        escalation.push(escalateName);
-      }
+    if (assign) {
+      assignmentSet.add(assign);
     }
   }
   
-  return { staff, assignment, escalation };
+  // جلب قائمة التصعيد من العمود E
+  const routingData = getRoutingFromMaster();
+  
+  return {
+    staff,
+    assignment: Array.from(assignmentSet),
+    escalation: routingData.escalation
+  };
 }
 
 function verifyComplaintPasscode(staffName, passcode) {
@@ -394,8 +454,26 @@ function submitComplaint(payload) {
   const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   
-  const locations = Array.isArray(payload.locations) ? payload.locations.join(', ') : (payload.locations || '');
+  // المواقع - لازم تكون Array
+  const locationsArr = Array.isArray(payload.locations) ? payload.locations : [];
+  const locations = locationsArr.join(', ');
   
+  // التصنيف والخطورة
+  const primaryCategory = payload.primaryCategory || '';
+  const subcategory = payload.subcategory || '';
+  const severity = payload.severity || '';
+  const severityLabel = payload.severityLabel || '';
+  
+  // الأولوية من الخطورة
+  const priority = (severity === 'high') ? 'high' : (severity === 'low') ? 'low' : 'medium';
+  
+  // التوزيع التلقائي من Master (Routing)
+  const routingData = getRoutingFromMaster();
+  const autoAssignedTo = routingData.routing[primaryCategory] || '';
+  const status = autoAssignedTo ? 'in_progress' : 'new';
+  const assignedDate = autoAssignedTo ? dateStr : '';
+  
+  // المرفقات
   let attachmentsInfo = '';
   if (payload.files && payload.files.length > 0) {
     try {
@@ -407,35 +485,50 @@ function submitComplaint(payload) {
     }
   }
   
+  // الصف الجديد يطابق COMPLAINTS_LOG_HEADER بالترتيب
   sheet.appendRow([
-    complaintId,
-    dateStr,
-    timeStr,
-    payload.complaintType || '',
-    payload.complainantName || '',
-    payload.complainantPhone || '',
-    payload.complainantEmail || '',
-    payload.complaintDateTime || '',
-    locations,
-    payload.description || '',
-    payload.complaintAgainst || '',
-    attachmentsInfo,
-    payload.additionalNotes || '',
-    'new',
-    payload.priority || 'medium',
-    '',
-    '',
-    '',
-    '',
-    '',
-    'no',
-    0
+    complaintId,                    // Complaint_ID
+    dateStr,                        // Submit_Date
+    timeStr,                        // Submit_Time
+    payload.complaintType || '',    // Complaint_Type
+    primaryCategory,                // Primary_Category
+    subcategory,                    // Subcategory
+    severity,                       // Severity
+    severityLabel,                  // Severity_Label
+    payload.complainantName || '',  // Complainant_Name
+    payload.complainantPhone || '', // Complainant_Phone
+    payload.complainantEmail || '', // Complainant_Email
+    payload.complaintDateTime || '',// Complaint_DateTime
+    locations,                      // Locations
+    payload.description || '',      // Description
+    payload.complaintAgainst || '', // Complaint_Against
+    attachmentsInfo,                // Attachments
+    payload.additionalNotes || '',  // Additional_Notes
+    status,                         // Status
+    priority,                       // Priority
+    autoAssignedTo,                 // Assigned_To
+    assignedDate,                   // Assigned_Date
+    '',                             // Resolution
+    '',                             // Resolution_Date
+    '',                             // Closed_By
+    'no',                           // Response_Sent
+    0,                              // Days_Open
+    '',                             // Escalated_To
+    '',                             // Escalated_By
+    '',                             // Escalation_Date
+    '',                             // Escalation_Reason
+    0,                              // Escalation_Count
+    '',                             // Root_Cause_Category
+    ''                              // Root_Cause_Details
   ]);
   
   return { 
     success: true, 
     complaintId: complaintId,
-    message: 'تم استلام شكواك بنجاح'
+    assignedTo: autoAssignedTo,
+    message: autoAssignedTo 
+      ? `تم استلام شكواك بنجاح وتكليف ${autoAssignedTo} بمتابعتها`
+      : 'تم استلام شكواك بنجاح'
   };
 }
 
@@ -522,10 +615,16 @@ function getComplaints(params) {
     date: formatDate(c.Submit_Date),
     time: c.Submit_Time || '',
     type: c.Complaint_Type || '',
+    // الحقول الجديدة
+    primaryCategory: c.Primary_Category || '',
+    subcategory: c.Subcategory || '',
+    severity: c.Severity || '',
+    severityLabel: c.Severity_Label || '',
     complainant: c.Complainant_Name || 'مجهول',
     phone: c.Complainant_Phone || '',
     location: c.Locations || '',
     description: (c.Description || '').substring(0, 100),
+    attachments: c.Attachments || '',
     status: c.Status || 'new',
     priority: c.Priority || 'medium',
     assignedTo: c.Assigned_To || '',
@@ -566,6 +665,11 @@ function getComplaintDetails(complaintId) {
       submitDate: formatDate(complaint.Submit_Date),
       submitTime: complaint.Submit_Time || '',
       type: complaint.Complaint_Type || '',
+      // الحقول الجديدة
+      primaryCategory: complaint.Primary_Category || '',
+      subcategory: complaint.Subcategory || '',
+      severity: complaint.Severity || '',
+      severityLabel: complaint.Severity_Label || '',
       complainantName: complaint.Complainant_Name || '',
       complainantPhone: complaint.Complainant_Phone || '',
       complainantEmail: complaint.Complainant_Email || '',
@@ -573,6 +677,7 @@ function getComplaintDetails(complaintId) {
       locations: complaint.Locations || '',
       description: complaint.Description || '',
       complaintAgainst: complaint.Complaint_Against || '',
+      attachments: complaint.Attachments || '',
       additionalNotes: complaint.Additional_Notes || '',
       status: complaint.Status || 'new',
       priority: complaint.Priority || 'medium',

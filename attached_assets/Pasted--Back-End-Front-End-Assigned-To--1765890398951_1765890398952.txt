@@ -1,0 +1,366 @@
+تعديلات نهائية متكاملة (Back-End أولاً ثم Front-End الاثنين) بحيث:
+
+✅ التوزيع Assigned_To يصير من شيت Master (عمود Assign + type of complain)
+
+✅ قائمة التصعيد من Master (عمود Escalation)
+
+✅ المواقع/الأقسام من Master (Room Code + Room Description)
+
+✅ إزالة أي “قائمة افتراضية” من الفرونت
+
+✅ حفظ نوع الشكوى الرئيسي + الخطورة في Complaints_Log + تظهر في التحليل
+
+✅ جعل locations تُرسل Array وليس string
+
+1) Back-End (Google Apps Script) — “النسخة النهائية”
+1.1 تحديث قراءة Master حسب ترتيبك الجديد
+
+من صورة الشيت عندك ترتيب الأعمدة أصبح كالتالي:
+
+A = اسم الموظف
+
+B = الرقم السري
+
+C = Assign (اسم المكلف الافتراضي)
+
+D = type of complain (اسم تصنيف الشكوى)
+
+E = Escalation (أسماء التصعيد)
+
+F = Room Code
+
+G = Room Description
+
+إذًا لازم نغيّر getLocations() ليقرأ من F و G بدل E و F.
+
+✅ استبدل getLocations() بالكامل بهذا:
+
+function getLocations() {
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('Master');
+  if (!sheet) return { locations: [], error: 'ورقة Master غير موجودة' };
+
+  const data = sheet.getDataRange().getValues();
+  const locations = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const code = String(data[i][5] || '').trim(); // F = index 5
+    const name = String(data[i][6] || '').trim(); // G = index 6
+    if (code && name) locations.push({ code, name });
+  }
+
+  return { locations };
+}
+
+1.2 إضافة “Routing” من الشيت (التوزيع حسب نوع الشكوى)
+
+أضف هذه الدالة تحت الدوال المساعدة:
+
+function getRoutingFromMaster() {
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('Master');
+  if (!sheet) return { routing: {}, escalation: [] };
+
+  const data = sheet.getDataRange().getValues();
+  const routing = {};       // { "شكوى مالية": "أ. صابر عبده", ... }
+  const escalationSet = new Set();
+
+  for (let i = 1; i < data.length; i++) {
+    const assignName = String(data[i][2] || '').trim();    // C
+    const complaintType = String(data[i][3] || '').trim(); // D
+    const escName = String(data[i][4] || '').trim();       // E
+
+    if (complaintType && assignName) routing[complaintType] = assignName;
+    if (escName) escalationSet.add(escName);
+  }
+
+  // ثابتين دائمًا للتصعيد (اختياري إذا تبغاهم دائمًا)
+  escalationSet.add('حسين بابصيل');
+  escalationSet.add('أ. بلال نتو');
+
+  return { routing, escalation: Array.from(escalationSet) };
+}
+
+1.3 تحديث getComplaintStaff ليستخدم Master الجديد
+
+استبدل getComplaintStaff() بالكامل بهذا:
+
+function getComplaintStaff() {
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('Master');
+  if (!sheet) return { staff: [], assignment: [], escalation: [] };
+
+  const data = sheet.getDataRange().getValues();
+  const staff = [];
+  const assignmentSet = new Set();
+
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][0] || '').trim(); // A
+    const pass = String(data[i][1] || '').trim(); // B
+    const assign = String(data[i][2] || '').trim(); // C
+
+    if (name) staff.push({ name, hasCode: !!pass });
+    if (assign) assignmentSet.add(assign);
+  }
+
+  const routingData = getRoutingFromMaster(); // escalation من عمود E
+  return {
+    staff,
+    assignment: Array.from(assignmentSet),
+    escalation: routingData.escalation
+  };
+}
+
+
+الآن: assignment list و escalation list ديناميكية من الشيت.
+
+1.4 تحديث Complaints_Log Header مرة واحدة (مهم)
+
+لازم نضيف أعمدة تصنيف الشكوى والخطورة داخل Complaints_Log.
+
+في getComplaintsSheet('Complaints_Log') استبدل الهيدر بـ:
+
+sheet.appendRow([
+  'Complaint_ID','Submit_Date','Submit_Time','Complaint_Type',
+
+  'Primary_Category','Subcategory','Severity','Severity_Label',
+
+  'Complainant_Name','Complainant_Phone','Complainant_Email','Complaint_DateTime',
+  'Locations',
+
+  'Description','Complaint_Against','Attachments','Additional_Notes',
+
+  'Status','Priority','Assigned_To','Assigned_Date',
+
+  'Resolution','Resolution_Date','Closed_By','Response_Sent','Days_Open',
+
+  'Escalated_To','Escalated_By','Escalation_Date','Escalation_Reason','Escalation_Count',
+  'Root_Cause_Category','Root_Cause_Details'
+]);
+
+
+لو الورقة موجودة قديمًا: أضف هذه الأعمدة يدويًا في الصف 1 بنفس الأسماء.
+
+1.5 submitComplaint: يجعل Assigned_To تلقائي من الشيت + يحفظ التصنيف والخطورة
+
+استبدل submitComplaint(payload) بهذا الجزء الأساسي (نفس كودك + التعديل):
+
+function submitComplaint(payload) {
+  const sheet = getComplaintsSheet('Complaints_Log');
+  const now = getSaudiDate();
+
+  const complaintId = `CMP-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${Date.now().toString().slice(-6)}`;
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  // locations لازم تكون Array
+  const locationsArr = Array.isArray(payload.locations) ? payload.locations : [];
+  const locations = locationsArr.join(', ');
+
+  // تصنيف + خطورة
+  const primaryCategory = payload.primaryCategory || '';
+  const subcategory = payload.subcategory || '';
+  const severity = payload.severity || '';
+  const severityLabel = payload.severityLabel || '';
+
+  // priority من severity
+  const priority = (severity === 'high') ? 'high' : (severity === 'low') ? 'low' : 'medium';
+
+  // توزيع من Master (Routing)
+  const routingData = getRoutingFromMaster();
+  const autoAssignedTo = routingData.routing[primaryCategory] || '';
+  const status = autoAssignedTo ? 'in_progress' : 'new';
+  const assignedDate = autoAssignedTo ? dateStr : '';
+
+  // مرفقات
+  let attachmentsInfo = '';
+  if (payload.files && payload.files.length > 0) {
+    try {
+      const uploadedFiles = uploadFilesToDrive(payload.files, complaintId);
+      attachmentsInfo = uploadedFiles.map(f => f.url).join('\n');
+    } catch (e) {
+      attachmentsInfo = 'فشل رفع المرفقات: ' + e.message;
+    }
+  }
+
+  sheet.appendRow([
+    complaintId, dateStr, timeStr, payload.complaintType || '',
+
+    primaryCategory, subcategory, severity, severityLabel,
+
+    payload.complainantName || '',
+    payload.complainantPhone || '',
+    payload.complainantEmail || '',
+    payload.complaintDateTime || '',
+    locations,
+
+    payload.description || '',
+    payload.complaintAgainst || '',
+    attachmentsInfo,
+    payload.additionalNotes || '',
+
+    status, priority,
+    autoAssignedTo, assignedDate,
+
+    '', '', '', 'no', 0,
+
+    '', '', '', '', 0,
+    '', ''
+  ]);
+
+  return { success: true, complaintId, message: 'تم استلام شكواك بنجاح' };
+}
+
+1.6 getComplaints: رجّع Primary_Category و Severity للفرونت
+
+داخل getComplaints() عند map أضف:
+
+primaryCategory: c.Primary_Category || '',
+subcategory: c.Subcategory || '',
+severity: c.Severity || '',
+severityLabel: c.Severity_Label || '',
+
+2) Front-End رفع الشكوى report.html — تعديلات ضرورية
+2.1 احذف أي fallback قديم (ريبلت + default)
+
+في كودك الحالي أنت تحاول /api/complaints/locations ثم fallback Apps Script ثم default list.
+
+أنت قلت تبغاه كل شيء من الشيت، إذًا خلّها Apps Script فقط، واحذف useDefaultLocations() نهائيًا.
+
+استبدل loadLocationsFromSheet() بهذا:
+
+async function loadLocationsFromSheet() {
+  try {
+    const response = await fetch(SCRIPT_URL + '?action=getLocations');
+    const data = await response.json();
+
+    if (data.ok && Array.isArray(data.locations) && data.locations.length > 0) {
+      locations = data.locations;
+      locationsLoaded = true;
+      updateLocationSelector();
+    } else {
+      throw new Error('No locations in Master');
+    }
+  } catch (err) {
+    console.error('❌ فشل تحميل المواقع:', err);
+    locations = [];
+    locationsLoaded = true;
+    updateLocationSelector();
+  }
+}
+
+
+وحذف useDefaultLocations() بالكامل.
+
+2.2 أهم تعديل: locations تُرسل Array وليس string
+
+في submitForm بدّل:
+
+locations: checkedLocations.join(', ')
+
+
+إلى:
+
+locations: checkedLocations
+
+2.3 إصلاح خطأ كبير عندك: primaryCategory الآن يرسل “ID” وليس الاسم العربي
+
+أنت تخزن في hidden input:
+
+document.getElementById('primaryCategory').value = selectedCategory; // هذا id مثل financial
+
+
+ثم لاحقًا تعمل:
+
+const catObj = complaintCategories.find(c => c.id === document.getElementById('primaryCategory').value);
+primaryCategory: catObj ? catObj.name : ''
+
+
+هذا صح ✅ لا تغيّره.
+
+3) Front-End التحليل complaint_mentoring.html — تحسين عرض “نوع الشكوى + الأهمية”
+
+أنت الآن تعرض c.type فقط (نوع الشاكي).
+نحتاج نعرض Primary Category و Severity/Priority.
+
+3.1 في renderTable (جميع الشكاوى) عدّل عمود “النوع”
+
+بدل:
+
+<td>${c.type || '-'}</td>
+
+
+ضع:
+
+<td>
+  ${c.type || '-'}
+  <div style="margin-top:6px;">
+    ${c.primaryCategory ? `<span class="badge badge-info">${c.primaryCategory}</span>` : ''}
+    ${c.priority === 'high' ? `<span class="badge badge-danger">عالية</span>` :
+      c.priority === 'low' ? `<span class="badge badge-secondary">منخفضة</span>` :
+      `<span class="badge badge-warning">متوسطة</span>`}
+  </div>
+</td>
+
+
+كذا “التحليل” يوضح النوع + التصنيف + الأهمية.
+
+3.2 في renderInProgressTable (قيد المعالجة) أبرز المصعدة + تكرار + التصنيف
+
+أنت قريب جدًا. أضف التصنيف + أولوية:
+
+داخل loop قبل html:
+
+const catBadge = c.primaryCategory ? `<span class="badge badge-info">${c.primaryCategory}</span>` : '';
+const prBadge = c.priority === 'high'
+  ? `<span class="badge badge-danger">عالية</span>`
+  : c.priority === 'low'
+  ? `<span class="badge badge-secondary">منخفضة</span>`
+  : `<span class="badge badge-warning">متوسطة</span>`;
+
+
+ثم داخل <td>:
+
+<td>
+  <strong>${c.id}</strong>
+  ${isEsc ? `<span class="badge badge-danger" style="margin-right:5px;">مصعدة</span>` : ''}
+  ${repeat >= 2 ? `<span class="badge badge-warning">تكرار ${repeat}</span>` : ''}
+  <div style="margin-top:6px;">${catBadge} ${prBadge}</div>
+</td>
+
+4) أهم ملاحظة عن Master (حتى ما يخرب عليك النظام)
+
+في Master عندك الآن “type of complain” لازم يطابق بالضبط اسم التصنيف اللي يرسلها الفرونت (catObj.name)
+مثال:
+
+الفرونت يرسل: شكوى مالية
+
+Master عمود D لازم يكون: شكوى مالية نفس النص 100%
+
+لو فيه مسافة زيادة أو اختلاف بسيط → التوزيع ما يشتغل.
+
+5) خلاصة التنفيذ السريع
+
+✅ حدّث Apps Script:
+
+getLocations indices
+
+getRoutingFromMaster
+
+getComplaintStaff
+
+getComplaintsSheet header
+
+submitComplaint auto-assign
+
+getComplaints يرجع primaryCategory
+
+✅ حدّث report.html:
+
+loadLocationsFromSheet من Apps Script فقط
+
+locations تُرسل Array
+
+✅ حدّث complaint_mentoring.html:
+
+عرض primaryCategory + priority badges في الجدولين
