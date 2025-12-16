@@ -1400,7 +1400,7 @@
                 
                 const escalated = result.incidents.filter(i => {
                     const escName = i.escalationAssignee || i.escalatedTo || '';
-                    return escName.trim() !== '';
+                    return i.status === 'escalated' || escName.trim() !== '';
                 });
                 document.getElementById('escalatedCount').textContent = escalated.length;
                 
@@ -1437,14 +1437,14 @@
             container.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</td></tr>';
             
             try {
-                const result = await apiCall('getIncidents', { status: 'closed' });
+                const result = await apiCall('getIncidents', { status: 'all' });
                 if (!result.ok || !result.incidents?.length) {
                     container.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد حوادث مغلقة</td></tr>';
                     document.getElementById('closedCount').textContent = '0';
                     return;
                 }
                 
-                const closed = result.incidents;
+                const closed = result.incidents.filter(i => i.status === 'closed');
                 document.getElementById('closedCount').textContent = closed.length;
                 
                 let html = '';
