@@ -1,0 +1,291 @@
+تمام—شفت مشاكلك، وفيه 3 أسباب رئيسية لازم تتصلّح “مرة واحدة” عشان كل شيء يثبت بعد التحديث ويطلع صح:
+
+1) ليش “الموقع” ما يطلع من الشيت؟ (الخلل الحقيقي)
+
+في report.html (رفع الشكوى) أنت ترسل locations كسطر نصي:
+
+locations: checkedLocations.join(', ')
+
+
+بينما الباك اند يتوقع locations كـ Array:
+
+const locationsArr = Array.isArray(payload.locations) ? payload.locations : [];
+
+
+فالنتيجة: يصير locationsArr = [] وبالتالي ينحفظ فاضي… وبعدها التحليل ما يقدر يبني Heatmap صح.
+
+✅ التعديل السريع (في report.html)
+
+بدّل هذا السطر فقط:
+
+- locations: checkedLocations.join(', '),
++ locations: checkedLocations,
+
+
+وبكذا الباك اند يحفظها صح (DEN, RAD ...) بدون فقدان.
+
+✅ حماية إضافية في الباك اند (اختياري لكن مهم)
+
+بدّل جزء locations في submitComplaint() إلى هذا (يدعم Array أو String):
+
+const locationsArr =
+  Array.isArray(payload.locations) ? payload.locations
+  : typeof payload.locations === 'string' ? payload.locations.split(',').map(x => x.trim()).filter(Boolean)
+  : [];
+
+const locations = locationsArr.join(', ');
+
+2) ليش “المُصعّدة / المغلقة” ترجع صفر بعد Refresh؟
+
+السبب الأغلب: أنت تعتمد على تحميل التبويب عند الضغط (Tab click) عشان يجلب البيانات ويحسب، لكن عند فتح الصفحة على Dashboard ما يتنفّذ حساب التبويبات/العدادات بشكل مضمون (خصوصًا مع تعدد listeners + تأخير login/localStorage).
+
+✅ أفضل حل سريع (100% يثبت بعد refresh)
+
+بدل ما تسوي 3–4 API Calls، خلّها Call واحدة تجيب كل الحوادث ثم:
+
+تحسب counts
+
+تبني الجداول
+
+تبني heatmap
+
+وتحدّث العدادات
+
+🔥 ضع هذا في أعلى JS (global)
+let allIncidentsCache = [];
+let cacheTime = 0;
+
+async function loadAllIncidentsCached(force=false) {
+  const now = Date.now();
+  if (!force && allIncidentsCache.length && (now - cacheTime) < 15000) return allIncidentsCache;
+
+  const res = await apiCall('getIncidents', { status: 'all', limit: 2000 });
+  if (!res.ok) throw new Error(res.error || 'Failed to load incidents');
+  allIncidentsCache = res.incidents || [];
+  cacheTime = now;
+  return allIncidentsCache;
+}
+
+function norm(v){ return String(v||'').trim(); }
+function normStatus(i){
+  // دعم اختلاف أسماء الحقول القادمة من الشيت/الباك اند
+  return norm(i.status || i.Status || i.incidentStatus || i.state).toLowerCase();
+}
+function normEscTo(i){
+  return norm(i.escalatedTo || i.Escalated_To || i.escalated_to || i.escalationTo || i.escalationAssignee);
+}
+function normClosedDate(i){
+  return norm(i.closedDate || i.Closed_Date || i.closed_date || i.Resolution_Date);
+}
+
+✅ عدّل loadData() ليكون كذا (مهم)
+async function loadData() {
+  const all = await loadAllIncidentsCached(true);
+
+  // عدادات أساسية
+  const escalated = all.filter(i => normStatus(i) === 'escalated' || normEscTo(i));
+  const closed    = all.filter(i => normStatus(i) === 'closed' || normClosedDate(i));
+  const open      = all.filter(i => !closed.includes(i));
+
+  // تحديث العدادات فورًا (بدون انتظار التبويب)
+  document.getElementById('escalatedTabCount').textContent = escalated.length;
+  document.getElementById('closedTabCount').textContent    = closed.length;
+
+  // (اختياري) لو عندك كروت أخرى
+  const totalEl = document.getElementById('totalIncidents');
+  if (totalEl) totalEl.textContent = all.length;
+
+  // تحديث الجداول (حسب الحاجة)
+  renderEscalatedTable(escalated);
+  renderClosedTable(closed);
+
+  // الحالات الحرجة
+  renderCriticalPanel(getCriticalIncidents(all));
+
+  // هيت ماب (نضيفها تحت)
+  buildIncidentHeatmap(all);
+
+  // والباقي إذا تبغاه:
+  await loadStats();
+  await loadIncidents();
+  await loadPendingIncidents();
+  await loadRcaIncidents();
+}
+
+✅ دوال عرض الجداول (مختصرة)
+function renderEscalatedTable(list){
+  const tbody = document.getElementById('escalatedTable');
+  if (!tbody) return;
+  if (!list.length){
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد حوادث مُصعّدة</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(inc => {
+    const escName = normEscTo(inc) || '-';
+    const sev = SEVERITY[inc.severity] || { name: inc.severity, color:'#dc3545' };
+    return `
+      <tr style="background:#fff5f5;">
+        <td><strong>${inc.id}</strong></td>
+        <td>${inc.date || '-'}</td>
+        <td>${INCIDENT_TYPES[inc.type] || inc.type || '-'}</td>
+        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+        <td>${inc.department || '-'}</td>
+        <td><strong style="color:#dc3545;"><i class="fas fa-arrow-up"></i> ${escName}</strong></td>
+        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+      </tr>`;
+  }).join('');
+}
+
+function renderClosedTable(list){
+  const tbody = document.getElementById('closedTable');
+  if (!tbody) return;
+  if (!list.length){
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد حوادث مغلقة</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(inc => {
+    const sev = SEVERITY[inc.severity] || { name: inc.severity, color:'#28a745' };
+    const closedDate = normClosedDate(inc) || '-';
+    return `
+      <tr>
+        <td><strong>${inc.id}</strong></td>
+        <td>${inc.date || '-'}</td>
+        <td>${INCIDENT_TYPES[inc.type] || inc.type || '-'}</td>
+        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+        <td>${inc.department || '-'}</td>
+        <td>${closedDate}</td>
+        <td><button class="btn btn-success btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+      </tr>`;
+  }).join('');
+}
+
+
+بهذا الحل: حتى لو ما ضغطت تبويب “المصعدة”، العدد يطلع صح بعد أي Refresh.
+
+3) Heatmap “خطير جدًا” للحوادث (فعلي + واضح)
+
+بدل heatmap بسيط، خلّها Risk Heatmap تجمع:
+
+القسم (Department)
+
+الخطورة (Severity)
+
+ومعامل التصعيد (Escalated)
+
+وتطلع “درجة خطر” + قائمة IDs عند الضغط.
+
+✅ أضف هذا في HTML داخل dashboard (مكان مناسب)
+<div class="card" style="margin-top:20px;">
+  <div class="card-header">
+    <h3 class="card-title"><i class="fas fa-th"></i> Heatmap المخاطر حسب القسم والخطورة</h3>
+  </div>
+  <div class="card-body">
+    <div id="incidentHeatmap" style="overflow:auto;"></div>
+    <div style="margin-top:10px;color:#666;font-size:0.9rem;">
+      اضغط أي خلية لعرض أول 20 رقم بلاغ داخلها.
+    </div>
+  </div>
+</div>
+
+✅ أضف CSS سريع (نفس ستايل الشكاوى)
+.hm-grid{display:grid;gap:8px;min-width:900px}
+.hm-head,.hm-row{background:#f6f8fb;border:1px solid #e9ecef;border-radius:10px;padding:10px;font-weight:700}
+.hm-head{text-align:center;position:sticky;top:0;z-index:1}
+.hm-cell{border-radius:12px;padding:10px;border:1px solid #e9ecef;cursor:pointer;min-height:56px;transition:.12s}
+.hm-cell:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.10)}
+.hm-num{font-weight:900;font-size:1.2rem}
+.hm-sub{font-size:.85rem;opacity:.85}
+
+✅ أضف JS Heatmap
+function sevWeight(sev){
+  sev = (sev||'').toLowerCase();
+  if (sev === 'death') return 10;
+  if (sev === 'severe') return 7;
+  if (sev === 'moderate') return 4;
+  if (sev === 'minor') return 2;
+  return 1; // none/unknown
+}
+function heatColor(score){
+  // score 0..?? -> لون أحمر/برتقالي/أصفر/أخضر
+  if (score >= 25) return 'rgba(220,53,69,0.55)';     // حرج
+  if (score >= 15) return 'rgba(253,126,20,0.55)';    // عالي
+  if (score >= 8)  return 'rgba(255,193,7,0.55)';     // متوسط
+  return 'rgba(40,167,69,0.35)';                      // منخفض
+}
+
+function buildIncidentHeatmap(all){
+  const container = document.getElementById('incidentHeatmap');
+  if (!container) return;
+
+  const depts = Array.from(new Set(all.map(x => norm(x.department) || 'غير محدد'))).sort();
+  const sevKeys = ['death','severe','moderate','minor','none']; // ترتيب واضح
+
+  // map[dept][sev] = {count, score, items}
+  const map = new Map();
+  for (const inc of all){
+    const dept = norm(inc.department) || 'غير محدد';
+    const sev  = (norm(inc.severity) || 'none').toLowerCase();
+    const esc  = !!normEscTo(inc) || normStatus(inc) === 'escalated';
+
+    const keySev = sevKeys.includes(sev) ? sev : 'none';
+    if (!map.has(dept)) map.set(dept, new Map());
+    const inner = map.get(dept);
+    if (!inner.has(keySev)) inner.set(keySev, {count:0, score:0, items:[]});
+
+    const cell = inner.get(keySev);
+    cell.count += 1;
+
+    // Risk score: severity weight + escalated boost
+    cell.score += sevWeight(keySev) + (esc ? 3 : 0);
+    cell.items.push(inc);
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'hm-grid';
+  grid.style.gridTemplateColumns = `240px repeat(${sevKeys.length}, minmax(140px,1fr))`;
+
+  // headers
+  grid.appendChild(Object.assign(document.createElement('div'), {className:'hm-head', textContent:'القسم'}));
+  const sevNames = {death:'وفاة', severe:'ضرر جسيم', moderate:'ضرر متوسط', minor:'ضرر بسيط', none:'بدون ضرر'};
+  for (const s of sevKeys){
+    const h = document.createElement('div');
+    h.className = 'hm-head';
+    h.textContent = sevNames[s];
+    grid.appendChild(h);
+  }
+
+  // rows
+  for (const dept of depts){
+    const row = document.createElement('div');
+    row.className = 'hm-row';
+    row.textContent = dept;
+    grid.appendChild(row);
+
+    const inner = map.get(dept) || new Map();
+    for (const s of sevKeys){
+      const d = inner.get(s) || {count:0, score:0, items:[]};
+      const cell = document.createElement('div');
+      cell.className = 'hm-cell';
+      cell.style.background = heatColor(d.score);
+      cell.innerHTML = `<div class="hm-num">${d.count}</div><div class="hm-sub">Risk: ${d.score}</div>`;
+      cell.onclick = () => {
+        const ids = d.items.slice(0,20).map(x=>x.id).join('\n');
+        alert(`القسم: ${dept}\nالخطورة: ${sevNames[s]}\nعدد الحالات: ${d.count}\nRisk Score: ${d.score}\n\nأول 20 رقم بلاغ:\n${ids || '-'}`);
+      };
+      grid.appendChild(cell);
+    }
+  }
+
+  container.innerHTML = '';
+  container.appendChild(grid);
+}
+
+4) ملاحظة مهمة جدًا من صور الشيت عندك (سبب التكرار في المتابعة)
+
+في Complaints_Followup واضح عندك تكرار Followup لنفس الشكوى بسبب أنك تسجل Followup في أكثر من مكان (مثلاً: escalate + update + close) و/أو زر ينضغط مرتين.
+
+✅ حل سريع (منع التكرار)
+
+داخل addComplaintFollowup() في Apps Script قبل appendRow أضف check بسيط يمنع تكرار نفس (Complaint_ID + Action + Date) خلال نفس اليوم.
+
+إذا تبغاه أكتب لك البلوك جاهز—بس قول لي هل تريد المنع يكون خلال 10 ثواني ولا خلال نفس اليوم؟

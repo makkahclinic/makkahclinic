@@ -317,6 +317,15 @@
         .badge-dark { background: #343a40; color: white; }
         .badge-purple { background: rgba(111,66,193,0.15); color: #6f42c1; }
         
+        /* Heatmap Styles */
+        .hm-grid { display: grid; gap: 8px; min-width: 900px; }
+        .hm-head, .hm-row { background: #f6f8fb; border: 1px solid #e9ecef; border-radius: 10px; padding: 10px; font-weight: 700; }
+        .hm-head { text-align: center; position: sticky; top: 0; z-index: 1; }
+        .hm-cell { border-radius: 12px; padding: 10px; border: 1px solid #e9ecef; cursor: pointer; min-height: 56px; transition: .12s; text-align: center; }
+        .hm-cell:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,.10); }
+        .hm-num { font-weight: 900; font-size: 1.2rem; }
+        .hm-sub { font-size: .85rem; opacity: .85; }
+        
         .severity-dot {
             display: inline-block;
             width: 12px;
@@ -721,6 +730,25 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Heatmap المخاطر -->
+            <div class="card" style="margin-top:20px;">
+                <div class="card-header">
+                    <h3 class="card-title"><i class="fas fa-th"></i> Heatmap المخاطر حسب القسم والخطورة</h3>
+                </div>
+                <div class="card-body">
+                    <div id="incidentHeatmap" style="overflow:auto;"></div>
+                    <div style="margin-top:15px; display:flex; flex-wrap:wrap; gap:15px; font-size:0.85rem; color:#666;">
+                        <span><span style="display:inline-block;width:16px;height:16px;background:rgba(220,53,69,0.55);border-radius:4px;vertical-align:middle;"></span> حرج (25+)</span>
+                        <span><span style="display:inline-block;width:16px;height:16px;background:rgba(253,126,20,0.55);border-radius:4px;vertical-align:middle;"></span> عالي (15-24)</span>
+                        <span><span style="display:inline-block;width:16px;height:16px;background:rgba(255,193,7,0.55);border-radius:4px;vertical-align:middle;"></span> متوسط (8-14)</span>
+                        <span><span style="display:inline-block;width:16px;height:16px;background:rgba(40,167,69,0.35);border-radius:4px;vertical-align:middle;"></span> منخفض (&lt;8)</span>
+                    </div>
+                    <div style="margin-top:10px;color:#999;font-size:0.85rem;">
+                        <i class="fas fa-info-circle"></i> اضغط أي خلية لعرض أرقام البلاغات
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div id="incidents" class="tab-content">
@@ -1013,6 +1041,33 @@
         let staffList = [];
         let currentIncident = null;
         
+        // نظام Cache للحوادث
+        let allIncidentsCache = [];
+        let cacheTime = 0;
+        
+        async function loadAllIncidentsCached(force = false) {
+            const now = Date.now();
+            if (!force && allIncidentsCache.length && (now - cacheTime) < 15000) return allIncidentsCache;
+            
+            const res = await apiCall('getIncidents', { status: 'all', limit: 2000 });
+            if (!res.ok) throw new Error(res.error || 'Failed to load incidents');
+            allIncidentsCache = res.incidents || [];
+            cacheTime = now;
+            return allIncidentsCache;
+        }
+        
+        // دوال تطبيع البيانات
+        function norm(v) { return String(v || '').trim(); }
+        function normStatus(i) {
+            return norm(i.status || i.Status || i.incidentStatus || i.state).toLowerCase();
+        }
+        function normEscTo(i) {
+            return norm(i.escalatedTo || i.Escalated_To || i.escalated_to || i.escalationTo || i.escalationAssignee);
+        }
+        function normClosedDate(i) {
+            return norm(i.closedDate || i.Closed_Date || i.closed_date || i.Resolution_Date);
+        }
+        
         function calculateDelay(incidentDate, status, lastActionDate) {
             if (status === 'closed') return { hours: 0, days: 0 };
             
@@ -1147,28 +1202,170 @@
                 document.getElementById('loginOverlay').classList.add('hidden');
                 document.getElementById('currentUserName').textContent = currentUser.name;
                 loadData();
-                
-                // إعادة تحديث العدادات بعد نصف ثانية كحماية من أي تأخير
-                setTimeout(() => {
-                    loadEscalatedIncidents();
-                    loadClosedIncidents();
-                }, 500);
             }
             loadStaffList();
         }
         
         async function loadData() {
+            try {
+                const all = await loadAllIncidentsCached(true);
+                
+                // فلترة الحوادث
+                const escalated = all.filter(i => normStatus(i) === 'escalated' || normEscTo(i));
+                const closed = all.filter(i => normStatus(i) === 'closed' || normClosedDate(i));
+                
+                // تحديث العدادات فوراً
+                document.getElementById('escalatedTabCount').textContent = escalated.length;
+                document.getElementById('closedTabCount').textContent = closed.length;
+                
+                // تحديث الجداول
+                renderEscalatedTable(escalated);
+                renderClosedTable(closed);
+                
+                // الحالات الحرجة
+                renderCriticalPanel(getCriticalIncidents(all));
+                
+                // Heatmap المخاطر
+                buildIncidentHeatmap(all);
+                
+            } catch (e) {
+                console.error('Error loading cached data:', e);
+            }
+            
+            // تحميل باقي البيانات
             await loadStats();
             await loadIncidents();
             await loadPendingIncidents();
             await loadRcaIncidents();
+        }
+        
+        // دالة عرض جدول المُصعّدة
+        function renderEscalatedTable(list) {
+            const tbody = document.getElementById('escalatedTable');
+            if (!tbody) return;
+            if (!list.length) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد حوادث مُصعّدة</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = list.map(inc => {
+                const escName = normEscTo(inc) || '-';
+                const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
+                return `
+                    <tr style="background:#fff5f5;">
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${inc.date || '-'}</td>
+                        <td>${INCIDENT_TYPES[inc.type] || inc.type || '-'}</td>
+                        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+                        <td>${inc.department || '-'}</td>
+                        <td><strong style="color:#dc3545;"><i class="fas fa-arrow-up"></i> ${escName}</strong></td>
+                        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+                    </tr>`;
+            }).join('');
+        }
+        
+        // دالة عرض جدول المغلقة
+        function renderClosedTable(list) {
+            const tbody = document.getElementById('closedTable');
+            if (!tbody) return;
+            if (!list.length) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد حوادث مغلقة</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = list.map(inc => {
+                const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#28a745' };
+                const closedDate = normClosedDate(inc) || '-';
+                return `
+                    <tr>
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${inc.date || '-'}</td>
+                        <td>${INCIDENT_TYPES[inc.type] || inc.type || '-'}</td>
+                        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+                        <td>${inc.department || '-'}</td>
+                        <td>${closedDate}</td>
+                        <td><button class="btn btn-success btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+                    </tr>`;
+            }).join('');
+        }
+        
+        // دوال Heatmap المخاطر
+        function sevWeight(sev) {
+            sev = (sev || '').toLowerCase();
+            if (sev === 'death') return 10;
+            if (sev === 'severe') return 7;
+            if (sev === 'moderate') return 4;
+            if (sev === 'minor') return 2;
+            return 1;
+        }
+        
+        function heatColor(score) {
+            if (score >= 25) return 'rgba(220,53,69,0.55)';
+            if (score >= 15) return 'rgba(253,126,20,0.55)';
+            if (score >= 8) return 'rgba(255,193,7,0.55)';
+            return 'rgba(40,167,69,0.35)';
+        }
+        
+        function buildIncidentHeatmap(all) {
+            const container = document.getElementById('incidentHeatmap');
+            if (!container) return;
             
-            // تحديث عدادات المُصعّدة والمغلقة عند فتح الصفحة
-            await loadEscalatedIncidents();
-            await loadClosedIncidents();
+            const depts = Array.from(new Set(all.map(x => norm(x.department) || 'غير محدد'))).sort();
+            const sevKeys = ['death', 'severe', 'moderate', 'minor', 'none'];
+            const sevNames = { death: 'وفاة', severe: 'ضرر جسيم', moderate: 'ضرر متوسط', minor: 'ضرر بسيط', none: 'بدون ضرر' };
             
-            // تحميل الحالات الحرجة
-            await loadCriticalIncidents();
+            const map = new Map();
+            for (const inc of all) {
+                const dept = norm(inc.department) || 'غير محدد';
+                const sev = (norm(inc.severity) || 'none').toLowerCase();
+                const esc = !!normEscTo(inc) || normStatus(inc) === 'escalated';
+                
+                const keySev = sevKeys.includes(sev) ? sev : 'none';
+                if (!map.has(dept)) map.set(dept, new Map());
+                const inner = map.get(dept);
+                if (!inner.has(keySev)) inner.set(keySev, { count: 0, score: 0, items: [] });
+                
+                const cell = inner.get(keySev);
+                cell.count += 1;
+                cell.score += sevWeight(keySev) + (esc ? 3 : 0);
+                cell.items.push(inc);
+            }
+            
+            const grid = document.createElement('div');
+            grid.className = 'hm-grid';
+            grid.style.gridTemplateColumns = `240px repeat(${sevKeys.length}, minmax(140px,1fr))`;
+            
+            // Headers
+            grid.appendChild(Object.assign(document.createElement('div'), { className: 'hm-head', textContent: 'القسم' }));
+            for (const s of sevKeys) {
+                const h = document.createElement('div');
+                h.className = 'hm-head';
+                h.textContent = sevNames[s];
+                grid.appendChild(h);
+            }
+            
+            // Rows
+            for (const dept of depts) {
+                const row = document.createElement('div');
+                row.className = 'hm-row';
+                row.textContent = dept;
+                grid.appendChild(row);
+                
+                const inner = map.get(dept) || new Map();
+                for (const s of sevKeys) {
+                    const d = inner.get(s) || { count: 0, score: 0, items: [] };
+                    const cell = document.createElement('div');
+                    cell.className = 'hm-cell';
+                    cell.style.background = heatColor(d.score);
+                    cell.innerHTML = `<div class="hm-num">${d.count}</div><div class="hm-sub">Risk: ${d.score}</div>`;
+                    cell.onclick = () => {
+                        const ids = d.items.slice(0, 20).map(x => x.id).join('\n');
+                        alert(`القسم: ${dept}\nالخطورة: ${sevNames[s]}\nعدد الحالات: ${d.count}\nRisk Score: ${d.score}\n\nأول 20 رقم بلاغ:\n${ids || '-'}`);
+                    };
+                    grid.appendChild(cell);
+                }
+            }
+            
+            container.innerHTML = '';
+            container.appendChild(grid);
         }
         
         // دالة تحديد الحالات الحرجة
