@@ -618,6 +618,9 @@
                 <button class="tab-btn" onclick="showTab('inprogress', this)">
                     <i class="fas fa-spinner"></i> قيد المعالجة <span class="count" id="inprogressCount">0</span>
                 </button>
+                <button class="tab-btn" onclick="showTab('escalated', this)">
+                    <i class="fas fa-exclamation-triangle"></i> المُصعّدة <span class="count danger" id="escalatedCount" style="background:#dc3545;">0</span>
+                </button>
                 <button class="tab-btn" onclick="showTab('history', this)">
                     <i class="fas fa-history"></i> التقرير التاريخي
                 </button>
@@ -783,6 +786,32 @@
                                     </tr>
                                 </thead>
                                 <tbody id="inprogressTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="escalated" class="tab-content">
+                <div class="card" style="border-top:4px solid #dc3545;">
+                    <div class="card-header" style="background:linear-gradient(135deg, #ffebee 0%, #fff 100%);">
+                        <h3 class="card-title" style="color:#dc3545;"><i class="fas fa-exclamation-triangle"></i> الشكاوى المُصعّدة</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>رقم الشكوى</th>
+                                        <th>التاريخ</th>
+                                        <th>النوع</th>
+                                        <th>مُصعّدة إلى</th>
+                                        <th>تاريخ التصعيد</th>
+                                        <th>السبب</th>
+                                        <th>إجراء</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="escalatedTable"></tbody>
                             </table>
                         </div>
                     </div>
@@ -1037,6 +1066,7 @@
                 applyFilters();
                 renderNewTable();
                 renderInProgressTable();
+                renderEscalatedTable();
             }
         }
         
@@ -1308,6 +1338,37 @@
                     <td>${c.type || '-'}</td>
                     <td>${c.assignedTo || '-'}</td>
                     <td>${c.daysOpen || 0} يوم</td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-success btn-sm" onclick="showCloseModal('${c.id}')"><i class="fas fa-check"></i> إغلاق</button>
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function renderEscalatedTable() {
+            const escalated = allComplaints.filter(c => (c.escalatedTo || '').trim() !== '' && c.status !== 'closed');
+            const tbody = document.getElementById('escalatedTable');
+            document.getElementById('escalatedCount').textContent = escalated.length;
+            
+            if (!escalated.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد شكاوى مُصعّدة حالياً</td></tr>';
+                return;
+            }
+            let html = '';
+            escalated.forEach(c => {
+                const repeat = Number(c.escalationCount || 0);
+                html += `<tr style="background:#fff5f5;">
+                    <td>
+                        <strong>${c.id}</strong>
+                        ${repeat >= 2 ? `<span class="badge badge-warning">تكرار ${repeat}</span>` : ''}
+                    </td>
+                    <td>${c.date}</td>
+                    <td>${c.type || '-'}</td>
+                    <td><strong style="color:#dc3545;">${c.escalatedTo || '-'}</strong></td>
+                    <td>${c.escalationDate || '-'}</td>
+                    <td>${c.escalationReason || '-'}</td>
                     <td>
                         <button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>
                         <button class="btn btn-success btn-sm" onclick="showCloseModal('${c.id}')"><i class="fas fa-check"></i> إغلاق</button>
