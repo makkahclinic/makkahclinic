@@ -1398,7 +1398,10 @@
                     return;
                 }
                 
-                const escalated = result.incidents.filter(i => i.escalatedTo && i.escalatedTo.trim() !== '');
+                const escalated = result.incidents.filter(i => {
+                    const escName = i.escalationAssignee || i.escalatedTo || '';
+                    return escName.trim() !== '';
+                });
                 document.getElementById('escalatedCount').textContent = escalated.length;
                 
                 if (!escalated.length) {
@@ -1409,13 +1412,14 @@
                 let html = '';
                 escalated.forEach(inc => {
                     const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
+                    const escName = inc.escalationAssignee || inc.escalatedTo || '-';
                     html += `<tr>
                         <td><strong>${inc.id}</strong></td>
                         <td>${inc.date}</td>
                         <td>${INCIDENT_TYPES[inc.type] || inc.type}</td>
                         <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
                         <td>${inc.department}</td>
-                        <td><span style="color:#dc3545;font-weight:600;"><i class="fas fa-arrow-up"></i> ${inc.escalatedTo}</span></td>
+                        <td><span style="color:#dc3545;font-weight:600;"><i class="fas fa-arrow-up"></i> ${escName}</span></td>
                         <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
                     </tr>`;
                 });
