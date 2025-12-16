@@ -1056,16 +1056,61 @@
             return allIncidentsCache;
         }
         
-        // دوال تطبيع البيانات
-        function norm(v) { return String(v || '').trim(); }
-        function normStatus(i) {
-            return norm(i.status || i.Status || i.incidentStatus || i.state).toLowerCase();
+        // دوال تطبيع البيانات - موحدة لكل الحقول
+        function norm(v) { return String(v ?? '').trim(); }
+        
+        function getId(i) {
+            return norm(i.id || i.Incident_ID || i.incident_id || i.IncidentId || i.incidentId);
         }
-        function normEscTo(i) {
+        function getDept(i) {
+            return norm(i.department || i.Department || i.dept) || 'غير محدد';
+        }
+        function getType(i) {
+            return norm(i.type || i.Incident_Type || i.incident_type || i.typeName || i.IncidentType || i.incidentType) || '-';
+        }
+        function getDate(i) {
+            return norm(i.date || i.Date || i.incidentDate || i.Incident_Date || i.incident_date) || '-';
+        }
+        function getSeverityRaw(i) {
+            return norm(i.severity || i.Severity || i.severityLabel || i.Severity_Label);
+        }
+        function getStatusRaw(i) {
+            return norm(i.status || i.Status || i.state || i.incidentStatus);
+        }
+        function getClosedDate(i) {
+            return norm(i.closedDate || i.Closed_Date || i.closed_date || i.Resolution_Date || i.ClosedDate);
+        }
+        function getEscTo(i) {
             return norm(i.escalatedTo || i.Escalated_To || i.escalated_to || i.escalationTo || i.escalationAssignee);
         }
-        function normClosedDate(i) {
-            return norm(i.closedDate || i.Closed_Date || i.closed_date || i.Resolution_Date);
+        function getDescription(i) {
+            return norm(i.description || i.Description || i.details || i.Details) || '-';
+        }
+        
+        // تطبيع Status (يدعم عربي/إنجليزي)
+        function normStatus(i) {
+            const s = getStatusRaw(i).toLowerCase();
+            if (!s) return '';
+            if (s.includes('closed') || s.includes('مغلق')) return 'closed';
+            if (s.includes('escalated') || s.includes('مصع') || s.includes('تصعيد')) return 'escalated';
+            if (s.includes('rca_required') || s.includes('يتطلب')) return 'rca_required';
+            if (s.includes('rca_in_progress') || s.includes('قيد التحليل')) return 'rca_in_progress';
+            if (s.includes('under_review') || s.includes('مراجعة')) return 'under_review';
+            if (s.includes('new') || s.includes('جديد')) return 'new';
+            if (s.includes('in_progress') || s.includes('قيد المعالجة')) return 'in_progress';
+            return s;
+        }
+        
+        // تطبيع Severity (يدعم عربي/إنجليزي)
+        function normSeverity(i) {
+            const s = getSeverityRaw(i).toLowerCase();
+            if (!s) return 'none';
+            if (s.includes('death') || s.includes('وفاة')) return 'death';
+            if (s.includes('severe') || s.includes('جسيم')) return 'severe';
+            if (s.includes('moderate') || s.includes('متوسط')) return 'moderate';
+            if (s.includes('minor') || s.includes('بسيط')) return 'minor';
+            if (s.includes('none') || s.includes('بدون') || s.includes('near')) return 'none';
+            return 'none';
         }
         
         function calculateDelay(incidentDate, status, lastActionDate) {
@@ -1211,8 +1256,8 @@
                 const all = await loadAllIncidentsCached(true);
                 
                 // فلترة الحوادث
-                const escalated = all.filter(i => normStatus(i) === 'escalated' || normEscTo(i));
-                const closed = all.filter(i => normStatus(i) === 'closed' || normClosedDate(i));
+                const escalated = all.filter(i => normStatus(i) === 'escalated' || getEscTo(i));
+                const closed = all.filter(i => normStatus(i) === 'closed' || getClosedDate(i));
                 
                 // تحديث العدادات فوراً
                 document.getElementById('escalatedTabCount').textContent = escalated.length;
@@ -1248,17 +1293,22 @@
                 return;
             }
             tbody.innerHTML = list.map(inc => {
-                const escName = normEscTo(inc) || '-';
-                const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
+                const id = getId(inc);
+                const dt = getDate(inc);
+                const dept = getDept(inc);
+                const type = getType(inc);
+                const sevKey = normSeverity(inc);
+                const sev = SEVERITY[sevKey] || { name: getSeverityRaw(inc) || '-', color: '#dc3545' };
+                const escName = getEscTo(inc) || '-';
                 return `
                     <tr style="background:#fff5f5;">
-                        <td><strong>${inc.id}</strong></td>
-                        <td>${inc.date || '-'}</td>
-                        <td>${INCIDENT_TYPES[inc.type] || inc.type || '-'}</td>
+                        <td><strong>${id || '-'}</strong></td>
+                        <td>${dt}</td>
+                        <td>${INCIDENT_TYPES[type] || type}</td>
                         <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
-                        <td>${inc.department || '-'}</td>
+                        <td>${dept}</td>
                         <td><strong style="color:#dc3545;"><i class="fas fa-arrow-up"></i> ${escName}</strong></td>
-                        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+                        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${id}')"><i class="fas fa-eye"></i></button></td>
                     </tr>`;
             }).join('');
         }
@@ -1272,17 +1322,22 @@
                 return;
             }
             tbody.innerHTML = list.map(inc => {
-                const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#28a745' };
-                const closedDate = normClosedDate(inc) || '-';
+                const id = getId(inc);
+                const dt = getDate(inc);
+                const dept = getDept(inc);
+                const type = getType(inc);
+                const sevKey = normSeverity(inc);
+                const sev = SEVERITY[sevKey] || { name: getSeverityRaw(inc) || '-', color: '#28a745' };
+                const closedDate = getClosedDate(inc) || '-';
                 return `
                     <tr>
-                        <td><strong>${inc.id}</strong></td>
-                        <td>${inc.date || '-'}</td>
-                        <td>${INCIDENT_TYPES[inc.type] || inc.type || '-'}</td>
+                        <td><strong>${id || '-'}</strong></td>
+                        <td>${dt}</td>
+                        <td>${INCIDENT_TYPES[type] || type}</td>
                         <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
-                        <td>${inc.department || '-'}</td>
+                        <td>${dept}</td>
                         <td>${closedDate}</td>
-                        <td><button class="btn btn-success btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
+                        <td><button class="btn btn-success btn-sm" onclick="viewIncident('${id}')"><i class="fas fa-eye"></i></button></td>
                     </tr>`;
             }).join('');
         }
@@ -1327,15 +1382,15 @@
             const container = document.getElementById('incidentHeatmap');
             if (!container) return;
             
-            const depts = Array.from(new Set(all.map(x => norm(x.department) || 'غير محدد'))).sort();
+            const depts = Array.from(new Set(all.map(x => getDept(x)))).sort();
             const sevKeys = ['death', 'severe', 'moderate', 'minor', 'none'];
             const sevNames = { death: 'وفاة', severe: 'ضرر جسيم', moderate: 'ضرر متوسط', minor: 'ضرر بسيط', none: 'بدون ضرر' };
             
             const map = new Map();
             for (const inc of all) {
-                const dept = norm(inc.department) || 'غير محدد';
-                const sev = (norm(inc.severity) || 'none').toLowerCase();
-                const esc = !!normEscTo(inc) || normStatus(inc) === 'escalated';
+                const dept = getDept(inc);
+                const sev = normSeverity(inc);
+                const esc = !!getEscTo(inc) || normStatus(inc) === 'escalated';
                 
                 const keySev = sevKeys.includes(sev) ? sev : 'none';
                 if (!map.has(dept)) map.set(dept, new Map());
@@ -1376,7 +1431,7 @@
                     cell.style.background = heatColor(d.score);
                     cell.innerHTML = `<div class="hm-num">${d.count}</div><div class="hm-sub">Risk: ${d.score}</div>`;
                     cell.onclick = () => {
-                        const ids = d.items.slice(0, 20).map(x => x.id).join('\n');
+                        const ids = d.items.slice(0, 20).map(x => getId(x)).filter(Boolean).join('\n');
                         alert(`القسم: ${dept}\nالخطورة: ${sevNames[s]}\nعدد الحالات: ${d.count}\nRisk Score: ${d.score}\n\nأول 20 رقم بلاغ:\n${ids || '-'}`);
                     };
                     grid.appendChild(cell);
@@ -1466,15 +1521,19 @@
                     
                     document.getElementById('rcaCount').textContent = result.byStatus?.rca_required?.count || 0;
                     
-                    // تحديث عدادات التبويبات فوراً من الإحصائيات
-                    const escalatedCount = result.byStatus?.escalated?.count ?? result.escalated ?? 0;
-                    const closedCount = result.byStatus?.closed?.count ?? result.closed ?? 0;
-                    
-                    const escEl = document.getElementById('escalatedTabCount');
-                    const clsEl = document.getElementById('closedTabCount');
-                    
-                    if (escEl) escEl.textContent = escalatedCount;
-                    if (clsEl) clsEl.textContent = closedCount;
+                    // تحديث عدادات التبويبات فقط إذا كانت البيانات موجودة
+                    const hasByStatus = !!result.byStatus;
+                    if (hasByStatus) {
+                        const escalatedCount = Number(result.byStatus.escalated?.count ?? 0);
+                        const closedCount = Number(result.byStatus.closed?.count ?? 0);
+                        
+                        const escEl = document.getElementById('escalatedTabCount');
+                        const clsEl = document.getElementById('closedTabCount');
+                        
+                        if (escEl && escalatedCount >= 0) escEl.textContent = escalatedCount;
+                        if (clsEl && closedCount >= 0) clsEl.textContent = closedCount;
+                    }
+                    // إذا لم يكن byStatus موجود، لا تلمس العدادات (خليها من loadData)
                     
                     renderCharts(result);
                 }

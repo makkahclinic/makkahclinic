@@ -1,0 +1,223 @@
+1) أكبر خلل: أسماء الحقول في الشيت vs الحقول اللي تستخدمها في الفرونت
+
+من صور شيت الحوادث واضح إن الأعمدة اسمها غالبًا مثل:
+
+Incident_ID
+
+Department
+
+Incident_Type
+
+Severity
+
+Status
+
+Closed_Date … إلخ
+
+لكن أنت في العرض والفلترة تستخدم:
+
+inc.id, inc.department, inc.type, inc.severity, inc.status
+
+إذا الباك-إند ما يحولها 100%، النتائج تصير:
+
+id فاضي → الجداول والـ alerts ما تطلع
+
+department فاضي → Heatmap يصير “غير محدد”
+
+status غير متطابق → عداد مُصعّدة/مغلقة يصير 0
+
+✅ الحل الصحيح: اعمل طبقة تطبيع واحدة تستخدمها في كل مكان.
+
+أضف هذه الدوال (مرة واحدة) عند “دوال التطبيع”:
+function norm(v){ return String(v ?? '').trim(); }
+
+function getId(i){
+  return norm(i.id || i.Incident_ID || i.incident_id || i.IncidentId);
+}
+function getDept(i){
+  return norm(i.department || i.Department) || 'غير محدد';
+}
+function getType(i){
+  return norm(i.type || i.Incident_Type || i.incident_type || i.typeName || i.IncidentType) || '-';
+}
+function getDate(i){
+  return norm(i.date || i.Date || i.incidentDate || i.Incident_Date) || '-';
+}
+function getSeverityRaw(i){
+  return norm(i.severity || i.Severity || i.severityLabel || i.Severity_Label);
+}
+function getStatusRaw(i){
+  return norm(i.status || i.Status || i.state || i.incidentStatus);
+}
+function getClosedDate(i){
+  return norm(i.closedDate || i.Closed_Date || i.closed_date || i.Resolution_Date || i.ClosedDate);
+}
+function getEscTo(i){
+  return norm(i.escalatedTo || i.Escalated_To || i.escalated_to || i.escalationTo || i.escalationAssignee);
+}
+
+طَبِّع الـ Status والـ Severity عشان تدعم عربي/إنجليزي:
+function normStatus(i){
+  const s = getStatusRaw(i).toLowerCase();
+  if (!s) return '';
+  if (s.includes('closed') || s.includes('مغلق')) return 'closed';
+  if (s.includes('escalated') || s.includes('مصع') || s.includes('تصعيد')) return 'escalated';
+  if (s.includes('rca_required') || s.includes('يتطلب') ) return 'rca_required';
+  if (s.includes('rca_in_progress') || s.includes('قيد التحليل')) return 'rca_in_progress';
+  if (s.includes('under_review') || s.includes('مراجعة')) return 'under_review';
+  if (s.includes('new') || s.includes('جديد')) return 'new';
+  if (s.includes('in_progress') || s.includes('قيد المعالجة')) return 'in_progress';
+  return s;
+}
+
+function normSeverity(i){
+  const s = getSeverityRaw(i).toLowerCase();
+  if (!s) return 'none';
+  if (s.includes('death') || s.includes('وفاة')) return 'death';
+  if (s.includes('severe') || s.includes('جسيم')) return 'severe';
+  if (s.includes('moderate') || s.includes('متوسط')) return 'moderate';
+  if (s.includes('minor') || s.includes('بسيط')) return 'minor';
+  if (s.includes('none') || s.includes('بدون')) return 'none';
+  return 'none';
+}
+
+2) خلل ثاني: أنت عندك “مصدرين” للعدادات والجداول وقد يصير بينهم تعارض
+
+loadData() يحسب escalated/closed من getIncidents(status=all)
+
+loadStats() يكتب نفس العدادات من getIncidentStats
+
+إذا getIncidentStats ما يرجع byStatus.escalated/closed دائمًا، ممكن يكتب 0 فوق اللي حسبته صح.
+
+✅ الحل: في loadStats() لا تكتب عدادات التبويبات إلا لو فعلاً البيانات موجودة.
+
+عدّل جزء العدادات في loadStats() بهذا الشكل:
+
+const escEl = document.getElementById('escalatedTabCount');
+const clsEl = document.getElementById('closedTabCount');
+
+const hasByStatus = !!result.byStatus;
+if (hasByStatus) {
+  const escalatedCount = Number(result.byStatus?.escalated?.count ?? 0);
+  const closedCount    = Number(result.byStatus?.closed?.count ?? 0);
+  if (escEl) escEl.textContent = escalatedCount;
+  if (clsEl) clsEl.textContent = closedCount;
+}
+// لو ما فيه byStatus لا تلمس العدادات (خليها من loadData)
+
+3) خلل ثالث: جداول “المُصعّدة/المغلقة” لسه تستخدم inc.id / inc.date / inc.department
+
+غيرها لتستخدم دوال التطبيع الجديدة.
+
+عدّل renderEscalatedTable:
+function renderEscalatedTable(list){
+  const tbody = document.getElementById('escalatedTable');
+  if (!tbody) return;
+
+  if (!list.length){
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد حوادث مُصعّدة</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(inc => {
+    const id = getId(inc);
+    const dt = getDate(inc);
+    const dept = getDept(inc);
+    const type = getType(inc);
+    const sevKey = normSeverity(inc);
+    const sev = SEVERITY[sevKey] || { name: getSeverityRaw(inc) || '-', color:'#dc3545' };
+    const escName = getEscTo(inc) || '-';
+
+    return `
+      <tr style="background:#fff5f5;">
+        <td><strong>${id || '-'}</strong></td>
+        <td>${dt}</td>
+        <td>${INCIDENT_TYPES[type] || type}</td>
+        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+        <td>${dept}</td>
+        <td><strong style="color:#dc3545;"><i class="fas fa-arrow-up"></i> ${escName}</strong></td>
+        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${id}')"><i class="fas fa-eye"></i></button></td>
+      </tr>`;
+  }).join('');
+}
+
+عدّل renderClosedTable:
+function renderClosedTable(list){
+  const tbody = document.getElementById('closedTable');
+  if (!tbody) return;
+
+  if (!list.length){
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">لا توجد حوادث مغلقة</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(inc => {
+    const id = getId(inc);
+    const dt = getDate(inc);
+    const dept = getDept(inc);
+    const type = getType(inc);
+    const sevKey = normSeverity(inc);
+    const sev = SEVERITY[sevKey] || { name: getSeverityRaw(inc) || '-', color:'#28a745' };
+    const closedDate = getClosedDate(inc) || '-';
+
+    return `
+      <tr>
+        <td><strong>${id || '-'}</strong></td>
+        <td>${dt}</td>
+        <td>${INCIDENT_TYPES[type] || type}</td>
+        <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
+        <td>${dept}</td>
+        <td>${closedDate}</td>
+        <td><button class="btn btn-success btn-sm" onclick="viewIncident('${id}')"><i class="fas fa-eye"></i></button></td>
+      </tr>`;
+  }).join('');
+}
+
+4) Heatmap عندك ممتاز “منطقًا” لكن يحتاج تصحيح مدخلاته
+
+داخل buildIncidentHeatmap أنت تستخدم norm(inc.department) و norm(inc.severity)—هذا لازم يتحول لـ getDept() و normSeverity().
+
+عدّل أول سطرين داخل loop:
+
+const dept = getDept(inc);
+const keySev = normSeverity(inc);
+
+
+وبدل:
+
+const esc = !!normEscTo(inc) || normStatus(inc) === 'escalated';
+
+
+إلى:
+
+const esc = !!getEscTo(inc) || normStatus(inc) === 'escalated';
+
+
+وبدل x.id في alert إلى getId(x):
+
+const ids = d.items.slice(0, 20).map(x => getId(x)).filter(Boolean).join('\n');
+
+5) أهم نقطة تشغيل: فلترة escalated/closed في loadData لازم تكون بـ normStatus
+
+عندك:
+
+const escalated = all.filter(i => normStatus(i) === 'escalated' || normEscTo(i));
+const closed = all.filter(i => normStatus(i) === 'closed' || normClosedDate(i));
+
+
+✅ غيّر normEscTo و normClosedDate إلى النسخ الجديدة:
+
+const escalated = all.filter(i => normStatus(i) === 'escalated' || getEscTo(i));
+const closed    = all.filter(i => normStatus(i) === 'closed'    || getClosedDate(i));
+
+الخلاصة: هذا اللي تحتاجه الآن “فعليًا”
+
+طبقة تطبيع موحدة (getId/getDept/getType/normStatus/normSeverity/getEscTo/getClosedDate)
+
+الفلترة (escalated/closed/rca/critical) تعتمد على التطبيع
+
+الجداول والـ Heatmap تستخدم التطبيع بدل الحقول الخام
+
+loadStats() لا ينسف العدادات إذا ما عنده byStatus
+
+إذا تبغى، ارسل لي عينة واحدة من JSON اللي يرجع من getIncidents {status:'all'} (أول عنصر فقط) وسأعطيك نسخة نهائية “مقفلة” بدون احتمالات—لأن كل شيء يعتمد هل الباك-إند يرجع id أو Incident_ID.
