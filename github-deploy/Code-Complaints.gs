@@ -227,24 +227,37 @@ function getComplaintsSheet(sheetName) {
 
 // دالة إصلاح الهيدر - تُشغّل مرة واحدة يدوياً
 function ensureComplaintsLogHeader() {
-  const sheet = getComplaintsSheet('Complaints_Log');
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('Complaints_Log');
   
-  const currentHeader = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  // لو الورقة غير موجودة → أنشئها
+  if (!sheet) {
+    sheet = ss.insertSheet('Complaints_Log');
+    sheet.getRange(1, 1, 1, COMPLAINTS_LOG_HEADER.length).setValues([COMPLAINTS_LOG_HEADER]);
+    Logger.log('تم إنشاء ورقة Complaints_Log وإضافة الهيدر');
+    return { success: true, message: 'تم إنشاء الورقة وإضافة الهيدر' };
+  }
+  
+  // لو الورقة فاضية تماماً
+  if (sheet.getLastRow() === 0 || sheet.getLastColumn() === 0) {
+    sheet.getRange(1, 1, 1, COMPLAINTS_LOG_HEADER.length).setValues([COMPLAINTS_LOG_HEADER]);
+    Logger.log('تم إضافة الهيدر للورقة الفارغة');
+    return { success: true, message: 'تم إضافة الهيدر' };
+  }
+  
+  // قراءة الهيدر الحالي
+  const lastCol = sheet.getLastColumn();
+  const currentHeader = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   
   // لو الهيدر مطابق → لا تعمل شيء
   if (JSON.stringify(currentHeader) === JSON.stringify(COMPLAINTS_LOG_HEADER)) {
     Logger.log('Header already correct');
-    return { success: true, message: 'الهيدر صحيح' };
+    return { success: true, message: 'الهيدر صحيح بالفعل' };
   }
   
-  // لو الورقة فاضية
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(COMPLAINTS_LOG_HEADER);
-    return { success: true, message: 'تم إضافة الهيدر' };
-  }
-  
-  // لو فيها بيانات → نعمل Replace للهيدر فقط
+  // تحديث الهيدر (استبدال أو توسيع)
   sheet.getRange(1, 1, 1, COMPLAINTS_LOG_HEADER.length).setValues([COMPLAINTS_LOG_HEADER]);
+  Logger.log('تم تحديث الهيدر');
   return { success: true, message: 'تم تحديث الهيدر' };
 }
 
