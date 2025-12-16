@@ -695,8 +695,37 @@
                         <h3 class="card-title"><i class="fas fa-th"></i> Heatmap المخاطر حسب الموقع</h3>
                     </div>
                     <div class="card-body">
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:12px; align-items:center;">
+                            <span class="badge badge-info" style="padding:8px 12px;">فلترة Heatmap</span>
+                            <select id="hmDays" class="btn btn-secondary btn-sm" style="border:1px solid #e9ecef;">
+                                <option value="all">كل البيانات</option>
+                                <option value="7">آخر 7 أيام</option>
+                                <option value="30" selected>آخر 30 يوم</option>
+                                <option value="90">آخر 90 يوم</option>
+                            </select>
+                            <label class="btn btn-secondary btn-sm" style="gap:8px; display:flex; align-items:center;">
+                                <input type="checkbox" id="hmOpenOnly" checked /> فقط المفتوحة
+                            </label>
+                            <label class="btn btn-secondary btn-sm" style="gap:8px; display:flex; align-items:center;">
+                                <input type="checkbox" id="hmTopOnly" checked /> أخطر 12 موقع
+                            </label>
+                            <button class="btn btn-primary btn-sm" onclick="rebuildHeatmapFromUI()">
+                                <i class="fas fa-sync"></i> تحديث
+                            </button>
+                        </div>
                         <div id="riskHeatmap" style="overflow:auto;"></div>
                         <div id="riskHeatmapNote" style="margin-top:10px; color:#666; font-size:0.9rem;"></div>
+
+                        <!-- نافذة تفاصيل Heatmap -->
+                        <div id="hmModal" class="modal">
+                            <div class="modal-content" style="max-width:720px;">
+                                <div class="modal-header">
+                                    <h3 id="hmModalTitle"><i class="fas fa-th"></i> تفاصيل Heatmap</h3>
+                                    <button class="modal-close" onclick="document.getElementById('hmModal').classList.remove('active')">&times;</button>
+                                </div>
+                                <div class="modal-body" id="hmModalBody"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1075,7 +1104,7 @@
                 document.getElementById('totalBadge').textContent = allComplaints.length + ' شكوى';
                 
                 // بناء Heatmap المخاطر
-                buildRiskHeatmap(allComplaints);
+                rebuildHeatmapFromUI();
                 
                 // حساب المصعدة وأعلى تكرار
                 const escalatedItems = allComplaints.filter(c => (c.escalatedTo || '').trim() !== '');
@@ -1257,6 +1286,212 @@
             if (note) {
                 note.textContent = 'ملاحظة: "حرج" يعتمد على (تصعيد متكرر/أولوية عالية+تصعيد/تأخر أيام). اضغط أي مربع لعرض أرقام الشكاوى.';
             }
+        }
+
+        function parseDate(dateStr) {
+            if (!dateStr) return null;
+            const parts = String(dateStr).split('-');
+            if (parts.length === 3) {
+                return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+            }
+            return new Date(dateStr);
+        }
+
+        function rebuildHeatmapFromUI() {
+            const days = document.getElementById('hmDays')?.value || 'all';
+            const openOnly = !!document.getElementById('hmOpenOnly')?.checked;
+            const topOnly = !!document.getElementById('hmTopOnly')?.checked;
+
+            let data = [...allComplaints];
+
+            if (openOnly) data = data.filter(c => c.status === 'new' || c.status === 'in_progress');
+
+            if (days !== 'all') {
+                const d = parseInt(days, 10);
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - d);
+                data = data.filter(c => {
+                    const dt = parseDate(c.date);
+                    return dt && !isNaN(dt) ? dt >= cutoff : true;
+                });
+            }
+
+            buildRiskHeatmapPro(data, { topOnly });
+        }
+
+        function buildRiskHeatmapPro(complaints, opts = { topOnly: true }) {
+            const buckets = ['حرج', 'عالي', 'متوسط', 'منخفض'];
+            const map = new Map();
+
+            complaints.forEach(c => {
+                const score = riskScore(c);
+                const b = riskBucket(score);
+                const locs = normalizeLocations(c.location || c.locations);
+                locs.forEach(loc => {
+                    if (!map.has(loc)) map.set(loc, new Map());
+                    const inner = map.get(loc);
+                    if (!inner.has(b)) inner.set(b, { count: 0, items: [] });
+                    inner.get(b).count += 1;
+                    inner.get(b).items.push(c);
+                });
+            });
+
+            function riskIndex(inner) {
+                const low = inner.get('منخفض')?.count || 0;
+                const mid = inner.get('متوسط')?.count || 0;
+                const high = inner.get('عالي')?.count || 0;
+                const crit = inner.get('حرج')?.count || 0;
+                const total = low + mid + high + crit || 1;
+                const weighted = (low * 1 + mid * 2 + high * 3 + crit * 4);
+                return Math.round((weighted / (total * 4)) * 100);
+            }
+
+            let locations = Array.from(map.keys()).map(loc => ({
+                loc,
+                inner: map.get(loc),
+                idx: riskIndex(map.get(loc)),
+            }));
+
+            locations.sort((a, b) => b.idx - a.idx);
+
+            if (opts.topOnly && locations.length > 12) {
+                const top = locations.slice(0, 12);
+                const rest = locations.slice(12);
+
+                const otherInner = new Map();
+                buckets.forEach(k => otherInner.set(k, { count: 0, items: [] }));
+                rest.forEach(x => {
+                    buckets.forEach(k => {
+                        const cell = x.inner.get(k) || { count: 0, items: [] };
+                        otherInner.get(k).count += cell.count;
+                        otherInner.get(k).items.push(...cell.items);
+                    });
+                });
+
+                top.push({ loc: 'أخرى (باقي المواقع)', inner: otherInner, idx: riskIndex(otherInner) });
+                locations = top;
+            }
+
+            const container = document.getElementById('riskHeatmap');
+            const note = document.getElementById('riskHeatmapNote');
+            if (!container) return;
+
+            const grid = document.createElement('div');
+            grid.className = 'heatmap-grid';
+            grid.style.gridTemplateColumns = `100px 220px repeat(${buckets.length}, minmax(120px, 1fr))`;
+
+            const hIdx = document.createElement('div');
+            hIdx.className = 'heatmap-head';
+            hIdx.textContent = 'Risk%';
+            grid.appendChild(hIdx);
+
+            const h0 = document.createElement('div');
+            h0.className = 'heatmap-head';
+            h0.textContent = 'الموقع';
+            grid.appendChild(h0);
+
+            buckets.forEach(b => {
+                const h = document.createElement('div');
+                h.className = 'heatmap-head';
+                h.textContent = b;
+                grid.appendChild(h);
+            });
+
+            function cellBG(bucket, count, total) {
+                const ratio = total ? (count / total) : 0;
+                const alpha = Math.min(Math.max(0.18 + ratio * 0.7, 0.18), 0.85);
+                if (bucket === 'حرج') return `rgba(220,53,69,${alpha})`;
+                if (bucket === 'عالي') return `rgba(253,126,20,${alpha})`;
+                if (bucket === 'متوسط') return `rgba(255,193,7,${alpha})`;
+                return `rgba(40,167,69,${alpha})`;
+            }
+
+            locations.forEach(row => {
+                const inner = row.inner;
+                const low = inner.get('منخفض')?.count || 0;
+                const mid = inner.get('متوسط')?.count || 0;
+                const high = inner.get('عالي')?.count || 0;
+                const crit = inner.get('حرج')?.count || 0;
+                const total = low + mid + high + crit || 1;
+
+                const idxCell = document.createElement('div');
+                idxCell.className = 'heatmap-rowlabel';
+                idxCell.style.textAlign = 'center';
+                idxCell.innerHTML = `<div style="font-size:1.1rem;font-weight:800;color:${row.idx >= 60 ? '#dc3545' : row.idx >= 40 ? '#fd7e14' : '#28a745'};">${row.idx}%</div>`;
+                grid.appendChild(idxCell);
+
+                const rowLabel = document.createElement('div');
+                rowLabel.className = 'heatmap-rowlabel';
+                rowLabel.textContent = row.loc;
+                grid.appendChild(rowLabel);
+
+                buckets.forEach(b => {
+                    const cellData = inner.get(b) || { count: 0, items: [] };
+                    const cell = document.createElement('div');
+                    cell.className = 'heatmap-cell';
+                    cell.style.background = cellBG(b, cellData.count, total);
+                    cell.style.cursor = 'pointer';
+                    cell.innerHTML = `<div class="heatmap-count">${cellData.count}</div><div class="heatmap-sub">من ${total}</div>`;
+                    cell.onclick = () => openHeatmapModal(row.loc, b, cellData.items);
+                    grid.appendChild(cell);
+                });
+            });
+
+            container.innerHTML = '';
+            container.appendChild(grid);
+
+            if (note) {
+                note.textContent = 'اضغط أي مربع لعرض التفاصيل + فلترة جدول الشكاوى مباشرة.';
+            }
+        }
+
+        function openHeatmapModal(locationName, bucket, items) {
+            const modal = document.getElementById('hmModal');
+            const title = document.getElementById('hmModalTitle');
+            const body = document.getElementById('hmModalBody');
+
+            title.innerHTML = `<i class="fas fa-th"></i> ${locationName} – ${bucket} (${items.length})`;
+
+            const rows = items.slice(0, 30).map(c => `
+                <tr>
+                    <td><strong>${c.id}</strong>${(c.escalatedTo || '').trim() ? ' <span class="badge badge-danger">مصعدة</span>' : ''}</td>
+                    <td>${c.date || '-'}</td>
+                    <td>${c.type || '-'}</td>
+                    <td>${c.assignedTo || '-'}</td>
+                    <td><button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button></td>
+                </tr>
+            `).join('');
+
+            body.innerHTML = `
+                <div style="margin-bottom:10px;color:#666;">عرض أول 30 شكوى.</div>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>الشكوى</th><th>التاريخ</th><th>النوع</th><th>المكلف</th><th>عرض</th></tr></thead>
+                        <tbody>${rows || `<tr><td colspan="5" style="text-align:center;padding:20px;">لا يوجد</td></tr>`}</tbody>
+                    </table>
+                </div>
+                <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn btn-secondary" onclick="filterByHeatmap('${locationName}', '${bucket}')">
+                        <i class="fas fa-filter"></i> فلترة الجدول الرئيسي
+                    </button>
+                    <button class="btn btn-light" onclick="document.getElementById('hmModal').classList.remove('active')">إغلاق</button>
+                </div>
+            `;
+
+            modal.classList.add('active');
+        }
+
+        function filterByHeatmap(locationName, bucket) {
+            let filtered = [...allComplaints];
+            filtered = filtered.filter(c => (c.location || c.locations || '').includes(locationName));
+            filtered = filtered.filter(c => riskBucket(riskScore(c)) === bucket);
+
+            renderTable('complaintsTable', filtered, true);
+
+            const btn = Array.from(document.querySelectorAll('.tab-btn')).find(x => x.textContent.includes('الشكاوى'));
+            if (btn) showTab('complaints', btn);
+
+            document.getElementById('hmModal').classList.remove('active');
         }
 
         function applyFilters() {
