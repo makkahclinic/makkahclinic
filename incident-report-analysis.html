@@ -3157,6 +3157,296 @@
                 </a>
             `).join(' ');
         }
+        
+        /* =========================
+           SLA System
+           ========================= */
+        
+        const SLA_HOURS = {
+            // الاستجابة الأولية (Triage)
+            triage_death: 2,
+            triage_severe: 2,
+            triage_moderate: 8,
+            triage_minor: 24,
+            triage_none: 24,
+            
+            // الاحتواء الفوري (Containment)
+            contain_death: 6,
+            contain_severe: 6,
+            contain_moderate: 24,
+            contain_minor: 48,
+            contain_none: 48,
+            
+            // بدء RCA
+            rcaStart_death: 72,
+            rcaStart_severe: 72,
+            rcaStart_moderate: 7 * 24,
+            
+            // الإغلاق
+            close_minor: 7 * 24,
+            close_none: 7 * 24,
+            close_moderate: 14 * 24,
+            close_severe: 30 * 24,
+            close_death: 30 * 24
+        };
+        
+        function getSlaLimit(phase, severity) {
+            const key = `${phase}_${severity}`;
+            return SLA_HOURS[key] || 24;
+        }
+        
+        function getAssignedTo(inc) {
+            return norm(inc.assignedTo || inc.Assigned_To || inc.assigned_to || inc.handler);
+        }
+        
+        function getContainmentDate(inc) {
+            return norm(inc.containmentDate || inc.Containment_Date || inc.firstActionDate || inc.First_Action_Date);
+        }
+        
+        function getRcaStartDate(inc) {
+            return norm(inc.rcaStartDate || inc.RCA_Start_Date || inc.rcaDate);
+        }
+        
+        // حساب SLA لكل حادث
+        function computeIncidentSla(inc) {
+            const sev = normSeverity(inc);
+            const st = normStatus(inc);
+            const incDate = parseDateSafe(getDate(inc));
+            if (!incDate) return { triage: null, contain: null, rca: null, close: null };
+            
+            const now = Date.now();
+            const hrsFromStart = (now - incDate.getTime()) / 36e5;
+            
+            // Triage SLA
+            const triageLimit = getSlaLimit('triage', sev);
+            const hasAssigned = !!getAssignedTo(inc);
+            const triageOk = hasAssigned || hrsFromStart <= triageLimit;
+            
+            // Containment SLA
+            const containLimit = getSlaLimit('contain', sev);
+            const containDate = parseDateSafe(getContainmentDate(inc));
+            let containOk = false;
+            if (containDate) {
+                const containHrs = (containDate.getTime() - incDate.getTime()) / 36e5;
+                containOk = containHrs <= containLimit;
+            } else if (st !== 'closed' && st !== 'new') {
+                containOk = hrsFromStart <= containLimit;
+            }
+            
+            // RCA SLA (فقط إذا مطلوب)
+            const needsRca = rcaFlag(inc) || sev === 'death' || sev === 'severe' || st === 'rca_required' || st === 'rca_in_progress';
+            let rcaOk = null;
+            if (needsRca) {
+                const rcaLimit = getSlaLimit('rcaStart', sev) || 72;
+                const rcaStartDate = parseDateSafe(getRcaStartDate(inc));
+                if (rcaStartDate) {
+                    const rcaHrs = (rcaStartDate.getTime() - incDate.getTime()) / 36e5;
+                    rcaOk = rcaHrs <= rcaLimit;
+                } else if (st === 'rca_in_progress' || st === 'in_progress') {
+                    rcaOk = hrsFromStart <= rcaLimit;
+                } else if (st !== 'closed') {
+                    rcaOk = hrsFromStart <= rcaLimit;
+                }
+            }
+            
+            // Close SLA
+            const closeLimit = getSlaLimit('close', sev);
+            let closeOk = null;
+            if (st === 'closed') {
+                const closedDate = parseDateSafe(getClosedDate(inc));
+                if (closedDate) {
+                    const closeHrs = (closedDate.getTime() - incDate.getTime()) / 36e5;
+                    closeOk = closeHrs <= closeLimit;
+                } else {
+                    closeOk = true;
+                }
+            } else {
+                closeOk = hrsFromStart <= closeLimit;
+            }
+            
+            return {
+                triage: { ok: triageOk, limit: triageLimit, hrs: hrsFromStart },
+                contain: { ok: containOk, limit: containLimit, hrs: hrsFromStart },
+                rca: needsRca ? { ok: rcaOk, limit: getSlaLimit('rcaStart', sev), hrs: hrsFromStart } : null,
+                close: { ok: closeOk, limit: closeLimit, hrs: hrsFromStart }
+            };
+        }
+        
+        // حساب امتثال SLA للكل
+        function computeSlaCompliance(all, daysRange) {
+            const filtered = all.filter(x => withinDays(x, daysRange) && normStatus(x) !== 'closed');
+            
+            let triageTotal = 0, triageOk = 0;
+            let containTotal = 0, containOk = 0;
+            let rcaTotal = 0, rcaOk = 0;
+            let closeTotal = 0, closeOk = 0;
+            
+            const breaches = [];
+            
+            for (const inc of filtered) {
+                const sla = computeIncidentSla(inc);
+                
+                if (sla.triage) {
+                    triageTotal++;
+                    if (sla.triage.ok) triageOk++;
+                    else breaches.push({ id: getId(inc), phase: 'triage', sev: normSeverity(inc), hrs: sla.triage.hrs, limit: sla.triage.limit });
+                }
+                
+                if (sla.contain) {
+                    containTotal++;
+                    if (sla.contain.ok) containOk++;
+                    else breaches.push({ id: getId(inc), phase: 'contain', sev: normSeverity(inc), hrs: sla.contain.hrs, limit: sla.contain.limit });
+                }
+                
+                if (sla.rca) {
+                    rcaTotal++;
+                    if (sla.rca.ok) rcaOk++;
+                    else breaches.push({ id: getId(inc), phase: 'rca', sev: normSeverity(inc), hrs: sla.rca.hrs, limit: sla.rca.limit });
+                }
+                
+                if (sla.close) {
+                    closeTotal++;
+                    if (sla.close.ok) closeOk++;
+                    else breaches.push({ id: getId(inc), phase: 'close', sev: normSeverity(inc), hrs: sla.close.hrs, limit: sla.close.limit });
+                }
+            }
+            
+            return {
+                triage: { total: triageTotal, ok: triageOk, pct: triageTotal ? Math.round((triageOk/triageTotal)*100) : 100 },
+                contain: { total: containTotal, ok: containOk, pct: containTotal ? Math.round((containOk/containTotal)*100) : 100 },
+                rca: { total: rcaTotal, ok: rcaOk, pct: rcaTotal ? Math.round((rcaOk/rcaTotal)*100) : 100 },
+                close: { total: closeTotal, ok: closeOk, pct: closeTotal ? Math.round((closeOk/closeTotal)*100) : 100 },
+                breaches: breaches.sort((a,b) => b.hrs - a.hrs).slice(0, 10)
+            };
+        }
+        
+        // RCA Completion Rate
+        function computeRcaCompletion(all, daysRange) {
+            const filtered = all.filter(x => withinDays(x, daysRange));
+            const needRca = filtered.filter(i => {
+                const st = normStatus(i);
+                const sev = normSeverity(i);
+                return rcaFlag(i) || sev === 'death' || sev === 'severe' || st === 'rca_required' || st === 'rca_in_progress';
+            });
+            
+            const completed = needRca.filter(i => {
+                const st = normStatus(i);
+                const hasRootCause = !!norm(i.rootCause || i.Root_Cause);
+                const hasActions = !!norm(i.correctiveActions || i.Corrective_Actions);
+                return st === 'closed' || (hasRootCause && hasActions);
+            });
+            
+            const inProgress = needRca.filter(i => normStatus(i) === 'rca_in_progress').length;
+            
+            return {
+                need: needRca.length,
+                completed: completed.length,
+                inProgress,
+                rate: needRca.length ? Math.round((completed.length / needRca.length) * 100) : 100
+            };
+        }
+        
+        // عرض لوحة SLA
+        function renderSlaPanel(sla, rca) {
+            const box = document.getElementById('slaCompliancePanel');
+            if (!box) return;
+            
+            const phaseNames = {
+                triage: 'الاستجابة الأولية',
+                contain: 'الاحتواء الفوري',
+                rca: 'بدء RCA',
+                close: 'الإغلاق'
+            };
+            
+            function pctColor(pct) {
+                if (pct >= 90) return '#28a745';
+                if (pct >= 70) return '#ffc107';
+                return '#dc3545';
+            }
+            
+            function pctBg(pct) {
+                if (pct >= 90) return 'rgba(40,167,69,0.15)';
+                if (pct >= 70) return 'rgba(255,193,7,0.2)';
+                return 'rgba(220,53,69,0.15)';
+            }
+            
+            const phases = ['triage', 'contain', 'rca', 'close'];
+            const cardsHtml = phases.map(p => {
+                const d = sla[p];
+                return `
+                    <div style="background:${pctBg(d.pct)};border-radius:12px;padding:16px;text-align:center;border:1px solid #e9ecef;">
+                        <div style="font-size:2rem;font-weight:900;color:${pctColor(d.pct)};">${d.pct}%</div>
+                        <div style="font-weight:700;color:#1e3a5f;margin:5px 0;">${phaseNames[p]}</div>
+                        <div style="font-size:0.85rem;color:#666;">${d.ok} / ${d.total} ملتزم</div>
+                    </div>
+                `;
+            }).join('');
+            
+            const breachesHtml = sla.breaches.length ? sla.breaches.map(b => `
+                <tr style="background:#fff5f5;">
+                    <td><strong>${b.id}</strong></td>
+                    <td>${phaseNames[b.phase]}</td>
+                    <td>${SEVERITY[b.sev]?.name || b.sev}</td>
+                    <td style="color:#dc3545;font-weight:700;">${Math.round(b.hrs)} ساعة</td>
+                    <td>${b.limit} ساعة</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5" style="text-align:center;color:#28a745;padding:20px;"><i class="fas fa-check-circle"></i> لا توجد انتهاكات</td></tr>';
+            
+            box.innerHTML = `
+                <div class="card" style="margin-top:18px;">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-clock"></i> امتثال SLA + معدل إكمال RCA</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;">
+                            ${cardsHtml}
+                            <div style="background:rgba(111,66,193,0.15);border-radius:12px;padding:16px;text-align:center;border:1px solid #e9ecef;">
+                                <div style="font-size:2rem;font-weight:900;color:#6f42c1;">${rca.rate}%</div>
+                                <div style="font-weight:700;color:#1e3a5f;margin:5px 0;">إكمال RCA</div>
+                                <div style="font-size:0.85rem;color:#666;">${rca.completed} / ${rca.need} مكتمل</div>
+                            </div>
+                        </div>
+                        
+                        <h4 style="color:#dc3545;margin-bottom:10px;"><i class="fas fa-exclamation-triangle"></i> أعلى 10 انتهاكات SLA</h4>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>رقم البلاغ</th>
+                                        <th>المرحلة</th>
+                                        <th>الخطورة</th>
+                                        <th>الوقت الفعلي</th>
+                                        <th>الحد الأقصى</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${breachesHtml}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // تحديث لوحة SLA
+        async function refreshSlaPanel() {
+            try {
+                const all = await loadAllIncidentsCached();
+                const daysRange = document.getElementById('hmRange')?.value || '90';
+                
+                const sla = computeSlaCompliance(all, daysRange);
+                const rca = computeRcaCompletion(all, daysRange);
+                renderSlaPanel(sla, rca);
+            } catch(e) {
+                console.error('SLA Error:', e);
+            }
+        }
+        
+        // تحديث شامل
+        const originalRefreshExecutiveView = refreshExecutiveView;
+        refreshExecutiveView = async function(force = false) {
+            await originalRefreshExecutiveView(force);
+            await refreshSlaPanel();
+        };
     </script>
 </body>
 </html>
