@@ -1,0 +1,222 @@
+خليه موجود لكن “مقفول” بدون حذف:
+عدّل الدالة:
+
+function playCriticalAlert(){ return; }
+
+2) إضافة لوحة المخاطر Heatmap (كود كامل + أين تضعه)
+A) HTML: ضع هذا داخل Dashboard
+
+أنت عندك chart-container داخل #dashboard.
+ضع هذا بعد chart-container مباشرة:
+
+<div class="card" style="margin-top:20px;">
+  <div class="card-header">
+    <h3 class="card-title"><i class="fas fa-th"></i> Heatmap المخاطر حسب الموقع</h3>
+  </div>
+  <div class="card-body">
+    <div id="riskHeatmap" style="overflow:auto;"></div>
+    <div id="riskHeatmapNote" style="margin-top:10px; color:#666; font-size:0.9rem;"></div>
+  </div>
+</div>
+
+B) CSS: أضف هذا داخل <style>
+
+ضعه آخر شيء قبل </style>:
+
+.heatmap-grid{
+  display:grid;
+  gap:8px;
+  min-width:900px;
+}
+.heatmap-head{
+  font-weight:700;
+  color:#1e3a5f;
+  background:#f6f8fb;
+  border:1px solid #e9ecef;
+  border-radius:10px;
+  padding:10px;
+  text-align:center;
+  position:sticky;
+  top:0;
+  z-index:1;
+}
+.heatmap-rowlabel{
+  font-weight:700;
+  color:#343a40;
+  background:#f6f8fb;
+  border:1px solid #e9ecef;
+  border-radius:10px;
+  padding:10px;
+  white-space:nowrap;
+}
+.heatmap-cell{
+  border-radius:12px;
+  padding:10px;
+  border:1px solid #e9ecef;
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  min-height:56px;
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.heatmap-cell:hover{
+  transform:translateY(-2px);
+  box-shadow:0 6px 18px rgba(0,0,0,0.10);
+}
+.heatmap-count{
+  font-weight:800;
+  font-size:1.2rem;
+}
+.heatmap-sub{
+  font-size:.85rem;
+  opacity:.85;
+}
+
+C) JS: أضف دوال الـ Heatmap داخل <script>
+
+ضعها مرة واحدة (مثلاً بعد renderCharts):
+
+function normalizeLocations(locStr){
+  const s = (locStr || '').trim();
+  if (!s) return ['غير محدد'];
+  return s.split(',').map(x => x.trim()).filter(Boolean);
+}
+
+function riskScore(c){
+  const isEsc = (c.escalatedTo || '').trim() !== '';
+  const repeat = Number(c.escalationCount || 0);
+  const days = Number(c.daysOpen || 0);
+  const pr = (c.priority || '').toLowerCase();
+
+  let score = 0;
+  if (pr === 'high') score += 3;
+  else if (pr === 'medium') score += 1;
+
+  if (isEsc) score += 3;
+
+  if (repeat >= 2) score += 4;
+  else if (repeat === 1 && isEsc) score += 1;
+
+  if (days >= 7) score += 3;
+  else if (days >= 3) score += 2;
+  else if (days >= 1) score += 1;
+
+  return score;
+}
+
+function riskBucket(score){
+  if (score >= 9) return 'حرج';
+  if (score >= 6) return 'عالي';
+  if (score >= 3) return 'متوسط';
+  return 'منخفض';
+}
+
+function cellColor(bucket, count){
+  const intensity = Math.min(0.15 + (count * 0.08), 0.75);
+  if (bucket === 'حرج') return `rgba(220,53,69,${intensity})`;
+  if (bucket === 'عالي') return `rgba(253,126,20,${intensity})`;
+  if (bucket === 'متوسط') return `rgba(255,193,7,${intensity})`;
+  return `rgba(40,167,69,${intensity})`;
+}
+
+function buildRiskHeatmap(complaints){
+  const buckets = ['حرج','عالي','متوسط','منخفض'];
+  const map = new Map();
+
+  complaints.forEach(c => {
+    const score = riskScore(c);
+    const b = riskBucket(score);
+    const locs = normalizeLocations(c.location || c.locations);
+
+    locs.forEach(loc => {
+      if (!map.has(loc)) map.set(loc, new Map());
+      const inner = map.get(loc);
+      if (!inner.has(b)) inner.set(b, {count:0, items:[]});
+      const cell = inner.get(b);
+      cell.count += 1;
+      cell.items.push(c);
+    });
+  });
+
+  const sortedLocations = Array.from(map.keys()).sort((a,b) => {
+    const A = map.get(a), B = map.get(b);
+    const aCrit = (A.get('حرج')?.count || 0) + (A.get('عالي')?.count || 0);
+    const bCrit = (B.get('حرج')?.count || 0) + (B.get('عالي')?.count || 0);
+    if (bCrit !== aCrit) return bCrit - aCrit;
+    const aAll = buckets.reduce((s,k)=>s+(A.get(k)?.count||0),0);
+    const bAll = buckets.reduce((s,k)=>s+(B.get(k)?.count||0),0);
+    return bAll - aAll;
+  });
+
+  const container = document.getElementById('riskHeatmap');
+  const note = document.getElementById('riskHeatmapNote');
+  if (!container) return;
+
+  const grid = document.createElement('div');
+  grid.className = 'heatmap-grid';
+  grid.style.gridTemplateColumns = `260px repeat(${buckets.length}, minmax(140px, 1fr))`;
+
+  const h0 = document.createElement('div');
+  h0.className = 'heatmap-head';
+  h0.textContent = 'الموقع';
+  grid.appendChild(h0);
+
+  buckets.forEach(b => {
+    const h = document.createElement('div');
+    h.className = 'heatmap-head';
+    h.textContent = b;
+    grid.appendChild(h);
+  });
+
+  sortedLocations.forEach(loc => {
+    const rowLabel = document.createElement('div');
+    rowLabel.className = 'heatmap-rowlabel';
+    rowLabel.textContent = loc;
+    grid.appendChild(rowLabel);
+
+    const inner = map.get(loc);
+
+    buckets.forEach(b => {
+      const cellData = inner.get(b) || {count:0, items:[]};
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      cell.style.background = cellColor(b, cellData.count);
+
+      cell.innerHTML = `
+        <div class="heatmap-count">${cellData.count}</div>
+        <div class="heatmap-sub">حالات ${b}</div>
+      `;
+
+      cell.onclick = () => {
+        const ids = cellData.items.slice(0, 15).map(x => x.id).join('\n');
+        alert(`الموقع: ${loc}\nالمستوى: ${b}\nعدد الحالات: ${cellData.count}\n\nأول 15 شكوى:\n${ids || '-'}`);
+      };
+
+      grid.appendChild(cell);
+    });
+  });
+
+  container.innerHTML = '';
+  container.appendChild(grid);
+
+  if (note) {
+    note.textContent = 'ملاحظة: “حرج” يعتمد على (تصعيد متكرر/أولوية عالية+تصعيد/تأخر أيام). اضغط أي مربع لعرض أرقام الشكاوى.';
+  }
+}
+
+D) استدعاء الـ Heatmap بعد تحميل البيانات
+
+داخل loadAllComplaints() بعد:
+
+allComplaints = result.complaints;
+
+
+أضف:
+
+buildRiskHeatmap(allComplaints);
+
+✅ الآن أين ستظهر؟
+
+ستظهر داخل لوحة المتابعة Dashboard تحت الشارت مباشرة، على شكل جدول Heatmap قابل للتمرير أفقيًا.
