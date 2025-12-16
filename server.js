@@ -2,7 +2,10 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow } from './sheets-service.js';
+import { google } from 'googleapis';
+import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow, getGoogleSheetsClient } from './sheets-service.js';
+
+const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -780,6 +783,35 @@ app.get('/api/rounds/metrics', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================
+// Complaints System API - Get Locations from Sheet
+// ============================================
+app.get('/api/complaints/locations', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: COMPLAINTS_SPREADSHEET_ID,
+      range: 'Master!E:F',
+    });
+    
+    const data = response.data.values || [];
+    const locations = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const code = (data[i][0] || '').trim();
+      const name = (data[i][1] || '').trim();
+      if (code && name) {
+        locations.push({ code, name });
+      }
+    }
+    
+    res.json({ ok: true, locations });
+  } catch (err) {
+    console.error('Error fetching locations:', err.message);
+    res.status(500).json({ ok: false, error: err.message, locations: [] });
   }
 });
 
