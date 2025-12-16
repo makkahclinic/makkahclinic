@@ -1290,14 +1290,33 @@
         // دوال Heatmap المخاطر
         function sevWeight(sev) {
             sev = (sev || '').toLowerCase();
-            if (sev === 'death') return 10;
-            if (sev === 'severe') return 7;
+            if (sev === 'death') return 12;
+            if (sev === 'severe') return 8;
             if (sev === 'moderate') return 4;
             if (sev === 'minor') return 2;
             return 1;
         }
         
+        function riskExtras(inc) {
+            const st = normStatus(inc);
+            const rca = inc.rcaRequired === true || inc.RCA_Required === 'نعم' || inc.requires_rca;
+            let extra = 0;
+            
+            if (st === 'escalated') extra += 4;
+            if (rca) extra += 3;
+            
+            // تأخير
+            const ref = inc.lastActionDate ? new Date(inc.lastActionDate) : (inc.date ? new Date(inc.date) : null);
+            if (ref && !isNaN(ref.getTime())) {
+                const hrs = Math.floor((Date.now() - ref.getTime()) / 36e5);
+                if (hrs >= 48) extra += 3;
+                else if (hrs >= 24) extra += 2;
+            }
+            return extra;
+        }
+        
         function heatColor(score) {
+            if (score >= 40) return 'rgba(220,53,69,0.70)';
             if (score >= 25) return 'rgba(220,53,69,0.55)';
             if (score >= 15) return 'rgba(253,126,20,0.55)';
             if (score >= 8) return 'rgba(255,193,7,0.55)';
@@ -1325,7 +1344,7 @@
                 
                 const cell = inner.get(keySev);
                 cell.count += 1;
-                cell.score += sevWeight(keySev) + (esc ? 3 : 0);
+                cell.score += sevWeight(keySev) + riskExtras(inc);
                 cell.items.push(inc);
             }
             
@@ -1446,6 +1465,16 @@
                     document.getElementById('nearMissPercent').textContent = (result.nearMissPercentage || 0) + '%';
                     
                     document.getElementById('rcaCount').textContent = result.byStatus?.rca_required?.count || 0;
+                    
+                    // تحديث عدادات التبويبات فوراً من الإحصائيات
+                    const escalatedCount = result.byStatus?.escalated?.count ?? result.escalated ?? 0;
+                    const closedCount = result.byStatus?.closed?.count ?? result.closed ?? 0;
+                    
+                    const escEl = document.getElementById('escalatedTabCount');
+                    const clsEl = document.getElementById('closedTabCount');
+                    
+                    if (escEl) escEl.textContent = escalatedCount;
+                    if (clsEl) clsEl.textContent = closedCount;
                     
                     renderCharts(result);
                 }

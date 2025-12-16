@@ -1,0 +1,174 @@
+الحل الأسرع (مضمون) — حدّث عدّادات التبويبات من getIncidentStats
+
+أنت عندك API getIncidentStats يرجّع byStatus و closed/open… خلّ العدّادات تتحدث من هناك بدل انتظار تحميل جدول المُصعّدة/المغلقة.
+
+1) عدّل loadStats() وأضف هذي الأسطر داخله بعد if (result.ok) { ... }
+// ✅ عدّادات التبويبات (تتحدث فوراً عند refresh)
+const escalatedCount = (result.byStatus?.escalated?.count ?? result.escalated ?? 0);
+const closedCount    = (result.byStatus?.closed?.count ?? result.closed ?? 0);
+
+const escEl = document.getElementById('escalatedTabCount');
+const clsEl = document.getElementById('closedTabCount');
+
+if (escEl) escEl.textContent = escalatedCount;
+if (clsEl) clsEl.textContent = closedCount;
+
+
+النتيجة: حتى لو الجداول ما انبنت إلا عند فتح التبويب، العدادات لن ترجع صفر بعد التحديث.
+
+حل سريع ثاني (إذا تبغى الجداول والعدادات تنبني فورًا)
+
+في loadData() عندك—خلي تحميل المُصعّدة/المغلقة يشتغل دائمًا بعد تسجيل الدخول، حتى لو المستخدم على Dashboard.
+
+2) داخل loadData() في آخره (بعد loadIncidents/loadPending/loadRca)
+
+أضف:
+
+// ✅ ابنِ الجداول والعدادات مباشرة بعد الريفريش
+await loadEscalatedIncidents();
+await loadClosedIncidents();
+
+
+وأهم شيء: تأكد checkLogin() ينادي loadData() بعد DOMContentLoaded (أنت سويتها، ممتاز).
+
+Heatmap “خطير جدًا” للحوادث (جاهز وفعّال)
+
+بما أن بياناتك فيها Department و Severity و Status و Assigned_To… أفضل Heatmap عملي للسلامة يكون:
+
+القسم (Department) × شدة الضرر (Severity)
+مع Risk Score يراعي:
+
+وزن الشدة (death أعلى شيء)
+
+نقاط لو الحالة “escalated”
+
+نقاط لو “rca_required”
+
+نقاط لو متأخرة (لو عندك lastActionDate أو نحسب من date)
+
+1) أضف مكان الهِيت ماب داخل Dashboard (أنت أصلاً حطيته)
+<div id="incidentHeatmap" style="overflow:auto;"></div>
+
+2) أضف هذا الكود (JS) مرة واحدة (أسفل السكربت)
+function sevWeight(sev){
+  sev = (sev || '').toLowerCase();
+  if (sev === 'death') return 12;
+  if (sev === 'severe') return 8;
+  if (sev === 'moderate') return 4;
+  if (sev === 'minor') return 2;
+  return 1; // none
+}
+
+function riskExtras(inc){
+  const st = (inc.status || '').toLowerCase();
+  const rca = (inc.rcaRequired === true) || ((inc.RCA_Required || '').toString().trim() === 'نعم');
+  let extra = 0;
+  if (st === 'escalated') extra += 4;
+  if (rca) extra += 3;
+
+  // تأخير (اختياري): لو عندك lastActionDate
+  const ref = inc.lastActionDate ? new Date(inc.lastActionDate) : (inc.date ? new Date(inc.date) : null);
+  if (ref && !isNaN(ref.getTime())) {
+    const hrs = Math.floor((Date.now() - ref.getTime()) / 36e5);
+    if (hrs >= 48) extra += 3;
+    else if (hrs >= 24) extra += 2;
+  }
+  return extra;
+}
+
+function heatColor(score){
+  // تدرج واضح
+  if (score >= 40) return 'rgba(220,53,69,0.70)';      // حرج جداً
+  if (score >= 25) return 'rgba(220,53,69,0.55)';      // حرج
+  if (score >= 15) return 'rgba(253,126,20,0.55)';     // عالي
+  if (score >= 8)  return 'rgba(255,193,7,0.55)';      // متوسط
+  return 'rgba(40,167,69,0.35)';                       // منخفض
+}
+
+function buildIncidentHeatmap(incidents){
+  const container = document.getElementById('incidentHeatmap');
+  if (!container) return;
+
+  const sevKeys  = ['death','severe','moderate','minor','none'];
+  const sevNames = { death:'وفاة', severe:'ضرر جسيم', moderate:'ضرر متوسط', minor:'ضرر بسيط', none:'بدون ضرر' };
+
+  const depts = Array.from(new Set(
+    (incidents || []).map(x => (x.department || x.Department || 'غير محدد').toString().trim() || 'غير محدد')
+  )).sort();
+
+  // dept -> sev -> {count, score, items[]}
+  const map = new Map();
+
+  for (const inc of (incidents || [])) {
+    const dept = (inc.department || inc.Department || 'غير محدد').toString().trim() || 'غير محدد';
+    const sevRaw = (inc.severity || inc.Severity || 'none').toString().trim().toLowerCase();
+    const sev = sevKeys.includes(sevRaw) ? sevRaw : 'none';
+
+    if (!map.has(dept)) map.set(dept, new Map());
+    const inner = map.get(dept);
+    if (!inner.has(sev)) inner.set(sev, {count:0, score:0, items:[]});
+
+    const cell = inner.get(sev);
+    cell.count += 1;
+    cell.score += sevWeight(sev) + riskExtras(inc);
+    cell.items.push(inc);
+  }
+
+  // بناء Grid
+  const grid = document.createElement('div');
+  grid.className = 'hm-grid';
+  grid.style.gridTemplateColumns = `240px repeat(${sevKeys.length}, minmax(140px,1fr))`;
+
+  const headDept = document.createElement('div');
+  headDept.className = 'hm-head';
+  headDept.textContent = 'القسم';
+  grid.appendChild(headDept);
+
+  sevKeys.forEach(s => {
+    const h = document.createElement('div');
+    h.className = 'hm-head';
+    h.textContent = sevNames[s];
+    grid.appendChild(h);
+  });
+
+  depts.forEach(dept => {
+    const row = document.createElement('div');
+    row.className = 'hm-row';
+    row.textContent = dept;
+    grid.appendChild(row);
+
+    const inner = map.get(dept) || new Map();
+
+    sevKeys.forEach(s => {
+      const d = inner.get(s) || {count:0, score:0, items:[]};
+      const cell = document.createElement('div');
+      cell.className = 'hm-cell';
+      cell.style.background = heatColor(d.score);
+      cell.innerHTML = `<div class="hm-num">${d.count}</div><div class="hm-sub">Risk: ${d.score}</div>`;
+      cell.onclick = () => {
+        const ids = d.items.slice(0, 25).map(x => x.id || x.Incident_ID || '').filter(Boolean).join('\n');
+        alert(`القسم: ${dept}\nالخطورة: ${sevNames[s]}\nعدد البلاغات: ${d.count}\nRisk Score: ${d.score}\n\nأول 25 رقم:\n${ids || '-'}`);
+      };
+      grid.appendChild(cell);
+    });
+  });
+
+  container.innerHTML = '';
+  container.appendChild(grid);
+}
+
+3) نادِ الهِيت ماب بعد ما تجيب كل الحوادث (مرة واحدة)
+
+داخل loadData() (بعد ما تجيب status:'all' أو من الكاش):
+
+const all = await loadAllIncidentsCached(true);
+buildIncidentHeatmap(all);
+
+ملاحظة مهمة جدًا من صور الشيت
+
+في الشيت عندك القيم واضحة مثل:
+
+Status: closed / escalated / under_review …
+
+Severity: none / minor / severe / death …
+فأفضل شيء هو الاعتماد على result.byStatus للعدادات، وgetIncidents status=all للـ Heatmap (بدون انتظار الضغط على تبويب).
