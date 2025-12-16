@@ -1,0 +1,118 @@
+1) تعديل الداشبورد: خلي “قيد المعالجة” = الإجمالي + أضف “تنبيه تكرار التصعيد”
+
+استبدل جزء تحديث قيد المعالجة في loadDashboard() بهذا:
+
+const inProgressTotal = statsResult.in_progress || 0;
+const escalatedTotal = statsResult.escalated || 0;
+
+document.getElementById('inProgressComplaints').textContent = inProgressTotal;  // ✅ إجمالي قيد المعالجة
+document.getElementById('inprogressCount').textContent = inProgressTotal;      // ✅ تبويب قيد المعالجة
+
+
+وخلي كرت المصعدة كما هو (يعرض escalatedTotal).
+
+✅ الآن نضيف “Badge” للتكرار فوق كرت المصعدة
+
+أضف هذه الدالة مرة واحدة تحت دوالك (مثلاً بعد renderCharts):
+
+function updateEscalationBadges(totalEscalated, repeatedCount) {
+  const el = document.getElementById('escalatedComplaints');
+
+  // الرقم الكبير = عدد المصعدة
+  el.innerHTML = totalEscalated + (totalEscalated > 0
+    ? '<span style="position:absolute; top:-8px; right:-20px; background:#dc3545; color:white; border-radius:50%; min-width:22px; height:22px; font-size:0.65rem; line-height:22px; text-align:center; box-shadow:0 2px 5px rgba(220,53,69,0.5); animation: pulse 1.5s infinite;">!</span>'
+    : ''
+  );
+
+  // Badge صغير للتكرار (لو > 0)
+  const badge = document.getElementById('escalationBadge');
+  if (!badge) return;
+
+  if (repeatedCount > 0) {
+    badge.style.display = 'block';
+    badge.textContent = repeatedCount;      // ⭐ هنا رقم “التكرار”
+    badge.title = 'شكاوى تم تصعيدها أكثر من مرة';
+  } else {
+    badge.style.display = 'none';
+    badge.textContent = '';
+    badge.title = '';
+  }
+}
+
+2) التكرار ما طلع عندك… السبب
+
+التكرار يعتمد على:
+
+c.escalationCount > 1
+
+
+وطبيعي جدًا ما يظهر إذا أنت ما صعّدت نفس الشكوى مرتين (أو Escalation_Count ما صار 2).
+
+✅ علشان نضمن أنه يشتغل حتى لو بعض الصفوف ترجع كنص/فارغة، استخدم هذا:
+
+داخل loadAllComplaints() بعد allComplaints = result.complaints; ضع:
+
+const repeatedEscalations = allComplaints.filter(c => Number(c.escalationCount || 0) >= 2);
+const repeatedCount = repeatedEscalations.length;
+
+// حدث كرت المصعدة + badge التكرار
+// (نأخذ totalEscalated من البيانات الفعلية هنا لضمان الدقة)
+const totalEscalated = allComplaints.filter(c => (c.escalatedTo || '').trim() !== '').length;
+
+updateEscalationBadges(totalEscalated, repeatedCount);
+
+
+ملاحظة: لو تبغى التكرار يظهر “على الشكوى نفسها” مو عدد الشكاوى المتكررة، نقدر نخليه يعرض أعلى رقم تكرار (مثلاً 5) بدل عدد الشكاوى.
+
+3) في صفحة “قيد المعالجة” لازم تمييز المصعدة (عشان لو 100 شكوى)
+
+حاليًا جدول قيد المعالجة ما يبين “مصعدة”.
+عدّل renderInProgressTable() كذا:
+
+استبدل جسم الـ forEach بهذا:
+
+inProgress.forEach(c => {
+  const isEsc = (c.escalatedTo || '').trim() !== '';
+  const escBadge = isEsc ? `<span class="badge badge-danger" style="margin-right:8px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>` : '';
+
+  html += `<tr ${isEsc ? 'style="background:#fff5f5;"' : ''}>
+      <td><strong>${c.id}</strong> ${escBadge}</td>
+      <td>${c.date}</td>
+      <td>${c.type || '-'}</td>
+      <td>${c.assignedTo || '-'}</td>
+      <td>${c.daysOpen || 0} يوم</td>
+      <td>
+          <button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>
+          <button class="btn btn-success btn-sm" onclick="showCloseModal('${c.id}')"><i class="fas fa-check"></i> إغلاق</button>
+      </td>
+  </tr>`;
+});
+
+
+✅ الآن المصعدة تظهر داخل قائمة قيد المعالجة بعلامة حمراء + خلفية خفيفة.
+
+4) التشارت الحالي ممتاز… بس لازم يعكس “قيد المعالجة” الحقيقي
+
+أنت حاليًا تعرض قيد المعالجة بدون المصعدة. إذا تبغاه “قيد المعالجة الإجمالي” في التشارت، غيّر هذا السطر في criticalData:
+
+بدل:
+
+{ label: 'قيد المعالجة', value: Math.max(in_progress - escalated, 0) }
+
+
+إلى:
+
+{ label: 'قيد المعالجة', value: stats.in_progress || 0, color: '#fd7e14' }
+
+
+وخلي المصعدة كعنصر منفصل (زي الآن).
+
+سريعًا: ماذا تعمل الآن بالترتيب؟
+
+عدّل loadDashboard() وخلي inProgress = statsResult.in_progress
+
+أضف updateEscalationBadges()
+
+في loadAllComplaints() استدعِ updateEscalationBadges(totalEscalated, repeatedCount)
+
+عدّل renderInProgressTable() لإظهار Badge المصعدة

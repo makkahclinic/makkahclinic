@@ -1,0 +1,153 @@
+🧠 الفكرة الإدارية (ليش لوحة “الحالات الحرجة”؟)
+
+أنت عندك 3 مستويات الآن:
+
+حالة عادية (جديدة / قيد المعالجة)
+
+حالة مصعّدة
+
+حالة خطِرة ← وهذه اللي نركز عليها
+
+ما هي “الحالة الحرجة”؟
+
+نعتبر الشكوى حرجة إذا تحقق واحد أو أكثر:
+
+🔁 تم تصعيدها أكثر من مرة (Escalation_Count ≥ 2)
+
+⏰ قيد المعالجة أكثر من X أيام (مثلاً 3 أو 5 أيام)
+
+🔺 أولوية عالية + مصعدة
+
+❗ لم تُغلق رغم تكرار المتابعة
+
+هذه الحالات لا يكفي تظهر في جدول…
+لازم لوحة خاصة + تنبيه صوتي.
+
+🔔 1) التنبيه الصوتي (Sound Alert)
+متى يشتغل؟
+
+أول ما تدخل الصفحة
+
+أو عند التحديث
+
+إذا وُجدت حالة حرجة جديدة أو زادت خطورتها
+
+🔧 كود التنبيه الصوتي (Copy / Paste)
+أ) أضف هذا داخل <body> مرة واحدة:
+<audio id="criticalAlertSound" preload="auto">
+  <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
+</audio>
+
+ب) أضف هذه الدالة في <script>:
+function playCriticalAlert() {
+  const audio = document.getElementById('criticalAlertSound');
+  if (!audio) return;
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+}
+
+ج) متى نشغّله؟
+
+داخل loadAllComplaints() بعد حساب الحالات الحرجة (سأعطيك الكود بعد قليل):
+
+if (criticalCases.length > 0) {
+  playCriticalAlert();
+}
+
+
+🔊 الصوت يشتغل مرة واحدة فقط عند وجود خطر
+(نقدر نطوره لاحقًا يمنع التكرار المزعج)
+
+🚨 2) لوحة “الحالات الحرجة” (Critical Dashboard)
+كيف شكلها؟
+
+كرت أحمر واضح أعلى الصفحة
+
+يشتغل فقط إذا وُجد خطر
+
+يجاوب سؤال واحد:
+
+وين أركز الآن؟
+
+🔧 أ) أضف هذا HTML داخل dashboard (فوق الكروت):
+<div id="criticalPanel" class="card" style="display:none; border-top:5px solid #dc3545; background:#fff5f5;">
+  <div class="card-header">
+    <h3 class="card-title" style="color:#dc3545;">
+      <i class="fas fa-exclamation-circle"></i>
+      حالات حرجة تحتاج تدخّل فوري
+    </h3>
+  </div>
+  <div class="card-body">
+    <div id="criticalList"></div>
+  </div>
+</div>
+
+🔧 ب) منطق تحديد “الحالات الحرجة”
+
+أضف هذه الدالة:
+
+function getCriticalCases(complaints) {
+  return complaints.filter(c => {
+    const repeat = Number(c.escalationCount || 0);
+    const days = Number(c.daysOpen || 0);
+    const isHigh = c.priority === 'high';
+    const isEsc = (c.escalatedTo || '').trim() !== '';
+
+    return (
+      repeat >= 2 ||
+      (isEsc && isHigh) ||
+      days >= 5
+    );
+  });
+}
+
+🔧 ج) عرض لوحة الحالات الحرجة
+
+أضف هذه الدالة:
+
+function renderCriticalPanel(cases) {
+  const panel = document.getElementById('criticalPanel');
+  const list = document.getElementById('criticalList');
+
+  if (!cases.length) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+
+  list.innerHTML = cases.map(c => `
+    <div style="padding:10px; margin-bottom:8px; background:white; border-radius:8px; border-right:5px solid #dc3545;">
+      <strong>${c.id}</strong>
+      <div style="font-size:0.9rem; margin-top:4px;">
+        🔁 تكرار: ${c.escalationCount || 1} |
+        ⏰ أيام: ${c.daysOpen || 0} |
+        👤 مكلف: ${c.assignedTo || '-'}
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="viewDetails('${c.id}')" style="margin-top:6px;">
+        عرض عاجل
+      </button>
+    </div>
+  `).join('');
+}
+
+🔧 د) ربط كل شيء في loadAllComplaints()
+
+داخلها بعد allComplaints = result.complaints;:
+
+const criticalCases = getCriticalCases(allComplaints);
+renderCriticalPanel(criticalCases);
+
+if (criticalCases.length > 0) {
+  playCriticalAlert();
+}
+
+🎯 النتيجة النهائية (عمليًا)
+
+🔔 تنبيه صوتي إذا فيه خطر
+
+🚨 لوحة مستقلة للحالات الحرجة
+
+👁️ ما تحتاج تبحث بين 100 شكوى
+
+🧠 النظام يفكّر معك كمدير مخاطر

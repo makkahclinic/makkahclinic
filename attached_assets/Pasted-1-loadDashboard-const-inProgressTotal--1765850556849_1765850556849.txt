@@ -1,0 +1,130 @@
+1️⃣ كرت قيد المعالجة (إجمالي حقيقي)
+
+استبدل هذا الجزء داخل loadDashboard():
+
+const inProgressTotal = statsResult.in_progress || 0;
+document.getElementById('inProgressComplaints').textContent = inProgressTotal;
+document.getElementById('inprogressCount').textContent = inProgressTotal;
+
+
+✅ الآن لو عندك 100 حالة (مصعدة وغير مصعدة) كلها تظهر هنا.
+
+2️⃣ تنبيه ذكي: أعلى تكرار تصعيد (الأهم)
+✨ يعرض: ⚠️ تكرار 3 بدل عدد الشكاوى
+أضف هذه الدالة مرة واحدة:
+function updateEscalationBadges(totalEscalated, maxRepeat) {
+  const el = document.getElementById('escalatedComplaints');
+  const badge = document.getElementById('escalationBadge');
+
+  // الرقم الأساسي = عدد الشكاوى المصعدة
+  el.innerHTML = totalEscalated;
+
+  if (totalEscalated > 0) {
+    el.innerHTML += `
+      <span style="
+        position:absolute; top:-8px; right:-20px;
+        background:#dc3545; color:white;
+        border-radius:50%; min-width:22px; height:22px;
+        font-size:0.65rem; line-height:22px;
+        text-align:center; animation:pulse 1.5s infinite;
+      ">!</span>`;
+    el.parentElement.parentElement.style.animation = 'pulse 2s infinite';
+  }
+
+  // 🔥 أعلى تكرار
+  if (maxRepeat >= 2) {
+    badge.style.display = 'block';
+    badge.textContent = maxRepeat;   // ⭐ أعلى رقم تكرار
+    badge.title = `أعلى تكرار تصعيد لنفس الشكوى = ${maxRepeat}`;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+3️⃣ حساب أعلى تكرار فعليًا من البيانات
+
+داخل loadAllComplaints() بعد تحميل allComplaints:
+
+const escalatedItems = allComplaints.filter(c => (c.escalatedTo || '').trim() !== '');
+const totalEscalated = escalatedItems.length;
+
+// أعلى رقم Escalation_Count
+const maxRepeat = Math.max(
+  ...allComplaints.map(c => Number(c.escalationCount || 0)),
+  0
+);
+
+// تحديث الكرت + التنبيه
+updateEscalationBadges(totalEscalated, maxRepeat);
+
+
+✅ لو شكوى واحدة تصعّدت 5 مرات → يظهر ⚠️ 5
+✅ لو 10 شكاوى كل واحدة مرة واحدة → لا يظهر تكرار (صحيح إداريًا)
+
+4️⃣ تمييز قوي داخل صفحة "قيد المعالجة"
+
+عدّل renderInProgressTable() واستبدل الـ forEach:
+
+inProgress.forEach(c => {
+  const isEsc = (c.escalatedTo || '').trim() !== '';
+  const repeat = Number(c.escalationCount || 0);
+
+  html += `
+    <tr style="${isEsc ? 'background:#fff5f5;' : ''}">
+      <td>
+        <strong>${c.id}</strong>
+        ${isEsc ? `<span class="badge badge-danger">مصعدة</span>` : ''}
+        ${repeat >= 2 ? `<span class="badge badge-warning">تكرار ${repeat}</span>` : ''}
+      </td>
+      <td>${c.date}</td>
+      <td>${c.type || '-'}</td>
+      <td>${c.assignedTo || '-'}</td>
+      <td>${c.daysOpen || 0} يوم</td>
+      <td>
+        <button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')">
+          <i class="fas fa-eye"></i>
+        </button>
+      </td>
+    </tr>
+  `;
+});
+
+
+👁️ لو عندك 100 حالة → عينك تروح مباشرة للخطير والمتكرر.
+
+5️⃣ تشارت تنفيذي واضح (نهائي)
+
+داخل renderCharts(stats) استخدم هذا فقط:
+
+const chartData = [
+  { label: 'مصعدة ⚠️', value: stats.escalated || 0, color: '#dc3545' },
+  { label: 'قيد المعالجة', value: stats.in_progress || 0, color: '#fd7e14' },
+  { label: 'جديدة', value: stats.new || 0, color: '#ffc107' },
+  { label: 'مغلقة', value: stats.closed || 0, color: '#28a745' }
+];
+
+const max = Math.max(...chartData.map(x => x.value), 1);
+
+document.getElementById('statusChart').innerHTML = chartData.map(item => `
+  <div style="margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; font-weight:bold;">
+      <span>${item.label}</span>
+      <span>${item.value}</span>
+    </div>
+    <div style="height:10px; background:#eee; border-radius:6px;">
+      <div style="height:10px; width:${(item.value/max)*100}%; background:${item.color}; border-radius:6px;"></div>
+    </div>
+  </div>
+`).join('');
+
+✅ النتيجة النهائية
+
+✔ كرت قيد المعالجة صحيح
+
+✔ المصعدة واضحة
+
+✔ تنبيه ذكي للتكرار (أهم شيء إداريًا)
+
+✔ تمييز بصري داخل القوائم
+
+✔ تشارت تنفيذي مفهوم في ثانيتين
