@@ -98,6 +98,50 @@
             const timezoneOffset = now.getTimezoneOffset() * 60000;
             return new Date(now - timezoneOffset).toISOString().slice(0, 16);
         };
+        
+        const complaintCategories = [
+            { id: 'financial', name: 'شكوى مالية', icon: '💰', subs: ['تأخر رواتب', 'خصومات غير مبررة', 'مستحقات متأخرة', 'أخرى'] },
+            { id: 'equipment', name: 'نقص معدات', icon: '🔧', subs: ['أجهزة طبية', 'معدات مكتبية', 'أدوات عمل', 'أخرى'] },
+            { id: 'staffing', name: 'نقص كوادر', icon: '👥', subs: ['تمريض', 'خدمية/نظافة', 'إداري', 'فني', 'أخرى'] },
+            { id: 'maintenance', name: 'شكوى صيانة', icon: '🛠️', subs: ['مكيف عاطل', 'انقطاع مياه', 'حمام خربان', 'كهرباء', 'لوحات مكسورة', 'لمبات', 'تشوهات بصرية', 'نظافة خارجية', 'أخرى'] },
+            { id: 'behavior', name: 'شكوى سلوك', icon: '⚠️', subs: ['تعدي لفظي', 'تعدي جسدي', 'إهانة', 'تحرش', 'أخرى'] },
+            { id: 'medical', name: 'شكوى طبية', icon: '🏥', subs: ['ضد طبيب', 'ضد ممرض', 'ضد مريض', 'خطأ طبي', 'تأخر علاج', 'أخرى'] },
+            { id: 'administrative', name: 'شكوى إدارية', icon: '📋', subs: ['ضد استقبال', 'ضد مدير', 'ضد موظف', 'تأخر إجراءات', 'أخرى'] },
+            { id: 'materials', name: 'نقص مواد', icon: '📦', subs: ['مواد أسنان', 'مواد طبية', 'مستلزمات مختبر', 'أدوية', 'أخرى'] }
+        ];
+        
+        let selectedCategory = null;
+        let selectedSeverity = null;
+        
+        function initCategorySelectors() {
+            document.querySelectorAll('.category-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    document.querySelectorAll('.category-card').forEach(c => c.classList.remove('border-[var(--accent)]', 'bg-amber-100', 'shadow-lg'));
+                    this.classList.add('border-[var(--accent)]', 'bg-amber-100', 'shadow-lg');
+                    selectedCategory = this.dataset.category;
+                    document.getElementById('primaryCategory').value = selectedCategory;
+                    const cat = complaintCategories.find(c => c.id === selectedCategory);
+                    if (cat && cat.subs.length > 0) {
+                        const subSelect = document.getElementById('subcategory');
+                        subSelect.innerHTML = '<option value="" disabled selected>اختر التصنيف الفرعي...</option>' + cat.subs.map(s => `<option value="${s}">${s}</option>`).join('');
+                        document.getElementById('subcategorySection').style.display = 'block';
+                    }
+                    document.getElementById('categoryError').textContent = '';
+                });
+            });
+            
+            document.querySelectorAll('.severity-option input').forEach(input => {
+                input.addEventListener('change', function() {
+                    document.querySelectorAll('.severity-card').forEach(c => c.classList.remove('ring-4', 'ring-offset-2'));
+                    this.nextElementSibling.classList.add('ring-4', 'ring-offset-2');
+                    if (this.value === 'high') this.nextElementSibling.classList.add('ring-red-400');
+                    else if (this.value === 'medium') this.nextElementSibling.classList.add('ring-yellow-400');
+                    else this.nextElementSibling.classList.add('ring-blue-400');
+                    selectedSeverity = this.value;
+                    document.getElementById('severityError').textContent = '';
+                });
+            });
+        }
 
         const renderProgressBar = () => {
             dom.progressBar.innerHTML = `
@@ -115,8 +159,9 @@
 
         const renderStepContent = () => {
             document.querySelector('.form-step[data-step="1"]').innerHTML = `
-                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 1: نوع الشكوى</h2>
-                <div class="form-group">
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 1: تصنيف الشكوى</h2>
+                
+                <div class="form-group mb-4">
                     <label for="complaintType" class="form-label required">نوع الشاكي</label>
                     <select id="complaintType" name="complaintType" class="form-select" required>
                         <option value="" disabled selected>اختر نوع الشاكي...</option>
@@ -125,7 +170,63 @@
                         <option value="شكوى زائر">شكوى زائر</option>
                     </select>
                     <p class="error-message"></p>
-                </div>`;
+                </div>
+                
+                <div class="form-group mb-4">
+                    <label class="form-label required">تصنيف الشكوى الرئيسي</label>
+                    <div id="categoryGrid" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        ${complaintCategories.map(cat => `
+                            <div class="category-card cursor-pointer border-2 border-slate-200 rounded-xl p-4 text-center hover:border-[var(--accent)] hover:bg-amber-50 transition-all" data-category="${cat.id}">
+                                <div class="text-3xl mb-2">${cat.icon}</div>
+                                <div class="font-bold text-sm text-slate-700">${cat.name}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <input type="hidden" id="primaryCategory" name="primaryCategory" required>
+                    <p id="categoryError" class="error-message"></p>
+                </div>
+                
+                <div class="form-group mb-4" id="subcategorySection" style="display:none;">
+                    <label class="form-label required">التصنيف الفرعي</label>
+                    <select id="subcategory" name="subcategory" class="form-select">
+                        <option value="" disabled selected>اختر التصنيف الفرعي...</option>
+                    </select>
+                    <p class="error-message"></p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label required">درجة الخطورة</label>
+                    <div id="severitySelector" class="flex gap-4 justify-center flex-wrap">
+                        <label class="severity-option cursor-pointer">
+                            <input type="radio" name="severity" value="high" class="hidden">
+                            <div class="severity-card border-2 border-red-300 rounded-xl p-4 text-center hover:bg-red-50 transition-all" style="min-width:100px;">
+                                <div class="text-2xl mb-1">🔴</div>
+                                <div class="font-bold text-red-600">عالية</div>
+                                <div class="text-xs text-slate-500">تحتاج تدخل فوري</div>
+                            </div>
+                        </label>
+                        <label class="severity-option cursor-pointer">
+                            <input type="radio" name="severity" value="medium" class="hidden">
+                            <div class="severity-card border-2 border-yellow-300 rounded-xl p-4 text-center hover:bg-yellow-50 transition-all" style="min-width:100px;">
+                                <div class="text-2xl mb-1">🟡</div>
+                                <div class="font-bold text-yellow-600">متوسطة</div>
+                                <div class="text-xs text-slate-500">تحتاج متابعة</div>
+                            </div>
+                        </label>
+                        <label class="severity-option cursor-pointer">
+                            <input type="radio" name="severity" value="low" class="hidden">
+                            <div class="severity-card border-2 border-blue-300 rounded-xl p-4 text-center hover:bg-blue-50 transition-all" style="min-width:100px;">
+                                <div class="text-2xl mb-1">🔵</div>
+                                <div class="font-bold text-blue-600">منخفضة</div>
+                                <div class="text-xs text-slate-500">للعلم فقط</div>
+                            </div>
+                        </label>
+                    </div>
+                    <p id="severityError" class="error-message"></p>
+                </div>
+            `;
+            
+            initCategorySelectors();
 
             document.querySelector('.form-step[data-step="2"]').innerHTML = `
                 <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 2: بيانات مقدم الشكوى</h2>
@@ -261,6 +362,25 @@
                     complaintType.nextElementSibling.textContent = 'يرجى اختيار نوع الشاكي';
                     isValid = false;
                 }
+                
+                const primaryCategory = document.getElementById('primaryCategory');
+                if (!primaryCategory.value) {
+                    document.getElementById('categoryError').textContent = 'يرجى اختيار تصنيف الشكوى';
+                    isValid = false;
+                }
+                
+                const subcategory = document.getElementById('subcategory');
+                if (document.getElementById('subcategorySection').style.display !== 'none' && !subcategory.value) {
+                    subcategory.classList.add('invalid');
+                    subcategory.nextElementSibling.textContent = 'يرجى اختيار التصنيف الفرعي';
+                    isValid = false;
+                }
+                
+                const severity = document.querySelector('input[name="severity"]:checked');
+                if (!severity) {
+                    document.getElementById('severityError').textContent = 'يرجى تحديد درجة الخطورة';
+                    isValid = false;
+                }
             } else if (step === 2) {
                 const name = document.getElementById('complainantName');
                 if (!name.value.trim()) {
@@ -366,10 +486,18 @@
                 }
             }
             
+            const severityLabels = { high: 'عالية', medium: 'متوسطة', low: 'منخفضة' };
+            const selectedSev = document.querySelector('input[name="severity"]:checked');
+            const catObj = complaintCategories.find(c => c.id === document.getElementById('primaryCategory').value);
+            
             const formData = {
                 action: 'submitComplaint',
                 payload: {
                     complaintType: document.getElementById('complaintType').value,
+                    primaryCategory: catObj ? catObj.name : '',
+                    subcategory: document.getElementById('subcategory').value || '',
+                    severity: selectedSev ? selectedSev.value : '',
+                    severityLabel: selectedSev ? severityLabels[selectedSev.value] : '',
                     complainantName: document.getElementById('complainantName').value,
                     complainantPhone: document.getElementById('complainantPhone').value || '',
                     complainantEmail: document.getElementById('complainantEmail').value || '',
