@@ -1174,14 +1174,13 @@
         // دالة تحديد الحالات الحرجة
         function getCriticalIncidents(incidents) {
             return incidents.filter(inc => {
-                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || '';
+                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || inc.Escalated_To || '';
                 const isEscalated = inc.status === 'escalated' || escName.trim() !== '';
                 const severity = (inc.severity || '').toLowerCase();
                 const isSevere = severity === 'severe' || severity === 'death';
-                const daysOpen = inc.daysOpen || 0;
                 
-                // الحالة حرجة إذا: مُصعّدة + خطيرة، أو وفاة، أو متأخرة جداً
-                return (isEscalated && isSevere) || severity === 'death' || (isEscalated && daysOpen >= 3);
+                // الحالة حرجة إذا: مُصعّدة (أي تصعيد)، أو وفاة، أو ضرر جسيم
+                return isEscalated || severity === 'death' || isSevere;
             });
         }
         
@@ -1198,16 +1197,24 @@
             
             panel.style.display = 'block';
             list.innerHTML = incidents.map(inc => {
-                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || '-';
+                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || inc.Escalated_To || inc.assignedTo || '-';
                 const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
+                const typeName = INCIDENT_TYPES[inc.type] || inc.type || '-';
+                const isEsc = inc.status === 'escalated' || (escName && escName !== '-');
+                
                 return `
                 <div style="padding:12px; margin-bottom:10px; background:white; border-radius:8px; border-right:5px solid #dc3545; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <div>
-                        <strong style="color:#1e3a5f; font-size:1.1rem;">${inc.id}</strong>
-                        <div style="font-size:0.9rem; margin-top:6px; color:#666;">
-                            <span style="margin-left:15px;"><i class="fas fa-exclamation-circle" style="color:${sev.color};"></i> ${sev.name}</span>
-                            <span style="margin-left:15px;"><i class="fas fa-clock"></i> أيام: ${inc.daysOpen || 0}</span>
-                            <span style="margin-left:15px;"><i class="fas fa-user"></i> مُصعّد إلى: ${escName}</span>
+                    <div style="flex:1;">
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <strong style="color:#1e3a5f; font-size:1.1rem;">${inc.id}</strong>
+                            ${isEsc ? '<span style="background:#dc3545; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem;"><i class="fas fa-arrow-up"></i> مُصعّد</span>' : ''}
+                            <span style="background:${sev.color}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${sev.name}</span>
+                        </div>
+                        <div style="font-size:0.9rem; margin-top:8px; color:#666; display:flex; flex-wrap:wrap; gap:15px;">
+                            <span><i class="fas fa-tag"></i> ${typeName}</span>
+                            <span><i class="fas fa-building"></i> ${inc.department || '-'}</span>
+                            <span><i class="fas fa-clock"></i> ${inc.daysOpen || 0} يوم</span>
+                            ${isEsc ? `<span style="color:#dc3545;"><i class="fas fa-user-tie"></i> مُصعّد إلى: ${escName}</span>` : ''}
                         </div>
                     </div>
                     <button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')" style="white-space:nowrap;">
