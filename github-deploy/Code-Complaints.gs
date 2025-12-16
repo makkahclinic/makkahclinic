@@ -152,10 +152,6 @@ function getRoutingFromMaster() {
     }
   }
   
-  // ثابتين دائمًا للتصعيد
-  escalationSet.add('حسين بابصيل');
-  escalationSet.add('أ. بلال نتو');
-  
   return { routing, escalation: Array.from(escalationSet) };
 }
 
