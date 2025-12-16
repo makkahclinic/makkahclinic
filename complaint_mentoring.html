@@ -881,20 +881,25 @@
             if (statsResult.ok) {
                 document.getElementById('totalComplaints').textContent = statsResult.total || 0;
                 document.getElementById('newComplaints').textContent = statsResult.new || 0;
-                document.getElementById('inProgressComplaints').textContent = statsResult.in_progress || 0;
+                
+                // حساب قيد المعالجة بدون المصعدة
+                const inProgressTotal = statsResult.in_progress || 0;
+                const escalatedTotal = statsResult.escalated || 0;
+                const inProgressNormal = Math.max(inProgressTotal - escalatedTotal, 0);
+                document.getElementById('inProgressComplaints').textContent = inProgressNormal;
+                
                 document.getElementById('closedComplaints').textContent = statsResult.closed || 0;
                 document.getElementById('avgDays').textContent = statsResult.avgResolutionTime || 0;
                 
                 // تحديث عدد المُصعّدة من الـ API مباشرة
-                const escalatedFromAPI = statsResult.escalated || 0;
-                document.getElementById('escalatedComplaints').innerHTML = escalatedFromAPI + (escalatedFromAPI > 0 ? '<span style="position:absolute; top:-8px; right:-20px; background:#dc3545; color:white; border-radius:50%; min-width:22px; height:22px; font-size:0.65rem; line-height:22px; text-align:center; box-shadow:0 2px 5px rgba(220,53,69,0.5); animation: pulse 1.5s infinite;">!</span>' : '');
-                if (escalatedFromAPI > 0) {
+                document.getElementById('escalatedComplaints').innerHTML = escalatedTotal + (escalatedTotal > 0 ? '<span style="position:absolute; top:-8px; right:-20px; background:#dc3545; color:white; border-radius:50%; min-width:22px; height:22px; font-size:0.65rem; line-height:22px; text-align:center; box-shadow:0 2px 5px rgba(220,53,69,0.5); animation: pulse 1.5s infinite;">!</span>' : '');
+                if (escalatedTotal > 0) {
                     document.getElementById('escalatedComplaints').parentElement.parentElement.style.animation = 'pulse 2s infinite';
                 }
                 
                 document.getElementById('complaintsCount').textContent = statsResult.total || 0;
                 document.getElementById('newCount').textContent = statsResult.new || 0;
-                document.getElementById('inprogressCount').textContent = statsResult.in_progress || 0;
+                document.getElementById('inprogressCount').textContent = inProgressNormal;
                 
                 renderCharts(statsResult);
             }
@@ -915,30 +920,32 @@
                 document.getElementById('typeChart').innerHTML = typeHtml || '<p style="text-align:center;color:#999;">لا توجد بيانات</p>';
             }
             
-            // استخدام عدد التصعيد من الـ API مباشرة
-            const escalatedCount = stats.escalated || 0;
-            
-            const statusData = [
-                { name: 'جديدة', count: stats.new || 0, color: '#ffc107' },
-                { name: 'قيد المعالجة', count: stats.in_progress || 0, color: '#0056A3' },
-                { name: 'مُصعّدة ⚠️', count: escalatedCount, color: '#dc3545' },
-                { name: 'تم الحل', count: stats.closed || 0, color: '#28a745' }
+            // تشارت حالة الشكاوى الحرجة - تصميم متطور
+            const criticalData = [
+                { label: 'مصعدة ⚠️', value: stats.escalated || 0, color: '#dc3545' },
+                { label: 'قيد المعالجة', value: Math.max((stats.in_progress || 0) - (stats.escalated || 0), 0), color: '#fd7e14' },
+                { label: 'جديدة', value: stats.new || 0, color: '#ffc107' },
+                { label: 'مغلقة', value: stats.closed || 0, color: '#28a745' }
             ];
-            const maxStatus = Math.max(...statusData.map(s => s.count), 1);
-            let statusHtml = '';
-            statusData.forEach(s => {
-                const isEscalated = s.name.includes('مُصعّدة');
-                const style = isEscalated && s.count > 0 ? 'animation: pulse 1s infinite; font-weight:bold;' : '';
-                const pct = (s.count / maxStatus * 100);
-                statusHtml += `<div class="bar-item" style="${style}"><span class="bar-label" style="${isEscalated ? 'color:#dc3545;font-weight:bold;' : ''}">${s.name}</span><div class="bar-wrapper"><div class="bar-fill" style="width:${pct}%; background:${s.color}">${s.count}</div></div></div>`;
-            });
-            document.getElementById('statusChart').innerHTML = statusHtml;
             
-            // تحديث مؤشر التصعيد الرئيسي (إذا لم يتم تحديثه من API)
-            if (escalatedCount > 0) {
-                document.getElementById('escalatedComplaints').innerHTML = escalatedCount + '<span style="position:absolute; top:-8px; right:-20px; background:#dc3545; color:white; border-radius:50%; min-width:22px; height:22px; font-size:0.65rem; line-height:22px; text-align:center; box-shadow:0 2px 5px rgba(220,53,69,0.5); animation: pulse 1.5s infinite;">!</span>';
-                document.getElementById('escalatedComplaints').parentElement.parentElement.style.animation = 'pulse 2s infinite';
-            }
+            const max = Math.max(...criticalData.map(x => x.value), 1);
+            
+            document.getElementById('statusChart').innerHTML = criticalData.map(item => {
+                const width = (item.value / max) * 100;
+                const isEscalated = item.label.includes('مصعدة');
+                const style = isEscalated && item.value > 0 ? 'animation: pulse 1s infinite;' : '';
+                return `
+                    <div style="margin-bottom:12px; ${style}">
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; ${isEscalated ? 'color:#dc3545;' : ''}">
+                            <span>${item.label}</span>
+                            <span>${item.value}</span>
+                        </div>
+                        <div style="height:10px; background:#eee; border-radius:6px;">
+                            <div style="height:10px; width:${width}%; background:${item.color}; border-radius:6px; transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         async function loadAllComplaints() {
@@ -947,11 +954,24 @@
                 allComplaints = result.complaints;
                 document.getElementById('totalBadge').textContent = allComplaints.length + ' شكوى';
                 
+                // تنبيه التصعيد المتكرر (أكثر من مرة)
+                const repeatedEscalations = allComplaints.filter(c => Number(c.escalationCount || 0) > 1);
+                if (repeatedEscalations.length > 0) {
+                    showRepeatedEscalationAlert(repeatedEscalations.length);
+                }
                 
                 applyFilters();
                 renderNewTable();
                 renderInProgressTable();
             }
+        }
+        
+        function showRepeatedEscalationAlert(count) {
+            const el = document.getElementById('escalatedComplaints');
+            el.innerHTML = `⚠ ${count} <span style="position:absolute; top:-8px; right:-20px; background:#dc3545; color:white; border-radius:50%; min-width:22px; height:22px; font-size:0.65rem; line-height:22px; text-align:center; box-shadow:0 2px 5px rgba(220,53,69,0.5); animation: pulse 1s infinite;">🔥</span>`;
+            el.style.color = '#dc3545';
+            el.title = 'شكاوى تم تصعيدها أكثر من مرة - خطر إداري!';
+            el.parentElement.parentElement.style.animation = 'pulse 1.5s infinite';
         }
 
         function applyFilters() {

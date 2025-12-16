@@ -1,0 +1,169 @@
+① لماذا “قيد المعالجة” لا يظهر في لوحة المتابعة؟
+السبب
+
+في شاشة لوحة المتابعة (Dashboard) أنت تعتمد على:
+
+stats.in_progress
+
+
+لكن الشكوى المصعّدة:
+
+حالتها = in_progress
+
+لكن أنت تعرضها بصريًا فقط في جدول الشكاوى، وليس في الكروت العلوية بشكل واضح
+
+الحل
+
+نفرّق بين:
+
+قيد المعالجة العادية
+
+قيد المعالجة + مصعّدة
+
+🔧 كود: حساب الحالات بشكل صحيح
+
+ضع هذا داخل loadDashboard بعد statsResult.ok:
+
+// عدد قيد المعالجة الكلي
+const inProgressTotal = statsResult.in_progress || 0;
+
+// عدد المصعّدة (من API)
+const escalatedTotal = statsResult.escalated || 0;
+
+// قيد المعالجة بدون تصعيد
+const inProgressNormal = Math.max(inProgressTotal - escalatedTotal, 0);
+
+// تحديث الواجهة
+document.getElementById('inProgressComplaints').textContent = inProgressNormal;
+
+
+➡️ الآن:
+
+كرت قيد المعالجة = الحالات غير المصعدة
+
+كرت المصعدة = الحالات المصعدة (حتى لو كانت قيد المعالجة)
+
+② تنبيه ذكي: “تكرار التصعيد لنفس الشكوى” (الأهم 🔥)
+
+أنت قلت:
+
+لو نفس الشكوى تصعدت مرتين أو ثلاث، أبغى تنبيه خاص يلفتني
+
+وهذا تفكير إداري ممتاز.
+
+الفكرة
+
+نستخدم:
+
+Escalation_Count
+
+🔧 كود: عداد “التصعيد المتكرر”
+
+ضع هذا داخل loadAllComplaints بعد تحميل allComplaints:
+
+// شكاوى تصعيد متكرر (أكثر من مرة)
+const repeatedEscalations = allComplaints.filter(c => 
+  Number(c.escalationCount || 0) > 1
+);
+
+// لو فيه تكرار
+if (repeatedEscalations.length > 0) {
+  showRepeatedEscalationAlert(repeatedEscalations.length);
+}
+
+
+ثم أضف هذه الدالة مرة واحدة:
+
+function showRepeatedEscalationAlert(count) {
+  const el = document.getElementById('escalatedComplaints');
+  el.innerHTML = `⚠ ${count}`;
+  el.style.color = '#dc3545';
+  el.title = 'شكاوى تم تصعيدها أكثر من مرة';
+  el.parentElement.parentElement.style.animation = 'pulse 1.5s infinite';
+}
+
+
+📌 الآن:
+
+لو نفس الشكوى تصعدت مرتين → يظهر تنبيه خاص
+
+لا يهم عدد الشكاوى، المهم التكرار
+
+③ إظهار المصعّدة داخل التقرير التاريخي
+
+أنت قلت:
+
+في التقرير أبغى المصعدة تظهر بوضوح
+
+أنت قريب جدًا من الحل، فقط نضيف تمييز أقوى.
+
+🔧 تعديل بسيط في renderHistory
+
+استبدل سطر الحالة بهذا:
+
+const escalatedBadge = c.escalatedTo
+  ? '<span class="badge badge-danger">⚠ مصعدة</span>'
+  : '';
+
+
+ويُعرض مع الحالة:
+
+<td>${escalatedBadge} <span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span></td>
+
+④ تشارت متطور وجميل (بديل الحالي)
+
+بدون مكتبات خارجية، نفس ستايلك، لكن أوضح وأقوى بصريًا.
+
+🔧 تشارت “حالة الشكاوى الحرجة”
+
+ضع هذا داخل renderCharts(stats):
+
+const criticalData = [
+  { label: 'مصعدة', value: stats.escalated || 0, color: '#dc3545' },
+  { label: 'قيد المعالجة', value: stats.in_progress || 0, color: '#fd7e14' },
+  { label: 'مغلقة', value: stats.closed || 0, color: '#28a745' }
+];
+
+const max = Math.max(...criticalData.map(x => x.value), 1);
+
+document.getElementById('statusChart').innerHTML = criticalData.map(item => {
+  const width = (item.value / max) * 100;
+  return `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; font-weight:bold;">
+        <span>${item.label}</span>
+        <span>${item.value}</span>
+      </div>
+      <div style="height:10px; background:#eee; border-radius:6px;">
+        <div style="height:10px; width:${width}%; background:${item.color}; border-radius:6px;"></div>
+      </div>
+    </div>
+  `;
+}).join('');
+
+
+✨ هذا يعطيك:
+
+نظرة تنفيذية
+
+تمييز واضح للمصعدة
+
+متناسق مع بقية التصميم
+
+خلاصة تنفيذية (مهم)
+
+بعد هذه التعديلات ستحصل على:
+
+✅ المصعدة تظهر في:
+
+لوحة المتابعة
+
+قيد المعالجة
+
+التقرير التاريخي
+
+✅ تنبيه خاص لو:
+
+نفس الشكوى تصعدت أكثر من مرة (خطر إداري)
+
+✅ تشارت أوضح وأقوى بصريًا
