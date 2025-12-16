@@ -1,0 +1,77 @@
+1) أضف/استبدل دالة exportHeatmapPNG() بهذه النسخة
+
+(نفسها تلتقط الـ Heatmap + تضيف توقيع رسمي أسفلها تلقائيًا)
+
+function exportHeatmapPNG(){
+  const heatmap = document.getElementById('riskHeatmap');
+  if (!heatmap) { alert('Heatmap غير موجود'); return; }
+
+  // نص التوقيع الرسمي
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('ar-SA');
+  const timeStr = now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+
+  // غلاف مؤقت (Heatmap + توقيع) حتى يظهر في الصورة
+  const wrapper = document.createElement('div');
+  wrapper.style.background = '#ffffff';
+  wrapper.style.padding = '16px';
+  wrapper.style.borderRadius = '14px';
+  wrapper.style.width = 'fit-content';
+  wrapper.style.direction = 'rtl';
+  wrapper.style.fontFamily = "'Tajawal', sans-serif";
+
+  // نسخ الـ Heatmap (حتى لا نخرب الصفحة)
+  const heatmapClone = heatmap.cloneNode(true);
+
+  // توقيع أسفل الصورة
+  const footer = document.createElement('div');
+  footer.style.marginTop = '14px';
+  footer.style.paddingTop = '12px';
+  footer.style.borderTop = '1px solid #e9ecef';
+  footer.style.color = '#6c757d';
+  footer.style.fontSize = '13px';
+  footer.style.display = 'flex';
+  footer.style.justifyContent = 'space-between';
+  footer.style.gap = '10px';
+  footer.innerHTML = `
+    <div>
+      <div style="font-weight:800; color:#1e3a5f;">مجمع مكة الطبي بالزاهر</div>
+      <div style="font-weight:700;">لجنة إدارة المخاطر</div>
+    </div>
+    <div style="text-align:left;">
+      <div style="font-weight:700;">تم الإنشاء بتاريخ:</div>
+      <div>${dateStr} – ${timeStr}</div>
+    </div>
+  `;
+
+  wrapper.appendChild(heatmapClone);
+  wrapper.appendChild(footer);
+
+  // نخلي الغلاف خارج الشاشة مؤقتاً
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-99999px';
+  wrapper.style.top = '0';
+  document.body.appendChild(wrapper);
+
+  // تصوير الغلاف
+  html2canvas(wrapper, {
+    backgroundColor: '#ffffff',
+    scale: 2,
+    useCORS: true
+  }).then(canvas => {
+    const link = document.createElement('a');
+    const isoDate = now.toISOString().split('T')[0];
+    link.download = `Risk_Heatmap_${isoDate}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }).finally(() => {
+    // تنظيف الغلاف
+    document.body.removeChild(wrapper);
+  });
+}
+
+2) تذكير سريع
+
+لازم تكون أضفت مكتبة html2canvas داخل <head>:
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
