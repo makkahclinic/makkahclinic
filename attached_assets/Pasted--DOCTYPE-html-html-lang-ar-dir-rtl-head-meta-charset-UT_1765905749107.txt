@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الإبلاغ عن حادث - مجمع مكة الطبي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --primary: #9E1B32; --primary-dark: #7a1527; --secondary: #0056A3; --accent: #c9a962; }
+        body { font-family: 'Tajawal', sans-serif; background: linear-gradient(135deg, #f8f9fa 0%, #e2e8f0 100%); }
+        .form-label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; }
+        .form-label.required::after { content: " *"; color: #dc2626; }
+        .form-input, .form-select, .form-textarea { width: 100%; padding: 0.75rem 1rem; border: 2px solid #e2e8f0; border-radius: 0.75rem; font-size: 1rem; transition: all 0.3s; background: #fff; }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201,169,98,0.2); }
+        .form-input.invalid, .form-select.invalid, .form-textarea.invalid { border-color: #dc2626; }
+        .error-message { color: #dc2626; font-size: 0.875rem; margin-top: 0.25rem; min-height: 1.25rem; }
+        .btn { padding: 0.875rem 2rem; border-radius: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; gap: 0.5rem; border: none; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px -5px rgba(0,0,0,0.2); }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; }
+        .btn-secondary { background: #e2e8f0; color: #475569; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        
+        .category-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 1rem;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            background: white;
+        }
+        .category-card:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 25px -8px rgba(0,0,0,0.15); }
+        .category-card.selected { border-color: var(--primary); background: linear-gradient(135deg, rgba(158,27,50,0.08), rgba(158,27,50,0.03)); box-shadow: 0 0 0 3px rgba(158,27,50,0.15); }
+        .category-card .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+        .category-card .name { font-weight: 700; color: #1e293b; font-size: 0.95rem; }
+        
+        .severity-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            background: white;
+        }
+        .severity-card:hover { transform: translateY(-2px); }
+        .severity-card.selected { box-shadow: 0 0 0 3px rgba(158,27,50,0.2); }
+        .severity-card .dot { width: 16px; height: 16px; border-radius: 50%; display: inline-block; margin-left: 8px; }
+        
+        .location-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+            font-size: 0.9rem;
+        }
+        .location-chip:hover { border-color: var(--accent); }
+        .location-chip.selected { border-color: var(--primary); background: rgba(158,27,50,0.08); color: var(--primary); font-weight: 600; }
+        .location-chip input { display: none; }
+        
+        .progress-container { display: flex; justify-content: space-between; position: relative; margin-bottom: 2rem; }
+        .progress-line { position: absolute; top: 20px; left: 10%; right: 10%; height: 4px; background: #e2e8f0; z-index: 0; border-radius: 2px; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 2px; transition: width 0.5s; }
+        .progress-step { display: flex; flex-direction: column; align-items: center; z-index: 1; }
+        .step-circle { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; transition: all 0.3s; }
+        .step-circle.active { background: var(--primary); color: white; box-shadow: 0 4px 15px rgba(158,27,50,0.4); }
+        .step-circle.completed { background: #22c55e; color: white; }
+        .step-circle.pending { background: #e2e8f0; color: #94a3b8; }
+        .step-label { margin-top: 8px; font-size: 0.8rem; color: #64748b; font-weight: 600; }
+        
+        .anonymous-toggle { display: flex; align-items: center; gap: 12px; padding: 16px; background: #fef3c7; border-radius: 0.75rem; cursor: pointer; }
+        .anonymous-toggle input { width: 20px; height: 20px; accent-color: var(--primary); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="container max-w-4xl w-full">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden" id="formContainer">
+            <header class="bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white p-6 sm:p-8 text-center">
+                <div class="flex justify-center mb-4">
+                    <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
+                        <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="الشعار" class="w-12 h-12 object-contain">
+                    </div>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-bold">مجمع مكة الطبي بالزاهر</h1>
+                <p class="text-lg sm:text-xl mt-2 opacity-90"><i class="fas fa-shield-alt mr-2"></i> نظام الإبلاغ عن حوادث سلامة المرضى</p>
+            </header>
+
+            <div id="formContent" class="p-6 sm:p-8">
+                <div id="progressBar" class="progress-container">
+                    <div class="progress-line"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+                    <div class="progress-step" data-step="1">
+                        <div class="step-circle active" id="circle1">1</div>
+                        <span class="step-label">نوع الحادث</span>
+                    </div>
+                    <div class="progress-step" data-step="2">
+                        <div class="step-circle pending" id="circle2">2</div>
+                        <span class="step-label">التفاصيل</span>
+                    </div>
+                    <div class="progress-step" data-step="3">
+                        <div class="step-circle pending" id="circle3">3</div>
+                        <span class="step-label">المكان والوقت</span>
+                    </div>
+                    <div class="progress-step" data-step="4">
+                        <div class="step-circle pending" id="circle4">4</div>
+                        <span class="step-label">المُبلّغ</span>
+                    </div>
+                </div>
+
+                <form id="incidentForm" novalidate>
+                    <!-- الخطوة 1: نوع الحادث -->
+                    <div class="form-step" data-step="1">
+                        <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">
+                            <i class="fas fa-exclamation-triangle ml-2"></i> نوع الحادث
+                        </h2>
+                        
+                        <div class="mb-6">
+                            <label class="form-label required">اختر نوع الحادث</label>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" id="categoryGrid"></div>
+                            <input type="hidden" id="incidentType" name="incidentType">
+                            <p class="error-message" id="categoryError"></p>
+                        </div>
+
+                        <div id="subcategorySection" class="mb-6 hidden">
+                            <label class="form-label required">التصنيف الفرعي</label>
+                            <select id="subcategory" class="form-select">
+                                <option value="">اختر التصنيف الفرعي</option>
+                            </select>
+                            <p class="error-message"></p>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="form-label required">مستوى الخطورة</label>
+                            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3" id="severityGrid"></div>
+                            <input type="hidden" id="severity" name="severity">
+                            <p class="error-message" id="severityError"></p>
+                        </div>
+                    </div>
+
+                    <!-- الخطوة 2: التفاصيل -->
+                    <div class="form-step hidden" data-step="2">
+                        <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">
+                            <i class="fas fa-file-alt ml-2"></i> تفاصيل الحادث
+                        </h2>
+                        
+                        <div class="mb-5">
+                            <label for="description" class="form-label required">وصف الحادث بالتفصيل</label>
+                            <textarea id="description" rows="4" class="form-textarea" placeholder="اشرح ماذا حدث بالتفصيل..."></textarea>
+                            <p class="error-message"></p>
+                        </div>
+
+                        <div class="mb-5">
+                            <label for="discoveryMethod" class="form-label">كيف تم اكتشاف الحادث؟</label>
+                            <textarea id="discoveryMethod" rows="2" class="form-textarea" placeholder="كيف ومتى تم اكتشاف الحادث؟"></textarea>
+                        </div>
+
+                        <div class="mb-5">
+                            <label for="immediateAction" class="form-label">الإجراءات الفورية المتخذة</label>
+                            <textarea id="immediateAction" rows="2" class="form-textarea" placeholder="ما الذي تم عمله فوراً؟"></textarea>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">هل تم إبلاغ الطبيب المعالج؟</label>
+                                <select id="doctorNotified" class="form-select">
+                                    <option value="لا">لا</option>
+                                    <option value="نعم">نعم</option>
+                                    <option value="غير مطلوب">غير مطلوب</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">هل تم إبلاغ المريض/ذويه؟</label>
+                                <select id="patientNotified" class="form-select">
+                                    <option value="لا">لا</option>
+                                    <option value="نعم">نعم</option>
+                                    <option value="غير مطلوب">غير مطلوب</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- الخطوة 3: المكان والوقت -->
+                    <div class="form-step hidden" data-step="3">
+                        <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">
+                            <i class="fas fa-map-marker-alt ml-2"></i> المكان والوقت
+                        </h2>
+
+                        <div class="grid md:grid-cols-2 gap-4 mb-5">
+                            <div>
+                                <label for="incidentDate" class="form-label required">تاريخ الحادث</label>
+                                <input type="date" id="incidentDate" class="form-input">
+                                <p class="error-message"></p>
+                            </div>
+                            <div>
+                                <label for="incidentTime" class="form-label">وقت الحادث</label>
+                                <input type="time" id="incidentTime" class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="mb-5">
+                            <label class="form-label required">موقع الحادث</label>
+                            <div id="locationSelector" class="flex flex-wrap gap-2 p-4 border-2 border-slate-200 rounded-xl max-h-52 overflow-y-auto">
+                                <div class="text-slate-500"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل المواقع...</div>
+                            </div>
+                            <input type="hidden" id="department" name="department">
+                            <p class="error-message" id="locationError"></p>
+                        </div>
+
+                        <div>
+                            <label for="locationDetail" class="form-label">الموقع المحدد (اختياري)</label>
+                            <input type="text" id="locationDetail" class="form-input" placeholder="مثال: غرفة الفحص 3، السرير رقم 5">
+                        </div>
+                    </div>
+
+                    <!-- الخطوة 4: بيانات المُبلّغ -->
+                    <div class="form-step hidden" data-step="4">
+                        <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">
+                            <i class="fas fa-user ml-2"></i> بيانات المُبلّغ
+                        </h2>
+
+                        <div class="mb-5">
+                            <label class="anonymous-toggle">
+                                <input type="checkbox" id="anonymous">
+                                <div>
+                                    <span class="font-bold text-amber-800">التبليغ بشكل مجهول</span>
+                                    <p class="text-sm text-amber-700">لن يتم حفظ اسمك أو بياناتك</p>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div id="reporterFields">
+                            <div class="grid md:grid-cols-2 gap-4 mb-5">
+                                <div>
+                                    <label for="reporterName" class="form-label">اسم المُبلّغ</label>
+                                    <input type="text" id="reporterName" class="form-input" placeholder="اسمك الكامل">
+                                </div>
+                                <div>
+                                    <label for="reporterContact" class="form-label">رقم التواصل</label>
+                                    <input type="tel" id="reporterContact" class="form-input" placeholder="05xxxxxxxx">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                            <i class="fas fa-info-circle text-blue-500 text-xl mt-1"></i>
+                            <div>
+                                <p class="font-bold text-blue-800">ملاحظة هامة</p>
+                                <p class="text-blue-700 text-sm">سيتم التعامل مع البلاغ بسرية تامة من قبل لجنة سلامة المرضى.</p>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between items-center">
+                    <button type="button" id="prevBtn" class="btn btn-secondary hidden">
+                        <i class="fas fa-arrow-right"></i> السابق
+                    </button>
+                    <button type="button" id="nextBtn" class="btn btn-primary">
+                        التالي <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <button type="submit" id="submitBtn" form="incidentForm" class="btn btn-primary hidden">
+                        <i class="fas fa-paper-plane"></i> إرسال البلاغ
+                    </button>
+                </div>
+            </div>
+
+            <!-- شاشة النجاح -->
+            <div id="successScreen" class="p-8 text-center hidden">
+                <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-6">
+                    <i class="fas fa-check text-green-600 text-4xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800">تم إرسال البلاغ بنجاح!</h2>
+                <p class="text-slate-600 mt-2">شكراً لك على المساهمة في تحسين سلامة المرضى</p>
+                <div class="mt-4 p-4 bg-slate-100 rounded-xl inline-block">
+                    <p class="text-sm text-slate-500">رقم البلاغ</p>
+                    <p class="text-2xl font-bold text-[var(--primary)]" id="displayIncidentId">-</p>
+                </div>
+                <div id="rcaWarning" class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl hidden">
+                    <i class="fas fa-exclamation-triangle text-amber-600"></i>
+                    <span class="text-amber-800 font-bold">هذا الحادث يتطلب تحليل السبب الجذري (RCA)</span>
+                </div>
+                <div class="mt-6 flex flex-col sm:flex-row justify-center gap-4">
+                    <button type="button" id="newReportBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> بلاغ جديد
+                    </button>
+                    <a href="cbahi-portal.html" class="btn btn-secondary">
+                        <i class="fas fa-home"></i> العودة للبوابة
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const API_URL = 'https://script.google.com/macros/s/AKfycbzutFp4ZM2K2byg5WZ41SJgjhC__zk8w6HEPwaYvz4jNz2ap-APA7SgbOg0IrwrbRq3/exec';
+        
+        let currentStep = 1;
+        const totalSteps = 4;
+        let selectedCategory = null;
+        let selectedSeverity = null;
+        let selectedLocation = null;
+
+        const incidentCategories = [
+            { id: 'medication_error', name: 'خطأ دوائي', icon: '💊', subs: ['جرعة خاطئة', 'دواء خاطئ', 'مريض خاطئ', 'وقت خاطئ', 'طريقة إعطاء خاطئة', 'أخرى'] },
+            { id: 'patient_fall', name: 'سقوط مريض', icon: '🚶', subs: ['من السرير', 'في الممر', 'في الحمام', 'أثناء النقل', 'أخرى'] },
+            { id: 'infection', name: 'عدوى مكتسبة', icon: '🦠', subs: ['عدوى جراحية', 'عدوى قسطرة', 'عدوى تنفسية', 'أخرى'] },
+            { id: 'procedure_error', name: 'خطأ إجراءات', icon: '⚕️', subs: ['إجراء خاطئ', 'موقع خاطئ', 'مريض خاطئ', 'نسيان أدوات', 'أخرى'] },
+            { id: 'diagnosis_error', name: 'خطأ تشخيصي', icon: '🔬', subs: ['تشخيص متأخر', 'تشخيص خاطئ', 'فحص مفقود', 'أخرى'] },
+            { id: 'equipment_failure', name: 'عطل معدات', icon: '🔧', subs: ['جهاز تنفس', 'مونيتور', 'جهاز تخدير', 'معدات جراحية', 'أخرى'] },
+            { id: 'near_miss', name: 'كاد يحدث', icon: '⚠️', subs: ['تم اكتشافه قبل الوصول للمريض', 'تم إيقافه في الوقت المناسب', 'أخرى'] },
+            { id: 'patient_id_error', name: 'خطأ هوية', icon: '🪪', subs: ['خلط بين مريضين', 'سوار خاطئ', 'ملف خاطئ', 'أخرى'] },
+            { id: 'communication', name: 'خطأ تواصل', icon: '📞', subs: ['تسليم مناوبة', 'أوامر شفهية', 'توثيق ناقص', 'أخرى'] },
+            { id: 'delay_care', name: 'تأخر رعاية', icon: '⏰', subs: ['تأخر علاج', 'تأخر فحوصات', 'تأخر استشارة', 'أخرى'] },
+            { id: 'blood_transfusion', name: 'نقل دم', icon: '🩸', subs: ['فصيلة خاطئة', 'تفاعل نقل دم', 'أخرى'] },
+            { id: 'other', name: 'أخرى', icon: '📋', subs: ['حدد في الوصف'] }
+        ];
+
+        const severityLevels = [
+            { id: 'none', name: 'بدون ضرر', color: '#22c55e', icon: '✓' },
+            { id: 'minor', name: 'ضرر بسيط', color: '#eab308', icon: '!' },
+            { id: 'moderate', name: 'ضرر متوسط', color: '#f97316', icon: '!!' },
+            { id: 'severe', name: 'ضرر جسيم', color: '#dc2626', icon: '!!!' },
+            { id: 'death', name: 'وفاة', color: '#1f2937', icon: '✝' }
+        ];
+
+        const defaultLocations = [
+            { code: 'ER', name: 'الطوارئ' },
+            { code: 'CLINIC', name: 'العيادات' },
+            { code: 'LAB', name: 'المختبر' },
+            { code: 'RAD', name: 'الأشعة' },
+            { code: 'PHARMACY', name: 'الصيدلية' },
+            { code: 'DENTAL', name: 'الأسنان' },
+            { code: 'EYES', name: 'العيون' },
+            { code: 'OBGYN', name: 'النساء والولادة' },
+            { code: 'SURGERY', name: 'العمليات' },
+            { code: 'CSSD', name: 'التعقيم' },
+            { code: 'NURSING', name: 'التمريض' },
+            { code: 'RECEPTION', name: 'الاستقبال' },
+            { code: 'ADMIN', name: 'الإدارة' },
+            { code: 'OTHER', name: 'أخرى' }
+        ];
+
+        let locations = [...defaultLocations];
+
+        function init() {
+            document.getElementById('incidentDate').valueAsDate = new Date();
+            renderCategories();
+            renderSeverities();
+            renderLocations();
+            setupEventListeners();
+        }
+
+        function renderCategories() {
+            const grid = document.getElementById('categoryGrid');
+            grid.innerHTML = incidentCategories.map(cat => `
+                <div class="category-card" data-category="${cat.id}">
+                    <div class="icon">${cat.icon}</div>
+                    <div class="name">${cat.name}</div>
+                </div>
+            `).join('');
+
+            grid.querySelectorAll('.category-card').forEach(card => {
+                card.addEventListener('click', () => selectCategory(card.dataset.category));
+            });
+        }
+
+        function selectCategory(catId) {
+            selectedCategory = catId;
+            document.getElementById('incidentType').value = catId;
+            
+            document.querySelectorAll('.category-card').forEach(c => c.classList.remove('selected'));
+            document.querySelector(`.category-card[data-category="${catId}"]`).classList.add('selected');
+            document.getElementById('categoryError').textContent = '';
+
+            const cat = incidentCategories.find(c => c.id === catId);
+            const subSection = document.getElementById('subcategorySection');
+            const subSelect = document.getElementById('subcategory');
+
+            if (cat && cat.subs && cat.subs.length > 1) {
+                subSelect.innerHTML = '<option value="">اختر التصنيف الفرعي</option>' +
+                    cat.subs.map(s => `<option value="${s}">${s}</option>`).join('');
+                subSection.classList.remove('hidden');
+            } else {
+                subSection.classList.add('hidden');
+                subSelect.value = cat?.subs?.[0] || '';
+            }
+        }
+
+        function renderSeverities() {
+            const grid = document.getElementById('severityGrid');
+            grid.innerHTML = severityLevels.map(sev => `
+                <div class="severity-card" data-severity="${sev.id}" style="border-color: ${sev.color}20;">
+                    <span class="dot" style="background: ${sev.color};"></span>
+                    <span>${sev.name}</span>
+                </div>
+            `).join('');
+
+            grid.querySelectorAll('.severity-card').forEach(card => {
+                card.addEventListener('click', () => selectSeverity(card.dataset.severity));
+            });
+        }
+
+        function selectSeverity(sevId) {
+            selectedSeverity = sevId;
+            document.getElementById('severity').value = sevId;
+            
+            document.querySelectorAll('.severity-card').forEach(c => c.classList.remove('selected'));
+            const card = document.querySelector(`.severity-card[data-severity="${sevId}"]`);
+            card.classList.add('selected');
+            const sev = severityLevels.find(s => s.id === sevId);
+            card.style.borderColor = sev.color;
+            card.style.background = sev.color + '15';
+            document.getElementById('severityError').textContent = '';
+        }
+
+        function renderLocations() {
+            const selector = document.getElementById('locationSelector');
+            selector.innerHTML = locations.map(loc => `
+                <label class="location-chip" data-code="${loc.code}">
+                    <input type="radio" name="location" value="${loc.code}">
+                    <i class="fas fa-map-marker-alt text-xs"></i>
+                    ${loc.name}
+                </label>
+            `).join('');
+
+            selector.querySelectorAll('.location-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    selector.querySelectorAll('.location-chip').forEach(c => c.classList.remove('selected'));
+                    chip.classList.add('selected');
+                    chip.querySelector('input').checked = true;
+                    selectedLocation = chip.dataset.code;
+                    document.getElementById('department').value = locations.find(l => l.code === selectedLocation)?.name || selectedLocation;
+                    document.getElementById('locationError').textContent = '';
+                });
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('nextBtn').addEventListener('click', nextStep);
+            document.getElementById('prevBtn').addEventListener('click', prevStep);
+            document.getElementById('incidentForm').addEventListener('submit', submitForm);
+            document.getElementById('newReportBtn').addEventListener('click', resetForm);
+
+            document.getElementById('anonymous').addEventListener('change', function() {
+                document.getElementById('reporterFields').classList.toggle('hidden', this.checked);
+                if (this.checked) {
+                    document.getElementById('reporterName').value = '';
+                    document.getElementById('reporterContact').value = '';
+                }
+            });
+        }
+
+        function updateProgress() {
+            const fill = document.getElementById('progressFill');
+            fill.style.width = ((currentStep - 1) / (totalSteps - 1) * 100) + '%';
+
+            for (let i = 1; i <= totalSteps; i++) {
+                const circle = document.getElementById('circle' + i);
+                circle.classList.remove('active', 'completed', 'pending');
+                if (i < currentStep) {
+                    circle.classList.add('completed');
+                    circle.innerHTML = '<i class="fas fa-check"></i>';
+                } else if (i === currentStep) {
+                    circle.classList.add('active');
+                    circle.textContent = i;
+                } else {
+                    circle.classList.add('pending');
+                    circle.textContent = i;
+                }
+            }
+        }
+
+        function showStep(step) {
+            document.querySelectorAll('.form-step').forEach(s => s.classList.add('hidden'));
+            document.querySelector(`.form-step[data-step="${step}"]`).classList.remove('hidden');
+
+            document.getElementById('prevBtn').classList.toggle('hidden', step === 1);
+            document.getElementById('nextBtn').classList.toggle('hidden', step === totalSteps);
+            document.getElementById('submitBtn').classList.toggle('hidden', step !== totalSteps);
+
+            updateProgress();
+        }
+
+        function validateStep(step) {
+            let valid = true;
+            
+            if (step === 1) {
+                if (!selectedCategory) {
+                    document.getElementById('categoryError').textContent = 'يرجى اختيار نوع الحادث';
+                    valid = false;
+                }
+                const subSection = document.getElementById('subcategorySection');
+                const subcategory = document.getElementById('subcategory');
+                if (!subSection.classList.contains('hidden') && !subcategory.value) {
+                    subcategory.classList.add('invalid');
+                    subcategory.nextElementSibling.textContent = 'يرجى اختيار التصنيف الفرعي';
+                    valid = false;
+                }
+                if (!selectedSeverity) {
+                    document.getElementById('severityError').textContent = 'يرجى اختيار مستوى الخطورة';
+                    valid = false;
+                }
+            } else if (step === 2) {
+                const desc = document.getElementById('description');
+                if (!desc.value.trim()) {
+                    desc.classList.add('invalid');
+                    desc.nextElementSibling.textContent = 'يرجى وصف الحادث';
+                    valid = false;
+                }
+            } else if (step === 3) {
+                const date = document.getElementById('incidentDate');
+                if (!date.value) {
+                    date.classList.add('invalid');
+                    date.nextElementSibling.textContent = 'يرجى تحديد تاريخ الحادث';
+                    valid = false;
+                }
+                if (!selectedLocation) {
+                    document.getElementById('locationError').textContent = 'يرجى اختيار موقع الحادث';
+                    valid = false;
+                }
+            }
+
+            return valid;
+        }
+
+        function clearErrors() {
+            document.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+            document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
+        }
+
+        function nextStep() {
+            clearErrors();
+            if (!validateStep(currentStep)) return;
+            if (currentStep < totalSteps) {
+                currentStep++;
+                showStep(currentStep);
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                showStep(currentStep);
+            }
+        }
+
+        async function submitForm(e) {
+            e.preventDefault();
+            clearErrors();
+            if (!validateStep(currentStep)) return;
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+
+            const payload = {
+                incidentDate: document.getElementById('incidentDate').value,
+                incidentTime: document.getElementById('incidentTime').value,
+                department: document.getElementById('department').value,
+                location: document.getElementById('locationDetail').value,
+                incidentType: document.getElementById('incidentType').value,
+                subcategory: document.getElementById('subcategory').value,
+                severity: document.getElementById('severity').value,
+                description: document.getElementById('description').value,
+                discoveryMethod: document.getElementById('discoveryMethod').value,
+                immediateAction: document.getElementById('immediateAction').value,
+                doctorNotified: document.getElementById('doctorNotified').value,
+                patientNotified: document.getElementById('patientNotified').value,
+                anonymous: document.getElementById('anonymous').checked,
+                reporterName: document.getElementById('reporterName').value,
+                reporterContact: document.getElementById('reporterContact').value
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'submitIncident', payload })
+                });
+
+                const result = await response.json();
+
+                if (result.ok && result.success) {
+                    document.getElementById('formContent').classList.add('hidden');
+                    document.getElementById('successScreen').classList.remove('hidden');
+                    document.getElementById('displayIncidentId').textContent = result.incidentId;
+
+                    if (result.requiresRCA) {
+                        document.getElementById('rcaWarning').classList.remove('hidden');
+                    }
+                } else {
+                    throw new Error(result.error || 'حدث خطأ');
+                }
+            } catch (err) {
+                alert('حدث خطأ: ' + err.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال البلاغ';
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('incidentForm').reset();
+            document.getElementById('incidentDate').valueAsDate = new Date();
+            document.getElementById('formContent').classList.remove('hidden');
+            document.getElementById('successScreen').classList.add('hidden');
+            document.getElementById('rcaWarning').classList.add('hidden');
+            document.getElementById('reporterFields').classList.remove('hidden');
+            document.getElementById('subcategorySection').classList.add('hidden');
+
+            selectedCategory = null;
+            selectedSeverity = null;
+            selectedLocation = null;
+            currentStep = 1;
+
+            document.querySelectorAll('.category-card').forEach(c => c.classList.remove('selected'));
+            document.querySelectorAll('.severity-card').forEach(c => {
+                c.classList.remove('selected');
+                c.style.background = '';
+            });
+            document.querySelectorAll('.location-chip').forEach(c => c.classList.remove('selected'));
+
+            showStep(1);
+        }
+
+        init();
+    })();
+    </script>
+</body>
+</html>
