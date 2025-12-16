@@ -80,19 +80,56 @@
         let selectedLocations = [];
         let attachedFiles = [];
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec";
-        const departments = [
-            { code: "DENTAL", name: "🦷 قسم الأسنان", nameEn: "Dental" },
-            { code: "RAD", name: "📷 قسم الأشعة", nameEn: "RAD" },
-            { code: "OBGYN", name: "👶 قسم النساء والولادة", nameEn: "OB/GYN" },
-            { code: "LAB", name: "🔬 المختبر", nameEn: "LAB" },
-            { code: "ER", name: "🚑 الطوارئ", nameEn: "E.R" },
-            { code: "CSSD", name: "🧼 التعقيم", nameEn: "CSSD" },
-            { code: "BUILDING-INT", name: "🏢 المبنى الداخلي", nameEn: "Building Internal" },
-            { code: "BUILDING-EXT", name: "🏢 المبنى الخارجي", nameEn: "Building External" },
-            { code: "EYES", name: "👁️ قسم العيون", nameEn: "Eyes" },
-            { code: "PHARMACY", name: "💊 الصيدلية", nameEn: "Pharmacy" }
-        ];
-        const locations = departments;
+        
+        // المواقع - تُحمّل من Google Sheet ديناميكياً
+        let locations = [];
+        let locationsLoaded = false;
+        
+        async function loadLocationsFromSheet() {
+            try {
+                const response = await fetch(SCRIPT_URL + '?action=getLocations');
+                const data = await response.json();
+                if (data.ok && data.locations && data.locations.length > 0) {
+                    locations = data.locations;
+                    locationsLoaded = true;
+                    console.log('✅ تم تحميل', locations.length, 'موقع من الشيت');
+                    // تحديث العرض إذا كانت الخطوة 3 ظاهرة
+                    updateLocationSelector();
+                } else {
+                    console.warn('⚠️ لم يتم العثور على مواقع، استخدام القائمة الافتراضية');
+                    useDefaultLocations();
+                }
+            } catch (err) {
+                console.error('❌ فشل تحميل المواقع:', err);
+                useDefaultLocations();
+            }
+        }
+        
+        function useDefaultLocations() {
+            locations = [
+                { code: "DENTAL", name: "قسم الأسنان" },
+                { code: "RAD", name: "قسم الأشعة" },
+                { code: "OBGYN", name: "قسم النساء والولادة" },
+                { code: "LAB", name: "المختبر" },
+                { code: "ER", name: "الطوارئ" },
+                { code: "CSSD", name: "التعقيم" },
+                { code: "EYES", name: "قسم العيون" },
+                { code: "PHARMACY", name: "الصيدلية" }
+            ];
+            locationsLoaded = true;
+        }
+        
+        function updateLocationSelector() {
+            const selector = document.getElementById('locationSelector');
+            if (selector && locations.length > 0) {
+                selector.innerHTML = locations.map(loc => `
+                    <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" name="locations" value="${loc.code}" class="location-checkbox w-4 h-4 accent-[var(--primary)]">
+                        <span class="text-sm">${loc.name}</span>
+                    </label>
+                `).join('');
+            }
+        }
 
         const dom = {
             form: document.getElementById('unifiedForm'),
@@ -556,7 +593,10 @@
             }
         };
 
-        const init = () => {
+        const init = async () => {
+            // تحميل المواقع من الشيت أولاً
+            await loadLocationsFromSheet();
+            
             renderProgressBar();
             renderStepContent();
             showStep(1);

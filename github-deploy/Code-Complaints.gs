@@ -88,8 +88,40 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
   
+  if (action === 'getLocations') {
+    const result = getLocations();
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
   return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Complaints API is running', version: '1.0' }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================
+// دالة جلب المواقع من الشيت (العمود E و F)
+// ============================================
+function getLocations() {
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('Master');
+  
+  if (!sheet) {
+    return { locations: [], error: 'ورقة Master غير موجودة' };
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  const locations = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    const code = String(data[i][4] || '').trim(); // العمود E (index 4)
+    const name = String(data[i][5] || '').trim(); // العمود F (index 5)
+    
+    if (code && name) {
+      locations.push({ code: code, name: name });
+    }
+  }
+  
+  return { locations: locations };
 }
 
 // ============================================
