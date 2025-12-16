@@ -670,6 +670,19 @@
         </div>
         
         <div id="dashboard" class="tab-content active">
+            <!-- قسم الحالات الحرجة -->
+            <div id="criticalPanel" class="card" style="display:none; margin-bottom:20px; border:2px solid #dc3545; background:linear-gradient(135deg, #fff5f5 0%, #ffebee 100%);">
+                <div class="card-header" style="background:linear-gradient(135deg, #dc3545, #c82333); color:white;">
+                    <h3 class="card-title" style="color:white; margin:0;">
+                        <i class="fas fa-exclamation-triangle fa-pulse"></i>
+                        حالات حرجة تحتاج تدخّل فوري
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div id="criticalList"></div>
+                </div>
+            </div>
+            
             <div class="stats-row" id="statsRow">
                 <div class="stat-card">
                     <div class="stat-number" id="totalIncidents">-</div>
@@ -1153,6 +1166,68 @@
             // تحديث عدادات المُصعّدة والمغلقة عند فتح الصفحة
             await loadEscalatedIncidents();
             await loadClosedIncidents();
+            
+            // تحميل الحالات الحرجة
+            await loadCriticalIncidents();
+        }
+        
+        // دالة تحديد الحالات الحرجة
+        function getCriticalIncidents(incidents) {
+            return incidents.filter(inc => {
+                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || '';
+                const isEscalated = inc.status === 'escalated' || escName.trim() !== '';
+                const severity = (inc.severity || '').toLowerCase();
+                const isSevere = severity === 'severe' || severity === 'death';
+                const daysOpen = inc.daysOpen || 0;
+                
+                // الحالة حرجة إذا: مُصعّدة + خطيرة، أو وفاة، أو متأخرة جداً
+                return (isEscalated && isSevere) || severity === 'death' || (isEscalated && daysOpen >= 3);
+            });
+        }
+        
+        // عرض لوحة الحالات الحرجة
+        function renderCriticalPanel(incidents) {
+            const panel = document.getElementById('criticalPanel');
+            const list = document.getElementById('criticalList');
+            if (!panel || !list) return;
+            
+            if (!incidents.length) {
+                panel.style.display = 'none';
+                return;
+            }
+            
+            panel.style.display = 'block';
+            list.innerHTML = incidents.map(inc => {
+                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || '-';
+                const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
+                return `
+                <div style="padding:12px; margin-bottom:10px; background:white; border-radius:8px; border-right:5px solid #dc3545; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <strong style="color:#1e3a5f; font-size:1.1rem;">${inc.id}</strong>
+                        <div style="font-size:0.9rem; margin-top:6px; color:#666;">
+                            <span style="margin-left:15px;"><i class="fas fa-exclamation-circle" style="color:${sev.color};"></i> ${sev.name}</span>
+                            <span style="margin-left:15px;"><i class="fas fa-clock"></i> أيام: ${inc.daysOpen || 0}</span>
+                            <span style="margin-left:15px;"><i class="fas fa-user"></i> مُصعّد إلى: ${escName}</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')" style="white-space:nowrap;">
+                        <i class="fas fa-eye"></i> عرض عاجل
+                    </button>
+                </div>
+            `}).join('');
+        }
+        
+        // تحميل الحالات الحرجة
+        async function loadCriticalIncidents() {
+            try {
+                const result = await apiCall('getIncidents', { status: 'all' });
+                if (result.ok && result.incidents?.length) {
+                    const critical = getCriticalIncidents(result.incidents);
+                    renderCriticalPanel(critical);
+                }
+            } catch (e) {
+                console.error('Error loading critical incidents:', e);
+            }
         }
         
         async function loadStats() {
