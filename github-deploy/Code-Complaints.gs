@@ -141,7 +141,9 @@ function getComplaintsSheet(sheetName) {
         'Complainant_Phone', 'Complainant_Email', 'Complaint_DateTime', 'Locations',
         'Description', 'Complaint_Against', 'Attachments', 'Additional_Notes',
         'Status', 'Priority', 'Assigned_To', 'Assigned_Date', 'Resolution',
-        'Resolution_Date', 'Closed_By', 'Response_Sent', 'Days_Open'
+        'Resolution_Date', 'Closed_By', 'Response_Sent', 'Days_Open',
+        'Escalated_To', 'Escalated_By', 'Escalation_Date', 'Escalation_Reason', 'Escalation_Count',
+        'Root_Cause_Category', 'Root_Cause_Details'
       ]);
     } else if (sheetName === 'Complaints_Followup') {
       sheet.appendRow(['Followup_ID', 'Complaint_ID', 'Date', 'Action', 'Action_By', 'Notes', 'Status']);
@@ -425,6 +427,7 @@ function getComplaintStats(params) {
   const newCount = filtered.filter(c => c.Status === 'new').length;
   const inProgress = filtered.filter(c => c.Status === 'in_progress').length;
   const closed = filtered.filter(c => c.Status === 'closed').length;
+  const escalated = filtered.filter(c => c.Escalated_To && c.Escalated_To.trim() !== '').length;
   
   const closedWithDays = filtered.filter(c => c.Status === 'closed' && c.Days_Open);
   const avgDays = closedWithDays.length > 0 
@@ -442,6 +445,7 @@ function getComplaintStats(params) {
     new: newCount,
     in_progress: inProgress,
     closed,
+    escalated,
     avgResolutionTime: avgDays,
     byType
   };
@@ -493,7 +497,17 @@ function getComplaints(params) {
     status: c.Status || 'new',
     priority: c.Priority || 'medium',
     assignedTo: c.Assigned_To || '',
-    daysOpen: c.Days_Open || 0
+    daysOpen: c.Days_Open || 0,
+    // حقول التصعيد
+    escalatedTo: c.Escalated_To || '',
+    escalatedBy: c.Escalated_By || '',
+    escalationDate: formatDate(c.Escalation_Date),
+    escalationReason: c.Escalation_Reason || '',
+    escalationCount: parseInt(c.Escalation_Count) || 0,
+    isEscalated: c.Escalated_To ? true : false,
+    // جذر المشكلة
+    rootCauseCategory: c.Root_Cause_Category || '',
+    rootCauseDetails: c.Root_Cause_Details || ''
   }));
   
   return { complaints, total: complaints.length };
@@ -537,6 +551,16 @@ function getComplaintDetails(complaintId) {
       closedBy: complaint.Closed_By || '',
       responseSent: complaint.Response_Sent || 'no',
       daysOpen: complaint.Days_Open || 0,
+      // حقول التصعيد
+      escalatedTo: complaint.Escalated_To || '',
+      escalatedBy: complaint.Escalated_By || '',
+      escalationDate: formatDate(complaint.Escalation_Date),
+      escalationReason: complaint.Escalation_Reason || '',
+      escalationCount: parseInt(complaint.Escalation_Count) || 0,
+      isEscalated: complaint.Escalated_To ? true : false,
+      // جذر المشكلة
+      rootCauseCategory: complaint.Root_Cause_Category || '',
+      rootCauseDetails: complaint.Root_Cause_Details || '',
       _rowIndex: complaint._rowIndex
     },
     followups: followups.map(f => ({
@@ -675,9 +699,28 @@ function escalateComplaint(payload) {
   
   const rowIndex = complaint._rowIndex;
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const now = getSaudiDate();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   
+  // تحديث الأولوية إلى عالية
   const priorityCol = headers.indexOf('Priority');
   if (priorityCol !== -1) sheet.getRange(rowIndex, priorityCol + 1).setValue('high');
+  
+  // حفظ بيانات التصعيد
+  const escalatedToCol = headers.indexOf('Escalated_To');
+  const escalatedByCol = headers.indexOf('Escalated_By');
+  const escalationDateCol = headers.indexOf('Escalation_Date');
+  const escalationReasonCol = headers.indexOf('Escalation_Reason');
+  const escalationCountCol = headers.indexOf('Escalation_Count');
+  
+  if (escalatedToCol !== -1) sheet.getRange(rowIndex, escalatedToCol + 1).setValue(payload.escalateTo);
+  if (escalatedByCol !== -1) sheet.getRange(rowIndex, escalatedByCol + 1).setValue(payload.escalatedBy || 'النظام');
+  if (escalationDateCol !== -1) sheet.getRange(rowIndex, escalationDateCol + 1).setValue(dateStr);
+  if (escalationReasonCol !== -1) sheet.getRange(rowIndex, escalationReasonCol + 1).setValue(payload.reason || '');
+  
+  // زيادة عداد التصعيد
+  const currentCount = parseInt(complaint.Escalation_Count) || 0;
+  if (escalationCountCol !== -1) sheet.getRange(rowIndex, escalationCountCol + 1).setValue(currentCount + 1);
   
   addComplaintFollowup({
     complaintId: payload.complaintId,
@@ -686,7 +729,12 @@ function escalateComplaint(payload) {
     notes: payload.reason || ''
   });
   
-  return { success: true, message: `تم تصعيد الشكوى إلى ${payload.escalateTo}` };
+  return { 
+    success: true, 
+    message: `تم تصعيد الشكوى إلى ${payload.escalateTo}`,
+    escalatedTo: payload.escalateTo,
+    escalationCount: currentCount + 1
+  };
 }
 
 function closeComplaint(payload) {
