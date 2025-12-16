@@ -750,7 +750,11 @@
                             <option value="365">آخر سنة</option>
                             <option value="all">كل البيانات</option>
                         </select>
-                        <button class="btn btn-secondary btn-sm" onclick="refreshExecutiveView(true)">
+                        <select id="hmScope" style="padding:8px 12px;border:1px solid #e9ecef;border-radius:8px;font-family:'Tajawal',sans-serif;">
+                            <option value="all">كل الحالات</option>
+                            <option value="open" selected>غير مغلقة فقط</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshHeatmapFiltered()">
                             <i class="fas fa-bolt"></i> تحديث سريع
                         </button>
                         <button class="btn btn-primary btn-sm" onclick="exportHeatmapPDF()">
@@ -1139,6 +1143,55 @@
             return 'none';
         }
         
+        // Global canonical store
+        let allIncidentsGlobal = [];
+        
+        // Canonical Adapter - موحد لكل البيانات
+        function toCanonical(i) {
+            const id = getId(i);
+            if (!id) return null;
+            
+            const status = normStatus(i);
+            const severity = normSeverity(i);
+            const dept = getDept(i);
+            const type = getType(i);
+            const date = getDate(i);
+            const closedDate = getClosedDate(i);
+            const escalatedTo = getEscTo(i);
+            const description = getDescription(i);
+            
+            const rcaRequired =
+                i.rcaRequired === true ||
+                norm(i.RCA_Required).toLowerCase() === 'yes' ||
+                norm(i.RCA_Required).includes('نعم') ||
+                norm(i.requires_rca).toLowerCase() === 'true' ||
+                norm(i.requiresRca).toLowerCase() === 'true';
+            
+            const lastActionDate = norm(i.lastActionDate || i.Last_Action_Date || i.last_action_date || i.LastActionDate);
+            const assignedTo = norm(i.assignedTo || i.Assigned_To || i.assignee || i.Assignee_To);
+            const containmentDate = norm(i.containmentDate || i.Containment_Date || i.firstActionDate || i.First_Action_Date);
+            const rcaStartDate = norm(i.rcaStartDate || i.RCA_Start_Date || i.rcaDate);
+            const rootCause = norm(i.rootCause || i.Root_Cause);
+            const correctiveActions = norm(i.correctiveActions || i.Corrective_Actions);
+            const attachments = norm(i.attachments || i.Attachments || i.files || i.Files);
+            
+            return {
+                raw: i,
+                id, status, severity, dept, type,
+                date, closedDate, escalatedTo,
+                rcaRequired, lastActionDate, assignedTo,
+                containmentDate, rcaStartDate, rootCause, correctiveActions,
+                description, attachments
+            };
+        }
+        
+        // حساب الأيام المفتوحة من canonical
+        function daysOpenFrom(inc) {
+            const ref = inc.lastActionDate ? new Date(inc.lastActionDate) : new Date(inc.date);
+            if (isNaN(ref.getTime())) return 0;
+            return Math.floor((Date.now() - ref.getTime()) / 86400000);
+        }
+        
         function calculateDelay(incidentDate, status, lastActionDate) {
             if (status === 'closed') return { hours: 0, days: 0 };
             
@@ -1279,21 +1332,25 @@
         
         async function loadData() {
             try {
-                const all = await loadAllIncidentsCached(true);
+                const allRaw = await loadAllIncidentsCached(true);
+                // تحويل لـ Canonical
+                const all = allRaw.map(toCanonical).filter(x => x && x.id);
+                window.allIncidentsGlobal = all;
+                allIncidentsGlobal = all;
                 
-                // فلترة الحوادث
-                const escalated = all.filter(i => normStatus(i) === 'escalated' || getEscTo(i));
-                const closed = all.filter(i => normStatus(i) === 'closed' || getClosedDate(i));
+                // فلترة الحوادث باستخدام Canonical
+                const escalated = all.filter(i => i.status === 'escalated' || i.escalatedTo);
+                const closed = all.filter(i => i.status === 'closed' || i.closedDate);
                 
                 // تحديث العدادات فوراً
                 document.getElementById('escalatedTabCount').textContent = escalated.length;
                 document.getElementById('closedTabCount').textContent = closed.length;
                 
-                // تحديث الجداول
+                // تحديث الجداول (canonical)
                 renderEscalatedTable(escalated);
                 renderClosedTable(closed);
                 
-                // الحالات الحرجة
+                // الحالات الحرجة (canonical)
                 renderCriticalPanel(getCriticalIncidents(all));
                 
                 // Heatmap المخاطر
@@ -1310,7 +1367,7 @@
             await loadRcaIncidents();
         }
         
-        // دالة عرض جدول المُصعّدة
+        // دالة عرض جدول المُصعّدة (Canonical)
         function renderEscalatedTable(list) {
             const tbody = document.getElementById('escalatedTable');
             if (!tbody) return;
@@ -1319,27 +1376,21 @@
                 return;
             }
             tbody.innerHTML = list.map(inc => {
-                const id = getId(inc);
-                const dt = getDate(inc);
-                const dept = getDept(inc);
-                const type = getType(inc);
-                const sevKey = normSeverity(inc);
-                const sev = SEVERITY[sevKey] || { name: getSeverityRaw(inc) || '-', color: '#dc3545' };
-                const escName = getEscTo(inc) || '-';
+                const sev = SEVERITY[inc.severity] || { name: inc.severity || '-', color: '#dc3545' };
                 return `
                     <tr style="background:#fff5f5;">
-                        <td><strong>${id || '-'}</strong></td>
-                        <td>${dt}</td>
-                        <td>${INCIDENT_TYPES[type] || type}</td>
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${formatDate(inc.date)}</td>
+                        <td>${INCIDENT_TYPES[inc.type] || inc.type}</td>
                         <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
-                        <td>${dept}</td>
-                        <td><strong style="color:#dc3545;"><i class="fas fa-arrow-up"></i> ${escName}</strong></td>
-                        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${id}')"><i class="fas fa-eye"></i></button></td>
+                        <td>${inc.dept}</td>
+                        <td><strong style="color:#dc3545;"><i class="fas fa-arrow-up"></i> ${inc.escalatedTo || '-'}</strong></td>
+                        <td><button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
                     </tr>`;
             }).join('');
         }
         
-        // دالة عرض جدول المغلقة
+        // دالة عرض جدول المغلقة (Canonical)
         function renderClosedTable(list) {
             const tbody = document.getElementById('closedTable');
             if (!tbody) return;
@@ -1348,22 +1399,16 @@
                 return;
             }
             tbody.innerHTML = list.map(inc => {
-                const id = getId(inc);
-                const dt = getDate(inc);
-                const dept = getDept(inc);
-                const type = getType(inc);
-                const sevKey = normSeverity(inc);
-                const sev = SEVERITY[sevKey] || { name: getSeverityRaw(inc) || '-', color: '#28a745' };
-                const closedDate = getClosedDate(inc) || '-';
+                const sev = SEVERITY[inc.severity] || { name: inc.severity || '-', color: '#28a745' };
                 return `
                     <tr>
-                        <td><strong>${id || '-'}</strong></td>
-                        <td>${dt}</td>
-                        <td>${INCIDENT_TYPES[type] || type}</td>
+                        <td><strong>${inc.id}</strong></td>
+                        <td>${formatDate(inc.date)}</td>
+                        <td>${INCIDENT_TYPES[inc.type] || inc.type}</td>
                         <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
-                        <td>${dept}</td>
-                        <td>${closedDate}</td>
-                        <td><button class="btn btn-success btn-sm" onclick="viewIncident('${id}')"><i class="fas fa-eye"></i></button></td>
+                        <td>${inc.dept}</td>
+                        <td>${formatDate(inc.closedDate)}</td>
+                        <td><button class="btn btn-success btn-sm" onclick="viewIncident('${inc.id}')"><i class="fas fa-eye"></i></button></td>
                     </tr>`;
             }).join('');
         }
@@ -1378,12 +1423,13 @@
             return 1;
         }
         
+        // Canonical-compatible riskExtras
         function riskExtras(inc) {
-            const st = normStatus(inc);
-            const rca = inc.rcaRequired === true || inc.RCA_Required === 'نعم' || inc.requires_rca;
+            const st = inc.status || normStatus(inc);
+            const rca = inc.rcaRequired;
             let extra = 0;
             
-            if (st === 'escalated') extra += 4;
+            if (st === 'escalated' || inc.escalatedTo) extra += 4;
             if (rca) extra += 3;
             
             // تأخير
@@ -1404,19 +1450,19 @@
             return 'rgba(40,167,69,0.35)';
         }
         
+        // Canonical-compatible Heatmap
         function buildIncidentHeatmap(all) {
             const container = document.getElementById('incidentHeatmap');
             if (!container) return;
             
-            const depts = Array.from(new Set(all.map(x => getDept(x)))).sort();
+            const depts = Array.from(new Set(all.map(x => x.dept || getDept(x)))).sort();
             const sevKeys = ['death', 'severe', 'moderate', 'minor', 'none'];
             const sevNames = { death: 'وفاة', severe: 'ضرر جسيم', moderate: 'ضرر متوسط', minor: 'ضرر بسيط', none: 'بدون ضرر' };
             
             const map = new Map();
             for (const inc of all) {
-                const dept = getDept(inc);
-                const sev = normSeverity(inc);
-                const esc = !!getEscTo(inc) || normStatus(inc) === 'escalated';
+                const dept = inc.dept || getDept(inc);
+                const sev = inc.severity || normSeverity(inc);
                 
                 const keySev = sevKeys.includes(sev) ? sev : 'none';
                 if (!map.has(dept)) map.set(dept, new Map());
@@ -1457,8 +1503,12 @@
                     cell.style.background = heatColor(d.score);
                     cell.innerHTML = `<div class="hm-num">${d.count}</div><div class="hm-sub">Risk: ${d.score}</div>`;
                     cell.onclick = () => {
-                        const ids = d.items.slice(0, 20).map(x => getId(x)).filter(Boolean).join('\n');
-                        alert(`القسم: ${dept}\nالخطورة: ${sevNames[s]}\nعدد الحالات: ${d.count}\nRisk Score: ${d.score}\n\nأول 20 رقم بلاغ:\n${ids || '-'}`);
+                        const ids = d.items.slice(0, 20).map(x => x.id).filter(Boolean).join('\n');
+                        if (typeof toast === 'function') {
+                            toast(`القسم: ${dept} | ${sevNames[s]} | ${d.count} حالة | Risk: ${d.score}`, 'info', 5000);
+                        } else {
+                            alert(`القسم: ${dept}\nالخطورة: ${sevNames[s]}\nعدد الحالات: ${d.count}\nRisk Score: ${d.score}\n\nأول 20 رقم بلاغ:\n${ids || '-'}`);
+                        }
                     };
                     grid.appendChild(cell);
                 }
@@ -1468,20 +1518,16 @@
             container.appendChild(grid);
         }
         
-        // دالة تحديد الحالات الحرجة
+        // Canonical-compatible getCriticalIncidents
         function getCriticalIncidents(incidents) {
             return incidents.filter(inc => {
-                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || inc.Escalated_To || '';
-                const isEscalated = inc.status === 'escalated' || escName.trim() !== '';
-                const severity = (inc.severity || '').toLowerCase();
-                const isSevere = severity === 'severe' || severity === 'death';
-                
-                // الحالة حرجة إذا: مُصعّدة (أي تصعيد)، أو وفاة، أو ضرر جسيم
-                return isEscalated || severity === 'death' || isSevere;
+                const isEscalated = inc.status === 'escalated' || !!inc.escalatedTo;
+                const isSevere = inc.severity === 'severe' || inc.severity === 'death';
+                return isEscalated || isSevere;
             });
         }
         
-        // عرض لوحة الحالات الحرجة
+        // Canonical-compatible renderCriticalPanel
         function renderCriticalPanel(incidents) {
             const panel = document.getElementById('criticalPanel');
             const list = document.getElementById('criticalList');
@@ -1494,10 +1540,10 @@
             
             panel.style.display = 'block';
             list.innerHTML = incidents.map(inc => {
-                const escName = inc.escalationAssignee || inc.escalatedTo || inc.escalated_to || inc.Escalated_To || inc.assignedTo || '-';
                 const sev = SEVERITY[inc.severity] || { name: inc.severity, color: '#dc3545' };
                 const typeName = INCIDENT_TYPES[inc.type] || inc.type || '-';
-                const isEsc = inc.status === 'escalated' || (escName && escName !== '-');
+                const isEsc = inc.status === 'escalated' || !!inc.escalatedTo;
+                const daysOpen = daysOpenFrom(inc);
                 
                 return `
                 <div style="padding:12px; margin-bottom:10px; background:white; border-radius:8px; border-right:5px solid #dc3545; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -1509,9 +1555,9 @@
                         </div>
                         <div style="font-size:0.9rem; margin-top:8px; color:#666; display:flex; flex-wrap:wrap; gap:15px;">
                             <span><i class="fas fa-tag"></i> ${typeName}</span>
-                            <span><i class="fas fa-building"></i> ${inc.department || '-'}</span>
-                            <span><i class="fas fa-clock"></i> ${calcDaysOpen(getDate(inc))} يوم</span>
-                            ${isEsc ? `<span style="color:#dc3545;"><i class="fas fa-user-tie"></i> مُصعّد إلى: ${escName}</span>` : ''}
+                            <span><i class="fas fa-building"></i> ${inc.dept}</span>
+                            <span><i class="fas fa-clock"></i> ${daysOpen} يوم</span>
+                            ${isEsc ? `<span style="color:#dc3545;"><i class="fas fa-user-tie"></i> مُصعّد إلى: ${inc.escalatedTo || inc.assignedTo || '-'}</span>` : ''}
                         </div>
                     </div>
                     <button class="btn btn-danger btn-sm" onclick="viewIncident('${inc.id}')" style="white-space:nowrap;">
@@ -3439,6 +3485,37 @@
             } catch(e) {
                 console.error('SLA Error:', e);
             }
+        }
+        
+        // تحديث Heatmap بالفلاتر
+        function refreshHeatmapFiltered() {
+            const days = document.getElementById('hmRange')?.value || 'all';
+            const scope = document.getElementById('hmScope')?.value || 'all';
+            
+            let filtered = allIncidentsGlobal;
+            
+            // فلتر الفترة
+            if (days !== 'all') {
+                filtered = filtered.filter(x => {
+                    const d = parseDateSafe(x.date);
+                    if (!d) return true;
+                    return (Date.now() - d.getTime()) <= (Number(days) * 86400000);
+                });
+            }
+            
+            // فلتر الحالات المفتوحة فقط
+            if (scope === 'open') {
+                filtered = filtered.filter(x => x.status !== 'closed');
+            }
+            
+            buildIncidentHeatmap(filtered);
+            
+            // تحديث لوحات RRI و Trend
+            const repeatRows = computeRepeatDeptRisk(allIncidentsGlobal, days);
+            const trendRows = computeDeptTrend(allIncidentsGlobal);
+            renderDeptTrendCard(trendRows, repeatRows);
+            
+            toast(`Heatmap: ${filtered.length} حادث | ${scope === 'open' ? 'غير مغلقة' : 'الكل'} | ${days === 'all' ? 'كل الفترات' : 'آخر ' + days + ' يوم'}`, 'success', 3000);
         }
         
         // تحديث شامل

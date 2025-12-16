@@ -1,0 +1,268 @@
+دقّقت في الشغل الحالي (الكود + صور الشيت)، وفعليًا مشكلتك الأساسية كانت/لا تزال “عدم توحيد أسماء الحقول” بين Google Sheet ↔︎ Apps Script ↔︎ Frontend، وهذا يسبب:
+
+عدّادات (المغلقة/المصعدة) ترجع صفر أحيانًا لأن loadStats() يكتب فوق loadData() بقيم ناقوصة (أصلحتها جزئيًا عندك بإضافة شرط hasByStatus).
+
+جداول/لوحات (Critical + Heatmap + Escalated/Closed) تستخدم أحيانًا inc.id وأحيانًا Incident_ID… فتطلع IDs ناقصة أو فاضية.
+
+تواريخ تظهر بصيغة ISO مثل 2025-12-14T08:00:00.000Z لأنك تطبع inc.date مباشرة بدل formatDate(getDate()).
+
+1) أهم خلل الآن: لازم “محول واحد” Canonical Adapter
+
+بدل ما كل جزء يقرأ الحقول بطريقته، سوِّ “طبقة تطبيع واحدة” ترجع Incident موحّد ثم استخدمه في كل مكان (الهيت ماب/الحرجة/الجداول/الحسابات).
+
+ضع هذا بعد loadAllIncidentsCached() مباشرة:
+
+function toCanonical(i){
+  const id = getId(i);
+  const status = normStatus(i);
+  const severity = normSeverity(i);
+  const dept = getDept(i);
+  const typeRaw = getType(i);
+  const type = INCIDENT_TYPES[typeRaw] ? typeRaw : typeRaw; // خله مفتوح
+  const date = getDate(i);
+  const closedDate = getClosedDate(i);
+  const escalatedTo = getEscTo(i);
+
+  const rcaRequired =
+    i.rcaRequired === true ||
+    norm(i.RCA_Required).toLowerCase() === 'yes' ||
+    norm(i.RCA_Required).includes('نعم') ||
+    norm(i.requires_rca).toLowerCase() === 'true' ||
+    norm(i.requiresRca).toLowerCase() === 'true';
+
+  const lastActionDate =
+    norm(i.lastActionDate || i.Last_Action_Date || i.last_action_date || i.LastActionDate) || '';
+
+  return {
+    raw: i,
+    id, status, severity, dept, type,
+    date, closedDate, escalatedTo,
+    rcaRequired, lastActionDate,
+    assignedTo: norm(i.assignedTo || i.Assigned_To || i.assignee || i.Assignee_To),
+    description: getDescription(i)
+  };
+}
+
+
+ثم في loadData() بدل const all = await loadAllIncidentsCached(true); استخدم:
+
+const allRaw = await loadAllIncidentsCached(true);
+const all = allRaw.map(toCanonical).filter(x => x.id); // فلتر أي صف بدون ID
+
+
+وبكذا كل شيء يصير يعتمد على all الموحد.
+
+2) أصلح الأخطاء الظاهرة فورًا (مباشرة)
+A) Critical Panel يستخدم inc.id و inc.department و inc.daysOpen (غير محسوبة)
+
+بدّل renderCriticalPanel() ليشتغل على canonical:
+
+function daysOpenFrom(inc){
+  const ref = inc.lastActionDate ? new Date(inc.lastActionDate) : new Date(inc.date);
+  if (isNaN(ref.getTime())) return 0;
+  return Math.floor((Date.now() - ref.getTime()) / 86400000);
+}
+
+
+وفي الـ HTML:
+
+inc.id → inc.id (موجود canonical)
+
+inc.department → inc.dept
+
+inc.daysOpen → daysOpenFrom(inc)
+
+B) جداول escalated/closed لازم تستخدم formatDate
+
+في renderClosedTable و renderEscalatedTable:
+
+dt خليها formatDate(inc.date)
+
+closedDate خليها formatDate(inc.closedDate)
+
+C) loadStats() لا تكتب عدادات escalated/closed إلا إذا byStatus موجود (أنت سويتها صح)
+
+بس الأفضل: خلي مصدر العدادات واحد فقط: من loadData() الموحد، واحذف تحديث العدادات داخل loadStats() نهائيًا (لتجنب overwrite).
+
+3) الهيت ماب: ممتازة كبداية… بس تحتاج 3 تحسينات “تخليها عبقرية”
+(1) هيتماب “مفتوح فقط” + “كل الحالات”
+
+أنت الآن تحسب من كل الحالات. الأفضل: خيار Toggle:
+
+“كل الحالات”
+
+“غير مغلقة فقط”
+
+“آخر 30/60/90 يوم”
+
+أضف فوق الهيتماب:
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+  <select id="hmWindow" class="form-control" style="max-width:220px;">
+    <option value="all">كل الفترات</option>
+    <option value="30">آخر 30 يوم</option>
+    <option value="60">آخر 60 يوم</option>
+    <option value="90">آخر 90 يوم</option>
+  </select>
+  <select id="hmScope" class="form-control" style="max-width:220px;">
+    <option value="all">كل الحالات</option>
+    <option value="open">غير مغلقة فقط</option>
+  </select>
+  <button class="btn btn-secondary btn-sm" onclick="refreshHeatmap()">تحديث Heatmap</button>
+</div>
+
+
+ودالة:
+
+function withinDays(dateStr, days){
+  if (!days || days === 'all') return true;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return true;
+  return (Date.now() - d.getTime()) <= (Number(days) * 86400000);
+}
+
+function refreshHeatmap(){
+  const days = document.getElementById('hmWindow')?.value || 'all';
+  const scope = document.getElementById('hmScope')?.value || 'all';
+  const filtered = allIncidentsGlobal
+    .filter(x => withinDays(x.date, days))
+    .filter(x => scope === 'open' ? x.status !== 'closed' : true);
+  buildIncidentHeatmap(filtered);
+}
+
+
+ملاحظة: في loadData() بعد ما تبني all الموحد: window.allIncidentsGlobal = all;
+
+(2) Risk Score: أنت أضفت extras ممتاز، بس عندك Bug صغير
+
+riskExtras() يستخدم inc.date و inc.lastActionDate من raw—بعد التطبيع خليها تستخدم canonical:
+
+function riskExtras(inc){
+  let extra = 0;
+  if (inc.status === 'escalated' || inc.escalatedTo) extra += 4;
+  if (inc.rcaRequired) extra += 3;
+
+  const ref = inc.lastActionDate ? new Date(inc.lastActionDate) : new Date(inc.date);
+  if (!isNaN(ref.getTime())) {
+    const hrs = Math.floor((Date.now() - ref.getTime()) / 36e5);
+    if (hrs >= 48) extra += 3;
+    else if (hrs >= 24) extra += 2;
+  }
+  return extra;
+}
+
+(3) بدل alert: Modal داخل الصفحة (احترافي)
+
+الـ alert غير عملي. اعمل modal بسيط لعرض قائمة IDs مع زر “فتح البلاغ”.
+
+4) بخصوص “24 ساعة للحالات عالية الخطورة” — رأيي نعم ومنطقي
+
+كسياسة داخلية لـ SLA عندكم:
+
+Severe/Death: أول استجابة موثّقة خلال ≤ 2 ساعة (إشعار + تحريك مسؤول + توثيق أول إجراء)
+
+تحديث/قرار أولي: خلال ≤ 24 ساعة
+
+RCA/تحليل: حسب سياسة منظمتك (شائع 45 يوم للـ RCA في برامج الاعتماد—مثل Joint Commission تذكر إرسال RCA/POA خلال 45 يوم عمل). 
+The Joint Commission
+
+والـ Sentinel events “تدل على الحاجة لاستجابة وتحقيق فوري” (كمنطق استرشادي قوي لـ severe/death). 
+The Joint Commission
+
+5) “6 إضافات ذكية” اللي طلبتها—نخليها جاهزة للتنفيذ
+(A) مستوى إداري أعلى (Role-based)
+
+من الشيت عندك Incidents_Staff فيه Role. اربط الدخول بحيث:
+
+Staff عادي يرى ويعدّل assigned فقط
+
+رئيس اللجنة يرى escalations + SLA + PDF + heatmap time
+
+Admin يرى كل شيء
+
+(التنفيذ: بعد login خذ role من API getIncidentStaff وخزنها في currentUser.role ثم اخفِ/اظهر أقسام UI بناءً عليها)
+
+(B) Heatmap حسب الوقت (30/60/90)
+
+جهزناه فوق (hmWindow + refreshHeatmap).
+
+(C) Repeat Department Risk
+
+احسب “تكرار المخاطر” للقسم: عدد severe/death أو escalated خلال آخر 30 يوم.
+وأظهر “Repeat Risk Badge” بجانب اسم القسم في الهيتماب.
+
+(D) ترتيب الأقسام حسب Risk Trend ↑↓
+
+احسب Risk score آخر 30 يوم مقابل 30 يوم قبلها:
+
+trend = (risk_30_now - risk_30_prev)
+ثم رتب قائمة الأقسام في لوحة صغيرة فوق الهيتماب.
+
+(E) تنبيهات (صوت + Toast بدل alert)
+
+Toast:
+
+function toast(msg, type='info', ms=4000){
+  const el = document.createElement('div');
+  el.style.cssText = `
+    position:fixed; bottom:20px; left:20px; z-index:99999;
+    background:${type==='danger'?'#dc3545':type==='warn'?'#ffc107':'#003E75'};
+    color:${type==='warn'?'#222':'#fff'};
+    padding:12px 14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.2);
+    max-width:360px; line-height:1.4;
+  `;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, ms);
+}
+
+
+صوت إنذار (بدون ملفات خارجية) عبر WebAudio:
+
+function beep(times=2){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let t = ctx.currentTime;
+  for(let i=0;i<times;i++){
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type='sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(0.25, t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.25);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t+0.26);
+    t += 0.35;
+  }
+}
+
+
+ثم عند اكتشاف:
+
+وفاة جديدة (death) خلال آخر X ساعات
+
+تصعيد جديد (escalated) خلال آخر X ساعات
+اعمل beep(3); toast('🚨 ...','danger');
+
+(F) تقارير: Heatmap → PDF + RCA completion rate + SLA compliance
+
+Heatmap → PDF: الأسرع والأضمن الآن: زر “طباعة” يفتح Print ثم المستخدم يحفظ PDF.
+لو تبغاه زر “Export PDF” تلقائي: تحتاج مكتبات مثل html2canvas + jspdf (ممكن CDN، لكن يزيد ثقل الصفحة).
+
+RCA completion rate:
+
+RCA مطلوب: rcaRequired===true OR severity in (severe,death) OR status in rca_*
+
+RCA مكتمل: وجود rootCause + correctiveActions + “rcaComplete=true” أو status in_progress/closed
+
+SLA compliance (فعلًا هو اللي تبغاه)
+عرّف SLA حسب الشدة:
+
+death/severe: قرار/تفعيل خلال 24h
+
+moderate: خلال 48h
+
+minor/none: خلال 72h
+و”الاستجابة” تُحسب من أول توثيق حقيقي (مثلاً: Assigned_Date أو أول Followup row لنفس Incident_ID).
+وهنا سؤالك “أي شيت تقصد؟” — المقصود شيت الحوادث Incidents_Log + شيت المتابعات Incidents_Followup (زي الصور عندك).
+
+ولأنك تبغى “بدون لف ودوران”: الحل الصح = نحسب SLA من Incidents_Followup لأنه دليل إجراءات، وليس فقط Assigned_To.
