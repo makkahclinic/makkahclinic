@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>رفع بلاغ شكوى - مجمع مكة الطبي</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --primary: #0a4c8b; --secondary: #1a936f; --accent: #f9a826; }
+        body { font-family: 'Tajawal', sans-serif; background-color: #f8fafc; }
+        .form-input[readonly] { background-color: #f3f4f6; cursor: not-allowed; color: #4b5563; }
+        .form-label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; }
+        .form-label.required::after { content: " *"; color: #dc2626; }
+        .form-input, .form-select, .form-textarea { width: 100%; padding: 0.75rem 1rem; border: 1px solid #cbd5e1; border-radius: 0.5rem; font-size: 1rem; transition: all 0.3s ease; background-color: #f8fafc; }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(249, 168, 38, 0.3); }
+        .form-input.invalid, .form-select.invalid, .form-textarea.invalid, .grid.invalid, #locationSelector.invalid { border-color: #dc2626; }
+        .error-message { color: #dc2626; font-size: 0.875rem; margin-top: 0.25rem; min-height: 1.25rem; }
+        .btn { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+        .btn-primary { background: linear-gradient(135deg, var(--primary) 0%, #144c63 100%); color: white; }
+        .btn-secondary { background-color: #e2e8f0; color: #334155; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        .radio-card input:checked + label { border-color: var(--primary); background-color: #f0f9ff; box-shadow: 0 0 0 2px var(--accent); }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="container max-w-4xl w-full">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden" id="formContainer">
+            <header class="bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white p-6 sm:p-8 text-center">
+                <h1 class="text-2xl sm:text-3xl font-bold">مجمع مكة الطبي بالزاهر</h1>
+                <p class="text-lg sm:text-xl mt-2 opacity-90">رفع بلاغ شكوى</p>
+            </header>
+
+            <div id="form-content-wrapper">
+                <div class="p-6 sm:p-8">
+                    <div id="progressBar" class="mb-8"></div>
+
+                    <form id="unifiedForm" novalidate>
+                        <div class="form-step" data-step="1"></div>
+                        <div class="form-step hidden" data-step="2"></div>
+                        <div class="form-step hidden" data-step="3"></div>
+                        <div class="form-step hidden" data-step="4"></div>
+                    </form>
+
+                    <div class="form-actions mt-8 pt-6 border-t border-slate-200 flex justify-between items-center">
+                        <button type="button" id="prevBtn" class="btn btn-secondary hidden">السابق</button>
+                        <button type="button" id="nextBtn" class="btn btn-primary">التالي</button>
+                        <button type="submit" id="submitBtn" form="unifiedForm" class="btn btn-primary hidden">إرسال الشكوى</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="success-screen" class="p-8 text-center hidden">
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100"><svg class="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                <h2 class="mt-6 text-2xl font-bold text-slate-800">تم إرسال شكواك بنجاح!</h2>
+                <p class="mt-2 text-slate-600">شكراً لك. سيقوم فريقنا بمراجعة الشكوى واتخاذ الإجراءات اللازمة.</p>
+                <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                    <button type="button" id="newReportBtn" class="btn btn-primary">تقديم شكوى جديدة</button>
+                    <a href="mega.html" class="btn btn-secondary">العودة للمركز الرقمي</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-3 px-6 rounded-lg shadow-lg flex items-center gap-3 transform translate-x-[150%] transition-transform duration-500 ease-in-out z-50">
+        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+    (function() {
+        let currentStep = 1;
+        let totalSteps = 4;
+        let selectedLocations = [];
+        let attachedFiles = [];
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec";
+        const locations = [ { code: "DIR-B-01", name: "المدير العام" }, { code: "ADM-B-01", name: "بلال" }, { code: "ADM-B-02", name: "أ/ عدنان" }, { code: "INS-B-01", name: "أ/ صابر" }, { code: "INS-B-02", name: "الموافقات الطبية" }, { code: "CSSD-B-01", name: "التعقييم" }, { code: "CSSD-B-02", name: "الغسيل" }, { code: "RAD-B-01", name: "استقبال الاشعة" }, { code: "RAD-B-02", name: "Ultrasound" }, { code: "RAD-B-03", name: "X-ray and Panorama" }, { code: "FAC-B-01", name: "دورة مياه" }, { code: "LAB-B-01", name: "امراض الدم" }, { code: "LAB-B-02", name: "الكيمياء الحيوية" }, { code: "LAB-B-03", name: "علم الطفيليات" }, { code: "ADM-B-03", name: "مكتب لتخزين ملفات الحسابات" }, { code: "REC-G-01", name: "استقبال الاول" }, { code: "FAC-G-01", name: "استراحة الموظفات" }, { code: "GP-G-01", name: "دكتور جعفر وحسن" }, { code: "WMF-G-01", name: "انتظار النساء" }, { code: "WMR-G-01", name: "انتظار الرجال" }, { code: "MED-G-01", name: "دكتور محمد" }, { code: "MED-G-02", name: "دكتور مجدي" }, { code: "ER-G-01", name: "غرفة الانعاش القلبي الرئوي" }, { code: "VS-G-01", name: "العلامات الحيوية" }, { code: "BD-G-01", name: "غرفة سحب العينات" }, { code: "OBG-G-01", name: "غرفة الكشف الطبي" }, { code: "OBG-G-02", name: "غرفة الولادة" }, { code: "OBG-G-03", name: "غرفة مابعد الولادة" }, { code: "ER-G-01", name: "طوارئ رجال" }, { code: "ER-G-02", name: "طوارئ نساء" }, { code: "FAC-G-02", name: "دورة مياه رجال" }, { code: "FAC-G-03", name: "دورة مياه نساء" }, { code: "FAC-G-04", name: "دورة مياه نساء" }, { code: "REC-1-01", name: "استقبال قسم الاسنان" }, { code: "DEN-1-01", name: "عيادة د/معاذ" }, { code: "DEN-1-02", name: "عيادة د/معاذ" }, { code: "DEN-1-03", name: "عيادة د/عزام الياسي" }, { code: "DEN-1-04", name: "عيادة د/نورا حبشي" }, { code: "DEN-1-05", name: "عيادة د/العنود الزبيدي" }, { code: "DEN-1-06", name: "عيادة د/رشا رجب" }, { code: "ORTH-1-07", name: "عيادة د/ربيعة تبسم" }, { code: "ADM-1-01", name: "مكتب د/خالد" }, { code: "WMR-1-01", name: "انتظار قسم الاسنان" }, { code: "WMR-1-02", name: "انتظار قسم الباطنة-العيون-العظام" }, { code: "WMF-1-01", name: "انتظار النساء" }, { code: "FAC-1-01", name: "دورة مياه النساء" }, { code: "FAC-1-02", name: "دورة مياه الرجال" }, { code: "OPH-1-01", name: "عيادة/ شذا" }, { code: "MED-1-01", name: "عيادة د/حمادة نجاح" }, { code: "MED-1-02", name: "عيادة اضافية للدكتور حمادة" }, { code: "MED-1-03", name: "عيادة مجهزة" }, { code: "ADM-1-02", name: "مكتب فارغ" }, { code: "FAC-1-03", name: "استراحة موظفات" } ];
+
+        const dom = {
+            form: document.getElementById('unifiedForm'),
+            nextBtn: document.getElementById('nextBtn'),
+            prevBtn: document.getElementById('prevBtn'),
+            submitBtn: document.getElementById('submitBtn'),
+            formContentWrapper: document.getElementById('form-content-wrapper'),
+            successScreen: document.getElementById('success-screen'),
+            newReportBtn: document.getElementById('newReportBtn'),
+            progressBar: document.getElementById('progressBar')
+        };
+
+        const getCurrentLocalISOString = () => {
+            const now = new Date();
+            const timezoneOffset = now.getTimezoneOffset() * 60000;
+            return new Date(now - timezoneOffset).toISOString().slice(0, 16);
+        };
+
+        const renderProgressBar = () => {
+            dom.progressBar.innerHTML = `
+                <div class="flex justify-between items-center relative">
+                    <div class="absolute top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200"></div>
+                    <div id="progress-bar-line" class="absolute top-1/2 -translate-y-1/2 w-0 h-1 bg-[var(--accent)] transition-all duration-500"></div>
+                    ${[1, 2, 3, 4].map(i => `
+                        <div class="progress-step z-10 flex flex-col items-center" data-step="${i}">
+                            <div class="step-circle w-10 h-10 flex items-center justify-center rounded-full font-bold text-lg transition-all duration-300 bg-slate-200 text-slate-500">${i}</div>
+                            <div class="step-label mt-2 text-xs text-center text-slate-500 font-semibold"></div>
+                        </div>
+                    `).join('')}
+                </div>`;
+        };
+
+        const renderStepContent = () => {
+            document.querySelector('.form-step[data-step="1"]').innerHTML = `
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 1: نوع الشكوى</h2>
+                <div class="form-group">
+                    <label for="complaintType" class="form-label required">نوع الشاكي</label>
+                    <select id="complaintType" name="complaintType" class="form-select" required>
+                        <option value="" disabled selected>اختر نوع الشاكي...</option>
+                        <option value="شكوى موظف">شكوى موظف</option>
+                        <option value="شكوى مريض">شكوى مريض</option>
+                        <option value="شكوى زائر">شكوى زائر</option>
+                    </select>
+                    <p class="error-message"></p>
+                </div>`;
+
+            document.querySelector('.form-step[data-step="2"]').innerHTML = `
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 2: بيانات مقدم الشكوى</h2>
+                <div class="grid md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div class="form-group">
+                        <label for="complainantName" class="form-label required">اسم مقدم الشكوى</label>
+                        <input type="text" id="complainantName" name="complainantName" class="form-input" placeholder="الاسم الكامل" required>
+                        <p class="error-message"></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="complainantPhone" class="form-label">رقم الجوال (اختياري)</label>
+                        <input type="tel" id="complainantPhone" name="complainantPhone" class="form-input" placeholder="05xxxxxxxx">
+                        <p class="error-message"></p>
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label for="complainantEmail" class="form-label">البريد الإلكتروني (اختياري)</label>
+                        <input type="email" id="complainantEmail" name="complainantEmail" class="form-input" placeholder="example@email.com">
+                        <p class="error-message"></p>
+                    </div>
+                </div>`;
+
+            document.querySelector('.form-step[data-step="3"]').innerHTML = `
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 3: تفاصيل الشكوى</h2>
+                <div class="grid gap-y-4">
+                    <div class="form-group">
+                        <label for="complaintDateTime" class="form-label required">تاريخ ووقت حدوث المشكلة</label>
+                        <input type="datetime-local" id="complaintDateTime" name="complaintDateTime" class="form-input" required>
+                        <p class="error-message"></p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label required">موقع الحدث</label>
+                        <div id="locationSelector" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-3">
+                            ${locations.map(loc => `
+                                <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
+                                    <input type="checkbox" name="locations" value="${loc.code}" class="location-checkbox w-4 h-4 accent-[var(--primary)]">
+                                    <span class="text-sm">${loc.name}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                        <p class="error-message"></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="complaintDescription" class="form-label required">وصف تفصيلي للشكوى</label>
+                        <textarea id="complaintDescription" name="complaintDescription" rows="5" class="form-textarea" placeholder="اشرح المشكلة بالتفصيل..." required></textarea>
+                        <p class="error-message"></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="complaintAgainst" class="form-label">الشكوى ضد (اختياري)</label>
+                        <input type="text" id="complaintAgainst" name="complaintAgainst" class="form-input" placeholder="اسم الشخص أو القسم المشكو منه">
+                        <p class="error-message"></p>
+                    </div>
+                </div>`;
+
+            document.querySelector('.form-step[data-step="4"]').innerHTML = `
+                <h2 class="text-xl font-bold text-[var(--primary)] border-b-2 border-[var(--accent)] pb-3 mb-6">القسم 4: المرفقات والملاحظات</h2>
+                <div class="grid gap-y-4">
+                    <div class="form-group">
+                        <label class="form-label">إرفاق صور أو مستندات (اختياري)</label>
+                        <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
+                            <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx" class="hidden">
+                            <button type="button" onclick="document.getElementById('fileInput').click()" class="btn btn-secondary">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                اختيار ملفات
+                            </button>
+                            <p class="text-slate-500 text-sm mt-2">صور، PDF، أو مستندات Word</p>
+                        </div>
+                        <div id="fileList" class="mt-3 space-y-2"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="additionalNotes" class="form-label">ملاحظات إضافية</label>
+                        <textarea id="additionalNotes" name="additionalNotes" rows="3" class="form-textarea" placeholder="أي معلومات إضافية ترغب في إضافتها..."></textarea>
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div class="flex items-start gap-3">
+                            <svg class="w-6 h-6 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div>
+                                <p class="font-semibold text-amber-800">ملاحظة هامة</p>
+                                <p class="text-amber-700 text-sm mt-1">سيتم التعامل مع شكواك بسرية تامة وستحصل على رد خلال 48 ساعة عمل.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        };
+
+        const updateProgressBar = () => {
+            const progressLine = document.getElementById('progress-bar-line');
+            const percentage = ((currentStep - 1) / (totalSteps - 1)) * 100;
+            progressLine.style.width = `${percentage}%`;
+            
+            document.querySelectorAll('.progress-step').forEach(step => {
+                const stepNum = parseInt(step.dataset.step);
+                const circle = step.querySelector('.step-circle');
+                if (stepNum < currentStep) {
+                    circle.classList.remove('bg-slate-200', 'text-slate-500', 'bg-[var(--accent)]');
+                    circle.classList.add('bg-green-500', 'text-white');
+                    circle.innerHTML = '✓';
+                } else if (stepNum === currentStep) {
+                    circle.classList.remove('bg-slate-200', 'text-slate-500', 'bg-green-500');
+                    circle.classList.add('bg-[var(--accent)]', 'text-white');
+                    circle.innerHTML = stepNum;
+                } else {
+                    circle.classList.remove('bg-[var(--accent)]', 'bg-green-500', 'text-white');
+                    circle.classList.add('bg-slate-200', 'text-slate-500');
+                    circle.innerHTML = stepNum;
+                }
+            });
+        };
+
+        const showStep = (step) => {
+            document.querySelectorAll('.form-step').forEach(s => s.classList.add('hidden'));
+            document.querySelector(`.form-step[data-step="${step}"]`).classList.remove('hidden');
+            
+            dom.prevBtn.classList.toggle('hidden', step === 1);
+            dom.nextBtn.classList.toggle('hidden', step === totalSteps);
+            dom.submitBtn.classList.toggle('hidden', step !== totalSteps);
+            
+            updateProgressBar();
+        };
+
+        const validateStep = (step) => {
+            let isValid = true;
+            const currentStepEl = document.querySelector(`.form-step[data-step="${step}"]`);
+            
+            currentStepEl.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+            currentStepEl.querySelectorAll('.error-message').forEach(el => el.textContent = '');
+            
+            if (step === 1) {
+                const complaintType = document.getElementById('complaintType');
+                if (!complaintType.value) {
+                    complaintType.classList.add('invalid');
+                    complaintType.nextElementSibling.textContent = 'يرجى اختيار نوع الشاكي';
+                    isValid = false;
+                }
+            } else if (step === 2) {
+                const name = document.getElementById('complainantName');
+                if (!name.value.trim()) {
+                    name.classList.add('invalid');
+                    name.nextElementSibling.textContent = 'يرجى إدخال اسم مقدم الشكوى';
+                    isValid = false;
+                }
+            } else if (step === 3) {
+                const dateTime = document.getElementById('complaintDateTime');
+                const description = document.getElementById('complaintDescription');
+                const locationSelector = document.getElementById('locationSelector');
+                const checkedLocations = locationSelector.querySelectorAll('input:checked');
+                
+                if (!dateTime.value) {
+                    dateTime.classList.add('invalid');
+                    dateTime.nextElementSibling.textContent = 'يرجى تحديد تاريخ ووقت الحدث';
+                    isValid = false;
+                }
+                if (checkedLocations.length === 0) {
+                    locationSelector.classList.add('invalid');
+                    locationSelector.nextElementSibling.textContent = 'يرجى اختيار موقع واحد على الأقل';
+                    isValid = false;
+                }
+                if (!description.value.trim()) {
+                    description.classList.add('invalid');
+                    description.nextElementSibling.textContent = 'يرجى وصف الشكوى';
+                    isValid = false;
+                }
+            }
+            
+            return isValid;
+        };
+
+        const showToast = (message, isError = false) => {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.textContent = message;
+            toast.classList.toggle('bg-green-500', !isError);
+            toast.classList.toggle('bg-red-500', isError);
+            toast.classList.remove('translate-x-[150%]');
+            setTimeout(() => toast.classList.add('translate-x-[150%]'), 3000);
+        };
+
+        const fileToBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve({ name: file.name, mimeType: file.type, data: base64 });
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        };
+
+        const handleFileSelect = (e) => {
+            const files = Array.from(e.target.files);
+            const fileList = document.getElementById('fileList');
+            
+            files.forEach(file => {
+                if (attachedFiles.length >= 5) {
+                    showToast('الحد الأقصى 5 ملفات', true);
+                    return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast(`الملف ${file.name} أكبر من 5 ميجا`, true);
+                    return;
+                }
+                attachedFiles.push(file);
+                
+                const fileItem = document.createElement('div');
+                fileItem.className = 'flex items-center justify-between bg-slate-50 p-3 rounded-lg';
+                fileItem.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span class="text-sm truncate max-w-xs">${file.name}</span>
+                    </div>
+                    <button type="button" class="text-red-500 hover:text-red-700" onclick="this.parentElement.remove()">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                `;
+                fileList.appendChild(fileItem);
+            });
+        };
+
+        const submitForm = async (e) => {
+            e.preventDefault();
+            
+            if (!validateStep(currentStep)) return;
+            
+            dom.submitBtn.disabled = true;
+            dom.submitBtn.innerHTML = '<svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> جاري الإرسال...';
+            
+            const locationSelector = document.getElementById('locationSelector');
+            const checkedLocations = Array.from(locationSelector.querySelectorAll('input:checked')).map(cb => cb.value);
+            
+            let filesBase64 = [];
+            if (attachedFiles.length > 0) {
+                try {
+                    filesBase64 = await Promise.all(attachedFiles.map(f => fileToBase64(f)));
+                } catch (err) {
+                    console.error('File conversion error:', err);
+                }
+            }
+            
+            const formData = {
+                action: 'submitComplaint',
+                payload: {
+                    complaintType: document.getElementById('complaintType').value,
+                    complainantName: document.getElementById('complainantName').value,
+                    complainantPhone: document.getElementById('complainantPhone').value || '',
+                    complainantEmail: document.getElementById('complainantEmail').value || '',
+                    complaintDateTime: document.getElementById('complaintDateTime').value,
+                    locations: checkedLocations.join(', '),
+                    description: document.getElementById('complaintDescription').value,
+                    complaintAgainst: document.getElementById('complaintAgainst').value || '',
+                    additionalNotes: document.getElementById('additionalNotes').value || '',
+                    files: filesBase64
+                }
+            };
+            
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(formData),
+                    redirect: 'follow'
+                });
+                
+                const text = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(text);
+                } catch (e) {
+                    console.error('Response:', text);
+                    throw new Error('فشل في معالجة الرد');
+                }
+                
+                if (!result.ok) {
+                    throw new Error(result.error || 'فشل في إرسال الشكوى');
+                }
+                
+                console.log('Success:', result);
+                dom.formContentWrapper.classList.add('hidden');
+                dom.successScreen.classList.remove('hidden');
+                showToast('تم إرسال الشكوى بنجاح - رقم الشكوى: ' + (result.complaintId || ''));
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showToast(error.message || 'حدث خطأ أثناء الإرسال', true);
+                dom.submitBtn.disabled = false;
+                dom.submitBtn.innerHTML = 'إرسال الشكوى';
+            }
+        };
+
+        const init = () => {
+            renderProgressBar();
+            renderStepContent();
+            showStep(1);
+            
+            const dateTimeInput = document.getElementById('complaintDateTime');
+            if (dateTimeInput) {
+                dateTimeInput.value = getCurrentLocalISOString();
+            }
+            
+            dom.nextBtn.addEventListener('click', () => {
+                if (validateStep(currentStep)) {
+                    currentStep++;
+                    showStep(currentStep);
+                }
+            });
+            
+            dom.prevBtn.addEventListener('click', () => {
+                currentStep--;
+                showStep(currentStep);
+            });
+            
+            dom.form.addEventListener('submit', submitForm);
+            
+            dom.newReportBtn.addEventListener('click', () => {
+                window.location.reload();
+            });
+            
+            setTimeout(() => {
+                const fileInput = document.getElementById('fileInput');
+                if (fileInput) {
+                    fileInput.addEventListener('change', handleFileSelect);
+                }
+            }, 100);
+        };
+
+        document.addEventListener('DOMContentLoaded', init);
+    })();
+    </script>
+</body>
+</html>
