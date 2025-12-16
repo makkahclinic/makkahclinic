@@ -1450,16 +1450,17 @@
             return 'rgba(40,167,69,0.35)';
         }
         
-        // Canonical-compatible Heatmap
+        // Canonical-compatible Heatmap with Avg Risk + Sort by Risk
         function buildIncidentHeatmap(all) {
             const container = document.getElementById('incidentHeatmap');
             if (!container) return;
             
-            const depts = Array.from(new Set(all.map(x => x.dept || getDept(x)))).sort();
             const sevKeys = ['death', 'severe', 'moderate', 'minor', 'none'];
             const sevNames = { death: 'وفاة', severe: 'ضرر جسيم', moderate: 'ضرر متوسط', minor: 'ضرر بسيط', none: 'بدون ضرر' };
             
             const map = new Map();
+            const deptTotalRisk = new Map();
+            
             for (const inc of all) {
                 const dept = inc.dept || getDept(inc);
                 const sev = inc.severity || normSeverity(inc);
@@ -1471,9 +1472,16 @@
                 
                 const cell = inner.get(keySev);
                 cell.count += 1;
-                cell.score += sevWeight(keySev) + riskExtras(inc);
+                const riskScore = sevWeight(keySev) + riskExtras(inc);
+                cell.score += riskScore;
                 cell.items.push(inc);
+                
+                // حساب إجمالي المخاطر لكل قسم للترتيب
+                deptTotalRisk.set(dept, (deptTotalRisk.get(dept) || 0) + riskScore);
             }
+            
+            // ترتيب الأقسام حسب أعلى مخاطر (بدل أبجدي)
+            const depts = Array.from(map.keys()).sort((a, b) => (deptTotalRisk.get(b) || 0) - (deptTotalRisk.get(a) || 0));
             
             const grid = document.createElement('div');
             grid.className = 'hm-grid';
@@ -1501,7 +1509,8 @@
                     const cell = document.createElement('div');
                     cell.className = 'hm-cell';
                     cell.style.background = heatColor(d.score);
-                    cell.innerHTML = `<div class="hm-num">${d.count}</div><div class="hm-sub">Risk: ${d.score}</div>`;
+                    const avgRisk = d.count ? (d.score / d.count).toFixed(1) : 0;
+                    cell.innerHTML = `<div class="hm-num">${d.count}</div><div class="hm-sub">Risk: ${d.score}</div><div class="hm-sub" style="font-size:0.7rem;opacity:0.8;">Avg: ${avgRisk}</div>`;
                     cell.onclick = () => {
                         const ids = d.items.slice(0, 20).map(x => x.id).filter(Boolean).join('\n');
                         if (typeof toast === 'function') {
@@ -1794,19 +1803,15 @@
             container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i></div>';
             
             try {
-                const all = await loadAllIncidentsCached();
+                // استخدام Canonical بدل RAW
+                const all = getCanonicalAll().length ? getCanonicalAll() : (await loadAllIncidentsCached()).map(toCanonical).filter(Boolean);
                 // فلترة الحوادث التي تتطلب RCA
                 const rcaIncidents = all.filter(i => {
-                    const status = normStatus(i);
-                    const severity = norm(i.severity).toLowerCase();
-                    const requiresRca = i.requiresRca || i.requires_rca || i.RCA_Required || false;
-                    
-                    // RCA مطلوب إذا: الحالة rca_required/rca_in_progress، أو الخطورة عالية (severe/death)، أو علامة requiresRca
-                    return status === 'rca_required' || 
-                           status === 'rca_in_progress' || 
-                           status === 'requires_rca' ||
-                           (requiresRca && status !== 'closed') ||
-                           ((severity === 'severe' || severity === 'death') && status !== 'closed');
+                    // RCA مطلوب إذا: الحالة rca_required/rca_in_progress، أو الخطورة عالية (severe/death)، أو علامة rcaRequired
+                    return i.status === 'rca_required' || 
+                           i.status === 'rca_in_progress' || 
+                           i.rcaRequired ||
+                           ((i.severity === 'severe' || i.severity === 'death') && i.status !== 'closed');
                 });
                 
                 if (!rcaIncidents.length) {
@@ -1834,7 +1839,7 @@
                     html += `<tr>
                         <td><strong>${inc.id}</strong></td>
                         <td>${inc.date}</td>
-                        <td>${inc.department}</td>
+                        <td>${inc.dept}</td>
                         <td>${INCIDENT_TYPES[inc.type] || inc.type}</td>
                         <td><span class="severity-dot" style="background:${sev.color}"></span>${sev.name}</td>
                         <td>${inc.assignedTo || '-'}</td>
@@ -1996,6 +2001,11 @@
                     <div class="detail-section">
                         <h4><i class="fas fa-bolt"></i> الإجراءات الفورية</h4>
                         <div class="detail-text">${inc.immediateAction || 'لم يتم تسجيل إجراءات فورية'}</div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-paperclip"></i> المرفقات</h4>
+                        <div class="detail-text">${renderAttachments(getAttachments(inc))}</div>
                     </div>
                 `;
                 
@@ -2984,12 +2994,10 @@
             return null;
         }
         
+        // DEPRECATED: استخدم withinDaysCanonical() بدلاً من هذه
         function withinDays(inc, days) {
-            if (days === 'all') return true;
-            const d = parseDateSafe(getDate(inc));
-            if (!d) return false;
-            const limit = Date.now() - (Number(days) * 86400000);
-            return d.getTime() >= limit;
+            console.warn('withinDays() deprecated - use withinDaysCanonical()');
+            return withinDaysCanonical(inc, days);
         }
         
         function hoursOpen(inc) {
@@ -3128,66 +3136,6 @@
                     </div>
                 </div>
             `;
-        }
-        
-        // Heatmap حسب الفترة الزمنية
-        function buildIncidentHeatmapTimed(all, daysRange) {
-            const filtered = all.filter(x => withinDays(x, daysRange));
-            buildIncidentHeatmap(filtered);
-        }
-        
-        // تحديث العرض التنفيذي
-        async function refreshExecutiveView(force = false) {
-            try {
-                const all = await loadAllIncidentsCached(force);
-                const daysRange = document.getElementById('hmRange')?.value || '90';
-                
-                buildIncidentHeatmapTimed(all, daysRange);
-                
-                const repeatRows = computeRepeatDeptRisk(all, daysRange);
-                const trendRows = computeDeptTrend(all);
-                renderDeptTrendCard(trendRows, repeatRows);
-                
-                toast('تم تحديث لوحة الإدارة', 'success', 2000);
-            } catch(e) {
-                console.error(e);
-                toast('خطأ في تحميل البيانات', 'danger');
-            }
-        }
-        
-        // تصدير Heatmap PDF
-        async function exportHeatmapPDF() {
-            try {
-                toast('جاري إنشاء PDF...', 'info', 3000);
-                const container = document.getElementById('incidentHeatmap');
-                if (!container) return toast('لا يوجد Heatmap', 'warning');
-                
-                const canvas = await html2canvas(container, { scale: 2 });
-                const imgData = canvas.toDataURL('image/png');
-                
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('l', 'mm', 'a4');
-                
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                
-                pdf.setFont('helvetica', 'bold');
-                pdf.setFontSize(16);
-                pdf.text('Incident Risk Heatmap - Makkah Medical Complex', pdfWidth/2, 15, { align: 'center' });
-                pdf.setFontSize(10);
-                pdf.text(new Date().toLocaleDateString('ar-SA'), pdfWidth/2, 22, { align: 'center' });
-                
-                const imgWidth = pdfWidth - 20;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                
-                pdf.addImage(imgData, 'PNG', 10, 30, imgWidth, Math.min(imgHeight, pdfHeight - 45));
-                
-                pdf.save('incident-heatmap.pdf');
-                toast('تم تصدير PDF بنجاح', 'success');
-            } catch(e) {
-                console.error(e);
-                toast('خطأ في إنشاء PDF', 'danger');
-            }
         }
         
         // المرفقات
@@ -3704,7 +3652,7 @@
                 toast('تم تصدير PDF بنجاح', 'success');
             } catch(e) {
                 console.error('PDF Error:', e);
-                toast('خطأ في تصدير PDF', 'error');
+                toast('خطأ في تصدير PDF', 'danger');
             }
         }
 
@@ -3727,7 +3675,7 @@
             try {
                 if (force || !allIncidentsGlobal.length) {
                     const raw = await loadAllIncidentsCached();
-                    allIncidentsGlobal = raw.map(toCanonical);
+                    allIncidentsGlobal = raw.map(toCanonical).filter(Boolean);
                 }
                 
                 const all = getCanonicalAll();
