@@ -915,15 +915,10 @@
                 document.getElementById('typeChart').innerHTML = typeHtml || '<p style="text-align:center;color:#999;">لا توجد بيانات</p>';
             }
             
-            // استخدام عدد التصعيد من الـ API أو حسابه من البيانات المحلية
-            const escalatedFromAPI = stats.escalated || 0;
-            const escalatedFromData = allComplaints.filter(c => 
-                c.escalatedTo || c.isEscalated || c.escalated || 
-                c.status === 'escalated' || 
-                (c.notes && c.notes.includes('تصعيد')) ||
-                (c.resolution && c.resolution.includes('تصعيد'))
+            // حساب التصعيد من البيانات الفعلية في Google Sheet
+            const escalatedCount = allComplaints.filter(c => 
+                c.escalatedTo && c.escalatedTo.trim() !== ''
             ).length;
-            const escalatedCount = escalatedFromAPI > 0 ? escalatedFromAPI : escalatedFromData;
             
             const statusData = [
                 { name: 'جديدة', count: stats.new || 0, color: '#ffc107' },
@@ -954,12 +949,9 @@
                 allComplaints = result.complaints;
                 document.getElementById('totalBadge').textContent = allComplaints.length + ' شكوى';
                 
-                // حساب عدد الشكاوى المُصعّدة (يشمل البحث في النصوص)
+                // حساب عدد الشكاوى المُصعّدة من البيانات الفعلية
                 const escalatedCount = allComplaints.filter(c => 
-                    c.escalatedTo || c.isEscalated || c.escalated || 
-                    c.status === 'escalated' || 
-                    (c.notes && c.notes.includes('تصعيد')) ||
-                    (c.resolution && c.resolution.includes('تصعيد'))
+                    c.escalatedTo && c.escalatedTo.trim() !== ''
                 ).length;
                 document.getElementById('escalatedComplaints').innerHTML = escalatedCount + (escalatedCount > 0 ? '<span style="position:absolute; top:-8px; right:-20px; background:#dc3545; color:white; border-radius:50%; min-width:22px; height:22px; font-size:0.65rem; line-height:22px; text-align:center; box-shadow:0 2px 5px rgba(220,53,69,0.5); animation: pulse 1.5s infinite;">!</span>' : '');
                 if (escalatedCount > 0) {
@@ -1080,7 +1072,7 @@
                         <div class="detail-item"><label>رقم الشكوى</label><span>${c.id}</span></div>
                         <div class="detail-item"><label>تاريخ التقديم</label><span>${c.submitDate} ${c.submitTime}</span></div>
                         <div class="detail-item"><label>نوع الشكوى</label><span>${c.type || '-'}</span></div>
-                        <div class="detail-item"><label>الحالة</label><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span>${(c.escalatedTo || c.isEscalated) ? '<span class="badge badge-danger" style="margin-right:8px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>' : ''}</div>
+                        <div class="detail-item"><label>الحالة</label><span class="badge badge-${statusInfo.badge}">${statusInfo.name}</span>${(c.escalatedTo && c.escalatedTo.trim() !== '') ? '<span class="badge badge-danger" style="margin-right:8px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>' : ''}</div>
                         <div class="detail-item"><label>الأولوية</label><span>${c.priority === 'high' ? 'عالية' : c.priority === 'low' ? 'منخفضة' : 'متوسطة'}</span></div>
                         <div class="detail-item"><label>المكلف</label><span>${c.assignedTo || 'غير مكلف'}</span></div>
                         ${c.escalatedTo ? `<div class="detail-item" style="background:#ffebee;"><label><i class="fas fa-arrow-up" style="color:#dc3545;"></i> مُصعّدة إلى</label><span style="color:#dc3545;font-weight:bold;">${c.escalatedTo}</span></div>` : ''}
