@@ -1,0 +1,566 @@
+تمام — خلّنا “نقفلها” كلها مرة وحدة ✅
+سأعطيك حزمة إضافات جاهزة للنسخ (UI + JS) تركّبها فوق كودك الحالي بدون ما تكسر أي شيء.
+
+الفكرة: نستخدم allIncidentsCache اللي عندك + دوال getDept/getDate/normSeverity/normStatus/getId/getEscTo… ونبني فوقها.
+
+0) أضف UI سريع في لوحة الـ Dashboard
+
+داخل قسم الـ Heatmap (قبل <div id="incidentHeatmap"> مباشرة) أضف:
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+  <label style="font-weight:700;color:#1e3a5f;">
+    <i class="fas fa-calendar-alt"></i> الفترة:
+  </label>
+
+  <select id="hmRange" class="form-control" style="width:220px;">
+    <option value="30">آخر 30 يوم</option>
+    <option value="60">آخر 60 يوم</option>
+    <option value="90" selected>آخر 90 يوم</option>
+    <option value="365">آخر سنة</option>
+    <option value="all">كل البيانات</option>
+  </select>
+
+  <button class="btn btn-secondary btn-sm" onclick="refreshExecutiveView(true)">
+    <i class="fas fa-bolt"></i> تحديث سريع
+  </button>
+
+  <button class="btn btn-primary btn-sm" onclick="exportHeatmapPDF()">
+    <i class="fas fa-file-pdf"></i> PDF Heatmap
+  </button>
+</div>
+
+<div id="deptRiskTrend" style="margin-top:12px;"></div>
+
+<div id="toastContainer" style="position:fixed;left:20px;bottom:20px;z-index:99999;display:flex;flex-direction:column;gap:10px;"></div>
+
+1) أضف مكتبة PDF (ضرورية لتصدير Heatmap PDF)
+
+داخل <head> أضف:
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+2) الصق هذا “البلوك” مرة واحدة داخل <script> (آخر الملف)
+
+هذا البلوك يضيف:
+
+Heatmap حسب الوقت (30/60/90/…)
+
+Repeat Department Risk (تكرار + وزن)
+
+Risk Trend ↑↓ (مقارنة آخر 30 يوم مع 30 يوم قبلها)
+
+Toast بدل alert
+
+صوت إنذار (وفاة / تصعيد جديد)
+
+تقارير: Heatmap PDF + RCA completion rate + SLA compliance
+
+/* =========================
+   Executive Add-ons Pack
+   ========================= */
+
+// ====== Settings
+const SLA_HOURS = {
+  acknowledge: 24, // تعيين مسؤول / بدء متابعة
+  rcaStart: 7 * 24, // بدء RCA خلال 7 أيام
+  closeMinor: 7 * 24, // إغلاق (none/minor) خلال 7 أيام
+  closeMajor: 14 * 24 // إغلاق (moderate/severe/death) خلال 14 يوم
+};
+
+// ====== Helpers
+function parseDateSafe(v) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+
+  // محاولة: yyyy-mm-dd (بدون وقت)
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const d2 = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00`);
+    if (!isNaN(d2.getTime())) return d2;
+  }
+  return null;
+}
+
+function withinDays(inc, days) {
+  if (days === 'all') return true;
+  const d = parseDateSafe(getDate(inc));
+  if (!d) return false;
+  const limit = Date.now() - (Number(days) * 86400000);
+  return d.getTime() >= limit;
+}
+
+function lastActionDate(inc) {
+  // لو عندك followup آخر، استعمله… حالياً نعتمد على lastActionDate أو date
+  const d = parseDateSafe(inc.lastActionDate) || parseDateSafe(getDate(inc));
+  return d || new Date(0);
+}
+
+function hoursOpen(inc) {
+  const st = normStatus(inc);
+  if (st === 'closed') return 0;
+  const ref = lastActionDate(inc);
+  return Math.floor((Date.now() - ref.getTime()) / 36e5);
+}
+
+// ====== Toast (بديل alert)
+function toast(msg, type = 'info', timeout = 4500) {
+  const box = document.getElementById('toastContainer');
+  if (!box) return alert(msg);
+
+  const el = document.createElement('div');
+  el.style.cssText = `
+    min-width:260px; max-width:420px;
+    background:${type==='danger'?'#dc3545':type==='warning'?'#ffc107':type==='success'?'#28a745':'#1e3a5f'};
+    color:${type==='warning'?'#222':'#fff'};
+    padding:12px 14px;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.18);
+    display:flex;gap:10px;align-items:flex-start;
+  `;
+  const icon = type==='danger'?'fa-triangle-exclamation':type==='warning'?'fa-circle-exclamation':type==='success'?'fa-circle-check':'fa-circle-info';
+  el.innerHTML = `<i class="fas ${icon}" style="margin-top:2px;"></i><div style="line-height:1.4">${msg}</div>`;
+  box.appendChild(el);
+  setTimeout(() => { el.remove(); }, timeout);
+}
+
+// ====== Sound Alert
+let audioCtx;
+function beep(freq = 880, ms = 180, gainVal = 0.05) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.value = freq;
+    o.type = 'sine';
+    g.gain.value = gainVal;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    setTimeout(() => { o.stop(); }, ms);
+  } catch (e) {}
+}
+
+function alarmPattern(type) {
+  // death = أقوى
+  if (type === 'death') { beep(880, 220, 0.07); setTimeout(()=>beep(660,220,0.07),260); setTimeout(()=>beep(880,260,0.07),520); return; }
+  // escalated
+  beep(740, 160, 0.06); setTimeout(()=>beep(740,160,0.06),220);
+}
+
+// ====== Risk Model
+function sevWeightKey(sevKey) {
+  if (sevKey === 'death') return 12;
+  if (sevKey === 'severe') return 8;
+  if (sevKey === 'moderate') return 4;
+  if (sevKey === 'minor') return 2;
+  return 1;
+}
+
+function rcaFlag(inc) {
+  // يدعم عربي/انجليزي حسب شيتك
+  const raw = String(inc.RCA_Required ?? inc.rcaRequired ?? '').trim().toLowerCase();
+  return raw === 'true' || raw === 'نعم' || raw === 'yes' || raw === 'y';
+}
+
+function riskExtras2(inc) {
+  let extra = 0;
+  const st = normStatus(inc);
+  const esc = !!getEscTo(inc) || st === 'escalated';
+  const rca = rcaFlag(inc) || st === 'rca_required' || st === 'rca_in_progress';
+
+  if (esc) extra += 4;
+  if (rca) extra += 3;
+
+  const hrs = hoursOpen(inc);
+  if (hrs >= 48) extra += 3;
+  else if (hrs >= 24) extra += 2;
+
+  return extra;
+}
+
+function riskScoreIncident(inc) {
+  const sevKey = normSeverity(inc);
+  return sevWeightKey(sevKey) + riskExtras2(inc);
+}
+
+// ====== Heatmap (time-based)
+function buildIncidentHeatmapTimed(all, daysRange) {
+  const filtered = all.filter(x => withinDays(x, daysRange));
+  buildIncidentHeatmap(filtered); // تستخدم دالتك الموجودة (تبني heatmap) — ممتاز
+}
+
+// ====== Repeat Department Risk
+function computeRepeatDeptRisk(all, daysRange) {
+  const filtered = all.filter(x => withinDays(x, daysRange));
+  const deptMap = new Map();
+
+  for (const inc of filtered) {
+    const dept = getDept(inc);
+    if (!deptMap.has(dept)) deptMap.set(dept, { count: 0, risk: 0, severe: 0, escalated: 0 });
+    const d = deptMap.get(dept);
+    d.count += 1;
+    const sev = normSeverity(inc);
+    d.risk += riskScoreIncident(inc);
+    if (sev === 'severe' || sev === 'death') d.severe += 1;
+    if (normStatus(inc) === 'escalated' || getEscTo(inc)) d.escalated += 1;
+  }
+
+  // Repeat Risk Index = (risk / max(1,count)) + severe*2 + escalated*1.5
+  const arr = Array.from(deptMap.entries()).map(([dept, d]) => {
+    const rri = (d.risk / Math.max(1,d.count)) + (d.severe*2) + (d.escalated*1.5);
+    return { dept, ...d, rri: Number(rri.toFixed(2)) };
+  });
+
+  arr.sort((a,b) => b.rri - a.rri);
+  return arr;
+}
+
+// ====== Risk Trend ↑↓ (آخر 30 يوم vs 30 يوم قبلها)
+function computeDeptTrend(all) {
+  const now30 = all.filter(x => withinDays(x, 30));
+  const prev30 = all.filter(x => {
+    const d = parseDateSafe(getDate(x));
+    if (!d) return false;
+    const t = d.getTime();
+    const from = Date.now() - (60 * 86400000);
+    const to = Date.now() - (30 * 86400000);
+    return t >= from && t < to;
+  });
+
+  function sumRisk(list) {
+    const m = new Map();
+    for (const inc of list) {
+      const dept = getDept(inc);
+      m.set(dept, (m.get(dept) || 0) + riskScoreIncident(inc));
+    }
+    return m;
+  }
+
+  const a = sumRisk(now30);
+  const b = sumRisk(prev30);
+
+  const depts = Array.from(new Set([...a.keys(), ...b.keys()]));
+  const rows = depts.map(dept => {
+    const cur = a.get(dept) || 0;
+    const prev = b.get(dept) || 0;
+    const delta = cur - prev;
+    const pct = prev ? ((delta / prev) * 100) : (cur ? 100 : 0);
+    return { dept, cur, prev, delta, pct: Number(pct.toFixed(1)) };
+  });
+
+  rows.sort((x,y) => Math.abs(y.delta) - Math.abs(x.delta));
+  return rows;
+}
+
+function renderDeptTrendCard(trendRows, repeatRows) {
+  const box = document.getElementById('deptRiskTrend');
+  if (!box) return;
+
+  const topRepeat = repeatRows.slice(0, 6);
+  const topTrend = trendRows.slice(0, 6);
+
+  const trendHtml = topTrend.map(r => {
+    const up = r.delta > 0;
+    const icon = up ? 'fa-arrow-trend-up' : (r.delta < 0 ? 'fa-arrow-trend-down' : 'fa-minus');
+    const color = up ? '#dc3545' : (r.delta < 0 ? '#28a745' : '#6c757d');
+    return `
+      <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:12px;padding:10px;display:flex;justify-content:space-between;gap:10px;">
+        <div style="font-weight:800;color:#1e3a5f;">${r.dept}</div>
+        <div style="font-weight:800;color:${color};white-space:nowrap;">
+          <i class="fas ${icon}"></i>
+          ${r.delta>=0?'+':''}${Math.round(r.delta)} (${r.pct}%)
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const repeatHtml = topRepeat.map(r => `
+    <div style="background:#fff;border:1px solid #e9ecef;border-radius:12px;padding:10px;display:flex;justify-content:space-between;gap:10px;">
+      <div style="font-weight:800;color:#1e3a5f;">${r.dept}</div>
+      <div style="font-weight:800;color:#6f42c1;white-space:nowrap;">
+        RRI ${r.rri} | #${r.count}
+      </div>
+    </div>
+  `).join('');
+
+  box.innerHTML = `
+    <div class="card" style="margin-top:18px;">
+      <div class="card-header">
+        <h3 class="card-title"><i class="fas fa-ranking-star"></i> لوحة الإدارة: Repeat Risk + Trend</h3>
+      </div>
+      <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;">
+        <div>
+          <div style="font-weight:900;color:#6f42c1;margin-bottom:10px;"><i class="fas fa-repeat"></i> أعلى الأقسام تكرارًا وخطورة (RRI)</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">${repeatHtml}</div>
+        </div>
+        <div>
+          <div style="font-weight:900;color:#dc3545;margin-bottom:10px;"><i class="fas fa-chart-line"></i> تغيّر الخطر (آخر 30 يوم مقابل السابق)</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">${trendHtml}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ====== SLA Compliance + RCA completion rate
+function computeRcaCompletion(all, daysRange) {
+  const list = all.filter(x => withinDays(x, daysRange));
+  const need = list.filter(i => {
+    const st = normStatus(i);
+    const sev = normSeverity(i);
+    return st !== 'closed' && (st === 'rca_required' || st === 'rca_in_progress' || rcaFlag(i) || sev === 'severe' || sev === 'death');
+  });
+
+  const inProgress = need.filter(i => normStatus(i) === 'rca_in_progress').length;
+  const started = need.filter(i => normStatus(i) === 'rca_in_progress' || normStatus(i) === 'in_progress' || norm(i.rootCause)).length;
+  const completed = list.filter(i => {
+    const st = normStatus(i);
+    // افترض: RCA مكتمل إذا فيه rootCause + correctiveActions
+    const ok = !!norm(i.rootCause) && !!norm(i.correctiveActions);
+    return ok || st === 'in_progress' || st === 'closed';
+  }).length;
+
+  return {
+    need: need.length,
+    inProgress,
+    started,
+    completed,
+    rate: need.length ? Math.round((started / need.length) * 100) : 100
+  };
+}
+
+function computeSla(all, daysRange) {
+  const list = all.filter(x => withinDays(x, daysRange));
+
+  let totalOpen = 0;
+  let okAck = 0;
+
+  let totalClose = 0;
+  let okClose = 0;
+
+  let totalRcaStart = 0;
+  let okRcaStart = 0;
+
+  for (const inc of list) {
+    const st = normStatus(inc);
+    const sev = normSeverity(inc);
+    const hrs = hoursOpen(inc);
+
+    // Acknowledge SLA: إن كانت “مفتوحة” ولا يوجد assignedTo خلال 24 ساعة
+    if (st !== 'closed') {
+      totalOpen += 1;
+      // إذا assignedTo موجود → نعتبر تم acknowledgment
+      if (norm(inc.assignedTo)) okAck += 1;
+      else if (hrs <= SLA_HOURS.acknowledge) okAck += 1; // لازال ضمن SLA
+    }
+
+    // Close SLA
+    if (st === 'closed') {
+      totalClose += 1;
+      const closeHrsLimit = (sev === 'none' || sev === 'minor') ? SLA_HOURS.closeMinor : SLA_HOURS.closeMajor;
+
+      const incD = parseDateSafe(getDate(inc));
+      const closeD = parseDateSafe(getClosedDate(inc));
+      if (incD && closeD) {
+        const durHrs = Math.floor((closeD.getTime() - incD.getTime()) / 36e5);
+        if (durHrs <= closeHrsLimit) okClose += 1;
+      } else {
+        // لو البيانات ناقصة، لا نكسر المؤشر — نعتبرها غير محسوبة
+      }
+    }
+
+    // RCA Start SLA (للحالات severe/death/rca_required)
+    const needsRca = (sev === 'severe' || sev === 'death' || normStatus(inc) === 'rca_required' || rcaFlag(inc));
+    if (needsRca && st !== 'closed') {
+      totalRcaStart += 1;
+      // إذا دخل rca_in_progress أو يوجد rootCause → بدأ
+      if (normStatus(inc) === 'rca_in_progress' || norm(inc.rootCause)) okRcaStart += 1;
+      else if (hrs <= SLA_HOURS.rcaStart) okRcaStart += 1; // لازال ضمن SLA
+    }
+  }
+
+  const pct = (a,b) => b ? Math.round((a/b)*100) : 100;
+  return {
+    ack: { ok: okAck, total: totalOpen, pct: pct(okAck,totalOpen) },
+    close: { ok: okClose, total: totalClose, pct: pct(okClose,totalClose) },
+    rcaStart: { ok: okRcaStart, total: totalRcaStart, pct: pct(okRcaStart,totalRcaStart) }
+  };
+}
+
+function renderComplianceCards(rca, sla) {
+  // نضيفها تحت deptRiskTrend
+  const box = document.getElementById('deptRiskTrend');
+  if (!box) return;
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.marginTop = '18px';
+  card.innerHTML = `
+    <div class="card-header">
+      <h3 class="card-title"><i class="fas fa-shield-check"></i> مؤشرات RCA + SLA</h3>
+    </div>
+    <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;">
+      <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:12px;padding:12px;">
+        <div style="font-weight:900;color:#6f42c1;margin-bottom:6px;">RCA Completion Rate</div>
+        <div style="font-size:28px;font-weight:900;color:#1e3a5f;">${rca.rate}%</div>
+        <div style="color:#666;font-size:0.9rem;">مطلوب RCA: ${rca.need} | بدأ/مكتمل: ${rca.started}</div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e9ecef;border-radius:12px;padding:12px;">
+        <div style="font-weight:900;color:#1e3a5f;margin-bottom:6px;">SLA Acknowledge</div>
+        <div style="font-size:28px;font-weight:900;color:${sla.ack.pct<80?'#dc3545':'#28a745'};">${sla.ack.pct}%</div>
+        <div style="color:#666;font-size:0.9rem;">${sla.ack.ok}/${sla.ack.total}</div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e9ecef;border-radius:12px;padding:12px;">
+        <div style="font-weight:900;color:#1e3a5f;margin-bottom:6px;">SLA RCA Start</div>
+        <div style="font-size:28px;font-weight:900;color:${sla.rcaStart.pct<80?'#dc3545':'#28a745'};">${sla.rcaStart.pct}%</div>
+        <div style="color:#666;font-size:0.9rem;">${sla.rcaStart.ok}/${sla.rcaStart.total}</div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e9ecef;border-radius:12px;padding:12px;">
+        <div style="font-weight:900;color:#1e3a5f;margin-bottom:6px;">SLA Close</div>
+        <div style="font-size:28px;font-weight:900;color:${sla.close.pct<80?'#dc3545':'#28a745'};">${sla.close.pct}%</div>
+        <div style="color:#666;font-size:0.9rem;">${sla.close.ok}/${sla.close.total}</div>
+      </div>
+    </div>
+  `;
+  box.appendChild(card);
+}
+
+// ====== Heatmap PDF
+async function exportHeatmapPDF() {
+  const el = document.getElementById('incidentHeatmap');
+  if (!el) return toast('Heatmap غير موجودة', 'warning');
+
+  toast('جاري إنشاء PDF…', 'info', 2500);
+  const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+  const imgData = canvas.toDataURL('image/png');
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('l', 'mm', 'a4');
+
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+
+  // نحافظ على النسبة
+  const imgW = pageW - 16;
+  const imgH = (canvas.height * imgW) / canvas.width;
+
+  pdf.addImage(imgData, 'PNG', 8, 10, imgW, Math.min(imgH, pageH - 20));
+  pdf.save(`Heatmap_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('تم تصدير Heatmap PDF ✅', 'success');
+}
+
+// ====== New Escalation / Death notifications (delta check)
+function diffKey(i) {
+  return `${getId(i)}|${normStatus(i)}|${getEscTo(i)}|${normSeverity(i)}`;
+}
+
+function checkNewAlerts(all) {
+  const key = 'incident_alert_snapshot_v1';
+  const oldRaw = localStorage.getItem(key);
+  const old = oldRaw ? new Set(JSON.parse(oldRaw)) : new Set();
+
+  const nowSet = new Set(all.map(diffKey));
+  localStorage.setItem(key, JSON.stringify(Array.from(nowSet)));
+
+  // تنبيه عند وفاة أو تصعيد جديد
+  for (const inc of all) {
+    const k = diffKey(inc);
+    if (old.has(k)) continue;
+
+    const sev = normSeverity(inc);
+    const st = normStatus(inc);
+    const esc = !!getEscTo(inc) || st === 'escalated';
+
+    if (sev === 'death') {
+      toast(`🚨 وفاة جديدة: ${getId(inc)} | ${getDept(inc)}`, 'danger', 8000);
+      alarmPattern('death');
+    } else if (esc) {
+      toast(`⚠️ تصعيد جديد: ${getId(inc)} → ${getEscTo(inc) || 'الإدارة'}`, 'warning', 6500);
+      alarmPattern('escalated');
+    }
+  }
+}
+
+// ====== One entry point for executive refresh
+async function refreshExecutiveView(force = false) {
+  const range = (document.getElementById('hmRange')?.value || '90');
+  const all = await loadAllIncidentsCached(force);
+
+  // Heatmap time-based
+  buildIncidentHeatmapTimed(all, range);
+
+  // Repeat Risk + Trend
+  const repeat = computeRepeatDeptRisk(all, range);
+  const trend = computeDeptTrend(all);
+  renderDeptTrendCard(trend, repeat);
+
+  // RCA + SLA
+  const rca = computeRcaCompletion(all, range);
+  const sla = computeSla(all, range);
+  renderComplianceCards(rca, sla);
+
+  // Alerts
+  checkNewAlerts(all);
+}
+
+// ====== Hook: range change auto-refresh
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'hmRange') refreshExecutiveView(false);
+});
+
+// ====== Call once after login/data load
+// ضيف هذا في نهاية loadData() عندك بعد buildIncidentHeatmap(all):
+// await refreshExecutiveView(false);
+
+3) تعديل صغير في loadData() عندك (سطر واحد)
+
+بعد ما تعمل:
+
+buildIncidentHeatmap(all);
+
+
+أضف:
+
+await refreshExecutiveView(false);
+
+4) أهم “خلل منطقي” لازم تنتبه له (حتى ما تتلخبط البيانات)
+
+أنت عندك الآن مصدرين للعدادات:
+
+loadData() يحسب escalated/closed من البيانات
+
+loadStats() قد يكتب فوقها من byStatus
+
+✅ أنت بالفعل عدّلتها جزئيًا (ما شاء الله).
+الأفضل: خلي مصدر واحد “حاكم” للعدادات التنفيذية وهو loadData()، وخل loadStats() فقط للبطاقات العامة.
+
+في loadStats() احذف/علّق أي تعديل لـ:
+
+escalatedTabCount / closedTabCount
+
+
+وخليها تُدار من refreshExecutiveView + loadData.
+
+5) المطلوب منك الآن (خطوات تنفيذ دقيقة)
+
+أضف UI controls (الجزء رقم 0)
+
+أضف scripts pdf libs (الجزء رقم 1)
+
+الصق Executive Add-ons Pack (الجزء رقم 2)
+
+أضف await refreshExecutiveView(false); بعد heatmap في loadData()
+
+وبكذا تكون خلّصت كل المطلوب:
+
+✅ Heatmap حسب الوقت
+✅ Repeat Department Risk
+✅ ترتيب الأقسام حسب Risk Trend
+✅ تنبيهات + صوت
+✅ Toast بدل alert
+✅ Heatmap PDF
+✅ RCA completion rate
+✅ SLA compliance
