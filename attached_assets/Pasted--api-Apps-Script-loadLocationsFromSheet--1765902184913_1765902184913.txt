@@ -1,0 +1,76 @@
+احذف محاولة /api/... بالكامل وخلي المصدر الوحيد هو Apps Script:
+
+استبدل loadLocationsFromSheet() بهذا (انسخه كما هو):
+
+async function loadLocationsFromSheet() {
+  try {
+    const response = await fetch(SCRIPT_URL + '?action=getLocations');
+    const data = await response.json();
+
+    if (data.ok && Array.isArray(data.locations) && data.locations.length > 0) {
+      locations = data.locations;
+      locationsLoaded = true;
+      updateLocationSelector();
+      return;
+    }
+
+    throw new Error('No locations returned from Apps Script');
+  } catch (err) {
+    console.error('❌ فشل تحميل المواقع من Apps Script:', err);
+    locations = [];
+    locationsLoaded = true;
+
+    // رسالة داخل مكان المواقع بدل السقوط بصمت
+    const selector = document.getElementById('locationSelector');
+    if (selector) selector.innerHTML = `<div style="color:#dc2626;">تعذر تحميل المواقع من الشيت</div>`;
+  }
+}
+
+✅ الخلل رقم 2: أنت تبني HTML لخطوة 3 باستخدام locations قبل تحميلها
+
+في renderStepContent() عندك Step 3 يكتب:
+
+${locations.map(loc => ...).join('')}
+
+
+لكن وقتها locations غالبًا لسه فاضية (حتى لو loadLocationsFromSheet شغّال).
+
+✅ الحل
+
+خلّي Step 3 يضع Placeholder فقط، وبعدها updateLocationSelector() تعبيها.
+
+عدّل جزء Step 3 في renderStepContent() إلى:
+
+<div id="locationSelector" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-3">
+  <div style="color:#64748b;">جاري تحميل المواقع...</div>
+</div>
+<p class="error-message"></p>
+
+
+ولا تستخدم ${locations.map...} داخل renderStepContent.
+
+✅ الخلل رقم 3: أنت ترسل locations كـ string وليس Array
+
+في submitForm عندك:
+
+locations: checkedLocations.join(', ')
+
+
+لكن الباك اند الجديد يتوقع Array (عشان يحولها هو لنص).
+هذا ما يمنع ظهور المواقع، لكن سيخرب التخزين والتحليل لاحقًا.
+
+✅ الحل
+
+بدّلها إلى:
+
+locations: checkedLocations
+
+✅ الكود الصحيح الجاهز (مختصر)
+
+نفّذ هذه 3 تغييرات فقط:
+
+استبدل loadLocationsFromSheet() بالكود اللي فوق
+
+غيّر Step 3 في renderStepContent() ليكون Placeholder
+
+غيّر إرسال locations إلى Array

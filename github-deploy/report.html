@@ -87,34 +87,25 @@
         
         async function loadLocationsFromSheet() {
             try {
-                // أولاً نحاول من السيرفر المحلي (للتطوير على Replit)
-                let response = await fetch('/api/complaints/locations');
-                let data = await response.json();
-                
-                if (data.ok && data.locations && data.locations.length > 0) {
-                    locations = data.locations;
-                    locationsLoaded = true;
-                    console.log('✅ تم تحميل', locations.length, 'موقع من الشيت');
-                    updateLocationSelector();
-                    return;
-                }
-                
-                // إذا فشل، نحاول من Apps Script (للإنتاج على GitHub Pages)
-                response = await fetch(SCRIPT_URL + '?action=getLocations');
-                data = await response.json();
-                
-                if (data.ok && data.locations && data.locations.length > 0) {
+                const response = await fetch(SCRIPT_URL + '?action=getLocations');
+                const data = await response.json();
+
+                if (data.ok && Array.isArray(data.locations) && data.locations.length > 0) {
                     locations = data.locations;
                     locationsLoaded = true;
                     console.log('✅ تم تحميل', locations.length, 'موقع من Apps Script');
                     updateLocationSelector();
-                } else {
-                    console.warn('⚠️ لم يتم العثور على مواقع، استخدام القائمة الافتراضية');
-                    useDefaultLocations();
+                    return;
                 }
+
+                throw new Error('No locations returned from Apps Script');
             } catch (err) {
-                console.error('❌ فشل تحميل المواقع:', err);
-                useDefaultLocations();
+                console.error('❌ فشل تحميل المواقع من Apps Script:', err);
+                locations = [];
+                locationsLoaded = true;
+
+                const selector = document.getElementById('locationSelector');
+                if (selector) selector.innerHTML = '<div style="color:#dc2626;">تعذر تحميل المواقع من الشيت</div>';
             }
         }
         
@@ -321,12 +312,7 @@
                     <div class="form-group">
                         <label class="form-label required">موقع الحدث</label>
                         <div id="locationSelector" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-3">
-                            ${locations.map(loc => `
-                                <label class="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" name="locations" value="${loc.code}" class="location-checkbox w-4 h-4 accent-[var(--primary)]">
-                                    <span class="text-sm">${loc.name}</span>
-                                </label>
-                            `).join('')}
+                            <div style="color:#64748b;">جاري تحميل المواقع...</div>
                         </div>
                         <p class="error-message"></p>
                     </div>
@@ -564,7 +550,7 @@
                     complainantPhone: document.getElementById('complainantPhone').value || '',
                     complainantEmail: document.getElementById('complainantEmail').value || '',
                     complaintDateTime: document.getElementById('complaintDateTime').value,
-                    locations: checkedLocations.join(', '),
+                    locations: checkedLocations,
                     description: document.getElementById('complaintDescription').value,
                     complaintAgainst: document.getElementById('complaintAgainst').value || '',
                     additionalNotes: document.getElementById('additionalNotes').value || '',
