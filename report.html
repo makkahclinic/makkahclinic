@@ -87,13 +87,26 @@
         
         async function loadLocationsFromSheet() {
             try {
-                const response = await fetch(SCRIPT_URL + '?action=getLocations');
-                const data = await response.json();
+                // أولاً نحاول من السيرفر المحلي (للتطوير على Replit)
+                let response = await fetch('/api/complaints/locations');
+                let data = await response.json();
+                
                 if (data.ok && data.locations && data.locations.length > 0) {
                     locations = data.locations;
                     locationsLoaded = true;
                     console.log('✅ تم تحميل', locations.length, 'موقع من الشيت');
-                    // تحديث العرض إذا كانت الخطوة 3 ظاهرة
+                    updateLocationSelector();
+                    return;
+                }
+                
+                // إذا فشل، نحاول من Apps Script (للإنتاج على GitHub Pages)
+                response = await fetch(SCRIPT_URL + '?action=getLocations');
+                data = await response.json();
+                
+                if (data.ok && data.locations && data.locations.length > 0) {
+                    locations = data.locations;
+                    locationsLoaded = true;
+                    console.log('✅ تم تحميل', locations.length, 'موقع من Apps Script');
                     updateLocationSelector();
                 } else {
                     console.warn('⚠️ لم يتم العثور على مواقع، استخدام القائمة الافتراضية');
