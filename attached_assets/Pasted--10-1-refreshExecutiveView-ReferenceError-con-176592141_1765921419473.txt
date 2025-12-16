@@ -1,0 +1,382 @@
+✅ أهم 10 أخطاء/نواقص لازم تتصلّح الآن
+1) refreshExecutiveView مكسور (ReferenceError)
+
+أنت كتبت:
+
+const originalRefreshExecutiveView = refreshExecutiveView;
+refreshExecutiveView = async function(force = false) { ... }
+
+
+لكن refreshExecutiveView غير موجود أصلاً في الكود اللي أرسلته (أنت ما عرّفته). النتيجة: الصفحة تتوقف هنا.
+
+✅ الحل: احذف هالسطرين بالكامل أو عرّف refreshExecutiveView قبلهم. (أنا بحط لك نسخة صحيحة تحت)
+
+2) computeRepeatDeptRisk / computeDeptTrend شغالة على RAW وليس Canonical
+
+أنت في refreshHeatmapFiltered() تستخدم:
+
+const repeatRows = computeRepeatDeptRisk(allIncidentsGlobal, days);
+const trendRows = computeDeptTrend(allIncidentsGlobal);
+
+
+لكن دوالك computeRepeatDeptRisk/computeDeptTrend تتوقع RAW وتستخدم getDept/getDate… بينما allIncidentsGlobal الآن Canonical (فيه dept/date جاهز).
+
+✅ الحل: خلّي الدوال تقبل canonical (أبسط) أو مرر لها RAW. الأفضل: اجعلها canonical بالكامل.
+
+3) SLA الحسابات تستخدم RAW + Canonical مع بعض
+
+computeSlaCompliance(all, daysRange) أنت تمرر لها all من loadAllIncidentsCached() (RAW)
+
+بينما في نفس الوقت عندك canonical جاهز allIncidentsGlobal
+
+✅ الحل: خلي SLA يعمل على canonical حتى:
+
+inc.date مضمون
+
+inc.status مضمون
+
+inc.severity مضمون
+
+assignedTo/containmentDate/rcaStartDate مضمون
+
+4) withinDays() عندك تستخدم RAW getDate(inc)—غير مناسب للـ Canonical
+
+في نسخة executive pack الأولى، withinDays(inc, days) تعتمد على getDate(inc).
+لكن بعد التطبيع، الأفضل يعتمد على inc.date.
+
+✅ الحل: rewrite.
+
+5) hoursOpen() يستخدم getDate(x) و inc.lastActionDate—غير ثابت
+
+انت أحيانًا تحفظ lastActionDate في canonical، لكن دوال SLA تستخدم raw.
+
+✅ الحل: توحيد المرجع: inc.lastActionDate || inc.date.
+
+6) rcaFlag() يقرأ inc.RCA_Required مباشرة، بينما canonical عندك rcaRequired
+
+نتيجة: SLA/RCA compliance قد يعطي أرقام غلط.
+
+✅ الحل: return inc.rcaRequired === true.
+
+7) PDF Heatmap: html2canvas + overflow
+
+أنت تصوّر #incidentHeatmap فقط، لكن هذا div داخله scroll. html2canvas يصور الجزء الظاهر فقط غالبًا.
+
+✅ حل سريع: قبل التصوير:
+
+مؤقتًا خلّ container.style.maxHeight = 'none' + overflow='visible'
+
+وبعد PDF ارجعها زي ما كانت.
+
+(أضيفه لك في patch)
+
+8) renderAttachments() موجود لكن ما تستخدمه داخل modal
+
+أنت قلت “زي التصوير وهكذا” — عندك field attachments داخل canonical، لكن ما تعرضه في تفاصيل البلاغ.
+
+✅ الحل: أضف section داخل viewIncident تعرض روابط الصور/المرفقات.
+
+9) loadRcaIncidents() مازال RAW (تطلع غلط)
+
+انت تستخدم:
+
+const all = await loadAllIncidentsCached();
+const rcaIncidents = all.filter(...)
+
+
+بينما canonical جاهز. ومع التطبيع، الشدة العربية/الإنجليزية والـ status بتكون ثابتة.
+
+✅ الحل: const all = allIncidentsGlobal;
+
+10) تغيير العدادات من loadStats() قد يطغى على loadData()
+
+أنت خليتها بحذر، لكن ما زالت ممكن تسبب اختلاف لو Apps Script لا يرجّع byStatus.
+
+✅ الأفضل: احذف تحديث escalated/closed من loadStats نهائيًا وخلي loadData هو المصدر الوحيد.
+
+✅ Patch جاهز (انسخه والصقه) — يصلّح كل اللي فوق
+
+ضع هذا آخر <script> قبل </script> (بعد كل الدوال)، وهو سيستبدل النسخ الحالية للدوال التنفيذية:
+
+/* =========================
+   FIX PACK (Canonical-first)
+   ضع هذا في آخر السكربت
+   ========================= */
+
+// 1) مصدر واحد للبيانات: Canonical فقط
+function getCanonicalAll() {
+  return Array.isArray(allIncidentsGlobal) ? allIncidentsGlobal : [];
+}
+
+// 2) withinDays على canonical
+function withinDaysCanonical(inc, days) {
+  if (days === 'all') return true;
+  const d = parseDateSafe(inc.date);
+  if (!d) return false;
+  return (Date.now() - d.getTime()) <= (Number(days) * 86400000);
+}
+
+// 3) Risk per incident canonical
+function riskScoreCanonical(inc) {
+  let score = sevWeight(inc.severity);
+  if (inc.status === 'escalated' || inc.escalatedTo) score += 4;
+  if (inc.rcaRequired) score += 3;
+
+  const ref = parseDateSafe(inc.lastActionDate) || parseDateSafe(inc.date);
+  if (ref) {
+    const hrs = Math.floor((Date.now() - ref.getTime()) / 36e5);
+    if (hrs >= 48) score += 3;
+    else if (hrs >= 24) score += 2;
+  }
+  return score;
+}
+
+// 4) Repeat Dept Risk canonical
+function computeRepeatDeptRiskCanonical(all, daysRange) {
+  const filtered = all.filter(x => withinDaysCanonical(x, daysRange));
+  const deptMap = new Map();
+
+  for (const inc of filtered) {
+    const dept = inc.dept || 'غير محدد';
+    if (!deptMap.has(dept)) deptMap.set(dept, { count: 0, risk: 0, severe: 0, escalated: 0 });
+    const d = deptMap.get(dept);
+    d.count += 1;
+    const r = riskScoreCanonical(inc);
+    d.risk += r;
+    if (inc.severity === 'severe' || inc.severity === 'death') d.severe += 1;
+    if (inc.status === 'escalated' || inc.escalatedTo) d.escalated += 1;
+  }
+
+  const arr = Array.from(deptMap.entries()).map(([dept, d]) => {
+    const rri = (d.risk / Math.max(1, d.count)) + (d.severe * 2) + (d.escalated * 1.5);
+    return { dept, ...d, rri: Number(rri.toFixed(2)) };
+  });
+
+  arr.sort((a,b) => b.rri - a.rri);
+  return arr;
+}
+
+// 5) Trend canonical (30 يوم مقابل 30 يوم السابقة)
+function computeDeptTrendCanonical(all) {
+  const now30 = all.filter(x => withinDaysCanonical(x, 30));
+  const prev30 = all.filter(x => {
+    const d = parseDateSafe(x.date);
+    if (!d) return false;
+    const t = d.getTime();
+    const from = Date.now() - (60 * 86400000);
+    const to = Date.now() - (30 * 86400000);
+    return t >= from && t < to;
+  });
+
+  function sumRisk(list) {
+    const m = new Map();
+    for (const inc of list) {
+      const dept = inc.dept || 'غير محدد';
+      m.set(dept, (m.get(dept) || 0) + riskScoreCanonical(inc));
+    }
+    return m;
+  }
+
+  const a = sumRisk(now30);
+  const b = sumRisk(prev30);
+
+  const depts = Array.from(new Set([...a.keys(), ...b.keys()]));
+  const rows = depts.map(dept => {
+    const cur = a.get(dept) || 0;
+    const prev = b.get(dept) || 0;
+    const delta = cur - prev;
+    const pct = prev ? ((delta / prev) * 100) : (cur ? 100 : 0);
+    return { dept, cur, prev, delta, pct: Number(pct.toFixed(1)) };
+  });
+
+  rows.sort((x,y) => Math.abs(y.delta) - Math.abs(x.delta));
+  return rows;
+}
+
+// 6) SLA canonical
+function computeIncidentSlaCanonical(inc) {
+  const incDate = parseDateSafe(inc.date);
+  if (!incDate) return null;
+
+  const now = Date.now();
+  const hrsFromStart = (now - incDate.getTime()) / 36e5;
+
+  const triageLimit = getSlaLimit('triage', inc.severity);
+  const hasAssigned = !!inc.assignedTo;
+  const triageOk = hasAssigned || hrsFromStart <= triageLimit;
+
+  const containLimit = getSlaLimit('contain', inc.severity);
+  const containDate = parseDateSafe(inc.containmentDate);
+  let containOk = false;
+  if (containDate) {
+    containOk = ((containDate.getTime() - incDate.getTime()) / 36e5) <= containLimit;
+  } else {
+    containOk = hrsFromStart <= containLimit;
+  }
+
+  const needsRca = inc.rcaRequired || inc.severity === 'death' || inc.severity === 'severe' || inc.status === 'rca_required' || inc.status === 'rca_in_progress';
+  let rcaOk = null;
+  let rcaLimit = getSlaLimit('rcaStart', inc.severity);
+  if (needsRca) {
+    const rcaStartDate = parseDateSafe(inc.rcaStartDate);
+    if (rcaStartDate) rcaOk = ((rcaStartDate.getTime() - incDate.getTime()) / 36e5) <= rcaLimit;
+    else rcaOk = hrsFromStart <= rcaLimit;
+  }
+
+  const closeLimit = getSlaLimit('close', inc.severity);
+  let closeOk = null;
+  if (inc.status === 'closed') {
+    const cd = parseDateSafe(inc.closedDate);
+    closeOk = cd ? ((cd.getTime() - incDate.getTime()) / 36e5) <= closeLimit : true;
+  } else {
+    closeOk = hrsFromStart <= closeLimit;
+  }
+
+  return {
+    triage: { ok: triageOk, limit: triageLimit, hrs: hrsFromStart },
+    contain: { ok: containOk, limit: containLimit, hrs: hrsFromStart },
+    rca: needsRca ? { ok: rcaOk, limit: rcaLimit, hrs: hrsFromStart } : null,
+    close: { ok: closeOk, limit: closeLimit, hrs: hrsFromStart }
+  };
+}
+
+function computeSlaComplianceCanonical(all, daysRange) {
+  const filtered = all
+    .filter(x => withinDaysCanonical(x, daysRange))
+    .filter(x => x.status !== 'closed');
+
+  let triageTotal=0, triageOk=0, containTotal=0, containOk=0, rcaTotal=0, rcaOk=0, closeTotal=0, closeOk=0;
+  const breaches = [];
+
+  for (const inc of filtered) {
+    const sla = computeIncidentSlaCanonical(inc);
+    if (!sla) continue;
+
+    triageTotal++; if (sla.triage.ok) triageOk++; else breaches.push({ id: inc.id, phase:'triage', sev:inc.severity, hrs:sla.triage.hrs, limit:sla.triage.limit });
+    containTotal++; if (sla.contain.ok) containOk++; else breaches.push({ id: inc.id, phase:'contain', sev:inc.severity, hrs:sla.contain.hrs, limit:sla.contain.limit });
+
+    if (sla.rca) { rcaTotal++; if (sla.rca.ok) rcaOk++; else breaches.push({ id: inc.id, phase:'rca', sev:inc.severity, hrs:sla.rca.hrs, limit:sla.rca.limit }); }
+    closeTotal++; if (sla.close.ok) closeOk++; else breaches.push({ id: inc.id, phase:'close', sev:inc.severity, hrs:sla.close.hrs, limit:sla.close.limit });
+  }
+
+  return {
+    triage: { total: triageTotal, ok: triageOk, pct: triageTotal ? Math.round((triageOk/triageTotal)*100) : 100 },
+    contain: { total: containTotal, ok: containOk, pct: containTotal ? Math.round((containOk/containTotal)*100) : 100 },
+    rca: { total: rcaTotal, ok: rcaOk, pct: rcaTotal ? Math.round((rcaOk/rcaTotal)*100) : 100 },
+    close: { total: closeTotal, ok: closeOk, pct: closeTotal ? Math.round((closeOk/closeTotal)*100) : 100 },
+    breaches: breaches.sort((a,b)=> b.hrs - a.hrs).slice(0, 10)
+  };
+}
+
+function computeRcaCompletionCanonical(all, daysRange) {
+  const filtered = all.filter(x => withinDaysCanonical(x, daysRange));
+  const needRca = filtered.filter(i => i.rcaRequired || i.severity === 'death' || i.severity === 'severe' || i.status === 'rca_required' || i.status === 'rca_in_progress');
+  const completed = needRca.filter(i => i.status === 'closed' || (i.rootCause && i.correctiveActions));
+  const inProgress = needRca.filter(i => i.status === 'rca_in_progress').length;
+
+  return { need: needRca.length, completed: completed.length, inProgress, rate: needRca.length ? Math.round((completed.length/needRca.length)*100) : 100 };
+}
+
+// 7) refreshHeatmapFiltered: استخدم canonical بالكامل
+function refreshHeatmapFiltered() {
+  const days = document.getElementById('hmRange')?.value || 'all';
+  const scope = document.getElementById('hmScope')?.value || 'all';
+  let filtered = getCanonicalAll();
+
+  if (days !== 'all') filtered = filtered.filter(x => withinDaysCanonical(x, days));
+  if (scope === 'open') filtered = filtered.filter(x => x.status !== 'closed');
+
+  buildIncidentHeatmap(filtered);
+
+  const repeatRows = computeRepeatDeptRiskCanonical(getCanonicalAll(), days);
+  const trendRows = computeDeptTrendCanonical(getCanonicalAll());
+  renderDeptTrendCard(trendRows, repeatRows);
+
+  const sla = computeSlaComplianceCanonical(getCanonicalAll(), days);
+  const rca = computeRcaCompletionCanonical(getCanonicalAll(), days);
+  renderSlaPanel(sla, rca);
+
+  toast(`Heatmap: ${filtered.length} حادث | ${scope==='open'?'غير مغلقة':'الكل'} | ${days==='all'?'كل الفترات':'آخر '+days+' يوم'}`, 'success', 2800);
+}
+
+// 8) PDF: صوّر كامل المحتوى وليس فقط الجزء الظاهر
+async function exportHeatmapPDF() {
+  try {
+    toast('جاري إنشاء PDF...', 'info', 2500);
+    const container = document.getElementById('incidentHeatmap');
+    if (!container) return toast('لا يوجد Heatmap', 'warning');
+
+    const oldOverflow = container.style.overflow;
+    const oldMaxH = container.style.maxHeight;
+    container.style.overflow = 'visible';
+    container.style.maxHeight = 'none';
+
+    await new Promise(r => setTimeout(r, 60));
+
+    const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff' });
+    const imgData = canvas.toDataURL('image/png');
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.text('Incident Risk Heatmap - Makkah Medical Complex', pdfW/2, 12, { align: 'center' });
+    pdf.setFontSize(10);
+    pdf.text(new Date().toLocaleDateString('ar-SA'), pdfW/2, 18, { align: 'center' });
+
+    const imgW = pdfW - 16;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 8, 24, imgW, Math.min(imgH, pdfH - 30));
+
+    pdf.save('incident-heatmap.pdf');
+
+    container.style.overflow = oldOverflow;
+    container.style.maxHeight = oldMaxH;
+
+    toast('تم تصدير PDF بنجاح', 'success');
+  } catch (e) {
+    console.error(e);
+    toast('خطأ في إنشاء PDF', 'danger');
+  }
+}
+
+✅ بعد الـ Patch: أين تربط التحديث؟
+
+بعد انتهاء loadData() (في آخره)، أضف سطر واحد:
+
+setTimeout(() => refreshHeatmapFiltered(), 300);
+
+
+أو تضيفه داخل loadData() بعد buildIncidentHeatmap(all);.
+
+✅ إضافة “مرفقات/صور” داخل تفاصيل البلاغ
+
+داخل viewIncident() قبل نهاية HTML أضف:
+
+const att = getAttachments(inc);
+html += `
+  <div class="detail-section">
+    <h4><i class="fas fa-paperclip"></i> المرفقات</h4>
+    <div class="detail-text">${renderAttachments(att)}</div>
+  </div>
+`;
+
+
+ملاحظة: لازم Apps Script يرجّع روابط فعلية (drive link / public link).
+لو عندك المرفقات “في Drive” بس بدون رابط مباشر، نحتاج تعديل Apps Script لتوليد URL لكل ملف.
+
+✅ حكم “24 ساعة للحالات عالية الخطورة”
+
+نعم منطقي جدًا كـ “قرار/إجراء أولي موثّق”.
+لكن أنصح تكون policy عندك كالتالي (يعطيك قوة أمام الجودة):
+
+Death/Severe: Triage ≤ 2h + Containment ≤ 6h + Decision ≤ 24h
+
+Moderate: Triage ≤ 8h + Containment ≤ 24h
+
+Minor/None: Triage ≤ 24h + Closure ≤ 7 أيام
+
+(وأنت في SLA_HOURS كتبت شيئ قريب—ممتاز).

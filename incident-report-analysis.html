@@ -3473,57 +3473,291 @@
             `;
         }
         
-        // تحديث لوحة SLA
+        /* =========================
+           FIX PACK (Canonical-first)
+           ========================= */
+
+        // 1) مصدر واحد للبيانات: Canonical فقط
+        function getCanonicalAll() {
+            return Array.isArray(allIncidentsGlobal) ? allIncidentsGlobal : [];
+        }
+
+        // 2) withinDays على canonical
+        function withinDaysCanonical(inc, days) {
+            if (days === 'all') return true;
+            const d = parseDateSafe(inc.date);
+            if (!d) return false;
+            return (Date.now() - d.getTime()) <= (Number(days) * 86400000);
+        }
+
+        // 3) Risk per incident canonical
+        function riskScoreCanonical(inc) {
+            let score = sevWeight(inc.severity);
+            if (inc.status === 'escalated' || inc.escalatedTo) score += 4;
+            if (inc.rcaRequired) score += 3;
+
+            const ref = parseDateSafe(inc.lastActionDate) || parseDateSafe(inc.date);
+            if (ref) {
+                const hrs = Math.floor((Date.now() - ref.getTime()) / 36e5);
+                if (hrs >= 48) score += 3;
+                else if (hrs >= 24) score += 2;
+            }
+            return score;
+        }
+
+        // 4) Repeat Dept Risk canonical
+        function computeRepeatDeptRiskCanonical(all, daysRange) {
+            const filtered = all.filter(x => withinDaysCanonical(x, daysRange));
+            const deptMap = new Map();
+
+            for (const inc of filtered) {
+                const dept = inc.dept || 'غير محدد';
+                if (!deptMap.has(dept)) deptMap.set(dept, { count: 0, risk: 0, severe: 0, escalated: 0 });
+                const d = deptMap.get(dept);
+                d.count += 1;
+                const r = riskScoreCanonical(inc);
+                d.risk += r;
+                if (inc.severity === 'severe' || inc.severity === 'death') d.severe += 1;
+                if (inc.status === 'escalated' || inc.escalatedTo) d.escalated += 1;
+            }
+
+            const arr = Array.from(deptMap.entries()).map(([dept, d]) => {
+                const rri = (d.risk / Math.max(1, d.count)) + (d.severe * 2) + (d.escalated * 1.5);
+                return { dept, ...d, rri: Number(rri.toFixed(2)) };
+            });
+
+            arr.sort((a,b) => b.rri - a.rri);
+            return arr;
+        }
+
+        // 5) Trend canonical (30 يوم مقابل 30 يوم السابقة)
+        function computeDeptTrendCanonical(all) {
+            const now30 = all.filter(x => withinDaysCanonical(x, 30));
+            const prev30 = all.filter(x => {
+                const d = parseDateSafe(x.date);
+                if (!d) return false;
+                const t = d.getTime();
+                const from = Date.now() - (60 * 86400000);
+                const to = Date.now() - (30 * 86400000);
+                return t >= from && t < to;
+            });
+
+            function sumRisk(list) {
+                const m = new Map();
+                for (const inc of list) {
+                    const dept = inc.dept || 'غير محدد';
+                    m.set(dept, (m.get(dept) || 0) + riskScoreCanonical(inc));
+                }
+                return m;
+            }
+
+            const a = sumRisk(now30);
+            const b = sumRisk(prev30);
+
+            const depts = Array.from(new Set([...a.keys(), ...b.keys()]));
+            const rows = depts.map(dept => {
+                const cur = a.get(dept) || 0;
+                const prev = b.get(dept) || 0;
+                const delta = cur - prev;
+                const pct = prev ? ((delta / prev) * 100) : (cur ? 100 : 0);
+                return { dept, cur, prev, delta, pct: Number(pct.toFixed(1)) };
+            });
+
+            rows.sort((x,y) => Math.abs(y.delta) - Math.abs(x.delta));
+            return rows;
+        }
+
+        // 6) SLA canonical
+        function computeIncidentSlaCanonical(inc) {
+            const incDate = parseDateSafe(inc.date);
+            if (!incDate) return null;
+
+            const now = Date.now();
+            const hrsFromStart = (now - incDate.getTime()) / 36e5;
+
+            const triageLimit = getSlaLimit('triage', inc.severity);
+            const hasAssigned = !!inc.assignedTo;
+            const triageOk = hasAssigned || hrsFromStart <= triageLimit;
+
+            const containLimit = getSlaLimit('contain', inc.severity);
+            const containDate = parseDateSafe(inc.containmentDate);
+            let containOk = false;
+            if (containDate) {
+                containOk = ((containDate.getTime() - incDate.getTime()) / 36e5) <= containLimit;
+            } else {
+                containOk = hrsFromStart <= containLimit;
+            }
+
+            const needsRca = inc.rcaRequired || inc.severity === 'death' || inc.severity === 'severe' || inc.status === 'rca_required' || inc.status === 'rca_in_progress';
+            let rcaOk = null;
+            let rcaLimit = getSlaLimit('rcaStart', inc.severity);
+            if (needsRca) {
+                const rcaStartDate = parseDateSafe(inc.rcaStartDate);
+                if (rcaStartDate) rcaOk = ((rcaStartDate.getTime() - incDate.getTime()) / 36e5) <= rcaLimit;
+                else rcaOk = hrsFromStart <= rcaLimit;
+            }
+
+            const closeLimit = getSlaLimit('close', inc.severity);
+            let closeOk = null;
+            if (inc.status === 'closed') {
+                const cd = parseDateSafe(inc.closedDate);
+                closeOk = cd ? ((cd.getTime() - incDate.getTime()) / 36e5) <= closeLimit : true;
+            } else {
+                closeOk = hrsFromStart <= closeLimit;
+            }
+
+            return {
+                triage: { ok: triageOk, limit: triageLimit, hrs: hrsFromStart },
+                contain: { ok: containOk, limit: containLimit, hrs: hrsFromStart },
+                rca: needsRca ? { ok: rcaOk, limit: rcaLimit, hrs: hrsFromStart } : null,
+                close: { ok: closeOk, limit: closeLimit, hrs: hrsFromStart }
+            };
+        }
+
+        function computeSlaComplianceCanonical(all, daysRange) {
+            const filtered = all
+                .filter(x => withinDaysCanonical(x, daysRange))
+                .filter(x => x.status !== 'closed');
+
+            let triageTotal=0, triageOk=0, containTotal=0, containOk=0, rcaTotal=0, rcaOk=0, closeTotal=0, closeOk=0;
+            const breaches = [];
+
+            for (const inc of filtered) {
+                const sla = computeIncidentSlaCanonical(inc);
+                if (!sla) continue;
+
+                triageTotal++; if (sla.triage.ok) triageOk++; else breaches.push({ id: inc.id, phase:'triage', sev:inc.severity, hrs:sla.triage.hrs, limit:sla.triage.limit });
+                containTotal++; if (sla.contain.ok) containOk++; else breaches.push({ id: inc.id, phase:'contain', sev:inc.severity, hrs:sla.contain.hrs, limit:sla.contain.limit });
+
+                if (sla.rca) { rcaTotal++; if (sla.rca.ok) rcaOk++; else breaches.push({ id: inc.id, phase:'rca', sev:inc.severity, hrs:sla.rca.hrs, limit:sla.rca.limit }); }
+                closeTotal++; if (sla.close.ok) closeOk++; else breaches.push({ id: inc.id, phase:'close', sev:inc.severity, hrs:sla.close.hrs, limit:sla.close.limit });
+            }
+
+            return {
+                triage: { total: triageTotal, ok: triageOk, pct: triageTotal ? Math.round((triageOk/triageTotal)*100) : 100 },
+                contain: { total: containTotal, ok: containOk, pct: containTotal ? Math.round((containOk/containTotal)*100) : 100 },
+                rca: { total: rcaTotal, ok: rcaOk, pct: rcaTotal ? Math.round((rcaOk/rcaTotal)*100) : 100 },
+                close: { total: closeTotal, ok: closeOk, pct: closeTotal ? Math.round((closeOk/closeTotal)*100) : 100 },
+                breaches: breaches.sort((a,b)=> b.hrs - a.hrs).slice(0, 10)
+            };
+        }
+
+        function computeRcaCompletionCanonical(all, daysRange) {
+            const filtered = all.filter(x => withinDaysCanonical(x, daysRange));
+            const needRca = filtered.filter(i => i.rcaRequired || i.severity === 'death' || i.severity === 'severe' || i.status === 'rca_required' || i.status === 'rca_in_progress');
+            const completed = needRca.filter(i => i.status === 'closed' || (i.rootCause && i.correctiveActions));
+            const inProgress = needRca.filter(i => i.status === 'rca_in_progress').length;
+
+            return { need: needRca.length, completed: completed.length, inProgress, rate: needRca.length ? Math.round((completed.length/needRca.length)*100) : 100 };
+        }
+
+        // 7) refreshHeatmapFiltered: استخدم canonical بالكامل
+        function refreshHeatmapFiltered() {
+            const days = document.getElementById('hmRange')?.value || 'all';
+            const scope = document.getElementById('hmScope')?.value || 'all';
+            let filtered = getCanonicalAll();
+
+            if (days !== 'all') filtered = filtered.filter(x => withinDaysCanonical(x, days));
+            if (scope === 'open') filtered = filtered.filter(x => x.status !== 'closed');
+
+            buildIncidentHeatmap(filtered);
+
+            const repeatRows = computeRepeatDeptRiskCanonical(getCanonicalAll(), days);
+            const trendRows = computeDeptTrendCanonical(getCanonicalAll());
+            renderDeptTrendCard(trendRows, repeatRows);
+
+            const sla = computeSlaComplianceCanonical(getCanonicalAll(), days);
+            const rca = computeRcaCompletionCanonical(getCanonicalAll(), days);
+            renderSlaPanel(sla, rca);
+
+            toast(`Heatmap: ${filtered.length} حادث | ${scope==='open'?'غير مغلقة':'الكل'} | ${days==='all'?'كل الفترات':'آخر '+days+' يوم'}`, 'success', 2800);
+        }
+
+        // 8) PDF: صوّر كامل المحتوى
+        async function exportHeatmapPDF() {
+            try {
+                toast('جاري إنشاء PDF...', 'info', 2500);
+                const container = document.getElementById('incidentHeatmap');
+                if (!container) return toast('لا يوجد Heatmap', 'warning');
+
+                const oldOverflow = container.style.overflow;
+                const oldMaxH = container.style.maxHeight;
+                container.style.overflow = 'visible';
+                container.style.maxHeight = 'none';
+
+                await new Promise(r => setTimeout(r, 60));
+
+                const canvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff' });
+                const imgData = canvas.toDataURL('image/png');
+
+                container.style.overflow = oldOverflow;
+                container.style.maxHeight = oldMaxH;
+
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('l', 'mm', 'a4');
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = pageWidth - 20;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, Math.min(imgHeight, pageHeight - 20));
+                pdf.save('heatmap-' + new Date().toISOString().slice(0,10) + '.pdf');
+                toast('تم تصدير PDF بنجاح', 'success');
+            } catch(e) {
+                console.error('PDF Error:', e);
+                toast('خطأ في تصدير PDF', 'error');
+            }
+        }
+
+        // 9) تحديث لوحة SLA باستخدام Canonical
         async function refreshSlaPanel() {
             try {
-                const all = await loadAllIncidentsCached();
+                const all = getCanonicalAll();
                 const daysRange = document.getElementById('hmRange')?.value || '90';
                 
-                const sla = computeSlaCompliance(all, daysRange);
-                const rca = computeRcaCompletion(all, daysRange);
+                const sla = computeSlaComplianceCanonical(all, daysRange);
+                const rca = computeRcaCompletionCanonical(all, daysRange);
                 renderSlaPanel(sla, rca);
             } catch(e) {
                 console.error('SLA Error:', e);
             }
         }
-        
-        // تحديث Heatmap بالفلاتر
-        function refreshHeatmapFiltered() {
-            const days = document.getElementById('hmRange')?.value || 'all';
-            const scope = document.getElementById('hmScope')?.value || 'all';
-            
-            let filtered = allIncidentsGlobal;
-            
-            // فلتر الفترة
-            if (days !== 'all') {
-                filtered = filtered.filter(x => {
-                    const d = parseDateSafe(x.date);
-                    if (!d) return true;
-                    return (Date.now() - d.getTime()) <= (Number(days) * 86400000);
-                });
+
+        // 10) تحديث Executive View الشامل
+        async function refreshExecutiveView(force = false) {
+            try {
+                if (force || !allIncidentsGlobal.length) {
+                    const raw = await loadAllIncidentsCached();
+                    allIncidentsGlobal = raw.map(toCanonical);
+                }
+                
+                const all = getCanonicalAll();
+                
+                // Heatmap
+                const days = document.getElementById('hmRange')?.value || '90';
+                const scope = document.getElementById('hmScope')?.value || 'open';
+                let filtered = all;
+                if (days !== 'all') filtered = filtered.filter(x => withinDaysCanonical(x, days));
+                if (scope === 'open') filtered = filtered.filter(x => x.status !== 'closed');
+                buildIncidentHeatmap(filtered);
+                
+                // Critical Panel
+                const critical = getCriticalIncidents(all);
+                renderCriticalPanel(critical);
+                
+                // RRI + Trend
+                const repeatRows = computeRepeatDeptRiskCanonical(all, days);
+                const trendRows = computeDeptTrendCanonical(all);
+                renderDeptTrendCard(trendRows, repeatRows);
+                
+                // SLA
+                const sla = computeSlaComplianceCanonical(all, days);
+                const rca = computeRcaCompletionCanonical(all, days);
+                renderSlaPanel(sla, rca);
+                
+            } catch(e) {
+                console.error('Executive View Error:', e);
             }
-            
-            // فلتر الحالات المفتوحة فقط
-            if (scope === 'open') {
-                filtered = filtered.filter(x => x.status !== 'closed');
-            }
-            
-            buildIncidentHeatmap(filtered);
-            
-            // تحديث لوحات RRI و Trend
-            const repeatRows = computeRepeatDeptRisk(allIncidentsGlobal, days);
-            const trendRows = computeDeptTrend(allIncidentsGlobal);
-            renderDeptTrendCard(trendRows, repeatRows);
-            
-            toast(`Heatmap: ${filtered.length} حادث | ${scope === 'open' ? 'غير مغلقة' : 'الكل'} | ${days === 'all' ? 'كل الفترات' : 'آخر ' + days + ' يوم'}`, 'success', 3000);
         }
-        
-        // تحديث شامل
-        const originalRefreshExecutiveView = refreshExecutiveView;
-        refreshExecutiveView = async function(force = false) {
-            await originalRefreshExecutiveView(force);
-            await refreshSlaPanel();
-        };
     </script>
 </body>
 </html>
