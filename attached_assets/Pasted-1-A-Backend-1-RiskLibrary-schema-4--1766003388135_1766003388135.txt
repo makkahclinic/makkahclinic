@@ -1,0 +1,231 @@
+1) إصلاحات نهائية ضرورية
+✅ (A) Backend
+1) RiskLibrary schema لازم 4 أعمدة فقط
+
+أنت صححته في آخر نسخة ✅ (Risk | Category | DefaultOwner | DefaultMitigation). ممتاز.
+لكن تأكد الشيت فعلاً بهذا الشكل، وإلا الـ library endpoint يرجع بيانات غلط.
+
+2) تفعيل metrics endpoint موجود ✅
+
+ممتاز.
+
+3) التوافق مع “قيد المعالجة” و “قيد التنفيذ”
+
+انت حاط الاثنين في metrics ✅ ممتاز.
+
+4) حماية write-token (اختياري)
+
+موجود ✅
+
+✅ (B) Frontend (مهم)
+1) saveBadge ما يزال Bug في HTML: الكلاس الأساسي يضيع
+
+أنت صححت setSaveBadge في JS ✅ ممتاز.
+لكن في HTML عندك:
+
+<span id="saveBadge" class="local">
+
+
+وفي CSS أنت كاتب:
+
+#saveBadge.ok { ... }
+
+
+يعني لازم يظل عنصره هو #saveBadge (موجود) تمام، بس الكلاس لازم يكون ok/warn/err/local فقط — الآن تمام.
+
+2) أخطر Bug: useLocalStorage يمنع الإرسال للسيرفر أحياناً
+
+أنت تستخدم:
+
+if (API_URL && !useLocalStorage) { ... }
+
+
+لكن useLocalStorage يتحدد فقط بعد نجاح loadRisks.
+إذا المستخدم حفظ قبل ما يتم loadRisks بنجاح، بيحفظ محلي ويوقف.
+
+✅ الحل: لا تربط الإرسال بـ useLocalStorage
+خلّه: إذا فيه API_URL جرّب السيرفر دائمًا، وإذا فشل احفظ محلي.
+
+3) مشكلة IDs (مهمة جدًا)
+
+في حالة fallback المحلي، أنت تولد R-<timestamp>، لكن إذا بعدين رجعت API اشتغل، ما عندك “مزامنة” لتحويل المحلي إلى سيرفر.
+
+✅ أبسط حل “مليون بالمية”:
+
+إذا السيرفر شغال: لا تنشئ ID محلي
+
+وإذا صار حفظ محلي: خليه يظل محلي فقط (ومكتوب عليه “محلي”) — أو نسوي زر “مزامنة” يرسل كل المحلي للسيرفر (أقدر أضيفه لك).
+
+4) لازم Owner و Risk يصيروا ديناميكية من ?action=master و ?action=library
+
+الآن owner والقسم ثابتين في HTML (وهذا ضد هدفك “تسهيل عليهم”).
+
+✅ هذا أهم تطوير باقي:
+
+عند init: نجيب master/library
+
+نخلي:
+
+owner dropdown من master
+
+riskDesc يصير dropdown من library بدل textarea
+
+عند اختيار risk: auto-fill (category + mitigation + defaultOwner)
+
+2) الباتش النهائي الجاهز (ضعه الآن)
+✅ (1) عدّل شرط الحفظ للسيرفر (احذف useLocalStorage من الشروط)
+
+ابحث في submit عن:
+
+if (API_URL && !useLocalStorage) {
+
+
+واستبدلها بـ:
+
+if (API_URL) {
+
+
+ونفس الشي في deleteRisk.
+
+✅ (2) اجلب Master + Library وعبّي القوائم تلقائيًا
+
+أضف هذه الدوال داخل <script> (قبل init()):
+
+let MASTER = null;
+let LIBRARY = [];
+
+async function loadMasterAndLibrary() {
+  if (!API_URL) return;
+
+  // Master
+  const mRes = await fetch(API_URL + '?action=master');
+  const mData = await mRes.json();
+  if (mData.ok) {
+    MASTER = mData;
+    fillSelect('owner', mData.owners || [], 'اختر المسؤول...');
+  }
+
+  // Library
+  const lRes = await fetch(API_URL + '?action=library');
+  const lData = await lRes.json();
+  if (lData.ok) {
+    LIBRARY = lData.items || [];
+    // نحول textarea إلى dropdown (بدون تغيير HTML كبير)
+    buildRiskDropdown();
+  }
+}
+
+function fillSelect(selectId, items, placeholder) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML =
+    `<option value="">${placeholder}</option>` +
+    items.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if (items.includes(cur)) sel.value = cur;
+}
+
+function buildRiskDropdown() {
+  const textarea = document.getElementById('riskDesc');
+  if (!textarea) return;
+
+  // استبدال textarea بـ select
+  const sel = document.createElement('select');
+  sel.className = textarea.className;
+  sel.id = 'riskDesc';
+
+  sel.innerHTML =
+    `<option value="">اختر الخطر من المكتبة...</option>` +
+    LIBRARY.map(x => `<option value="${escapeHtml(x.risk)}">${escapeHtml(x.risk)}</option>`).join('');
+
+  textarea.parentNode.replaceChild(sel, textarea);
+
+  sel.addEventListener('change', () => autoFillFromLibrary(sel.value));
+}
+
+function autoFillFromLibrary(riskText) {
+  const found = LIBRARY.find(x => x.risk === riskText);
+  if (!found) return;
+
+  // category
+  const cat = document.getElementById('category');
+  if (cat && !cat.value) cat.value = found.category || '';
+
+  // mitigation
+  const mit = document.getElementById('mitigation');
+  if (mit && !mit.value) mit.value = found.defaultMitigation || '';
+
+  // owner (لو فاضي)
+  const owner = document.getElementById('owner');
+  if (owner && !owner.value && found.defaultOwner) owner.value = found.defaultOwner;
+}
+
+function escapeHtml(str){
+  return String(str || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+✅ (3) عدّل init() عشان يحمّل المكتبات أولًا
+
+استبدل init() عندك بهذا:
+
+async function init() {
+  setupRatingButtons();
+
+  if (!API_URL) {
+    document.getElementById('setupBanner').style.display = 'block';
+    loadFromLocalStorage();
+    updateStats(); applyFilters(); renderHeatmap(); checkCriticalAlert();
+    return;
+  }
+
+  try {
+    await loadMasterAndLibrary();   // مهم
+  } catch (e) {
+    // حتى لو فشل، نكمل
+  }
+
+  await loadRisks();
+}
+
+✅ (4) editRisk لازم يراعي إن riskDesc صار select
+
+عند editRisk() بدل:
+
+document.getElementById('riskDesc').value = risk.risk || '';
+
+
+خلّها تشتغل مهما كان textarea أو select (الآن صار select):
+
+const riskEl = document.getElementById('riskDesc');
+if (riskEl) riskEl.value = risk.risk || '';
+
+
+وبعدها نادِ:
+
+autoFillFromLibrary(risk.risk || '');
+
+✅ (5) حفظ على السيرفر: تأكد من قراءة JSON response
+
+أنت أصلاً تقرأ await res.json() ✅ ممتاز.
+
+3) ملاحظة “مليون بالمية” عن RiskLibrary
+
+بما إن الـ backend الآن يتوقع RiskLibrary 4 أعمدة، لازم RiskLibrary يكون:
+
+A: Risk
+B: Category
+C: DefaultOwner
+D: DefaultMitigation
+
+إذا عندك أعمدة زيادة في RiskLibrary، لا مشكلة بس الخلايا من A إلى D لازم تكون صحيحة.
+
+4) بعد هذه الإصلاحات… التقييم
+
+Backend: 99/100
+
+Frontend: 96/100
