@@ -1,0 +1,157 @@
+أهم الملاحظات (لازم تتعدل)
+1) نوع الـ Content-Type في POST (مهم جدًا)
+
+أنت ترسل:
+
+headers: { 'Content-Type': 'application/json' }
+
+
+لكن كثير Web Apps في Apps Script تتعب مع CORS/Preflight بسبب application/json.
+الأكثر استقرارًا (وكنت تستخدمه في أنظمة ثانية) هو:
+
+✅ بدّلها إلى:
+
+headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+
+
+واخلي body نفس JSON.
+
+عدّلها في مكانين: submit + delete.
+
+2) القوائم (Owner + Risks) لازم تكون ديناميكية من الشيت
+
+حاليًا:
+
+Owner dropdown ثابت داخل HTML ❌
+
+Category قائمة ثابتة ❌
+
+Risk تكتبه يدوي في textarea ❌
+
+✅ الأفضل:
+
+Risk يكون Dropdown من RiskLibrary
+
+Owner يكون Dropdown من Master
+
+بعد اختيار Risk → يتعبّى category و mitigation تلقائيًا
+
+هذا أهم إضافة “تسهّل عليهم” فعلًا وتمنع الأخطاء.
+
+3) ناقص حقول سباهي الأساسية
+
+سباهي تحب تشوف:
+
+مصدر الخطر (Evidence/Source): جولة/حادث/تدقيق/شكوى
+
+تاريخ الإضافة
+
+آخر تحديث + من قام بالتحديث
+
+Review cycle (ربع سنوي) + next review واضح
+
+أنت عندك reviewDate بس ناقص SourceEvidence (مرة مهم).
+
+✅ أضف حقل بسيط في الفورم:
+
+Source / Evidence (Dropdown)
+مثال: (Round / Incident / Audit / Complaint / Other)
+
+4) “تم الحفظ ✅” لازم يظهر بوضوح (أنت طلبته قبل)
+
+الـ Toast ممتاز… لكنه يختفي بعد 3 ثواني.
+✅ أضف “Save Status” ثابت في الهيدر:
+
+جاري الحفظ…
+
+تم الحفظ ✅
+
+فشل الحفظ ❌
+
+(مثل اللي سويناه في نسخة risk-register.html الثانية).
+
+5) نقص حماية الوصول (Auth)
+
+حاليًا أي شخص عنده الرابط يقدر:
+
+يضيف/يحذف/يعدل مخاطر ❌
+
+حتى لو مجمع صغير، هذا عند اللجان نقطة حساسة.
+
+✅ أبسط حل:
+
+Passcode بسيط مثل نظام الحوادث
+أو
+
+“Read-only للعرض” و “Write يتطلب كلمة مرور”
+
+تحسينات (Nice-to-have لكنها قوية)
+6) ترتيب وفرز
+
+ضيف:
+
+Sort by Risk Level (حرج أولًا)
+
+Sort by Score
+
+Sort by Status
+
+7) تصدير Excel/PDF
+
+زي نظام الحوادث:
+زر تصدير Excel + PDF للسجل.
+
+8) ربط بالمخاطر المتكررة
+
+لو خطر “حرج” أو “High” → أظهر شريط تنبيه أعلى.
+
+أهم تعديلين أعطيك جاهزين الآن (انسخهم)
+✅ تعديل POST عشان الاستقرار
+
+استبدل في submit/delete:
+
+const res = await fetch(API_URL, {
+  method: 'POST',
+  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  body: JSON.stringify({ action, payload })
+});
+
+
+نفس الفكرة في delete.
+
+✅ إضافة “Save status” ثابت
+
+أضف داخل .header-actions:
+
+<span id="saveBadge" class="btn btn-light" style="cursor:default;">
+  <i class="fas fa-circle"></i> جاهز
+</span>
+
+
+ثم في JS:
+
+function setSaveBadge(type, text){
+  const el = document.getElementById('saveBadge');
+  el.innerHTML = text;
+  el.style.opacity = '1';
+  if (type === 'ok') el.style.borderColor = 'rgba(34,197,94,0.6)';
+  if (type === 'warn') el.style.borderColor = 'rgba(245,158,11,0.6)';
+  if (type === 'err') el.style.borderColor = 'rgba(239,68,68,0.6)';
+}
+
+
+واستخدمها:
+
+قبل الإرسال:
+
+setSaveBadge('warn','<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...');
+
+
+بعد النجاح:
+
+setSaveBadge('ok','<i class="fas fa-circle-check"></i> تم الحفظ ✅');
+
+
+عند الفشل:
+
+setSaveBadge('err','<i class="fas fa-triangle-exclamation"></i> فشل الحفظ');
