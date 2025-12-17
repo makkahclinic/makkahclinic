@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
   <style>
+    /* =========================
+       Base / Reset
+    ========================== */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root{
@@ -21,9 +24,14 @@
       --ink: #111;
       --muted: #666;
       --bg: #f3f6fb;
+
       --shadow-soft: 0 18px 55px rgba(30, 58, 95, 0.14);
       --radius-lg: 26px;
       --radius-md: 18px;
+
+      /* غيّرها لـ A3 لو تبغى */
+      --print-size: A4;
+      --print-margin: 10mm;
     }
 
     html, body{
@@ -34,10 +42,14 @@
     }
 
     body{
+      /* بدل flex (اللي يخبّص الطباعة) */
       display: block;
       padding: 28px;
     }
 
+    /* =========================
+       Poster Layout
+    ========================== */
     .poster-container{
       width: min(920px, 100%);
       margin: 0 auto;
@@ -237,7 +249,7 @@
       height: 150px;
       border-radius: 10px;
       display: block;
-      image-rendering: pixelated;
+      image-rendering: pixelated; /* يساعد شوي في وضوح QR */
     }
 
     .qr-link{
@@ -290,6 +302,7 @@
       font-weight: 800;
     }
 
+    /* زر الطباعة */
     .print-btn{
       position: fixed;
       bottom: 22px;
@@ -310,6 +323,7 @@
       gap: 10px;
     }
 
+    /* Responsive */
     @media (max-width: 900px){
       .qr-grid{ grid-template-columns: repeat(2, 1fr); }
       .poster-body{ padding: 26px 18px 22px; }
@@ -321,17 +335,19 @@
       .clinic-name{ font-size: 26px; }
     }
 
+    /* =========================
+       Print (المهم!)
+    ========================== */
     @page{
-      size: A4;
-      margin: 6mm;
+      size: var(--print-size);
+      margin: var(--print-margin);
     }
 
     @media print{
+      /* لازم لتطبع الألوان والخلفيات في كروم */
       *{
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
-        animation: none !important;
-        transition: none !important;
       }
 
       html, body{
@@ -342,7 +358,9 @@
         padding: 0 !important;
       }
 
-      .print-btn{ display:none !important; }
+      .print-btn{
+        display: none !important;
+      }
 
       .poster-container{
         width: 100% !important;
@@ -350,43 +368,41 @@
         margin: 0 !important;
         border-radius: 0 !important;
         box-shadow: none !important;
-        transform: scale(0.88) !important;
-        transform-origin: top center !important;
+        border: 1px solid rgba(0,0,0,0.10) !important;
       }
 
-      .poster-header{ padding: 22px 18px !important; }
-      .poster-body{ padding: 18px 18px 14px !important; }
-      .section-title{ margin-bottom: 10px !important; }
-      .scan-badge{ margin: 8px auto 12px !important; padding: 10px 14px !important; }
-
-      .qr-grid{
-        grid-template-columns: repeat(3, 1fr) !important;
-        gap: 10px !important;
+      /* إلغاء أي حركة/تأثيرات */
+      *{
+        animation: none !important;
+        transition: none !important;
       }
 
-      .qr-card{
-        padding: 14px 10px 10px !important;
-        min-height: 0 !important;
-        box-shadow: none !important;
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
-      }
-
-      .qr-code-wrapper{ padding: 8px !important; }
-      .qr-code-wrapper img{
-        width: 120px !important;
-        height: 120px !important;
-      }
-
-      .clinic-name{ font-size: 26px !important; }
-      .section-title h2{ font-size: 22px !important; }
-      .qr-title{ font-size: 18px !important; }
-      .qr-desc{ font-size: 12px !important; margin-bottom: 10px !important; }
-      .footer-text{ font-size: 12px !important; }
-
+      /* تقليل ظلال العناصر لأنها تشوه الطباعة */
       .qr-card,
       .logo-img{
         box-shadow: none !important;
+      }
+
+      /* تثبيت شبكة 3 أعمدة للطباعة */
+      .qr-grid{
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 14px !important;
+      }
+
+      .qr-card{
+        min-height: 0 !important;
+        padding: 18px 14px 14px !important;
+      }
+
+      .qr-code-wrapper img{
+        width: 140px !important;
+        height: 140px !important;
+      }
+
+      /* منع انقسام الكروت بين صفحات */
+      .qr-card{
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
       }
     }
   </style>
@@ -430,6 +446,7 @@
       </div>
 
       <section class="qr-grid">
+        <!-- Complaints -->
         <article class="qr-card complaints">
           <div class="qr-icon"><i class="fas fa-comment-dots"></i></div>
           <h3 class="qr-title">الشكاوى والمقترحات</h3>
@@ -445,6 +462,7 @@
           </div>
         </article>
 
+        <!-- Incidents -->
         <article class="qr-card incidents">
           <div class="qr-icon"><i class="fas fa-triangle-exclamation"></i></div>
           <h3 class="qr-title">الإبلاغ عن الحوادث</h3>
@@ -460,6 +478,7 @@
           </div>
         </article>
 
+        <!-- Needlestick -->
         <article class="qr-card needlestick">
           <div class="qr-icon"><i class="fas fa-syringe"></i></div>
           <h3 class="qr-title">التعرض الوخزي</h3>
@@ -481,34 +500,38 @@
       <div class="footer-content">
         <i class="fas fa-shield-heart footer-icon"></i>
         <span class="footer-text">
-          سلامتكم أولويتنا | جميع البلاغات <span class="footer-highlight">سرية</span> ويتم التعامل معها بجدية تامة
+          <span class="footer-highlight">سلامتكم أولويتنا</span>
+          | جميع البلاغات سرية ويتم التعامل معها بجدية تامة
         </span>
-        <div class="footer-badge">
+        <span class="footer-badge">
           <i class="fas fa-lock"></i>
           <span>بلاغ آمن وسري</span>
-        </div>
+        </span>
       </div>
     </footer>
   </div>
 
   <button class="print-btn" onclick="window.print()">
     <i class="fas fa-print"></i>
-    <span>طباعة البوستر</span>
+    طباعة البوستر
   </button>
 
   <script>
-    const BASE = 'https://www.m2020m.org';
-    const qrSize = 200;
+    const BASE_URL = "https://m2020m.org";
 
     function generateQR(elementId, url, color) {
-      const encoded = encodeURIComponent(url);
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encoded}&color=${color}&bgcolor=f5f5f5`;
-      document.getElementById(elementId).src = qrUrl;
+      const encodedUrl = encodeURIComponent(url);
+      const qrApiUrl =
+        `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodedUrl}` +
+        `&color=${color}&bgcolor=ffffff&format=png&margin=10`;
+      document.getElementById(elementId).src = qrApiUrl;
     }
 
-    generateQR('qr-complaints', `${BASE}/report.html`, 'c9a962');
-    generateQR('qr-incidents', `${BASE}/incident-report.html`, 'DC143C');
-    generateQR('qr-needlestick', `${BASE}/ipc/incidents/report-needlestick.html`, '7B1E24');
+    document.addEventListener("DOMContentLoaded", () => {
+      generateQR("qr-complaints", `${BASE_URL}/report.html`, "c9a962");
+      generateQR("qr-incidents", `${BASE_URL}/incident-report.html`, "DC143C");
+      generateQR("qr-needlestick", `${BASE_URL}/ipc/incidents/report-needlestick.html`, "7B1E24");
+    });
   </script>
 </body>
 </html>
