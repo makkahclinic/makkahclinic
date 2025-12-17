@@ -504,7 +504,7 @@
                 <button class="btn btn-gold" onclick="refreshData()">
                     <i class="fas fa-sync-alt"></i> تحديث
                 </button>
-                <a href="report-needlestick.html" class="btn btn-outline">
+                <a href="ipc/incidents/report-needlestick.html" class="btn btn-outline">
                     <i class="fas fa-plus"></i> بلاغ جديد
                 </a>
             </div>
@@ -695,24 +695,36 @@
             if (e.key === 'Enter') checkAccess();
         });
         
-        async function loadData() {
-            try {
-                const res = await fetch(`${WEB_APP_URL}?action=data&callback=cb_${Date.now()}`);
-                const text = await res.text();
-                const match = text.match(/\((.*)\)$/);
-                if (!match) throw new Error('Invalid response');
+        function loadData() {
+            const callbackName = 'jsonpCallback_' + Date.now();
+            
+            window[callbackName] = function(data) {
+                delete window[callbackName];
+                document.getElementById('jsonpScript')?.remove();
                 
-                const data = JSON.parse(match[1]);
-                if (data.status === 'success' && data.rows) {
+                if (data && data.status === 'success' && data.rows) {
                     allData = data.rows;
                     updateDashboard();
                 } else {
                     showNoData();
                 }
-            } catch (err) {
-                console.error('Error loading data:', err);
+            };
+            
+            const script = document.createElement('script');
+            script.id = 'jsonpScript';
+            script.src = `${WEB_APP_URL}?action=data&callback=${callbackName}`;
+            script.onerror = function() {
+                console.error('Error loading data');
                 showNoData();
-            }
+            };
+            document.body.appendChild(script);
+            
+            setTimeout(() => {
+                if (window[callbackName]) {
+                    delete window[callbackName];
+                    showNoData();
+                }
+            }, 15000);
         }
         
         function showNoData() {
@@ -854,6 +866,8 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '60%',
                     plugins: {
                         legend: { position: 'bottom' }
                     }
