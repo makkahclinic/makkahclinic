@@ -1,757 +1,913 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>سجل المخاطر - مجمع مكة الطبي</title>
-
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-  <style>
-    :root{
-      --navy:#0f1b2d;
-      --blue:#0056A3;
-      --crimson:#7d0024;
-      --gold:#d4af37;
-      --bg:#f5f7fb;
-      --card:#ffffff;
-      --ink:#0b1220;
-      --muted:#5b6575;
-      --line:rgba(15,27,45,.10);
-      --shadow:0 14px 40px rgba(15,27,45,.08);
-      --radius:16px;
-
-      --low:#28a745;
-      --med:#ffc107;
-      --high:#fd7e14;
-      --ext:#dc3545;
-    }
-
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{
-      font-family:"Tajawal",sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-      line-height:1.6;
-    }
-    .container{max-width:1200px;margin:0 auto;padding:18px}
-
-    .header{
-      background: linear-gradient(135deg, var(--navy), #13284b);
-      color:#fff;
-      border-radius: 18px;
-      overflow:hidden;
-      box-shadow: var(--shadow);
-      position:relative;
-      margin-bottom:14px;
-    }
-    .header::before{
-      content:"";
-      position:absolute; inset:0 0 auto 0; height:6px;
-      background: linear-gradient(90deg, var(--gold), var(--crimson), var(--gold));
-    }
-    .header-inner{
-      padding:14px 16px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      flex-wrap:wrap;
-    }
-    .brand{display:flex;align-items:center;gap:12px;min-width:280px}
-    .logo{
-      width:56px;height:56px;border-radius:14px;background:#fff;
-      border:2px solid rgba(212,175,55,.55);
-      overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;
-    }
-    .logo img{width:100%;height:100%;object-fit:contain;padding:6px}
-    .brand h1{font-family:"Cairo",sans-serif;font-weight:900;font-size:18px;margin-bottom:2px}
-    .brand p{opacity:.88;font-weight:700;font-size:12px}
-
-    .meta{
-      display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end
-    }
-    .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:8px 12px;border-radius:999px;
-      background: rgba(255,255,255,.10);
-      border:1px solid rgba(255,255,255,.16);
-      font-weight:800;font-size:12px;white-space:nowrap;
-    }
-    .pill i{color:var(--gold)}
-    .pill .muted{opacity:.85;font-weight:700}
-
-    .banner{
-      padding:10px 16px 14px;
-      border-top: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.04);
-      display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;
-    }
-    .badge{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:7px 10px;border-radius:12px;
-      background: rgba(212,175,55,.14);
-      border:1px solid rgba(212,175,55,.28);
-      font-weight:900;font-size:12px;
-    }
-    .banner .text{flex:1;opacity:.93;font-weight:700;font-size:12px;min-width:260px}
-
-    .card{
-      background:var(--card);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    .card-head{
-      padding:12px 14px;
-      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
-      border-bottom:1px solid var(--line);
-      background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-    }
-    .title{
-      font-family:"Cairo",sans-serif;
-      font-weight:900;
-      font-size:14px;
-      display:flex;align-items:center;gap:10px;
-    }
-    .title i{color:var(--gold)}
-    .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-
-    .btn{
-      border:0;
-      cursor:pointer;
-      padding:10px 12px;
-      border-radius:12px;
-      font-family:"Tajawal",sans-serif;
-      font-weight:900;
-      font-size:12px;
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      transition:.15s;
-    }
-    .btn:hover{transform: translateY(-1px)}
-    .btn-primary{background: var(--blue); color:#fff}
-    .btn-light{background: #eef2ff; color:#1e3a5f; border:1px solid rgba(15,27,45,.10)}
-    .btn-danger{background: var(--ext); color:#fff}
-    .btn-gray{background:#f1f3f5;color:#333;border:1px solid rgba(0,0,0,.07)}
-
-    .sync-pill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:8px 10px;border-radius:999px;
-      background:#f8fafc;border:1px solid rgba(15,27,45,.10);
-      color:#1e3a5f;font-weight:900;font-size:12px;
-    }
-    .sync-pill.ok{ background: rgba(40,167,69,.12); border-color: rgba(40,167,69,.25); color:#1d7a35; }
-    .sync-pill.warn{ background: rgba(255,193,7,.18); border-color: rgba(255,193,7,.30); color:#7a5a00; }
-    .sync-pill.err{ background: rgba(220,53,69,.12); border-color: rgba(220,53,69,.25); color:#b10014; }
-
-    .filters{
-      padding:12px 14px;
-      display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap:10px;
-      border-bottom:1px solid var(--line);
-    }
-    .field label{display:block;font-size:11px;font-weight:900;color:var(--muted);margin-bottom:5px}
-    .field input,.field select{
-      width:100%;
-      padding:10px 10px;
-      border-radius:12px;
-      border:1px solid rgba(15,27,45,.12);
-      font-family:"Tajawal",sans-serif;
-      background:#fff;
-    }
-
-    .table-wrap{overflow:auto}
-    table{width:100%;border-collapse:collapse;min-width:1150px}
-    th,td{padding:10px 10px;border-bottom:1px solid rgba(15,27,45,.08);text-align:right;vertical-align:top}
-    th{
-      background:#f6f8ff;
-      color:#1e3a5f;
-      font-weight:900;
-      white-space:nowrap;
-      position:sticky;
-      top:0;
-      z-index:1;
-    }
-    tr:hover{background:#fbfcff}
-
-    .chip{
-      display:inline-flex;align-items:center;gap:6px;
-      padding:4px 10px;border-radius:999px;
-      font-size:11px;font-weight:900;white-space:nowrap;
-      border:1px solid transparent;
-    }
-    .low{background: rgba(40,167,69,.12); color:#1d7a35; border-color: rgba(40,167,69,.25)}
-    .med{background: rgba(255,193,7,.22); color:#7a5a00; border-color: rgba(255,193,7,.35)}
-    .high{background: rgba(253,126,20,.18); color:#8a3f00; border-color: rgba(253,126,20,.30)}
-    .ext{background: rgba(220,53,69,.14); color:#b10014; border-color: rgba(220,53,69,.28)}
-
-    .score{
-      font-family:"Cairo",sans-serif;
-      font-weight:900;
-      font-size:14px;
-      text-align:center;
-      min-width:50px;
-    }
-
-    .edit{
-      width:100%;
-      border:1px dashed rgba(15,27,45,.20);
-      background:#fff;
-      border-radius:10px;
-      padding:8px 8px;
-      font-family:"Tajawal",sans-serif;
-      font-size:12px;
-    }
-
-    .footer-note{
-      padding:12px 14px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      flex-wrap:wrap;
-      color: var(--muted);
-      font-size:11px;
-      font-weight:800;
-      border-top:1px solid var(--line);
-      background:#fff;
-    }
-
-    .loading{
-      padding:26px;
-      text-align:center;
-      color: var(--muted);
-      font-weight:800;
-    }
-    .loading i{font-size:22px;margin-bottom:8px}
-
-    @media print{
-      body{background:#fff}
-      .container{max-width:100%;padding:0}
-      .btn{display:none !important}
-      .filters{display:none !important}
-      .sync-pill{display:none !important}
-      .header{border-radius:0;box-shadow:none}
-      .card{box-shadow:none;border-radius:0}
-      table{min-width:0}
-      th{position:static}
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سجل المخاطر - Risk Register</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --navy: #1e3a5f;
+            --navy-dark: #0f2744;
+            --gold: #c9a962;
+            --crimson: #DC143C;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --gray: #64748b;
+            --gray-light: #f1f5f9;
+            --ext: #7f1d1d;
+            --high: #dc2626;
+            --med: #f59e0b;
+            --low: #22c55e;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            border-bottom: 3px solid var(--gold);
+        }
+        
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .header-title i { font-size: 2rem; color: var(--gold); }
+        .header-title h1 { font-family: 'Cairo', sans-serif; font-size: 1.5rem; font-weight: 800; }
+        .header-title small { opacity: 0.8; font-size: 0.85rem; }
+        
+        .header-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .btn-primary { background: var(--info); color: #fff; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-success:hover { background: #059669; }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-light { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+        .btn-light:hover { background: rgba(255,255,255,0.25); }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+        }
+        
+        .stat-card.ext::before { background: var(--ext); }
+        .stat-card.high::before { background: var(--high); }
+        .stat-card.med::before { background: var(--med); }
+        .stat-card.low::before { background: var(--low); }
+        .stat-card.total::before { background: var(--gold); }
+        
+        .stat-value { font-size: 2.5rem; font-weight: 900; font-family: 'Cairo', sans-serif; }
+        .stat-label { font-size: 0.85rem; opacity: 0.8; margin-top: 0.25rem; }
+        
+        .stat-card.ext .stat-value { color: #fca5a5; }
+        .stat-card.high .stat-value { color: #fca5a5; }
+        .stat-card.med .stat-value { color: #fcd34d; }
+        .stat-card.low .stat-value { color: #86efac; }
+        .stat-card.total .stat-value { color: var(--gold); }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 1.5rem;
+        }
+        
+        @media (max-width: 1000px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: rgba(255,255,255,0.05);
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        
+        .card-header h3 {
+            font-family: 'Cairo', sans-serif;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .card-header h3 i { color: var(--gold); }
+        
+        .card-body { padding: 1.25rem; }
+        
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 700; margin-bottom: 0.4rem; font-size: 0.9rem; }
+        .form-label .required { color: var(--danger); }
+        
+        .form-control {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--gold);
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .form-control option { background: #1e293b; color: #fff; }
+        
+        textarea.form-control { min-height: 80px; resize: vertical; }
+        
+        .rating-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .rating-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        
+        .rating-box label { display: block; font-weight: 700; margin-bottom: 0.5rem; font-size: 0.85rem; }
+        
+        .rating-btns { display: flex; gap: 0.3rem; justify-content: center; }
+        
+        .rating-btn {
+            width: 36px;
+            height: 36px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: transparent;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .rating-btn:hover { border-color: var(--gold); }
+        .rating-btn.active { background: var(--gold); border-color: var(--gold); color: #000; }
+        
+        .score-display {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+        }
+        
+        .score-display.ext { background: rgba(127,29,29,0.3); border: 2px solid var(--ext); color: #fca5a5; }
+        .score-display.high { background: rgba(220,38,38,0.2); border: 2px solid var(--high); color: #fca5a5; }
+        .score-display.med { background: rgba(245,158,11,0.2); border: 2px solid var(--med); color: #fcd34d; }
+        .score-display.low { background: rgba(34,197,94,0.2); border: 2px solid var(--low); color: #86efac; }
+        
+        .filters-bar {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        
+        .filter-select {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.85rem;
+            min-width: 140px;
+        }
+        
+        .filter-select option { background: #1e293b; }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: right;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        
+        th {
+            background: rgba(255,255,255,0.05);
+            font-weight: 800;
+            font-size: 0.8rem;
+            color: var(--gold);
+            white-space: nowrap;
+        }
+        
+        tr:hover { background: rgba(255,255,255,0.03); }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        
+        .badge-ext { background: var(--ext); color: #fff; }
+        .badge-high { background: var(--high); color: #fff; }
+        .badge-med { background: var(--med); color: #000; }
+        .badge-low { background: var(--low); color: #000; }
+        
+        .badge-open { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+        .badge-progress { background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.4); }
+        .badge-closed { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.4); }
+        
+        .action-btns { display: flex; gap: 0.3rem; }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gold);
+        }
+        
+        .loading i { font-size: 2rem; animation: spin 1s linear infinite; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .empty-state i { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
+        
+        .heatmap-section {
+            margin-top: 1.5rem;
+        }
+        
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: 40px repeat(5, 1fr);
+            gap: 4px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .heatmap-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 0.9rem;
+        }
+        
+        .heatmap-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: rgba(255,255,255,0.6);
+        }
+        
+        .heatmap-header {
+            text-align: center;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            padding: 0.25rem;
+        }
+        
+        .cell-ext { background: var(--ext); color: #fff; }
+        .cell-high { background: var(--high); color: #fff; }
+        .cell-med { background: var(--med); color: #000; }
+        .cell-low { background: var(--low); color: #000; }
+        
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 700;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { background: var(--success); color: #fff; }
+        .toast.error { background: var(--danger); color: #fff; }
+        
+        .risk-text { max-width: 200px; }
+    </style>
 </head>
-
 <body>
-  <div class="container">
-
-    <div class="header">
-      <div class="header-inner">
-        <div class="brand">
-          <div class="logo">
-            <img src="logo-new.png" alt="شعار مجمع مكة الطبي">
-          </div>
-          <div>
-            <h1>سجل المخاطر الرسمي (Risk Register)</h1>
-            <p>مجمع مكة الطبي بالزاهر — برنامج إدارة المخاطر (Proactive)</p>
-          </div>
+    <header class="header">
+        <div class="header-title">
+            <i class="fas fa-shield-virus"></i>
+            <div>
+                <h1>سجل المخاطر - Risk Register</h1>
+                <small>إدارة المخاطر - مجمع مكة الطبي بالزاهر</small>
+            </div>
         </div>
-
-        <div class="meta">
-          <div class="pill"><i class="fas fa-shield-check"></i><strong>RM</strong><span class="muted">إدارة المخاطر</span></div>
-          <div class="pill"><i class="fas fa-calendar-check"></i><strong>مراجعة</strong><span class="muted" id="reviewCycle">ربع سنوي</span></div>
-          <div class="pill"><i class="fas fa-clock"></i><strong>آخر تحديث</strong><span class="muted" id="lastUpdated">—</span></div>
-        </div>
-      </div>
-
-      <div class="banner">
-        <span class="badge"><i class="fas fa-circle-info"></i> توجيه سباهي</span>
-        <div class="text">
-          هذا السجل يركز على المخاطر الاستباقية (Proactive). يتم تحديثه عند ظهور مخاطر جديدة أو بعد أي حادث/شبه حادث/تدقيق داخلي، ويُراجع في اجتماع لجنة RM ربع سنويًا.
-        </div>
-      </div>
-    </div>
-
-    <div class="card" id="printArea">
-      <div class="card-head">
-        <div class="title"><i class="fas fa-list-check"></i> سجل المخاطر</div>
-
-        <div class="actions">
-          <span id="syncState" class="sync-pill warn"><i class="fas fa-cloud"></i> غير متصل بعد</span>
-
-          <button class="btn btn-light" onclick="reloadFromSheet()"><i class="fas fa-rotate"></i> تحديث</button>
-          <button class="btn btn-light" onclick="addRow()"><i class="fas fa-plus"></i> إضافة خطر</button>
-          <button class="btn btn-gray" onclick="resetDefaultsOnSheet()"><i class="fas fa-rotate-left"></i> استعادة نموذج</button>
-
-          <button class="btn btn-light" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
-          <button class="btn btn-light" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Excel</button>
-          <button class="btn btn-primary" onclick="exportPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
-        </div>
-      </div>
-
-      <div class="filters">
-        <div class="field">
-          <label>فلترة حسب اللجنة/القسم</label>
-          <select id="filterDept" onchange="render()">
-            <option value="all">الكل</option>
-            <option value="RM">RM</option>
-            <option value="PSC">PSC</option>
-            <option value="IPC">IPC</option>
-            <option value="FMS">FMS</option>
-            <option value="QI">QI</option>
-            <option value="EOC">EOC</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>مستوى الخطر</label>
-          <select id="filterLevel" onchange="render()">
-            <option value="all">الكل</option>
-            <option value="ext">حرج</option>
-            <option value="high">عالي</option>
-            <option value="med">متوسط</option>
-            <option value="low">منخفض</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>بحث (عنوان/وصف)</label>
-          <input id="filterText" oninput="render()" placeholder="اكتب كلمة..." />
-        </div>
-        <div class="field">
-          <label>اسم المُراجع/المُعد (UpdatedBy)</label>
-          <input id="preparedBy" placeholder="مثال: حسين / خالد / ..." />
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>الخطر (Risk)</th>
-              <th>التصنيف</th>
-              <th>المالك/المسؤول</th>
-              <th>الاحتمالية (1-5)</th>
-              <th>الأثر (1-5)</th>
-              <th>الدرجة</th>
-              <th>المستوى</th>
-              <th>الإجراء/التحكم (Mitigation)</th>
-              <th>الحالة</th>
-              <th>تاريخ المراجعة</th>
-              <th>إجراء</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="12" class="loading"><i class="fas fa-spinner fa-spin"></i><div>جاري تحميل البيانات من الشيت...</div></td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="footer-note">
-        <div>ملاحظة: الدرجة = الاحتمالية × الأثر. حرج ≥ 16 | عالي 12-15 | متوسط 6-11 | منخفض ≤ 5</div>
-        <div>Prepared/Updated by: <span id="preparedByView">—</span></div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    /* =======================
-       API (Google Apps Script)
-       ======================= */
-    const API_URL = "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec";
-
-    async function apiList() {
-      const res = await fetch(`${API_URL}?action=list`);
-      return await res.json();
-    }
-
-    async function apiPost(action, payload) {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action, payload })
-      });
-      return await res.json();
-    }
-
-    /* =======================
-       Default seed (used only when you click "استعادة نموذج")
-       ======================= */
-    const DEFAULT_ROWS = [
-      { risk:"انقطاع كهرباء أثناء التشغيل", category:"EOC/FMS", owner:"الصيانة", probability:3, impact:5, mitigation:"فحص مولد/UPS + خطة بديلة + اختبار شهري", status:"مفتوح", reviewDate:"" },
-      { risk:"تأخر التعامل مع حادث/شبه حادث", category:"PSC", owner:"منسق سلامة المرضى", probability:3, impact:4, mitigation:"SLA للاستجابة + تصعيد + تدريب", status:"مفتوح", reviewDate:"" },
-      { risk:"وخز إبر/تعرض دموي", category:"IPC", owner:"منسق مكافحة العدوى", probability:3, impact:4, mitigation:"PPE + إبر آمنة + بروتوكول ما بعد التعرض + متابعة", status:"مفتوح", reviewDate:"" },
-      { risk:"فشل حفظ بيانات/انقطاع نظام إلكتروني", category:"RM/QI", owner:"الدعم التقني", probability:2, impact:4, mitigation:"نسخ احتياطي + مراقبة + خطة استمرارية", status:"مفتوح", reviewDate:"" },
-      { risk:"أخطاء تعريف المريض/ملف المريض", category:"PSC", owner:"الاستقبال/التمريض", probability:2, impact:5, mitigation:"معرّفين + تدقيق عشوائي + تدريب", status:"مفتوح", reviewDate:"" },
-      { risk:"مخاطر حريق/إخلاء", category:"EOC/FMS", owner:"السلامة", probability:2, impact:5, mitigation:"خطة إخلاء + تدريب سنوي + طفايات وفحص شهري", status:"مفتوح", reviewDate:"" },
-      { risk:"أدوية منتهية/إدارة صلاحيات", category:"RM/PH", owner:"الصيدلية", probability:2, impact:4, mitigation:"فحص دوري + فصل منتهية + سجل إتلاف", status:"مفتوح", reviewDate:"" }
-    ];
-
-    /* =======================
-       Helpers
-       ======================= */
-    function setSync(state, text) {
-      const el = document.getElementById("syncState");
-      el.classList.remove("ok","warn","err");
-      el.classList.add(state);
-      el.innerHTML = text;
-    }
-
-    function escapeHtml(str){
-      return String(str || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    function clamp(n, min, max){
-      n = Number(n);
-      if (Number.isNaN(n)) n = min;
-      return Math.max(min, Math.min(max, n));
-    }
-
-    function scoreLevel(score){
-      if (score >= 16) return { key:"ext", label:"حرج", cls:"ext" };
-      if (score >= 12) return { key:"high", label:"عالي", cls:"high" };
-      if (score >= 6)  return { key:"med", label:"متوسط", cls:"med" };
-      return { key:"low", label:"منخفض", cls:"low" };
-    }
-
-    function updateLastUpdated(){
-      const now = new Date();
-      const fmt = new Intl.DateTimeFormat('ar-SA', { dateStyle: 'medium' }).format(now);
-      document.getElementById("lastUpdated").textContent = fmt;
-    }
-
-    function getUpdatedBy(){
-      const v = (document.getElementById("preparedBy").value || "").trim();
-      return v || "system";
-    }
-
-    /* =======================
-       State
-       ======================= */
-    let rows = []; // items from sheet
-    let saveTimers = new Map(); // debounce per row id
-
-    /* =======================
-       Load / Render
-       ======================= */
-    async function reloadFromSheet() {
-      try {
-        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> جاري الاتصال...');
-        const data = await apiList();
-        if (!data.ok) throw new Error(data.error || "API list failed");
-
-        rows = (data.items || []).map(x => ({
-          id: x.id,
-          risk: x.risk || "",
-          category: x.category || "",
-          owner: x.owner || "",
-          probability: clamp(x.probability, 1, 5),
-          impact: clamp(x.impact, 1, 5),
-          mitigation: x.mitigation || "",
-          status: x.status || "مفتوح",
-          reviewDate: x.reviewDate || ""
-        }));
-
-        setSync("ok", '<i class="fas fa-cloud-check"></i> متصل بالشيت');
-        updateLastUpdated();
-        render();
-      } catch (e) {
-        console.error(e);
-        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الاتصال');
-        document.getElementById("tbody").innerHTML =
-          `<tr><td colspan="12" class="loading"><i class="fas fa-triangle-exclamation"></i><div>تعذر تحميل البيانات من الشيت</div><div style="margin-top:6px;font-weight:700;opacity:.85">${escapeHtml(e.message || '')}</div></td></tr>`;
-      }
-    }
-
-    function render(){
-      const tbody = document.getElementById("tbody");
-      const dept = document.getElementById("filterDept").value;
-      const level = document.getElementById("filterLevel").value;
-      const text = (document.getElementById("filterText").value || "").trim().toLowerCase();
-
-      document.getElementById("preparedByView").textContent = (document.getElementById("preparedBy").value || "").trim() || "—";
-
-      tbody.innerHTML = "";
-
-      const filtered = rows.map((r, idx) => ({...r, _idx: idx})).filter(r => {
-        const score = r.probability * r.impact;
-        const lvl = scoreLevel(score).key;
-        const okDept = dept === "all" ? true : (r.category || "").includes(dept);
-        const okLvl = level === "all" ? true : (lvl === level);
-        const okText = !text ? true : ((r.risk || "").toLowerCase().includes(text) || (r.mitigation || "").toLowerCase().includes(text));
-        return okDept && okLvl && okText;
-      });
-
-      if (!filtered.length) {
-        tbody.innerHTML = `<tr><td colspan="12" class="loading"><i class="fas fa-inbox"></i><div>لا توجد نتائج</div></td></tr>`;
-        return;
-      }
-
-      filtered.forEach((r, viewIndex) => {
-        const p = clamp(r.probability, 1, 5);
-        const i = clamp(r.impact, 1, 5);
-        const score = p * i;
-        const lvl = scoreLevel(score);
-
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${viewIndex + 1}</strong></td>
-
-          <td><input class="edit" value="${escapeHtml(r.risk)}"
-              oninput="onEdit(${r._idx}, 'risk', this.value)" /></td>
-
-          <td><input class="edit" value="${escapeHtml(r.category)}"
-              placeholder="RM/PSC/IPC/FMS/QI/EOC..."
-              oninput="onEdit(${r._idx}, 'category', this.value)" /></td>
-
-          <td><input class="edit" value="${escapeHtml(r.owner)}"
-              oninput="onEdit(${r._idx}, 'owner', this.value)" /></td>
-
-          <td>
-            <select class="edit" onchange="onEdit(${r._idx}, 'probability', this.value)">
-              ${[1,2,3,4,5].map(n => `<option value="${n}" ${p===n?'selected':''}>${n}</option>`).join("")}
-            </select>
-          </td>
-
-          <td>
-            <select class="edit" onchange="onEdit(${r._idx}, 'impact', this.value)">
-              ${[1,2,3,4,5].map(n => `<option value="${n}" ${i===n?'selected':''}>${n}</option>`).join("")}
-            </select>
-          </td>
-
-          <td class="score">${score}</td>
-
-          <td><span class="chip ${lvl.cls}"><i class="fas fa-circle"></i> ${lvl.label}</span></td>
-
-          <td><input class="edit" value="${escapeHtml(r.mitigation)}"
-              oninput="onEdit(${r._idx}, 'mitigation', this.value)" /></td>
-
-          <td>
-            <select class="edit" onchange="onEdit(${r._idx}, 'status', this.value)">
-              ${["مفتوح","قيد التنفيذ","مغلق"].map(s => `<option ${r.status===s?'selected':''}>${s}</option>`).join("")}
-            </select>
-          </td>
-
-          <td><input class="edit" type="date" value="${escapeHtml(r.reviewDate)}"
-              oninput="onEdit(${r._idx}, 'reviewDate', this.value)" /></td>
-
-          <td>
-            <button class="btn btn-danger" onclick="deleteRow(${r._idx})" title="حذف">
-              <i class="fas fa-trash"></i>
+        <div class="header-actions">
+            <button class="btn btn-light" onclick="loadRisks()">
+                <i class="fas fa-sync"></i> تحديث
             </button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
+            <a href="incident-report-analysis.html" class="btn btn-light">
+                <i class="fas fa-chart-pie"></i> تحليل الحوادث
+            </a>
+            <a href="mega.html" class="btn btn-light">
+                <i class="fas fa-home"></i> المركز الرقمي
+            </a>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card total">
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">إجمالي المخاطر</div>
+            </div>
+            <div class="stat-card ext">
+                <div class="stat-value" id="statExt">0</div>
+                <div class="stat-label">حرج (16-25)</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-value" id="statHigh">0</div>
+                <div class="stat-label">عالي (12-15)</div>
+            </div>
+            <div class="stat-card med">
+                <div class="stat-value" id="statMed">0</div>
+                <div class="stat-label">متوسط (6-11)</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-value" id="statLow">0</div>
+                <div class="stat-label">منخفض (1-5)</div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-plus-circle"></i> <span id="formTitle">إضافة خطر جديد</span></h3>
+                </div>
+                <div class="card-body">
+                    <form id="riskForm">
+                        <input type="hidden" id="editId">
+                        
+                        <div class="form-group">
+                            <label class="form-label">وصف الخطر <span class="required">*</span></label>
+                            <textarea class="form-control" id="riskDesc" placeholder="وصف تفصيلي للخطر..." required></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">التصنيف <span class="required">*</span></label>
+                            <select class="form-control" id="category" required>
+                                <option value="">اختر التصنيف...</option>
+                                <option value="FMS">FMS - إدارة المرافق</option>
+                                <option value="PSC">PSC - سلامة المرضى</option>
+                                <option value="IPC">IPC - مكافحة العدوى</option>
+                                <option value="EOC">EOC - الطوارئ والكوارث</option>
+                                <option value="RM">RM - إدارة المخاطر</option>
+                                <option value="QI">QI - تحسين الجودة</option>
+                                <option value="LD">LD - القيادة والحوكمة</option>
+                                <option value="HR">HR - الموارد البشرية</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">المالك/المسؤول</label>
+                            <select class="form-control" id="owner">
+                                <option value="">اختر المسؤول...</option>
+                                <option value="د.خالد الخطاب">د.خالد الخطاب</option>
+                                <option value="صابر عبده">صابر عبده</option>
+                                <option value="بلال نذر">بلال نذر</option>
+                                <option value="عدنان الرفاعي">عدنان الرفاعي</option>
+                                <option value="هيثم">هيثم</option>
+                                <option value="منسق سلامة المرضى">منسق سلامة المرضى</option>
+                                <option value="الإدارة">الإدارة</option>
+                            </select>
+                        </div>
+                        
+                        <div class="rating-grid">
+                            <div class="rating-box">
+                                <label>الاحتمالية</label>
+                                <div class="rating-btns" id="probBtns">
+                                    <button type="button" class="rating-btn" data-val="1">1</button>
+                                    <button type="button" class="rating-btn" data-val="2">2</button>
+                                    <button type="button" class="rating-btn active" data-val="3">3</button>
+                                    <button type="button" class="rating-btn" data-val="4">4</button>
+                                    <button type="button" class="rating-btn" data-val="5">5</button>
+                                </div>
+                            </div>
+                            <div class="rating-box">
+                                <label>الأثر</label>
+                                <div class="rating-btns" id="impactBtns">
+                                    <button type="button" class="rating-btn" data-val="1">1</button>
+                                    <button type="button" class="rating-btn" data-val="2">2</button>
+                                    <button type="button" class="rating-btn active" data-val="3">3</button>
+                                    <button type="button" class="rating-btn" data-val="4">4</button>
+                                    <button type="button" class="rating-btn" data-val="5">5</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="score-display med" id="scoreDisplay">
+                            درجة الخطورة: <span id="scoreValue">9</span> - متوسط
+                        </div>
+                        
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label">إجراءات التخفيف</label>
+                            <textarea class="form-control" id="mitigation" placeholder="الإجراءات المقترحة للتخفيف من الخطر..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">الحالة</label>
+                            <select class="form-control" id="status">
+                                <option value="مفتوح">مفتوح</option>
+                                <option value="قيد المعالجة">قيد المعالجة</option>
+                                <option value="مغلق">مغلق</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">تاريخ المراجعة القادمة</label>
+                            <input type="date" class="form-control" id="reviewDate">
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
+                            <button type="submit" class="btn btn-success" style="flex: 1;">
+                                <i class="fas fa-save"></i> <span id="submitText">حفظ</span>
+                            </button>
+                            <button type="button" class="btn btn-light" onclick="resetForm()" id="cancelBtn" style="display: none;">
+                                <i class="fas fa-times"></i> إلغاء
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-list"></i> سجل المخاطر</h3>
+                    <div class="filters-bar">
+                        <select class="filter-select" id="filterCategory" onchange="applyFilters()">
+                            <option value="">كل التصنيفات</option>
+                            <option value="FMS">FMS</option>
+                            <option value="PSC">PSC</option>
+                            <option value="IPC">IPC</option>
+                            <option value="EOC">EOC</option>
+                            <option value="RM">RM</option>
+                            <option value="QI">QI</option>
+                            <option value="LD">LD</option>
+                            <option value="HR">HR</option>
+                        </select>
+                        <select class="filter-select" id="filterLevel" onchange="applyFilters()">
+                            <option value="">كل المستويات</option>
+                            <option value="حرج">حرج</option>
+                            <option value="عالي">عالي</option>
+                            <option value="متوسط">متوسط</option>
+                            <option value="منخفض">منخفض</option>
+                        </select>
+                        <select class="filter-select" id="filterStatus" onchange="applyFilters()">
+                            <option value="">كل الحالات</option>
+                            <option value="مفتوح">مفتوح</option>
+                            <option value="قيد المعالجة">قيد المعالجة</option>
+                            <option value="مغلق">مغلق</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div id="tableContainer">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            <p>جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="heatmap-section" style="padding: 1.25rem;">
+                    <h4 style="text-align: center; margin-bottom: 1rem; color: var(--gold);">
+                        <i class="fas fa-th"></i> مصفوفة المخاطر
+                    </h4>
+                    <div class="heatmap-grid" id="heatmapGrid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
 
-      updateLastUpdated();
-    }
-
-    /* =======================
-       Edit -> Auto Save (debounced)
-       ======================= */
-    function onEdit(idx, key, value){
-      if (!rows[idx]) return;
-
-      if (key === "probability" || key === "impact") value = clamp(value, 1, 5);
-      rows[idx][key] = value;
-
-      render(); // update score/level instantly
-
-      // debounce save
-      const id = rows[idx].id;
-      if (!id) return;
-
-      if (saveTimers.has(id)) clearTimeout(saveTimers.get(id));
-      setSync("warn", '<i class="fas fa-spinner fa-spin"></i> حفظ التغييرات...');
-      const t = setTimeout(() => saveRow(idx), 600);
-      saveTimers.set(id, t);
-    }
-
-    async function saveRow(idx){
-      const r = rows[idx];
-      if (!r || !r.id) return;
-
-      const payload = {
-        id: r.id,
-        risk: r.risk,
-        category: r.category,
-        owner: r.owner,
-        probability: clamp(r.probability, 1, 5),
-        impact: clamp(r.impact, 1, 5),
-        mitigation: r.mitigation,
-        status: r.status,
-        reviewDate: r.reviewDate,
-        updatedBy: getUpdatedBy()
-      };
-
-      try{
-        const res = await apiPost("update", payload);
-        if (!res.ok) throw new Error(res.error || "Update failed");
-        setSync("ok", '<i class="fas fa-cloud-check"></i> محفوظ');
-      }catch(e){
-        console.error(e);
-        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الحفظ');
-        alert("تعذر حفظ التعديل في الشيت.\n" + (e.message || ""));
-      }
-    }
-
-    /* =======================
-       Add / Delete / Reset
-       ======================= */
-    async function addRow(){
-      const payload = {
-        risk: "",
-        category: "RM",
-        owner: "",
-        probability: 2,
-        impact: 2,
-        mitigation: "",
-        status: "مفتوح",
-        reviewDate: "",
-        updatedBy: getUpdatedBy()
-      };
-
-      try{
-        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> إضافة...');
-        const res = await apiPost("add", payload);
-        if (!res.ok) throw new Error(res.error || "Add failed");
-
-        // reload to get the new ID & list
-        await reloadFromSheet();
-        setSync("ok", '<i class="fas fa-cloud-check"></i> تمت الإضافة');
-      }catch(e){
-        console.error(e);
-        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الإضافة');
-        alert("تعذر إضافة خطر.\n" + (e.message || ""));
-      }
-    }
-
-    async function deleteRow(idx){
-      const r = rows[idx];
-      if (!r || !r.id) return;
-      if (!confirm("هل تريد حذف هذا الخطر نهائيًا؟")) return;
-
-      try{
-        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> حذف...');
-        const res = await apiPost("delete", { id: r.id });
-        if (!res.ok) throw new Error(res.error || "Delete failed");
-        await reloadFromSheet();
-        setSync("ok", '<i class="fas fa-cloud-check"></i> تم الحذف');
-      }catch(e){
-        console.error(e);
-        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الحذف');
-        alert("تعذر حذف الخطر.\n" + (e.message || ""));
-      }
-    }
-
-    async function resetDefaultsOnSheet(){
-      if (!confirm("سيتم إضافة المخاطر الافتراضية للشيت (لن نحذف الموجود). هل تريد المتابعة؟")) return;
-      try{
-        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> استعادة النموذج...');
-        for (const d of DEFAULT_ROWS){
-          await apiPost("add", { ...d, updatedBy: getUpdatedBy() });
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwSCFPl4FKjCwfCNYG7FNiTb2PDTntK7QcMfYJkLcRs0r--l68S4DuehYFl1Xs3H-bl/exec';
+        
+        let allRisks = [];
+        let probability = 3;
+        let impact = 3;
+        
+        document.querySelectorAll('#probBtns .rating-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#probBtns .rating-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                probability = parseInt(btn.dataset.val);
+                updateScore();
+            });
+        });
+        
+        document.querySelectorAll('#impactBtns .rating-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#impactBtns .rating-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                impact = parseInt(btn.dataset.val);
+                updateScore();
+            });
+        });
+        
+        function updateScore() {
+            const score = probability * impact;
+            let level, levelClass;
+            
+            if (score >= 16) { level = 'حرج'; levelClass = 'ext'; }
+            else if (score >= 12) { level = 'عالي'; levelClass = 'high'; }
+            else if (score >= 6) { level = 'متوسط'; levelClass = 'med'; }
+            else { level = 'منخفض'; levelClass = 'low'; }
+            
+            const display = document.getElementById('scoreDisplay');
+            display.className = 'score-display ' + levelClass;
+            display.innerHTML = `درجة الخطورة: <span id="scoreValue">${score}</span> - ${level}`;
         }
-        await reloadFromSheet();
-        setSync("ok", '<i class="fas fa-cloud-check"></i> تم الاستعادة');
-      }catch(e){
-        console.error(e);
-        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الاستعادة');
-        alert("تعذر استعادة النموذج.\n" + (e.message || ""));
-      }
-    }
-
-    /* =======================
-       Export
-       ======================= */
-    function exportExcel(){
-      const data = rows.map((r, idx) => {
-        const p = clamp(r.probability, 1, 5);
-        const i = clamp(r.impact, 1, 5);
-        const s = p*i;
-        const lvl = scoreLevel(s).label;
-        return {
-          "#": idx+1,
-          "ID": r.id,
-          "الخطر": r.risk || "",
-          "التصنيف": r.category || "",
-          "المالك": r.owner || "",
-          "الاحتمالية": p,
-          "الأثر": i,
-          "الدرجة": s,
-          "المستوى": lvl,
-          "الإجراء/التحكم": r.mitigation || "",
-          "الحالة": r.status || "",
-          "تاريخ المراجعة": r.reviewDate || ""
-        };
-      });
-
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Risk Register");
-      XLSX.writeFile(wb, "Risk-Register.xlsx");
-    }
-
-    async function exportPDF(){
-      try{
-        const area = document.getElementById("printArea");
-        const { jsPDF } = window.jspdf;
-
-        const tableWrap = area.querySelector(".table-wrap");
-        const oldOverflow = tableWrap.style.overflow;
-        tableWrap.style.overflow = "visible";
-
-        await new Promise(r => setTimeout(r, 50));
-        const canvas = await html2canvas(area, { scale: 2, backgroundColor: "#ffffff" });
-        const img = canvas.toDataURL("image/png");
-
-        tableWrap.style.overflow = oldOverflow;
-
-        const pdf = new jsPDF("l", "mm", "a4");
-        const w = pdf.internal.pageSize.getWidth();
-        const h = pdf.internal.pageSize.getHeight();
-
-        const margin = 8;
-        const imgW = w - margin*2;
-        const imgH = (canvas.height * imgW) / canvas.width;
-
-        let y = margin;
-        let remaining = imgH;
-
-        while (remaining > 0){
-          pdf.addImage(img, "PNG", margin, y, imgW, imgH);
-          remaining -= (h - margin*2);
-          if (remaining > 0) pdf.addPage();
-          y = margin - (imgH - remaining);
+        
+        async function loadRisks() {
+            document.getElementById('tableContainer').innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>جاري التحميل...</p>
+                </div>
+            `;
+            
+            try {
+                const res = await fetch(API_URL + '?action=list');
+                const data = await res.json();
+                
+                if (data.ok) {
+                    allRisks = data.items || [];
+                    updateStats();
+                    applyFilters();
+                    renderHeatmap();
+                } else {
+                    showToast('خطأ في تحميل البيانات', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('فشل الاتصال بالخادم', 'error');
+                document.getElementById('tableContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>فشل تحميل البيانات</p>
+                    </div>
+                `;
+            }
         }
-
-        pdf.save("Risk-Register-" + new Date().toISOString().slice(0,10) + ".pdf");
-      }catch(e){
-        alert("تعذر تصدير PDF");
-        console.error(e);
-      }
-    }
-
-    /* =======================
-       Init
-       ======================= */
-    (function init(){
-      document.getElementById("preparedBy").addEventListener("input", () => {
-        document.getElementById("preparedByView").textContent =
-          (document.getElementById("preparedBy").value || "").trim() || "—";
-      });
-      updateLastUpdated();
-      reloadFromSheet();
-    })();
-  </script>
+        
+        function updateStats() {
+            const stats = { total: allRisks.length, ext: 0, high: 0, med: 0, low: 0 };
+            
+            allRisks.forEach(r => {
+                if (r.level === 'حرج') stats.ext++;
+                else if (r.level === 'عالي') stats.high++;
+                else if (r.level === 'متوسط') stats.med++;
+                else stats.low++;
+            });
+            
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statExt').textContent = stats.ext;
+            document.getElementById('statHigh').textContent = stats.high;
+            document.getElementById('statMed').textContent = stats.med;
+            document.getElementById('statLow').textContent = stats.low;
+        }
+        
+        function applyFilters() {
+            const cat = document.getElementById('filterCategory').value;
+            const lvl = document.getElementById('filterLevel').value;
+            const st = document.getElementById('filterStatus').value;
+            
+            let filtered = allRisks;
+            if (cat) filtered = filtered.filter(r => r.category === cat);
+            if (lvl) filtered = filtered.filter(r => r.level === lvl);
+            if (st) filtered = filtered.filter(r => r.status === st);
+            
+            renderTable(filtered);
+        }
+        
+        function renderTable(risks) {
+            if (!risks.length) {
+                document.getElementById('tableContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>لا توجد مخاطر مسجلة</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const html = `
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>الخطر</th>
+                                <th>التصنيف</th>
+                                <th>المسؤول</th>
+                                <th>الدرجة</th>
+                                <th>المستوى</th>
+                                <th>الحالة</th>
+                                <th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${risks.map(r => `
+                                <tr>
+                                    <td style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${r.id || '-'}</td>
+                                    <td class="risk-text">${r.risk || '-'}</td>
+                                    <td><span class="badge" style="background: rgba(201,169,98,0.2); color: var(--gold);">${r.category || '-'}</span></td>
+                                    <td>${r.owner || '-'}</td>
+                                    <td style="font-weight: 800;">${r.score || '-'}</td>
+                                    <td><span class="badge badge-${getLevelClass(r.level)}">${r.level || '-'}</span></td>
+                                    <td><span class="badge badge-${getStatusClass(r.status)}">${r.status || '-'}</span></td>
+                                    <td>
+                                        <div class="action-btns">
+                                            <button class="btn btn-sm btn-primary" onclick="editRisk('${r.id}')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-danger" onclick="deleteRisk('${r.id}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            document.getElementById('tableContainer').innerHTML = html;
+        }
+        
+        function getLevelClass(level) {
+            if (level === 'حرج') return 'ext';
+            if (level === 'عالي') return 'high';
+            if (level === 'متوسط') return 'med';
+            return 'low';
+        }
+        
+        function getStatusClass(status) {
+            if (status === 'مغلق') return 'closed';
+            if (status === 'قيد المعالجة') return 'progress';
+            return 'open';
+        }
+        
+        function renderHeatmap() {
+            const matrix = {};
+            for (let p = 1; p <= 5; p++) {
+                for (let i = 1; i <= 5; i++) {
+                    matrix[`${p}-${i}`] = 0;
+                }
+            }
+            
+            allRisks.forEach(r => {
+                const key = `${r.probability}-${r.impact}`;
+                if (matrix[key] !== undefined) matrix[key]++;
+            });
+            
+            let html = '<div class="heatmap-header"></div>';
+            for (let i = 1; i <= 5; i++) {
+                html += `<div class="heatmap-header">${i}</div>`;
+            }
+            
+            for (let p = 5; p >= 1; p--) {
+                html += `<div class="heatmap-label">${p}</div>`;
+                for (let i = 1; i <= 5; i++) {
+                    const score = p * i;
+                    let cellClass;
+                    if (score >= 16) cellClass = 'cell-ext';
+                    else if (score >= 12) cellClass = 'cell-high';
+                    else if (score >= 6) cellClass = 'cell-med';
+                    else cellClass = 'cell-low';
+                    
+                    const count = matrix[`${p}-${i}`];
+                    html += `<div class="heatmap-cell ${cellClass}">${count || ''}</div>`;
+                }
+            }
+            
+            document.getElementById('heatmapGrid').innerHTML = html;
+        }
+        
+        document.getElementById('riskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const editId = document.getElementById('editId').value;
+            const payload = {
+                risk: document.getElementById('riskDesc').value,
+                category: document.getElementById('category').value,
+                owner: document.getElementById('owner').value,
+                probability: probability,
+                impact: impact,
+                mitigation: document.getElementById('mitigation').value,
+                status: document.getElementById('status').value,
+                reviewDate: document.getElementById('reviewDate').value,
+                updatedBy: 'user'
+            };
+            
+            const action = editId ? 'update' : 'add';
+            if (editId) payload.id = editId;
+            
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, payload })
+                });
+                
+                const data = await res.json();
+                
+                if (data.ok) {
+                    showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
+                    resetForm();
+                    loadRisks();
+                } else {
+                    showToast(data.error || 'حدث خطأ', 'error');
+                }
+            } catch (err) {
+                showToast('فشل الاتصال', 'error');
+            }
+        });
+        
+        function editRisk(id) {
+            const risk = allRisks.find(r => r.id === id);
+            if (!risk) return;
+            
+            document.getElementById('editId').value = id;
+            document.getElementById('riskDesc').value = risk.risk || '';
+            document.getElementById('category').value = risk.category || '';
+            document.getElementById('owner').value = risk.owner || '';
+            document.getElementById('mitigation').value = risk.mitigation || '';
+            document.getElementById('status').value = risk.status || 'مفتوح';
+            document.getElementById('reviewDate').value = risk.reviewDate || '';
+            
+            probability = risk.probability || 3;
+            impact = risk.impact || 3;
+            
+            document.querySelectorAll('#probBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.val) === probability);
+            });
+            document.querySelectorAll('#impactBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.val) === impact);
+            });
+            
+            updateScore();
+            
+            document.getElementById('formTitle').textContent = 'تعديل الخطر';
+            document.getElementById('submitText').textContent = 'تحديث';
+            document.getElementById('cancelBtn').style.display = 'block';
+            
+            document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        async function deleteRisk(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا الخطر؟')) return;
+            
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete', payload: { id } })
+                });
+                
+                const data = await res.json();
+                
+                if (data.ok) {
+                    showToast('تم الحذف بنجاح', 'success');
+                    loadRisks();
+                } else {
+                    showToast(data.error || 'حدث خطأ', 'error');
+                }
+            } catch (err) {
+                showToast('فشل الاتصال', 'error');
+            }
+        }
+        
+        function resetForm() {
+            document.getElementById('riskForm').reset();
+            document.getElementById('editId').value = '';
+            document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
+            document.getElementById('submitText').textContent = 'حفظ';
+            document.getElementById('cancelBtn').style.display = 'none';
+            
+            probability = 3;
+            impact = 3;
+            
+            document.querySelectorAll('#probBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.val === '3');
+            });
+            document.querySelectorAll('#impactBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.val === '3');
+            });
+            
+            updateScore();
+        }
+        
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        loadRisks();
+    </script>
 </body>
 </html>
