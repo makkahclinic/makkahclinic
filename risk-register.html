@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>سجل المخاطر - مجمع مكة الطبي</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root{
+      --navy:#0f1b2d;
+      --blue:#0056A3;
+      --crimson:#7d0024;
+      --gold:#d4af37;
+      --bg:#f5f7fb;
+      --card:#ffffff;
+      --ink:#0b1220;
+      --muted:#5b6575;
+      --line:rgba(15,27,45,.10);
+      --shadow:0 14px 40px rgba(15,27,45,.08);
+      --radius:16px;
+
+      --low:#28a745;
+      --med:#ffc107;
+      --high:#fd7e14;
+      --ext:#dc3545;
+    }
+
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:"Tajawal",sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height:1.6;
+    }
+    .container{max-width:1200px;margin:0 auto;padding:18px}
+
+    /* Header */
+    .header{
+      background: linear-gradient(135deg, var(--navy), #13284b);
+      color:#fff;
+      border-radius: 18px;
+      overflow:hidden;
+      box-shadow: var(--shadow);
+      position:relative;
+      margin-bottom:14px;
+    }
+    .header::before{
+      content:"";
+      position:absolute; inset:0 0 auto 0; height:6px;
+      background: linear-gradient(90deg, var(--gold), var(--crimson), var(--gold));
+    }
+    .header-inner{
+      padding:14px 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .brand{display:flex;align-items:center;gap:12px;min-width:280px}
+    .logo{
+      width:56px;height:56px;border-radius:14px;background:#fff;
+      border:2px solid rgba(212,175,55,.55);
+      overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    }
+    .logo img{width:100%;height:100%;object-fit:contain;padding:6px}
+    .brand h1{font-family:"Cairo",sans-serif;font-weight:900;font-size:18px;margin-bottom:2px}
+    .brand p{opacity:.88;font-weight:700;font-size:12px}
+
+    .meta{
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end
+    }
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 12px;border-radius:999px;
+      background: rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.16);
+      font-weight:800;font-size:12px;white-space:nowrap;
+    }
+    .pill i{color:var(--gold)}
+    .pill .muted{opacity:.85;font-weight:700}
+
+    .banner{
+      padding:10px 16px 14px;
+      border-top: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;
+    }
+    .badge{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:7px 10px;border-radius:12px;
+      background: rgba(212,175,55,.14);
+      border:1px solid rgba(212,175,55,.28);
+      font-weight:900;font-size:12px;
+    }
+    .banner .text{flex:1;opacity:.93;font-weight:700;font-size:12px;min-width:260px}
+
+    /* Card */
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-head{
+      padding:12px 14px;
+      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      border-bottom:1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+    }
+    .title{
+      font-family:"Cairo",sans-serif;
+      font-weight:900;
+      font-size:14px;
+      display:flex;align-items:center;gap:10px;
+    }
+    .title i{color:var(--gold)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+
+    .btn{
+      border:0;
+      cursor:pointer;
+      padding:10px 12px;
+      border-radius:12px;
+      font-family:"Tajawal",sans-serif;
+      font-weight:900;
+      font-size:12px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition:.15s;
+    }
+    .btn:hover{transform: translateY(-1px)}
+    .btn-primary{background: var(--blue); color:#fff}
+    .btn-light{background: #eef2ff; color:#1e3a5f; border:1px solid rgba(15,27,45,.10)}
+    .btn-danger{background: var(--ext); color:#fff}
+    .btn-gray{background:#f1f3f5;color:#333;border:1px solid rgba(0,0,0,.07)}
+
+    /* Filters */
+    .filters{
+      padding:12px 14px;
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap:10px;
+      border-bottom:1px solid var(--line);
+    }
+    .field label{display:block;font-size:11px;font-weight:900;color:var(--muted);margin-bottom:5px}
+    .field input,.field select{
+      width:100%;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid rgba(15,27,45,.12);
+      font-family:"Tajawal",sans-serif;
+      background:#fff;
+    }
+
+    /* Table */
+    .table-wrap{overflow:auto}
+    table{width:100%;border-collapse:collapse;min-width:1050px}
+    th,td{padding:10px 10px;border-bottom:1px solid rgba(15,27,45,.08);text-align:right;vertical-align:top}
+    th{
+      background:#f6f8ff;
+      color:#1e3a5f;
+      font-weight:900;
+      white-space:nowrap;
+      position:sticky;
+      top:0;
+      z-index:1;
+    }
+    tr:hover{background:#fbfcff}
+
+    .chip{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 10px;border-radius:999px;
+      font-size:11px;font-weight:900;white-space:nowrap;
+      border:1px solid transparent;
+    }
+    .low{background: rgba(40,167,69,.12); color:#1d7a35; border-color: rgba(40,167,69,.25)}
+    .med{background: rgba(255,193,7,.22); color:#7a5a00; border-color: rgba(255,193,7,.35)}
+    .high{background: rgba(253,126,20,.18); color:#8a3f00; border-color: rgba(253,126,20,.30)}
+    .ext{background: rgba(220,53,69,.14); color:#b10014; border-color: rgba(220,53,69,.28)}
+
+    .score{
+      font-family:"Cairo",sans-serif;
+      font-weight:900;
+      font-size:14px;
+      text-align:center;
+      min-width:50px;
+    }
+
+    .edit{
+      width:100%;
+      border:1px dashed rgba(15,27,45,.20);
+      background:#fff;
+      border-radius:10px;
+      padding:8px 8px;
+      font-family:"Tajawal",sans-serif;
+      font-size:12px;
+    }
+
+    .footer-note{
+      padding:12px 14px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      color: var(--muted);
+      font-size:11px;
+      font-weight:800;
+      border-top:1px solid var(--line);
+      background:#fff;
+    }
+
+    /* Print */
+    @media print{
+      body{background:#fff}
+      .container{max-width:100%;padding:0}
+      .btn{display:none !important}
+      .filters{display:none !important}
+      .header{border-radius:0;box-shadow:none}
+      .card{box-shadow:none;border-radius:0}
+      table{min-width:0}
+      th{position:static}
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <div class="header">
+      <div class="header-inner">
+        <div class="brand">
+          <div class="logo">
+            <img src="logo-new.png" alt="شعار مجمع مكة الطبي">
+          </div>
+          <div>
+            <h1>سجل المخاطر الرسمي (Risk Register)</h1>
+            <p>مجمع مكة الطبي بالزاهر — برنامج إدارة المخاطر (Proactive)</p>
+          </div>
+        </div>
+
+        <div class="meta">
+          <div class="pill"><i class="fas fa-shield-check"></i><strong>RM</strong><span class="muted">إدارة المخاطر</span></div>
+          <div class="pill"><i class="fas fa-calendar-check"></i><strong>مراجعة</strong><span class="muted" id="reviewCycle">ربع سنوي</span></div>
+          <div class="pill"><i class="fas fa-clock"></i><strong>آخر تحديث</strong><span class="muted" id="lastUpdated">—</span></div>
+        </div>
+      </div>
+
+      <div class="banner">
+        <span class="badge"><i class="fas fa-circle-info"></i> توجيه سباهي</span>
+        <div class="text">
+          هذا السجل يركز على المخاطر الاستباقية (Proactive). يتم تحديثه عند ظهور مخاطر جديدة أو بعد أي حادث/شبه حادث/تدقيق داخلي، ويُراجع في اجتماع لجنة RM ربع سنويًا.
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="printArea">
+      <div class="card-head">
+        <div class="title"><i class="fas fa-list-check"></i> سجل المخاطر</div>
+        <div class="actions">
+          <button class="btn btn-light" onclick="addRow()"><i class="fas fa-plus"></i> إضافة خطر</button>
+          <button class="btn btn-gray" onclick="resetDefaults()"><i class="fas fa-rotate-left"></i> استعادة نموذج</button>
+          <button class="btn btn-light" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
+          <button class="btn btn-light" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Excel</button>
+          <button class="btn btn-primary" onclick="exportPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
+        </div>
+      </div>
+
+      <div class="filters">
+        <div class="field">
+          <label>فلترة حسب اللجنة/القسم</label>
+          <select id="filterDept" onchange="render()">
+            <option value="all">الكل</option>
+            <option value="RM">RM</option>
+            <option value="PSC">PSC</option>
+            <option value="IPC">IPC</option>
+            <option value="FMS">FMS</option>
+            <option value="QI">QI</option>
+            <option value="EOC">EOC</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>مستوى الخطر</label>
+          <select id="filterLevel" onchange="render()">
+            <option value="all">الكل</option>
+            <option value="ext">حرج</option>
+            <option value="high">عالي</option>
+            <option value="med">متوسط</option>
+            <option value="low">منخفض</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>بحث (عنوان/وصف)</label>
+          <input id="filterText" oninput="render()" placeholder="اكتب كلمة..." />
+        </div>
+        <div class="field">
+          <label>اسم المُراجع/المُعد</label>
+          <input id="preparedBy" oninput="saveMeta()" placeholder="مثال: حسين / خالد / ..." />
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>الخطر (Risk)</th>
+              <th>التصنيف</th>
+              <th>المالك/المسؤول</th>
+              <th>الاحتمالية (1-5)</th>
+              <th>الأثر (1-5)</th>
+              <th>الدرجة</th>
+              <th>المستوى</th>
+              <th>الإجراء/التحكم (Mitigation)</th>
+              <th>الحالة</th>
+              <th>تاريخ المراجعة</th>
+              <th>إجراء</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="footer-note">
+        <div>ملاحظة: الدرجة = الاحتمالية × الأثر. حرج ≥ 16 | عالي 12-15 | متوسط 6-11 | منخفض ≤ 5</div>
+        <div>Prepared by: <span id="preparedByView">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "MMC_RISK_REGISTER_V1";
+    const META_KEY = "MMC_RISK_REGISTER_META_V1";
+
+    const DEFAULT_ROWS = [
+      { risk:"انقطاع كهرباء أثناء التشغيل", category:"EOC/FMS", owner:"الصيانة", p:3, i:5, mitigation:"فحص مولد/UPS + خطة بديلة + اختبار شهري", status:"مفتوح", review:"" },
+      { risk:"تأخر التعامل مع حادث/شبه حادث", category:"PSC", owner:"منسق سلامة المرضى", p:3, i:4, mitigation:"SLA للاستجابة + تصعيد + تدريب", status:"مفتوح", review:"" },
+      { risk:"وخز إبر/تعرض دموي", category:"IPC", owner:"منسق مكافحة العدوى", p:3, i:4, mitigation:"PPE + إبر آمنة + بروتوكول ما بعد التعرض + متابعة", status:"مفتوح", review:"" },
+      { risk:"فشل حفظ بيانات/انقطاع نظام إلكتروني", category:"RM/QI", owner:"الدعم التقني", p:2, i:4, mitigation:"نسخ احتياطي + مراقبة + خطة استمرارية", status:"مفتوح", review:"" },
+      { risk:"أخطاء تعريف المريض/ملف المريض", category:"PSC", owner:"الاستقبال/التمريض", p:2, i:5, mitigation:"معرّفين + تدقيق عشوائي + تدريب", status:"مفتوح", review:"" },
+      { risk:"مخاطر حريق/إخلاء", category:"EOC/FMS", owner:"السلامة", p:2, i:5, mitigation:"خطة إخلاء + تدريب سنوي + طفايات وفحص شهري", status:"مفتوح", review:"" },
+      { risk:"أدوية منتهية/إدارة صلاحيات", category:"RM/PH", owner:"الصيدلية", p:2, i:4, mitigation:"فحص دوري + فصل منتهية + سجل إتلاف", status:"مفتوح", review:"" }
+    ];
+
+    function loadRows(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return JSON.parse(JSON.stringify(DEFAULT_ROWS));
+      try { return JSON.parse(raw); } catch { return JSON.parse(JSON.stringify(DEFAULT_ROWS)); }
+    }
+    function saveRows(rows){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+    }
+
+    function loadMeta(){
+      const raw = localStorage.getItem(META_KEY);
+      if (!raw) return { preparedBy:"" };
+      try { return JSON.parse(raw); } catch { return { preparedBy:"" }; }
+    }
+    function saveMeta(){
+      const meta = loadMeta();
+      meta.preparedBy = document.getElementById("preparedBy").value || "";
+      localStorage.setItem(META_KEY, JSON.stringify(meta));
+      document.getElementById("preparedByView").textContent = meta.preparedBy || "—";
+    }
+
+    function scoreLevel(score){
+      if (score >= 16) return { key:"ext", label:"حرج", cls:"ext" };
+      if (score >= 12) return { key:"high", label:"عالي", cls:"high" };
+      if (score >= 6)  return { key:"med", label:"متوسط", cls:"med" };
+      return { key:"low", label:"منخفض", cls:"low" };
+    }
+
+    function clamp(n, min, max){
+      n = Number(n);
+      if (Number.isNaN(n)) n = min;
+      return Math.max(min, Math.min(max, n));
+    }
+
+    let rows = loadRows();
+
+    function render(){
+      const tbody = document.getElementById("tbody");
+      const dept = document.getElementById("filterDept").value;
+      const level = document.getElementById("filterLevel").value;
+      const text = (document.getElementById("filterText").value || "").trim().toLowerCase();
+
+      tbody.innerHTML = "";
+
+      const filtered = rows.map((r, idx) => ({...r, _idx: idx})).filter(r => {
+        const lvl = scoreLevel(r.p * r.i).key;
+        const okDept = dept === "all" ? true : (r.category || "").includes(dept);
+        const okLvl = level === "all" ? true : (lvl === level);
+        const okText = !text ? true : ((r.risk || "").toLowerCase().includes(text) || (r.mitigation || "").toLowerCase().includes(text));
+        return okDept && okLvl && okText;
+      });
+
+      filtered.forEach((r, viewIndex) => {
+        const p = clamp(r.p, 1, 5);
+        const i = clamp(r.i, 1, 5);
+        const score = p * i;
+        const lvl = scoreLevel(score);
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${viewIndex + 1}</strong></td>
+
+          <td><input class="edit" value="${escapeHtml(r.risk || "")}" oninput="updateRow(${r._idx}, 'risk', this.value)" /></td>
+
+          <td>
+            <input class="edit" value="${escapeHtml(r.category || "")}" oninput="updateRow(${r._idx}, 'category', this.value)" placeholder="RM/PSC/IPC/FMS/QI/EOC..." />
+          </td>
+
+          <td><input class="edit" value="${escapeHtml(r.owner || "")}" oninput="updateRow(${r._idx}, 'owner', this.value)" /></td>
+
+          <td>
+            <select class="edit" onchange="updateRow(${r._idx}, 'p', this.value)">
+              ${[1,2,3,4,5].map(n => `<option value="${n}" ${p===n?'selected':''}>${n}</option>`).join("")}
+            </select>
+          </td>
+
+          <td>
+            <select class="edit" onchange="updateRow(${r._idx}, 'i', this.value)">
+              ${[1,2,3,4,5].map(n => `<option value="${n}" ${i===n?'selected':''}>${n}</option>`).join("")}
+            </select>
+          </td>
+
+          <td class="score">${score}</td>
+
+          <td><span class="chip ${lvl.cls}"><i class="fas fa-circle"></i> ${lvl.label}</span></td>
+
+          <td><input class="edit" value="${escapeHtml(r.mitigation || "")}" oninput="updateRow(${r._idx}, 'mitigation', this.value)" /></td>
+
+          <td>
+            <select class="edit" onchange="updateRow(${r._idx}, 'status', this.value)">
+              ${["مفتوح","قيد التنفيذ","مغلق"].map(s => `<option ${r.status===s?'selected':''}>${s}</option>`).join("")}
+            </select>
+          </td>
+
+          <td><input class="edit" type="date" value="${escapeHtml(r.review || "")}" oninput="updateRow(${r._idx}, 'review', this.value)" /></td>
+
+          <td>
+            <button class="btn btn-danger" onclick="deleteRow(${r._idx})" title="حذف">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      saveRows(rows);
+      updateLastUpdated();
+    }
+
+    function updateRow(idx, key, value){
+      if (!rows[idx]) return;
+      if (key === "p" || key === "i") value = clamp(value, 1, 5);
+      rows[idx][key] = value;
+      saveRows(rows);
+      render();
+    }
+
+    function addRow(){
+      rows.unshift({ risk:"", category:"RM", owner:"", p:2, i:2, mitigation:"", status:"مفتوح", review:"" });
+      saveRows(rows);
+      render();
+    }
+
+    function deleteRow(idx){
+      if (!confirm("هل تريد حذف هذا الخطر؟")) return;
+      rows.splice(idx, 1);
+      saveRows(rows);
+      render();
+    }
+
+    function resetDefaults(){
+      if (!confirm("استعادة النموذج الافتراضي؟ سيتم استبدال البيانات الحالية.")) return;
+      rows = JSON.parse(JSON.stringify(DEFAULT_ROWS));
+      saveRows(rows);
+      render();
+    }
+
+    function updateLastUpdated(){
+      const now = new Date();
+      const fmt = new Intl.DateTimeFormat('ar-SA', { dateStyle: 'medium' }).format(now);
+      document.getElementById("lastUpdated").textContent = fmt;
+    }
+
+    async function exportPDF(){
+      try{
+        const area = document.getElementById("printArea");
+        const { jsPDF } = window.jspdf;
+
+        // اجعل الجدول يظهر كاملًا أثناء التصوير
+        const tableWrap = area.querySelector(".table-wrap");
+        const oldOverflow = tableWrap.style.overflow;
+        tableWrap.style.overflow = "visible";
+
+        await new Promise(r => setTimeout(r, 50));
+        const canvas = await html2canvas(area, { scale: 2, backgroundColor: "#ffffff" });
+        const img = canvas.toDataURL("image/png");
+
+        tableWrap.style.overflow = oldOverflow;
+
+        const pdf = new jsPDF("l", "mm", "a4");
+        const w = pdf.internal.pageSize.getWidth();
+        const h = pdf.internal.pageSize.getHeight();
+
+        const margin = 8;
+        const imgW = w - margin*2;
+        const imgH = (canvas.height * imgW) / canvas.width;
+
+        let y = margin;
+        let remaining = imgH;
+
+        // إذا أطول من صفحة، نقسم
+        while (remaining > 0){
+          pdf.addImage(img, "PNG", margin, y, imgW, imgH);
+          remaining -= (h - margin*2);
+          if (remaining > 0) pdf.addPage();
+          y = margin - (imgH - remaining);
+        }
+
+        pdf.save("Risk-Register-" + new Date().toISOString().slice(0,10) + ".pdf");
+      }catch(e){
+        alert("تعذر تصدير PDF");
+        console.error(e);
+      }
+    }
+
+    function exportExcel(){
+      const data = rows.map((r, idx) => {
+        const p = clamp(r.p, 1, 5);
+        const i = clamp(r.i, 1, 5);
+        const s = p*i;
+        const lvl = scoreLevel(s).label;
+        return {
+          "#": idx+1,
+          "الخطر": r.risk || "",
+          "التصنيف": r.category || "",
+          "المالك": r.owner || "",
+          "الاحتمالية": p,
+          "الأثر": i,
+          "الدرجة": s,
+          "المستوى": lvl,
+          "الإجراء/التحكم": r.mitigation || "",
+          "الحالة": r.status || "",
+          "تاريخ المراجعة": r.review || ""
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Risk Register");
+      XLSX.writeFile(wb, "Risk-Register.xlsx");
+    }
+
+    function escapeHtml(str){
+      return String(str || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // Init
+    (function init(){
+      const meta = loadMeta();
+      document.getElementById("preparedBy").value = meta.preparedBy || "";
+      document.getElementById("preparedByView").textContent = meta.preparedBy || "—";
+      updateLastUpdated();
+      render();
+    })();
+  </script>
+</body>
+</html>
