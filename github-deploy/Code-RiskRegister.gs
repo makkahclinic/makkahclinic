@@ -169,23 +169,32 @@ function getRiskLibrary() {
   const lib = getLibSheet_();
   if (!lib || lib.getLastRow() < 2) return { ok: true, items: [] };
 
-  const values = lib.getRange(2, 1, lib.getLastRow() - 1, 4).getValues();
+  // الأعمدة: A=المالك, B=القسم, C=Risk, D=Category, E=DefaultOwner, F=DefaultMitigation
+  const values = lib.getRange(2, 3, lib.getLastRow() - 1, 4).getValues(); // من العمود C
   const items = values
     .filter(r => String(r[0] || '').trim())
     .map(r => ({
-      risk: String(r[0] || '').trim(),
-      category: String(r[1] || '').trim(),
-      defaultOwner: String(r[2] || '').trim(),
-      defaultMitigation: String(r[3] || '').trim(),
+      risk: String(r[0] || '').trim(),           // C = Risk
+      category: String(r[1] || '').trim(),        // D = Category
+      defaultOwner: String(r[2] || '').trim(),    // E = DefaultOwner
+      defaultMitigation: String(r[3] || '').trim(), // F = DefaultMitigation
     }));
 
   return { ok: true, items };
 }
 
 function getMasterList() {
-  const sh = getMasterSheet_();
+  // أولاً نحاول من شيت Master
+  let sh = getMasterSheet_();
+  
+  // إذا لم يوجد شيت Master، نقرأ من RiskLibrary (الأعمدة A و B)
+  if (!sh || sh.getLastRow() < 2) {
+    sh = getLibSheet_();
+  }
+  
   if (!sh || sh.getLastRow() < 2) return { ok: true, owners: [], departments: [], pairs: [] };
 
+  // الأعمدة A=المالك/المسؤول, B=القسم
   const values = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
   const pairs = values
     .filter(r => String(r[0] || '').trim())
