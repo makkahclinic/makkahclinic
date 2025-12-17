@@ -1,281 +1,1219 @@
-/**
- * Risk Register API - Makkah Medical Complex (Al Zaher)
- * Spreadsheet: 12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A
- * Sheets:
- *  - RiskRegister (Data)
- *  - RiskLibrary  (Risk templates: Risk | Category | DefaultOwner | DefaultMitigation)
- *  - Master       (Owners/Departments: Owner | Department)
- * 
- * ===== تعليمات النشر =====
- * 1. افتح: https://script.google.com
- * 2. ملف > مشروع جديد
- * 3. انسخ هذا الكود بالكامل
- * 4. Deploy > New deployment
- * 5. Type: Web app
- * 6. Execute as: Me
- * 7. Who has access: Anyone
- * 8. انسخ الرابط واستخدمه
- */
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سجل المخاطر - Risk Register</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --navy: #1e3a5f;
+            --navy-dark: #0f2744;
+            --gold: #c9a962;
+            --crimson: #DC143C;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --ext: #7f1d1d;
+            --high: #dc2626;
+            --med: #f59e0b;
+            --low: #22c55e;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            border-bottom: 3px solid var(--gold);
+        }
+        
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .header-title i { font-size: 2rem; color: var(--gold); }
+        .header-title h1 { font-family: 'Cairo', sans-serif; font-size: 1.5rem; font-weight: 800; }
+        .header-title small { opacity: 0.8; font-size: 0.85rem; }
+        
+        .header-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+        
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .btn-primary { background: var(--info); color: #fff; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-light { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+        .btn-light:hover { background: rgba(255,255,255,0.25); }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        
+        #saveBadge {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border: 2px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            cursor: default;
+        }
+        
+        #saveBadge.ok { border-color: rgba(34,197,94,0.6); color: #86efac; }
+        #saveBadge.warn { border-color: rgba(245,158,11,0.6); color: #fcd34d; }
+        #saveBadge.err { border-color: rgba(239,68,68,0.6); color: #fca5a5; }
+        #saveBadge.local { border-color: rgba(59,130,246,0.6); color: #93c5fd; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+        
+        
+        .alert-bar {
+            background: linear-gradient(135deg, rgba(127,29,29,0.3) 0%, rgba(220,38,38,0.2) 100%);
+            border: 2px solid var(--danger);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            display: none;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .alert-bar.show { display: flex; }
+        .alert-bar i { font-size: 1.5rem; color: var(--danger); }
+        .alert-bar strong { color: #fca5a5; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover { transform: translateY(-2px); background: rgba(255,255,255,0.08); }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+        }
+        
+        .stat-card.ext::before { background: var(--ext); }
+        .stat-card.high::before { background: var(--high); }
+        .stat-card.med::before { background: var(--med); }
+        .stat-card.low::before { background: var(--low); }
+        .stat-card.total::before { background: var(--gold); }
+        
+        .stat-value { font-size: 2.2rem; font-weight: 900; font-family: 'Cairo', sans-serif; }
+        .stat-label { font-size: 0.8rem; opacity: 0.8; margin-top: 0.25rem; }
+        
+        .stat-card.ext .stat-value { color: #fca5a5; }
+        .stat-card.high .stat-value { color: #fca5a5; }
+        .stat-card.med .stat-value { color: #fcd34d; }
+        .stat-card.low .stat-value { color: #86efac; }
+        .stat-card.total .stat-value { color: var(--gold); }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 1.5rem;
+        }
+        
+        @media (max-width: 1000px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: rgba(255,255,255,0.05);
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .card-header h3 {
+            font-family: 'Cairo', sans-serif;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .card-header h3 i { color: var(--gold); }
+        
+        .card-body { padding: 1.25rem; }
+        
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 700; margin-bottom: 0.4rem; font-size: 0.9rem; }
+        .form-label .required { color: var(--danger); }
+        
+        .form-control {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.95rem;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--gold);
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .form-control option { background: #1e293b; color: #fff; }
+        
+        textarea.form-control { min-height: 70px; resize: vertical; }
+        
+        .rating-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+        
+        .rating-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 0.6rem;
+            text-align: center;
+        }
+        
+        .rating-box label { display: block; font-weight: 700; margin-bottom: 0.4rem; font-size: 0.8rem; }
+        
+        .rating-btns { display: flex; gap: 0.25rem; justify-content: center; }
+        
+        .rating-btn {
+            width: 32px;
+            height: 32px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: transparent;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        
+        .rating-btn:hover { border-color: var(--gold); }
+        .rating-btn.active { background: var(--gold); border-color: var(--gold); color: #000; }
+        
+        .score-display {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 800;
+            font-size: 1rem;
+        }
+        
+        .score-display.ext { background: rgba(127,29,29,0.3); border: 2px solid var(--ext); color: #fca5a5; }
+        .score-display.high { background: rgba(220,38,38,0.2); border: 2px solid var(--high); color: #fca5a5; }
+        .score-display.med { background: rgba(245,158,11,0.2); border: 2px solid var(--med); color: #fcd34d; }
+        .score-display.low { background: rgba(34,197,94,0.2); border: 2px solid var(--low); color: #86efac; }
+        
+        .filters-bar {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .filter-select {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.8rem;
+            min-width: 120px;
+        }
+        
+        .filter-select option { background: #1e293b; }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        th, td {
+            padding: 0.75rem;
+            text-align: right;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        
+        th {
+            background: rgba(255,255,255,0.05);
+            font-weight: 800;
+            font-size: 0.75rem;
+            color: var(--gold);
+            white-space: nowrap;
+        }
+        
+        tr:hover { background: rgba(255,255,255,0.03); }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+        
+        .badge-ext { background: var(--ext); color: #fff; }
+        .badge-high { background: var(--high); color: #fff; }
+        .badge-med { background: var(--med); color: #000; }
+        .badge-low { background: var(--low); color: #000; }
+        
+        .badge-open { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+        .badge-progress { background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.4); }
+        .badge-closed { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.4); }
+        
+        .action-btns { display: flex; gap: 0.25rem; }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gold);
+        }
+        
+        .loading i { font-size: 2rem; animation: spin 1s linear infinite; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .empty-state i { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
+        
+        .heatmap-section { margin-top: 1.5rem; padding: 1.25rem; }
+        
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: 30px repeat(5, 1fr);
+            gap: 3px;
+            max-width: 350px;
+            margin: 0 auto;
+        }
+        
+        .heatmap-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 0.8rem;
+        }
+        
+        .heatmap-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: rgba(255,255,255,0.6);
+        }
+        
+        .heatmap-header {
+            text-align: center;
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .cell-ext { background: var(--ext); color: #fff; }
+        .cell-high { background: var(--high); color: #fff; }
+        .cell-med { background: var(--med); color: #000; }
+        .cell-low { background: var(--low); color: #000; }
+        
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 700;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { background: var(--success); color: #fff; }
+        .toast.error { background: var(--danger); color: #fff; }
+        
+        .risk-text { max-width: 180px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-title">
+            <i class="fas fa-shield-virus"></i>
+            <div>
+                <h1>سجل المخاطر - Risk Register</h1>
+                <small>إدارة المخاطر - مجمع مكة الطبي بالزاهر</small>
+            </div>
+        </div>
+        <div class="header-actions">
+            <span id="saveBadge" class="local">
+                <i class="fas fa-database"></i> محفوظ محلياً
+            </span>
+            <button class="btn btn-light" onclick="loadRisks()">
+                <i class="fas fa-sync"></i> تحديث
+            </button>
+            <button class="btn btn-light btn-sm" onclick="exportExcel()">
+                <i class="fas fa-file-excel"></i> تصدير
+            </button>
+            <a href="incident-report-analysis.html" class="btn btn-light">
+                <i class="fas fa-chart-pie"></i> الحوادث
+            </a>
+            <a href="mega.html" class="btn btn-light">
+                <i class="fas fa-home"></i> الرئيسية
+            </a>
+        </div>
+    </header>
+    
+    <div class="container">
+        
+        <div class="alert-bar" id="criticalAlert">
+            <i class="fas fa-triangle-exclamation"></i>
+            <div>
+                <strong>تنبيه!</strong> يوجد <span id="criticalCount">0</span> مخاطر حرجة تتطلب اهتمام فوري
+            </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card total" onclick="filterByLevel('')">
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">إجمالي المخاطر</div>
+            </div>
+            <div class="stat-card ext" onclick="filterByLevel('حرج')">
+                <div class="stat-value" id="statExt">0</div>
+                <div class="stat-label">حرج (16-25)</div>
+            </div>
+            <div class="stat-card high" onclick="filterByLevel('عالي')">
+                <div class="stat-value" id="statHigh">0</div>
+                <div class="stat-label">عالي (12-15)</div>
+            </div>
+            <div class="stat-card med" onclick="filterByLevel('متوسط')">
+                <div class="stat-value" id="statMed">0</div>
+                <div class="stat-label">متوسط (6-11)</div>
+            </div>
+            <div class="stat-card low" onclick="filterByLevel('منخفض')">
+                <div class="stat-value" id="statLow">0</div>
+                <div class="stat-label">منخفض (1-5)</div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="card" id="formCard">
+                <div class="card-header">
+                    <h3><i class="fas fa-plus-circle"></i> <span id="formTitle">إضافة خطر جديد</span></h3>
+                </div>
+                <div class="card-body">
+                    <form id="riskForm">
+                        <input type="hidden" id="editId">
+                        
+                        <div class="form-group">
+                            <label class="form-label">وصف الخطر <span class="required">*</span></label>
+                            <textarea class="form-control" id="riskDesc" placeholder="مثال: عدم توفر طفايات حريق كافية في الممرات، تسرب مياه من السقف، خلل في نظام التكييف..." required></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">التصنيف <span class="required">*</span></label>
+                            <select class="form-control" id="category" required>
+                                <option value="">اختر التصنيف...</option>
+                                <option value="FMS">FMS - إدارة المرافق</option>
+                                <option value="PSC">PSC - سلامة المرضى</option>
+                                <option value="PSC/FMS">PSC/FMS</option>
+                                <option value="IPC">IPC - مكافحة العدوى</option>
+                                <option value="EOC">EOC - الطوارئ والكوارث</option>
+                                <option value="EOC/FMS">EOC/FMS</option>
+                                <option value="RM">RM - إدارة المخاطر</option>
+                                <option value="QI">QI - تحسين الجودة</option>
+                                <option value="LD">LD - القيادة والحوكمة</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">المالك/المسؤول</label>
+                            <select class="form-control" id="owner">
+                                <option value="">اختر المسؤول...</option>
+                                <option value="د.خالد الخطاب">د.خالد الخطاب</option>
+                                <option value="صابر عبده">صابر عبده</option>
+                                <option value="بلال نذر">بلال نذر</option>
+                                <option value="عدنان الرفاعي">عدنان الرفاعي</option>
+                                <option value="هيثم">هيثم</option>
+                                <option value="منسق سلامة المرضى">منسق سلامة المرضى</option>
+                                <option value="الإدارة">الإدارة</option>
+                                <option value="الصيدلية">الصيدلية</option>
+                                <option value="المختبر">المختبر</option>
+                                <option value="التمريض">التمريض</option>
+                                <option value="الاستقبال">الاستقبال</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">مصدر الخطر</label>
+                            <select class="form-control" id="source">
+                                <option value="">اختر المصدر...</option>
+                                <option value="جولة">جولة (Round)</option>
+                                <option value="حادث">حادث (Incident)</option>
+                                <option value="تدقيق">تدقيق (Audit)</option>
+                                <option value="شكوى">شكوى (Complaint)</option>
+                                <option value="Near Miss">Near Miss</option>
+                                <option value="تقييم ذاتي">تقييم ذاتي</option>
+                            </select>
+                        </div>
+                        
+                        <div class="rating-grid">
+                            <div class="rating-box">
+                                <label>الاحتمالية</label>
+                                <div class="rating-btns" id="probBtns">
+                                    <button type="button" class="rating-btn" data-val="1">1</button>
+                                    <button type="button" class="rating-btn" data-val="2">2</button>
+                                    <button type="button" class="rating-btn active" data-val="3">3</button>
+                                    <button type="button" class="rating-btn" data-val="4">4</button>
+                                    <button type="button" class="rating-btn" data-val="5">5</button>
+                                </div>
+                            </div>
+                            <div class="rating-box">
+                                <label>الأثر</label>
+                                <div class="rating-btns" id="impactBtns">
+                                    <button type="button" class="rating-btn" data-val="1">1</button>
+                                    <button type="button" class="rating-btn" data-val="2">2</button>
+                                    <button type="button" class="rating-btn active" data-val="3">3</button>
+                                    <button type="button" class="rating-btn" data-val="4">4</button>
+                                    <button type="button" class="rating-btn" data-val="5">5</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="score-display med" id="scoreDisplay">
+                            درجة الخطورة: <span id="scoreValue">9</span> - متوسط
+                        </div>
+                        
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label">إجراءات التخفيف</label>
+                            <textarea class="form-control" id="mitigation" placeholder="الإجراءات المقترحة..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">الحالة</label>
+                            <select class="form-control" id="status">
+                                <option value="مفتوح">مفتوح</option>
+                                <option value="قيد المعالجة">قيد المعالجة</option>
+                                <option value="مغلق">مغلق</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">تاريخ المراجعة</label>
+                            <input type="date" class="form-control" id="reviewDate">
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
+                            <button type="submit" class="btn btn-success" style="flex: 1;">
+                                <i class="fas fa-save"></i> <span id="submitText">حفظ</span>
+                            </button>
+                            <button type="button" class="btn btn-light" onclick="resetForm()" id="cancelBtn" style="display: none;">
+                                <i class="fas fa-times"></i> إلغاء
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-list"></i> سجل المخاطر</h3>
+                    <div class="filters-bar">
+                        <select class="filter-select" id="filterCategory" onchange="applyFilters()">
+                            <option value="">كل التصنيفات</option>
+                            <option value="FMS">FMS</option>
+                            <option value="PSC">PSC</option>
+                            <option value="IPC">IPC</option>
+                            <option value="EOC">EOC</option>
+                            <option value="RM">RM</option>
+                            <option value="QI">QI</option>
+                            <option value="LD">LD</option>
+                        </select>
+                        <select class="filter-select" id="filterLevel" onchange="applyFilters()">
+                            <option value="">كل المستويات</option>
+                            <option value="حرج">حرج</option>
+                            <option value="عالي">عالي</option>
+                            <option value="متوسط">متوسط</option>
+                            <option value="منخفض">منخفض</option>
+                        </select>
+                        <select class="filter-select" id="filterStatus" onchange="applyFilters()">
+                            <option value="">كل الحالات</option>
+                            <option value="مفتوح">مفتوح</option>
+                            <option value="قيد المعالجة">قيد المعالجة</option>
+                            <option value="مغلق">مغلق</option>
+                        </select>
+                        <select class="filter-select" id="sortBy" onchange="applyFilters()">
+                            <option value="score-desc">الأعلى خطورة</option>
+                            <option value="score-asc">الأقل خطورة</option>
+                            <option value="date-desc">الأحدث</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div id="tableContainer">
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>لا توجد مخاطر مسجلة</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="heatmap-section">
+                    <h4 style="text-align: center; margin-bottom: 1rem; color: var(--gold); font-size: 0.9rem;">
+                        <i class="fas fa-th"></i> مصفوفة المخاطر
+                    </h4>
+                    <div class="heatmap-grid" id="heatmapGrid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
 
-const SPREADSHEET_ID = '12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A';
-const SHEET_NAME = 'RiskRegister';
-const LIB_SHEET = 'RiskLibrary';
-const MASTER_SHEET = 'Master';
-
-const WRITE_TOKEN = '';
-
-function doGet(e) {
-  const action = String(e?.parameter?.action || '').toLowerCase();
-
-  if (action === 'list') return jsonOutput(listRisks());
-  if (action === 'metrics') return jsonOutput(getMetrics());
-  if (action === 'library') return jsonOutput(getRiskLibrary());
-  if (action === 'master') return jsonOutput(getMasterList());
-
-  return jsonOutput({
-    ok: true,
-    message: 'Risk Register API. Use ?action=list | metrics | library | master'
-  });
-}
-
-function doPost(e) {
-  try {
-    const body = e.postData?.contents ? JSON.parse(e.postData.contents) : {};
-    const action = String(body.action || '').toLowerCase();
-    const payload = body.payload || {};
-
-    if (WRITE_TOKEN && String(payload.token || '') !== WRITE_TOKEN) {
-      return jsonOutput({ ok: false, error: 'Unauthorized' });
-    }
-
-    if (action === 'add') return jsonOutput(addRisk(payload));
-    if (action === 'update') return jsonOutput(updateRisk(payload));
-    if (action === 'delete') return jsonOutput(deleteRisk(payload));
-
-    return jsonOutput({ ok: false, error: 'Unknown action' });
-  } catch (err) {
-    return jsonOutput({ ok: false, error: String(err) });
-  }
-}
-
-function jsonOutput(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function getSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sh = ss.getSheetByName(SHEET_NAME);
-  if (!sh) sh = ss.insertSheet(SHEET_NAME);
-
-  if (sh.getLastRow() === 0) {
-    sh.appendRow([
-      'ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level',
-      'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'LastUpdated', 'UpdatedBy'
-    ]);
-    sh.getRange(1, 1, 1, 14)
-      .setFontWeight('bold')
-      .setBackground('#1e3a5f')
-      .setFontColor('#ffffff');
-    sh.setFrozenRows(1);
-  }
-  return sh;
-}
-
-function getLibSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  return ss.getSheetByName(LIB_SHEET);
-}
-
-function getMasterSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  return ss.getSheetByName(MASTER_SHEET);
-}
-
-function clamp_(n, min, max) {
-  n = Number(n);
-  if (Number.isNaN(n)) n = min;
-  return Math.max(min, Math.min(max, n));
-}
-
-function levelFromScore_(score) {
-  if (score >= 16) return { key: 'ext', label: 'حرج' };
-  if (score >= 12) return { key: 'high', label: 'عالي' };
-  if (score >= 6)  return { key: 'med', label: 'متوسط' };
-  return { key: 'low', label: 'منخفض' };
-}
-
-function findRowById_(sh, id) {
-  const finder = sh.createTextFinder(id).matchEntireCell(true).findNext();
-  return finder ? finder.getRow() : -1;
-}
-
-function listRisks() {
-  const sh = getSheet_();
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return { ok: true, items: [] };
-
-  const values = sh.getRange(2, 1, lastRow - 1, 14).getValues();
-
-  const items = values.map(r => ({
-    id: r[0],
-    risk: r[1],
-    category: r[2],
-    owner: r[3],
-    probability: Number(r[4]) || 1,
-    impact: Number(r[5]) || 1,
-    score: Number(r[6]) || (Number(r[4]) || 1) * (Number(r[5]) || 1),
-    level: r[7] || levelFromScore_((Number(r[4]) || 1) * (Number(r[5]) || 1)).label,
-    mitigation: r[8],
-    status: r[9],
-    reviewDate: r[10],
-    sourceEvidence: r[11],
-    lastUpdated: r[12],
-    updatedBy: r[13],
-  }));
-
-  return { ok: true, items };
-}
-
-function getMetrics() {
-  const sh = getSheet_();
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) {
-    return { ok: true, total: 0, ext: 0, high: 0, med: 0, low: 0, open: 0, progress: 0, closed: 0 };
-  }
-
-  const values = sh.getRange(2, 1, lastRow - 1, 14).getValues();
-  const stats = { total: values.length, ext: 0, high: 0, med: 0, low: 0, open: 0, progress: 0, closed: 0 };
-
-  values.forEach(r => {
-    const level = String(r[7] || '').trim();
-    const status = String(r[9] || '').trim();
-
-    if (level === 'حرج') stats.ext++;
-    else if (level === 'عالي') stats.high++;
-    else if (level === 'متوسط') stats.med++;
-    else stats.low++;
-
-    if (status === 'مغلق') stats.closed++;
-    else if (status === 'قيد المعالجة' || status === 'قيد التنفيذ') stats.progress++;
-    else stats.open++;
-  });
-
-  return { ok: true, ...stats };
-}
-
-function getRiskLibrary() {
-  const lib = getLibSheet_();
-  if (!lib || lib.getLastRow() < 2) return { ok: true, items: [] };
-
-  // الأعمدة: A=المالك, B=القسم, C=Risk, D=Category, E=DefaultOwner, F=DefaultMitigation
-  const values = lib.getRange(2, 3, lib.getLastRow() - 1, 4).getValues(); // من العمود C
-  const items = values
-    .filter(r => String(r[0] || '').trim())
-    .map(r => ({
-      risk: String(r[0] || '').trim(),           // C = Risk
-      category: String(r[1] || '').trim(),        // D = Category
-      defaultOwner: String(r[2] || '').trim(),    // E = DefaultOwner
-      defaultMitigation: String(r[3] || '').trim(), // F = DefaultMitigation
-    }));
-
-  return { ok: true, items };
-}
-
-function getMasterList() {
-  // أولاً نحاول من شيت Master
-  let sh = getMasterSheet_();
-  
-  // إذا لم يوجد شيت Master، نقرأ من RiskLibrary (الأعمدة A و B)
-  if (!sh || sh.getLastRow() < 2) {
-    sh = getLibSheet_();
-  }
-  
-  if (!sh || sh.getLastRow() < 2) return { ok: true, owners: [], departments: [], pairs: [] };
-
-  // الأعمدة A=المالك/المسؤول, B=القسم
-  const values = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
-  const pairs = values
-    .filter(r => String(r[0] || '').trim())
-    .map(r => ({ owner: String(r[0] || '').trim(), department: String(r[1] || '').trim() }));
-
-  const owners = Array.from(new Set(pairs.map(p => p.owner))).sort();
-  const departments = Array.from(new Set(pairs.map(p => p.department).filter(Boolean))).sort();
-
-  return { ok: true, owners, departments, pairs };
-}
-
-function addRisk(p) {
-  const sh = getSheet_();
-
-  const prob = clamp_(p.probability, 1, 5);
-  const impact = clamp_(p.impact, 1, 5);
-  const score = prob * impact;
-  const lvl = levelFromScore_(score).label;
-
-  const id = 'R-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
-
-  sh.appendRow([
-    id,
-    String(p.risk || ''),
-    String(p.category || ''),
-    String(p.owner || ''),
-    prob,
-    impact,
-    score,
-    lvl,
-    String(p.mitigation || ''),
-    String(p.status || 'مفتوح'),
-    String(p.reviewDate || ''),
-    String(p.sourceEvidence || ''),
-    new Date().toISOString(),
-    String(p.updatedBy || 'system')
-  ]);
-
-  return { ok: true, id };
-}
-
-function updateRisk(p) {
-  const sh = getSheet_();
-  const id = String(p.id || '').trim();
-  if (!id) return { ok: false, error: 'Missing id' };
-
-  const row = findRowById_(sh, id);
-  if (row === -1) return { ok: false, error: 'ID not found' };
-
-  const prob = clamp_(p.probability, 1, 5);
-  const impact = clamp_(p.impact, 1, 5);
-  const score = prob * impact;
-  const lvl = levelFromScore_(score).label;
-
-  sh.getRange(row, 2, 1, 13).setValues([[
-    String(p.risk || ''),
-    String(p.category || ''),
-    String(p.owner || ''),
-    prob,
-    impact,
-    score,
-    lvl,
-    String(p.mitigation || ''),
-    String(p.status || 'مفتوح'),
-    String(p.reviewDate || ''),
-    String(p.sourceEvidence || ''),
-    new Date().toISOString(),
-    String(p.updatedBy || 'system')
-  ]]);
-
-  return { ok: true };
-}
-
-function deleteRisk(p) {
-  const sh = getSheet_();
-  const id = String(p.id || '').trim();
-  if (!id) return { ok: false, error: 'Missing id' };
-
-  const row = findRowById_(sh, id);
-  if (row === -1) return { ok: false, error: 'ID not found' };
-
-  sh.deleteRow(row);
-  return { ok: true };
-}
+    <script>
+        const STORAGE_KEY = 'makkah_risk_register';
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec";
+        let allRisks = [];
+        let probability = 3;
+        let impact = 3;
+        let MASTER = null;
+        let LIBRARY = [];
+        
+        async function loadMasterAndLibrary() {
+            if (!WEB_APP_URL) return;
+            
+            try {
+                const mRes = await fetch(WEB_APP_URL + '?action=master');
+                const mData = await mRes.json();
+                if (mData.ok) {
+                    MASTER = mData;
+                    fillSelect('owner', mData.owners || [], 'اختر المسؤول...');
+                }
+            } catch (e) { console.log('Master load failed'); }
+            
+            try {
+                const lRes = await fetch(WEB_APP_URL + '?action=library');
+                const lData = await lRes.json();
+                if (lData.ok) {
+                    LIBRARY = lData.items || [];
+                    buildRiskDropdown();
+                }
+            } catch (e) { console.log('Library load failed'); }
+        }
+        
+        function fillSelect(selectId, items, placeholder) {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            const cur = sel.value;
+            sel.innerHTML = `<option value="">${placeholder}</option>` +
+                items.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+            if (items.includes(cur)) sel.value = cur;
+        }
+        
+        function buildRiskDropdown() {
+            const el = document.getElementById('riskDesc');
+            if (!el || LIBRARY.length === 0) return;
+            if (el.tagName === 'SELECT') return;
+            
+            const textarea = el;
+            
+            const sel = document.createElement('select');
+            sel.className = textarea.className;
+            sel.id = 'riskDesc';
+            sel.required = true;
+            
+            sel.innerHTML = `<option value="">اختر الخطر من المكتبة...</option>` +
+                LIBRARY.map(x => `<option value="${escapeHtml(x.risk)}">${escapeHtml(x.risk)}</option>`).join('') +
+                `<option value="__other__">أخرى (إدخال يدوي)...</option>`;
+            
+            textarea.parentNode.replaceChild(sel, textarea);
+            sel.addEventListener('change', () => {
+                if (sel.value === '__other__') {
+                    const input = document.createElement('textarea');
+                    input.className = sel.className;
+                    input.id = 'riskDesc';
+                    input.placeholder = 'أدخل وصف الخطر...';
+                    input.required = true;
+                    sel.parentNode.replaceChild(input, sel);
+                } else {
+                    autoFillFromLibrary(sel.value);
+                }
+            });
+        }
+        
+        function autoFillFromLibrary(riskText) {
+            const found = LIBRARY.find(x => x.risk === riskText);
+            if (!found) return;
+            
+            const cat = document.getElementById('category');
+            if (cat) cat.value = found.category || '';
+            
+            const mit = document.getElementById('mitigation');
+            if (mit) mit.value = found.defaultMitigation || '';
+            
+            const owner = document.getElementById('owner');
+            if (owner && found.defaultOwner) owner.value = found.defaultOwner;
+        }
+        
+        function escapeHtml(str) {
+            return String(str || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+        
+        async function init() {
+            setupRatingButtons();
+            
+            try {
+                await loadMasterAndLibrary();
+            } catch (e) { console.log('Loading master/library failed'); }
+            
+            await loadRisks();
+        }
+        
+        function setupRatingButtons() {
+            document.querySelectorAll('#probBtns .rating-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#probBtns .rating-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    probability = parseInt(btn.dataset.val);
+                    updateScore();
+                });
+            });
+            
+            document.querySelectorAll('#impactBtns .rating-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#impactBtns .rating-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    impact = parseInt(btn.dataset.val);
+                    updateScore();
+                });
+            });
+        }
+        
+        function updateScore() {
+            const score = probability * impact;
+            let level, levelClass;
+            
+            if (score >= 16) { level = 'حرج'; levelClass = 'ext'; }
+            else if (score >= 12) { level = 'عالي'; levelClass = 'high'; }
+            else if (score >= 6) { level = 'متوسط'; levelClass = 'med'; }
+            else { level = 'منخفض'; levelClass = 'low'; }
+            
+            const display = document.getElementById('scoreDisplay');
+            display.className = 'score-display ' + levelClass;
+            display.innerHTML = `درجة الخطورة: <span id="scoreValue">${score}</span> - ${level}`;
+        }
+        
+        function getLevel(score) {
+            if (score >= 16) return 'حرج';
+            if (score >= 12) return 'عالي';
+            if (score >= 6) return 'متوسط';
+            return 'منخفض';
+        }
+        
+        async function loadRisks() {
+            if (WEB_APP_URL) {
+                try {
+                    const res = await fetch(WEB_APP_URL + '?action=list');
+                    const data = await res.json();
+                    
+                    if (data.ok) {
+                        allRisks = data.items || [];
+                        useLocalStorage = false;
+                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> متصل');
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(allRisks));
+                    }
+                } catch (err) {
+                    console.log('API unavailable, using localStorage');
+                    loadFromLocalStorage();
+                }
+            } else {
+                loadFromLocalStorage();
+            }
+            
+            updateStats();
+            applyFilters();
+            renderHeatmap();
+            checkCriticalAlert();
+        }
+        
+        function loadFromLocalStorage() {
+            useLocalStorage = true;
+            const stored = localStorage.getItem(STORAGE_KEY);
+            allRisks = stored ? JSON.parse(stored) : [];
+            setSaveBadge('local', '<i class="fas fa-database"></i> محفوظ محلياً');
+        }
+        
+        function saveToLocalStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(allRisks));
+        }
+        
+        function setSaveBadge(type, html) {
+            const el = document.getElementById('saveBadge');
+            el.innerHTML = html;
+            el.classList.remove('ok', 'warn', 'err', 'local');
+            el.classList.add(type);
+        }
+        
+        function checkCriticalAlert() {
+            const critical = allRisks.filter(r => r.level === 'حرج' && r.status !== 'مغلق').length;
+            const alertBar = document.getElementById('criticalAlert');
+            
+            if (critical > 0) {
+                document.getElementById('criticalCount').textContent = critical;
+                alertBar.classList.add('show');
+            } else {
+                alertBar.classList.remove('show');
+            }
+        }
+        
+        function updateStats() {
+            const stats = { total: allRisks.length, ext: 0, high: 0, med: 0, low: 0 };
+            
+            allRisks.forEach(r => {
+                if (r.level === 'حرج') stats.ext++;
+                else if (r.level === 'عالي') stats.high++;
+                else if (r.level === 'متوسط') stats.med++;
+                else stats.low++;
+            });
+            
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statExt').textContent = stats.ext;
+            document.getElementById('statHigh').textContent = stats.high;
+            document.getElementById('statMed').textContent = stats.med;
+            document.getElementById('statLow').textContent = stats.low;
+        }
+        
+        function filterByLevel(level) {
+            document.getElementById('filterLevel').value = level;
+            applyFilters();
+        }
+        
+        function applyFilters() {
+            const cat = document.getElementById('filterCategory').value;
+            const lvl = document.getElementById('filterLevel').value;
+            const st = document.getElementById('filterStatus').value;
+            const sort = document.getElementById('sortBy').value;
+            
+            let filtered = [...allRisks];
+            if (cat) filtered = filtered.filter(r => r.category && r.category.includes(cat));
+            if (lvl) filtered = filtered.filter(r => r.level === lvl);
+            if (st) filtered = filtered.filter(r => r.status === st);
+            
+            if (sort === 'score-desc') filtered.sort((a, b) => (b.score || 0) - (a.score || 0));
+            else if (sort === 'score-asc') filtered.sort((a, b) => (a.score || 0) - (b.score || 0));
+            else if (sort === 'date-desc') filtered.sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
+            
+            renderTable(filtered);
+        }
+        
+        function renderTable(risks) {
+            if (!risks.length) {
+                document.getElementById('tableContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>لا توجد مخاطر مسجلة</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            document.getElementById('tableContainer').innerHTML = `
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>الخطر</th>
+                                <th>التصنيف</th>
+                                <th>المسؤول</th>
+                                <th>المصدر</th>
+                                <th>الدرجة</th>
+                                <th>المستوى</th>
+                                <th>الحالة</th>
+                                <th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${risks.map(r => `
+                                <tr>
+                                    <td class="risk-text">${r.risk || '-'}${r.localOnly ? ' <span class="badge" style="margin-right:6px;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;font-size:0.65rem;">محلي</span>' : ''}</td>
+                                    <td><span class="badge" style="background: rgba(201,169,98,0.2); color: var(--gold);">${r.category || '-'}</span></td>
+                                    <td style="font-size: 0.8rem;">${r.owner || '-'}</td>
+                                    <td style="font-size: 0.75rem; opacity: 0.7;">${r.sourceEvidence || '-'}</td>
+                                    <td style="font-weight: 800;">${r.score || '-'}</td>
+                                    <td><span class="badge badge-${getLevelClass(r.level)}">${r.level || '-'}</span></td>
+                                    <td><span class="badge badge-${getStatusClass(r.status)}">${r.status || '-'}</span></td>
+                                    <td>
+                                        <div class="action-btns">
+                                            <button class="btn btn-sm btn-primary" onclick="editRisk('${r.id}')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-danger" onclick="deleteRisk('${r.id}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        function getLevelClass(level) {
+            if (level === 'حرج') return 'ext';
+            if (level === 'عالي') return 'high';
+            if (level === 'متوسط') return 'med';
+            return 'low';
+        }
+        
+        function getStatusClass(status) {
+            if (status === 'مغلق') return 'closed';
+            if (status === 'قيد المعالجة') return 'progress';
+            return 'open';
+        }
+        
+        function renderHeatmap() {
+            const matrix = {};
+            for (let p = 1; p <= 5; p++) {
+                for (let i = 1; i <= 5; i++) {
+                    matrix[`${p}-${i}`] = 0;
+                }
+            }
+            
+            allRisks.forEach(r => {
+                const key = `${r.probability}-${r.impact}`;
+                if (matrix[key] !== undefined) matrix[key]++;
+            });
+            
+            let html = '<div class="heatmap-header"></div>';
+            for (let i = 1; i <= 5; i++) {
+                html += `<div class="heatmap-header">${i}</div>`;
+            }
+            
+            for (let p = 5; p >= 1; p--) {
+                html += `<div class="heatmap-label">${p}</div>`;
+                for (let i = 1; i <= 5; i++) {
+                    const score = p * i;
+                    let cellClass;
+                    if (score >= 16) cellClass = 'cell-ext';
+                    else if (score >= 12) cellClass = 'cell-high';
+                    else if (score >= 6) cellClass = 'cell-med';
+                    else cellClass = 'cell-low';
+                    
+                    const count = matrix[`${p}-${i}`];
+                    html += `<div class="heatmap-cell ${cellClass}">${count || ''}</div>`;
+                }
+            }
+            
+            document.getElementById('heatmapGrid').innerHTML = html;
+        }
+        
+        document.getElementById('riskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            setSaveBadge('warn', '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...');
+            
+            const editId = document.getElementById('editId').value;
+            const score = probability * impact;
+            
+            const payload = {
+                risk: document.getElementById('riskDesc').value,
+                category: document.getElementById('category').value,
+                owner: document.getElementById('owner').value,
+                probability: probability,
+                impact: impact,
+                mitigation: document.getElementById('mitigation').value,
+                status: document.getElementById('status').value,
+                reviewDate: document.getElementById('reviewDate').value,
+                sourceEvidence: document.getElementById('source').value,
+                updatedBy: 'user'
+            };
+            
+            if (editId) {
+                payload.id = editId;
+            }
+            
+            const action = editId ? 'update' : 'add';
+            
+            if (WEB_APP_URL) {
+                try {
+                    const res = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action, payload })
+                    });
+                    const data = await res.json();
+                    
+                    if (!data.ok) throw new Error(data.error || 'Save failed');
+                    
+                    setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
+                    await loadRisks();
+                } catch (err) {
+                    console.error('API error:', err);
+                    const localData = {
+                        ...payload,
+                        id: editId || 'R-' + Date.now(),
+                        score: score,
+                        level: getLevel(score),
+                        lastUpdated: new Date().toISOString(),
+                        localOnly: editId ? false : true
+                    };
+                    
+                    if (editId) {
+                        const idx = allRisks.findIndex(r => r.id === editId);
+                        if (idx !== -1) allRisks[idx] = localData;
+                    } else {
+                        allRisks.push(localData);
+                    }
+                    saveToLocalStorage();
+                    setSaveBadge('local', '<i class="fas fa-database"></i> محفوظ محلياً');
+                    updateStats();
+                    applyFilters();
+                    renderHeatmap();
+                    checkCriticalAlert();
+                }
+            } else {
+                const localData = {
+                    ...payload,
+                    id: editId || 'R-' + Date.now(),
+                    score: score,
+                    level: getLevel(score),
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                if (editId) {
+                    const idx = allRisks.findIndex(r => r.id === editId);
+                    if (idx !== -1) allRisks[idx] = localData;
+                } else {
+                    allRisks.push(localData);
+                }
+                saveToLocalStorage();
+                setSaveBadge('ok', '<i class="fas fa-check-circle"></i> تم الحفظ ✓');
+                updateStats();
+                applyFilters();
+                renderHeatmap();
+                checkCriticalAlert();
+            }
+            
+            showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
+            resetForm();
+        });
+        
+        function editRisk(id) {
+            const risk = allRisks.find(r => r.id === id);
+            if (!risk) return;
+            
+            document.getElementById('editId').value = id;
+            
+            const riskEl = document.getElementById('riskDesc');
+            if (riskEl) {
+                if (riskEl.tagName === 'SELECT') {
+                    const options = Array.from(riskEl.options).map(o => o.value);
+                    if (options.includes(risk.risk)) {
+                        riskEl.value = risk.risk || '';
+                    } else {
+                        const textarea = document.createElement('textarea');
+                        textarea.className = riskEl.className;
+                        textarea.id = 'riskDesc';
+                        textarea.value = risk.risk || '';
+                        textarea.required = true;
+                        riskEl.parentNode.replaceChild(textarea, riskEl);
+                    }
+                } else {
+                    riskEl.value = risk.risk || '';
+                }
+            }
+            
+            document.getElementById('category').value = risk.category || '';
+            document.getElementById('owner').value = risk.owner || '';
+            document.getElementById('mitigation').value = risk.mitigation || '';
+            document.getElementById('status').value = risk.status || 'مفتوح';
+            document.getElementById('reviewDate').value = risk.reviewDate || '';
+            document.getElementById('source').value = risk.sourceEvidence || '';
+            
+            probability = risk.probability || 3;
+            impact = risk.impact || 3;
+            
+            document.querySelectorAll('#probBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.val) === probability);
+            });
+            document.querySelectorAll('#impactBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.val) === impact);
+            });
+            
+            updateScore();
+            
+            document.getElementById('formTitle').textContent = 'تعديل الخطر';
+            document.getElementById('submitText').textContent = 'تحديث';
+            document.getElementById('cancelBtn').style.display = 'block';
+            
+            document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        async function deleteRisk(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا الخطر؟')) return;
+            
+            setSaveBadge('warn', '<i class="fas fa-spinner fa-spin"></i> جاري الحذف...');
+            
+            allRisks = allRisks.filter(r => r.id !== id);
+            saveToLocalStorage();
+            
+            if (WEB_APP_URL) {
+                try {
+                    const res = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'delete', payload: { id } })
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحذف ✓');
+                    } else {
+                        setSaveBadge('warn', '<i class="fas fa-exclamation-triangle"></i> حذف محلي فقط');
+                    }
+                } catch (err) {
+                    setSaveBadge('local', '<i class="fas fa-database"></i> محفوظ محلياً');
+                }
+            } else {
+                setSaveBadge('ok', '<i class="fas fa-check-circle"></i> تم الحذف ✓');
+            }
+            
+            showToast('تم الحذف بنجاح', 'success');
+            updateStats();
+            applyFilters();
+            renderHeatmap();
+            checkCriticalAlert();
+        }
+        
+        function resetForm() {
+            document.getElementById('riskForm').reset();
+            document.getElementById('editId').value = '';
+            document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
+            document.getElementById('submitText').textContent = 'حفظ';
+            document.getElementById('cancelBtn').style.display = 'none';
+            
+            probability = 3;
+            impact = 3;
+            
+            document.querySelectorAll('#probBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.val === '3');
+            });
+            document.querySelectorAll('#impactBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.val === '3');
+            });
+            
+            updateScore();
+        }
+        
+        function exportExcel() {
+            if (!allRisks.length) {
+                showToast('لا توجد بيانات للتصدير', 'error');
+                return;
+            }
+            
+            let csv = '\uFEFF';
+            csv += 'الخطر,التصنيف,المسؤول,المصدر,الاحتمالية,الأثر,الدرجة,المستوى,الحالة,إجراءات التخفيف\n';
+            
+            allRisks.forEach(r => {
+                csv += `"${r.risk || ''}","${r.category || ''}","${r.owner || ''}","${r.sourceEvidence || ''}",${r.probability || ''},${r.impact || ''},${r.score || ''},"${r.level || ''}","${r.status || ''}","${r.mitigation || ''}"\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'risk-register-' + new Date().toISOString().split('T')[0] + '.csv';
+            link.click();
+            
+            showToast('تم التصدير بنجاح', 'success');
+        }
+        
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        init();
+    </script>
+</body>
+</html>
