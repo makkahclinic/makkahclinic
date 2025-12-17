@@ -1,232 +1,832 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>🩺 نموذج الإبلاغ عن التعرض المهني – مجمع مكة الطبي بالزاهر</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    :root{--maroon:#7B1E24;--burgundy:#9e2b2b;--gold:#E9C46A;--sand:#FDF8F5}
-    body{font-family:'Tajawal',sans-serif;background:var(--sand);
-      background-image:radial-gradient(circle at top left,#fff 25%,#f9f2ef 80%)}
-    .header{background:linear-gradient(to right,var(--maroon),var(--burgundy));
-      color:#fff;border-bottom:6px solid var(--gold)}
-    .card{background:#fff;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,.08);transition:transform .3s ease}
-    .card:hover{transform:translateY(-3px)}
-    .label{color:var(--maroon);font-weight:700}
-    .btn{background-color:var(--maroon);color:#fff;padding:12px 28px;border-radius:12px;font-weight:700;transition:all .3s ease;box-shadow:0 4px 8px rgba(0,0,0,.1)}
-    .btn:hover{background-color:var(--gold);color:#3b2f2f;transform:translateY(-1px)}
-    footer{margin-top:40px;text-align:center;color:#777;font-size:.85rem}
-    @keyframes pulse {0%{transform:scale(1)}50%{transform:scale(1.03)}100%{transform:scale(1)}}
-    canvas.pulse {animation:pulse 1.5s ease;}
-    .gold-counter{background:var(--gold);color:#7B1E24;font-weight:800;
-      padding:10px 20px;border-radius:12px;display:inline-block;
-      box-shadow:0 2px 6px rgba(0,0,0,.15);animation:pulse 2s infinite ease-in-out;}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بلاغ التعرض الوخزي - مجمع مكة الطبي</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --maroon: #7B1E24;
+            --maroon-light: #9e2b2b;
+            --gold: #E9C46A;
+            --gold-light: #f3cf73;
+            --sand: #FDF8F5;
+            --white: #ffffff;
+            --gray: #666;
+            --success: #28a745;
+            --danger: #dc3545;
+        }
+        
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(135deg, var(--sand) 0%, #fff5f0 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--maroon) 0%, var(--maroon-light) 100%);
+            color: var(--white);
+            padding: 30px 20px;
+            border-radius: 20px 20px 0 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M20 20c0-5.5-4.5-10-10-10S0 14.5 0 20s4.5 10 10 10 10-4.5 10-10zm10 0c0 5.5 4.5 10 10 10s10-4.5 10-10-4.5-10-10-10-10 4.5-10 10z'/%3E%3C/g%3E%3C/svg%3E");
+        }
+        
+        .header-icon {
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 40px;
+            border: 3px solid var(--gold);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 900;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .urgent-badge {
+            background: var(--gold);
+            color: var(--maroon);
+            padding: 8px 20px;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 13px;
+            display: inline-block;
+            margin-top: 15px;
+        }
+        
+        .form-card {
+            background: var(--white);
+            border-radius: 0 0 20px 20px;
+            padding: 30px 25px;
+            box-shadow: 0 20px 60px rgba(123, 30, 36, 0.15);
+        }
+        
+        .progress-bar {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .progress-step {
+            width: 40px;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+        
+        .progress-step.active {
+            background: var(--gold);
+        }
+        
+        .progress-step.completed {
+            background: var(--success);
+        }
+        
+        .step {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .step.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .step-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--maroon);
+            text-align: center;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .step-title i {
+            color: var(--gold);
+        }
+        
+        .quick-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .quick-option {
+            background: var(--sand);
+            border: 2px solid transparent;
+            border-radius: 15px;
+            padding: 20px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .quick-option:hover {
+            border-color: var(--gold);
+            transform: translateY(-3px);
+        }
+        
+        .quick-option.selected {
+            border-color: var(--maroon);
+            background: linear-gradient(135deg, #fff5f0, #ffeee8);
+        }
+        
+        .quick-option i {
+            font-size: 32px;
+            color: var(--maroon);
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .quick-option span {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--maroon);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 700;
+            color: var(--maroon);
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .form-group label i {
+            margin-left: 5px;
+            color: var(--gold);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--gold);
+            box-shadow: 0 0 0 4px rgba(233, 196, 106, 0.2);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        @media (max-width: 500px) {
+            .form-row { grid-template-columns: 1fr; }
+            .quick-options { grid-template-columns: 1fr; gap: 10px; }
+            .quick-option { padding: 15px; display: flex; align-items: center; gap: 15px; text-align: right; }
+            .quick-option i { margin-bottom: 0; font-size: 28px; }
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .checkbox-item {
+            background: var(--sand);
+            padding: 12px 18px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .checkbox-item:hover {
+            border-color: var(--gold);
+        }
+        
+        .checkbox-item.checked {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border-color: var(--success);
+        }
+        
+        .checkbox-item input {
+            display: none;
+        }
+        
+        .checkbox-item i {
+            color: var(--gray);
+            font-size: 18px;
+        }
+        
+        .checkbox-item.checked i {
+            color: var(--success);
+        }
+        
+        .checkbox-item span {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 16px 20px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 16px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--maroon), var(--maroon-light));
+            color: var(--white);
+            box-shadow: 0 5px 20px rgba(123, 30, 36, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(123, 30, 36, 0.4);
+        }
+        
+        .btn-secondary {
+            background: var(--sand);
+            color: var(--maroon);
+        }
+        
+        .btn-secondary:hover {
+            background: #f0e6e0;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .success-screen {
+            text-align: center;
+            padding: 40px 20px;
+            display: none;
+        }
+        
+        .success-screen.active {
+            display: block;
+        }
+        
+        .success-icon {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, var(--success), #20c997);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            font-size: 50px;
+            color: var(--white);
+            animation: bounceIn 0.5s ease;
+        }
+        
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        .success-screen h2 {
+            color: var(--success);
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .success-screen p {
+            color: var(--gray);
+            font-size: 15px;
+            line-height: 1.8;
+        }
+        
+        .ref-number {
+            background: var(--sand);
+            padding: 15px 25px;
+            border-radius: 12px;
+            display: inline-block;
+            margin: 20px 0;
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--maroon);
+        }
+        
+        .next-steps {
+            background: linear-gradient(135deg, #fff3cd, #ffeeba);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 25px;
+            text-align: right;
+        }
+        
+        .next-steps h4 {
+            color: var(--maroon);
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        
+        .next-steps ul {
+            list-style: none;
+            font-size: 14px;
+            color: #856404;
+        }
+        
+        .next-steps li {
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .next-steps li i {
+            color: var(--maroon);
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 25px;
+            color: var(--gray);
+            font-size: 13px;
+        }
+        
+        .footer a {
+            color: var(--maroon);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .loading-overlay.active {
+            display: flex;
+        }
+        
+        .loading-box {
+            background: var(--white);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+        }
+        
+        .loading-box i {
+            font-size: 50px;
+            color: var(--maroon);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-box p {
+            margin-top: 15px;
+            font-weight: 700;
+            color: var(--maroon);
+        }
+    </style>
 </head>
-  <header class="header py-6 text-center rounded-b-xl shadow">
-    <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo.png" alt="شعار المجمع" class="mx-auto h-20 mb-3">
-    <h1 class="text-3xl md:text-4xl font-extrabold">نموذج الإبلاغ عن التعرض المهني</h1>
-    <p class="text-lg mt-2 text-[var(--gold)]">وخزي – دموي – رذاذ مخاطي</p>
-    <p class="text-sm text-gray-100 mt-1">لجنة مكافحة العدوى – مجمع مكة الطبي بالزاهر</p>
-  </header>
-  
-</div>
-<body class="p-4">
-  <!-- رأس الصفحة -->
-
-
-  <!-- النموذج -->
-  <section class="max-w-4xl mx-auto mt-10 card p-8 space-y-6">
-    <h2 class="text-2xl font-extrabold text-[var(--maroon)] text-center border-b-2 border-[var(--gold)] pb-3">
-      📋 تعبئة بلاغ التعرض المهني
-    </h2>
-
-    <form id="exposureForm" class="space-y-6" autocomplete="off" novalidate>
-      <div>
-        <h3 class="text-xl font-bold text-[var(--maroon)] mb-3">البيانات الأساسية</h3>
-        <div class="grid md:grid-cols-2 gap-4">
-          <div><label class="label">الاسم الكامل</label>
-               <input name="fullname" class="w-full border p-2 rounded" required></div>
-          <div><label class="label">القسم / الوحدة</label>
-               <input name="department" class="w-full border p-2 rounded" required></div>
-          <div><label class="label">الوظيفة</label>
-               <input name="position" class="w-full border p-2 rounded"></div>
-          <div><label class="label">تاريخ الحادث</label>
-               <input type="date" name="date" class="w-full border p-2 rounded" required></div>
-          <div><label class="label">الوقت</label>
-               <input type="time" name="time" class="w-full border p-2 rounded" required></div>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-icon">
+                <i class="fas fa-syringe"></i>
+            </div>
+            <h1>بلاغ التعرض المهني</h1>
+            <p>وخزي - دموي - رذاذ مخاطي</p>
+            <div class="urgent-badge">
+                <i class="fas fa-bolt"></i> نموذج سريع - 3 خطوات فقط
+            </div>
         </div>
-      </div>
-
-      <div>
-        <h3 class="text-xl font-bold text-[var(--maroon)] mb-3">نوع التعرض</h3>
-        <select id="exposureType" name="exposure_type" class="w-full border p-2 rounded" required>
-          <option value="">اختر نوع التعرض</option>
-          <option value="needle">وخزي (إبرة أو أداة حادة)</option>
-          <option value="blood">تعرض دموي / سوائل جسدية</option>
-          <option value="mucosal">تلامس الأغشية المخاطية</option>
-        </select>
-
-        <div id="needleSection" class="hidden space-y-2 mt-3">
-          <label class="label">نوع الأداة</label>
-          <select name="instrument" class="w-full border p-2 rounded">
-            <option value="">اختر</option><option>إبرة</option><option>مشرط</option><option>أداة أخرى</option>
-          </select>
-          <label class="label">هل كانت ملوثة؟</label>
-          <select name="contaminated" class="w-full border p-2 rounded">
-            <option value="">اختر</option><option>نعم</option><option>لا</option>
-          </select>
-          <label class="label">موضع الإصابة</label>
-          <input name="injury_site" class="w-full border p-2 rounded" placeholder="مثال: إصبع اليد اليمنى">
+        
+        <div class="form-card">
+            <div class="progress-bar">
+                <div class="progress-step active" data-step="1"></div>
+                <div class="progress-step" data-step="2"></div>
+                <div class="progress-step" data-step="3"></div>
+            </div>
+            
+            <form id="exposureForm">
+                <div class="step active" data-step="1">
+                    <h3 class="step-title"><i class="fas fa-exclamation-triangle"></i> نوع التعرض</h3>
+                    
+                    <div class="quick-options">
+                        <div class="quick-option" data-type="needle" onclick="selectType(this)">
+                            <i class="fas fa-syringe"></i>
+                            <span>وخز إبرة</span>
+                        </div>
+                        <div class="quick-option" data-type="blood" onclick="selectType(this)">
+                            <i class="fas fa-droplet"></i>
+                            <span>تعرض دموي</span>
+                        </div>
+                        <div class="quick-option" data-type="mucosal" onclick="selectType(this)">
+                            <i class="fas fa-eye"></i>
+                            <span>رذاذ مخاطي</span>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="exposure_type" id="exposureType" required>
+                    
+                    <div id="needleDetails" style="display:none;">
+                        <div class="form-group">
+                            <label><i class="fas fa-tools"></i> نوع الأداة</label>
+                            <select name="instrument" class="form-control">
+                                <option value="">اختر...</option>
+                                <option value="إبرة تحت الجلد">إبرة تحت الجلد</option>
+                                <option value="إبرة وريدية">إبرة وريدية</option>
+                                <option value="مشرط">مشرط</option>
+                                <option value="سرنجة">سرنجة</option>
+                                <option value="أخرى">أخرى</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-hand-pointer"></i> موضع الإصابة</label>
+                            <input type="text" name="injury_site" class="form-control" placeholder="مثال: إصبع اليد اليمنى">
+                        </div>
+                    </div>
+                    
+                    <div id="bloodDetails" style="display:none;">
+                        <div class="form-group">
+                            <label><i class="fas fa-tint"></i> نوع السائل</label>
+                            <select name="fluid_type" class="form-control">
+                                <option value="">اختر...</option>
+                                <option value="دم">دم</option>
+                                <option value="سوائل جسدية">سوائل جسدية أخرى</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-body-text"></i> مكان التلامس</label>
+                            <input type="text" name="contact_area" class="form-control" placeholder="جرح مفتوح، جلد متشقق...">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-biohazard"></i> هل المصدر ملوث؟</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-item" onclick="toggleCheck(this)">
+                                <input type="radio" name="contaminated" value="نعم">
+                                <i class="fas fa-circle"></i>
+                                <span>نعم</span>
+                            </label>
+                            <label class="checkbox-item" onclick="toggleCheck(this)">
+                                <input type="radio" name="contaminated" value="لا">
+                                <i class="fas fa-circle"></i>
+                                <span>لا</span>
+                            </label>
+                            <label class="checkbox-item" onclick="toggleCheck(this)">
+                                <input type="radio" name="contaminated" value="غير معروف">
+                                <i class="fas fa-circle"></i>
+                                <span>غير معروف</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary" onclick="nextStep(2)" id="step1Next" disabled>
+                            التالي <i class="fas fa-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="step" data-step="2">
+                    <h3 class="step-title"><i class="fas fa-user"></i> بياناتك</h3>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> الاسم</label>
+                        <input type="text" name="fullname" class="form-control" placeholder="الاسم الثلاثي" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> القسم</label>
+                            <select name="department" class="form-control" required>
+                                <option value="">اختر...</option>
+                                <option>الطوارئ</option>
+                                <option>العيادات الخارجية</option>
+                                <option>المختبر</option>
+                                <option>الأشعة</option>
+                                <option>التمريض</option>
+                                <option>العمليات</option>
+                                <option>الصيدلية</option>
+                                <option>التنظيف</option>
+                                <option>أخرى</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-briefcase"></i> الوظيفة</label>
+                            <select name="position" class="form-control">
+                                <option value="">اختر...</option>
+                                <option>طبيب</option>
+                                <option>ممرض/ة</option>
+                                <option>فني مختبر</option>
+                                <option>فني أشعة</option>
+                                <option>صيدلي</option>
+                                <option>عامل نظافة</option>
+                                <option>أخرى</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-calendar"></i> تاريخ الحادث</label>
+                            <input type="date" name="date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-clock"></i> الوقت</label>
+                            <input type="time" name="time" class="form-control" required>
+                        </div>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-secondary" onclick="prevStep(1)">
+                            <i class="fas fa-arrow-right"></i> السابق
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="nextStep(3)">
+                            التالي <i class="fas fa-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="step" data-step="3">
+                    <h3 class="step-title"><i class="fas fa-first-aid"></i> الإجراءات الفورية</h3>
+                    
+                    <p style="text-align:center;color:var(--gray);margin-bottom:20px;font-size:14px;">
+                        اختر ما قمت به فور حدوث التعرض:
+                    </p>
+                    
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <label class="checkbox-item" onclick="toggleCheck(this)">
+                            <input type="checkbox" name="washed" value="نعم">
+                            <i class="fas fa-circle-check"></i>
+                            <span>غسلت المنطقة بالماء والصابون</span>
+                        </label>
+                        <label class="checkbox-item" onclick="toggleCheck(this)">
+                            <input type="checkbox" name="reported" value="نعم">
+                            <i class="fas fa-circle-check"></i>
+                            <span>أبلغت المشرف المباشر</span>
+                        </label>
+                        <label class="checkbox-item" onclick="toggleCheck(this)">
+                            <input type="checkbox" name="medical_eval" value="نعم">
+                            <i class="fas fa-circle-check"></i>
+                            <span>تم التقييم الطبي</span>
+                        </label>
+                        <label class="checkbox-item" onclick="toggleCheck(this)">
+                            <input type="checkbox" name="pep" value="نعم">
+                            <i class="fas fa-circle-check"></i>
+                            <span>بدأت العلاج الوقائي (PEP)</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top:20px;">
+                        <label><i class="fas fa-comment"></i> ملاحظات (اختياري)</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="أي تفاصيل إضافية..."></textarea>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-secondary" onclick="prevStep(2)">
+                            <i class="fas fa-arrow-right"></i> السابق
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-paper-plane"></i> إرسال البلاغ
+                        </button>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="success-screen" id="successScreen">
+                <div class="success-icon">
+                    <i class="fas fa-check"></i>
+                </div>
+                <h2>تم استلام البلاغ بنجاح!</h2>
+                <p>سيتواصل معك فريق مكافحة العدوى خلال ساعات</p>
+                
+                <div class="ref-number" id="refNumber">
+                    رقم البلاغ: NS-000
+                </div>
+                
+                <div class="next-steps">
+                    <h4><i class="fas fa-list-check"></i> الخطوات التالية:</h4>
+                    <ul>
+                        <li><i class="fas fa-check"></i> راجع عيادة الموظفين خلال 24 ساعة</li>
+                        <li><i class="fas fa-check"></i> أحضر نتائج فحوصات المصدر (إن وجدت)</li>
+                        <li><i class="fas fa-check"></i> التزم بمواعيد المتابعة</li>
+                    </ul>
+                </div>
+                
+                <button class="btn btn-primary" style="margin-top:25px;" onclick="location.reload()">
+                    <i class="fas fa-plus"></i> بلاغ جديد
+                </button>
+            </div>
         </div>
-        <div id="bloodSection" class="hidden space-y-2 mt-3">
-          <label class="label">مكان التلامس</label>
-          <input name="contact_area" class="w-full border p-2 rounded" placeholder="جرح / جلد متشقق">
-          <label class="label">نوع السائل</label>
-          <input name="fluid_type" class="w-full border p-2 rounded" placeholder="دم / سوائل جسدية">
-          <label class="label">كمية السائل</label>
-          <input name="fluid_amount" class="w-full border p-2 rounded" placeholder="قليلة / متوسطة / كثيرة">
+        
+        <div class="footer">
+            <p>لجنة مكافحة العدوى - مجمع مكة الطبي بالزاهر</p>
+            <p style="margin-top:8px;">
+                <a href="https://m2020m.org"><i class="fas fa-home"></i> الرئيسية</a>
+            </p>
         </div>
-      </div>
-
-      <div>
-        <h3 class="text-xl font-bold text-[var(--maroon)] mb-3">الإجراءات الفورية</h3>
-        <div class="space-y-2">
-          <label><input type="checkbox" name="washed" value="نعم"> تم غسل المنطقة</label><br>
-          <label><input type="checkbox" name="reported" value="نعم"> تم الإبلاغ</label><br>
-          <label><input type="checkbox" name="medical_eval" value="نعم"> تم التقييم الطبي</label><br>
-          <label><input type="checkbox" name="pep" value="نعم"> تم البدء بالعلاج الوقائي (PEP)</label>
+    </div>
+    
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-box">
+            <i class="fas fa-spinner"></i>
+            <p>جاري إرسال البلاغ...</p>
         </div>
-      </div>
-
-      <div>
-        <label class="label block mb-1">ملاحظات إضافية</label>
-        <textarea name="notes" class="w-full border p-2 rounded" rows="3" placeholder="أي تفاصيل إضافية..."></textarea>
-      </div>
-
-      <div class="text-center mt-6">
-        <button type="submit" id="submitBtn" class="btn">📤 إرسال البلاغ</button>
-        <div id="statusMsg" class="text-sm mt-3 text-gray-600"></div>
-      </div>
-    </form>
-  </section>
-
-  <div class="text-center mt-10">
-    <button id="openLogBtn" class="btn bg-[var(--gold)] text-black hover:bg-[#f3cf73]">📊 عرض سجل الإصابات</button>
-  </div>
-
-  <section class="max-w-6xl mx-auto mt-12 card p-8 text-center">
-    <h2 class="text-2xl font-extrabold text-[var(--maroon)] mb-4">📈 الإحصائيات الحية</h2>
-    <div id="goldCounter" class="gold-counter mb-6">📊 إجمالي البلاغات: 0 | الحالات الخطيرة: 0</div>
-    <canvas id="chart" class="mx-auto pulse" height="160"></canvas>
-    <div id="dataTable" class="mt-6"></div>
-  </section>
-<!-- 🔗 QR Code for Needlestick Report -->
-<div class="text-center mt-6">
-  <h2 class="text-xl font-bold text-[var(--maroon)] mb-2">📱 مسح الكود للإبلاغ الفوري</h2>
-  <img 
-    src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https://www.m2020m.org/ipc/incidents/report-needlestick.html" 
-    alt="QR Code - نموذج الإبلاغ عن التعرض الوخزي أو الدموي"
-    class="mx-auto border-4 border-[var(--gold)] rounded-xl p-2 shadow-lg hover:scale-105 transition-transform duration-300"
-  />
-  <p class="mt-2 text-gray-700">افتح الكاميرا وامسح الكود لفتح النموذج الإلكتروني مباشرة</p>
-</div>
-
-  <footer>© 2025 مجمع مكة الطبي بالزاهر – لجنة مكافحة العدوى</footer>
-
-  <script>
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec";
-    const exposureType=document.getElementById('exposureType');
-    const needleSection=document.getElementById('needleSection');
-    const bloodSection=document.getElementById('bloodSection');
-
-    function handleExposureTypeChange(){
-      needleSection.classList.add('hidden');
-      bloodSection.classList.add('hidden');
-      if(exposureType.value==='needle') needleSection.classList.remove('hidden');
-      else if(['blood','mucosal'].includes(exposureType.value)) bloodSection.classList.remove('hidden');
-    }
-    exposureType.addEventListener('change',handleExposureTypeChange);
-
-    document.getElementById('exposureForm').addEventListener('submit',e=>{
-      e.preventDefault();
-      const btn=document.getElementById('submitBtn'),msg=document.getElementById('statusMsg');
-      btn.disabled=true;btn.textContent='⏳ جاري الإرسال...';
-      const fd=new FormData(e.target);
-      ['washed','reported','medical_eval','pep'].forEach(n=>{if(!fd.has(n))fd.append(n,'لا');});
-      const params=new URLSearchParams(fd);
-      const cb="__gs_cb_"+Date.now();params.append('callback',cb);
-      const s=document.createElement('script');s.src=WEB_APP_URL+"?"+params.toString();
-      const timeout=setTimeout(()=>{msg.textContent='❌ لم يصل ردّ من الخادم';msg.style.color='red';btn.disabled=false;btn.textContent='📤 إرسال البلاغ';document.body.removeChild(s);delete window[cb];},15000);
-      window[cb]=(json)=>{clearTimeout(timeout);
-        if(json&&json.status==='success'){msg.textContent='✅ تم الإرسال بنجاح';msg.style.color='green';e.target.reset();handleExposureTypeChange();loadData();}
-        else{msg.textContent='❌ فشل الإرسال';msg.style.color='red';}
-        btn.disabled=false;btn.textContent='📤 إرسال البلاغ';document.body.removeChild(s);delete window[cb];};
-      document.body.appendChild(s);
-    });
-
-    document.getElementById('openLogBtn').addEventListener('click',()=>{
-      const pass=prompt('🔐 الرجاء إدخال كلمة السر للوصول إلى سجل الإصابات:');
-      if(pass==='BostonYYYY2025'){window.open('https://docs.google.com/spreadsheets/d/11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw/edit#gid=0','_blank');}
-      else if(pass!==null){alert('❌ كلمة السر غير صحيحة.');}
-    });
-
-    let chart;
-
-    async function loadData(){
-      try{
-        const res=await fetch(`${WEB_APP_URL}?action=data&callback=cb_${Date.now()}`);
-        const text=await res.text();
-        const match=text.match(/\((.*)\)$/);
-        if(!match)return;
-        const data=JSON.parse(match[1]);
-        if(data.status==='success'){renderChart(data.rows);renderTable(data.rows);}
-      }catch(err){console.error('🚨 خطأ أثناء تحميل البيانات:',err);}
-    }
-
-    function renderChart(rows){
-      if(!rows.length)return;
-      const ctx=document.getElementById('chart').getContext('2d');
-      const types={needle:0,blood:0,mucosal:0};
-      let severe=0;
-      rows.forEach(r=>{
-        const type=(r["نوع التعرض"]||"").trim().toLowerCase();
-        const contaminated=(r["هل كانت ملوثة؟"]||"").trim();
-        if(types.hasOwnProperty(type))types[type]++;
-        if(contaminated==="نعم")severe++;
-      });
-
-      // تحديث العداد الذهبي
-      const counter=document.getElementById('goldCounter');
-      counter.textContent=`📊 إجمالي البلاغات: ${rows.length} | الحالات الخطيرة: ${severe}`;
-
-      if(chart&&typeof chart.destroy==="function")chart.destroy();
-      chart=new Chart(ctx,{
-        type:'bar',
-        data:{labels:['وخزي','دموي','مخاطي'],
-          datasets:[{label:'عدد الحالات',data:Object.values(types),
-            backgroundColor:['#7B1E24','#C55A44','#E9C46A'],borderWidth:1}]},
-        options:{
-          responsive:true,
-          plugins:{title:{display:false},legend:{display:false}},
-          scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}
-        }});
-      const canvas=document.getElementById('chart');
-      canvas.classList.remove('pulse');void canvas.offsetWidth;canvas.classList.add('pulse');
-    }
-
-    function renderTable(rows){
-      const c=document.getElementById('dataTable');
-      if(!rows.length){c.innerHTML='<p class="text-gray-600 text-center">لا توجد بيانات حالياً</p>';return;}
-      const headers=Object.keys(rows[0]);
-      c.innerHTML=`<div class="overflow-x-auto"><table class="min-w-full border text-sm text-center">
-        <thead><tr>${headers.map(h=>`<th class="border bg-[var(--gold)] text-[var(--maroon)] p-2">${h}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td class="border p-1">${r[h]||''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-    }
-
-    window.addEventListener('DOMContentLoaded',()=>{loadData();setInterval(loadData,60000);});
-  </script>
+    </div>
+    
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec";
+        
+        let currentStep = 1;
+        let selectedType = '';
+        
+        function selectType(el) {
+            document.querySelectorAll('.quick-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedType = el.dataset.type;
+            document.getElementById('exposureType').value = selectedType;
+            
+            document.getElementById('needleDetails').style.display = selectedType === 'needle' ? 'block' : 'none';
+            document.getElementById('bloodDetails').style.display = ['blood', 'mucosal'].includes(selectedType) ? 'block' : 'none';
+            
+            document.getElementById('step1Next').disabled = false;
+        }
+        
+        function toggleCheck(el) {
+            const input = el.querySelector('input');
+            if (input.type === 'checkbox') {
+                input.checked = !input.checked;
+                el.classList.toggle('checked', input.checked);
+            } else if (input.type === 'radio') {
+                el.closest('.checkbox-group').querySelectorAll('.checkbox-item').forEach(item => {
+                    item.classList.remove('checked');
+                    item.querySelector('input').checked = false;
+                });
+                input.checked = true;
+                el.classList.add('checked');
+            }
+            el.querySelector('i').className = input.checked ? 'fas fa-circle-check' : 'fas fa-circle';
+        }
+        
+        function updateProgress() {
+            document.querySelectorAll('.progress-step').forEach((step, i) => {
+                const stepNum = i + 1;
+                step.classList.remove('active', 'completed');
+                if (stepNum === currentStep) step.classList.add('active');
+                else if (stepNum < currentStep) step.classList.add('completed');
+            });
+        }
+        
+        function showStep(step) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            document.querySelector(`.step[data-step="${step}"]`).classList.add('active');
+            currentStep = step;
+            updateProgress();
+        }
+        
+        function nextStep(step) {
+            showStep(step);
+        }
+        
+        function prevStep(step) {
+            showStep(step);
+        }
+        
+        document.getElementById('exposureForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const btn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loadingOverlay');
+            
+            btn.disabled = true;
+            loading.classList.add('active');
+            
+            const fd = new FormData(form);
+            ['washed', 'reported', 'medical_eval', 'pep'].forEach(n => {
+                if (!fd.has(n)) fd.append(n, 'لا');
+            });
+            
+            const params = new URLSearchParams(fd);
+            const cb = "__gs_cb_" + Date.now();
+            params.append('callback', cb);
+            
+            const script = document.createElement('script');
+            script.src = WEB_APP_URL + "?" + params.toString();
+            
+            const timeout = setTimeout(() => {
+                loading.classList.remove('active');
+                btn.disabled = false;
+                alert('حدث خطأ في الإرسال. يرجى المحاولة مرة أخرى.');
+                document.body.removeChild(script);
+                delete window[cb];
+            }, 20000);
+            
+            window[cb] = function(json) {
+                clearTimeout(timeout);
+                loading.classList.remove('active');
+                
+                if (json && json.status === 'success') {
+                    const refNum = 'NS-' + Date.now().toString().slice(-6);
+                    document.getElementById('refNumber').textContent = 'رقم البلاغ: ' + refNum;
+                    
+                    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('successScreen').classList.add('active');
+                    document.querySelector('.progress-bar').style.display = 'none';
+                } else {
+                    alert('فشل الإرسال. يرجى المحاولة مرة أخرى.');
+                    btn.disabled = false;
+                }
+                
+                document.body.removeChild(script);
+                delete window[cb];
+            };
+            
+            document.body.appendChild(script);
+        });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelector('input[name="date"]').value = today;
+            
+            const now = new Date();
+            const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            document.querySelector('input[name="time"]').value = timeStr;
+        });
+    </script>
 </body>
 </html>
