@@ -480,7 +480,9 @@
                         
                         <div class="form-group">
                             <label class="form-label">وصف الخطر <span class="required">*</span></label>
-                            <textarea class="form-control" id="riskDesc" placeholder="مثال: عدم توفر طفايات حريق كافية في الممرات، تسرب مياه من السقف، خلل في نظام التكييف..." required></textarea>
+                            <select class="form-control" id="riskDesc" required>
+                                <option value="">جاري تحميل المكتبة...</option>
+                            </select>
                         </div>
                         
                         <div class="form-group">
@@ -684,23 +686,19 @@
         }
         
         function buildRiskDropdown() {
-            const el = document.getElementById('riskDesc');
-            if (!el || LIBRARY.length === 0) return;
-            if (el.tagName === 'SELECT') return;
+            const sel = document.getElementById('riskDesc');
+            if (!sel) return;
             
-            const textarea = el;
+            if (LIBRARY.length === 0) {
+                sel.innerHTML = `<option value="">لا توجد مخاطر في المكتبة</option>
+                    <option value="__other__">إدخال يدوي...</option>`;
+            } else {
+                sel.innerHTML = `<option value="">اختر الخطر من المكتبة...</option>` +
+                    LIBRARY.map(x => `<option value="${escapeHtml(x.risk)}">${escapeHtml(x.risk)}</option>`).join('') +
+                    `<option value="__other__">أخرى (إدخال يدوي)...</option>`;
+            }
             
-            const sel = document.createElement('select');
-            sel.className = textarea.className;
-            sel.id = 'riskDesc';
-            sel.required = true;
-            
-            sel.innerHTML = `<option value="">اختر الخطر من المكتبة...</option>` +
-                LIBRARY.map(x => `<option value="${escapeHtml(x.risk)}">${escapeHtml(x.risk)}</option>`).join('') +
-                `<option value="__other__">أخرى (إدخال يدوي)...</option>`;
-            
-            textarea.parentNode.replaceChild(sel, textarea);
-            sel.addEventListener('change', () => {
+            sel.onchange = function() {
                 if (sel.value === '__other__') {
                     const input = document.createElement('textarea');
                     input.className = sel.className;
@@ -711,7 +709,7 @@
                 } else {
                     autoFillFromLibrary(sel.value);
                 }
-            });
+            };
         }
         
         function autoFillFromLibrary(riskText) {
