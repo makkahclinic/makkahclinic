@@ -720,8 +720,11 @@
         }
         
         function buildRiskDropdown() {
-            const textarea = document.getElementById('riskDesc');
-            if (!textarea || LIBRARY.length === 0) return;
+            const el = document.getElementById('riskDesc');
+            if (!el || LIBRARY.length === 0) return;
+            if (el.tagName === 'SELECT') return;
+            
+            const textarea = el;
             
             const sel = document.createElement('select');
             sel.className = textarea.className;
@@ -752,13 +755,13 @@
             if (!found) return;
             
             const cat = document.getElementById('category');
-            if (cat && !cat.value) cat.value = found.category || '';
+            if (cat) cat.value = found.category || '';
             
             const mit = document.getElementById('mitigation');
-            if (mit && !mit.value) mit.value = found.defaultMitigation || '';
+            if (mit) mit.value = found.defaultMitigation || '';
             
             const owner = document.getElementById('owner');
-            if (owner && !owner.value && found.defaultOwner) owner.value = found.defaultOwner;
+            if (owner && found.defaultOwner) owner.value = found.defaultOwner;
         }
         
         function escapeHtml(str) {
@@ -790,14 +793,16 @@
             await loadRisks();
         }
         
-        function saveApiUrl() {
+        async function saveApiUrl() {
             const url = document.getElementById('apiUrlInput').value.trim();
             if (url && url.startsWith('https://script.google.com')) {
                 localStorage.setItem(API_KEY, url);
                 API_URL = url;
                 document.getElementById('setupBanner').style.display = 'none';
-                showToast('تم حفظ الرابط! جاري المزامنة...', 'success');
-                loadRisks();
+                showToast('تم حفظ الرابط! جاري التحميل...', 'success');
+                
+                await loadMasterAndLibrary();
+                await loadRisks();
             } else {
                 showToast('الرابط غير صحيح', 'error');
             }
@@ -973,7 +978,7 @@
                         <tbody>
                             ${risks.map(r => `
                                 <tr>
-                                    <td class="risk-text">${r.risk || '-'}</td>
+                                    <td class="risk-text">${r.risk || '-'}${r.localOnly ? ' <span class="badge" style="margin-right:6px;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;font-size:0.65rem;">محلي</span>' : ''}</td>
                                     <td><span class="badge" style="background: rgba(201,169,98,0.2); color: var(--gold);">${r.category || '-'}</span></td>
                                     <td style="font-size: 0.8rem;">${r.owner || '-'}</td>
                                     <td style="font-size: 0.75rem; opacity: 0.7;">${r.sourceEvidence || '-'}</td>
@@ -1094,7 +1099,8 @@
                         id: editId || 'R-' + Date.now(),
                         score: score,
                         level: getLevel(score),
-                        lastUpdated: new Date().toISOString()
+                        lastUpdated: new Date().toISOString(),
+                        localOnly: editId ? false : true
                     };
                     
                     if (editId) {

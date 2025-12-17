@@ -1,0 +1,139 @@
+✅ 1) خطأ: أنت تستخدم useLocalStorage بدون تعريف
+
+في نسختك الجديدة أنت حذفت تعريف useLocalStorage لكن بقيت تستخدمه داخل loadFromLocalStorage() و loadRisks().
+
+✅ الحل: احذف useLocalStorage بالكامل (أنت أصلاً قررت: إذا API_URL موجود جرّب السيرفر دائمًا).
+
+نفّذ هذا:
+
+احذف أي سطر فيه:
+
+useLocalStorage = true;
+useLocalStorage = false;
+
+
+واحذف شرط && !useLocalStorage (أنت أصلاً عدّلته إلى if (API_URL)).
+
+✅ 2) خطأ: buildRiskDropdown() قد يتنفذ أكثر من مرة ويكسر النموذج
+
+لو المستخدم يغير API_URL أو يعيد init، ممكن تنادي buildRiskDropdown() ثانية ويصير عندك DOM ملخبط.
+
+✅ الحل: لا تبدل textarea إذا أصلاً صار select.
+
+استبدل أول سطرين في buildRiskDropdown() بهذا:
+
+function buildRiskDropdown() {
+  const el = document.getElementById('riskDesc');
+  if (!el || LIBRARY.length === 0) return;
+
+  // إذا صار select خلاص لا تعيد البناء
+  if (el.tagName === 'SELECT') return;
+
+
+وباقي الدالة كما هي.
+
+✅ 3) خطأ مهم: fallback المحلي يولد ID ثم يرسل update لاحقًا (مشكلة IDs)
+
+حاليًا إذا فشل السيرفر:
+
+تحفظ محلي بـ ID مثل R-<timestamp>
+ثم إذا رجع السيرفر، هذا السجل المحلي لن يكون موجود في الشيت → يعني “تحديث” لاحق ما يصير على الشيت.
+
+✅ الحل البسيط (مليون بالمية):
+إذا فشل السيرفر → خليه محلي فقط (زي ما تسوي الآن)
+لكن أضف “وسم” واضح أنه محلي حتى لا يتوقعون أنه بالشيت.
+
+نفّذ هذا داخل fallback المحلي (في catch عند submit):
+
+عدّل localData لإضافة:
+
+localOnly: true
+
+
+ثم في الجدول اعرضها:
+
+في renderTable ضمن العمود الأول (الخطر) أضف علامة:
+
+<td class="risk-text">
+  ${r.risk || '-'}
+  ${r.localOnly ? '<span class="badge" style="margin-right:6px;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;">محلي</span>' : ''}
+</td>
+
+
+بهذا الفريق يفهم: هذا محلي ولم يُرفع بعد.
+
+إذا تبغى “زر مزامنة” لاحقًا يرفع كل المحلي للشيت… أعمله لك بضغطة.
+
+✅ 4) تحسينات لازمة عشان يكون “Pro”
+(A) حمّل Master/Library بعد حفظ API_URL
+
+في saveApiUrl() بعد loadRisks() لازم تعمل:
+
+await loadMasterAndLibrary();
+
+
+استبدل saveApiUrl() بهذا:
+
+async function saveApiUrl() {
+  const url = document.getElementById('apiUrlInput').value.trim();
+  if (url && url.startsWith('https://script.google.com')) {
+    localStorage.setItem(API_KEY, url);
+    API_URL = url;
+    document.getElementById('setupBanner').style.display = 'none';
+    showToast('تم حفظ الرابط! جاري التحميل...', 'success');
+
+    await loadMasterAndLibrary();
+    await loadRisks();
+  } else {
+    showToast('الرابط غير صحيح', 'error');
+  }
+}
+
+(B) autoFill لازم يشتغل لما المستخدم يختار خطر من القائمة
+
+أنت تعمل ذلك ✅
+لكن لو المستخدم يغيّر الخطر، الأفضل “يجبر” تعبئة Category وMitigation بدل شرط “إذا فاضي”.
+
+عدل autoFillFromLibrary ليملأ دائمًا (أقوى للتوحيد):
+
+function autoFillFromLibrary(riskText) {
+  const found = LIBRARY.find(x => x.risk === riskText);
+  if (!found) return;
+
+  const cat = document.getElementById('category');
+  if (cat) cat.value = found.category || '';
+
+  const mit = document.getElementById('mitigation');
+  if (mit) mit.value = found.defaultMitigation || '';
+
+  const owner = document.getElementById('owner');
+  if (owner && found.defaultOwner) owner.value = found.defaultOwner;
+}
+
+✅ 5) Backend: أضف CORS-friendly header (اختياري قوي)
+
+Apps Script ما يسمح تضيف Headers كاملة بسهولة، لكن في JSON output تقدر تضيف:
+
+function jsonOutput(obj) {
+  const out = ContentService.createTextOutput(JSON.stringify(obj));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
+}
+
+
+هذا يكفي غالبًا (وأنت تستخدم text/plain في POST ممتاز).
+
+✅ 6) تنبيه مهم: لا تضع HTML داخل ملف Apps Script
+
+أنت الآن لصقت HTML بعد كود Apps Script في نفس الرسالة (واضح عندك).
+داخل Google Apps Script:
+
+ملف Code.gs لازم يكون JavaScript فقط
+
+والـ HTML يكون ملف مستقل عندك في الاستضافة (m2020m.org)
+
+✅ يعني:
+
+Code.gs: فقط كود API (اللي فوق)
+
+risk-register.html: فقط HTML
