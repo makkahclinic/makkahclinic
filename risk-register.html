@@ -41,7 +41,6 @@
     }
     .container{max-width:1200px;margin:0 auto;padding:18px}
 
-    /* Header */
     .header{
       background: linear-gradient(135deg, var(--navy), #13284b);
       color:#fff;
@@ -102,7 +101,6 @@
     }
     .banner .text{flex:1;opacity:.93;font-weight:700;font-size:12px;min-width:260px}
 
-    /* Card */
     .card{
       background:var(--card);
       border:1px solid var(--line);
@@ -123,7 +121,7 @@
       display:flex;align-items:center;gap:10px;
     }
     .title i{color:var(--gold)}
-    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
     .btn{
       border:0;
@@ -144,7 +142,16 @@
     .btn-danger{background: var(--ext); color:#fff}
     .btn-gray{background:#f1f3f5;color:#333;border:1px solid rgba(0,0,0,.07)}
 
-    /* Filters */
+    .sync-pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 10px;border-radius:999px;
+      background:#f8fafc;border:1px solid rgba(15,27,45,.10);
+      color:#1e3a5f;font-weight:900;font-size:12px;
+    }
+    .sync-pill.ok{ background: rgba(40,167,69,.12); border-color: rgba(40,167,69,.25); color:#1d7a35; }
+    .sync-pill.warn{ background: rgba(255,193,7,.18); border-color: rgba(255,193,7,.30); color:#7a5a00; }
+    .sync-pill.err{ background: rgba(220,53,69,.12); border-color: rgba(220,53,69,.25); color:#b10014; }
+
     .filters{
       padding:12px 14px;
       display:grid;
@@ -162,9 +169,8 @@
       background:#fff;
     }
 
-    /* Table */
     .table-wrap{overflow:auto}
-    table{width:100%;border-collapse:collapse;min-width:1050px}
+    table{width:100%;border-collapse:collapse;min-width:1150px}
     th,td{padding:10px 10px;border-bottom:1px solid rgba(15,27,45,.08);text-align:right;vertical-align:top}
     th{
       background:#f6f8ff;
@@ -219,12 +225,20 @@
       background:#fff;
     }
 
-    /* Print */
+    .loading{
+      padding:26px;
+      text-align:center;
+      color: var(--muted);
+      font-weight:800;
+    }
+    .loading i{font-size:22px;margin-bottom:8px}
+
     @media print{
       body{background:#fff}
       .container{max-width:100%;padding:0}
       .btn{display:none !important}
       .filters{display:none !important}
+      .sync-pill{display:none !important}
       .header{border-radius:0;box-shadow:none}
       .card{box-shadow:none;border-radius:0}
       table{min-width:0}
@@ -266,9 +280,14 @@
     <div class="card" id="printArea">
       <div class="card-head">
         <div class="title"><i class="fas fa-list-check"></i> سجل المخاطر</div>
+
         <div class="actions">
+          <span id="syncState" class="sync-pill warn"><i class="fas fa-cloud"></i> غير متصل بعد</span>
+
+          <button class="btn btn-light" onclick="reloadFromSheet()"><i class="fas fa-rotate"></i> تحديث</button>
           <button class="btn btn-light" onclick="addRow()"><i class="fas fa-plus"></i> إضافة خطر</button>
-          <button class="btn btn-gray" onclick="resetDefaults()"><i class="fas fa-rotate-left"></i> استعادة نموذج</button>
+          <button class="btn btn-gray" onclick="resetDefaultsOnSheet()"><i class="fas fa-rotate-left"></i> استعادة نموذج</button>
+
           <button class="btn btn-light" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
           <button class="btn btn-light" onclick="exportExcel()"><i class="fas fa-file-excel"></i> Excel</button>
           <button class="btn btn-primary" onclick="exportPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
@@ -303,8 +322,8 @@
           <input id="filterText" oninput="render()" placeholder="اكتب كلمة..." />
         </div>
         <div class="field">
-          <label>اسم المُراجع/المُعد</label>
-          <input id="preparedBy" oninput="saveMeta()" placeholder="مثال: حسين / خالد / ..." />
+          <label>اسم المُراجع/المُعد (UpdatedBy)</label>
+          <input id="preparedBy" placeholder="مثال: حسين / خالد / ..." />
         </div>
       </div>
 
@@ -326,50 +345,75 @@
               <th>إجراء</th>
             </tr>
           </thead>
-          <tbody id="tbody"></tbody>
+          <tbody id="tbody">
+            <tr><td colspan="12" class="loading"><i class="fas fa-spinner fa-spin"></i><div>جاري تحميل البيانات من الشيت...</div></td></tr>
+          </tbody>
         </table>
       </div>
 
       <div class="footer-note">
         <div>ملاحظة: الدرجة = الاحتمالية × الأثر. حرج ≥ 16 | عالي 12-15 | متوسط 6-11 | منخفض ≤ 5</div>
-        <div>Prepared by: <span id="preparedByView">—</span></div>
+        <div>Prepared/Updated by: <span id="preparedByView">—</span></div>
       </div>
     </div>
   </div>
 
   <script>
-    const STORAGE_KEY = "MMC_RISK_REGISTER_V1";
-    const META_KEY = "MMC_RISK_REGISTER_META_V1";
+    /* =======================
+       API (Google Apps Script)
+       ======================= */
+    const API_URL = "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec";
 
+    async function apiList() {
+      const res = await fetch(`${API_URL}?action=list`);
+      return await res.json();
+    }
+
+    async function apiPost(action, payload) {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action, payload })
+      });
+      return await res.json();
+    }
+
+    /* =======================
+       Default seed (used only when you click "استعادة نموذج")
+       ======================= */
     const DEFAULT_ROWS = [
-      { risk:"انقطاع كهرباء أثناء التشغيل", category:"EOC/FMS", owner:"الصيانة", p:3, i:5, mitigation:"فحص مولد/UPS + خطة بديلة + اختبار شهري", status:"مفتوح", review:"" },
-      { risk:"تأخر التعامل مع حادث/شبه حادث", category:"PSC", owner:"منسق سلامة المرضى", p:3, i:4, mitigation:"SLA للاستجابة + تصعيد + تدريب", status:"مفتوح", review:"" },
-      { risk:"وخز إبر/تعرض دموي", category:"IPC", owner:"منسق مكافحة العدوى", p:3, i:4, mitigation:"PPE + إبر آمنة + بروتوكول ما بعد التعرض + متابعة", status:"مفتوح", review:"" },
-      { risk:"فشل حفظ بيانات/انقطاع نظام إلكتروني", category:"RM/QI", owner:"الدعم التقني", p:2, i:4, mitigation:"نسخ احتياطي + مراقبة + خطة استمرارية", status:"مفتوح", review:"" },
-      { risk:"أخطاء تعريف المريض/ملف المريض", category:"PSC", owner:"الاستقبال/التمريض", p:2, i:5, mitigation:"معرّفين + تدقيق عشوائي + تدريب", status:"مفتوح", review:"" },
-      { risk:"مخاطر حريق/إخلاء", category:"EOC/FMS", owner:"السلامة", p:2, i:5, mitigation:"خطة إخلاء + تدريب سنوي + طفايات وفحص شهري", status:"مفتوح", review:"" },
-      { risk:"أدوية منتهية/إدارة صلاحيات", category:"RM/PH", owner:"الصيدلية", p:2, i:4, mitigation:"فحص دوري + فصل منتهية + سجل إتلاف", status:"مفتوح", review:"" }
+      { risk:"انقطاع كهرباء أثناء التشغيل", category:"EOC/FMS", owner:"الصيانة", probability:3, impact:5, mitigation:"فحص مولد/UPS + خطة بديلة + اختبار شهري", status:"مفتوح", reviewDate:"" },
+      { risk:"تأخر التعامل مع حادث/شبه حادث", category:"PSC", owner:"منسق سلامة المرضى", probability:3, impact:4, mitigation:"SLA للاستجابة + تصعيد + تدريب", status:"مفتوح", reviewDate:"" },
+      { risk:"وخز إبر/تعرض دموي", category:"IPC", owner:"منسق مكافحة العدوى", probability:3, impact:4, mitigation:"PPE + إبر آمنة + بروتوكول ما بعد التعرض + متابعة", status:"مفتوح", reviewDate:"" },
+      { risk:"فشل حفظ بيانات/انقطاع نظام إلكتروني", category:"RM/QI", owner:"الدعم التقني", probability:2, impact:4, mitigation:"نسخ احتياطي + مراقبة + خطة استمرارية", status:"مفتوح", reviewDate:"" },
+      { risk:"أخطاء تعريف المريض/ملف المريض", category:"PSC", owner:"الاستقبال/التمريض", probability:2, impact:5, mitigation:"معرّفين + تدقيق عشوائي + تدريب", status:"مفتوح", reviewDate:"" },
+      { risk:"مخاطر حريق/إخلاء", category:"EOC/FMS", owner:"السلامة", probability:2, impact:5, mitigation:"خطة إخلاء + تدريب سنوي + طفايات وفحص شهري", status:"مفتوح", reviewDate:"" },
+      { risk:"أدوية منتهية/إدارة صلاحيات", category:"RM/PH", owner:"الصيدلية", probability:2, impact:4, mitigation:"فحص دوري + فصل منتهية + سجل إتلاف", status:"مفتوح", reviewDate:"" }
     ];
 
-    function loadRows(){
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return JSON.parse(JSON.stringify(DEFAULT_ROWS));
-      try { return JSON.parse(raw); } catch { return JSON.parse(JSON.stringify(DEFAULT_ROWS)); }
-    }
-    function saveRows(rows){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+    /* =======================
+       Helpers
+       ======================= */
+    function setSync(state, text) {
+      const el = document.getElementById("syncState");
+      el.classList.remove("ok","warn","err");
+      el.classList.add(state);
+      el.innerHTML = text;
     }
 
-    function loadMeta(){
-      const raw = localStorage.getItem(META_KEY);
-      if (!raw) return { preparedBy:"" };
-      try { return JSON.parse(raw); } catch { return { preparedBy:"" }; }
+    function escapeHtml(str){
+      return String(str || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
     }
-    function saveMeta(){
-      const meta = loadMeta();
-      meta.preparedBy = document.getElementById("preparedBy").value || "";
-      localStorage.setItem(META_KEY, JSON.stringify(meta));
-      document.getElementById("preparedByView").textContent = meta.preparedBy || "—";
+
+    function clamp(n, min, max){
+      n = Number(n);
+      if (Number.isNaN(n)) n = min;
+      return Math.max(min, Math.min(max, n));
     }
 
     function scoreLevel(score){
@@ -379,13 +423,54 @@
       return { key:"low", label:"منخفض", cls:"low" };
     }
 
-    function clamp(n, min, max){
-      n = Number(n);
-      if (Number.isNaN(n)) n = min;
-      return Math.max(min, Math.min(max, n));
+    function updateLastUpdated(){
+      const now = new Date();
+      const fmt = new Intl.DateTimeFormat('ar-SA', { dateStyle: 'medium' }).format(now);
+      document.getElementById("lastUpdated").textContent = fmt;
     }
 
-    let rows = loadRows();
+    function getUpdatedBy(){
+      const v = (document.getElementById("preparedBy").value || "").trim();
+      return v || "system";
+    }
+
+    /* =======================
+       State
+       ======================= */
+    let rows = []; // items from sheet
+    let saveTimers = new Map(); // debounce per row id
+
+    /* =======================
+       Load / Render
+       ======================= */
+    async function reloadFromSheet() {
+      try {
+        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> جاري الاتصال...');
+        const data = await apiList();
+        if (!data.ok) throw new Error(data.error || "API list failed");
+
+        rows = (data.items || []).map(x => ({
+          id: x.id,
+          risk: x.risk || "",
+          category: x.category || "",
+          owner: x.owner || "",
+          probability: clamp(x.probability, 1, 5),
+          impact: clamp(x.impact, 1, 5),
+          mitigation: x.mitigation || "",
+          status: x.status || "مفتوح",
+          reviewDate: x.reviewDate || ""
+        }));
+
+        setSync("ok", '<i class="fas fa-cloud-check"></i> متصل بالشيت');
+        updateLastUpdated();
+        render();
+      } catch (e) {
+        console.error(e);
+        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الاتصال');
+        document.getElementById("tbody").innerHTML =
+          `<tr><td colspan="12" class="loading"><i class="fas fa-triangle-exclamation"></i><div>تعذر تحميل البيانات من الشيت</div><div style="margin-top:6px;font-weight:700;opacity:.85">${escapeHtml(e.message || '')}</div></td></tr>`;
+      }
+    }
 
     function render(){
       const tbody = document.getElementById("tbody");
@@ -393,19 +478,27 @@
       const level = document.getElementById("filterLevel").value;
       const text = (document.getElementById("filterText").value || "").trim().toLowerCase();
 
+      document.getElementById("preparedByView").textContent = (document.getElementById("preparedBy").value || "").trim() || "—";
+
       tbody.innerHTML = "";
 
       const filtered = rows.map((r, idx) => ({...r, _idx: idx})).filter(r => {
-        const lvl = scoreLevel(r.p * r.i).key;
+        const score = r.probability * r.impact;
+        const lvl = scoreLevel(score).key;
         const okDept = dept === "all" ? true : (r.category || "").includes(dept);
         const okLvl = level === "all" ? true : (lvl === level);
         const okText = !text ? true : ((r.risk || "").toLowerCase().includes(text) || (r.mitigation || "").toLowerCase().includes(text));
         return okDept && okLvl && okText;
       });
 
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="12" class="loading"><i class="fas fa-inbox"></i><div>لا توجد نتائج</div></td></tr>`;
+        return;
+      }
+
       filtered.forEach((r, viewIndex) => {
-        const p = clamp(r.p, 1, 5);
-        const i = clamp(r.i, 1, 5);
+        const p = clamp(r.probability, 1, 5);
+        const i = clamp(r.impact, 1, 5);
         const score = p * i;
         const lvl = scoreLevel(score);
 
@@ -413,22 +506,24 @@
         tr.innerHTML = `
           <td><strong>${viewIndex + 1}</strong></td>
 
-          <td><input class="edit" value="${escapeHtml(r.risk || "")}" oninput="updateRow(${r._idx}, 'risk', this.value)" /></td>
+          <td><input class="edit" value="${escapeHtml(r.risk)}"
+              oninput="onEdit(${r._idx}, 'risk', this.value)" /></td>
+
+          <td><input class="edit" value="${escapeHtml(r.category)}"
+              placeholder="RM/PSC/IPC/FMS/QI/EOC..."
+              oninput="onEdit(${r._idx}, 'category', this.value)" /></td>
+
+          <td><input class="edit" value="${escapeHtml(r.owner)}"
+              oninput="onEdit(${r._idx}, 'owner', this.value)" /></td>
 
           <td>
-            <input class="edit" value="${escapeHtml(r.category || "")}" oninput="updateRow(${r._idx}, 'category', this.value)" placeholder="RM/PSC/IPC/FMS/QI/EOC..." />
-          </td>
-
-          <td><input class="edit" value="${escapeHtml(r.owner || "")}" oninput="updateRow(${r._idx}, 'owner', this.value)" /></td>
-
-          <td>
-            <select class="edit" onchange="updateRow(${r._idx}, 'p', this.value)">
+            <select class="edit" onchange="onEdit(${r._idx}, 'probability', this.value)">
               ${[1,2,3,4,5].map(n => `<option value="${n}" ${p===n?'selected':''}>${n}</option>`).join("")}
             </select>
           </td>
 
           <td>
-            <select class="edit" onchange="updateRow(${r._idx}, 'i', this.value)">
+            <select class="edit" onchange="onEdit(${r._idx}, 'impact', this.value)">
               ${[1,2,3,4,5].map(n => `<option value="${n}" ${i===n?'selected':''}>${n}</option>`).join("")}
             </select>
           </td>
@@ -437,15 +532,17 @@
 
           <td><span class="chip ${lvl.cls}"><i class="fas fa-circle"></i> ${lvl.label}</span></td>
 
-          <td><input class="edit" value="${escapeHtml(r.mitigation || "")}" oninput="updateRow(${r._idx}, 'mitigation', this.value)" /></td>
+          <td><input class="edit" value="${escapeHtml(r.mitigation)}"
+              oninput="onEdit(${r._idx}, 'mitigation', this.value)" /></td>
 
           <td>
-            <select class="edit" onchange="updateRow(${r._idx}, 'status', this.value)">
+            <select class="edit" onchange="onEdit(${r._idx}, 'status', this.value)">
               ${["مفتوح","قيد التنفيذ","مغلق"].map(s => `<option ${r.status===s?'selected':''}>${s}</option>`).join("")}
             </select>
           </td>
 
-          <td><input class="edit" type="date" value="${escapeHtml(r.review || "")}" oninput="updateRow(${r._idx}, 'review', this.value)" /></td>
+          <td><input class="edit" type="date" value="${escapeHtml(r.reviewDate)}"
+              oninput="onEdit(${r._idx}, 'reviewDate', this.value)" /></td>
 
           <td>
             <button class="btn btn-danger" onclick="deleteRow(${r._idx})" title="حذف">
@@ -456,42 +553,152 @@
         tbody.appendChild(tr);
       });
 
-      saveRows(rows);
       updateLastUpdated();
     }
 
-    function updateRow(idx, key, value){
+    /* =======================
+       Edit -> Auto Save (debounced)
+       ======================= */
+    function onEdit(idx, key, value){
       if (!rows[idx]) return;
-      if (key === "p" || key === "i") value = clamp(value, 1, 5);
+
+      if (key === "probability" || key === "impact") value = clamp(value, 1, 5);
       rows[idx][key] = value;
-      saveRows(rows);
-      render();
+
+      render(); // update score/level instantly
+
+      // debounce save
+      const id = rows[idx].id;
+      if (!id) return;
+
+      if (saveTimers.has(id)) clearTimeout(saveTimers.get(id));
+      setSync("warn", '<i class="fas fa-spinner fa-spin"></i> حفظ التغييرات...');
+      const t = setTimeout(() => saveRow(idx), 600);
+      saveTimers.set(id, t);
     }
 
-    function addRow(){
-      rows.unshift({ risk:"", category:"RM", owner:"", p:2, i:2, mitigation:"", status:"مفتوح", review:"" });
-      saveRows(rows);
-      render();
+    async function saveRow(idx){
+      const r = rows[idx];
+      if (!r || !r.id) return;
+
+      const payload = {
+        id: r.id,
+        risk: r.risk,
+        category: r.category,
+        owner: r.owner,
+        probability: clamp(r.probability, 1, 5),
+        impact: clamp(r.impact, 1, 5),
+        mitigation: r.mitigation,
+        status: r.status,
+        reviewDate: r.reviewDate,
+        updatedBy: getUpdatedBy()
+      };
+
+      try{
+        const res = await apiPost("update", payload);
+        if (!res.ok) throw new Error(res.error || "Update failed");
+        setSync("ok", '<i class="fas fa-cloud-check"></i> محفوظ');
+      }catch(e){
+        console.error(e);
+        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الحفظ');
+        alert("تعذر حفظ التعديل في الشيت.\n" + (e.message || ""));
+      }
     }
 
-    function deleteRow(idx){
-      if (!confirm("هل تريد حذف هذا الخطر؟")) return;
-      rows.splice(idx, 1);
-      saveRows(rows);
-      render();
+    /* =======================
+       Add / Delete / Reset
+       ======================= */
+    async function addRow(){
+      const payload = {
+        risk: "",
+        category: "RM",
+        owner: "",
+        probability: 2,
+        impact: 2,
+        mitigation: "",
+        status: "مفتوح",
+        reviewDate: "",
+        updatedBy: getUpdatedBy()
+      };
+
+      try{
+        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> إضافة...');
+        const res = await apiPost("add", payload);
+        if (!res.ok) throw new Error(res.error || "Add failed");
+
+        // reload to get the new ID & list
+        await reloadFromSheet();
+        setSync("ok", '<i class="fas fa-cloud-check"></i> تمت الإضافة');
+      }catch(e){
+        console.error(e);
+        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الإضافة');
+        alert("تعذر إضافة خطر.\n" + (e.message || ""));
+      }
     }
 
-    function resetDefaults(){
-      if (!confirm("استعادة النموذج الافتراضي؟ سيتم استبدال البيانات الحالية.")) return;
-      rows = JSON.parse(JSON.stringify(DEFAULT_ROWS));
-      saveRows(rows);
-      render();
+    async function deleteRow(idx){
+      const r = rows[idx];
+      if (!r || !r.id) return;
+      if (!confirm("هل تريد حذف هذا الخطر نهائيًا؟")) return;
+
+      try{
+        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> حذف...');
+        const res = await apiPost("delete", { id: r.id });
+        if (!res.ok) throw new Error(res.error || "Delete failed");
+        await reloadFromSheet();
+        setSync("ok", '<i class="fas fa-cloud-check"></i> تم الحذف');
+      }catch(e){
+        console.error(e);
+        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الحذف');
+        alert("تعذر حذف الخطر.\n" + (e.message || ""));
+      }
     }
 
-    function updateLastUpdated(){
-      const now = new Date();
-      const fmt = new Intl.DateTimeFormat('ar-SA', { dateStyle: 'medium' }).format(now);
-      document.getElementById("lastUpdated").textContent = fmt;
+    async function resetDefaultsOnSheet(){
+      if (!confirm("سيتم إضافة المخاطر الافتراضية للشيت (لن نحذف الموجود). هل تريد المتابعة؟")) return;
+      try{
+        setSync("warn", '<i class="fas fa-spinner fa-spin"></i> استعادة النموذج...');
+        for (const d of DEFAULT_ROWS){
+          await apiPost("add", { ...d, updatedBy: getUpdatedBy() });
+        }
+        await reloadFromSheet();
+        setSync("ok", '<i class="fas fa-cloud-check"></i> تم الاستعادة');
+      }catch(e){
+        console.error(e);
+        setSync("err", '<i class="fas fa-triangle-exclamation"></i> فشل الاستعادة');
+        alert("تعذر استعادة النموذج.\n" + (e.message || ""));
+      }
+    }
+
+    /* =======================
+       Export
+       ======================= */
+    function exportExcel(){
+      const data = rows.map((r, idx) => {
+        const p = clamp(r.probability, 1, 5);
+        const i = clamp(r.impact, 1, 5);
+        const s = p*i;
+        const lvl = scoreLevel(s).label;
+        return {
+          "#": idx+1,
+          "ID": r.id,
+          "الخطر": r.risk || "",
+          "التصنيف": r.category || "",
+          "المالك": r.owner || "",
+          "الاحتمالية": p,
+          "الأثر": i,
+          "الدرجة": s,
+          "المستوى": lvl,
+          "الإجراء/التحكم": r.mitigation || "",
+          "الحالة": r.status || "",
+          "تاريخ المراجعة": r.reviewDate || ""
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Risk Register");
+      XLSX.writeFile(wb, "Risk-Register.xlsx");
     }
 
     async function exportPDF(){
@@ -499,7 +706,6 @@
         const area = document.getElementById("printArea");
         const { jsPDF } = window.jspdf;
 
-        // اجعل الجدول يظهر كاملًا أثناء التصوير
         const tableWrap = area.querySelector(".table-wrap");
         const oldOverflow = tableWrap.style.overflow;
         tableWrap.style.overflow = "visible";
@@ -521,7 +727,6 @@
         let y = margin;
         let remaining = imgH;
 
-        // إذا أطول من صفحة، نقسم
         while (remaining > 0){
           pdf.addImage(img, "PNG", margin, y, imgW, imgH);
           remaining -= (h - margin*2);
@@ -536,49 +741,16 @@
       }
     }
 
-    function exportExcel(){
-      const data = rows.map((r, idx) => {
-        const p = clamp(r.p, 1, 5);
-        const i = clamp(r.i, 1, 5);
-        const s = p*i;
-        const lvl = scoreLevel(s).label;
-        return {
-          "#": idx+1,
-          "الخطر": r.risk || "",
-          "التصنيف": r.category || "",
-          "المالك": r.owner || "",
-          "الاحتمالية": p,
-          "الأثر": i,
-          "الدرجة": s,
-          "المستوى": lvl,
-          "الإجراء/التحكم": r.mitigation || "",
-          "الحالة": r.status || "",
-          "تاريخ المراجعة": r.review || ""
-        };
-      });
-
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Risk Register");
-      XLSX.writeFile(wb, "Risk-Register.xlsx");
-    }
-
-    function escapeHtml(str){
-      return String(str || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    // Init
+    /* =======================
+       Init
+       ======================= */
     (function init(){
-      const meta = loadMeta();
-      document.getElementById("preparedBy").value = meta.preparedBy || "";
-      document.getElementById("preparedByView").textContent = meta.preparedBy || "—";
+      document.getElementById("preparedBy").addEventListener("input", () => {
+        document.getElementById("preparedByView").textContent =
+          (document.getElementById("preparedBy").value || "").trim() || "—";
+      });
       updateLastUpdated();
-      render();
+      reloadFromSheet();
     })();
   </script>
 </body>
