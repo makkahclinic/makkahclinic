@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سجل المخاطر - Risk Register</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --navy: #1e3a5f;
+            --navy-dark: #0f2744;
+            --gold: #c9a962;
+            --crimson: #DC143C;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --gray: #64748b;
+            --gray-light: #f1f5f9;
+            --ext: #7f1d1d;
+            --high: #dc2626;
+            --med: #f59e0b;
+            --low: #22c55e;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            border-bottom: 3px solid var(--gold);
+        }
+        
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .header-title i { font-size: 2rem; color: var(--gold); }
+        .header-title h1 { font-family: 'Cairo', sans-serif; font-size: 1.5rem; font-weight: 800; }
+        .header-title small { opacity: 0.8; font-size: 0.85rem; }
+        
+        .header-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .btn-primary { background: var(--info); color: #fff; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-success:hover { background: #059669; }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-light { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+        .btn-light:hover { background: rgba(255,255,255,0.25); }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 1.25rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+        }
+        
+        .stat-card.ext::before { background: var(--ext); }
+        .stat-card.high::before { background: var(--high); }
+        .stat-card.med::before { background: var(--med); }
+        .stat-card.low::before { background: var(--low); }
+        .stat-card.total::before { background: var(--gold); }
+        
+        .stat-value { font-size: 2.5rem; font-weight: 900; font-family: 'Cairo', sans-serif; }
+        .stat-label { font-size: 0.85rem; opacity: 0.8; margin-top: 0.25rem; }
+        
+        .stat-card.ext .stat-value { color: #fca5a5; }
+        .stat-card.high .stat-value { color: #fca5a5; }
+        .stat-card.med .stat-value { color: #fcd34d; }
+        .stat-card.low .stat-value { color: #86efac; }
+        .stat-card.total .stat-value { color: var(--gold); }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 1.5rem;
+        }
+        
+        @media (max-width: 1000px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: rgba(255,255,255,0.05);
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        
+        .card-header h3 {
+            font-family: 'Cairo', sans-serif;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .card-header h3 i { color: var(--gold); }
+        
+        .card-body { padding: 1.25rem; }
+        
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; font-weight: 700; margin-bottom: 0.4rem; font-size: 0.9rem; }
+        .form-label .required { color: var(--danger); }
+        
+        .form-control {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--gold);
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .form-control option { background: #1e293b; color: #fff; }
+        
+        textarea.form-control { min-height: 80px; resize: vertical; }
+        
+        .rating-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .rating-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        
+        .rating-box label { display: block; font-weight: 700; margin-bottom: 0.5rem; font-size: 0.85rem; }
+        
+        .rating-btns { display: flex; gap: 0.3rem; justify-content: center; }
+        
+        .rating-btn {
+            width: 36px;
+            height: 36px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: transparent;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .rating-btn:hover { border-color: var(--gold); }
+        .rating-btn.active { background: var(--gold); border-color: var(--gold); color: #000; }
+        
+        .score-display {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+        }
+        
+        .score-display.ext { background: rgba(127,29,29,0.3); border: 2px solid var(--ext); color: #fca5a5; }
+        .score-display.high { background: rgba(220,38,38,0.2); border: 2px solid var(--high); color: #fca5a5; }
+        .score-display.med { background: rgba(245,158,11,0.2); border: 2px solid var(--med); color: #fcd34d; }
+        .score-display.low { background: rgba(34,197,94,0.2); border: 2px solid var(--low); color: #86efac; }
+        
+        .filters-bar {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        
+        .filter-select {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.85rem;
+            min-width: 140px;
+        }
+        
+        .filter-select option { background: #1e293b; }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: right;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        
+        th {
+            background: rgba(255,255,255,0.05);
+            font-weight: 800;
+            font-size: 0.8rem;
+            color: var(--gold);
+            white-space: nowrap;
+        }
+        
+        tr:hover { background: rgba(255,255,255,0.03); }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        
+        .badge-ext { background: var(--ext); color: #fff; }
+        .badge-high { background: var(--high); color: #fff; }
+        .badge-med { background: var(--med); color: #000; }
+        .badge-low { background: var(--low); color: #000; }
+        
+        .badge-open { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+        .badge-progress { background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.4); }
+        .badge-closed { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.4); }
+        
+        .action-btns { display: flex; gap: 0.3rem; }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gold);
+        }
+        
+        .loading i { font-size: 2rem; animation: spin 1s linear infinite; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .empty-state i { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
+        
+        .heatmap-section {
+            margin-top: 1.5rem;
+        }
+        
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: 40px repeat(5, 1fr);
+            gap: 4px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .heatmap-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 0.9rem;
+        }
+        
+        .heatmap-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: rgba(255,255,255,0.6);
+        }
+        
+        .heatmap-header {
+            text-align: center;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            padding: 0.25rem;
+        }
+        
+        .cell-ext { background: var(--ext); color: #fff; }
+        .cell-high { background: var(--high); color: #fff; }
+        .cell-med { background: var(--med); color: #000; }
+        .cell-low { background: var(--low); color: #000; }
+        
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 700;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { background: var(--success); color: #fff; }
+        .toast.error { background: var(--danger); color: #fff; }
+        
+        .risk-text { max-width: 200px; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-title">
+            <i class="fas fa-shield-virus"></i>
+            <div>
+                <h1>سجل المخاطر - Risk Register</h1>
+                <small>إدارة المخاطر - مجمع مكة الطبي بالزاهر</small>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-light" onclick="loadRisks()">
+                <i class="fas fa-sync"></i> تحديث
+            </button>
+            <a href="incident-report-analysis.html" class="btn btn-light">
+                <i class="fas fa-chart-pie"></i> تحليل الحوادث
+            </a>
+            <a href="mega.html" class="btn btn-light">
+                <i class="fas fa-home"></i> المركز الرقمي
+            </a>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card total">
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">إجمالي المخاطر</div>
+            </div>
+            <div class="stat-card ext">
+                <div class="stat-value" id="statExt">0</div>
+                <div class="stat-label">حرج (16-25)</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-value" id="statHigh">0</div>
+                <div class="stat-label">عالي (12-15)</div>
+            </div>
+            <div class="stat-card med">
+                <div class="stat-value" id="statMed">0</div>
+                <div class="stat-label">متوسط (6-11)</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-value" id="statLow">0</div>
+                <div class="stat-label">منخفض (1-5)</div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-plus-circle"></i> <span id="formTitle">إضافة خطر جديد</span></h3>
+                </div>
+                <div class="card-body">
+                    <form id="riskForm">
+                        <input type="hidden" id="editId">
+                        
+                        <div class="form-group">
+                            <label class="form-label">وصف الخطر <span class="required">*</span></label>
+                            <textarea class="form-control" id="riskDesc" placeholder="وصف تفصيلي للخطر..." required></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">التصنيف <span class="required">*</span></label>
+                            <select class="form-control" id="category" required>
+                                <option value="">اختر التصنيف...</option>
+                                <option value="FMS">FMS - إدارة المرافق</option>
+                                <option value="PSC">PSC - سلامة المرضى</option>
+                                <option value="IPC">IPC - مكافحة العدوى</option>
+                                <option value="EOC">EOC - الطوارئ والكوارث</option>
+                                <option value="RM">RM - إدارة المخاطر</option>
+                                <option value="QI">QI - تحسين الجودة</option>
+                                <option value="LD">LD - القيادة والحوكمة</option>
+                                <option value="HR">HR - الموارد البشرية</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">المالك/المسؤول</label>
+                            <select class="form-control" id="owner">
+                                <option value="">اختر المسؤول...</option>
+                                <option value="د.خالد الخطاب">د.خالد الخطاب</option>
+                                <option value="صابر عبده">صابر عبده</option>
+                                <option value="بلال نذر">بلال نذر</option>
+                                <option value="عدنان الرفاعي">عدنان الرفاعي</option>
+                                <option value="هيثم">هيثم</option>
+                                <option value="منسق سلامة المرضى">منسق سلامة المرضى</option>
+                                <option value="الإدارة">الإدارة</option>
+                            </select>
+                        </div>
+                        
+                        <div class="rating-grid">
+                            <div class="rating-box">
+                                <label>الاحتمالية</label>
+                                <div class="rating-btns" id="probBtns">
+                                    <button type="button" class="rating-btn" data-val="1">1</button>
+                                    <button type="button" class="rating-btn" data-val="2">2</button>
+                                    <button type="button" class="rating-btn active" data-val="3">3</button>
+                                    <button type="button" class="rating-btn" data-val="4">4</button>
+                                    <button type="button" class="rating-btn" data-val="5">5</button>
+                                </div>
+                            </div>
+                            <div class="rating-box">
+                                <label>الأثر</label>
+                                <div class="rating-btns" id="impactBtns">
+                                    <button type="button" class="rating-btn" data-val="1">1</button>
+                                    <button type="button" class="rating-btn" data-val="2">2</button>
+                                    <button type="button" class="rating-btn active" data-val="3">3</button>
+                                    <button type="button" class="rating-btn" data-val="4">4</button>
+                                    <button type="button" class="rating-btn" data-val="5">5</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="score-display med" id="scoreDisplay">
+                            درجة الخطورة: <span id="scoreValue">9</span> - متوسط
+                        </div>
+                        
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label">إجراءات التخفيف</label>
+                            <textarea class="form-control" id="mitigation" placeholder="الإجراءات المقترحة للتخفيف من الخطر..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">الحالة</label>
+                            <select class="form-control" id="status">
+                                <option value="مفتوح">مفتوح</option>
+                                <option value="قيد المعالجة">قيد المعالجة</option>
+                                <option value="مغلق">مغلق</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">تاريخ المراجعة القادمة</label>
+                            <input type="date" class="form-control" id="reviewDate">
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
+                            <button type="submit" class="btn btn-success" style="flex: 1;">
+                                <i class="fas fa-save"></i> <span id="submitText">حفظ</span>
+                            </button>
+                            <button type="button" class="btn btn-light" onclick="resetForm()" id="cancelBtn" style="display: none;">
+                                <i class="fas fa-times"></i> إلغاء
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-list"></i> سجل المخاطر</h3>
+                    <div class="filters-bar">
+                        <select class="filter-select" id="filterCategory" onchange="applyFilters()">
+                            <option value="">كل التصنيفات</option>
+                            <option value="FMS">FMS</option>
+                            <option value="PSC">PSC</option>
+                            <option value="IPC">IPC</option>
+                            <option value="EOC">EOC</option>
+                            <option value="RM">RM</option>
+                            <option value="QI">QI</option>
+                            <option value="LD">LD</option>
+                            <option value="HR">HR</option>
+                        </select>
+                        <select class="filter-select" id="filterLevel" onchange="applyFilters()">
+                            <option value="">كل المستويات</option>
+                            <option value="حرج">حرج</option>
+                            <option value="عالي">عالي</option>
+                            <option value="متوسط">متوسط</option>
+                            <option value="منخفض">منخفض</option>
+                        </select>
+                        <select class="filter-select" id="filterStatus" onchange="applyFilters()">
+                            <option value="">كل الحالات</option>
+                            <option value="مفتوح">مفتوح</option>
+                            <option value="قيد المعالجة">قيد المعالجة</option>
+                            <option value="مغلق">مغلق</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div id="tableContainer">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            <p>جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="heatmap-section" style="padding: 1.25rem;">
+                    <h4 style="text-align: center; margin-bottom: 1rem; color: var(--gold);">
+                        <i class="fas fa-th"></i> مصفوفة المخاطر
+                    </h4>
+                    <div class="heatmap-grid" id="heatmapGrid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwSCFPl4FKjCwfCNYG7FNiTb2PDTntK7QcMfYJkLcRs0r--l68S4DuehYFl1Xs3H-bl/exec';
+        
+        let allRisks = [];
+        let probability = 3;
+        let impact = 3;
+        
+        document.querySelectorAll('#probBtns .rating-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#probBtns .rating-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                probability = parseInt(btn.dataset.val);
+                updateScore();
+            });
+        });
+        
+        document.querySelectorAll('#impactBtns .rating-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#impactBtns .rating-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                impact = parseInt(btn.dataset.val);
+                updateScore();
+            });
+        });
+        
+        function updateScore() {
+            const score = probability * impact;
+            let level, levelClass;
+            
+            if (score >= 16) { level = 'حرج'; levelClass = 'ext'; }
+            else if (score >= 12) { level = 'عالي'; levelClass = 'high'; }
+            else if (score >= 6) { level = 'متوسط'; levelClass = 'med'; }
+            else { level = 'منخفض'; levelClass = 'low'; }
+            
+            const display = document.getElementById('scoreDisplay');
+            display.className = 'score-display ' + levelClass;
+            display.innerHTML = `درجة الخطورة: <span id="scoreValue">${score}</span> - ${level}`;
+        }
+        
+        async function loadRisks() {
+            document.getElementById('tableContainer').innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>جاري التحميل...</p>
+                </div>
+            `;
+            
+            try {
+                const res = await fetch(API_URL + '?action=list');
+                const data = await res.json();
+                
+                if (data.ok) {
+                    allRisks = data.items || [];
+                    updateStats();
+                    applyFilters();
+                    renderHeatmap();
+                } else {
+                    showToast('خطأ في تحميل البيانات', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('فشل الاتصال بالخادم', 'error');
+                document.getElementById('tableContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>فشل تحميل البيانات</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function updateStats() {
+            const stats = { total: allRisks.length, ext: 0, high: 0, med: 0, low: 0 };
+            
+            allRisks.forEach(r => {
+                if (r.level === 'حرج') stats.ext++;
+                else if (r.level === 'عالي') stats.high++;
+                else if (r.level === 'متوسط') stats.med++;
+                else stats.low++;
+            });
+            
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statExt').textContent = stats.ext;
+            document.getElementById('statHigh').textContent = stats.high;
+            document.getElementById('statMed').textContent = stats.med;
+            document.getElementById('statLow').textContent = stats.low;
+        }
+        
+        function applyFilters() {
+            const cat = document.getElementById('filterCategory').value;
+            const lvl = document.getElementById('filterLevel').value;
+            const st = document.getElementById('filterStatus').value;
+            
+            let filtered = allRisks;
+            if (cat) filtered = filtered.filter(r => r.category === cat);
+            if (lvl) filtered = filtered.filter(r => r.level === lvl);
+            if (st) filtered = filtered.filter(r => r.status === st);
+            
+            renderTable(filtered);
+        }
+        
+        function renderTable(risks) {
+            if (!risks.length) {
+                document.getElementById('tableContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>لا توجد مخاطر مسجلة</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const html = `
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>الخطر</th>
+                                <th>التصنيف</th>
+                                <th>المسؤول</th>
+                                <th>الدرجة</th>
+                                <th>المستوى</th>
+                                <th>الحالة</th>
+                                <th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${risks.map(r => `
+                                <tr>
+                                    <td style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${r.id || '-'}</td>
+                                    <td class="risk-text">${r.risk || '-'}</td>
+                                    <td><span class="badge" style="background: rgba(201,169,98,0.2); color: var(--gold);">${r.category || '-'}</span></td>
+                                    <td>${r.owner || '-'}</td>
+                                    <td style="font-weight: 800;">${r.score || '-'}</td>
+                                    <td><span class="badge badge-${getLevelClass(r.level)}">${r.level || '-'}</span></td>
+                                    <td><span class="badge badge-${getStatusClass(r.status)}">${r.status || '-'}</span></td>
+                                    <td>
+                                        <div class="action-btns">
+                                            <button class="btn btn-sm btn-primary" onclick="editRisk('${r.id}')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-danger" onclick="deleteRisk('${r.id}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            document.getElementById('tableContainer').innerHTML = html;
+        }
+        
+        function getLevelClass(level) {
+            if (level === 'حرج') return 'ext';
+            if (level === 'عالي') return 'high';
+            if (level === 'متوسط') return 'med';
+            return 'low';
+        }
+        
+        function getStatusClass(status) {
+            if (status === 'مغلق') return 'closed';
+            if (status === 'قيد المعالجة') return 'progress';
+            return 'open';
+        }
+        
+        function renderHeatmap() {
+            const matrix = {};
+            for (let p = 1; p <= 5; p++) {
+                for (let i = 1; i <= 5; i++) {
+                    matrix[`${p}-${i}`] = 0;
+                }
+            }
+            
+            allRisks.forEach(r => {
+                const key = `${r.probability}-${r.impact}`;
+                if (matrix[key] !== undefined) matrix[key]++;
+            });
+            
+            let html = '<div class="heatmap-header"></div>';
+            for (let i = 1; i <= 5; i++) {
+                html += `<div class="heatmap-header">${i}</div>`;
+            }
+            
+            for (let p = 5; p >= 1; p--) {
+                html += `<div class="heatmap-label">${p}</div>`;
+                for (let i = 1; i <= 5; i++) {
+                    const score = p * i;
+                    let cellClass;
+                    if (score >= 16) cellClass = 'cell-ext';
+                    else if (score >= 12) cellClass = 'cell-high';
+                    else if (score >= 6) cellClass = 'cell-med';
+                    else cellClass = 'cell-low';
+                    
+                    const count = matrix[`${p}-${i}`];
+                    html += `<div class="heatmap-cell ${cellClass}">${count || ''}</div>`;
+                }
+            }
+            
+            document.getElementById('heatmapGrid').innerHTML = html;
+        }
+        
+        document.getElementById('riskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const editId = document.getElementById('editId').value;
+            const payload = {
+                risk: document.getElementById('riskDesc').value,
+                category: document.getElementById('category').value,
+                owner: document.getElementById('owner').value,
+                probability: probability,
+                impact: impact,
+                mitigation: document.getElementById('mitigation').value,
+                status: document.getElementById('status').value,
+                reviewDate: document.getElementById('reviewDate').value,
+                updatedBy: 'user'
+            };
+            
+            const action = editId ? 'update' : 'add';
+            if (editId) payload.id = editId;
+            
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, payload })
+                });
+                
+                const data = await res.json();
+                
+                if (data.ok) {
+                    showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
+                    resetForm();
+                    loadRisks();
+                } else {
+                    showToast(data.error || 'حدث خطأ', 'error');
+                }
+            } catch (err) {
+                showToast('فشل الاتصال', 'error');
+            }
+        });
+        
+        function editRisk(id) {
+            const risk = allRisks.find(r => r.id === id);
+            if (!risk) return;
+            
+            document.getElementById('editId').value = id;
+            document.getElementById('riskDesc').value = risk.risk || '';
+            document.getElementById('category').value = risk.category || '';
+            document.getElementById('owner').value = risk.owner || '';
+            document.getElementById('mitigation').value = risk.mitigation || '';
+            document.getElementById('status').value = risk.status || 'مفتوح';
+            document.getElementById('reviewDate').value = risk.reviewDate || '';
+            
+            probability = risk.probability || 3;
+            impact = risk.impact || 3;
+            
+            document.querySelectorAll('#probBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.val) === probability);
+            });
+            document.querySelectorAll('#impactBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', parseInt(b.dataset.val) === impact);
+            });
+            
+            updateScore();
+            
+            document.getElementById('formTitle').textContent = 'تعديل الخطر';
+            document.getElementById('submitText').textContent = 'تحديث';
+            document.getElementById('cancelBtn').style.display = 'block';
+            
+            document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        async function deleteRisk(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا الخطر؟')) return;
+            
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete', payload: { id } })
+                });
+                
+                const data = await res.json();
+                
+                if (data.ok) {
+                    showToast('تم الحذف بنجاح', 'success');
+                    loadRisks();
+                } else {
+                    showToast(data.error || 'حدث خطأ', 'error');
+                }
+            } catch (err) {
+                showToast('فشل الاتصال', 'error');
+            }
+        }
+        
+        function resetForm() {
+            document.getElementById('riskForm').reset();
+            document.getElementById('editId').value = '';
+            document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
+            document.getElementById('submitText').textContent = 'حفظ';
+            document.getElementById('cancelBtn').style.display = 'none';
+            
+            probability = 3;
+            impact = 3;
+            
+            document.querySelectorAll('#probBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.val === '3');
+            });
+            document.querySelectorAll('#impactBtns .rating-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.val === '3');
+            });
+            
+            updateScore();
+        }
+        
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        loadRisks();
+    </script>
+</body>
+</html>
