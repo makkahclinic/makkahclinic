@@ -94,30 +94,6 @@
         
         .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
         
-        .setup-banner {
-            background: linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(37,99,235,0.1) 100%);
-            border: 2px solid var(--info);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        
-        .setup-banner h4 { color: #93c5fd; margin-bottom: 1rem; font-family: 'Cairo', sans-serif; }
-        .setup-banner p { margin-bottom: 0.75rem; line-height: 1.8; }
-        .setup-banner .note { background: rgba(255,255,255,0.1); padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; margin-top: 1rem; }
-        .setup-banner input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 8px;
-            background: rgba(255,255,255,0.05);
-            color: #fff;
-            font-family: 'Tajawal', sans-serif;
-            margin-top: 0.5rem;
-            direction: ltr;
-        }
-        .setup-banner input:focus { border-color: var(--gold); outline: none; }
-        .setup-banner .btn-row { display: flex; gap: 0.5rem; margin-top: 1rem; }
         
         .alert-bar {
             background: linear-gradient(135deg, rgba(127,29,29,0.3) 0%, rgba(220,38,38,0.2) 100%);
@@ -462,16 +438,6 @@
     </header>
     
     <div class="container">
-        <div class="setup-banner" id="setupBanner" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #93c5fd;"><i class="fas fa-info-circle"></i> لربط النظام بـ Google Sheets، أدخل رابط API:</span>
-                <button class="btn btn-light btn-sm" onclick="hideSetupBanner()"><i class="fas fa-times"></i></button>
-            </div>
-            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-                <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/....." dir="ltr" style="flex: 1;">
-                <button class="btn btn-success" onclick="saveApiUrl()"><i class="fas fa-link"></i> ربط</button>
-            </div>
-        </div>
         
         <div class="alert-bar" id="criticalAlert">
             <i class="fas fa-triangle-exclamation"></i>
@@ -679,9 +645,7 @@
 
     <script>
         const STORAGE_KEY = 'makkah_risk_register';
-        const API_KEY = 'makkah_risk_api_url';
-        
-        let API_URL = localStorage.getItem(API_KEY) || '';
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/exec";
         let allRisks = [];
         let probability = 3;
         let impact = 3;
@@ -689,10 +653,10 @@
         let LIBRARY = [];
         
         async function loadMasterAndLibrary() {
-            if (!API_URL) return;
+            if (!WEB_APP_URL) return;
             
             try {
-                const mRes = await fetch(API_URL + '?action=master');
+                const mRes = await fetch(WEB_APP_URL + '?action=master');
                 const mData = await mRes.json();
                 if (mData.ok) {
                     MASTER = mData;
@@ -701,7 +665,7 @@
             } catch (e) { console.log('Master load failed'); }
             
             try {
-                const lRes = await fetch(API_URL + '?action=library');
+                const lRes = await fetch(WEB_APP_URL + '?action=library');
                 const lData = await lRes.json();
                 if (lData.ok) {
                     LIBRARY = lData.items || [];
@@ -776,40 +740,11 @@
         async function init() {
             setupRatingButtons();
             
-            if (!API_URL) {
-                document.getElementById('setupBanner').style.display = 'block';
-                loadFromLocalStorage();
-                updateStats();
-                applyFilters();
-                renderHeatmap();
-                checkCriticalAlert();
-                return;
-            }
-            
             try {
                 await loadMasterAndLibrary();
-            } catch (e) {}
+            } catch (e) { console.log('Loading master/library failed'); }
             
             await loadRisks();
-        }
-        
-        async function saveApiUrl() {
-            const url = document.getElementById('apiUrlInput').value.trim();
-            if (url && url.startsWith('https://script.google.com')) {
-                localStorage.setItem(API_KEY, url);
-                API_URL = url;
-                document.getElementById('setupBanner').style.display = 'none';
-                showToast('تم حفظ الرابط! جاري التحميل...', 'success');
-                
-                await loadMasterAndLibrary();
-                await loadRisks();
-            } else {
-                showToast('الرابط غير صحيح', 'error');
-            }
-        }
-        
-        function hideSetupBanner() {
-            document.getElementById('setupBanner').style.display = 'none';
         }
         
         function setupRatingButtons() {
@@ -854,9 +789,9 @@
         }
         
         async function loadRisks() {
-            if (API_URL) {
+            if (WEB_APP_URL) {
                 try {
-                    const res = await fetch(API_URL + '?action=list');
+                    const res = await fetch(WEB_APP_URL + '?action=list');
                     const data = await res.json();
                     
                     if (data.ok) {
@@ -1079,9 +1014,9 @@
             
             const action = editId ? 'update' : 'add';
             
-            if (API_URL) {
+            if (WEB_APP_URL) {
                 try {
-                    const res = await fetch(API_URL, {
+                    const res = await fetch(WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action, payload })
@@ -1202,9 +1137,9 @@
             allRisks = allRisks.filter(r => r.id !== id);
             saveToLocalStorage();
             
-            if (API_URL) {
+            if (WEB_APP_URL) {
                 try {
-                    const res = await fetch(API_URL, {
+                    const res = await fetch(WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action: 'delete', payload: { id } })
