@@ -695,15 +695,109 @@
         let allRisks = [];
         let probability = 3;
         let impact = 3;
-        let useLocalStorage = true;
+        let MASTER = null;
+        let LIBRARY = [];
         
-        function init() {
-            loadRisks();
+        async function loadMasterAndLibrary() {
+            if (!API_URL) return;
+            
+            try {
+                const mRes = await fetch(API_URL + '?action=master');
+                const mData = await mRes.json();
+                if (mData.ok) {
+                    MASTER = mData;
+                    fillSelect('owner', mData.owners || [], 'اختر المسؤول...');
+                }
+            } catch (e) { console.log('Master load failed'); }
+            
+            try {
+                const lRes = await fetch(API_URL + '?action=library');
+                const lData = await lRes.json();
+                if (lData.ok) {
+                    LIBRARY = lData.items || [];
+                    buildRiskDropdown();
+                }
+            } catch (e) { console.log('Library load failed'); }
+        }
+        
+        function fillSelect(selectId, items, placeholder) {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            const cur = sel.value;
+            sel.innerHTML = `<option value="">${placeholder}</option>` +
+                items.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+            if (items.includes(cur)) sel.value = cur;
+        }
+        
+        function buildRiskDropdown() {
+            const textarea = document.getElementById('riskDesc');
+            if (!textarea || LIBRARY.length === 0) return;
+            
+            const sel = document.createElement('select');
+            sel.className = textarea.className;
+            sel.id = 'riskDesc';
+            sel.required = true;
+            
+            sel.innerHTML = `<option value="">اختر الخطر من المكتبة...</option>` +
+                LIBRARY.map(x => `<option value="${escapeHtml(x.risk)}">${escapeHtml(x.risk)}</option>`).join('') +
+                `<option value="__other__">أخرى (إدخال يدوي)...</option>`;
+            
+            textarea.parentNode.replaceChild(sel, textarea);
+            sel.addEventListener('change', () => {
+                if (sel.value === '__other__') {
+                    const input = document.createElement('textarea');
+                    input.className = sel.className;
+                    input.id = 'riskDesc';
+                    input.placeholder = 'أدخل وصف الخطر...';
+                    input.required = true;
+                    sel.parentNode.replaceChild(input, sel);
+                } else {
+                    autoFillFromLibrary(sel.value);
+                }
+            });
+        }
+        
+        function autoFillFromLibrary(riskText) {
+            const found = LIBRARY.find(x => x.risk === riskText);
+            if (!found) return;
+            
+            const cat = document.getElementById('category');
+            if (cat && !cat.value) cat.value = found.category || '';
+            
+            const mit = document.getElementById('mitigation');
+            if (mit && !mit.value) mit.value = found.defaultMitigation || '';
+            
+            const owner = document.getElementById('owner');
+            if (owner && !owner.value && found.defaultOwner) owner.value = found.defaultOwner;
+        }
+        
+        function escapeHtml(str) {
+            return String(str || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+        
+        async function init() {
             setupRatingButtons();
             
             if (!API_URL) {
                 document.getElementById('setupBanner').style.display = 'block';
+                loadFromLocalStorage();
+                updateStats();
+                applyFilters();
+                renderHeatmap();
+                checkCriticalAlert();
+                return;
             }
+            
+            try {
+                await loadMasterAndLibrary();
+            } catch (e) {}
+            
+            await loadRisks();
         }
         
         function saveApiUrl() {
@@ -990,7 +1084,7 @@
             
             const action = editId ? 'update' : 'add';
             
-            if (API_URL && !useLocalStorage) {
+            if (API_URL) {
                 try {
                     const res = await fetch(API_URL, {
                         method: 'POST',
@@ -1058,7 +1152,26 @@
             if (!risk) return;
             
             document.getElementById('editId').value = id;
-            document.getElementById('riskDesc').value = risk.risk || '';
+            
+            const riskEl = document.getElementById('riskDesc');
+            if (riskEl) {
+                if (riskEl.tagName === 'SELECT') {
+                    const options = Array.from(riskEl.options).map(o => o.value);
+                    if (options.includes(risk.risk)) {
+                        riskEl.value = risk.risk || '';
+                    } else {
+                        const textarea = document.createElement('textarea');
+                        textarea.className = riskEl.className;
+                        textarea.id = 'riskDesc';
+                        textarea.value = risk.risk || '';
+                        textarea.required = true;
+                        riskEl.parentNode.replaceChild(textarea, riskEl);
+                    }
+                } else {
+                    riskEl.value = risk.risk || '';
+                }
+            }
+            
             document.getElementById('category').value = risk.category || '';
             document.getElementById('owner').value = risk.owner || '';
             document.getElementById('mitigation').value = risk.mitigation || '';
@@ -1093,7 +1206,7 @@
             allRisks = allRisks.filter(r => r.id !== id);
             saveToLocalStorage();
             
-            if (API_URL && !useLocalStorage) {
+            if (API_URL) {
                 try {
                     const res = await fetch(API_URL, {
                         method: 'POST',
