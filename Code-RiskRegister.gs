@@ -1,6 +1,10 @@
 /**
- * سجل المخاطر - Risk Register Backend
- * مجمع مكة الطبي بالزاهر
+ * Risk Register API - Makkah Medical Complex (Al Zaher)
+ * Spreadsheet: 12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A
+ * Sheets:
+ *  - RiskRegister (Data)
+ *  - RiskLibrary  (Risk templates: Risk | Category | DefaultOwner | DefaultMitigation)
+ *  - Master       (Owners/Departments: Owner | Department)
  * 
  * ===== تعليمات النشر =====
  * 1. افتح: https://script.google.com
@@ -14,103 +18,79 @@
  */
 
 const SPREADSHEET_ID = '12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A';
-const RISK_SHEET = 'RiskRegister';
-const LIBRARY_SHEET = 'RiskLibrary';
+const SHEET_NAME = 'RiskRegister';
+const LIB_SHEET = 'RiskLibrary';
+const MASTER_SHEET = 'Master';
+
+const WRITE_TOKEN = '';
 
 function doGet(e) {
-  const action = (e && e.parameter && e.parameter.action) || '';
-  
-  let result;
-  switch (action.toLowerCase()) {
-    case 'list':
-      result = listRisks();
-      break;
-    case 'library':
-      result = getRiskLibrary();
-      break;
-    case 'owners':
-      result = getOwnersList();
-      break;
-    case 'test':
-      result = testConnection();
-      break;
-    default:
-      result = { message: 'Risk Register API v1.0', actions: ['list', 'library', 'owners', 'test'] };
-  }
-  
-  return ContentService
-    .createTextOutput(JSON.stringify({ ok: true, ...result }))
-    .setMimeType(ContentService.MimeType.JSON);
+  const action = String(e?.parameter?.action || '').toLowerCase();
+
+  if (action === 'list') return jsonOutput(listRisks());
+  if (action === 'metrics') return jsonOutput(getMetrics());
+  if (action === 'library') return jsonOutput(getRiskLibrary());
+  if (action === 'master') return jsonOutput(getMasterList());
+
+  return jsonOutput({
+    ok: true,
+    message: 'Risk Register API. Use ?action=list | metrics | library | master'
+  });
 }
 
 function doPost(e) {
   try {
-    const body = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
-    const action = (body.action || '').toLowerCase();
+    const body = e.postData?.contents ? JSON.parse(e.postData.contents) : {};
+    const action = String(body.action || '').toLowerCase();
     const payload = body.payload || {};
 
-    let result;
-    switch (action) {
-      case 'add':
-        result = addRisk(payload);
-        break;
-      case 'update':
-        result = updateRisk(payload);
-        break;
-      case 'delete':
-        result = deleteRisk(payload);
-        break;
-      default:
-        result = { error: 'Unknown action: ' + action };
+    if (WRITE_TOKEN && String(payload.token || '') !== WRITE_TOKEN) {
+      return jsonOutput({ ok: false, error: 'Unauthorized' });
     }
 
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: !result.error, ...result }))
-      .setMimeType(ContentService.MimeType.JSON);
-      
+    if (action === 'add') return jsonOutput(addRisk(payload));
+    if (action === 'update') return jsonOutput(updateRisk(payload));
+    if (action === 'delete') return jsonOutput(deleteRisk(payload));
+
+    return jsonOutput({ ok: false, error: 'Unknown action' });
   } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return jsonOutput({ ok: false, error: String(err) });
   }
 }
 
-function testConnection() {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheets = ss.getSheets().map(s => s.getName());
-    return {
-      connected: true,
-      spreadsheetName: ss.getName(),
-      sheets: sheets,
-      timestamp: new Date().toISOString()
-    };
-  } catch (err) {
-    return { connected: false, error: err.message };
-  }
+function jsonOutput(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-function getSheet_(name) {
+function getSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sh = ss.getSheetByName(name);
-  
-  if (!sh && name === RISK_SHEET) {
-    sh = ss.insertSheet(RISK_SHEET);
+  let sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) sh = ss.insertSheet(SHEET_NAME);
+
+  if (sh.getLastRow() === 0) {
     sh.appendRow([
       'ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level',
       'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'LastUpdated', 'UpdatedBy'
     ]);
-    sh.getRange(1, 1, 1, 14).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('#ffffff');
+    sh.getRange(1, 1, 1, 14)
+      .setFontWeight('bold')
+      .setBackground('#1e3a5f')
+      .setFontColor('#ffffff');
+    sh.setFrozenRows(1);
   }
-  
   return sh;
 }
 
-function levelFromScore_(score) {
-  if (score >= 16) return 'حرج';
-  if (score >= 12) return 'عالي';
-  if (score >= 6) return 'متوسط';
-  return 'منخفض';
+function getLibSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(LIB_SHEET);
+}
+
+function getMasterSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(MASTER_SHEET);
 }
 
 function clamp_(n, min, max) {
@@ -119,169 +99,174 @@ function clamp_(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-// ========== قراءة مكتبة المخاطر ==========
-function getRiskLibrary() {
-  const sh = getSheet_(LIBRARY_SHEET);
-  if (!sh || sh.getLastRow() < 2) {
-    return { items: [] };
-  }
-  
-  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
-  const items = data.map(r => ({
-    owner: String(r[0] || '').trim(),
-    department: String(r[1] || '').trim(),
-    risk: String(r[2] || '').trim(),
-    category: String(r[3] || '').trim(),
-    defaultOwner: String(r[4] || '').trim(),
-    defaultMitigation: String(r[5] || '').trim()
-  })).filter(item => item.risk);
-  
-  return { items };
+function levelFromScore_(score) {
+  if (score >= 16) return { key: 'ext', label: 'حرج' };
+  if (score >= 12) return { key: 'high', label: 'عالي' };
+  if (score >= 6)  return { key: 'med', label: 'متوسط' };
+  return { key: 'low', label: 'منخفض' };
 }
 
-// ========== قائمة المسؤولين ==========
-function getOwnersList() {
-  const sh = getSheet_(LIBRARY_SHEET);
-  if (!sh || sh.getLastRow() < 2) {
-    return { owners: [] };
-  }
-  
-  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
-  const ownerSet = new Set();
-  
-  data.forEach(r => {
-    const owner = String(r[0] || '').trim();
-    const defaultOwner = String(r[4] || '').trim();
-    if (owner) ownerSet.add(owner);
-    if (defaultOwner) ownerSet.add(defaultOwner);
-  });
-  
-  return { owners: Array.from(ownerSet).sort() };
+function findRowById_(sh, id) {
+  const finder = sh.createTextFinder(id).matchEntireCell(true).findNext();
+  return finder ? finder.getRow() : -1;
 }
 
-// ========== قراءة سجل المخاطر ==========
 function listRisks() {
-  const sh = getSheet_(RISK_SHEET);
+  const sh = getSheet_();
   const lastRow = sh.getLastRow();
-  
-  if (lastRow < 2) {
-    return { items: [] };
-  }
+  if (lastRow < 2) return { ok: true, items: [] };
 
-  const data = sh.getRange(2, 1, lastRow - 1, 14).getValues();
-  const items = data.map(r => ({
+  const values = sh.getRange(2, 1, lastRow - 1, 14).getValues();
+
+  const items = values.map(r => ({
     id: r[0],
     risk: r[1],
     category: r[2],
     owner: r[3],
-    probability: Number(r[4]) || 3,
-    impact: Number(r[5]) || 3,
-    score: Number(r[6]) || 9,
-    level: r[7] || 'متوسط',
+    probability: Number(r[4]) || 1,
+    impact: Number(r[5]) || 1,
+    score: Number(r[6]) || (Number(r[4]) || 1) * (Number(r[5]) || 1),
+    level: r[7] || levelFromScore_((Number(r[4]) || 1) * (Number(r[5]) || 1)).label,
     mitigation: r[8],
-    status: r[9] || 'مفتوح',
-    reviewDate: formatDate_(r[10]),
+    status: r[9],
+    reviewDate: r[10],
     sourceEvidence: r[11],
     lastUpdated: r[12],
-    updatedBy: r[13]
-  })).filter(item => item.id);
+    updatedBy: r[13],
+  }));
 
-  return { items };
+  return { ok: true, items };
 }
 
-function formatDate_(val) {
-  if (!val) return '';
-  if (val instanceof Date) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+function getMetrics() {
+  const sh = getSheet_();
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) {
+    return { ok: true, total: 0, ext: 0, high: 0, med: 0, low: 0, open: 0, progress: 0, closed: 0 };
   }
-  return String(val);
+
+  const values = sh.getRange(2, 1, lastRow - 1, 14).getValues();
+  const stats = { total: values.length, ext: 0, high: 0, med: 0, low: 0, open: 0, progress: 0, closed: 0 };
+
+  values.forEach(r => {
+    const level = String(r[7] || '').trim();
+    const status = String(r[9] || '').trim();
+
+    if (level === 'حرج') stats.ext++;
+    else if (level === 'عالي') stats.high++;
+    else if (level === 'متوسط') stats.med++;
+    else stats.low++;
+
+    if (status === 'مغلق') stats.closed++;
+    else if (status === 'قيد المعالجة' || status === 'قيد التنفيذ') stats.progress++;
+    else stats.open++;
+  });
+
+  return { ok: true, ...stats };
 }
 
-// ========== إضافة خطر جديد ==========
+function getRiskLibrary() {
+  const lib = getLibSheet_();
+  if (!lib || lib.getLastRow() < 2) return { ok: true, items: [] };
+
+  const values = lib.getRange(2, 1, lib.getLastRow() - 1, 4).getValues();
+  const items = values
+    .filter(r => String(r[0] || '').trim())
+    .map(r => ({
+      risk: String(r[0] || '').trim(),
+      category: String(r[1] || '').trim(),
+      defaultOwner: String(r[2] || '').trim(),
+      defaultMitigation: String(r[3] || '').trim(),
+    }));
+
+  return { ok: true, items };
+}
+
+function getMasterList() {
+  const sh = getMasterSheet_();
+  if (!sh || sh.getLastRow() < 2) return { ok: true, owners: [], departments: [], pairs: [] };
+
+  const values = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  const pairs = values
+    .filter(r => String(r[0] || '').trim())
+    .map(r => ({ owner: String(r[0] || '').trim(), department: String(r[1] || '').trim() }));
+
+  const owners = Array.from(new Set(pairs.map(p => p.owner))).sort();
+  const departments = Array.from(new Set(pairs.map(p => p.department).filter(Boolean))).sort();
+
+  return { ok: true, owners, departments, pairs };
+}
+
 function addRisk(p) {
-  const sh = getSheet_(RISK_SHEET);
+  const sh = getSheet_();
+
   const prob = clamp_(p.probability, 1, 5);
   const impact = clamp_(p.impact, 1, 5);
   const score = prob * impact;
-  const level = levelFromScore_(score);
-  
+  const lvl = levelFromScore_(score).label;
+
   const id = 'R-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
-  
+
   sh.appendRow([
     id,
-    p.risk || '',
-    p.category || '',
-    p.owner || '',
+    String(p.risk || ''),
+    String(p.category || ''),
+    String(p.owner || ''),
     prob,
     impact,
     score,
-    level,
-    p.mitigation || '',
-    p.status || 'مفتوح',
-    p.reviewDate || '',
-    p.sourceEvidence || '',
+    lvl,
+    String(p.mitigation || ''),
+    String(p.status || 'مفتوح'),
+    String(p.reviewDate || ''),
+    String(p.sourceEvidence || ''),
     new Date().toISOString(),
-    p.updatedBy || 'system'
+    String(p.updatedBy || 'system')
   ]);
-  
-  return { id };
+
+  return { ok: true, id };
 }
 
-// ========== تحديث خطر ==========
 function updateRisk(p) {
-  const sh = getSheet_(RISK_SHEET);
+  const sh = getSheet_();
   const id = String(p.id || '').trim();
-  
-  if (!id) return { error: 'Missing id' };
-  
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return { error: 'No data' };
-  
-  const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const idx = ids.findIndex(x => String(x).trim() === id);
-  
-  if (idx === -1) return { error: 'ID not found' };
-  
-  const row = idx + 2;
+  if (!id) return { ok: false, error: 'Missing id' };
+
+  const row = findRowById_(sh, id);
+  if (row === -1) return { ok: false, error: 'ID not found' };
+
   const prob = clamp_(p.probability, 1, 5);
   const impact = clamp_(p.impact, 1, 5);
   const score = prob * impact;
-  const level = levelFromScore_(score);
-  
+  const lvl = levelFromScore_(score).label;
+
   sh.getRange(row, 2, 1, 13).setValues([[
-    p.risk || '',
-    p.category || '',
-    p.owner || '',
+    String(p.risk || ''),
+    String(p.category || ''),
+    String(p.owner || ''),
     prob,
     impact,
     score,
-    level,
-    p.mitigation || '',
-    p.status || 'مفتوح',
-    p.reviewDate || '',
-    p.sourceEvidence || '',
+    lvl,
+    String(p.mitigation || ''),
+    String(p.status || 'مفتوح'),
+    String(p.reviewDate || ''),
+    String(p.sourceEvidence || ''),
     new Date().toISOString(),
-    p.updatedBy || 'system'
+    String(p.updatedBy || 'system')
   ]]);
-  
-  return { updated: true };
+
+  return { ok: true };
 }
 
-// ========== حذف خطر ==========
 function deleteRisk(p) {
-  const sh = getSheet_(RISK_SHEET);
+  const sh = getSheet_();
   const id = String(p.id || '').trim();
-  
-  if (!id) return { error: 'Missing id' };
-  
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return { error: 'No data' };
-  
-  const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const idx = ids.findIndex(x => String(x).trim() === id);
-  
-  if (idx === -1) return { error: 'ID not found' };
-  
-  sh.deleteRow(idx + 2);
-  return { deleted: true };
+  if (!id) return { ok: false, error: 'Missing id' };
+
+  const row = findRowById_(sh, id);
+  if (row === -1) return { ok: false, error: 'ID not found' };
+
+  sh.deleteRow(row);
+  return { ok: true };
 }

@@ -767,7 +767,7 @@
         async function loadRisks() {
             if (API_URL) {
                 try {
-                    const res = await fetch(API_URL + '?action=list', { mode: 'cors' });
+                    const res = await fetch(API_URL + '?action=list');
                     const data = await res.json();
                     
                     if (data.ok) {
@@ -804,7 +804,8 @@
         function setSaveBadge(type, html) {
             const el = document.getElementById('saveBadge');
             el.innerHTML = html;
-            el.className = type;
+            el.classList.remove('ok', 'warn', 'err', 'local');
+            el.classList.add(type);
         }
         
         function checkCriticalAlert() {
@@ -970,55 +971,86 @@
             const editId = document.getElementById('editId').value;
             const score = probability * impact;
             
-            const riskData = {
-                id: editId || 'R-' + Date.now(),
+            const payload = {
                 risk: document.getElementById('riskDesc').value,
                 category: document.getElementById('category').value,
                 owner: document.getElementById('owner').value,
                 probability: probability,
                 impact: impact,
-                score: score,
-                level: getLevel(score),
                 mitigation: document.getElementById('mitigation').value,
                 status: document.getElementById('status').value,
                 reviewDate: document.getElementById('reviewDate').value,
                 sourceEvidence: document.getElementById('source').value,
-                lastUpdated: new Date().toISOString()
+                updatedBy: 'user'
             };
             
             if (editId) {
-                const idx = allRisks.findIndex(r => r.id === editId);
-                if (idx !== -1) allRisks[idx] = riskData;
-            } else {
-                allRisks.push(riskData);
+                payload.id = editId;
             }
             
-            saveToLocalStorage();
+            const action = editId ? 'update' : 'add';
             
             if (API_URL && !useLocalStorage) {
                 try {
-                    await fetch(API_URL, {
+                    const res = await fetch(API_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ 
-                            action: editId ? 'update' : 'add', 
-                            payload: riskData 
-                        })
+                        body: JSON.stringify({ action, payload })
                     });
+                    const data = await res.json();
+                    
+                    if (!data.ok) throw new Error(data.error || 'Save failed');
+                    
                     setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
+                    await loadRisks();
                 } catch (err) {
+                    console.error('API error:', err);
+                    const localData = {
+                        ...payload,
+                        id: editId || 'R-' + Date.now(),
+                        score: score,
+                        level: getLevel(score),
+                        lastUpdated: new Date().toISOString()
+                    };
+                    
+                    if (editId) {
+                        const idx = allRisks.findIndex(r => r.id === editId);
+                        if (idx !== -1) allRisks[idx] = localData;
+                    } else {
+                        allRisks.push(localData);
+                    }
+                    saveToLocalStorage();
                     setSaveBadge('local', '<i class="fas fa-database"></i> محفوظ محلياً');
+                    updateStats();
+                    applyFilters();
+                    renderHeatmap();
+                    checkCriticalAlert();
                 }
             } else {
+                const localData = {
+                    ...payload,
+                    id: editId || 'R-' + Date.now(),
+                    score: score,
+                    level: getLevel(score),
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                if (editId) {
+                    const idx = allRisks.findIndex(r => r.id === editId);
+                    if (idx !== -1) allRisks[idx] = localData;
+                } else {
+                    allRisks.push(localData);
+                }
+                saveToLocalStorage();
                 setSaveBadge('ok', '<i class="fas fa-check-circle"></i> تم الحفظ ✓');
+                updateStats();
+                applyFilters();
+                renderHeatmap();
+                checkCriticalAlert();
             }
             
             showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
             resetForm();
-            updateStats();
-            applyFilters();
-            renderHeatmap();
-            checkCriticalAlert();
         });
         
         function editRisk(id) {
@@ -1053,18 +1085,32 @@
             document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
         }
         
-        function deleteRisk(id) {
+        async function deleteRisk(id) {
             if (!confirm('هل أنت متأكد من حذف هذا الخطر؟')) return;
+            
+            setSaveBadge('warn', '<i class="fas fa-spinner fa-spin"></i> جاري الحذف...');
             
             allRisks = allRisks.filter(r => r.id !== id);
             saveToLocalStorage();
             
             if (API_URL && !useLocalStorage) {
-                fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'delete', payload: { id } })
-                }).catch(() => {});
+                try {
+                    const res = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'delete', payload: { id } })
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحذف ✓');
+                    } else {
+                        setSaveBadge('warn', '<i class="fas fa-exclamation-triangle"></i> حذف محلي فقط');
+                    }
+                } catch (err) {
+                    setSaveBadge('local', '<i class="fas fa-database"></i> محفوظ محلياً');
+                }
+            } else {
+                setSaveBadge('ok', '<i class="fas fa-check-circle"></i> تم الحذف ✓');
             }
             
             showToast('تم الحذف بنجاح', 'success');
