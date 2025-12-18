@@ -741,15 +741,23 @@
                     console.warn('Complaints API failed:', complaintsRes);
                 }
 
-                // الحوادث - البيانات ترجع مباشرة
+                // الحوادث - البيانات ترجع مباشرة مع byStatus للتصعيدات
                 if (incidentsRes.ok) {
                     const s = incidentsRes;
                     const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
+                    // التصعيدات تأتي من byStatus.escalated.count
+                    const escalatedCount = s.byStatus?.escalated?.count || s.escalated || 0;
+                    
                     document.getElementById('kpi-incidents-open').textContent = openIncidents;
-                    document.getElementById('kpi-incidents-escalated').textContent = s.escalated ? `${s.escalated} مصعّدة` : '';
+                    if (escalatedCount > 0) {
+                        document.getElementById('kpi-incidents-escalated').textContent = `${escalatedCount} مصعّدة`;
+                        document.getElementById('kpi-incidents-escalated').style.color = '#DC143C';
+                    } else {
+                        document.getElementById('kpi-incidents-escalated').textContent = '';
+                    }
                     document.getElementById('stat-incidents-new').textContent = s.new || s.open || 0;
                     document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
-                    document.getElementById('stat-incidents-escalated').textContent = s.escalated || 0;
+                    document.getElementById('stat-incidents-escalated').textContent = escalatedCount;
                     document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
                 } else {
                     console.warn('Incidents API failed:', incidentsRes);
@@ -925,6 +933,12 @@
             document.body.classList.add('authenticated');
             loadingOverlay.classList.add('hidden');
             loadDashboardData();
+            
+            // التحديث التلقائي كل 3 دقائق (180000 ملي ثانية)
+            setInterval(() => {
+                console.log('تحديث تلقائي للبيانات...');
+                loadDashboardData();
+            }, 180000);
         });
 
         document.querySelectorAll('.nav-item[data-section]').forEach(item => {
