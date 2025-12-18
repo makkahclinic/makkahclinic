@@ -1408,17 +1408,27 @@
             if (currentUserRole !== 'admin') return;
             const container = document.getElementById('permissionsContainer');
             
+            // إظهار حالة التحميل
+            container.innerHTML = `<div style="text-align:center; padding:40px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:var(--gold);"></i><p style="margin-top:15px;">جاري تحميل البيانات...</p></div>`;
+            
             try {
+                console.log('Loading permissions from Firestore...');
                 const rolesSnap = await getDocs(collection(db, "staff_roles"));
                 const users = [];
-                rolesSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
+                rolesSnap.forEach(docSnap => users.push({ uid: docSnap.id, ...docSnap.data() }));
+                console.log('Loaded users:', users.length, users);
                 
                 // حساب الإحصائيات
                 const activeCount = users.filter(u => u.status !== 'suspended').length;
                 const suspendedCount = users.filter(u => u.status === 'suspended').length;
-                document.getElementById('statsActive').textContent = activeCount;
-                document.getElementById('statsSuspended').textContent = suspendedCount;
-                document.getElementById('statsTotal').textContent = users.length;
+                
+                const statsActiveEl = document.getElementById('statsActive');
+                const statsSuspendedEl = document.getElementById('statsSuspended');
+                const statsTotalEl = document.getElementById('statsTotal');
+                
+                if (statsActiveEl) statsActiveEl.textContent = activeCount;
+                if (statsSuspendedEl) statsSuspendedEl.textContent = suspendedCount;
+                if (statsTotalEl) statsTotalEl.textContent = users.length;
                 
                 if (users.length === 0) {
                     container.innerHTML = `<div class="no-alerts"><p>لا يوجد موظفين مسجلين</p></div>`;
@@ -1500,7 +1510,15 @@
                 
             } catch (e) {
                 console.error('Error loading permissions:', e);
-                container.innerHTML = `<div class="no-alerts"><p>تعذر تحميل الصلاحيات</p></div>`;
+                container.innerHTML = `
+                    <div class="no-alerts" style="text-align:center; padding:30px;">
+                        <i class="fas fa-exclamation-triangle fa-2x" style="color:#f59e0b; margin-bottom:15px;"></i>
+                        <p style="margin-bottom:10px;">تعذر تحميل الصلاحيات</p>
+                        <p style="font-size:0.85rem; color:#888;">${e.message || 'خطأ في الاتصال بقاعدة البيانات'}</p>
+                        <button onclick="loadPermissions()" style="margin-top:15px; padding:10px 25px; background:var(--gold); color:#fff; border:none; border-radius:8px; cursor:pointer; font-family:inherit;">
+                            <i class="fas fa-sync"></i> إعادة المحاولة
+                        </button>
+                    </div>`;
             }
         }
         
