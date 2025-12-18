@@ -488,7 +488,8 @@
                     <div class="kpi-info">
                         <h3 id="kpi-maintenance-total">-</h3>
                         <p>صيانة الأجهزة</p>
-                        <span class="sub" id="kpi-maintenance-pending"></span>
+                        <span class="sub" id="kpi-maintenance-completed"></span>
+                        <span class="sub" id="kpi-maintenance-overdue"></span>
                     </div>
                 </a>
                 <a href="pages/needlestick-analysis.html" target="_blank" class="kpi-card">
@@ -1006,7 +1007,7 @@
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
                 }
 
-                // الصيانة - عرض إحصائيات الصيانة (getKPIs)
+                // الصيانة - عرض إحصائيات الصيانة
                 console.log('Processing Maintenance:', maintenanceRes);
                 const mData = maintenanceRes.data || maintenanceRes;
 
@@ -1016,24 +1017,29 @@
 
                 if (!hasStats) {
                     document.getElementById('kpi-maintenance-total').textContent = '--';
-                    document.getElementById('kpi-maintenance-pending').textContent = 'API لا يرجع إحصائيات';
+                    document.getElementById('kpi-maintenance-completed').textContent = 'API لا يرجع إحصائيات';
+                    document.getElementById('kpi-maintenance-overdue').textContent = '';
                 } else {
                     const totalDevices = Number(mData.totalDevices || mData.total || 0);
                     const completed = Number(mData.completed || mData.done || 0);
-                    const notServiced = Number(mData.notServiced || mData.pending || Math.max(totalDevices - completed, 0));
                     const overdue = Number(mData.overdue || 0);
-                    const completionRate = Number(mData.completionRate || 0);
 
+                    // عدد الأجهزة الكلية
                     document.getElementById('kpi-maintenance-total').textContent = totalDevices;
 
-                    const pendingEl = document.getElementById('kpi-maintenance-pending');
-                    if (notServiced > 0) {
-                        pendingEl.textContent = `${notServiced} لم تتم صيانتها`;
-                        pendingEl.classList.add('danger');
+                    // عدد ما تم صيانته (أخضر)
+                    const completedEl = document.getElementById('kpi-maintenance-completed');
+                    completedEl.textContent = `${completed} تمت صيانتها`;
+                    completedEl.style.color = '#28a745';
+
+                    // عدد المتأخرة (أحمر)
+                    const overdueEl = document.getElementById('kpi-maintenance-overdue');
+                    if (overdue > 0) {
+                        overdueEl.textContent = `${overdue} متأخرة`;
+                        overdueEl.classList.add('danger');
+                        overdueEl.style.color = '#DC143C';
                     } else {
-                        pendingEl.textContent = `${completionRate}% مكتملة`;
-                        pendingEl.classList.remove('danger');
-                        pendingEl.style.color = '#28a745';
+                        overdueEl.textContent = '';
                     }
                 }
 
