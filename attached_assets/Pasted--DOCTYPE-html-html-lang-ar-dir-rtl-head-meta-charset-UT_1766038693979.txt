@@ -93,7 +93,7 @@
     <header class="mb-6 gradient-header text-white shadow-lg rounded-lg overflow-hidden">
       <div class="p-6 flex flex-col lg:flex-row items-start justify-between">
         <div class="flex items-center mb-4 lg:mb-0 lg:w-1/3">
-          <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-transparent.png"
+          <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo.png"
                alt="شعار مجمع مكة الطبي"
                class="h-16 w-16 mr-4 rounded-full bg-white p-1" />
           <div>
@@ -399,30 +399,11 @@
             </table>
           </div>
 
-          <!-- Pagination Controls -->
-          <div class="mt-4 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
-            <div class="flex items-center gap-4">
-              <div id="table-stats">إجمالي السجلات: <span id="total-records">0</span></div>
-              <div id="filter-stats" class="hidden">
-                (تم تصفية: <span id="filtered-count">0</span> من <span id="total-count">0</span>)
-              </div>
-            </div>
-            <div id="pagination-controls" class="flex items-center gap-2">
-              <button id="first-page" onclick="goToPage(1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="fas fa-angle-double-right"></i>
-              </button>
-              <button id="prev-page" onclick="goToPage(currentPage - 1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="fas fa-angle-right"></i>
-              </button>
-              <span class="px-3">
-                صفحة <span id="current-page-num">1</span> من <span id="total-pages">1</span>
-              </span>
-              <button id="next-page" onclick="goToPage(currentPage + 1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="fas fa-angle-left"></i>
-              </button>
-              <button id="last-page" onclick="goToPage(totalPages)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="fas fa-angle-double-left"></i>
-              </button>
+          <div class="mt-4 flex justify-between items-center text-sm text-gray-600">
+            <div id="table-stats">إجمالي السجلات: <span id="total-records">0</span></div>
+            <div id="filter-stats" class="hidden">
+              تم تصفية: <span id="filtered-count">0</span> من
+              <span id="total-count">0</span>
             </div>
           </div>
         </div>
@@ -441,15 +422,10 @@
     let assetsMap = {};
     let staffList = [];
     let allRecords = [];
-    let filteredRecords = [];
     let DEPARTMENTS_LIST = [];
     let uploadedFileBase64 = null;
     let uploadedFileMimeType = null;
     let uploadedFileName = null;
-    
-    // Pagination
-    const RECORDS_PER_PAGE = 25;
-    let currentPage = 1;
 
     // عناصر DOM
     const elements = {
@@ -511,21 +487,10 @@
       return 1;
     }
 
-    // تجاوز يوم الجمعة (إجازة أسبوعية)
-    function skipFriday(date) {
-      // إذا كان اليوم جمعة (5)، ننتقل للسبت
-      if (date.getDay() === 5) {
-        date.setDate(date.getDate() + 1);
-      }
-      return date;
-    }
-
-    function addDaysYMD(ymd, days, skipFridayFlag = false) {
+    function addDaysYMD(ymd, days) {
       const d = parseYMD(ymd);
       if (!d) return '';
       d.setDate(d.getDate() + days);
-      // تجاوز الجمعة إذا طُلب
-      if (skipFridayFlag) skipFriday(d);
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
       const da = String(d.getDate()).padStart(2, '0');
@@ -736,8 +701,7 @@
 
       switch (frequency) {
         case 'يومي':
-          // تجاوز الجمعة (إجازة) في التكرار اليومي
-          nextYMD = addDaysYMD(testDateValue, 1, true);
+          nextYMD = addDaysYMD(testDateValue, 1);
           break;
         case 'أسبوعي':
           nextYMD = addDaysYMD(testDateValue, 7);
@@ -1054,49 +1018,8 @@
       `;
     }
 
-    let totalPages = 1;
-
-    function goToPage(page) {
-      const maxPage = Math.ceil(filteredRecords.length / RECORDS_PER_PAGE) || 1;
-      if (page < 1) page = 1;
-      if (page > maxPage) page = maxPage;
-      currentPage = page;
-      renderTablePage();
-      updatePaginationControls();
-    }
-
-    function updatePaginationControls() {
-      totalPages = Math.ceil(filteredRecords.length / RECORDS_PER_PAGE) || 1;
-      document.getElementById('current-page-num').textContent = currentPage;
-      document.getElementById('total-pages').textContent = totalPages;
-      
-      document.getElementById('first-page').disabled = currentPage === 1;
-      document.getElementById('prev-page').disabled = currentPage === 1;
-      document.getElementById('next-page').disabled = currentPage >= totalPages;
-      document.getElementById('last-page').disabled = currentPage >= totalPages;
-    }
-
     function renderTable(records) {
       if (!records || records.length === 0) {
-        filteredRecords = [];
-        elements.tableBody.innerHTML =
-          '<tr><td colspan="8" class="text-center py-4">لا توجد سجلات متاحة.</td></tr>';
-        updatePaginationControls();
-        return;
-      }
-
-      // ترتيب السجلات من الأحدث للأقدم
-      filteredRecords = [...records].sort((a, b) =>
-        a.Timestamp < b.Timestamp ? 1 : -1
-      );
-      
-      currentPage = 1;
-      renderTablePage();
-      updatePaginationControls();
-    }
-
-    function renderTablePage() {
-      if (!filteredRecords || filteredRecords.length === 0) {
         elements.tableBody.innerHTML =
           '<tr><td colspan="8" class="text-center py-4">لا توجد سجلات متاحة.</td></tr>';
         return;
@@ -1105,12 +1028,11 @@
       const today = todayYMD();
       const weeklyThreshold = addDaysYMD(today, 7);
 
-      // حساب نطاق الصفحة
-      const startIndex = (currentPage - 1) * RECORDS_PER_PAGE;
-      const endIndex = startIndex + RECORDS_PER_PAGE;
-      const pageRecords = filteredRecords.slice(startIndex, endIndex);
+      const sorted = [...records].sort((a, b) =>
+        a.Timestamp < b.Timestamp ? 1 : -1
+      );
 
-      elements.tableBody.innerHTML = pageRecords
+      elements.tableBody.innerHTML = sorted
         .map(record => {
           const isPass = record.result === 'Pass';
           const resultHtml = `
@@ -1237,57 +1159,53 @@
       }
     }
 
-    // ================ البحث والفلترة ================
+    // ================ البحث في الجدول ================
     function filterTable() {
-      const searchFilter = elements.searchInput.value.trim().toUpperCase();
+      const searchFilter = elements.searchInput.value.toUpperCase();
       const departmentFilter = elements.departmentFilter.value;
+      const rows = elements.tableBody.getElementsByTagName('tr');
+      let visibleCount = 0;
 
-      // ترتيب جميع السجلات من الأحدث للأقدم
-      const sorted = [...allRecords].sort((a, b) =>
-        a.Timestamp < b.Timestamp ? 1 : -1
-      );
+      for (let i = 0; i < rows.length; i++) {
+        let visible = true;
+        const cells = rows[i].getElementsByTagName('td');
 
-      // تطبيق الفلترة
-      filteredRecords = sorted.filter(record => {
-        let matchSearch = true;
-        let matchDept = true;
-
-        // فلتر البحث النصي
         if (searchFilter) {
-          const searchableText = [
-            record.Timestamp || '',
-            record.department || '',
-            record.staff || '',
-            record.assetID || '',
-            record.assetName || '',
-            record.testDate || '',
-            record.nextDue || '',
-            record.result || ''
-          ].join(' ').toUpperCase();
-          
-          matchSearch = searchableText.includes(searchFilter);
+          let found = false;
+          for (let j = 0; j < cells.length; j++) {
+            if (
+              cells[j] &&
+              cells[j].textContent.toUpperCase().indexOf(searchFilter) > -1
+            ) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) visible = false;
         }
 
-        // فلتر القسم
-        if (departmentFilter) {
-          matchDept = record.department === departmentFilter;
+        if (departmentFilter && visible) {
+          const departmentCell = cells[1];
+          if (
+            departmentCell &&
+            departmentCell.textContent !== departmentFilter
+          ) {
+            visible = false;
+          }
         }
 
-        return matchSearch && matchDept;
-      });
+        rows[i].style.display = visible ? '' : 'none';
+        if (visible) visibleCount++;
+      }
 
-      // إعادة رسم الجدول من الصفحة الأولى
-      currentPage = 1;
-      renderTablePage();
-      updatePaginationControls();
-      updateFilterStats();
+      updateFilterStats(visibleCount, rows.length);
     }
 
-    function updateFilterStats() {
+    function updateFilterStats(visibleCount, totalCount) {
       if (elements.searchInput.value || elements.departmentFilter.value) {
         elements.filterStats.classList.remove('hidden');
-        elements.filteredCount.textContent = filteredRecords.length;
-        elements.totalCount.textContent = allRecords.length;
+        elements.filteredCount.textContent = visibleCount;
+        elements.totalCount.textContent = totalCount;
       } else {
         elements.filterStats.classList.add('hidden');
       }
