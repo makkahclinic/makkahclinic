@@ -866,8 +866,8 @@
                     document.getElementById('kpi-calibration-pending').textContent = 'لا توجد بيانات';
                 }
 
-                // تحديث التنبيهات
-                updateAlerts(complaintsRes, incidentsRes, risksRes);
+                // تحديث التنبيهات - إرسال كل البيانات
+                updateAlerts(complaintsRes, incidentsRes, risksRes, roundsRes, calStats);
 
             } catch (e) {
                 console.error('Dashboard load error:', e);
@@ -876,7 +876,7 @@
             }
         }
 
-        function updateAlerts(complaints, incidents, risks) {
+        function updateAlerts(complaints, incidents, risks, rounds, calibration) {
             const container = document.getElementById('alertsContainer');
             const alerts = [];
 
@@ -891,13 +891,14 @@
                 });
             }
 
-            // تنبيهات الحوادث المصعّدة
-            if (incidents.ok && incidents.escalated > 0) {
+            // تنبيهات الحوادث المصعّدة - قراءة من byStatus.escalated.count
+            const incidentEscalated = incidents.byStatus?.escalated?.count || incidents.escalated || 0;
+            if (incidents.ok && incidentEscalated > 0) {
                 alerts.push({
                     type: 'danger',
                     icon: 'fa-exclamation-triangle',
                     text: 'حوادث مصعّدة تحتاج متابعة',
-                    count: incidents.escalated,
+                    count: incidentEscalated,
                     link: 'incident-report-analysis.html'
                 });
             }
@@ -911,6 +912,28 @@
                     text: 'مخاطر عالية في السجل',
                     count: risksHigh,
                     link: 'risk-register.html'
+                });
+            }
+
+            // تنبيهات الجولات المتأخرة
+            if (rounds && rounds.ok && rounds.delayed > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-clipboard-check',
+                    text: 'جولات متأخرة تحتاج متابعة',
+                    count: rounds.delayed,
+                    link: 'Round.html'
+                });
+            }
+
+            // تنبيهات المعايرة المتأخرة
+            if (calibration && calibration.overdue > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-tools',
+                    text: 'أجهزة تجاوزت موعد المعايرة',
+                    count: calibration.overdue,
+                    link: 'calibration.html'
                 });
             }
 
