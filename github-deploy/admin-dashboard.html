@@ -742,18 +742,48 @@
             return { ok: false, ...res };
         }
 
-        // جلب JSON بأمان
-        async function fetchJsonSafe(url) {
+        // فك JSONP أو JSON
+        function parseJsonOrJsonp(text) {
+            // JSON عادي
+            try { return JSON.parse(text); } catch {}
+            // JSONP: callback({...})
+            const m = text.match(/^[a-zA-Z_$][\w$]*\((.*)\)\s*;?\s*$/s);
+            if (m && m[1]) {
+                try { return JSON.parse(m[1]); } catch {}
+            }
+            return null;
+        }
+
+        // جلب JSON/JSONP بأمان
+        async function fetchJsonFlexible(url) {
             const r = await fetch(url, { method: 'GET', redirect: 'follow' });
             const text = await r.text();
-            try { return JSON.parse(text); } catch { return { ok: false, error: 'Non-JSON', raw: text.slice(0, 200) }; }
+            const parsed = parseJsonOrJsonp(text);
+            return parsed ?? { ok: false, error: 'Non-JSON', raw: text.slice(0, 200) };
+        }
+
+        // تجربة actions مختلفة لحد ما نلقى اللي يدعمه الـ API
+        async function tryActions(url, actions) {
+            for (const a of actions) {
+                try {
+                    const r = await fetch(url + '?action=' + encodeURIComponent(a));
+                    const t = await r.text();
+                    if (!t.includes('Action not found') && !t.includes('error')) {
+                        const json = parseJsonOrJsonp(t);
+                        if (json && (json.success !== false)) {
+                            return { action: a, raw: t, json };
+                        }
+                    }
+                } catch {}
+            }
+            return null;
         }
 
         // دالة ذكية: GET ثم fallback POST
         async function getStatsSmart(url, action) {
             // 1) جرب GET
             try {
-                const j = await fetchJsonSafe(url + '?action=' + encodeURIComponent(action));
+                const j = await fetchJsonFlexible(url + '?action=' + encodeURIComponent(action));
                 if (j && (j.ok || j.success || j.status === 'success' || j.total !== undefined || j.data)) return j;
             } catch (e) { console.log('GET failed for', action); }
 
@@ -833,21 +863,21 @@
             console.log('Loading dashboard data...');
 
             try {
-                // جلب البيانات بالتوازي مع getStatsSmart
-                const [complaintsRes, incidentsRes, risksRaw, roundsRes, needlestickRaw, calibrationRes, maintenanceRaw] = await Promise.all([
+                // جلب البيانات بالتوازي
+                const [complaintsRes, incidentsRes, risksRaw, roundsRes, needlestickRes, calibrationRes, maintTry] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
                     getStatsSmart(APIs.risks, 'metrics'),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    getStatsSmart(APIs.needlestick, 'getStats'),
+                    loadNeedlestickData(),
                     fetch(APIs.calibration).then(r => r.json()).catch(() => ({ status: 'error' })),
-                    getStatsSmart(APIs.maintenance, 'getKPIs')
+                    tryActions(APIs.maintenance, ['getKPIs', 'getStats', 'stats', 'metrics', 'getMetrics', 'summary', 'dashboard'])
                 ]);
 
                 // تطبيع البيانات
                 const risksRes = normalize(risksRaw);
-                const needlestickRes = normalize(needlestickRaw);
-                const maintenanceRes = normalize(maintenanceRaw);
+                const maintenanceRes = maintTry ? normalize(maintTry.json) : { ok: false };
+                console.log('Maintenance action probe:', maintTry);
 
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);

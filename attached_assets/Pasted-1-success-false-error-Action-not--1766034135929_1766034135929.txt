@@ -1,0 +1,106 @@
+1) الصيانة: لماذا ما تطلع أرقام؟
+
+في الصورة الأولى الرد واضح:
+
+{"success":false,"error":"Action not found: getStats"}
+
+
+هذا يعني: سكربت الصيانة نفسه ما عنده action اسمه getStats.
+فحتى لو الداشبورد ممتاز—ما يقدر يطلع رقم لأن الـ API يرفض الطلب من الأساس.
+
+✅ الحل من الداشبورد فقط (بدون لمس Apps Script):
+بدل ما تثبت على getStats، خلّ الداشبورد يجرب Actions مختلفة لحد ما يلقى اللي السكربت يدعمه.
+
+ضع هذا الكود مرة واحدة فوق loadDashboardData():
+
+async function tryActions(url, actions) {
+  for (const a of actions) {
+    try {
+      const r = await fetch(url + '?action=' + encodeURIComponent(a));
+      const t = await r.text();
+      if (!t.includes('Action not found')) {
+        return { action: a, raw: t, json: (() => { try { return JSON.parse(t); } catch { return null; } })() };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+
+ثم داخل loadDashboardData() بدل سطر الصيانة:
+
+const maintTry = await tryActions(APIs.maintenance, [
+  'getStats', 'stats', 'metrics', 'getMetrics', 'summary', 'dashboard', 'ping'
+]);
+
+console.log('Maintenance action probe:', maintTry);
+
+
+لو maintTry رجع JSON فيه أرقام → نربطه على KPI.
+
+لو كلهم فشلوا → السكربت ما يوفر stats نهائيًا (لا يمكن من الـ front-end).
+
+ملاحظة: لما تتعامل مع Apps Script Web App، البيانات الصحيحة لازم تُرجع عبر doGet/doPost باستخدام ContentService كـ JSON/نص. 
+Google for Developers
+
+2) الوخز الإبري: لماذا ما يطلع رقم؟
+
+في الصورة الثانية ظهر:
+
+callback({"status":"success"})
+
+
+هذا ليس JSON… هذا JSONP (ملف JavaScript ينفّذ callback)؛ لذلك response.json() أو JSON.parse() يفشل ويعطي “Unexpected token …” لأن النص مو JSON. 
+MDN Web Docs
++1
+
+✅ الحل من الداشبورد فقط:
+بدل .json() اقرأ كنص، ثم “فك” الـ JSONP:
+
+أضف دالة:
+
+function parseJsonOrJsonp(text) {
+  // JSON عادي
+  try { return JSON.parse(text); } catch {}
+
+  // JSONP: callback({...})
+  const m = text.match(/^[a-zA-Z_$][\w$]*\((.*)\)\s*;?\s*$/s);
+  if (m && m[1]) {
+    try { return JSON.parse(m[1]); } catch {}
+  }
+  return null;
+}
+
+
+واستخدمها للوخز بدل r.json():
+
+async function fetchJsonFlexible(url) {
+  const r = await fetch(url, { method: 'GET', redirect: 'follow' });
+  const text = await r.text();
+  const parsed = parseJsonOrJsonp(text);
+  return parsed ?? { ok:false, error:'Non-JSON', raw:text.slice(0,200) };
+}
+
+
+ثم:
+
+const needlestickRes = await fetchJsonFlexible(APIs.needlestick + '?action=getStats');
+console.log('Needlestick parsed:', needlestickRes);
+
+
+⚠️ لكن انتبه: ردّك الحالي فيه status فقط بدون أرقام.
+يعني حتى لو قدرنا نفكّه، ما فيه total/thisMonth عشان تعرضه… لازم action مختلف أو endpoint مختلف يعطي الأرقام.
+
+“Unexpected token” غالبًا يعني أنك تتوقع JSON لكنك استلمت شيء ثاني (HTML/JS/JSONP). 
+MDN Web Docs
++1
+
+الخلاصة السريعة
+
+الصيانة: المشكلة ليست parsing — المشكلة أن getStats غير موجود أصلًا. لازم تعرف action الصحيح أو تضيفه في السكربت.
+
+الوخز: المشكلة مزدوجة:
+
+الرد JSONP وليس JSON (نحلها بالـ parser فوق)
+
+الرد الحالي لا يحتوي أرقام (يحتاج action/endpoint يعطي stats)
