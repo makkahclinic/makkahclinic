@@ -638,13 +638,34 @@
         <section class="content-section" id="section-permissions">
             <div class="stats-box">
                 <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات - تحكم كامل</h4>
-                <p style="color:#666; margin-bottom:20px; font-size:0.9rem;">تعيين اللجان والأنظمة المسموحة لكل موظف</p>
+                <p style="color:#666; margin-bottom:15px; font-size:0.9rem;">تعيين اللجان والأنظمة المسموحة لكل موظف</p>
+                
+                <div id="permissionsStats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius:12px;">
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #10b981;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#10b981;" id="statsActive">0</div>
+                        <div style="font-size:0.8rem; color:#666;">فعال</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #f59e0b;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="statsSuspended">0</div>
+                        <div style="font-size:0.8rem; color:#666;">معلق</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid:#1e3a5f;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="statsTotal">0</div>
+                        <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
+                    </div>
+                </div>
+                
                 <div id="permissionsContainer">
                     <div class="no-alerts">جاري التحميل...</div>
                 </div>
             </div>
         </section>
     </main>
+    
+    <div id="toastNotification" style="position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#10b981; color:white; padding:15px 30px; border-radius:10px; box-shadow:0 4px 15px rgba(0,0,0,0.2); display:none; z-index:9999; font-weight:600;">
+        <i class="fas fa-check-circle" style="margin-left:8px;"></i>
+        <span id="toastMessage">تم الحفظ بنجاح</span>
+    </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1345,6 +1366,15 @@
         }, 2000);
 
         // ===== إدارة الصلاحيات الكاملة =====
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toastNotification');
+            const toastMsg = document.getElementById('toastMessage');
+            toastMsg.textContent = message;
+            toast.style.background = isError ? '#ef4444' : '#10b981';
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+        
         const COMMITTEES = [
             { id: 'RM', name: 'لجنة إدارة المخاطر' },
             { id: 'FMS', name: 'لجنة السلامة والمرافق' },
@@ -1383,6 +1413,13 @@
                 const users = [];
                 rolesSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
                 
+                // حساب الإحصائيات
+                const activeCount = users.filter(u => u.status !== 'suspended').length;
+                const suspendedCount = users.filter(u => u.status === 'suspended').length;
+                document.getElementById('statsActive').textContent = activeCount;
+                document.getElementById('statsSuspended').textContent = suspendedCount;
+                document.getElementById('statsTotal').textContent = users.length;
+                
                 if (users.length === 0) {
                     container.innerHTML = `<div class="no-alerts"><p>لا يوجد موظفين مسجلين</p></div>`;
                     return;
@@ -1392,21 +1429,35 @@
                     const currentRole = ROLES.find(r => r.id === u.role) || ROLES[3];
                     const allowedSystems = u.allowedSystems || [];
                     const committee = u.committee || '';
+                    const isSuspended = u.status === 'suspended';
+                    const statusColor = isSuspended ? '#f59e0b' : '#10b981';
+                    const statusText = isSuspended ? 'معلق' : 'فعال';
+                    const statusBg = isSuspended ? '#fef3c7' : '#d1fae5';
                     
                     return `
-                        <div class="permission-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${currentRole.color}; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                        <div class="permission-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${isSuspended ? '#f59e0b' : currentRole.color}; box-shadow:0 2px 8px rgba(0,0,0,0.08); ${isSuspended ? 'opacity:0.7;' : ''}">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px; margin-bottom:15px;">
                                 <div>
-                                    <h4 style="color:var(--primary); margin-bottom:5px;">
-                                        <i class="fas fa-user" style="margin-left:8px; color:var(--gold);"></i>
-                                        ${u.fullName || u.email || u.uid}
-                                    </h4>
+                                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:5px;">
+                                        <h4 style="color:var(--primary); margin:0;">
+                                            <i class="fas fa-user" style="margin-left:8px; color:var(--gold);"></i>
+                                            ${u.fullName || u.email || u.uid}
+                                        </h4>
+                                        <span style="background:${statusBg}; color:${statusColor}; padding:3px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;">
+                                            <i class="fas fa-${isSuspended ? 'pause-circle' : 'check-circle'}"></i> ${statusText}
+                                        </span>
+                                    </div>
                                     <p style="color:#666; font-size:0.85rem;">${u.email || ''}</p>
                                     <p style="color:#999; font-size:0.8rem;">${u.department || ''} - ${u.jobTitle || ''}</p>
                                 </div>
-                                <button onclick="deleteUser('${u.uid}')" style="background:#fee2e2; color:#dc3545; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
-                                    <i class="fas fa-trash"></i> حذف
-                                </button>
+                                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                    <button onclick="toggleUserStatus('${u.uid}', ${isSuspended})" style="background:${isSuspended ? '#d1fae5' : '#fef3c7'}; color:${isSuspended ? '#10b981' : '#f59e0b'}; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
+                                        <i class="fas fa-${isSuspended ? 'play-circle' : 'pause-circle'}"></i> ${isSuspended ? 'تفعيل' : 'تعليق'}
+                                    </button>
+                                    <button onclick="deleteUser('${u.uid}')" style="background:#fee2e2; color:#dc3545; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
+                                        <i class="fas fa-trash"></i> حذف
+                                    </button>
+                                </div>
                             </div>
                             
                             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;">
@@ -1455,7 +1506,7 @@
         
         window.updateUserField = async function(uid, field, value) {
             if (currentUserRole !== 'admin') {
-                alert('ليس لديك صلاحية لهذا الإجراء');
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
                 return;
             }
             try {
@@ -1464,15 +1515,40 @@
                     updatedAt: new Date().toISOString(),
                     updatedBy: auth.currentUser.email
                 });
+                showToast('تم الحفظ بنجاح');
             } catch (e) {
                 console.error('Error updating:', e);
-                alert('حدث خطأ أثناء التحديث');
+                showToast('حدث خطأ أثناء التحديث', true);
+            }
+        };
+        
+        window.toggleUserStatus = async function(uid, currentlySuspended) {
+            if (currentUserRole !== 'admin') {
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
+                return;
+            }
+            const newStatus = currentlySuspended ? 'active' : 'suspended';
+            const message = currentlySuspended ? 'تفعيل' : 'تعليق';
+            
+            if (!confirm(`هل تريد ${message} هذا العضو؟`)) return;
+            
+            try {
+                await updateDoc(doc(db, "staff_roles", uid), {
+                    status: newStatus,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+                showToast(currentlySuspended ? 'تم تفعيل العضو' : 'تم تعليق العضو');
+                loadPermissions();
+            } catch (e) {
+                console.error('Error toggling status:', e);
+                showToast('حدث خطأ', true);
             }
         };
         
         window.toggleSystem = async function(uid, systemId, checked) {
             if (currentUserRole !== 'admin') {
-                alert('ليس لديك صلاحية لهذا الإجراء');
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
                 return;
             }
             try {
@@ -1491,26 +1567,27 @@
                     updatedAt: new Date().toISOString(),
                     updatedBy: auth.currentUser.email
                 });
+                showToast('تم الحفظ');
             } catch (e) {
                 console.error('Error toggling system:', e);
-                alert('حدث خطأ');
+                showToast('حدث خطأ', true);
             }
         };
         
         window.deleteUser = async function(uid) {
             if (currentUserRole !== 'admin') {
-                alert('ليس لديك صلاحية لهذا الإجراء');
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
                 return;
             }
-            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟ لن يتمكن من الدخول بعد الحذف.')) return;
+            if (!confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً؟ لن يتمكن من الدخول بعد الحذف.')) return;
             
             try {
                 await deleteDoc(doc(db, "staff_roles", uid));
-                alert('تم حذف المستخدم');
+                showToast('تم حذف المستخدم');
                 loadPermissions();
             } catch (e) {
                 console.error('Error deleting:', e);
-                alert('حدث خطأ أثناء الحذف');
+                showToast('حدث خطأ أثناء الحذف', true);
             }
         };
         
