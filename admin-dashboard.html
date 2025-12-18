@@ -712,34 +712,36 @@
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
-                // سجل المخاطر
-                if (risksRes.success && risksRes.data) {
-                    const r = risksRes.data;
-                    document.getElementById('kpi-risks-active').textContent = r.active || 0;
-                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : '';
+                // سجل المخاطر - يستخدم ok وليس success
+                if (risksRes.ok) {
+                    const r = risksRes;
+                    // ext = خارجي، total = الإجمالي، high/med/low = المستويات
+                    const activeRisks = r.total || (r.high || 0) + (r.med || 0) + (r.low || 0);
+                    document.getElementById('kpi-risks-active').textContent = activeRisks;
+                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : (r.ext ? `${r.ext} خارجي` : '');
                     document.getElementById('stat-risks-high').textContent = r.high || 0;
-                    document.getElementById('stat-risks-medium').textContent = r.medium || 0;
+                    document.getElementById('stat-risks-medium').textContent = r.med || r.medium || 0;
                     document.getElementById('stat-risks-low').textContent = r.low || 0;
-                    document.getElementById('stat-risks-resolved').textContent = r.resolved || 0;
+                    document.getElementById('stat-risks-resolved').textContent = r.resolved || r.closed || 0;
                 } else {
-                    // حاول البنية البديلة
-                    if (risksRes.active !== undefined) {
-                        document.getElementById('kpi-risks-active').textContent = risksRes.active || 0;
-                        document.getElementById('kpi-risks-high').textContent = risksRes.high ? `${risksRes.high} عالي` : '';
-                        document.getElementById('stat-risks-high').textContent = risksRes.high || 0;
-                        document.getElementById('stat-risks-medium').textContent = risksRes.medium || 0;
-                        document.getElementById('stat-risks-low').textContent = risksRes.low || 0;
-                        document.getElementById('stat-risks-resolved').textContent = risksRes.resolved || 0;
-                    } else {
-                        console.warn('Risks API failed:', risksRes);
-                    }
+                    console.warn('Risks API failed:', risksRes);
                 }
 
                 // الجولات - البيانات ترجع مباشرة
                 if (roundsRes.ok) {
                     const rd = roundsRes;
-                    document.getElementById('kpi-rounds-today').textContent = rd.completed || rd.todayCompleted || 0;
-                    document.getElementById('kpi-rounds-delayed').textContent = rd.delayed ? `${rd.delayed} متأخرة` : (rd.violations ? `${rd.violations} مخالفة` : '');
+                    // عرض المكتملة في البطاقة الرئيسية
+                    document.getElementById('kpi-rounds-today').textContent = rd.completed || 0;
+                    // عرض المتأخرة بوضوح
+                    if (rd.delayed > 0) {
+                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
+                        document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
+                    } else if (rd.violations > 0) {
+                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.violations} مخالفة`;
+                        document.getElementById('kpi-rounds-delayed').style.color = '#f0ad4e';
+                    } else {
+                        document.getElementById('kpi-rounds-delayed').textContent = '';
+                    }
                 } else {
                     console.warn('Rounds API failed:', roundsRes);
                 }
@@ -797,7 +799,7 @@
             }
 
             // تنبيهات المخاطر العالية
-            const risksHigh = risks.data?.high || risks.high || 0;
+            const risksHigh = risks.high || risks.data?.high || 0;
             if (risksHigh > 0) {
                 alerts.push({
                     type: 'warning',
