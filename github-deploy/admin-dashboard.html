@@ -755,18 +755,17 @@
             return await apiCall(url, action, {});
         }
 
-        // دالة JSONP للوخز الإبري
+        // دالة JSONP للوخز الإبري - الـ API يستخدم callback ثابت
         function loadNeedlestickData() {
             return new Promise((resolve) => {
-                const callbackName = 'needlestickCallback_' + Date.now();
                 const timeout = setTimeout(() => {
-                    delete window[callbackName];
+                    delete window.callback;
                     resolve({ success: false, total: 0 });
                 }, 10000);
                 
-                window[callbackName] = function(data) {
+                // الـ API يستخدم callback ثابت اسمه "callback"
+                window.callback = function(data) {
                     clearTimeout(timeout);
-                    delete window[callbackName];
                     document.getElementById('needlestickScript')?.remove();
                     
                     if (data && data.status === 'success' && data.rows) {
@@ -786,10 +785,10 @@
                 
                 const script = document.createElement('script');
                 script.id = 'needlestickScript';
-                script.src = `${APIs.needlestick}?action=data&callback=${callbackName}`;
+                script.src = `${APIs.needlestick}?action=data`;
                 script.onerror = () => {
                     clearTimeout(timeout);
-                    delete window[callbackName];
+                    delete window.callback;
                     resolve({ success: false, total: 0 });
                 };
                 document.body.appendChild(script);
