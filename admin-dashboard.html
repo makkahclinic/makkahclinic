@@ -383,28 +383,28 @@
                 <span>مركز القيادة</span>
             </a>
             <div class="nav-divider"></div>
-            <a class="nav-item" href="complaint_mentoring.html" target="_blank">
+            <a class="nav-item system-link" data-system="complaints" href="complaint_mentoring.html" target="_blank">
                 <i class="fas fa-comment-dots"></i>
                 <span>نظام الشكاوى</span>
             </a>
-            <a class="nav-item" href="incident-report-analysis.html" target="_blank">
+            <a class="nav-item system-link" data-system="incidents" href="incident-report-analysis.html" target="_blank">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>نظام الحوادث</span>
             </a>
-            <a class="nav-item" href="risk-register.html" target="_blank">
+            <a class="nav-item system-link" data-system="risks" href="risk-register.html" target="_blank">
                 <i class="fas fa-shield-alt"></i>
                 <span>سجل المخاطر</span>
             </a>
-            <a class="nav-item" href="Round.html" target="_blank">
+            <a class="nav-item system-link" data-system="rounds" href="Round.html" target="_blank">
                 <i class="fas fa-clipboard-check"></i>
                 <span>نظام الجولات</span>
             </a>
-            <a class="nav-item" href="calibration.html" target="_blank">
+            <a class="nav-item system-link" data-system="calibration" href="calibration.html" target="_blank">
                 <i class="fas fa-tools"></i>
                 <span>معايرة الأجهزة</span>
             </a>
             <div class="nav-divider"></div>
-            <a class="nav-item" href="cbahi-portal.html" target="_blank">
+            <a class="nav-item system-link" data-system="cbahi" href="cbahi-portal.html" target="_blank">
                 <i class="fas fa-award"></i>
                 <span>بوابة سباهي</span>
             </a>
@@ -452,7 +452,7 @@
         <section class="content-section active" id="section-dashboard">
             <!-- مؤشرات رئيسية -->
             <div class="kpi-grid">
-                <a href="complaint_mentoring.html" target="_blank" class="kpi-card">
+                <a href="complaint_mentoring.html" target="_blank" class="kpi-card system-card" data-system="complaints">
                     <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-complaints-open">-</h3>
@@ -460,7 +460,7 @@
                         <span class="sub" id="kpi-complaints-escalated"></span>
                     </div>
                 </a>
-                <a href="incident-report-analysis.html" target="_blank" class="kpi-card">
+                <a href="incident-report-analysis.html" target="_blank" class="kpi-card system-card" data-system="incidents">
                     <div class="kpi-icon incidents"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-incidents-open">-</h3>
@@ -468,7 +468,7 @@
                         <span class="sub" id="kpi-incidents-escalated"></span>
                     </div>
                 </a>
-                <a href="risk-register.html" target="_blank" class="kpi-card">
+                <a href="risk-register.html" target="_blank" class="kpi-card system-card" data-system="risks">
                     <div class="kpi-icon risks"><i class="fas fa-shield-alt"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-risks-active">-</h3>
@@ -476,7 +476,7 @@
                         <span class="sub" id="kpi-risks-high"></span>
                     </div>
                 </a>
-                <a href="Round.html" target="_blank" class="kpi-card">
+                <a href="Round.html" target="_blank" class="kpi-card system-card" data-system="rounds">
                     <div class="kpi-icon rounds"><i class="fas fa-clipboard-check"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-rounds-today">-</h3>
@@ -484,7 +484,7 @@
                         <span class="sub" id="kpi-rounds-delayed"></span>
                     </div>
                 </a>
-                <a href="calibration.html" target="_blank" class="kpi-card">
+                <a href="calibration.html" target="_blank" class="kpi-card system-card" data-system="calibration">
                     <div class="kpi-icon calibration"><i class="fas fa-cogs"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-calibration-compliance">-</h3>
@@ -492,7 +492,7 @@
                         <span class="sub" id="kpi-calibration-overdue"></span>
                     </div>
                 </a>
-                <a href="maintenance.html" target="_blank" class="kpi-card">
+                <a href="maintenance.html" target="_blank" class="kpi-card system-card" data-system="maintenance">
                     <div class="kpi-icon maintenance"><i class="fas fa-wrench"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-maintenance-total">-</h3>
@@ -501,7 +501,7 @@
                         <span class="sub" id="kpi-maintenance-overdue"></span>
                     </div>
                 </a>
-                <a href="pages/needleـstickـanalysis.html" target="_blank" class="kpi-card">
+                <a href="pages/needleـstickـanalysis.html" target="_blank" class="kpi-card system-card" data-system="needlestick">
                     <div class="kpi-icon needlestick"><i class="fas fa-syringe"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-needlestick">-</h3>
@@ -795,15 +795,44 @@
             try {
                 const docRef = doc(db, "staff_roles", uid);
                 const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) return docSnap.data().role;
-                const reqRef = doc(db, "role_requests", uid);
-                const reqSnap = await getDoc(reqRef);
-                if (reqSnap.exists() && ['doctor', 'pharmacist'].includes(reqSnap.data().role)) return 'viewer';
+                if (docSnap.exists()) {
+                    return docSnap.data(); // نرجع كل البيانات
+                }
                 return null;
             } catch (e) {
                 console.error('Role check error:', e);
                 return null;
             }
+        }
+        
+        let userAllowedSystems = [];
+        
+        function applySystemsFilter(role, allowedSystems) {
+            // الأدمن يرى كل شيء
+            if (role === 'admin') {
+                console.log('Admin user - showing all systems');
+                return;
+            }
+            
+            // تحويل allowedSystems لـ array لو ما كان
+            const allowed = Array.isArray(allowedSystems) ? allowedSystems : [];
+            console.log('Allowed systems for user:', allowed);
+            
+            // إخفاء روابط القائمة الجانبية غير المسموحة
+            document.querySelectorAll('.system-link').forEach(el => {
+                const system = el.dataset.system;
+                if (!allowed.includes(system)) {
+                    el.style.display = 'none';
+                }
+            });
+            
+            // إخفاء بطاقات KPI غير المسموحة
+            document.querySelectorAll('.system-card').forEach(el => {
+                const system = el.dataset.system;
+                if (!allowed.includes(system)) {
+                    el.style.display = 'none';
+                }
+            });
         }
 
         async function apiCall(url, action, payload = {}) {
@@ -1131,25 +1160,35 @@
             console.log('User UID:', user.uid);
             console.log('User Email:', user.email);
             
-            const role = await getUserRole(user.uid);
-            console.log('Role found:', role);
+            const roleData = await getUserRole(user.uid);
+            console.log('Role data found:', roleData);
             
-            if (!role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(role)) {
+            if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                 console.log('Role rejected! Signing out...');
-                alert('لم يتم العثور على صلاحيات. الدور: ' + role);
+                alert('لم يتم العثور على صلاحيات. الدور: ' + (roleData ? roleData.role : 'غير موجود'));
                 await signOut(auth);
                 window.location.href = 'admin-login.html';
                 return;
             }
 
-            currentUserRole = role;
+            currentUserRole = roleData.role;
+            userAllowedSystems = roleData.allowedSystems || [];
             
-            const roleLabels = { admin: 'مدير النظام', staff: 'موظف جودة', viewer: 'مشاهد' };
+            const roleLabels = { 
+                admin: 'مدير النظام', 
+                chair: 'رئيس لجنة',
+                member: 'عضو',
+                staff: 'موظف جودة', 
+                viewer: 'مشاهد' 
+            };
             
             document.getElementById('staffName').textContent = user.email.split('@')[0];
-            document.getElementById('roleBadge').textContent = roleLabels[role];
+            document.getElementById('roleBadge').textContent = roleLabels[roleData.role] || roleData.role;
             
-            if (role === 'admin') document.body.classList.add('is-admin');
+            if (roleData.role === 'admin') document.body.classList.add('is-admin');
+            
+            // تطبيق فلتر الأنظمة المسموحة
+            applySystemsFilter(roleData.role, roleData.allowedSystems);
 
             document.body.classList.add('authenticated');
             loadingOverlay.classList.add('hidden');
