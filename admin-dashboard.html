@@ -682,10 +682,11 @@
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);
                 console.log('Risks:', risksRes);
+                console.log('Rounds:', roundsRes);
 
-                // الشكاوى (تستخدم ok كمفتاح النجاح)
-                if (complaintsRes.ok && complaintsRes.stats) {
-                    const s = complaintsRes.stats;
+                // الشكاوى - البيانات ترجع مباشرة وليس في stats
+                if (complaintsRes.ok) {
+                    const s = complaintsRes;
                     const openComplaints = (s.new || 0) + (s.in_progress || 0);
                     document.getElementById('kpi-complaints-open').textContent = openComplaints;
                     document.getElementById('kpi-complaints-escalated').textContent = s.escalated ? `${s.escalated} مصعّدة` : '';
@@ -697,21 +698,21 @@
                     console.warn('Complaints API failed:', complaintsRes);
                 }
 
-                // الحوادث (تستخدم ok كمفتاح النجاح)
-                if (incidentsRes.ok && incidentsRes.stats) {
-                    const s = incidentsRes.stats;
-                    const openIncidents = (s.new || 0) + (s.in_progress || 0) + (s.under_review || 0);
+                // الحوادث - البيانات ترجع مباشرة
+                if (incidentsRes.ok) {
+                    const s = incidentsRes;
+                    const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
                     document.getElementById('kpi-incidents-open').textContent = openIncidents;
                     document.getElementById('kpi-incidents-escalated').textContent = s.escalated ? `${s.escalated} مصعّدة` : '';
-                    document.getElementById('stat-incidents-new').textContent = s.new || 0;
-                    document.getElementById('stat-incidents-progress').textContent = (s.in_progress || 0) + (s.under_review || 0);
+                    document.getElementById('stat-incidents-new').textContent = s.new || s.open || 0;
+                    document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
                     document.getElementById('stat-incidents-escalated').textContent = s.escalated || 0;
                     document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
                 } else {
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
-                // سجل المخاطر (تستخدم success كمفتاح النجاح)
+                // سجل المخاطر
                 if (risksRes.success && risksRes.data) {
                     const r = risksRes.data;
                     document.getElementById('kpi-risks-active').textContent = r.active || 0;
@@ -721,23 +722,36 @@
                     document.getElementById('stat-risks-low').textContent = r.low || 0;
                     document.getElementById('stat-risks-resolved').textContent = r.resolved || 0;
                 } else {
-                    console.warn('Risks API failed:', risksRes);
+                    // حاول البنية البديلة
+                    if (risksRes.active !== undefined) {
+                        document.getElementById('kpi-risks-active').textContent = risksRes.active || 0;
+                        document.getElementById('kpi-risks-high').textContent = risksRes.high ? `${risksRes.high} عالي` : '';
+                        document.getElementById('stat-risks-high').textContent = risksRes.high || 0;
+                        document.getElementById('stat-risks-medium').textContent = risksRes.medium || 0;
+                        document.getElementById('stat-risks-low').textContent = risksRes.low || 0;
+                        document.getElementById('stat-risks-resolved').textContent = risksRes.resolved || 0;
+                    } else {
+                        console.warn('Risks API failed:', risksRes);
+                    }
                 }
 
-                // الجولات
-                if (roundsRes.ok && roundsRes.data) {
-                    const rd = roundsRes.data;
-                    document.getElementById('kpi-rounds-today').textContent = rd.todayCompleted || rd.completed || 0;
-                    document.getElementById('kpi-rounds-delayed').textContent = rd.delayed ? `${rd.delayed} متأخرة` : '';
+                // الجولات - البيانات ترجع مباشرة
+                if (roundsRes.ok) {
+                    const rd = roundsRes;
+                    document.getElementById('kpi-rounds-today').textContent = rd.completed || rd.todayCompleted || 0;
+                    document.getElementById('kpi-rounds-delayed').textContent = rd.delayed ? `${rd.delayed} متأخرة` : (rd.violations ? `${rd.violations} مخالفة` : '');
                 } else {
                     console.warn('Rounds API failed:', roundsRes);
                 }
 
                 // الوخز الإبري
-                if (needlestickRes.success && needlestickRes.data) {
-                    const n = needlestickRes.data;
+                if (needlestickRes.success) {
+                    const n = needlestickRes.data || needlestickRes;
                     document.getElementById('kpi-needlestick').textContent = n.total || 0;
                     document.getElementById('kpi-needlestick-month').textContent = n.thisMonth ? `${n.thisMonth} هذا الشهر` : '';
+                } else if (needlestickRes.total !== undefined) {
+                    document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
+                    document.getElementById('kpi-needlestick-month').textContent = needlestickRes.thisMonth ? `${needlestickRes.thisMonth} هذا الشهر` : '';
                 } else {
                     console.warn('Needlestick API failed:', needlestickRes);
                 }
@@ -761,45 +775,46 @@
             const alerts = [];
 
             // تنبيهات الشكاوى المصعّدة
-            if (complaints.ok && complaints.stats?.escalated > 0) {
+            if (complaints.ok && complaints.escalated > 0) {
                 alerts.push({
                     type: 'danger',
                     icon: 'fa-comment-dots',
                     text: 'شكاوى مصعّدة تحتاج اهتمام فوري',
-                    count: complaints.stats.escalated,
+                    count: complaints.escalated,
                     link: 'complaint_analysis.html'
                 });
             }
 
             // تنبيهات الحوادث المصعّدة
-            if (incidents.ok && incidents.stats?.escalated > 0) {
+            if (incidents.ok && incidents.escalated > 0) {
                 alerts.push({
                     type: 'danger',
                     icon: 'fa-exclamation-triangle',
                     text: 'حوادث مصعّدة تحتاج متابعة',
-                    count: incidents.stats.escalated,
+                    count: incidents.escalated,
                     link: 'incident-report-analysis.html'
                 });
             }
 
             // تنبيهات المخاطر العالية
-            if (risks.success && risks.data?.high > 0) {
+            const risksHigh = risks.data?.high || risks.high || 0;
+            if (risksHigh > 0) {
                 alerts.push({
                     type: 'warning',
                     icon: 'fa-shield-alt',
                     text: 'مخاطر عالية في السجل',
-                    count: risks.data.high,
+                    count: risksHigh,
                     link: 'risk-register.html'
                 });
             }
 
             // شكاوى جديدة
-            if (complaints.ok && complaints.stats?.new > 0) {
+            if (complaints.ok && complaints.new > 0) {
                 alerts.push({
                     type: 'info',
                     icon: 'fa-inbox',
                     text: 'شكاوى جديدة بانتظار المعالجة',
-                    count: complaints.stats.new,
+                    count: complaints.new,
                     link: 'complaint_analysis.html'
                 });
             }
