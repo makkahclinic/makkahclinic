@@ -272,9 +272,11 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (user && user.emailVerified) {
-                const role = await getUserRole(user.uid);
-                if (role && ['admin', 'staff', 'viewer'].includes(role)) {
-                    window.location.href = 'admin-dashboard.html';
+                const roleData = await getUserRole(user.uid);
+                if (roleData && roleData.role && ['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+                    if (roleData.status !== 'suspended') {
+                        window.location.href = 'admin-dashboard.html';
+                    }
                 }
             }
         });
@@ -284,12 +286,13 @@
                 const docRef = doc(db, "staff_roles", uid);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    return docSnap.data().role;
+                    // إرجاع كل البيانات بما فيها الحالة
+                    return docSnap.data();
                 }
                 const reqRef = doc(db, "role_requests", uid);
                 const reqSnap = await getDoc(reqRef);
                 if (reqSnap.exists() && ['doctor', 'pharmacist'].includes(reqSnap.data().role)) {
-                    return 'viewer';
+                    return { role: 'viewer', status: 'active' };
                 }
                 return null;
             } catch (e) {
@@ -316,16 +319,19 @@
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                if (!user.emailVerified) {
-                    showMessage('يجب تأكيد البريد الإلكتروني أولاً', 'error');
+                // تحقق من الصلاحيات أولاً - الموظفين المقبولين لا يحتاجون تأكيد البريد
+                const roleData = await getUserRole(user.uid);
+                
+                if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+                    showMessage('ليس لديك صلاحية الدخول. تواصل مع الإدارة.', 'error');
+                    await auth.signOut();
                     setLoading(false);
                     return;
                 }
-
-                const role = await getUserRole(user.uid);
                 
-                if (!role || !['admin', 'staff', 'viewer'].includes(role)) {
-                    showMessage('ليس لديك صلاحية الدخول. تواصل مع الإدارة.', 'error');
+                // التحقق من حالة التعليق
+                if (roleData.status === 'suspended') {
+                    showMessage('حسابك معلق مؤقتاً. تواصل مع الإدارة.', 'error');
                     await auth.signOut();
                     setLoading(false);
                     return;
@@ -333,7 +339,7 @@
 
                 showMessage('تم التحقق! جاري التوجيه...', 'success');
                 
-                localStorage.setItem('staffRole', role);
+                localStorage.setItem('staffRole', roleData.role);
                 localStorage.setItem('staffEmail', email);
                 localStorage.setItem('staffUid', user.uid);
                 
