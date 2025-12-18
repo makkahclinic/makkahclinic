@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم - مجمع مكة الطبي</title>
+    <title>مركز القيادة - مجمع مكة الطبي</title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -16,7 +16,7 @@
             --danger: #dc3545;
             --info: #17a2b8;
             --bg-light: #f8f9fa;
-            --sidebar-width: 280px;
+            --sidebar-width: 260px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -25,6 +25,8 @@
             min-height: 100vh;
             display: flex;
         }
+        .sidebar, .main-content { visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+        body.authenticated .sidebar, body.authenticated .main-content { visibility: visible; opacity: 1; }
         .sidebar {
             width: var(--sidebar-width);
             background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
@@ -36,21 +38,21 @@
             transition: transform 0.3s;
         }
         .sidebar-header {
-            padding: 1.5rem;
+            padding: 1.2rem;
             text-align: center;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         .sidebar-header img {
-            width: 70px;
-            height: 70px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             background: white;
             padding: 5px;
         }
         .sidebar-header h3 {
             color: white;
-            margin-top: 0.8rem;
-            font-size: 1rem;
+            margin-top: 0.6rem;
+            font-size: 0.95rem;
         }
         .sidebar-header .role-badge {
             display: inline-block;
@@ -58,239 +60,206 @@
             color: var(--primary-dark);
             padding: 3px 12px;
             border-radius: 20px;
-            font-size: 0.75rem;
-            margin-top: 0.5rem;
+            font-size: 0.7rem;
+            margin-top: 0.4rem;
             font-weight: 700;
         }
-        .nav-menu {
-            padding: 1rem 0;
-        }
+        .nav-menu { padding: 0.8rem 0; }
         .nav-item {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 14px 20px;
+            gap: 10px;
+            padding: 12px 18px;
             color: rgba(255,255,255,0.8);
             text-decoration: none;
             transition: all 0.3s;
             border-right: 4px solid transparent;
             cursor: pointer;
+            font-size: 0.9rem;
         }
         .nav-item:hover, .nav-item.active {
             background: rgba(255,255,255,0.1);
             color: white;
             border-right-color: var(--gold);
         }
-        .nav-item i {
-            width: 24px;
-            text-align: center;
-            font-size: 1.1rem;
-        }
-        .nav-divider {
-            height: 1px;
-            background: rgba(255,255,255,0.1);
-            margin: 1rem 0;
-        }
+        .nav-item i { width: 22px; text-align: center; }
+        .nav-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.8rem 0; }
         .main-content {
             margin-right: var(--sidebar-width);
             flex: 1;
-            padding: 1.5rem;
+            padding: 1.2rem;
             min-height: 100vh;
         }
         .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem 1.5rem;
+            padding: 0.8rem 1.2rem;
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            margin-bottom: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 1.2rem;
         }
-        .welcome-text h2 {
-            color: var(--primary);
-            font-size: 1.4rem;
-        }
-        .welcome-text p {
-            color: #666;
-            font-size: 0.9rem;
-        }
-        .user-actions {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
+        .welcome-text h2 { color: var(--primary); font-size: 1.2rem; }
+        .welcome-text p { color: #666; font-size: 0.85rem; }
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 18px;
+            gap: 6px;
+            padding: 8px 14px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             font-family: inherit;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s;
+            text-decoration: none;
         }
-        .btn-outline {
-            background: transparent;
-            border: 2px solid var(--primary);
-            color: var(--primary);
-        }
-        .btn-outline:hover {
-            background: var(--primary);
-            color: white;
-        }
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        .stats-grid {
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+
+        /* مؤشرات رئيسية */
+        .kpi-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 1.2rem;
-            margin-bottom: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.2rem;
         }
-        .stat-card {
+        .kpi-card {
             background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             display: flex;
             align-items: center;
-            gap: 1rem;
-            transition: transform 0.3s;
+            gap: 0.8rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            color: inherit;
         }
-        .stat-card:hover {
-            transform: translateY(-3px);
-        }
-        .stat-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 12px;
+        .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .kpi-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             color: white;
         }
-        .stat-icon.complaints { background: linear-gradient(135deg, #f39c12, #e74c3c); }
-        .stat-icon.incidents { background: linear-gradient(135deg, #9b59b6, #3498db); }
-        .stat-icon.risks { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-        .stat-icon.rounds { background: linear-gradient(135deg, #2ecc71, #27ae60); }
-        .stat-info h3 {
-            font-size: 2rem;
-            color: var(--primary);
-            line-height: 1;
-        }
-        .stat-info p {
-            color: #666;
-            font-size: 0.9rem;
-            margin-top: 4px;
-        }
-        .content-section {
-            display: none;
-        }
-        .content-section.active {
-            display: block;
-        }
-        .card {
+        .kpi-icon.complaints { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .kpi-icon.incidents { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .kpi-icon.risks { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .kpi-icon.rounds { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+        .kpi-icon.calibration { background: linear-gradient(135deg, #fa709a, #fee140); }
+        .kpi-icon.needlestick { background: linear-gradient(135deg, #a8edea, #fed6e3); color: #333; }
+        .kpi-info h3 { font-size: 1.5rem; color: var(--primary); line-height: 1; }
+        .kpi-info p { font-size: 0.75rem; color: #666; margin-top: 2px; }
+        .kpi-info .sub { font-size: 0.7rem; color: #999; }
+
+        /* قسم التنبيهات */
+        .alerts-section {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            margin-bottom: 1.5rem;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-        .card-header {
-            padding: 1.2rem 1.5rem;
-            border-bottom: 1px solid #eee;
+        .section-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid #eee;
         }
-        .card-header h3 {
-            color: var(--primary);
-            font-size: 1.1rem;
+        .section-header h3 { font-size: 1rem; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+        .alert-item {
             display: flex;
             align-items: center;
             gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
         }
-        .card-body {
-            padding: 1.5rem;
-        }
-        .quick-links {
+        .alert-item:last-child { margin-bottom: 0; }
+        .alert-item.danger { background: #fff5f5; border-right: 4px solid var(--danger); }
+        .alert-item.warning { background: #fffbeb; border-right: 4px solid var(--warning); }
+        .alert-item.info { background: #f0f9ff; border-right: 4px solid var(--info); }
+        .alert-item i { font-size: 1.1rem; }
+        .alert-item.danger i { color: var(--danger); }
+        .alert-item.warning i { color: var(--warning); }
+        .alert-item.info i { color: var(--info); }
+        .alert-item .alert-text { flex: 1; }
+        .alert-item .alert-count { font-weight: 700; font-size: 1.1rem; }
+        .no-alerts { text-align: center; padding: 1.5rem; color: #999; font-size: 0.9rem; }
+
+        /* جدول الإحصائيات */
+        .stats-grid-detailed {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 1rem;
+            margin-bottom: 1.2rem;
+        }
+        .stats-box {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .stats-box h4 {
+            font-size: 0.9rem;
+            color: var(--primary);
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+        }
+        .stats-row:last-child { border-bottom: none; }
+        .stats-row .label { color: #666; }
+        .stats-row .value { font-weight: 700; color: var(--primary); }
+        .stats-row .value.danger { color: var(--danger); }
+        .stats-row .value.warning { color: var(--warning); }
+        .stats-row .value.success { color: var(--success); }
+
+        /* روابط سريعة */
+        .quick-links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.8rem;
         }
         .quick-link {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
-            padding: 1.5rem;
-            background: var(--bg-light);
-            border-radius: 12px;
+            gap: 8px;
+            padding: 1rem;
+            background: white;
+            border-radius: 10px;
             text-decoration: none;
             color: var(--primary);
             transition: all 0.3s;
-            border: 2px solid transparent;
-        }
-        .quick-link:hover {
-            border-color: var(--primary);
-            background: white;
-        }
-        .quick-link i {
-            font-size: 2rem;
-            color: var(--gold);
-        }
-        .quick-link span {
-            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            font-size: 0.8rem;
             text-align: center;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 12px 15px;
-            text-align: right;
-            border-bottom: 1px solid #eee;
-        }
-        th {
-            background: var(--bg-light);
-            color: var(--primary);
-            font-weight: 600;
-        }
-        tr:hover {
-            background: #fafafa;
-        }
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .badge-success { background: #d4edda; color: #155724; }
-        .badge-warning { background: #fff3cd; color: #856404; }
-        .badge-danger { background: #f8d7da; color: #721c24; }
-        .badge-info { background: #d1ecf1; color: #0c5460; }
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #888;
-        }
-        .empty-state i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
-        .sidebar, .main-content { visibility: hidden; opacity: 0; transition: opacity 0.3s; }
-        body.authenticated .sidebar, body.authenticated .main-content { visibility: visible; opacity: 1; }
+        .quick-link:hover { background: var(--primary); color: white; transform: translateY(-2px); }
+        .quick-link i { font-size: 1.5rem; }
+
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+
         .loading-overlay {
             position: fixed;
             inset: 0;
@@ -308,56 +277,25 @@
             border: 4px solid #eee;
             border-top-color: var(--primary);
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .loading-overlay p {
-            margin-top: 1rem;
-            color: var(--primary);
-            font-weight: 500;
-        }
-        @media (max-width: 992px) {
-            .sidebar {
-                transform: translateX(100%);
-            }
-            .sidebar.open {
-                transform: translateX(0);
-            }
-            .main-content {
-                margin-right: 0;
-            }
-            .menu-toggle {
-                display: block !important;
-            }
-        }
-        .menu-toggle {
-            display: none;
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 1.2rem;
-            cursor: pointer;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .admin-only { display: none; }
+        body.is-admin .admin-only { display: block; }
+
         .users-section .user-card {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 1rem;
+            padding: 0.8rem;
             border-bottom: 1px solid #eee;
         }
         .user-card:last-child { border-bottom: none; }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .user-info { display: flex; align-items: center; gap: 10px; }
         .user-avatar {
-            width: 45px;
-            height: 45px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: var(--primary);
             color: white;
@@ -365,25 +303,51 @@
             align-items: center;
             justify-content: center;
             font-weight: 700;
+            font-size: 0.9rem;
         }
-        .user-details h4 { color: var(--primary); font-size: 0.95rem; }
-        .user-details p { color: #666; font-size: 0.8rem; }
+        .user-details h4 { color: var(--primary); font-size: 0.9rem; }
+        .user-details p { color: #666; font-size: 0.75rem; }
         select.role-select {
-            padding: 6px 12px;
+            padding: 5px 10px;
             border: 1px solid #ddd;
-            border-radius: 6px;
+            border-radius: 5px;
             font-family: inherit;
+            font-size: 0.8rem;
             cursor: pointer;
         }
-        .admin-only { display: none; }
-        body.is-admin .admin-only { display: block; }
-        body.is-admin .admin-only-flex { display: flex !important; }
+
+        @media (max-width: 992px) {
+            .sidebar { transform: translateX(100%); }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-right: 0; }
+            .menu-toggle { display: block !important; }
+        }
+        .menu-toggle {
+            display: none;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .refresh-btn:hover { background: #f0f0f0; }
+        .refresh-btn.loading i { animation: spin 1s linear infinite; }
     </style>
 </head>
 <body>
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner"></div>
-        <p>جاري تحميل لوحة التحكم...</p>
+        <p>جاري تحميل مركز القيادة...</p>
     </div>
 
     <aside class="sidebar" id="sidebar">
@@ -394,27 +358,32 @@
         </div>
         <nav class="nav-menu">
             <a class="nav-item active" data-section="dashboard">
-                <i class="fas fa-home"></i>
-                <span>الرئيسية</span>
+                <i class="fas fa-tachometer-alt"></i>
+                <span>مركز القيادة</span>
             </a>
-            <a class="nav-item" data-section="complaints">
+            <div class="nav-divider"></div>
+            <a class="nav-item" href="complaint_analysis.html" target="_blank">
                 <i class="fas fa-comment-dots"></i>
-                <span>الشكاوى</span>
+                <span>نظام الشكاوى</span>
             </a>
-            <a class="nav-item" data-section="incidents">
+            <a class="nav-item" href="incident-report-analysis.html" target="_blank">
                 <i class="fas fa-exclamation-triangle"></i>
-                <span>الحوادث</span>
+                <span>نظام الحوادث</span>
             </a>
-            <a class="nav-item" data-section="risks">
+            <a class="nav-item" href="risk-register.html" target="_blank">
                 <i class="fas fa-shield-alt"></i>
                 <span>سجل المخاطر</span>
             </a>
-            <a class="nav-item" data-section="rounds">
+            <a class="nav-item" href="Round.html" target="_blank">
                 <i class="fas fa-clipboard-check"></i>
-                <span>الجولات</span>
+                <span>نظام الجولات</span>
+            </a>
+            <a class="nav-item" href="calibration.html" target="_blank">
+                <i class="fas fa-tools"></i>
+                <span>معايرة الأجهزة</span>
             </a>
             <div class="nav-divider"></div>
-            <a class="nav-item" data-section="cbahi">
+            <a class="nav-item" href="cbahi-portal.html" target="_blank">
                 <i class="fas fa-award"></i>
                 <span>بوابة سباهي</span>
             </a>
@@ -436,199 +405,184 @@
                 <i class="fas fa-bars"></i>
             </button>
             <div class="welcome-text">
-                <h2>مرحباً بك في لوحة التحكم</h2>
+                <h2>مركز القيادة والسيطرة</h2>
                 <p id="dateDisplay"></p>
             </div>
-            <div class="user-actions">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="refresh-btn" id="refreshBtn" title="تحديث البيانات">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
                 <a href="index.html" class="btn btn-outline">
                     <i class="fas fa-external-link-alt"></i>
-                    الموقع الرئيسي
+                    الموقع
                 </a>
             </div>
         </div>
 
         <section class="content-section active" id="section-dashboard">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon complaints">
-                        <i class="fas fa-comment-dots"></i>
-                    </div>
-                    <div class="stat-info">
-                        <h3 id="complaintsCount">0</h3>
+            <!-- مؤشرات رئيسية -->
+            <div class="kpi-grid">
+                <a href="complaint_analysis.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-complaints-open">-</h3>
                         <p>شكوى مفتوحة</p>
+                        <span class="sub" id="kpi-complaints-escalated"></span>
                     </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon incidents">
-                        <i class="fas fa-exclamation-triangle"></i>
+                </a>
+                <a href="incident-report-analysis.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon incidents"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-incidents-open">-</h3>
+                        <p>حادثة مفتوحة</p>
+                        <span class="sub" id="kpi-incidents-escalated"></span>
                     </div>
-                    <div class="stat-info">
-                        <h3 id="incidentsCount">0</h3>
-                        <p>حادثة هذا الشهر</p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon risks">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <div class="stat-info">
-                        <h3 id="risksCount">0</h3>
+                </a>
+                <a href="risk-register.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon risks"><i class="fas fa-shield-alt"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-risks-active">-</h3>
                         <p>خطر نشط</p>
+                        <span class="sub" id="kpi-risks-high"></span>
                     </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon rounds">
-                        <i class="fas fa-clipboard-check"></i>
-                    </div>
-                    <div class="stat-info">
-                        <h3 id="roundsCount">0</h3>
+                </a>
+                <a href="Round.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon rounds"><i class="fas fa-clipboard-check"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-rounds-today">-</h3>
                         <p>جولة اليوم</p>
+                        <span class="sub" id="kpi-rounds-delayed"></span>
+                    </div>
+                </a>
+                <a href="calibration.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon calibration"><i class="fas fa-tools"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-calibration-rate">-</h3>
+                        <p>نسبة المعايرة</p>
+                        <span class="sub" id="kpi-calibration-pending"></span>
+                    </div>
+                </a>
+                <a href="ipc/incidents/needlestick-analysis.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon needlestick"><i class="fas fa-syringe"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-needlestick">-</h3>
+                        <p>حالة وخز إبري</p>
+                        <span class="sub" id="kpi-needlestick-month"></span>
+                    </div>
+                </a>
+            </div>
+
+            <!-- قسم التنبيهات العاجلة -->
+            <div class="alerts-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-bell"></i> التنبيهات والتصعيدات</h3>
+                </div>
+                <div id="alertsContainer">
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success); margin-bottom: 10px;"></i>
+                        <p>جاري تحميل التنبيهات...</p>
                     </div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-rocket"></i> الوصول السريع</h3>
+            <!-- إحصائيات تفصيلية -->
+            <div class="stats-grid-detailed">
+                <div class="stats-box">
+                    <h4><i class="fas fa-comment-dots"></i> الشكاوى</h4>
+                    <div class="stats-row">
+                        <span class="label">جديدة</span>
+                        <span class="value" id="stat-complaints-new">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">قيد المعالجة</span>
+                        <span class="value warning" id="stat-complaints-progress">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مصعّدة</span>
+                        <span class="value danger" id="stat-complaints-escalated">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مغلقة</span>
+                        <span class="value success" id="stat-complaints-closed">-</span>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="quick-links">
-                        <a href="report.html" class="quick-link" target="_blank">
-                            <i class="fas fa-plus-circle"></i>
-                            <span>رفع شكوى جديدة</span>
-                        </a>
-                        <a href="incident-report-analysis.html" class="quick-link" target="_blank">
-                            <i class="fas fa-file-medical"></i>
-                            <span>تقرير حادثة</span>
-                        </a>
-                        <a href="risk-register.html" class="quick-link" target="_blank">
-                            <i class="fas fa-shield-virus"></i>
-                            <span>سجل المخاطر</span>
-                        </a>
-                        <a href="Round.html" class="quick-link" target="_blank">
-                            <i class="fas fa-walking"></i>
-                            <span>نظام الجولات</span>
-                        </a>
-                        <a href="cbahi-portal.html" class="quick-link" target="_blank">
-                            <i class="fas fa-award"></i>
-                            <span>بوابة سباهي</span>
-                        </a>
-                        <a href="calibration.html" class="quick-link" target="_blank">
-                            <i class="fas fa-tools"></i>
-                            <span>معايرة الأجهزة</span>
-                        </a>
+                <div class="stats-box">
+                    <h4><i class="fas fa-exclamation-triangle"></i> الحوادث</h4>
+                    <div class="stats-row">
+                        <span class="label">جديدة</span>
+                        <span class="value" id="stat-incidents-new">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">قيد التحقيق</span>
+                        <span class="value warning" id="stat-incidents-progress">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مصعّدة</span>
+                        <span class="value danger" id="stat-incidents-escalated">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مغلقة</span>
+                        <span class="value success" id="stat-incidents-closed">-</span>
+                    </div>
+                </div>
+                <div class="stats-box">
+                    <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
+                    <div class="stats-row">
+                        <span class="label">خطر عالي</span>
+                        <span class="value danger" id="stat-risks-high">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">خطر متوسط</span>
+                        <span class="value warning" id="stat-risks-medium">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">خطر منخفض</span>
+                        <span class="value" id="stat-risks-low">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مُعالجة</span>
+                        <span class="value success" id="stat-risks-resolved">-</span>
                     </div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-clock"></i> آخر النشاطات</h3>
-                </div>
-                <div class="card-body">
-                    <div class="empty-state" id="recentActivities">
-                        <i class="fas fa-history"></i>
-                        <p>لا توجد نشاطات حديثة</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="content-section" id="section-complaints">
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-comment-dots"></i> الشكاوى</h3>
-                    <a href="complaint_analysis.html" class="btn btn-outline" target="_blank">
-                        <i class="fas fa-external-link-alt"></i> فتح نظام الشكاوى
+            <!-- روابط سريعة -->
+            <div class="stats-box">
+                <h4><i class="fas fa-rocket"></i> الوصول السريع</h4>
+                <div class="quick-links-grid">
+                    <a href="report.html" class="quick-link" target="_blank">
+                        <i class="fas fa-plus-circle"></i>
+                        <span>رفع شكوى</span>
+                    </a>
+                    <a href="incident-report.html" class="quick-link" target="_blank">
+                        <i class="fas fa-file-medical"></i>
+                        <span>بلاغ حادثة</span>
+                    </a>
+                    <a href="risk-register.html?action=new" class="quick-link" target="_blank">
+                        <i class="fas fa-shield-virus"></i>
+                        <span>تسجيل خطر</span>
+                    </a>
+                    <a href="ipc/incidents/report-needlestick.html" class="quick-link" target="_blank">
+                        <i class="fas fa-syringe"></i>
+                        <span>بلاغ وخز</span>
+                    </a>
+                    <a href="mega.html" class="quick-link" target="_blank">
+                        <i class="fas fa-th-large"></i>
+                        <span>المركز الرقمي</span>
+                    </a>
+                    <a href="cbahi-portal.html" class="quick-link" target="_blank">
+                        <i class="fas fa-award"></i>
+                        <span>بوابة سباهي</span>
                     </a>
                 </div>
-                <div class="card-body">
-                    <div class="empty-state">
-                        <i class="fas fa-folder-open"></i>
-                        <p>اضغط على "فتح نظام الشكاوى" للوصول للنظام الكامل</p>
-                    </div>
-                </div>
             </div>
         </section>
 
-        <section class="content-section" id="section-incidents">
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-exclamation-triangle"></i> الحوادث</h3>
-                    <a href="incident-report-analysis.html" class="btn btn-outline" target="_blank">
-                        <i class="fas fa-external-link-alt"></i> فتح نظام الحوادث
-                    </a>
-                </div>
-                <div class="card-body">
-                    <div class="empty-state">
-                        <i class="fas fa-file-medical-alt"></i>
-                        <p>اضغط للوصول لنظام الحوادث والتقارير</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="content-section" id="section-risks">
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-shield-alt"></i> سجل المخاطر</h3>
-                    <a href="risk-register.html" class="btn btn-outline" target="_blank">
-                        <i class="fas fa-external-link-alt"></i> فتح سجل المخاطر
-                    </a>
-                </div>
-                <div class="card-body">
-                    <div class="empty-state">
-                        <i class="fas fa-chart-pie"></i>
-                        <p>اضغط للوصول لسجل المخاطر ومصفوفة التقييم</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="content-section" id="section-rounds">
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-clipboard-check"></i> جولات السلامة</h3>
-                    <a href="Round.html" class="btn btn-outline" target="_blank">
-                        <i class="fas fa-external-link-alt"></i> فتح نظام الجولات
-                    </a>
-                </div>
-                <div class="card-body">
-                    <div class="empty-state">
-                        <i class="fas fa-walking"></i>
-                        <p>اضغط للوصول لنظام الجولات اليومية</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="content-section" id="section-cbahi">
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-award"></i> بوابة سباهي</h3>
-                    <a href="cbahi-portal.html" class="btn btn-outline" target="_blank">
-                        <i class="fas fa-external-link-alt"></i> فتح بوابة سباهي
-                    </a>
-                </div>
-                <div class="card-body">
-                    <div class="empty-state">
-                        <i class="fas fa-certificate"></i>
-                        <p>الوصول لجميع معايير ووثائق سباهي</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="content-section admin-only" id="section-users">
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-users-cog"></i> إدارة المستخدمين</h3>
-                </div>
-                <div class="card-body users-section" id="usersContainer">
-                    <div class="empty-state">
-                        <i class="fas fa-users"></i>
-                        <p>جاري تحميل المستخدمين...</p>
-                    </div>
+        <section class="content-section" id="section-users">
+            <div class="stats-box users-section">
+                <h4><i class="fas fa-users-cog"></i> إدارة المستخدمين</h4>
+                <div id="usersContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
                 </div>
             </div>
         </section>
@@ -637,7 +591,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
@@ -651,29 +605,197 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-
+        
         const loadingOverlay = document.getElementById('loadingOverlay');
-        let currentUserRole = 'viewer';
+        let currentUserRole = null;
 
-        const arabicDate = new Date().toLocaleDateString('ar-SA', {
+        // API URLs
+        const APIs = {
+            complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
+            incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
+            risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
+            rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec",
+            needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec"
+        };
+
+        // التاريخ الهجري
+        const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
             weekday: 'long',
-            year: 'numeric',
+            day: 'numeric',
             month: 'long',
-            day: 'numeric'
-        });
-        document.getElementById('dateDisplay').textContent = arabicDate;
+            year: 'numeric'
+        }).format(new Date());
+        document.getElementById('dateDisplay').textContent = hijriDate;
 
         async function getUserRole(uid) {
             try {
                 const docRef = doc(db, "staff_roles", uid);
                 const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    return docSnap.data().role;
-                }
+                if (docSnap.exists()) return docSnap.data().role;
+                const reqRef = doc(db, "role_requests", uid);
+                const reqSnap = await getDoc(reqRef);
+                if (reqSnap.exists() && ['doctor', 'pharmacist'].includes(reqSnap.data().role)) return 'viewer';
                 return null;
             } catch (e) {
                 console.error('Role check error:', e);
                 return null;
+            }
+        }
+
+        async function apiCall(url, action, payload = {}) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action, ...payload })
+                });
+                return await response.json();
+            } catch (e) {
+                console.error(`API Error (${action}):`, e);
+                return { success: false, error: e.message };
+            }
+        }
+
+        async function loadDashboardData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.classList.add('loading');
+
+            try {
+                // جلب البيانات بالتوازي
+                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes] = await Promise.all([
+                    apiCall(APIs.complaints, 'getComplaintStats', {}),
+                    apiCall(APIs.incidents, 'getIncidentStats', {}),
+                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(() => ({ success: false })),
+                    apiCall(APIs.rounds, 'getMetrics', {}),
+                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(() => ({ success: false }))
+                ]);
+
+                // الشكاوى
+                if (complaintsRes.success && complaintsRes.stats) {
+                    const s = complaintsRes.stats;
+                    const openComplaints = (s.new || 0) + (s.in_progress || 0);
+                    document.getElementById('kpi-complaints-open').textContent = openComplaints;
+                    document.getElementById('kpi-complaints-escalated').textContent = s.escalated ? `${s.escalated} مصعّدة` : '';
+                    document.getElementById('stat-complaints-new').textContent = s.new || 0;
+                    document.getElementById('stat-complaints-progress').textContent = s.in_progress || 0;
+                    document.getElementById('stat-complaints-escalated').textContent = s.escalated || 0;
+                    document.getElementById('stat-complaints-closed').textContent = s.closed || 0;
+                }
+
+                // الحوادث
+                if (incidentsRes.success && incidentsRes.stats) {
+                    const s = incidentsRes.stats;
+                    const openIncidents = (s.new || 0) + (s.in_progress || 0);
+                    document.getElementById('kpi-incidents-open').textContent = openIncidents;
+                    document.getElementById('kpi-incidents-escalated').textContent = s.escalated ? `${s.escalated} مصعّدة` : '';
+                    document.getElementById('stat-incidents-new').textContent = s.new || 0;
+                    document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
+                    document.getElementById('stat-incidents-escalated').textContent = s.escalated || 0;
+                    document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
+                }
+
+                // سجل المخاطر
+                if (risksRes.success && risksRes.data) {
+                    const r = risksRes.data;
+                    document.getElementById('kpi-risks-active').textContent = r.active || 0;
+                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : '';
+                    document.getElementById('stat-risks-high').textContent = r.high || 0;
+                    document.getElementById('stat-risks-medium').textContent = r.medium || 0;
+                    document.getElementById('stat-risks-low').textContent = r.low || 0;
+                    document.getElementById('stat-risks-resolved').textContent = r.resolved || 0;
+                }
+
+                // الجولات
+                if (roundsRes.success && roundsRes.data) {
+                    const rd = roundsRes.data;
+                    document.getElementById('kpi-rounds-today').textContent = rd.todayCompleted || 0;
+                    document.getElementById('kpi-rounds-delayed').textContent = rd.delayed ? `${rd.delayed} متأخرة` : '';
+                }
+
+                // الوخز الإبري
+                if (needlestickRes.success && needlestickRes.data) {
+                    const n = needlestickRes.data;
+                    document.getElementById('kpi-needlestick').textContent = n.total || 0;
+                    document.getElementById('kpi-needlestick-month').textContent = n.thisMonth ? `${n.thisMonth} هذا الشهر` : '';
+                }
+
+                // المعايرة (placeholder)
+                document.getElementById('kpi-calibration-rate').textContent = '--';
+                document.getElementById('kpi-calibration-pending').textContent = 'قريباً';
+
+                // تحديث التنبيهات
+                updateAlerts(complaintsRes, incidentsRes, risksRes);
+
+            } catch (e) {
+                console.error('Dashboard load error:', e);
+            } finally {
+                refreshBtn.classList.remove('loading');
+            }
+        }
+
+        function updateAlerts(complaints, incidents, risks) {
+            const container = document.getElementById('alertsContainer');
+            const alerts = [];
+
+            // تنبيهات الشكاوى المصعّدة
+            if (complaints.success && complaints.stats?.escalated > 0) {
+                alerts.push({
+                    type: 'danger',
+                    icon: 'fa-comment-dots',
+                    text: 'شكاوى مصعّدة تحتاج اهتمام فوري',
+                    count: complaints.stats.escalated,
+                    link: 'complaint_analysis.html'
+                });
+            }
+
+            // تنبيهات الحوادث المصعّدة
+            if (incidents.success && incidents.stats?.escalated > 0) {
+                alerts.push({
+                    type: 'danger',
+                    icon: 'fa-exclamation-triangle',
+                    text: 'حوادث مصعّدة تحتاج متابعة',
+                    count: incidents.stats.escalated,
+                    link: 'incident-report-analysis.html'
+                });
+            }
+
+            // تنبيهات المخاطر العالية
+            if (risks.success && risks.data?.high > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-shield-alt',
+                    text: 'مخاطر عالية في السجل',
+                    count: risks.data.high,
+                    link: 'risk-register.html'
+                });
+            }
+
+            // شكاوى جديدة
+            if (complaints.success && complaints.stats?.new > 0) {
+                alerts.push({
+                    type: 'info',
+                    icon: 'fa-inbox',
+                    text: 'شكاوى جديدة بانتظار المعالجة',
+                    count: complaints.stats.new,
+                    link: 'complaint_analysis.html'
+                });
+            }
+
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success); margin-bottom: 10px; display: block;"></i>
+                        <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = alerts.map(a => `
+                    <a href="${a.link}" target="_blank" class="alert-item ${a.type}" style="text-decoration: none;">
+                        <i class="fas ${a.icon}"></i>
+                        <span class="alert-text">${a.text}</span>
+                        <span class="alert-count">${a.count}</span>
+                    </a>
+                `).join('');
             }
         }
 
@@ -693,37 +815,26 @@
 
             currentUserRole = role;
             
-            const roleLabels = {
-                admin: 'مدير النظام',
-                staff: 'موظف جودة',
-                viewer: 'مشاهد'
-            };
+            const roleLabels = { admin: 'مدير النظام', staff: 'موظف جودة', viewer: 'مشاهد' };
             
             document.getElementById('staffName').textContent = user.email.split('@')[0];
             document.getElementById('roleBadge').textContent = roleLabels[role];
             
-            if (role === 'admin') {
-                document.body.classList.add('is-admin');
-            }
+            if (role === 'admin') document.body.classList.add('is-admin');
 
             document.body.classList.add('authenticated');
             loadingOverlay.classList.add('hidden');
-            loadStats();
+            loadDashboardData();
         });
 
         document.querySelectorAll('.nav-item[data-section]').forEach(item => {
             item.addEventListener('click', () => {
                 const section = item.dataset.section;
-                
                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
-                
                 document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
                 document.getElementById('section-' + section).classList.add('active');
-                
-                if (window.innerWidth < 992) {
-                    document.getElementById('sidebar').classList.remove('open');
-                }
+                if (window.innerWidth < 992) document.getElementById('sidebar').classList.remove('open');
             });
         });
 
@@ -731,28 +842,16 @@
             document.getElementById('sidebar').classList.toggle('open');
         });
 
+        document.getElementById('refreshBtn').addEventListener('click', loadDashboardData);
+
         document.getElementById('logoutBtn').addEventListener('click', async () => {
             await signOut(auth);
-            localStorage.removeItem('staffRole');
-            localStorage.removeItem('staffEmail');
-            localStorage.removeItem('staffUid');
+            localStorage.clear();
             window.location.href = 'admin-login.html';
         });
 
-        async function loadStats() {
-            try {
-                document.getElementById('complaintsCount').textContent = '--';
-                document.getElementById('incidentsCount').textContent = '--';
-                document.getElementById('risksCount').textContent = '--';
-                document.getElementById('roundsCount').textContent = '--';
-            } catch (e) {
-                console.error('Stats load error:', e);
-            }
-        }
-
         async function loadUsers() {
             if (currentUserRole !== 'admin') return;
-            
             const container = document.getElementById('usersContainer');
             
             try {
@@ -760,33 +859,15 @@
                 const requestsSnap = await getDocs(collection(db, "role_requests"));
                 
                 const users = [];
-                
-                rolesSnap.forEach(doc => {
-                    users.push({
-                        uid: doc.id,
-                        ...doc.data(),
-                        source: 'staff_roles'
-                    });
-                });
-                
+                rolesSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data(), source: 'staff_roles' }));
                 requestsSnap.forEach(doc => {
                     if (!users.find(u => u.uid === doc.id)) {
-                        users.push({
-                            uid: doc.id,
-                            role: doc.data().role,
-                            email: doc.data().email || 'غير معروف',
-                            source: 'role_requests'
-                        });
+                        users.push({ uid: doc.id, role: doc.data().role, email: doc.data().email || 'غير معروف', source: 'role_requests' });
                     }
                 });
                 
                 if (users.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-users"></i>
-                            <p>لا يوجد مستخدمين مسجلين</p>
-                        </div>
-                    `;
+                    container.innerHTML = `<div class="no-alerts"><p>لا يوجد مستخدمين</p></div>`;
                     return;
                 }
                 
@@ -799,11 +880,10 @@
                                 <p>${u.source === 'role_requests' ? 'طلب جديد' : 'مسجل'}</p>
                             </div>
                         </div>
-                        <select class="role-select" data-uid="${u.uid}" data-source="${u.source}">
+                        <select class="role-select" data-uid="${u.uid}">
                             <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>مشاهد</option>
                             <option value="staff" ${u.role === 'staff' ? 'selected' : ''}>موظف جودة</option>
                             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>مدير</option>
-                            <option value="patient" ${u.role === 'patient' ? 'selected' : ''}>مريض (بدون صلاحية)</option>
                         </select>
                     </div>
                 `).join('');
@@ -811,31 +891,20 @@
                 container.querySelectorAll('.role-select').forEach(select => {
                     select.addEventListener('change', async (e) => {
                         const uid = e.target.dataset.uid;
-                        const newRole = e.target.value;
-                        
                         try {
                             await setDoc(doc(db, "staff_roles", uid), {
-                                role: newRole,
+                                role: e.target.value,
                                 updatedAt: new Date().toISOString(),
                                 updatedBy: auth.currentUser.email
                             }, { merge: true });
-                            
-                            alert('تم تحديث الصلاحية بنجاح');
+                            alert('تم تحديث الصلاحية');
                         } catch (err) {
-                            console.error('Update error:', err);
                             alert('فشل التحديث');
                         }
                     });
                 });
-                
             } catch (e) {
-                console.error('Users load error:', e);
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p>تعذر تحميل المستخدمين</p>
-                    </div>
-                `;
+                container.innerHTML = `<div class="no-alerts"><p>تعذر تحميل المستخدمين</p></div>`;
             }
         }
 
