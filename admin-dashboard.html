@@ -417,6 +417,10 @@
                 <span>طلبات العضوية</span>
                 <span class="badge-count" id="requestsBadge" style="display:none; background:#ef4444; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-right:auto;"></span>
             </a>
+            <a class="nav-item admin-only" data-section="permissions">
+                <i class="fas fa-user-shield"></i>
+                <span>إدارة الصلاحيات</span>
+            </a>
             <div class="nav-divider"></div>
             <a class="nav-item" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i>
@@ -626,6 +630,16 @@
             <div class="stats-box">
                 <h4><i class="fas fa-user-clock"></i> طلبات العضوية الإدارية</h4>
                 <div id="requestsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-section" id="section-permissions">
+            <div class="stats-box">
+                <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات - تحكم كامل</h4>
+                <p style="color:#666; margin-bottom:20px; font-size:0.9rem;">تعيين اللجان والأنظمة المسموحة لكل موظف</p>
+                <div id="permissionsContainer">
                     <div class="no-alerts">جاري التحميل...</div>
                 </div>
             </div>
@@ -1329,6 +1343,166 @@
                 } catch(e) {}
             }
         }, 2000);
+
+        // ===== إدارة الصلاحيات الكاملة =====
+        const COMMITTEES = [
+            { id: 'RM', name: 'لجنة إدارة المخاطر' },
+            { id: 'FMS', name: 'لجنة السلامة والمرافق' },
+            { id: 'PSC', name: 'لجنة سلامة المرضى' },
+            { id: 'IPC', name: 'لجنة مكافحة العدوى' },
+            { id: 'QI', name: 'لجنة الجودة والتحسين' },
+            { id: 'EOC', name: 'لجنة الطوارئ والكوارث' },
+            { id: 'OTHER', name: 'أخرى' }
+        ];
+        
+        const SYSTEMS = [
+            { id: 'complaints', name: 'نظام الشكاوى', icon: 'comment-dots' },
+            { id: 'incidents', name: 'نظام الحوادث', icon: 'exclamation-triangle' },
+            { id: 'risks', name: 'سجل المخاطر', icon: 'shield-alt' },
+            { id: 'rounds', name: 'نظام الجولات', icon: 'clipboard-check' },
+            { id: 'calibration', name: 'المعايرة', icon: 'tools' },
+            { id: 'maintenance', name: 'الصيانة', icon: 'wrench' },
+            { id: 'needlestick', name: 'التعرض الوخزي', icon: 'syringe' },
+            { id: 'cbahi', name: 'بوابة سباهي', icon: 'award' },
+            { id: 'dashboard', name: 'لوحة التحكم', icon: 'tachometer-alt' }
+        ];
+        
+        const ROLES = [
+            { id: 'admin', name: 'مدير عام', color: '#dc3545' },
+            { id: 'chair', name: 'رئيس لجنة', color: '#c9a962' },
+            { id: 'member', name: 'عضو', color: '#17a2b8' },
+            { id: 'viewer', name: 'مشاهد فقط', color: '#6c757d' }
+        ];
+        
+        async function loadPermissions() {
+            if (currentUserRole !== 'admin') return;
+            const container = document.getElementById('permissionsContainer');
+            
+            try {
+                const rolesSnap = await getDocs(collection(db, "staff_roles"));
+                const users = [];
+                rolesSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
+                
+                if (users.length === 0) {
+                    container.innerHTML = `<div class="no-alerts"><p>لا يوجد موظفين مسجلين</p></div>`;
+                    return;
+                }
+                
+                container.innerHTML = users.map(u => {
+                    const currentRole = ROLES.find(r => r.id === u.role) || ROLES[3];
+                    const allowedSystems = u.allowedSystems || [];
+                    const committee = u.committee || '';
+                    
+                    return `
+                        <div class="permission-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${currentRole.color}; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px; margin-bottom:15px;">
+                                <div>
+                                    <h4 style="color:var(--primary); margin-bottom:5px;">
+                                        <i class="fas fa-user" style="margin-left:8px; color:var(--gold);"></i>
+                                        ${u.fullName || u.email || u.uid}
+                                    </h4>
+                                    <p style="color:#666; font-size:0.85rem;">${u.email || ''}</p>
+                                    <p style="color:#999; font-size:0.8rem;">${u.department || ''} - ${u.jobTitle || ''}</p>
+                                </div>
+                                <button onclick="deleteUser('${u.uid}')" style="background:#fee2e2; color:#dc3545; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
+                                    <i class="fas fa-trash"></i> حذف
+                                </button>
+                            </div>
+                            
+                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;">
+                                <div>
+                                    <label style="font-weight:600; color:var(--primary); display:block; margin-bottom:8px;">
+                                        <i class="fas fa-user-tag"></i> الدور
+                                    </label>
+                                    <select onchange="updateUserField('${u.uid}', 'role', this.value)" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-family:inherit;">
+                                        ${ROLES.map(r => `<option value="${r.id}" ${u.role === r.id ? 'selected' : ''}>${r.name}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="font-weight:600; color:var(--primary); display:block; margin-bottom:8px;">
+                                        <i class="fas fa-users"></i> اللجنة
+                                    </label>
+                                    <select onchange="updateUserField('${u.uid}', 'committee', this.value)" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-family:inherit;">
+                                        <option value="">-- بدون لجنة --</option>
+                                        ${COMMITTEES.map(c => `<option value="${c.id}" ${committee === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label style="font-weight:600; color:var(--primary); display:block; margin-bottom:10px;">
+                                    <i class="fas fa-th-large"></i> الأنظمة المسموحة (اختر ما تريد)
+                                </label>
+                                <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                                    ${SYSTEMS.map(s => `
+                                        <label style="display:flex; align-items:center; gap:6px; background:${allowedSystems.includes(s.id) ? '#d1fae5' : '#f3f4f6'}; padding:8px 12px; border-radius:8px; cursor:pointer; transition:all 0.2s;">
+                                            <input type="checkbox" ${allowedSystems.includes(s.id) ? 'checked' : ''} onchange="toggleSystem('${u.uid}', '${s.id}', this.checked)" style="cursor:pointer;">
+                                            <i class="fas fa-${s.icon}" style="color:${allowedSystems.includes(s.id) ? '#10b981' : '#9ca3af'};"></i>
+                                            <span style="font-size:0.85rem;">${s.name}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (e) {
+                console.error('Error loading permissions:', e);
+                container.innerHTML = `<div class="no-alerts"><p>تعذر تحميل الصلاحيات</p></div>`;
+            }
+        }
+        
+        window.updateUserField = async function(uid, field, value) {
+            try {
+                await updateDoc(doc(db, "staff_roles", uid), {
+                    [field]: value,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+            } catch (e) {
+                console.error('Error updating:', e);
+                alert('حدث خطأ أثناء التحديث');
+            }
+        };
+        
+        window.toggleSystem = async function(uid, systemId, checked) {
+            try {
+                const docRef = doc(db, "staff_roles", uid);
+                const docSnap = await getDoc(docRef);
+                let allowedSystems = docSnap.exists() ? (docSnap.data().allowedSystems || []) : [];
+                
+                if (checked && !allowedSystems.includes(systemId)) {
+                    allowedSystems.push(systemId);
+                } else if (!checked) {
+                    allowedSystems = allowedSystems.filter(s => s !== systemId);
+                }
+                
+                await updateDoc(docRef, {
+                    allowedSystems: allowedSystems,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+            } catch (e) {
+                console.error('Error toggling system:', e);
+                alert('حدث خطأ');
+            }
+        };
+        
+        window.deleteUser = async function(uid) {
+            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟ لن يتمكن من الدخول بعد الحذف.')) return;
+            
+            try {
+                await deleteDoc(doc(db, "staff_roles", uid));
+                alert('تم حذف المستخدم');
+                loadPermissions();
+            } catch (e) {
+                console.error('Error deleting:', e);
+                alert('حدث خطأ أثناء الحذف');
+            }
+        };
+        
+        document.querySelector('[data-section="permissions"]')?.addEventListener('click', loadPermissions);
     </script>
 </body>
 </html>
