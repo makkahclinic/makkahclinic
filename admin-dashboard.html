@@ -1338,16 +1338,29 @@
                 return;
             }
             
-            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً\n\n${email}\n\nهل أنت متأكد؟`)) return;
+            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً من:\n• Firebase Auth (الحساب)\n• Firestore (الصلاحيات)\n\n${email}\n\nهل أنت متأكد؟`)) return;
             if (!confirm('تأكيد نهائي: هذا الإجراء لا يمكن التراجع عنه!')) return;
             
             try {
+                // 1. Delete from Firebase Auth via server API
+                const apiResponse = await fetch(`/api/admin/user/${encodeURIComponent(email)}`, {
+                    method: 'DELETE'
+                });
+                const apiResult = await apiResponse.json();
+                console.log('Server delete result:', apiResult);
+                
+                // 2. Delete from Firestore staff_roles
                 await deleteDoc(doc(db, "staff_roles", uid));
-                showToast('تم حذف المستخدم بنجاح', '#dc3545');
+                
+                if (apiResult.authDeleted) {
+                    showToast('تم حذف المستخدم بالكامل من Firebase', '#dc3545');
+                } else {
+                    showToast('تم الحذف من Firestore (الحساب قد يكون محذوف مسبقاً من Auth)', '#f59e0b');
+                }
                 loadUsers();
             } catch (e) {
                 console.error('خطأ:', e);
-                alert('فشل في حذف المستخدم');
+                alert('فشل في حذف المستخدم: ' + e.message);
             }
         };
 

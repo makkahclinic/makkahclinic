@@ -3,9 +3,27 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
+import admin from 'firebase-admin';
 import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow, getGoogleSheetsClient } from './sheets-service.js';
 
 const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
+
+// Initialize Firebase Admin SDK
+let firebaseAdmin = null;
+try {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (serviceAccountJson) {
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    firebaseAdmin = admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('Firebase Admin SDK initialized successfully');
+  } else {
+    console.warn('FIREBASE_SERVICE_ACCOUNT not found - admin features disabled');
+  }
+} catch (err) {
+  console.error('Failed to initialize Firebase Admin:', err.message);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -908,6 +926,75 @@ app.get('/api/complaints/staff', async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching staff:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================
+// Firebase Admin API - Complete User Deletion
+// ============================================
+app.delete('/api/admin/user/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ ok: false, error: 'Email is required' });
+    }
+    
+    if (!firebaseAdmin) {
+      return res.status(503).json({ ok: false, error: 'Firebase Admin not initialized' });
+    }
+    
+    let authDeleted = false;
+    let authError = null;
+    
+    // Try to delete from Firebase Auth
+    try {
+      const userRecord = await admin.auth().getUserByEmail(email);
+      await admin.auth().deleteUser(userRecord.uid);
+      authDeleted = true;
+      console.log(`Deleted user ${email} from Firebase Auth`);
+    } catch (authErr) {
+      if (authErr.code === 'auth/user-not-found') {
+        authError = 'User not found in Auth';
+        console.log(`User ${email} not found in Firebase Auth (already deleted or never existed)`);
+      } else {
+        authError = authErr.message;
+        console.error(`Error deleting from Auth: ${authErr.message}`);
+      }
+    }
+    
+    res.json({ 
+      ok: true, 
+      message: authDeleted ? 'تم حذف المستخدم بالكامل من Firebase' : 'تم الحذف من Firestore فقط',
+      authDeleted,
+      authError
+    });
+  } catch (err) {
+    console.error('Error in admin delete:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Get all Firebase Auth users (for syncing)
+app.get('/api/admin/auth-users', async (req, res) => {
+  try {
+    if (!firebaseAdmin) {
+      return res.status(503).json({ ok: false, error: 'Firebase Admin not initialized' });
+    }
+    
+    const listUsersResult = await admin.auth().listUsers(1000);
+    const users = listUsersResult.users.map(u => ({
+      uid: u.uid,
+      email: u.email,
+      displayName: u.displayName || '',
+      disabled: u.disabled,
+      createdAt: u.metadata.creationTime
+    }));
+    
+    res.json({ ok: true, users });
+  } catch (err) {
+    console.error('Error listing auth users:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
