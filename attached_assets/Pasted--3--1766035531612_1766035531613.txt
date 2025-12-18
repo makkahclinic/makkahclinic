@@ -1,0 +1,99 @@
+تبغى 3 أرقام للصيانة:
+
+عدد الأجهزة كاملة
+
+عدد الأجهزة المصانة
+
+عدد الأجهزة المتأخرة (بالأحمر)
+
+وأنت سألت: فين أسويها؟
+الجواب: أفضل مكان تسوي الحساب هو داخل سكربت الصيانة (Apps Script) لأن عندك هناك البيانات كاملة (Assets + Records) وتقدر تحسبها بدقة. Apps Script web apps أساسًا مبنية على doGet/doPost وترجع JSON عبر ContentService. 
+Google for Developers
++1
+
+✅ أين تسويها؟ (مختصر)
+
+في نفس كود Apps Script للصيانة داخل الدالة getKPIs()
+ثم تعرضها في الداشبورد من maintenanceRes.data.
+
+✅ التعديل الجاهز (انسخه داخل getKPIs) — يعطيك الثلاث أرقام
+
+أنت عندك getKPIs() ممتاز، بس “completed” عندك الآن هو عدد السجلات وليس عدد الأجهزة.
+نحن نحتاج “عدد أجهزة” (Unique AssetID).
+
+أضف/استبدل الجزء الخاص بالإحصاءات داخل getKPIs() بهذا المنطق (ضعه بعد ما تحسب assetNextDueDates وقبل return):
+
+  // ====== أرقام على مستوى الأجهزة (Unique Devices) ======
+
+  // 1) عدد الأجهزة المصانة = أجهزة لديها آخر سجل حالته Completed
+  let servicedDevices = 0;
+
+  // 2) عدد الأجهزة المتأخرة = overdue (أنت حسبته بالفعل)
+  const overdueDevices = overdue;
+
+  // نجمع حالة "آخر سجل" لكل جهاز بناءً على الأحدث في السجلات
+  // (بدون الاعتماد على dueDate فقط)
+  const latestByAsset = {};
+  records.forEach(r => {
+    const assetId = String(r.AssetID || '').trim();
+    if (!assetId) return;
+
+    const d = new Date(r.Timestamp || r.CompletedDate || r.StartDate || r.DueDate || 0);
+    if (isNaN(d)) return;
+
+    if (!latestByAsset[assetId] || d > latestByAsset[assetId].d) {
+      latestByAsset[assetId] = { d, r };
+    }
+  });
+
+  Object.values(latestByAsset).forEach(({ r }) => {
+    const status = String(r.Status || '').trim();
+    if (status === 'Completed') servicedDevices++;
+  });
+
+  // 3) عدد الأجهزة الكاملة
+  const totalDevices = allAssetIds.size;
+
+  // (اختياري) عدد الأجهزة غير المصانة = كل الأجهزة - الأجهزة المصانة
+  const notServicedDevices = Math.max(totalDevices - servicedDevices, 0);
+
+
+ثم عدّل return في نهاية getKPIs() ليشمل الحقول الثلاثة (حتى لو أبقيت باقي الحقول):
+
+  return {
+    totalDevices,          // ✅ عدد الأجهزة كاملة
+    servicedDevices,       // ✅ عدد الأجهزة المصانة
+    overdueDevices,        // ✅ عدد الأجهزة المتأخرة (بالأحمر)
+
+    // باقي مؤشراتك إن أحببت
+    dueThisMonth,
+    outOfService,
+    downtime: Math.round(downtime),
+    completionRate,
+    mttr,
+    notServicedDevices
+  };
+
+
+وبس.
+
+✅ تعديل الداشبورد لعرض الأرقام الثلاثة في كرت “الصيانة”
+
+في الداشبورد عند جزء الصيانة، استخدم:
+
+const m = maintenanceRes.data || maintenanceRes;
+
+document.getElementById('kpi-maintenance-total').textContent = m.totalDevices ?? '--';
+
+const sub = document.getElementById('kpi-maintenance-pending');
+const red = m.overdueDevices ?? 0;
+const done = m.servicedDevices ?? 0;
+
+if (red > 0) {
+  sub.textContent = `مصان ${done} | متأخر ${red}`;
+  sub.classList.add('danger');
+} else {
+  sub.textContent = `مصان ${done} | لا يوجد تأخير`;
+  sub.classList.remove('danger');
+  sub.style.color = '#28a745';
+}

@@ -1007,39 +1007,49 @@
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
                 }
 
-                // الصيانة - عرض إحصائيات الصيانة
+                // الصيانة - عرض إحصائيات الصيانة (3 أرقام)
                 console.log('Processing Maintenance:', maintenanceRes);
-                const mData = maintenanceRes.data || maintenanceRes;
+                const m = maintenanceRes.data || maintenanceRes;
 
                 // التحقق من وجود بيانات الإحصائيات
-                const hasStats = (mData.totalDevices !== undefined) || (mData.total !== undefined) || 
-                                 (mData.completed !== undefined) || (mData.pending !== undefined) || (mData.overdue !== undefined);
+                const hasMaintenanceStats = (m.totalDevices !== undefined) || (m.servicedDevices !== undefined) || 
+                                            (m.overdueDevices !== undefined) || (m.overdue !== undefined);
 
-                if (!hasStats) {
+                if (!hasMaintenanceStats) {
                     document.getElementById('kpi-maintenance-total').textContent = '--';
                     document.getElementById('kpi-maintenance-completed').textContent = 'API لا يرجع إحصائيات';
                     document.getElementById('kpi-maintenance-overdue').textContent = '';
                 } else {
-                    const totalDevices = Number(mData.totalDevices || mData.total || 0);
-                    const completed = Number(mData.completed || mData.done || 0);
-                    const overdue = Number(mData.overdue || 0);
+                    // عدد الأجهزة كاملة
+                    const totalDevices = Number(m.totalDevices ?? 0);
+                    // عدد الأجهزة المصانة
+                    const servicedDevices = Number(m.servicedDevices ?? m.completed ?? 0);
+                    // عدد الأجهزة المتأخرة
+                    const overdueDevices = Number(m.overdueDevices ?? m.overdue ?? 0);
 
-                    // عدد الأجهزة الكلية
+                    // عرض عدد الأجهزة الكلية
                     document.getElementById('kpi-maintenance-total').textContent = totalDevices;
 
-                    // عدد ما تم صيانته (أخضر)
+                    // عرض الأجهزة المصانة والمتأخرة في سطر واحد
                     const completedEl = document.getElementById('kpi-maintenance-completed');
-                    completedEl.textContent = `${completed} تمت صيانتها`;
-                    completedEl.style.color = '#28a745';
-
-                    // عدد المتأخرة (أحمر)
                     const overdueEl = document.getElementById('kpi-maintenance-overdue');
-                    if (overdue > 0) {
-                        overdueEl.textContent = `${overdue} متأخرة`;
+
+                    if (overdueDevices > 0) {
+                        completedEl.textContent = `مصان ${servicedDevices}`;
+                        completedEl.style.color = '#28a745';
+                        completedEl.classList.remove('danger');
+                        
+                        overdueEl.textContent = `متأخر ${overdueDevices}`;
                         overdueEl.classList.add('danger');
                         overdueEl.style.color = '#DC143C';
                     } else {
-                        overdueEl.textContent = '';
+                        completedEl.textContent = `مصان ${servicedDevices}`;
+                        completedEl.style.color = '#28a745';
+                        completedEl.classList.remove('danger');
+                        
+                        overdueEl.textContent = 'لا يوجد تأخير';
+                        overdueEl.classList.remove('danger');
+                        overdueEl.style.color = '#28a745';
                     }
                 }
 
