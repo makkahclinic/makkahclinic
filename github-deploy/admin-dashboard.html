@@ -619,9 +619,33 @@
 
         <section class="content-section" id="section-users">
             <div class="stats-box users-section">
-                <h4><i class="fas fa-users-cog"></i> إدارة المستخدمين</h4>
+                <h4><i class="fas fa-crown"></i> مركز القيادة والسيطرة - إدارة المستخدمين</h4>
+                <p style="color:#666; margin-bottom:15px; font-size:0.9rem;">تحكم كامل في جميع المستخدمين - عرض، تعليق، حذف، إعادة كلمة المرور</p>
+                
+                <div id="usersStats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius:12px;">
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #10b981;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#10b981;" id="usersActiveCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">نشط</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #f59e0b;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="usersSuspendedCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">معلق</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #1e3a5f;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="usersTotalCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <input type="text" id="usersSearchInput" placeholder="🔍 بحث بالاسم أو البريد..." style="flex:1; min-width:200px; padding:10px 15px; border:1px solid #ddd; border-radius:8px; font-family:inherit;">
+                    <button onclick="loadUsers()" style="padding:10px 20px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer; font-family:inherit;">
+                        <i class="fas fa-sync-alt"></i> تحديث
+                    </button>
+                </div>
+                
                 <div id="usersContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
+                    <div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
                 </div>
             </div>
         </section>
@@ -1155,63 +1179,177 @@
             window.location.href = 'admin-login.html';
         });
 
+        let allUsersData = [];
+        
         async function loadUsers() {
-            if (currentUserRole !== 'admin') return;
+            if (currentUserRole !== 'admin') {
+                document.getElementById('usersContainer').innerHTML = '<div class="no-alerts" style="color:#dc3545;"><i class="fas fa-lock"></i> صلاحية المدير فقط</div>';
+                return;
+            }
+            
             const container = document.getElementById('usersContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري تحميل المستخدمين...</div>';
             
             try {
+                console.log('جاري تحميل المستخدمين من staff_roles...');
                 const rolesSnap = await getDocs(collection(db, "staff_roles"));
-                const requestsSnap = await getDocs(collection(db, "role_requests"));
                 
-                const users = [];
-                rolesSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data(), source: 'staff_roles' }));
-                requestsSnap.forEach(doc => {
-                    if (!users.find(u => u.uid === doc.id)) {
-                        users.push({ uid: doc.id, role: doc.data().role, email: doc.data().email || 'غير معروف', source: 'role_requests' });
-                    }
-                });
-                
-                if (users.length === 0) {
-                    container.innerHTML = `<div class="no-alerts"><p>لا يوجد مستخدمين</p></div>`;
-                    return;
-                }
-                
-                container.innerHTML = users.map(u => `
-                    <div class="user-card">
-                        <div class="user-info">
-                            <div class="user-avatar">${(u.email || u.uid).charAt(0).toUpperCase()}</div>
-                            <div class="user-details">
-                                <h4>${u.email || u.uid}</h4>
-                                <p>${u.source === 'role_requests' ? 'طلب جديد' : 'مسجل'}</p>
-                            </div>
-                        </div>
-                        <select class="role-select" data-uid="${u.uid}">
-                            <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>مشاهد</option>
-                            <option value="staff" ${u.role === 'staff' ? 'selected' : ''}>موظف جودة</option>
-                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>مدير</option>
-                        </select>
-                    </div>
-                `).join('');
-                
-                container.querySelectorAll('.role-select').forEach(select => {
-                    select.addEventListener('change', async (e) => {
-                        const uid = e.target.dataset.uid;
-                        try {
-                            await setDoc(doc(db, "staff_roles", uid), {
-                                role: e.target.value,
-                                updatedAt: new Date().toISOString(),
-                                updatedBy: auth.currentUser.email
-                            }, { merge: true });
-                            alert('تم تحديث الصلاحية');
-                        } catch (err) {
-                            alert('فشل التحديث');
-                        }
+                allUsersData = [];
+                rolesSnap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    allUsersData.push({ 
+                        uid: docSnap.id, 
+                        email: data.email || 'غير محدد',
+                        fullName: data.fullName || '',
+                        role: data.role || 'viewer',
+                        status: data.status || 'active',
+                        committee: data.committee || '',
+                        allowedSystems: data.allowedSystems || [],
+                        createdAt: data.createdAt || '',
+                        updatedAt: data.updatedAt || ''
                     });
                 });
+                
+                console.log('تم تحميل', allUsersData.length, 'مستخدم');
+                
+                const activeCount = allUsersData.filter(u => u.status === 'active').length;
+                const suspendedCount = allUsersData.filter(u => u.status === 'suspended').length;
+                
+                document.getElementById('usersActiveCount').textContent = activeCount;
+                document.getElementById('usersSuspendedCount').textContent = suspendedCount;
+                document.getElementById('usersTotalCount').textContent = allUsersData.length;
+                
+                renderUsers(allUsersData);
+                
             } catch (e) {
-                container.innerHTML = `<div class="no-alerts"><p>تعذر تحميل المستخدمين</p></div>`;
+                console.error('خطأ في تحميل المستخدمين:', e);
+                container.innerHTML = `
+                    <div class="no-alerts" style="color:#dc3545;">
+                        <i class="fas fa-exclamation-triangle"></i> تعذر تحميل المستخدمين
+                        <br><small style="color:#666;">${e.message}</small>
+                        <br><button onclick="loadUsers()" style="margin-top:10px; padding:8px 20px; background:var(--primary); color:white; border:none; border-radius:6px; cursor:pointer;">
+                            <i class="fas fa-redo"></i> إعادة المحاولة
+                        </button>
+                    </div>`;
             }
         }
+        
+        function renderUsers(users) {
+            const container = document.getElementById('usersContainer');
+            const searchTerm = document.getElementById('usersSearchInput')?.value?.toLowerCase() || '';
+            
+            const filtered = users.filter(u => 
+                u.email.toLowerCase().includes(searchTerm) || 
+                u.fullName.toLowerCase().includes(searchTerm)
+            );
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="no-alerts"><i class="fas fa-users-slash"></i> لا يوجد مستخدمين</div>';
+                return;
+            }
+            
+            const roleLabels = { admin: 'مدير النظام', chair: 'رئيس لجنة', member: 'عضو', viewer: 'مشاهد' };
+            const roleColors = { admin: '#dc3545', chair: '#1e3a5f', member: '#17a2b8', viewer: '#6c757d' };
+            
+            container.innerHTML = filtered.map(u => {
+                const isActive = u.status === 'active';
+                const statusColor = isActive ? '#10b981' : '#f59e0b';
+                const statusLabel = isActive ? 'نشط' : 'معلق';
+                const systemsCount = u.allowedSystems?.length || 0;
+                
+                return `
+                <div class="user-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${statusColor}; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px;">
+                        <div style="flex:1; min-width:250px;">
+                            <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                                <div style="width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, var(--primary), var(--gold)); display:flex; align-items:center; justify-content:center; color:white; font-size:1.3rem; font-weight:bold;">
+                                    ${(u.fullName || u.email).charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <h4 style="color:var(--primary); margin:0; font-size:1.1rem;">${u.fullName || 'بدون اسم'}</h4>
+                                    <p style="margin:0; color:#666; font-size:0.85rem;">${u.email}</p>
+                                </div>
+                            </div>
+                            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+                                <span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:${roleColors[u.role]}20; color:${roleColors[u.role]}; font-weight:600;">
+                                    ${roleLabels[u.role] || u.role}
+                                </span>
+                                <span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:${statusColor}20; color:${statusColor}; font-weight:600;">
+                                    ${statusLabel}
+                                </span>
+                                ${u.committee ? `<span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:#e0e7ff; color:#4f46e5;">لجنة: ${u.committee}</span>` : ''}
+                                <span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:#f3f4f6; color:#374151;">${systemsCount} أنظمة</span>
+                            </div>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:8px; min-width:150px;">
+                            <button onclick="toggleUserStatus('${u.uid}', '${u.status}')" style="padding:8px 12px; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.8rem; background:${isActive ? '#fef3c7' : '#d1fae5'}; color:${isActive ? '#92400e' : '#065f46'};">
+                                <i class="fas fa-${isActive ? 'pause' : 'play'}"></i> ${isActive ? 'تعليق' : 'تفعيل'}
+                            </button>
+                            <button onclick="sendPasswordReset('${u.email}')" style="padding:8px 12px; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.8rem; background:#dbeafe; color:#1e40af;">
+                                <i class="fas fa-key"></i> إعادة كلمة المرور
+                            </button>
+                            <button onclick="deleteUser('${u.uid}', '${u.email}')" style="padding:8px 12px; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.8rem; background:#fee2e2; color:#991b1b;">
+                                <i class="fas fa-trash"></i> حذف
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        
+        document.getElementById('usersSearchInput')?.addEventListener('input', () => renderUsers(allUsersData));
+        
+        window.toggleUserStatus = async function(uid, currentStatus) {
+            const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+            const action = newStatus === 'suspended' ? 'تعليق' : 'تفعيل';
+            
+            if (!confirm(`هل تريد ${action} هذا المستخدم؟`)) return;
+            
+            try {
+                await updateDoc(doc(db, "staff_roles", uid), {
+                    status: newStatus,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+                showToast(`تم ${action} المستخدم بنجاح`);
+                loadUsers();
+            } catch (e) {
+                console.error('خطأ:', e);
+                alert('فشل في ' + action + ' المستخدم');
+            }
+        };
+        
+        window.sendPasswordReset = async function(email) {
+            if (!confirm(`سيتم إرسال رابط إعادة تعيين كلمة المرور إلى:\n${email}`)) return;
+            
+            try {
+                const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+                await sendPasswordResetEmail(auth, email);
+                showToast('تم إرسال رابط إعادة كلمة المرور');
+            } catch (e) {
+                console.error('خطأ:', e);
+                alert('فشل إرسال رابط إعادة كلمة المرور: ' + e.message);
+            }
+        };
+        
+        window.deleteUser = async function(uid, email) {
+            if (uid === auth.currentUser.uid) {
+                alert('لا يمكنك حذف حسابك الحالي!');
+                return;
+            }
+            
+            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً\n\n${email}\n\nهل أنت متأكد؟`)) return;
+            if (!confirm('تأكيد نهائي: هذا الإجراء لا يمكن التراجع عنه!')) return;
+            
+            try {
+                await deleteDoc(doc(db, "staff_roles", uid));
+                showToast('تم حذف المستخدم بنجاح', '#dc3545');
+                loadUsers();
+            } catch (e) {
+                console.error('خطأ:', e);
+                alert('فشل في حذف المستخدم');
+            }
+        };
 
         document.querySelector('[data-section="users"]')?.addEventListener('click', loadUsers);
 
