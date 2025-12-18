@@ -641,23 +641,25 @@
             const upcomingThreshold = new Date(today);
             upcomingThreshold.setDate(upcomingThreshold.getDate() + 30);
             
-            // تجميع أحدث سجل لكل جهاز
+            // تجميع أحدث سجل لكل جهاز (الحقول بحروف كبيرة من الـ API)
             const latestRecords = {};
             records.forEach(r => {
-                const assetID = r.assetID || r.asset_id || r.id;
+                const assetID = r.AssetID || r.assetID || r.asset_id;
+                const recordDate = r.TestDate || r.Timestamp || r.date;
                 if (!assetID) return;
-                if (!latestRecords[assetID] || new Date(r.date) > new Date(latestRecords[assetID].date)) {
-                    latestRecords[assetID] = r;
+                if (!latestRecords[assetID] || new Date(recordDate) > new Date(latestRecords[assetID].recordDate)) {
+                    latestRecords[assetID] = { ...r, recordDate };
                 }
             });
             
             Object.values(latestRecords).forEach(r => {
-                // حساب Pass/Fail
-                if (r.result === 'Pass') pass++;
-                else if (r.result === 'Fail') fail++;
+                // حساب Pass/Fail (Result بحرف كبير)
+                const result = r.Result || r.result;
+                if (result === 'Pass') pass++;
+                else if (result === 'Fail') fail++;
                 
-                // حساب Overdue و Upcoming
-                const nd = r.nextDue || r.next_due;
+                // حساب Overdue و Upcoming (NextDue بحرف كبير)
+                const nd = r.NextDue || r.nextDue || r.next_due;
                 if (nd) {
                     const nextDue = new Date(nd);
                     if (nextDue < today) {
@@ -670,6 +672,8 @@
             
             // حساب نسبة الامتثال = (المطابق / إجمالي المهام) * 100
             const compliance = totalTasks > 0 ? Math.round((pass / totalTasks) * 100) : 0;
+            
+            console.log(`Calibration: Pass=${pass}, Fail=${fail}, Overdue=${overdue}, Total=${totalTasks}, Compliance=${compliance}%`);
             
             return { compliance, overdue, pass, fail, total: totalTasks, upcoming };
         }
