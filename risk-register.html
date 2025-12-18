@@ -653,6 +653,7 @@
         let impact = 3;
         let MASTER = null;
         let LIBRARY = [];
+        let isSaving = false;
         
         async function loadMasterAndLibrary() {
             if (!WEB_APP_URL) return;
@@ -988,32 +989,38 @@
         document.getElementById('riskForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            if (isSaving) return;
+            isSaving = true;
+            
+            const submitBtn = e.submitter || document.querySelector('#riskForm button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+            
             setSaveBadge('warn', '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...');
             
-            const editId = document.getElementById('editId').value;
-            const score = probability * impact;
-            
-            const payload = {
-                risk: document.getElementById('riskDesc').value,
-                category: document.getElementById('category').value,
-                owner: document.getElementById('owner').value,
-                probability: probability,
-                impact: impact,
-                mitigation: document.getElementById('mitigation').value,
-                status: document.getElementById('status').value,
-                reviewDate: document.getElementById('reviewDate').value,
-                sourceEvidence: document.getElementById('source').value,
-                updatedBy: 'user'
-            };
-            
-            if (editId) {
-                payload.id = editId;
-            }
-            
-            const action = editId ? 'update' : 'add';
-            
-            if (WEB_APP_URL) {
-                try {
+            try {
+                const editId = document.getElementById('editId').value;
+                const score = probability * impact;
+                const requestId = crypto?.randomUUID ? crypto.randomUUID() : 'req-' + Date.now() + '-' + Math.random();
+                
+                const payload = {
+                    requestId,
+                    risk: document.getElementById('riskDesc').value,
+                    category: document.getElementById('category').value,
+                    owner: document.getElementById('owner').value,
+                    probability: probability,
+                    impact: impact,
+                    mitigation: document.getElementById('mitigation').value,
+                    status: document.getElementById('status').value,
+                    reviewDate: document.getElementById('reviewDate').value,
+                    sourceEvidence: document.getElementById('source').value,
+                    updatedBy: 'user'
+                };
+                
+                if (editId) payload.id = editId;
+                
+                const action = editId ? 'update' : 'add';
+                
+                if (WEB_APP_URL) {
                     const res = await fetch(WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1025,15 +1032,13 @@
                     
                     setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
                     await loadRisks();
-                } catch (err) {
-                    console.error('API error:', err);
+                } else {
                     const localData = {
                         ...payload,
                         id: editId || 'R-' + Date.now(),
                         score: score,
                         level: getLevel(score),
-                        lastUpdated: new Date().toISOString(),
-                        localOnly: editId ? false : true
+                        lastUpdated: new Date().toISOString()
                     };
                     
                     if (editId) {
@@ -1043,37 +1048,23 @@
                         allRisks.push(localData);
                     }
                     saveToLocalStorage();
-                    setSaveBadge('local', '<i class="fas fa-database"></i> محفوظ محلياً');
+                    setSaveBadge('ok', '<i class="fas fa-check-circle"></i> تم الحفظ ✓');
                     updateStats();
                     applyFilters();
                     renderHeatmap();
                     checkCriticalAlert();
                 }
-            } else {
-                const localData = {
-                    ...payload,
-                    id: editId || 'R-' + Date.now(),
-                    score: score,
-                    level: getLevel(score),
-                    lastUpdated: new Date().toISOString()
-                };
                 
-                if (editId) {
-                    const idx = allRisks.findIndex(r => r.id === editId);
-                    if (idx !== -1) allRisks[idx] = localData;
-                } else {
-                    allRisks.push(localData);
-                }
-                saveToLocalStorage();
-                setSaveBadge('ok', '<i class="fas fa-check-circle"></i> تم الحفظ ✓');
-                updateStats();
-                applyFilters();
-                renderHeatmap();
-                checkCriticalAlert();
+                showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
+                resetForm();
+            } catch (err) {
+                console.error('Save error:', err);
+                showToast('فشل الحفظ. حاول مرة أخرى.', 'error');
+                setSaveBadge('err', '<i class="fas fa-triangle-exclamation"></i> تعذر الحفظ');
+            } finally {
+                isSaving = false;
+                if (submitBtn) submitBtn.disabled = false;
             }
-            
-            showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
-            resetForm();
         });
         
         function editRisk(id) {
@@ -1168,6 +1159,17 @@
             document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
             document.getElementById('submitText').textContent = 'حفظ';
             document.getElementById('cancelBtn').style.display = 'none';
+            
+            // إذا تحول riskDesc إلى textarea، أرجعه select
+            const riskEl = document.getElementById('riskDesc');
+            if (riskEl && riskEl.tagName === 'TEXTAREA') {
+                const sel = document.createElement('select');
+                sel.className = riskEl.className;
+                sel.id = 'riskDesc';
+                sel.required = true;
+                riskEl.parentNode.replaceChild(sel, riskEl);
+                buildRiskDropdown();
+            }
             
             probability = 3;
             impact = 3;
