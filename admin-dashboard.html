@@ -496,7 +496,7 @@
                     <div class="kpi-icon maintenance"><i class="fas fa-wrench"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-maintenance-total">-</h3>
-                        <p>صيانة الأجهزة</p>
+                        <p>أجهزة بدون صيانة</p>
                         <span class="sub" id="kpi-maintenance-completed" style="color:#28a745"></span>
                         <span class="sub" id="kpi-maintenance-overdue"></span>
                     </div>
@@ -967,24 +967,25 @@
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
                 }
 
-                // الصيانة - عرض إحصائيات الصيانة
+                // الصيانة - عرض إحصائيات الصيانة (نفس بيانات صفحة الصيانة)
                 console.log('Processing Maintenance:', maintenanceRes);
-                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.totalDevices !== undefined || maintenanceRes.total !== undefined)) {
+                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.notServiced !== undefined || maintenanceRes.totalDevices !== undefined)) {
                     const m = maintenanceRes.data || maintenanceRes;
-                    const totalDevices = m.totalDevices || m.total || 0;
-                    const servicedDevices = m.servicedDevices || m.completed || m.done || 0;
-                    const overdueDevices = m.overdueDevices || m.overdue || 0;
+                    // عرض عدد الأجهزة غير المصانة (مثل صفحة الصيانة)
+                    const notServiced = m.notServiced ?? m.notServicedDevices ?? 0;
+                    const completed = m.completed ?? m.servicedDevices ?? 0;
+                    const overdue = m.overdue ?? m.overdueDevices ?? 0;
                     
-                    document.getElementById('kpi-maintenance-total').textContent = totalDevices;
+                    document.getElementById('kpi-maintenance-total').textContent = notServiced;
                     
                     const completedEl = document.getElementById('kpi-maintenance-completed');
                     const overdueEl = document.getElementById('kpi-maintenance-overdue');
                     
-                    completedEl.textContent = `مصان ${servicedDevices}`;
+                    completedEl.textContent = `مكتملة ${completed}`;
                     completedEl.style.color = '#28a745';
                     
-                    if (overdueDevices > 0) {
-                        overdueEl.textContent = `متأخر ${overdueDevices}`;
+                    if (overdue > 0) {
+                        overdueEl.textContent = `متأخرة ${overdue}`;
                         overdueEl.style.color = '#DC143C';
                         overdueEl.classList.add('danger');
                     } else {
@@ -1408,17 +1409,27 @@
             if (currentUserRole !== 'admin') return;
             const container = document.getElementById('permissionsContainer');
             
+            // إظهار حالة التحميل
+            container.innerHTML = `<div style="text-align:center; padding:40px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:var(--gold);"></i><p style="margin-top:15px;">جاري تحميل البيانات...</p></div>`;
+            
             try {
+                console.log('Loading permissions from Firestore...');
                 const rolesSnap = await getDocs(collection(db, "staff_roles"));
                 const users = [];
-                rolesSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
+                rolesSnap.forEach(docSnap => users.push({ uid: docSnap.id, ...docSnap.data() }));
+                console.log('Loaded users:', users.length, users);
                 
                 // حساب الإحصائيات
                 const activeCount = users.filter(u => u.status !== 'suspended').length;
                 const suspendedCount = users.filter(u => u.status === 'suspended').length;
-                document.getElementById('statsActive').textContent = activeCount;
-                document.getElementById('statsSuspended').textContent = suspendedCount;
-                document.getElementById('statsTotal').textContent = users.length;
+                
+                const statsActiveEl = document.getElementById('statsActive');
+                const statsSuspendedEl = document.getElementById('statsSuspended');
+                const statsTotalEl = document.getElementById('statsTotal');
+                
+                if (statsActiveEl) statsActiveEl.textContent = activeCount;
+                if (statsSuspendedEl) statsSuspendedEl.textContent = suspendedCount;
+                if (statsTotalEl) statsTotalEl.textContent = users.length;
                 
                 if (users.length === 0) {
                     container.innerHTML = `<div class="no-alerts"><p>لا يوجد موظفين مسجلين</p></div>`;
@@ -1500,7 +1511,15 @@
                 
             } catch (e) {
                 console.error('Error loading permissions:', e);
-                container.innerHTML = `<div class="no-alerts"><p>تعذر تحميل الصلاحيات</p></div>`;
+                container.innerHTML = `
+                    <div class="no-alerts" style="text-align:center; padding:30px;">
+                        <i class="fas fa-exclamation-triangle fa-2x" style="color:#f59e0b; margin-bottom:15px;"></i>
+                        <p style="margin-bottom:10px;">تعذر تحميل الصلاحيات</p>
+                        <p style="font-size:0.85rem; color:#888;">${e.message || 'خطأ في الاتصال بقاعدة البيانات'}</p>
+                        <button onclick="loadPermissions()" style="margin-top:15px; padding:10px 25px; background:var(--gold); color:#fff; border:none; border-radius:8px; cursor:pointer; font-family:inherit;">
+                            <i class="fas fa-sync"></i> إعادة المحاولة
+                        </button>
+                    </div>`;
             }
         }
         
