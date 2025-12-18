@@ -128,27 +128,46 @@
         }
         .kpi-card {
             background: white;
-            border-radius: 10px;
-            padding: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: 14px;
+            padding: 1.2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             display: flex;
             align-items: center;
-            gap: 0.8rem;
+            gap: 1rem;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s ease;
             text-decoration: none;
             color: inherit;
+            border: 1px solid rgba(0,0,0,0.04);
+            position: relative;
+            overflow: hidden;
         }
-        .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--gold);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .kpi-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+        .kpi-card:hover::before { opacity: 1; }
         .kpi-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 10px;
+            width: 55px;
+            height: 55px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.3rem;
+            font-size: 1.4rem;
             color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         .kpi-icon.complaints { background: linear-gradient(135deg, #667eea, #764ba2); }
         .kpi-icon.incidents { background: linear-gradient(135deg, #f093fb, #f5576c); }
@@ -156,9 +175,10 @@
         .kpi-icon.rounds { background: linear-gradient(135deg, #43e97b, #38f9d7); }
         .kpi-icon.calibration { background: linear-gradient(135deg, #fa709a, #fee140); }
         .kpi-icon.needlestick { background: linear-gradient(135deg, #a8edea, #fed6e3); color: #333; }
-        .kpi-info h3 { font-size: 1.5rem; color: var(--primary); line-height: 1; }
-        .kpi-info p { font-size: 0.75rem; color: #666; margin-top: 2px; }
-        .kpi-info .sub { font-size: 0.7rem; color: #999; }
+        .kpi-info h3 { font-size: 1.6rem; color: var(--primary); line-height: 1; font-weight: 700; }
+        .kpi-info p { font-size: 0.8rem; color: #555; margin-top: 4px; font-weight: 500; }
+        .kpi-info .sub { font-size: 0.75rem; color: #999; display: block; margin-top: 2px; }
+        .kpi-info .sub.danger { color: #DC143C !important; font-weight: 700; }
 
         /* قسم التنبيهات */
         .alerts-section {
@@ -751,7 +771,14 @@
                     const s = complaintsRes;
                     const openComplaints = (s.new || 0) + (s.in_progress || 0);
                     document.getElementById('kpi-complaints-open').textContent = openComplaints;
-                    document.getElementById('kpi-complaints-escalated').textContent = s.escalated ? `${s.escalated} مصعّدة` : '';
+                    const escEl = document.getElementById('kpi-complaints-escalated');
+                    if (s.escalated > 0) {
+                        escEl.textContent = `${s.escalated} مصعّدة`;
+                        escEl.classList.add('danger');
+                    } else {
+                        escEl.textContent = '';
+                        escEl.classList.remove('danger');
+                    }
                     document.getElementById('stat-complaints-new').textContent = s.new || 0;
                     document.getElementById('stat-complaints-progress').textContent = s.in_progress || 0;
                     document.getElementById('stat-complaints-escalated').textContent = s.escalated || 0;
@@ -764,15 +791,16 @@
                 if (incidentsRes.ok) {
                     const s = incidentsRes;
                     const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
-                    // التصعيدات تأتي من byStatus.escalated.count
                     const escalatedCount = s.byStatus?.escalated?.count || s.escalated || 0;
                     
                     document.getElementById('kpi-incidents-open').textContent = openIncidents;
+                    const incEscEl = document.getElementById('kpi-incidents-escalated');
                     if (escalatedCount > 0) {
-                        document.getElementById('kpi-incidents-escalated').textContent = `${escalatedCount} مصعّدة`;
-                        document.getElementById('kpi-incidents-escalated').style.color = '#DC143C';
+                        incEscEl.textContent = `${escalatedCount} مصعّدة`;
+                        incEscEl.classList.add('danger');
                     } else {
-                        document.getElementById('kpi-incidents-escalated').textContent = '';
+                        incEscEl.textContent = '';
+                        incEscEl.classList.remove('danger');
                     }
                     document.getElementById('stat-incidents-new').textContent = s.new || s.open || 0;
                     document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
