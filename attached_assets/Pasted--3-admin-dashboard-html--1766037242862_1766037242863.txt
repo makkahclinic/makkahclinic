@@ -1,0 +1,132 @@
+فاهم. مشكلتك مو “خطأ واحد” — أنت فعليًا خلطت 3 ملفات مختلفة فوق بعض:
+
+admin-dashboard.html (مركز القيادة)
+
+Google Apps Script (باك إند الصيانة)
+
+maintenance.html (واجهة الصيانة Bootstrap)
+
+ولما تلصقهم في نفس الملف/نفس المكان، طبيعي تحس الدنيا “تخرب”.
+
+خلّني أدقق لك أهم 3 مشاكل مؤكدة في اللي أرسلته:
+
+✅ المشكلة رقم 1 (خطيرة): عندك CONFIG متكرر في نفس الملف
+
+في admin-dashboard.html عندك:
+
+const firebaseConfig = {...}
+const APIs = {...}
+
+
+وبعدين أنت لصقت سكربت Apps Script وفيه:
+
+const CONFIG = {...}
+
+
+وأنت أصلاً في maintenance.html عندك:
+
+const CONFIG = { MAX_FILES: 5, ... }
+
+
+هذا يسبب:
+
+SyntaxError: Identifier 'CONFIG' has already been declared
+
+أو يغيّر قيمة CONFIG وتنهار وظائفك
+
+✅ الحل:
+
+لا تضع كود Apps Script داخل HTML نهائيًا
+
+وفي maintenance.html غيّر اسم CONFIG حق الواجهة إلى شيء مختلف مثل:
+
+const UI_CONFIG = { MAX_FILES: 5, MAX_MB: 10, AUTO_REFRESH_MS: 300000 };
+
+✅ المشكلة رقم 2 (سبب “الأرقام غلط”): الداشبورد يقرأ الصيانة بطريقة خاطئة
+
+في admin-dashboard.html عندك:
+
+const m = maintenanceRes.data || maintenanceRes;
+const total = m.total || 0;
+const completed = m.completed || 0;
+
+
+لكن getKPIs في Apps Script ما يرجع total/completed/pending
+هو يرجع:
+
+totalDevices
+servicedDevices
+overdueDevices
+completionRate
+
+
+✅ الحل في الداشبورد:
+استبدل جزء الصيانة بهذا:
+
+const m = maintenanceRes.data || maintenanceRes;
+
+document.getElementById('kpi-maintenance-total').textContent =
+  (m.completionRate !== undefined) ? (m.completionRate + '%') : (m.totalDevices || 0);
+
+const pendingEl = document.getElementById('kpi-maintenance-pending');
+if ((m.overdueDevices || 0) > 0) {
+  pendingEl.textContent = `متأخر ${m.overdueDevices} | مصان ${m.servicedDevices || 0} / ${m.totalDevices || 0}`;
+  pendingEl.classList.add('danger');
+} else {
+  pendingEl.textContent = `مصان ${m.servicedDevices || 0} / ${m.totalDevices || 0}`;
+  pendingEl.classList.remove('danger');
+  pendingEl.style.color = '#28a745';
+}
+
+✅ المشكلة رقم 3: الوخز لن يشتغل مع r.json()
+
+أنت ما زلت تستخدم:
+
+fetch(APIs.needlestick + '?action=getStats').then(r => r.json())
+
+
+بينما الـ API يرجّع:
+callback({...}) (JSONP)
+
+✅ الحل السريع في الداشبورد (بدون تعديل السكربت):
+استبدل استدعاء الوخز بهذا:
+
+async function fetchJsonp(url) {
+  const r = await fetch(url, { redirect: 'follow' });
+  const text = await r.text();
+
+  // callback({...})
+  const m = text.match(/^[a-zA-Z_$][\w$]*\((.*)\)\s*;?\s*$/s);
+  if (m && m[1]) return JSON.parse(m[1]);
+
+  // JSON عادي
+  return JSON.parse(text);
+}
+
+
+ثم بدل:
+
+fetch(APIs.needlestick + '?action=getStats').then(r => r.json())
+
+
+بـ:
+
+fetchJsonp(APIs.needlestick + '?action=getStats').catch(e => ({ success:false }))
+
+
+لكن: حتى بعد فك JSONP، لازم يكون فيه أرقام (total/thisMonth). إذا رجع فقط status، ما فيه رقم نعرضه.
+
+✅ المختصر المفيد جدًا (عشان ما تخاف “كودك يخرب”)
+لا تدمج الملفات
+
+admin-dashboard.html لوحده
+
+maintenance.html لوحده
+
+Apps Script لوحده
+
+في admin-dashboard.html عدّل فقط:
+
+قراءة الصيانة من الحقول الجديدة (totalDevices/servicedDevices/overdueDevices/completionRate)
+
+فك JSONP للوَخز بدل r.json()

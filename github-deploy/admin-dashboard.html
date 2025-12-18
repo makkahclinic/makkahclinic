@@ -754,6 +754,14 @@
             }
         }
 
+        async function fetchJsonp(url) {
+            const r = await fetch(url, { redirect: 'follow' });
+            const text = await r.text();
+            const m = text.match(/^[a-zA-Z_$][\w$]*\s*\((.*)\)\s*;?\s*$/s);
+            if (m && m[1]) return JSON.parse(m[1]);
+            return JSON.parse(text);
+        }
+
         async function loadDashboardData() {
             const refreshBtn = document.getElementById('refreshBtn');
             refreshBtn.classList.add('loading');
@@ -761,15 +769,14 @@
             console.log('Loading dashboard data...');
 
             try {
-                // جلب البيانات بالتوازي
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
                     fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
+                    fetchJsonp(APIs.needlestick + '?action=data').catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
-                    fetch(APIs.maintenance + '?action=getStats').then(r => r.json()).catch(e => { console.error('Maintenance error:', e); return { success: false }; })
+                    apiCall(APIs.maintenance, 'getKPIs', {})
                 ]);
 
                 console.log('Complaints:', complaintsRes);
@@ -857,15 +864,23 @@
                     console.warn('Rounds API failed:', roundsRes);
                 }
 
-                // الوخز الإبري
-                if (needlestickRes.success) {
-                    const n = needlestickRes.data || needlestickRes;
-                    document.getElementById('kpi-needlestick').textContent = n.total || 0;
-                    document.getElementById('kpi-needlestick-month').textContent = n.thisMonth ? `${n.thisMonth} هذا الشهر` : '';
+                // الوخز الإبري - البيانات ترجع كـ array في data
+                console.log('Needlestick:', needlestickRes);
+                if (needlestickRes.success && Array.isArray(needlestickRes.data)) {
+                    const records = needlestickRes.data;
+                    const total = records.length;
+                    const now = new Date();
+                    const thisMonth = records.filter(r => {
+                        const d = new Date(r.date || r.timestamp);
+                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    }).length;
+                    document.getElementById('kpi-needlestick').textContent = total;
+                    document.getElementById('kpi-needlestick-month').textContent = thisMonth > 0 ? `${thisMonth} هذا الشهر` : '';
                 } else if (needlestickRes.total !== undefined) {
                     document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
                     document.getElementById('kpi-needlestick-month').textContent = needlestickRes.thisMonth ? `${needlestickRes.thisMonth} هذا الشهر` : '';
                 } else {
+                    document.getElementById('kpi-needlestick').textContent = '-';
                     console.warn('Needlestick API failed:', needlestickRes);
                 }
 
