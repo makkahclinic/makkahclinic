@@ -1,0 +1,138 @@
+1) ضع Firestore Rules (انسخ/الصق كما هي)
+
+Firebase Console → Firestore → Rules:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUid() {
+      return request.auth.uid;
+    }
+
+    function myRoleDoc() {
+      return get(/databases/$(database)/documents/staff_roles/$(myUid()));
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && myRoleDoc().exists()
+        && myRoleDoc().data.role == "admin"
+        && (myRoleDoc().data.status == null || myRoleDoc().data.status != "suspended");
+    }
+
+    // الموظف يقرأ وثيقته فقط / الأدمن يقرأ الكل ويكتب الكل
+    match /staff_roles/{uid} {
+      allow read: if signedIn() && (myUid() == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // طلبات العضوية: الموظف ينشئ طلبه فقط ويقرأ طلبه / الأدمن يقرأ ويحدّث
+    match /membershipRequests/{docId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == myUid()
+        && request.resource.data.status == "pending";
+
+      allow read: if signedIn() && (resource.data.uid == myUid() || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+  }
+}
+
+
+توثيق Firebase الرسمي لاستخدام get() داخل Rules وللاستفادة من request.auth.uid: 
+Firebase
++2
+Firebase
++2
+
+2) عدّل كود “الموافقة” داخل لوحة الإدارة (هذا هو المفتاح)
+
+في admin-dashboard.html عند زر Approve (أو المكان اللي تغيّر فيه الحالة إلى approved)، خليه يعمل خطوتين دائمًا:
+
+يحدّث membershipRequests إلى approved
+
+ينشئ/يحدّث staff_roles/{uid}
+
+أضف الاستيرادات:
+
+import { doc, updateDoc, setDoc, serverTimestamp } 
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+
+ثم استخدم الدالة التالية عند الموافقة:
+
+async function approveMember(reqDocId, reqData) {
+  // reqData لازم يحتوي uid + email + fullName ... (من membershipRequests)
+  const uid = reqData.uid;
+
+  // 1) علّم الطلب Approved
+  await updateDoc(doc(db, "membershipRequests", reqDocId), {
+    status: "approved",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: auth.currentUser?.email || ""
+  });
+
+  // 2) أنشئ الدور النهائي الذي يعتمد عليه تسجيل الدخول
+  await setDoc(doc(db, "staff_roles", uid), {
+    role: "staff",        // غيّرها لو تبغى viewer/member...
+    status: "active",
+    email: reqData.email || "",
+    fullName: reqData.fullName || "",
+    department: reqData.department || ""
+  }, { merge: true });
+}
+
+
+توثيق Firebase الرسمي لكتابة/تحديث الوثائق باستخدام setDoc و updateDoc: 
+Firebase
++2
+modularfirebase.web.app
++2
+
+3) ثبّت منطق تسجيل الدخول: يعتمد فقط على staff_roles
+
+في صفحة الدخول احذف أي اعتماد على membershipRequests أو role_requests.
+إذا ما لقى وثيقة في staff_roles/{uid} → معناها “لسه ما تم اعتمادك” → يطلع رسالة واضحة ويرجع للدخول.
+
+استبدل getUserRole عندك بهذا:
+
+async function getUserRole(uid) {
+  try {
+    const docRef = doc(db, "staff_roles", uid);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? docSnap.data() : null;
+  } catch (e) {
+    console.error('Role check error:', e);
+    return null;
+  }
+}
+
+
+وبعد تسجيل الدخول، لو رجّعت null:
+
+if (!roleData) {
+  showMessage('تم استلام طلبك وهو قيد المراجعة. انتظر اعتماد الإدارة.', 'error');
+  await auth.signOut();
+  setLoading(false);
+  return;
+}
+
+
+توثيق قراءة الوثائق في Firestore (getDoc): 
+Firebase
++1
+
+النتيجة بعد تنفيذ الثلاث خطوات
+
+أي موظف يفتح الموقع ويطلب عضوية → يتسجل طلبه “pending”.
+
+أنت توافق من لوحة الإدارة → فورًا ينشأ له staff_roles/{uid}.
+
+الموظف يدخل بعدها مباشرة بدون لف ودوران، لأن صفحة الدخول تبحث فقط عن staff_roles.
+
+إذا تبغى، انسخ لي كود جزء الموافقة الموجود حاليًا في admin-dashboard.html (مكان زر approve) وأنا أدمج لك الدالة فوق داخله سطر بسطر بدون ما نخرب أي شيء.
