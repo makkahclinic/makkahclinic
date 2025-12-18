@@ -645,7 +645,8 @@
             risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
             rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec",
             needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec",
-            calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec"
+            calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec",
+            maintenance: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec"
         };
         
         // دالة حساب إحصائيات المعايرة (نفس منطق calibration.html)
@@ -760,13 +761,14 @@
 
             try {
                 // جلب البيانات بالتوازي
-                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes] = await Promise.all([
+                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
                     fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
                     fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
-                    fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; })
+                    fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
+                    fetch(APIs.maintenance + '?action=getStats').then(r => r.json()).catch(e => { console.error('Maintenance error:', e); return { success: false }; })
                 ]);
 
                 console.log('Complaints:', complaintsRes);
@@ -774,6 +776,7 @@
                 console.log('Risks:', risksRes);
                 console.log('Rounds:', roundsRes);
                 console.log('Calibration:', calibrationRes);
+                console.log('Maintenance:', maintenanceRes);
 
                 // الشكاوى - البيانات ترجع مباشرة وليس في stats
                 if (complaintsRes.ok) {
@@ -896,6 +899,30 @@
                 } else {
                     document.getElementById('kpi-calibration-compliance').textContent = '--';
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
+                }
+
+                // الصيانة - عرض إحصائيات الصيانة
+                console.log('Processing Maintenance:', maintenanceRes);
+                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.total !== undefined)) {
+                    const m = maintenanceRes.data || maintenanceRes;
+                    const total = m.total || 0;
+                    const completed = m.completed || m.done || 0;
+                    const pending = m.pending || m.overdue || (total - completed) || 0;
+                    
+                    document.getElementById('kpi-maintenance-total').textContent = total;
+                    
+                    const pendingEl = document.getElementById('kpi-maintenance-pending');
+                    if (pending > 0) {
+                        pendingEl.textContent = `${pending} بانتظار الصيانة`;
+                        pendingEl.classList.add('danger');
+                    } else {
+                        pendingEl.textContent = `${completed} مكتملة`;
+                        pendingEl.classList.remove('danger');
+                        pendingEl.style.color = '#28a745';
+                    }
+                } else {
+                    document.getElementById('kpi-maintenance-total').textContent = '--';
+                    document.getElementById('kpi-maintenance-pending').textContent = 'لا توجد بيانات';
                 }
 
                 // تحديث التنبيهات - إرسال كل البيانات
