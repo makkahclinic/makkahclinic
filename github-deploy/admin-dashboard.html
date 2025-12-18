@@ -732,6 +732,47 @@
             }
         }
 
+        // دالة JSONP للوخز الإبري
+        function loadNeedlestickData() {
+            return new Promise((resolve) => {
+                const callbackName = 'needlestickCallback_' + Date.now();
+                const timeout = setTimeout(() => {
+                    delete window[callbackName];
+                    resolve({ success: false, total: 0 });
+                }, 10000);
+                
+                window[callbackName] = function(data) {
+                    clearTimeout(timeout);
+                    delete window[callbackName];
+                    document.getElementById('needlestickScript')?.remove();
+                    
+                    if (data && data.status === 'success' && data.rows) {
+                        const total = data.rows.length;
+                        const now = new Date();
+                        const thisMonth = data.rows.filter(r => {
+                            const dateStr = r["تاريخ الحادث"] || r["التاريخ"] || "";
+                            if (!dateStr) return false;
+                            const d = new Date(dateStr);
+                            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                        }).length;
+                        resolve({ success: true, total, thisMonth });
+                    } else {
+                        resolve({ success: false, total: 0 });
+                    }
+                };
+                
+                const script = document.createElement('script');
+                script.id = 'needlestickScript';
+                script.src = `${APIs.needlestick}?action=data&callback=${callbackName}`;
+                script.onerror = () => {
+                    clearTimeout(timeout);
+                    delete window[callbackName];
+                    resolve({ success: false, total: 0 });
+                };
+                document.body.appendChild(script);
+            });
+        }
+
         async function apiCall(url, action, payload = {}) {
             try {
                 const response = await fetch(url, {
@@ -766,9 +807,9 @@
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
                     fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
+                    loadNeedlestickData(),
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
-                    fetch(APIs.maintenance + '?action=getStats').then(r => r.json()).catch(e => { console.error('Maintenance error:', e); return { success: false }; })
+                    fetch(APIs.maintenance + '?action=getKPIs').then(r => r.json()).catch(e => { console.error('Maintenance error:', e); return { success: false }; })
                 ]);
 
                 console.log('Complaints:', complaintsRes);
@@ -856,16 +897,18 @@
                     console.warn('Rounds API failed:', roundsRes);
                 }
 
-                // الوخز الإبري
+                // الوخز الإبري (JSONP)
+                console.log('Needlestick:', needlestickRes);
                 if (needlestickRes.success) {
-                    const n = needlestickRes.data || needlestickRes;
-                    document.getElementById('kpi-needlestick').textContent = n.total || 0;
-                    document.getElementById('kpi-needlestick-month').textContent = n.thisMonth ? `${n.thisMonth} هذا الشهر` : '';
-                } else if (needlestickRes.total !== undefined) {
                     document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
-                    document.getElementById('kpi-needlestick-month').textContent = needlestickRes.thisMonth ? `${needlestickRes.thisMonth} هذا الشهر` : '';
+                    if (needlestickRes.thisMonth > 0) {
+                        document.getElementById('kpi-needlestick-month').textContent = `${needlestickRes.thisMonth} هذا الشهر`;
+                    } else {
+                        document.getElementById('kpi-needlestick-month').textContent = '';
+                    }
                 } else {
-                    console.warn('Needlestick API failed:', needlestickRes);
+                    document.getElementById('kpi-needlestick').textContent = '--';
+                    document.getElementById('kpi-needlestick-month').textContent = '';
                 }
 
                 // المعايرة/الصيانة - حساب الإحصائيات من البيانات
@@ -901,22 +944,25 @@
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
                 }
 
-                // الصيانة - عرض إحصائيات الصيانة
+                // الصيانة - عرض إحصائيات الصيانة (getKPIs)
                 console.log('Processing Maintenance:', maintenanceRes);
-                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.total !== undefined)) {
-                    const m = maintenanceRes.data || maintenanceRes;
-                    const total = m.total || 0;
-                    const completed = m.completed || m.done || 0;
-                    const pending = m.pending || m.overdue || (total - completed) || 0;
+                if (maintenanceRes && maintenanceRes.success && maintenanceRes.data) {
+                    const m = maintenanceRes.data;
+                    const totalDevices = m.totalDevices || 0;
+                    const completed = m.completed || 0;
+                    const notServiced = m.notServiced || 0;
+                    const overdue = m.overdue || 0;
+                    const completionRate = m.completionRate || 0;
                     
-                    document.getElementById('kpi-maintenance-total').textContent = total;
+                    // عرض عدد الأجهزة الكلية
+                    document.getElementById('kpi-maintenance-total').textContent = totalDevices;
                     
                     const pendingEl = document.getElementById('kpi-maintenance-pending');
-                    if (pending > 0) {
-                        pendingEl.textContent = `${pending} بانتظار الصيانة`;
+                    if (notServiced > 0) {
+                        pendingEl.textContent = `${notServiced} لم تتم صيانتها`;
                         pendingEl.classList.add('danger');
                     } else {
-                        pendingEl.textContent = `${completed} مكتملة`;
+                        pendingEl.textContent = `${completionRate}% مكتملة`;
                         pendingEl.classList.remove('danger');
                         pendingEl.style.color = '#28a745';
                     }
