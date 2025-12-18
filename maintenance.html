@@ -1,1575 +1,915 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>نظام إدارة صيانة الأجهزة الطبية – مجمع مكة الطبي بالزاهر</title>
+/** =====================[ CONFIG ]===================== **/
+const CONFIG = {
+  sheetId: '1Mf6KN3OtrgpT3mYYIVDi5uDcknE_7wEZoK1aPXlzF9A',
 
-  <!-- خطوط -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  folders: {
+    '🦷 قسم الأسنان (Dental)': '1X90N2U0am3H0Z4fJFBrUER1IjBKwrPXI',
+    '📷 قسم الأشعة (RAD)':     '1nvDKOfyEuuyzxdORd7caS9kej0wLaWzz',
+    '👶 قسم النساء والولادة (OB/GYN)': '1AcDWphAsYNak2EZSs_NXKD4dhrYm6PkW',
+    '🔬 المختبر (LAB)':         '18Qk88cD9sG2C-TvotwA3MPHU6nHK9KgI',
+    '🚑 الطوارئ (E.R)':        '1e7PZmNFz8wLbAorw1_2OK2ZVkncWToej',
+    '🧼 التعقيم (CSSD)':        '1KVSDblQHbZ1YAn1bKSjyrxsKDZAnEdAN',
+    '🏢 المبنى (Building)':     '1-04JUnPzyg03rIb1rTgNcL542ohI0tAZ'
+  },
 
-  <!-- Bootstrap RTL + أيقونات + Chart.js -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet"/>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  fmsManager: 'صابر عبده',
+  fmsDeputy: 'الاستاذ عدنان الرفاعي'
+};
 
-  <style>
-    :root {
-      --crimson:#7d0024;
-      --crimson-2:#5b001a;
-      --gold:#d4af37;
-      --bg:#1a0b10;
-      --muted:rgba(255,255,255,.7);
-      --emerald:#10b981;
-      --ruby:#ef4444;
-      --sapphire:#3b82f6;
-      --amber:#f59e0b;
-      --amethyst:#8b5cf6;
-      --topaz:#f97316;
-      --pearl:#f8fafc;
-    }
+const DEPT_CODE_MAP = {
+  'rad-maintains'      : '📷 قسم الأشعة (RAD)',
+  'rad maintains'      : '📷 قسم الأشعة (RAD)',
+  'rad'                : '📷 قسم الأشعة (RAD)',
 
-    * { box-sizing:border-box; }
+  'ob/gyn-maintains'   : '👶 قسم النساء والولادة (OB/GYN)',
+  'obgyn-maintains'    : '👶 قسم النساء والولادة (OB/GYN)',
 
-    body{
-      font-family:'Tajawal',system-ui,-apple-system,Segoe UI,Roboto,Arial;
-      background: radial-gradient(ellipse at 20% 10%, rgba(212,175,55,.08) 0%, transparent 50%),
-                  radial-gradient(ellipse at 80% 60%, rgba(125,0,36,.06) 0%, transparent 50%),
-                  linear-gradient(135deg, #2a0b14 0%, #18060a 55%, #110306 100%);
-      background-size: cover, cover, auto;
-      color: var(--pearl);
-      min-height: 100vh;
-    }
+  'lab-maintains'      : '🔬 المختبر (LAB)',
+  'lab'                : '🔬 المختبر (LAB)',
 
-    h1,h2,h3,h4,h5{font-family:'Cairo',Tajawal,Arial;letter-spacing:.2px}
+  'e.r-maintains'      : '🚑 الطوارئ (E.R)',
+  'er-maintains'       : '🚑 الطوارئ (E.R)',
+  'er'                 : '🚑 الطوارئ (E.R)',
 
-    .navbar{
-      background: linear-gradient(135deg, var(--crimson), var(--crimson-2));
-      border-bottom: 2px solid var(--gold);
-      box-shadow:0 10px 30px rgba(0,0,0,.5);
-      backdrop-filter: blur(10px);
-    }
+  'dental-maintains'   : '🦷 قسم الأسنان (Dental)',
+  'dental'             : '🦷 قسم الأسنان (Dental)',
 
-    .brand{
-      display:flex;align-items:center;gap:.75rem;color:#fff;text-decoration:none
-    }
-    .brand img{
-      width:48px;height:48px;border-radius:50%;background:#fff;object-fit:cover;
-      box-shadow:0 0 0 3px rgba(212,175,55,.4),0 8px 24px rgba(0,0,0,.6)
-    }
-    .brand span{font-family:'Cairo';font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.3)}
+  'cssd-maintains'     : '🧼 التعقيم (CSSD)',
+  'cssd'               : '🧼 التعقيم (CSSD)',
 
-    .tabbar{
-      background: rgba(255,255,255,.08);
-      border-bottom: 1px solid rgba(255,255,255,.2);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      backdrop-filter: blur(8px);
-    }
+  'building-maintains' : '🏢 المبنى (Building)',
+  'building'           : '🏢 المبنى (Building)'
+};
 
-    .tabbar .nav-link{
-      color:rgba(255,255,255,0.85);
-      border:none;
-      border-bottom:3px solid transparent;
-      border-radius:8px 8px 0 0;
-      font-weight:700;
-      padding:10px 18px;
-      transition:all .25s ease;
-      position:relative;
-      overflow:hidden;
-    }
-    .tabbar .nav-link:hover{
-      background:rgba(255,255,255,0.08);
-      color:#fff;
-    }
-    .tabbar .nav-link.active{
-      border-color:var(--gold);
-      background:rgba(212,175,55,0.18);
-      color:#fff;
-    }
+function _normDeptName(value) {
+  return String(value || '')
+    .replace(/[\u200E\u200F\u202A-\u202E]/g, '')
+    .trim()
+    .toLowerCase();
+}
 
-    .card-glass{
-      background:rgba(255,255,255,0.08);
-      border:1px solid rgba(255,255,255,0.18);
-      border-radius:20px;
-      box-shadow:0 14px 32px rgba(0,0,0,.45);
-      backdrop-filter: blur(10px);
-      transition:all .25s ease;
-    }
-    .card-glass:hover{
-      transform:translateY(-4px);
-      box-shadow:0 18px 36px rgba(0,0,0,.55);
-      border-color:rgba(255,255,255,0.28);
-    }
-
-    .kpi{
-      padding:20px;
-      border-radius:18px;
-      position:relative;
-      overflow:hidden;
-      border:1px solid transparent;
-    }
-    .kpi-icon{
-      width:44px;height:44px;
-      border-radius:12px;
-      display:flex;align-items:center;justify-content:center;
-      font-size:1.4rem;
-      margin-bottom:10px;
-      background:rgba(0,0,0,0.2);
-      box-shadow:0 4px 10px rgba(0,0,0,.25);
-    }
-    .kpi .label{
-      color:var(--muted);
-      font-size:.9rem;
-      display:flex;
-      align-items:center;
-      gap:6px;
-    }
-    .kpi .value{
-      font-family:'Cairo';
-      font-size:40px;
-      font-weight:900;
-      line-height:1.1;
-      margin:6px 0;
-      text-shadow:0 2px 8px rgba(0,0,0,.35);
-    }
-    .kpi .hint{
-      color:var(--muted);
-      font-size:.85rem;
-    }
-
-    .kpi.amethyst{background:linear-gradient(135deg,rgba(139,92,246,0.2),rgba(15,23,42,0.8));border-color:rgba(139,92,246,0.6);}
-    .kpi.amethyst .kpi-icon{background:rgba(139,92,246,0.3);color:#e5e7ff;}
-    .kpi.amethyst .value{color:#e5e7ff;}
-
-    .kpi.sapphire{background:linear-gradient(135deg,rgba(59,130,246,0.2),rgba(15,23,42,0.8));border-color:rgba(59,130,246,0.6);}
-    .kpi.sapphire .kpi-icon{background:rgba(59,130,246,0.3);color:#bfdbfe;}
-    .kpi.sapphire .value{color:#bfdbfe;}
-
-    .kpi.ruby{background:linear-gradient(135deg,rgba(239,68,68,0.2),rgba(15,23,42,0.8));border-color:rgba(239,68,68,0.7);}
-    .kpi.ruby .kpi-icon{background:rgba(239,68,68,0.3);color:#fecaca;}
-    .kpi.ruby .value{color:#fecaca;}
-
-    .kpi.emerald{background:linear-gradient(135deg,rgba(16,185,129,0.2),rgba(15,23,42,0.8));border-color:rgba(16,185,129,0.7);}
-    .kpi.emerald .kpi-icon{background:rgba(16,185,129,0.3);color:#bbf7d0;}
-    .kpi.emerald .value{color:#bbf7d0;}
-
-    .kpi.topaz{background:linear-gradient(135deg,rgba(249,115,22,0.2),rgba(15,23,42,0.8));border-color:rgba(249,115,22,0.7);}
-    .kpi.topaz .kpi-icon{background:rgba(249,115,22,0.3);color:#fed7aa;}
-    .kpi.topaz .value{color:#fed7aa;}
-
-    .kpi.amber{background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(15,23,42,0.8));border-color:rgba(245,158,11,0.7);}
-    .kpi.amber .kpi-icon{background:rgba(245,158,11,0.3);color:#fef3c7;}
-    .kpi.amber .value{color:#fef3c7;}
-
-    .badge-status{
-      padding:.45rem .75rem;
-      border-radius:999px;
-      font-weight:700;
-      border:2px solid rgba(255,255,255,.18);
-      color:#fff;
-      backdrop-filter:blur(8px);
-      font-size:.8rem;
-    }
-    .badge-status.completed{background:linear-gradient(135deg,#16a34a,#22c55e);border-color:rgba(34,197,94,.7);}
-    .badge-status.pending{background:linear-gradient(135deg,#f59e0b,#eab308);border-color:rgba(245,158,11,.7);}
-    .badge-status.overdue{background:linear-gradient(135deg,#dc2626,#ef4444);border-color:rgba(239,68,68,.8);box-shadow:0 0 0 4px rgba(248,113,113,.25);}
-    .badge-status.critical{background:linear-gradient(135deg,#7f1d1d,#b91c1c);border-color:rgba(248,113,113,.8);}
-    .badge-status.due-soon{background:linear-gradient(135deg,#eab308,#facc15);border-color:rgba(250,204,21,.8);}
-
-    .table thead th{
-      background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.08));
-      border-bottom:2px solid rgba(255,255,255,.25);
-      color:#fff;
-    }
-    .table{color:#fff;}
-    .table tbody tr{transition:all .2s ease;}
-    .table tbody tr:hover{background:rgba(255,255,255,.09);transform:translateX(3px);}
-
-    .form-control,.form-select{
-      background:rgba(0,0,0,.45) !important;
-      color:#f9fafb !important;
-      border:1px solid rgba(255,255,255,.25) !important;
-      border-radius:10px;
-      font-weight:500;
-      transition:all .2s ease;
-    }
-    .form-control:focus,.form-select:focus{
-      background:rgba(0,0,0,.7) !important;
-      border-color:var(--gold) !important;
-      box-shadow:0 0 0 3px rgba(212,175,55,.35) !important;
-      transform:translateY(-1px);
-    }
-
-    /* توضيح لون حقل التاريخ (أبيض وواضح) */
-    input[type="date"].form-control{
-      color:#ffffff !important;
-    }
-    input[type="date"].form-control::-webkit-datetime-edit{
-      color:#ffffff !important;
-    }
-    input[type="date"].form-control::-webkit-datetime-edit-text{
-      color:#e5e7eb !important;
-    }
-    input[type="date"].form-control::-webkit-calendar-picker-indicator{
-      filter:invert(1);
-      cursor:pointer;
-    }
-
-    .btn-gold{
-      background:linear-gradient(135deg,var(--gold),#f5d86c);
-      color:#331a00;
-      border:none;
-      font-weight:800;
-      border-radius:10px;
-      box-shadow:0 4px 14px rgba(212,175,55,.35);
-    }
-    .btn-gold:hover{
-      transform:translateY(-1px);
-      box-shadow:0 6px 18px rgba(212,175,55,.4);
-    }
-    .btn-crimson{
-      background:linear-gradient(135deg,var(--crimson),var(--crimson-2));
-      border:none;
-      color:#fff;
-      border-radius:10px;
-      box-shadow:0 4px 14px rgba(125,0,36,.35);
-    }
-    .btn-crimson:hover{
-      transform:translateY(-1px);
-      box-shadow:0 6px 18px rgba(125,0,36,.4);
-    }
-    .btn-outline-gold{
-      border:2px solid var(--gold);
-      color:#fff;
-      border-radius:10px;
-      background:rgba(212,175,55,.08);
-    }
-    .btn-outline-gold:hover{
-      background:var(--gold);
-      color:#331a00;
-      transform:translateY(-1px);
-    }
-
-    .smallmuted{color:var(--muted);}
-
-    .dropzone{
-      border:2px dashed rgba(212,175,55,.55);
-      border-radius:16px;
-      padding:24px;
-      text-align:center;
-      background:rgba(212,175,55,.08);
-      cursor:pointer;
-      transition:all .2s ease;
-    }
-    .dropzone.drag,.dropzone:hover{
-      background:rgba(212,175,55,.16);
-      border-color:rgba(212,175,55,.8);
-    }
-    .preview img{
-      max-height:90px;
-      margin:6px;
-      border-radius:10px;
-      border:2px solid rgba(255,255,255,.25);
-      box-shadow:0 4px 12px rgba(0,0,0,.35);
-    }
-    .thumb{
-      display:inline-block;
-      position:relative;
-      margin:6px;
-    }
-    .thumb .x{
-      position:absolute;
-      top:-10px;
-      left:-10px;
-      width:22px;height:22px;
-      border-radius:50%;
-      border:none;
-      background:#b91c1c;
-      color:#fff;
-      font-size:14px;
-      line-height:20px;
-      cursor:pointer;
-      box-shadow:0 3px 8px rgba(0,0,0,.45);
-    }
-
-    .toast-lite{
-      position:fixed;
-      top:20px;
-      left:50%;
-      transform:translateX(-50%);
-      z-index:9999;
-      background:linear-gradient(135deg,var(--crimson),#3a0010);
-      color:#fff;
-      padding:10px 18px;
-      border-radius:12px;
-      box-shadow:0 12px 30px rgba(0,0,0,.5);
-      font-weight:700;
-    }
-
-    .chart-container{
-      position:relative;
-      height:220px;
-      width:100%;
-    }
-
-    .alert-item{
-      padding:10px 12px;
-      margin-bottom:8px;
-      border-radius:10px;
-      background:rgba(255,255,255,0.06);
-      border:1px solid rgba(255,255,255,0.15);
-      border-right:4px solid transparent;
-      display:block;
-    }
-    .alert-item.critical{border-right-color:var(--ruby);}
-    .alert-item.due-soon{border-right-color:var(--amber);}
-
-    .loading-spinner{
-      display:inline-block;
-      width:2rem;height:2rem;
-      border:.25em solid currentColor;
-      border-right-color:transparent;
-      border-radius:50%;
-      animation:spinner-border .75s linear infinite;
-    }
-    @keyframes spinner-border{to{transform:rotate(360deg);}}
-
-    footer{
-      border-top:1px solid rgba(255,255,255,.18);
-      background:rgba(0,0,0,.25);
-      backdrop-filter:blur(8px);
-      margin-top:20px;
-    }
-
-    @media (max-width:768px){
-      .kpi .value{font-size:30px;}
-      .tabbar .nav-link{padding:8px 10px;font-size:.9rem;}
-    }
-  </style>
-</head>
-<body>
-<nav class="navbar navbar-expand-lg sticky-top">
-  <div class="container">
-    <a class="brand" href="#">
-      <img src="attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg" alt="شعار">
-      <span>نظام إدارة صيانة الأجهزة الطبية</span>
-    </a>
-    <div class="ms-auto d-flex gap-2">
-      <button id="btnExportXLSX" class="btn btn-outline-gold btn-sm">
-        <i class="fa-solid fa-file-excel ms-1"></i> تصدير Excel
-      </button>
-      <button id="btnExportPDF" class="btn btn-outline-gold btn-sm">
-        <i class="fa-solid fa-file-pdf ms-1"></i> تصدير PDF
-      </button>
-      <button id="btnRefreshAll" class="btn btn-gold btn-sm">
-        <i class="fa-solid fa-rotate ms-1"></i> تحديث
-      </button>
-      <button id="btnRepairSheets" class="btn btn-outline-warning btn-sm">
-        <i class="fa-solid fa-tools ms-1"></i> إصلاح الجداول
-      </button>
-    </div>
-  </div>
-</nav>
-
-<section class="tabbar">
-  <div class="container">
-    <ul class="nav nav-tabs" id="tabs" role="tablist">
-      <li class="nav-item">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-dashboard" type="button">
-          <i class="fa-solid fa-gauge-high me-1"></i> اللوحة الرئيسية
-        </button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-log" type="button">
-          <i class="fa-solid fa-list me-1"></i> سجلات الصيانة
-        </button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-add" type="button">
-          <i class="fa-solid fa-plus me-1"></i> إضافة مهمة
-        </button>
-      </li>
-    </ul>
-  </div>
-</section>
-
-<div class="tab-content">
-  <!-- Dashboard -->
-  <div id="tab-dashboard" class="tab-pane fade show active">
-    <div class="container py-4">
-      <div class="row g-3">
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi amethyst h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-            <div class="label"><i class="fa-solid fa-clock"></i> الأجهزة التي لم تتم صيانتها</div>
-            <div id="kpiNotServiced" class="value">—</div>
-            <div class="hint">أجهزة لم يُسجل لها أي مهمة صيانة</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi sapphire h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div>
-            <div class="label"><i class="fa-solid fa-calendar-check"></i> المستحقة هذا الشهر</div>
-            <div id="kpiDueThisMonth" class="value">0</div>
-            <div class="hint">المهام غير المكتملة داخل شهرنا الحالي</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi ruby h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
-            <div class="label"><i class="fa-solid fa-calendar-xmark"></i> الأجهزة المتأخرة</div>
-            <div id="kpiOverdue" class="value">0</div>
-            <div class="hint">تجاوزت تاريخ الاستحقاق</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi amber h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-power-off"></i></div>
-            <div class="label"><i class="fa-solid fa-ban"></i> خارج الخدمة</div>
-            <div id="kpiOutOfService" class="value">0</div>
-            <div class="hint">أجهزة غير قيد التشغيل</div>
-          </div>
-        </div>
-
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi topaz h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div>
-            <div class="label"><i class="fa-solid fa-hourglass-half"></i> غير المكتملة</div>
-            <div id="kpiUncompleted" class="value">0</div>
-            <div class="hint">كل المهام المفتوحة (قيد الانتظار/متأخرة)</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi ruby h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-skull-crossbones"></i></div>
-            <div class="label"><i class="fa-solid fa-bolt"></i> الحرجة</div>
-            <div id="kpiCritical" class="value">0</div>
-            <div class="hint">مهام حرجة تحتاج تدخلًا عاجلًا</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi emerald h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
-            <div class="label"><i class="fa-solid fa-check-double"></i> المكتملة</div>
-            <div id="kpiCompleted" class="value">0</div>
-            <div class="hint">مهام تم إنهاؤها بنجاح</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi sapphire h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-hourglass-end"></i></div>
-            <div class="label"><i class="fa-solid fa-clock"></i> ساعات التوقف</div>
-            <div id="kpiDowntime" class="value">0</div>
-            <div class="hint">إجمالي ساعات التوقف المسجلة</div>
-          </div>
-        </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi emerald h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-shield-check"></i></div>
-            <div class="label"><i class="fa-solid fa-percent"></i> نسبة الامتثال (Compliance)</div>
-            <div id="kpiCompliance" class="value">—</div>
-            <div id="kpiComplianceHint" class="hint">مصان — / إجمالي —</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="row g-3 mt-2">
-        <div class="col-lg-6">
-          <div class="card-glass p-3 h-100">
-            <h5 class="mb-3"><i class="fa-solid fa-chart-line me-1"></i> الأداء الشهري (منجز)</h5>
-            <div class="chart-container"><canvas id="lineMonthly"></canvas></div>
-          </div>
-        </div>
-        <div class="col-lg-3">
-          <div class="card-glass p-3 h-100">
-            <h5 class="mb-3"><i class="fa-solid fa-chart-pie me-1"></i> توزيع الحالات</h5>
-            <div class="chart-container"><canvas id="donutStatus"></canvas></div>
-          </div>
-        </div>
-        <div class="col-lg-3">
-          <div class="card-glass p-3 h-100">
-            <h5 class="mb-3"><i class="fa-solid fa-bell me-1"></i> تنبيهات قريبة</h5>
-            <div id="alertsList" class="small"></div>
-            <div class="smallmuted mt-2">
-              <i class="fa-solid fa-circle me-1" style="color:#f97316"></i> خلال 10 أيام
-              •
-              <i class="fa-solid fa-circle me-1" style="color:#ef4444"></i> متجاوزة الموعد
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card-glass p-3 mt-3">
-        <h5 class="mb-3"><i class="fa-solid fa-chart-bar me-1"></i> حالة الأقسام</h5>
-        <div class="chart-container" style="height:240px"><canvas id="barDept"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Log -->
-  <div id="tab-log" class="tab-pane fade">
-    <div class="container py-4">
-      <div class="card-glass p-3 mb-3">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label"><i class="fa-solid fa-building me-1"></i> القسم</label>
-            <select id="filterDept" class="form-select">
-              <option value="">جميع الأقسام</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label"><i class="fa-solid fa-tags me-1"></i> النوع</label>
-            <select id="filterType" class="form-select">
-              <option value="">الكل</option>
-              <option value="PM">وقائية (PM)</option>
-              <option value="CM">تصحيحية (CM)</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label"><i class="fa-solid fa-circle-info me-1"></i> الحالة</label>
-            <select id="filterStatus" class="form-select">
-              <option value="">الكل</option>
-              <option value="Completed">مكتملة</option>
-              <option value="Pending">قيد الانتظار</option>
-              <option value="Overdue">متأخرة</option>
-              <option value="Critical">حرجة</option>
-              <option value="OutOfService">خارج الخدمة</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label"><i class="fa-solid fa-search me-1"></i> بحث</label>
-            <input id="searchBox" class="form-control" placeholder="اسم الجهاز، الفني، القسم، ...">
-          </div>
-          <div class="col-md-2 d-grid">
-            <button id="btnShowAlertsOnly" class="btn btn-crimson">
-              <i class="fa-solid fa-triangle-exclamation ms-1"></i> التنبيهات
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card-glass p-3">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle">
-            <thead>
-              <tr>
-                <th>التاريخ</th>
-                <th>القسم</th>
-                <th>الفني</th>
-                <th>الجهاز</th>
-                <th>النوع</th>
-                <th>البداية</th>
-                <th>الاستحقاق</th>
-                <th>الإغلاق</th>
-                <th>الحالة</th>
-                <th>الأولوية</th>
-                <th>المرفقات</th>
-                <th>الشهادة</th>
-                <th>إجراءات</th>
-              </tr>
-            </thead>
-            <tbody id="logBody">
-              <tr>
-                <td colspan="13" class="text-center py-4">
-                  <div class="loading-spinner text-light"></div>
-                  <div class="smallmuted mt-2">جاري تحميل البيانات...</div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="d-flex justify-content-between mt-2 smallmuted">
-          <div>إجمالي: <b id="totalCount">0</b></div>
-          <div>المعروض: <b id="viewCount">0</b></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Add Task -->
-  <div id="tab-add" class="tab-pane fade">
-    <div class="container py-4">
-      <div class="card-glass p-3">
-        <h5 class="mb-3"><i class="fa-solid fa-plus-circle me-1"></i> إضافة مهمة صيانة</h5>
-        <form id="formNew" class="row g-3">
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-building me-1"></i> القسم</label>
-            <select id="fDepartment" class="form-select" required>
-              <option value="">— اختر —</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-user me-1"></i> الفني</label>
-            <select id="fStaff" class="form-select" required>
-              <option value="">— اختر —</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-tag me-1"></i> نوع المهمة</label>
-            <select id="fTaskType" class="form-select" required>
-              <option value="PM">وقائية (PM)</option>
-              <option value="CM">تصحيحية (CM)</option>
-            </select>
-          </div>
-
-          <div class="col-md-8">
-            <label class="form-label"><i class="fa-solid fa-microchip me-1"></i> الجهاز</label>
-            <select id="fAsset" class="form-select" required>
-              <option value="">— اختر القسم أولًا —</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-arrow-up me-1"></i> الأولوية</label>
-            <select id="fPriority" class="form-select">
-              <option value="High">عالية</option>
-              <option value="Medium" selected>متوسطة</option>
-              <option value="Low">منخفضة</option>
-            </select>
-          </div>
-
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-play me-1"></i> تاريخ التنفيذ</label>
-            <input id="fStart" type="date" class="form-control" required>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-repeat me-1"></i> تكرار الصيانة</label>
-            <select id="fFreq" class="form-select">
-              <option value="">بدون تكرار</option>
-              <option value="W1">أسبوعي</option>
-              <option value="M1">شهري</option>
-              <option value="M3">كل 3 أشهر</option>
-              <option value="M6">كل 6 أشهر</option>
-              <option value="M12">سنوي</option>
-              <option value="Y2">كل سنتين</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-flag me-1"></i> الاستحقاق القادم</label>
-            <input id="fDue" type="date" class="form-control" readonly>
-          </div>
-
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-circle-info me-1"></i> الحالة</label>
-            <select id="fStatus" class="form-select" required>
-              <option value="Pending" selected>قيد الانتظار</option>
-              <option value="Completed">مكتملة</option>
-              <option value="Critical">حرجة</option>
-              <option value="OutOfService">خارج الخدمة</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-hourglass-end me-1"></i> ساعات التوقف</label>
-            <input id="fDown" type="number" min="0" step="0.1" class="form-control" value="0">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label"><i class="fa-solid fa-stop me-1"></i> تاريخ الإغلاق (إن وُجد)</label>
-            <input id="fCompleted" type="date" class="form-control">
-          </div>
-
-          <div class="col-12">
-            <label class="form-label"><i class="fa-solid fa-paperclip me-1"></i> الصورة/المرفقات (إلزامي)</label>
-            <div id="dropzone" class="dropzone">
-              <i class="fa-solid fa-cloud-arrow-up fa-2x mb-2"></i>
-              <div class="smallmuted">اسحب وأفلت هنا أو انقر للاختيار — الحد الأقصى 5 ملفات</div>
-              <input id="fFiles" type="file" class="d-none" accept="image/*,.pdf,.doc,.docx,.xlsx,.xls" multiple>
-              <div id="dzPreview" class="preview mt-2"></div>
-              <div id="dzInfo" class="small mt-1"></div>
-              <div class="progress d-none" id="dzProgress">
-                <div class="progress-bar bg-warning" style="width:0%"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-12 d-flex gap-2 justify-content-end">
-            <button type="button" id="btnReset" class="btn btn-outline-gold">
-              <i class="fa-solid fa-rotate-left ms-1"></i> إعادة تعيين
-            </button>
-            <button type="submit" class="btn btn-gold">
-              <i class="fa-solid fa-floppy-disk ms-1"></i> حفظ المهمة
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-
-<footer class="container py-4">
-  <div class="d-flex flex-column flex-md-row align-items-center justify-content-between smallmuted">
-    <div>© 2025 مجمع مكة الطبي بالزاهر – إدارة الصيانة الطبية</div>
-    <div><i class="fa-solid fa-envelope ms-1"></i> support@makkahclinic.com</div>
-  </div>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
-  /*************** إعداد الاتصال ****************/
-  const API_URL = 'https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec';
-
-  const CONFIG = {
-    MAX_FILES: 5,
-    MAX_MB: 10,
-    AUTO_REFRESH_MS: 5 * 60 * 1000
-  };
-
-  const App = {
-    records: [],
-    assetsMap: {},
-    staff: [],
-    charts: { donut: null, bar: null, line: null },
-    filters: { dept: "", type: "", status: "", search: "", alertsOnly: false }
-  };
-
-  const $  = s => document.querySelector(s);
-  const $$ = s => document.querySelectorAll(s);
-
-  function toast(msg, type="info"){
-    const t = document.createElement('div');
-    t.className = 'toast-lite';
-    t.style.background = type === 'error'
-      ? 'linear-gradient(135deg,#b91c1c,#7f1d1d)'
-      : type === 'success'
-      ? 'linear-gradient(135deg,#15803d,#22c55e)'
-      : 'linear-gradient(135deg,var(--crimson),#3a0010)';
-    t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), 3500);
+function resolveDepartmentFolder(dept) {
+  if (!dept) {
+    return CONFIG.folders['🏢 المبنى (Building)'];
   }
 
-  function fmt(d){
-    if (!d) return "";
-    const x = new Date(d);
-    return isNaN(x) ? String(d) : x.toLocaleDateString('ar-SA');
+  const norm = _normDeptName(dept);
+  const withDash = norm.replace(/\s+/g, '-');
+
+  if (DEPT_CODE_MAP[withDash]) {
+    const key = DEPT_CODE_MAP[withDash];
+    const folderId = CONFIG.folders[key];
+    if (folderId) return folderId;
   }
 
-  function addDays(d, n){
-    const x = new Date(d);
-    x.setDate(x.getDate() + n);
-    return x;
+  if (DEPT_CODE_MAP[norm]) {
+    const key = DEPT_CODE_MAP[norm];
+    const folderId = CONFIG.folders[key];
+    if (folderId) return folderId;
   }
 
-  // تصنيف سجل فردي (لجدول + donut)
-  function classify(r){
+  if (CONFIG.folders[dept]) {
+    return CONFIG.folders[dept];
+  }
+
+  return CONFIG.folders['🏢 المبنى (Building)'];
+}
+
+/** =====================[ HELPER FUNCTIONS ]===================== **/
+function getSheet(name) {
+  const ss = SpreadsheetApp.openById(CONFIG.sheetId);
+  return ss.getSheetByName(name) || null;
+}
+
+function findRowIndexById_(sheet, id) {
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(id).trim()) {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+function extractFileIdFromUrl(url) {
+  if (!url) return null;
+  const match = String(url).match(/[-\w]{25,}/);
+  return match ? match[0] : null;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-';
+  try {
+    return new Date(dateString).toLocaleDateString('ar-SA');
+  } catch (error) {
+    return dateString;
+  }
+}
+
+function formatDateForFileName(dateString) {
+  if (!dateString) return 'unknown';
+  try {
+    return Utilities.formatDate(new Date(dateString), 'Asia/Riyadh', 'yyyy-MM-dd');
+  } catch (error) {
+    return 'unknown-date';
+  }
+}
+
+function _decodeBase64(input) {
+  if (!input) throw new Error('fileData فارغ');
+  let base64 = input, mime = null;
+  const m = String(input).match(/^data:(.+);base64,(.*)$/);
+  if (m) { mime = m[1]; base64 = m[2]; }
+  return { bytes: Utilities.base64Decode(base64), mimeType: mime };
+}
+
+/** =====================[ ENTRY POINTS ]===================== **/
+function doGet(e) {
+  try {
+    const params = (e && e.parameter) ? e.parameter : {};
+    const action = params.action || '';
+
+    if (action === 'viewCert' && params.id) {
+      return renderCertificatePage_(params.id);
+    }
+
+    const result = action ? handleApiRequest(params) : {
+      ok: true,
+      time: new Date().toISOString(),
+      version: '2.0'
+    };
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true, data: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        success: false,
+        error: String(err && err.message || err)
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    let params = {};
+    if (e && e.postData) {
+      params = JSON.parse(e.postData.contents || '{}');
+    }
+    const result = handleApiRequest(params);
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true, data: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        success: false,
+        error: String(err && err.message || err)
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/** =====================[ API ROUTER ]===================== **/
+function handleApiRequest(params) {
+  const action = params && params.action;
+  if (!action) throw new Error('No action specified');
+
+  switch (action) {
+    case 'getRecords':          return getRecords();
+    case 'getAssets':           return getAssets();
+    case 'getStaff':            return getStaff();
+    case 'getKPIs':             return getKPIs();
+    case 'addRecord':           return addRecord(params);
+    case 'updateRecord':        return updateRecord(params);
+    case 'deleteRecord':        return deleteRecord(params);
+    case 'uploadFile':          return uploadFile(params);
+    case 'generateCertificate': return generateCertificate(params);
+    case 'export':              return exportData(params.format);
+    case 'repair':              return repairSheets();
+    case 'getStats':            return getKPIs();
+    case 'health':              return { ok: true, time: new Date().toISOString(), version: '2.0' };
+    default: throw new Error('Action not found: ' + action);
+  }
+}
+
+/** =====================[ READ OPERATIONS ]===================== **/
+function getRecords() {
+  try {
+    const sheet = getSheet('Records');
+    if (!sheet || sheet.getLastRow() <= 1) return [];
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+
+    return data.map(row => ({
+      ID:            row[0],
+      Timestamp:     row[1],
+      Department:    row[2],
+      Staff:         row[3],
+      AssetID:       row[4],
+      AssetName:     row[5],
+      TaskType:      row[6],
+      StartDate:     row[7],
+      DueDate:       row[8],
+      CompletedDate: row[9],
+      Status:        row[10],
+      Priority:      row[11],
+      DowntimeHours: row[12],
+      File:          row[13],
+      Certificate:   row[14],
+      Notes:         row[15]
+    })).filter(r => r.ID);
+  } catch (error) {
+    throw new Error('فشل في جلب السجلات: ' + error.message);
+  }
+}
+
+function getAssets() {
+  try {
+    const sheet = getSheet('Assets');
+    if (!sheet || sheet.getLastRow() <= 1) return {};
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 12).getValues();
+    const assetsMap = {};
+
+    data.forEach(row => {
+      if (!row[1]) return;
+      const department = String(row[1]).trim();
+      if (!assetsMap[department]) assetsMap[department] = [];
+      assetsMap[department].push({
+        id:       row[0],
+        name:     row[4] || '',
+        room:     row[3] || '',
+        serial:   row[6] || '',
+        status:   row[7] || '',
+        frequency: row[8] || '',
+        lastPM:   row[9] || '',
+        nextPM:   row[10] || ''
+      });
+    });
+
+    return assetsMap;
+  } catch (error) {
+    throw new Error('فشل في جلب الأصول: ' + error.message);
+  }
+}
+
+function getStaff() {
+  try {
+    const sheet = getSheet('Staff');
+    if (!sheet || sheet.getLastRow() <= 1) return [];
+    return sheet.getRange(2, 1, sheet.getLastRow() - 1, 1)
+      .getValues()
+      .flat()
+      .filter(Boolean);
+  } catch (error) {
+    throw new Error('فشل في جلب الفنيين: ' + error.message);
+  }
+}
+
+/** =====================[ KPI CALCULATIONS - UPDATED VERSION WITH 3 DEVICE COUNTS ]===================== **/
+function getKPIs() {
+  const records = getRecords();
+  const assetsMap = getAssets();
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  // 1) إجمالي الأجهزة من شيت Assets
+  const allAssetIds = new Set();
+  Object.values(assetsMap).forEach(list => {
+    if (!Array.isArray(list)) return;
+    list.forEach(a => {
+      const id = String(a.id || '').trim();
+      if (id) allAssetIds.add(id);
+    });
+  });
+  const totalDevices = allAssetIds.size;
+
+  // 2) مؤشرات عامة من السجلات
+  const devicesWithRecord = new Set();
+  let outOfService = 0;
+  let completed = 0;
+  let critical = 0;
+  let uncompleted = 0;
+  let downtime = 0;
+
+  records.forEach(r => {
+    const assetId = String(r.AssetID || '').trim();
     const status = String(r.Status || '').trim();
-    if (status === 'Completed')    return 'Completed';
-    if (status === 'OutOfService') return 'OutOfService';
-    if (status === 'Critical')     return 'Critical';
-    if (status === 'Overdue')      return 'Overdue'; // يدوي
 
-    const due = r.DueDate ? new Date(r.DueDate) : null;
-    if (due && !isNaN(due)){
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      due.setHours(0,0,0,0);
-      if (due < today)               return 'Overdue';
-      if (due <= addDays(today, 10)) return 'DueSoon';
-    }
-    return status || 'Pending';
-  }
+    if (assetId) devicesWithRecord.add(assetId);
 
-  function animateValue(el, to, suffix=""){
-    const start = 0, dur = 900, t0 = performance.now();
-    function step(now){
-      const p = Math.min(1, (now - t0)/dur);
-      el.textContent = Math.round(start + (to - start)*p) + suffix;
-      if (p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
+    if (status === 'Completed') completed++;
+    else uncompleted++;
 
-  /*************** طبقة API ****************/
-  const API = {
-    async _parseResponse(r){
-      const raw = await r.text();
-      if (!r.ok) throw new Error(`HTTP ${r.status}: ${raw.slice(0,200)}`);
-      let json;
-      try { json = JSON.parse(raw); }
-      catch { throw new Error('استجابة غير JSON من الخادم: ' + raw.slice(0,200)); }
-      if (json?.success === false || json?.error) {
-        throw new Error(json.error || 'فشل العملية');
-      }
-      return json.data ?? json;
-    },
-    async _get(action, params = {}){
-      const url = new URL(API_URL);
-      url.searchParams.set('action', action);
-      Object.entries(params).forEach(([k,v])=>{
-        if (v !== undefined && v !== null) url.searchParams.set(k, v);
-      });
-      const r = await fetch(url.toString(), {method:'GET'});
-      return this._parseResponse(r);
-    },
-    async _post(action, params = {}){
-      const payload = { action, ...params };
-      const r = await fetch(API_URL,{
-        method:'POST',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify(payload)
-      });
-      return this._parseResponse(r);
-    },
+    if (status === 'OutOfService') outOfService++;
+    if (status === 'Critical') critical++;
 
-    getRecords(){ return this._get('getRecords'); },
-    getAssets(){  return this._get('getAssets');  },
-    getStaff(){   return this._get('getStaff');   },
-    getKPIs(){    return this._get('getKPIs');    },
+    downtime += Number(r.DowntimeHours) || 0;
+  });
 
-    addRecord(p){           return this._post('addRecord', p);           },
-    deleteRecord(p){        return this._post('deleteRecord', p);        },
-    updateRecord(p){        return this._post('updateRecord', p);        },
-    uploadFile(p){          return this._post('uploadFile', p);          },
-    generateCertificate(p){ return this._post('generateCertificate', p); },
+  // 3) حساب الأجهزة المتأخرة والمستحقة
+  let dueThisMonth = 0;
+  let overdue = 0;
 
-    exportData(format){ return this._get('export', {format}); },
-    repairSheets(){     return this._get('repair');           },
-    healthCheck(){      return this._get('health');           }
-  };
+  const assetNextDueDates = {};
 
-  /*************** تحميل أولي ****************/
-  document.addEventListener('DOMContentLoaded', async () => {
-    try{
-      $('#fStart').value = new Date().toISOString().split('T')[0];
-      bindEvents();
-      await loadAll();
-      setInterval(loadAll, CONFIG.AUTO_REFRESH_MS);
-    } catch(e){
-      console.error('INIT error:', e);
-      toast('خطأ أثناء التهيئة: ' + e.message, 'error');
+  records.forEach(r => {
+    const assetId = String(r.AssetID || '').trim();
+    if (!assetId || !r.DueDate) return;
+
+    const dueDate = r.DueDate instanceof Date ? new Date(r.DueDate) : new Date(r.DueDate);
+    if (isNaN(dueDate)) return;
+
+    if (!assetNextDueDates[assetId] || dueDate > assetNextDueDates[assetId].dueDate) {
+      assetNextDueDates[assetId] = {
+        dueDate: dueDate,
+        record: r
+      };
     }
   });
 
-  function bindEvents(){
-    // فلاتر
-    $('#filterDept').addEventListener('change', e => { App.filters.dept = e.target.value; renderLog(); });
-    $('#filterType').addEventListener('change', e => { App.filters.type = e.target.value; renderLog(); });
-    $('#filterStatus').addEventListener('change', e => { App.filters.status = e.target.value; renderLog(); });
-    $('#searchBox').addEventListener('input', e => { App.filters.search = e.target.value.toLowerCase(); renderLog(); });
-    $('#btnShowAlertsOnly').addEventListener('click', () => {
-      App.filters.alertsOnly = !App.filters.alertsOnly;
-      renderLog();
-    });
+  Object.values(assetNextDueDates).forEach(({ dueDate, record }) => {
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const status = String(record.Status || '').trim();
+    
+    if (status === 'OutOfService') return;
+    
+    if (dueDate < now) {
+      overdue++;
+    } else if (dueDate.getFullYear() === currentYear && 
+               dueDate.getMonth() === currentMonth) {
+      dueThisMonth++;
+    }
+  });
 
-    // تواريخ الاستحقاق
-    $('#fFreq').addEventListener('change', calcNextDue);
-    $('#fStart').addEventListener('change', calcNextDue);
+  // ====== ✅ أرقام على مستوى الأجهزة (Unique Devices) - التعديل الجديد ======
+  let servicedDevices = 0;
+  const overdueDevices = overdue;
 
-    // عند تغيير القسم في الفورم
-    $('#fDepartment').addEventListener('change', () => {
-      const dep = $('#fDepartment').value;
-      const arr = App.assetsMap[dep] || [];
-      $('#fAsset').innerHTML = arr.length
-        ? '<option value="">— اختر الجهاز —</option>' + arr.map(a => `<option value="${a.id}">${a.name}</option>`).join('')
-        : '<option value="">لا توجد أجهزة</option>';
-    });
+  // نجمع حالة "آخر سجل" لكل جهاز بناءً على الأحدث في السجلات
+  const latestByAsset = {};
+  records.forEach(r => {
+    const assetId = String(r.AssetID || '').trim();
+    if (!assetId) return;
 
-    // إدارة الملفات
-    const dz = $('#dropzone'), fi = $('#fFiles');
-    dz.addEventListener('click', () => fi.click());
-    dz.addEventListener('dragover', e => {e.preventDefault(); dz.classList.add('drag');});
-    dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
-    dz.addEventListener('drop', e => {
-      e.preventDefault();
-      dz.classList.remove('drag');
-      handleFiles(e.dataTransfer.files);
-    });
-    fi.addEventListener('change', () => handleFiles(fi.files));
+    const d = new Date(r.Timestamp || r.CompletedDate || r.StartDate || r.DueDate || 0);
+    if (isNaN(d)) return;
 
-    // فورم
-    $('#formNew').addEventListener('submit', submitNew);
-    $('#btnReset').addEventListener('click', () => { $('#formNew').reset(); resetFilesUI(); });
+    if (!latestByAsset[assetId] || d > latestByAsset[assetId].d) {
+      latestByAsset[assetId] = { d, r };
+    }
+  });
 
-    // أزرار عامة
-    $('#btnExportXLSX').addEventListener('click', async () => {
-      try{
-        const r = await API.exportData('xlsx');
-        if (r.url && r.url !== 'about:blank') window.open(r.url, '_blank');
-        else toast('ميزة التصدير قيد التطوير', 'info');
-      }catch(e){ toast('فشل تصدير Excel: ' + e.message, 'error'); }
-    });
+  Object.values(latestByAsset).forEach(({ r }) => {
+    const status = String(r.Status || '').trim();
+    if (status === 'Completed') servicedDevices++;
+  });
 
-    $('#btnExportPDF').addEventListener('click', async () => {
-      try{
-        const r = await API.exportData('pdf');
-        if (r.url && r.url !== 'about:blank') window.open(r.url, '_blank');
-        else toast('ميزة التصدير قيد التطوير', 'info');
-      }catch(e){ toast('فشل تصدير PDF: ' + e.message, 'error'); }
-    });
+  // عدد الأجهزة غير المصانة = كل الأجهزة - الأجهزة المصانة
+  const notServicedDevices = Math.max(totalDevices - servicedDevices, 0);
 
-    $('#btnRefreshAll').addEventListener('click', loadAll);
+  // 4) أجهزة لم تتم صيانتها نهائياً
+  let notServiced = 0;
+  allAssetIds.forEach(id => {
+    if (!devicesWithRecord.has(id)) notServiced++;
+  });
 
-    $('#btnRepairSheets').addEventListener('click', async () => {
-      if (!confirm('هل تريد إصلاح الجداول؟')) return;
-      try{
-        await API.repairSheets();
-        toast('تم إصلاح الجداول', 'success');
-        await loadAll();
-      }catch(e){ toast('فشل الإصلاح: ' + e.message, 'error'); }
-    });
+  // 5) MTTR + نسبة الإنجاز
+  const completedWithDates = records.filter(r =>
+    r.Status === 'Completed' && r.StartDate && r.CompletedDate
+  );
 
-    // أحداث ديناميكية: حذف / شهادة
-    document.addEventListener('click', async e => {
-      const delBtn = e.target.closest('.del-rec');
-      if (delBtn){
-        e.preventDefault();
-        await handleDelete(delBtn);
-        return;
-      }
-      const certBtn = e.target.closest('.btn-gen-cert');
-      if (certBtn){
-        e.preventDefault();
-        await handleGenerateCert(certBtn);
-        return;
-      }
-    });
+  const mttr = completedWithDates.length
+    ? Math.round(
+        completedWithDates.reduce((t, r) => {
+          const s = new Date(r.StartDate);
+          const c = new Date(r.CompletedDate);
+          return t + ((c - s) / (1000 * 3600 * 24));
+        }, 0) / completedWithDates.length
+      )
+    : 0;
+
+  // ✅ حساب نسبة الإنجاز بناءً على الأجهزة المصانة وليس السجلات
+  const completionRate = totalDevices
+    ? Math.round((servicedDevices / totalDevices) * 100)
+    : 0;
+
+  // ✅ النتيجة النهائية مع الحقول الثلاثة الجديدة
+  return {
+    totalDevices,          // ✅ عدد الأجهزة كاملة
+    servicedDevices,       // ✅ عدد الأجهزة المصانة
+    overdueDevices,        // ✅ عدد الأجهزة المتأخرة (بالأحمر)
+    notServicedDevices,    // عدد الأجهزة غير المصانة
+    notServiced,
+    dueThisMonth,
+    overdue,
+    outOfService,
+    completed,
+    critical,
+    uncompleted,
+    downtime: Math.round(downtime),
+    completionRate,
+    mttr
+  };
+}
+
+/** =====================[ WRITE OPERATIONS ]===================== **/
+function addRecord(params) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = getSheet('Records');
+    if (!sheet) throw new Error('جدول Records غير موجود. يرجى تشغيل إصلاح الجداول أولاً.');
+
+    const id = Utilities.getUuid();
+    const timestamp = new Date().toISOString();
+
+    const row = [
+      id,
+      timestamp,
+      params.department,
+      params.staff,
+      params.assetID,
+      params.assetName,
+      params.taskType,
+      params.startDate,
+      params.dueDate,
+      params.completedDate,
+      params.status,
+      params.priority,
+      params.downtimeHours,
+      '',
+      '',
+      params.notes || ''
+    ];
+
+    sheet.appendRow(row);
+
+    return {
+      ID: id,
+      Timestamp: timestamp,
+      Department: params.department,
+      Staff: params.staff,
+      AssetID: params.assetID,
+      AssetName: params.assetName,
+      TaskType: params.taskType,
+      StartDate: params.startDate,
+      DueDate: params.dueDate,
+      CompletedDate: params.completedDate,
+      Status: params.status,
+      Priority: params.priority,
+      DowntimeHours: params.downtimeHours
+    };
+  } catch (error) {
+    throw new Error('فشل في إضافة السجل: ' + error.message);
+  } finally {
+    lock.releaseLock();
   }
+}
 
-  /*************** حذف و شهادة ****************/
-  async function handleDelete(btn){
-    const recordId = btn.dataset.id;
-    const timestamp = btn.dataset.timestamp;
-    const assetName = btn.dataset.asset || '';
+function updateRecord(params) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = getSheet('Records');
+    if (!sheet) throw new Error('جدول Records غير موجود');
 
-    if (!recordId){
-      toast('لا يمكن تحديد السجل للحذف', 'error');
-      return;
-    }
-    if (!confirm(`هل أنت متأكد من حذف سجل الصيانة للجهاز:\n${assetName} ؟`)) return;
+    const rowIndex = findRowIndexById_(sheet, params.id);
+    if (rowIndex === -1) throw new Error('Record not found');
 
-    try{
-      btn.disabled = true;
-      const old = btn.innerHTML;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-      await API.deleteRecord({id:recordId, timestamp});
-      toast('تم حذف السجل بنجاح', 'success');
-      await loadAll();
-      btn.innerHTML = old;
-    }catch(e){
-      console.error('delete error', e);
-      toast('فشل حذف السجل: ' + e.message, 'error');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-    }
+    const row = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    const updatedRow = [
+      row[0],
+      row[1],
+      params.department || row[2],
+      params.staff || row[3],
+      params.assetID || row[4],
+      params.assetName || row[5],
+      params.taskType || row[6],
+      params.startDate || row[7],
+      params.dueDate || row[8],
+      params.completedDate || row[9],
+      params.status || row[10],
+      params.priority || row[11],
+      params.downtimeHours || row[12],
+      row[13],
+      row[14],
+      params.notes || row[15]
+    ];
+
+    sheet.getRange(rowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+    return { success: true };
+  } catch (error) {
+    throw new Error('فشل في تحديث السجل: ' + error.message);
+  } finally {
+    lock.releaseLock();
   }
+}
 
-  async function handleGenerateCert(btn){
-    const id = btn.dataset.id;
-    if (!id){
-      toast('لا يمكن تحديد السجل لإصدار الشهادة', 'error');
-      return;
-    }
-    try{
-      btn.disabled = true;
-      const old = btn.innerHTML;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-      await API.generateCertificate({id});
-      toast('تم إنشاء الشهادة بنجاح', 'success');
-      await loadAll();
-      btn.innerHTML = old;
-    }catch(e){
-      console.error('cert error', e);
-      toast('فشل إنشاء الشهادة: ' + e.message, 'error');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i>';
-    }
-  }
+function deleteRecord(params) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = getSheet('Records');
+    if (!sheet) throw new Error('جدول Records غير موجود');
 
-  /*************** تحميل البيانات ****************/
-  async function loadAll(){
-    try{
-      const [recordsRes, assetsRes, staffRes, kpisRes] = await Promise.allSettled([
-        API.getRecords(),
-        API.getAssets(),
-        API.getStaff(),
-        API.getKPIs()
-      ]);
+    const rowIndex = findRowIndexById_(sheet, params.id);
+    if (rowIndex === -1) throw new Error('Record not found');
 
-      App.records   = recordsRes.status === 'fulfilled' ? (recordsRes.value || []) : [];
-      App.assetsMap = assetsRes.status === 'fulfilled' ? (assetsRes.value || {}) : {};
-      App.staff     = staffRes.status === 'fulfilled' ? (staffRes.value || []) : [];
-      const kpis    = kpisRes.status === 'fulfilled' ? (kpisRes.value || null) : null;
+    const row = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+    sheet.deleteRow(rowIndex);
 
-      const depts = Object.keys(App.assetsMap).sort();
-      $('#filterDept').innerHTML   = '<option value="">جميع الأقسام</option>' + depts.map(d=>`<option>${d}</option>`).join('');
-      $('#fDepartment').innerHTML  = '<option value="">— اختر —</option>' + depts.map(d=>`<option>${d}</option>`).join('');
-      $('#fStaff').innerHTML       = '<option value="">— اختر —</option>' + (App.staff || []).map(s=>`<option>${s}</option>`).join('');
-
-      updateKPIs(kpis);
-      drawCharts();
-      renderLog();
-
-      const failed = [recordsRes,assetsRes,staffRes,kpisRes].filter(r=>r.status==='rejected').length;
-      if (failed) toast('تم التحميل جزئيًا. بعض البيانات غير متوفرة.', 'warning');
-      else        toast('تم التحديث', 'success');
-    }catch(e){
-      console.error('loadAll error', e);
-      toast('تعذر تحميل البيانات: ' + e.message, 'error');
-    }
-  }
-
-  /*************** Compliance Calculation ****************/
-  function calcComplianceFromState() {
-    const allIds = new Set();
-    Object.values(App.assetsMap || {}).forEach(list => {
-      if (!Array.isArray(list)) return;
-      list.forEach(a => {
-        const id = String(a.id || '').trim();
-        if (id) allIds.add(id);
+    try {
+      const fileUrls = row[13] ? String(row[13]).split(',') : [];
+      fileUrls.forEach(url => {
+        try {
+          const fileId = extractFileIdFromUrl(url.trim());
+          if (fileId) DriveApp.getFileById(fileId).setTrashed(true);
+        } catch (e) {}
       });
-    });
-    const totalDevices = allIds.size;
-
-    const latestByAsset = {};
-    (App.records || []).forEach(r => {
-      const assetId = String(r.AssetID || '').trim();
-      if (!assetId) return;
-
-      const d = new Date(r.CompletedDate || r.Timestamp || r.StartDate || r.DueDate || 0);
-      if (isNaN(d)) return;
-
-      if (!latestByAsset[assetId] || d > latestByAsset[assetId].d) {
-        latestByAsset[assetId] = { d, r };
+      const certificateUrl = row[14];
+      if (certificateUrl) {
+        try {
+          const certId = extractFileIdFromUrl(certificateUrl);
+          if (certId) DriveApp.getFileById(certId).setTrashed(true);
+        } catch (e) {}
       }
-    });
+    } catch (e) {}
 
-    let servicedDevices = 0;
-    Object.values(latestByAsset).forEach(({ r }) => {
-      if (String(r.Status || '').trim() === 'Completed') servicedDevices++;
-    });
-
-    const compliance = totalDevices ? Math.round((servicedDevices / totalDevices) * 100) : 0;
-
-    return { totalDevices, servicedDevices, compliance };
+    return { success: true };
+  } catch (error) {
+    throw new Error('فشل في حذف السجل: ' + error.message);
+  } finally {
+    lock.releaseLock();
   }
+}
 
-  /*************** KPIs ****************/
-  function updateKPIs(kpisData){
-    const data = kpisData || {};
-    animateValue($('#kpiNotServiced'), data.notServiced ?? 0);
-    animateValue($('#kpiOverdue'),      data.overdue      ?? 0);
-    animateValue($('#kpiDueThisMonth'), data.dueThisMonth ?? 0);
-    animateValue($('#kpiOutOfService'), data.outOfService ?? 0);
-    animateValue($('#kpiCompleted'),    data.completed    ?? 0);
-    animateValue($('#kpiCritical'),     data.critical     ?? 0);
-    animateValue($('#kpiUncompleted'),  data.uncompleted  ?? 0);
-    animateValue($('#kpiDowntime'),     data.downtime     ?? 0);
+function uploadFile(params) {
+  try {
+    const folderId = resolveDepartmentFolder(params.department);
+    const folder = DriveApp.getFolderById(folderId);
 
-    // Compliance (محسوب من الـ Front-end)
-    const c = calcComplianceFromState();
-    const el = $('#kpiCompliance');
-    const hint = $('#kpiComplianceHint');
+    const decoded = _decodeBase64(params.fileData);
+    const mime = params.mimeType || decoded.mimeType || 'application/octet-stream';
+    const name = params.fileName || ('upload_' + Date.now());
+    const file = folder.createFile(Utilities.newBlob(decoded.bytes, mime, name));
 
-    if (el) {
-      animateValue(el, c.compliance, '%');
-      el.style.color =
-        c.compliance >= 90 ? '#22c55e' :
-        c.compliance >= 75 ? '#f59e0b' :
-        '#ef4444';
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (_) {}
+
+    const sheet = getSheet('Records');
+    const rowIndex = findRowIndexById_(sheet, params.recordId);
+    if (rowIndex === -1) throw new Error('Record not found by ID: ' + params.recordId);
+
+    const current = sheet.getRange(rowIndex, 14).getValue();
+    sheet.getRange(rowIndex, 14).setValue(current ? (current + ',' + file.getUrl()) : file.getUrl());
+
+    return { url: file.getUrl(), id: file.getId(), name: file.getName(), attached: true };
+  } catch (error) {
+    throw new Error('Failed to upload file: ' + error.message);
+  }
+}
+
+/** =====================[ QR & CERTIFICATES ]===================== **/
+function createQrDataUrl_(text) {
+  const url = 'https://quickchart.io/qr?text=' + encodeURIComponent(text) + '&size=220';
+  const resp = UrlFetchApp.fetch(url);
+  const blob = resp.getBlob();
+  const bytes = blob.getBytes();
+  const base64 = Utilities.base64Encode(bytes);
+  return 'data:image/png;base64,' + base64;
+}
+
+function generateCertificate(params) {
+  try {
+    const sheet = getSheet('Records');
+    if (!sheet) throw new Error('جدول Records غير موجود');
+
+    const rowIndex = findRowIndexById_(sheet, params.id);
+    if (rowIndex === -1) throw new Error('Record not found');
+
+    const row = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    const record = {
+      ID: row[0],
+      Timestamp: row[1],
+      Department: row[2],
+      Staff: row[3],
+      AssetID: row[4],
+      AssetName: row[5],
+      TaskType: row[6],
+      StartDate: row[7],
+      DueDate: row[8],
+      CompletedDate: row[9],
+      Status: row[10],
+      Priority: row[11],
+      DowntimeHours: row[12],
+      File: row[13],
+      Certificate: row[14],
+      Notes: row[15]
+    };
+
+    let qrPayload;
+    if (record.File && record.File.trim() !== '') {
+      const fileUrls = record.File.split(',').map(url => url.trim()).filter(url => url !== '');
+      if (fileUrls.length > 0) {
+        qrPayload = fileUrls[0];
+      } else {
+        qrPayload = record.Certificate;
+      }
+    } else {
+      qrPayload = record.Certificate;
     }
 
-    if (hint) {
-      hint.textContent = `مصان ${c.servicedDevices} / إجمالي ${c.totalDevices}`;
-    }
+    const pdf = createCertificatePDF(
+      record,
+      params.fmsManager || CONFIG.fmsManager,
+      params.fmsDeputy || CONFIG.fmsDeputy,
+      qrPayload
+    );
 
-    updateAlertsList();
+    pdf.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    sheet.getRange(rowIndex, 15).setValue(pdf.getUrl());
+
+    return { url: pdf.getUrl(), id: pdf.getId() };
+  } catch (error) {
+    throw new Error('Failed to generate certificate: ' + error.message);
   }
+}
 
-  // تنبيهات قريبة مبنية على "آخر سجل لكل جهاز" و DueDate
-  function updateAlertsList() {
-    const recs = App.records || [];
+function createCertificatePDF(record, manager, deputy, qrPayload) {
+  const folderId = resolveDepartmentFolder(record.Department);
+  const folder = DriveApp.getFolderById(folderId);
 
-    // 1) بناء آخر سجل لكل جهاز حسب Timestamp / StartDate / DueDate
-    const latestByAsset = {};
-    recs.forEach(r => {
-      const assetId = String(r.AssetID || '').trim();
-      if (!assetId) return;
+  const now = new Date();
+  const year = now.getFullYear();
+  const shortId = String(record.ID || '').substring(0, 8);
+  const certNumber = 'MC-FMS-' + year + '-' + shortId;
 
-      let ts = r.Timestamp || r.StartDate || r.DueDate;
-      if (!ts) return;
-
-      const d = ts instanceof Date ? new Date(ts) : new Date(ts);
-      if (isNaN(d)) return;
-
-      const ms = d.getTime();
-      if (!latestByAsset[assetId] || ms > latestByAsset[assetId]._ts) {
-        latestByAsset[assetId] = Object.assign({}, r, { _ts: ms });
-      }
-    });
-
-    const now = new Date();
-    now.setHours(0,0,0,0);
-    const soonLimit = addDays(now, 10);
-
-    const alerts = [];
-
-    // 2) تحديد الأجهزة المتأخرة أو القريبة
-    Object.keys(latestByAsset).forEach(assetId => {
-      const r = latestByAsset[assetId];
-      const status = String(r.Status || '').trim();
-
-      // خارج الخدمة ما نبغى تنبيهات لها
-      if (status === 'OutOfService') return;
-
-      if (!r.DueDate) return;
-      let due = r.DueDate instanceof Date ? new Date(r.DueDate) : new Date(r.DueDate);
-      if (isNaN(due)) return;
-      due.setHours(0,0,0,0);
-
-      // متجاوزة الموعد
-      if (due < now) {
-        alerts.push({ rec: r, type: 'Overdue', due });
-      }
-      // خلال 10 أيام
-      else if (due <= soonLimit) {
-        alerts.push({ rec: r, type: 'DueSoon', due });
-      }
-    });
-
-    // ترتيب حسب أقرب موعد
-    alerts.sort((a,b) => a.due - b.due);
-
-    const container = $('#alertsList');
-    if (!alerts.length) {
-      container.innerHTML =
-        '<div class="text-center smallmuted py-3"><i class="fa-solid fa-check-circle me-1"></i>لا توجد تنبيهات حالية</div>';
-      return;
-    }
-
-    container.innerHTML = alerts.slice(0, 8).map(a => {
-      const r      = a.rec;
-      const isSoon = a.type === 'DueSoon';
-      const icon   = isSoon ? '🟠' : '🔴';
-      const cls    = isSoon ? 'due-soon' : 'critical';
-      const label  = isSoon ? 'خلال 10 أيام' : 'متجاوزة الموعد';
-
-      return `
-        <div class="alert-item ${cls}">
-          <div class="d-flex align-items-center">
-            <span class="me-2">${icon}</span>
-            <div class="flex-grow-1">
-              <b>${r.AssetName || r.AssetID || '-'}</b> — ${r.Department || ''}
-            </div>
-          </div>
-          <div class="small smallmuted mt-1">
-            <i class="fa-solid fa-calendar me-1"></i>${label}: ${fmt(r.DueDate)}
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  /*************** الرسوم البيانية ****************/
-  function drawCharts(){
-    try{
-      const ctxD = $('#donutStatus')?.getContext('2d');
-      const ctxB = $('#barDept')?.getContext('2d');
-      const ctxL = $('#lineMonthly')?.getContext('2d');
-      if (!ctxD || !ctxB || !ctxL) return;
-
-      const recs = App.records || [];
-
-      if (App.charts.donut) App.charts.donut.destroy();
-      if (App.charts.bar)   App.charts.bar.destroy();
-      if (App.charts.line)  App.charts.line.destroy();
-
-      const statusCount = recs.reduce((acc,r)=>{
-        const st = classify(r);
-        acc[st] = (acc[st] || 0) + 1;
-        return acc;
-      },{});
-
-      const deptStats = {};
-      recs.forEach(r=>{
-        const dept = r.Department || 'غير محدد';
-        if (!deptStats[dept]) deptStats[dept] = {completed:0, overdue:0, pending:0};
-        const st = classify(r);
-        if (st === 'Completed') deptStats[dept].completed++;
-        else if (['Overdue','Critical','OutOfService'].includes(st)) deptStats[dept].overdue++;
-        else deptStats[dept].pending++;
-      });
-
-      const monthly = Array(12).fill(0);
-      recs.forEach(r=>{
-        if (r.Status === 'Completed' && r.CompletedDate){
-          const m = new Date(r.CompletedDate).getMonth();
-          if (!isNaN(m)) monthly[m]++;
-        }
-      });
-
-      const monthLabels = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-
-      App.charts.donut = new Chart(ctxD,{
-        type:'doughnut',
-        data:{
-          labels:['مكتملة','قيد الانتظار','متأخرة/حرجة','خارج الخدمة'],
-          datasets:[{
-            data:[
-              statusCount.Completed || 0,
-              statusCount.Pending  || 0,
-              (statusCount.Overdue || 0) + (statusCount.Critical || 0),
-              statusCount.OutOfService || 0
-            ],
-            backgroundColor:['#10b981','#f59e0b','#ef4444','#9ca3af'],
-            borderColor:['#047857','#92400e','#b91c1c','#6b7280'],
-            borderWidth:2
-          }]
-        },
-        options:{
-          plugins:{
-            legend:{
-              position:'bottom',
-              labels:{color:'#fff',font:{family:'Tajawal',size:12}}
-            }
-          },
-          maintainAspectRatio:false
-        }
-      });
-
-      const deptNames = Object.keys(deptStats);
-      App.charts.bar = new Chart(ctxB,{
-        type:'bar',
-        data:{
-          labels:deptNames,
-          datasets:[
-            {
-              label:'مكتملة',
-              data:deptNames.map(d=>deptStats[d].completed),
-              backgroundColor:'rgba(34,197,94,.85)'
-            },
-            {
-              label:'متأخرة/حرجة',
-              data:deptNames.map(d=>deptStats[d].overdue),
-              backgroundColor:'rgba(239,68,68,.9)'
-            },
-            {
-              label:'قيد الانتظار',
-              data:deptNames.map(d=>deptStats[d].pending),
-              backgroundColor:'rgba(245,158,11,.9)'
-            }
-          ]
-        },
-        options:{
-          plugins:{
-            legend:{labels:{color:'#fff',font:{family:'Tajawal',size:12}}}
-          },
-          scales:{
-            x:{ticks:{color:'#fff',font:{family:'Tajawal',size:11}}},
-            y:{ticks:{color:'#fff',font:{family:'Tajawal',size:11}}}
-          },
-          maintainAspectRatio:false
-        }
-      });
-
-      App.charts.line = new Chart(ctxL,{
-        type:'line',
-        data:{
-          labels:monthLabels,
-          datasets:[{
-            label:'مهام مكتملة شهريًا',
-            data:monthly,
-            borderWidth:3,
-            tension:.3,
-            fill:true,
-            backgroundColor:'rgba(212,175,55,.18)',
-            borderColor:'#d4af37'
-          }]
-        },
-        options:{
-          plugins:{
-            legend:{labels:{color:'#fff',font:{family:'Tajawal',size:12}}}
-          },
-          scales:{
-            x:{ticks:{color:'#fff',font:{family:'Tajawal',size:11}}},
-            y:{ticks:{color:'#fff',font:{family:'Tajawal',size:11}}}
-          },
-          maintainAspectRatio:false
-        }
-      });
-    }catch(e){
-      console.error('drawCharts error', e);
+  if (!qrPayload) {
+    const webAppUrl = ScriptApp.getService().getUrl();
+    if (webAppUrl) {
+      qrPayload = webAppUrl + '?action=viewCert&id=' + encodeURIComponent(record.ID || '');
+    } else {
+      qrPayload =
+        'شهادة صيانة رقم: ' + certNumber + '\n' +
+        'القسم: ' + (record.Department || '-') + '\n' +
+        'الجهاز: ' + (record.AssetName || record.AssetID || '-') + '\n' +
+        'الحالة: ' + (record.Status || '-') + '\n' +
+        'تاريخ التنفيذ: ' + formatDate(record.StartDate) + '\n' +
+        'تاريخ الإغلاق: ' + formatDate(record.CompletedDate);
     }
   }
 
-  /*************** عرض السجلات ****************/
-  function renderLog(){
-    const f = App.filters;
-    const filtered = (App.records || []).filter(r=>{
-      if (f.dept && r.Department !== f.dept) return false;
-      if (f.type && r.TaskType !== f.type)   return false;
+  const qrDataUrl = createQrDataUrl_(qrPayload);
 
-      const cls = classify(r);
-      if (f.status){
-        if (f.status === 'Overdue'      && cls !== 'Overdue')      return false;
-        if (f.status === 'Completed'    && cls !== 'Completed')    return false;
-        if (f.status === 'Pending'      && cls !== 'Pending')      return false;
-        if (f.status === 'Critical'     && cls !== 'Critical')     return false;
-        if (f.status === 'OutOfService' && cls !== 'OutOfService') return false;
-      }
+  const qrDescription = record.File && record.File.trim() !== '' ? 
+    'امسح الكود لفتح الملف المرفق' : 
+    'امسح الكود لعرض تفاصيل الشهادة';
 
-      if (f.alertsOnly && !['Overdue','Critical','OutOfService','DueSoon'].includes(cls)) return false;
+  const html = `<!DOCTYPE html>
+  <html dir="rtl">
+  <head>
+  <meta charset="utf-8">
+  <style>
+   body { font-family: Arial, sans-serif; margin:0; padding:40px; background:#fff; }
+   .page {
+     max-width:800px; margin:0 auto; color:#000; line-height:1.8;
+     font-size:14px; border:1px solid #ccc; padding:32px 40px;
+   }
+   h1,h2 { margin:0; text-align:center; }
+   h1 { font-size:22px; margin-bottom:4px; }
+   h2 { font-size:18px; margin-bottom:16px; }
+   .meta {
+     display:flex; justify-content:space-between;
+     margin-top:8px; margin-bottom:18px; font-size:13px;
+   }
+   .section-title {
+     font-size:15px; font-weight:bold; margin:16px 0 8px; text-decoration:underline;
+   }
+   .details {
+     width:100%; border-collapse:collapse; margin-bottom:24px; font-size:13px;
+   }
+   .details th,.details td {
+     padding:6px 8px; border:1px solid #ccc; text-align:right; vertical-align:top;
+   }
+   .details th { width:25%; background:#f2f2f2; font-weight:bold; }
+   .bottom-row {
+     display:flex; justify-content:space-between; align-items:flex-start;
+     margin-top:24px; border-top:1px solid #ccc; padding-top:16px;
+   }
+   .signatures { display:flex; gap:32px; font-size:12px; }
+   .sig-box { text-align:center; min-width:140px; }
+   .sig-box .title { margin-bottom:6px; }
+   .sig-box .name  { font-weight:bold; margin-top:20px; }
+   .qr-block { text-align:center; font-size:10px; color:#555; }
+   .qr-block img {
+     width:120px; height:120px; border:1px solid #ddd; border-radius:4px;
+   }
+   .footer-note { margin-top:24px; font-size:11px; text-align:center; color:#555; }
+  </style>
+  </head>
+  <body>
+  <div class="page">
+   <h1>مجمع مكة الطبي بالزاهر</h1>
+   <h2>شهادة إنجاز مهمة صيانة جهاز طبي</h2>
 
-      if (f.search){
-        const t = f.search;
-        const text = `${r.Department||''} ${r.Staff||''} ${r.AssetName||''} ${r.AssetID||''} ${r.TaskType||''}`.toLowerCase();
-        if (!text.includes(t)) return false;
-      }
-      return true;
-    }).sort((a,b)=> new Date(b.Timestamp||0) - new Date(a.Timestamp||0));
+   <div class="meta">
+     <span><strong>التاريخ:</strong> ${formatDate(record.CompletedDate)}</span>
+     <span><strong>رقم الشهادة:</strong> ${certNumber}</span>
+   </div>
 
-    const tb = $('#logBody');
-    if (!filtered.length){
-      tb.innerHTML = '<tr><td colspan="13" class="text-center py-4 smallmuted"><i class="fa-solid fa-inbox me-1"></i> لا توجد سجلات</td></tr>';
-      $('#viewCount').textContent  = '0';
-      $('#totalCount').textContent = String(App.records.length || 0);
-      return;
+   <div class="section-title">تفاصيل المهمة</div>
+   <table class="details">
+     <tr><th>القسم</th><td>${record.Department || '-'}</td></tr>
+     <tr><th>الجهاز</th><td>${record.AssetName || record.AssetID || '-'}</td></tr>
+     <tr><th>رقم الجهاز</th><td>${record.AssetID || '-'}</td></tr>
+     <tr><th>الفني المنفذ</th><td>${record.Staff || '-'}</td></tr>
+     <tr><th>نوع المهمة</th><td>${record.TaskType === 'PM' ? 'صيانة وقائية (PM)' : 'صيانة تصحيحية (CM)'}</td></tr>
+     <tr><th>الحالة</th><td>${record.Status || '-'}</td></tr>
+     <tr><th>تاريخ التنفيذ</th><td>${formatDate(record.StartDate)}</td></tr>
+     <tr><th>تاريخ الإغلاق</th><td>${formatDate(record.CompletedDate)}</td></tr>
+     <tr><th>ساعات التوقف</th><td>${record.DowntimeHours || '0'}</td></tr>
+     <tr><th>ملاحظات</th><td>${record.Notes || 'لا توجد ملاحظات'}</td></tr>
+   </table>
+
+   <div class="bottom-row">
+     <div class="signatures">
+       <div class="sig-box">
+         <div class="title">منفذ العمل</div>
+         <div class="name">${record.Staff || ''}</div>
+       </div>
+       <div class="sig-box">
+         <div class="title">رئيس لجنة إدارة المرافق (FMS)</div>
+         <div class="name">${manager}</div>
+       </div>
+       <div class="sig-box">
+         <div class="title">مدير إدارة الصيانة</div>
+         <div class="name">${deputy}</div>
+       </div>
+     </div>
+     <div class="qr-block">
+       <img src="${qrDataUrl}" alt="QR Code">
+       <div>${qrDescription}</div>
+     </div>
+   </div>
+
+   <p class="footer-note">
+     تم توليد هذه الشهادة تلقائياً من نظام إدارة الصيانة – مجمع مكة الطبي بالزاهر
+   </p>
+  </div>
+  </body>
+  </html>`;
+
+  const blob = Utilities.newBlob(html, 'text/html', 'certificate.html');
+  const pdf = blob.getAs('application/pdf');
+  const fileName =
+    'شهادة_صيانة_' + (record.AssetID || 'جهاز') + '_' +
+    formatDateForFileName(record.CompletedDate) + '.pdf';
+
+  return folder.createFile(pdf).setName(fileName);
+}
+
+function renderCertificatePage_(id) {
+  const sheet = getSheet('Records');
+  if (!sheet) {
+    return HtmlService.createHtmlOutput('<h3>لا يمكن الوصول لجدول Records</h3>');
+  }
+  const rowIndex = findRowIndexById_(sheet, id);
+  if (rowIndex === -1) {
+    return HtmlService.createHtmlOutput('<h3>الشهادة غير موجودة أو تم حذفها</h3>');
+  }
+
+  const row = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  const record = {
+    ID: row[0],
+    Timestamp: row[1],
+    Department: row[2],
+    Staff: row[3],
+    AssetID: row[4],
+    AssetName: row[5],
+    TaskType: row[6],
+    StartDate: row[7],
+    DueDate: row[8],
+    CompletedDate: row[9],
+    Status: row[10],
+    Priority: row[11],
+    DowntimeHours: row[12],
+    Notes: row[15]
+  };
+
+  const html = `<!DOCTYPE html>
+  <html dir="rtl">
+  <head>
+  <meta charset="utf-8">
+  <title>تفاصيل شهادة الصيانة</title>
+  <style>
+   body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:20px; }
+   .card {
+     max-width:700px; margin:0 auto; background:#fff; padding:20px 24px;
+     border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.1);
+   }
+   h1 { margin-top:0; font-size:22px; text-align:center; }
+   .meta { text-align:center; font-size:13px; color:#555; margin-bottom:16px; }
+   table { width:100%; border-collapse:collapse; font-size:13px; }
+   th, td { padding:6px 8px; border-bottom:1px solid #eee; text-align:right; }
+   th { width:30%; color:#555; }
+   .status { font-weight:bold; }
+  </style>
+  </head>
+  <body>
+  <div class="card">
+   <h1>تفاصيل شهادة / تقرير الصيانة</h1>
+   <div class="meta">
+     رقم الشهادة (ID): ${record.ID}<br>
+     التاريخ: ${formatDate(record.CompletedDate)}
+   </div>
+   <table>
+     <tr><th>القسم</th><td>${record.Department || '-'}</td></tr>
+     <tr><th>الجهاز</th><td>${record.AssetName || record.AssetID || '-'}</td></tr>
+     <tr><th>رقم الجهاز</th><td>${record.AssetID || '-'}</td></tr>
+     <tr><th>الفني المنفذ</th><td>${record.Staff || '-'}</td></tr>
+     <tr><th>نوع المهمة</th><td>${record.TaskType === 'PM' ? 'صيانة وقائية (PM)' : 'صيانة تصحيحية (CM)'}</td></tr>
+     <tr><th>الحالة</th><td class="status">${record.Status || '-'}</td></tr>
+     <tr><th>تاريخ التنفيذ</th><td>${formatDate(record.StartDate)}</td></tr>
+     <tr><th>تاريخ الإغلاق</th><td>${formatDate(record.CompletedDate)}</td></tr>
+     <tr><th>ساعات التوقف</th><td>${record.DowntimeHours || '0'}</td></tr>
+     <tr><th>ملاحظات</th><td>${record.Notes || 'لا توجد ملاحظات'}</td></tr>
+   </table>
+  </div>
+  </body>
+  </html>`;
+
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/** =====================[ EXPORT & SETUP ]===================== **/
+function exportData(format) {
+  return {
+    url: 'about:blank',
+    format: format,
+    message: 'Export functionality will be implemented soon'
+  };
+}
+
+function repairSheets() {
+  const ss = SpreadsheetApp.openById(CONFIG.sheetId);
+
+  const sheetDefinitions = [
+    {
+      name: 'Records',
+      headers: [
+        'ID', 'Timestamp', 'Department', 'Staff', 'AssetID', 'AssetName', 'TaskType',
+        'StartDate', 'DueDate', 'CompletedDate', 'Status', 'Priority', 'DowntimeHours',
+        'File', 'Certificate', 'Notes'
+      ]
+    },
+    {
+      name: 'Assets',
+      headers: [
+        'AssetID', 'Department', 'RoomCode', 'RoomName', 'Device', 'Count', 'Serial',
+        'AssetStatus', 'PM_Frequency', 'Last_PM', 'Next_PM', 'Vendor'
+      ]
+    },
+    {
+      name: 'Staff',
+      headers: ['Name']
+    }
+  ];
+
+  let createdSheets = [];
+
+  sheetDefinitions.forEach(def => {
+    let sheet = ss.getSheetByName(def.name);
+    if (!sheet) {
+      sheet = ss.insertSheet(def.name);
+      sheet.getRange(1, 1, 1, def.headers.length).setValues([def.headers]).setFontWeight('bold');
+      createdSheets.push(def.name);
     }
 
-    tb.innerHTML = filtered.map(r=>{
-      const cls = classify(r);
-      const badgeClass =
-        cls === 'Completed'    ? 'completed' :
-        cls === 'Overdue'      ? 'overdue'   :
-        cls === 'Critical'     ? 'critical'  :
-        cls === 'DueSoon'      ? 'due-soon'  :
-        cls === 'OutOfService' ? 'critical'  :
-        'pending';
-
-      const files = [];
-      if (r.File){
-        String(r.File).split(',').forEach(u=>{
-          u = u.trim();
-          if (u && u !== 'undefined'){
-            files.push(`<a href="${u}" target="_blank" class="btn btn-sm btn-outline-success me-1"><i class="fa-solid fa-paperclip ms-1"></i> ملف</a>`);
-          }
-        });
-      }
-
-      let certHtml = '—';
-      if (r.Certificate){
-        certHtml = `<a class="btn btn-sm btn-outline-gold" target="_blank" href="${r.Certificate}"><i class="fa-solid fa-file-pdf"></i></a>`;
-      }else if (r.Status === 'Completed'){
-        certHtml = `<button class="btn btn-sm btn-outline-gold btn-gen-cert" data-id="${r.ID || r.id || ''}"><i class="fa-solid fa-file-circle-plus"></i></button>`;
-      }
-
-      const recordId = r.ID || r.id || '';
-      const timestamp = r.Timestamp || r.timestamp || '';
-      const assetName = r.AssetName || r.AssetID || 'جهاز';
-
-      return `
-        <tr>
-          <td>${fmt(r.Timestamp)}</td>
-          <td><b>${r.Department || '-'}</b></td>
-          <td>${r.Staff || '-'}</td>
-          <td title="${r.AssetID || ''}">${r.AssetName || r.AssetID || '-'}</td>
-          <td><span class="badge bg-primary">${r.TaskType || '-'}</span></td>
-          <td>${fmt(r.StartDate)}</td>
-          <td>${fmt(r.DueDate)}</td>
-          <td>${fmt(r.CompletedDate)}</td>
-          <td><span class="badge-status ${badgeClass}">${r.Status || cls}</span></td>
-          <td>${r.Priority || '-'}</td>
-          <td>${files.join('') || '—'}</td>
-          <td>${certHtml}</td>
-          <td>
-            <button class="btn btn-sm btn-outline-danger del-rec"
-                    data-id="${recordId}"
-                    data-timestamp="${timestamp}"
-                    data-asset="${assetName}">
-              <i class="fa-solid fa-trash"></i>
-            </button>
-          </td>
-        </tr>`;
-    }).join('');
-
-    $('#viewCount').textContent  = String(filtered.length);
-    $('#totalCount').textContent = String(App.records.length || 0);
-  }
-
-  /*************** النموذج والملفات ****************/
-  function calcNextDue(){
-    const startDate = $('#fStart').value;
-    const freq = $('#fFreq').value;
-    if (!startDate || !freq){
-      $('#fDue').value = '';
-      return;
+    if (def.name === 'Records') {
+      sheet.getRange('B:B').setNumberFormat('@');
     }
-    const start = new Date(startDate);
-    const due = new Date(start);
-    switch(freq){
-      case 'W1': due.setDate(due.getDate()+7); break;
-      case 'M1': due.setMonth(due.getMonth()+1); break;
-      case 'M3': due.setMonth(due.getMonth()+3); break;
-      case 'M6': due.setMonth(due.getMonth()+6); break;
-      case 'M12': due.setMonth(due.getMonth()+12); break;
-      case 'Y2': due.setFullYear(due.getFullYear()+2); break;
-      default: $('#fDue').value = ''; return;
-    }
-    $('#fDue').value = due.toISOString().split('T')[0];
-  }
+  });
 
-  let selectedFiles = [];
+  return {
+    repaired: true,
+    message: 'تم إصلاح الجداول بنجاح',
+    createdSheets,
+    time: new Date().toISOString()
+  };
+}
 
-  function resetFilesUI(){
-    selectedFiles = [];
-    $('#fFiles').value = '';
-    $('#dzPreview').innerHTML = '';
-    $('#dzInfo').textContent = '';
-    $('#dzProgress').classList.add('d-none');
-    $('#dzProgress .progress-bar').style.width = '0%';
-  }
-
-  function handleFiles(files){
-    const list = Array.from(files || []);
-    for (const f of list){
-      if (selectedFiles.length >= CONFIG.MAX_FILES){
-        toast('الحد الأقصى 5 ملفات', 'error');
-        break;
-      }
-      if (f.size > CONFIG.MAX_MB * 1024 * 1024){
-        toast(`الملف ${f.name} يتجاوز ${CONFIG.MAX_MB}MB`, 'error');
-        continue;
-      }
-      selectedFiles.push(f);
-    }
-
-    const pv = $('#dzPreview');
-    pv.innerHTML = '';
-    selectedFiles.forEach((f,idx)=>{
-      const wrap = document.createElement('div');
-      wrap.className = 'thumb';
-      const del = document.createElement('button');
-      del.className = 'x';
-      del.textContent = '×';
-      del.addEventListener('click',e=>{
-        e.stopPropagation();
-        selectedFiles.splice(idx,1);
-        handleFiles([]);
-      });
-      wrap.appendChild(del);
-
-      if (f.type.startsWith('image/')){
-        const img = document.createElement('img');
-        const r = new FileReader();
-        r.onload = e => img.src = e.target.result;
-        r.readAsDataURL(f);
-        wrap.appendChild(img);
-      }else{
-        const chip = document.createElement('div');
-        chip.className = 'badge bg-dark';
-        chip.textContent = f.name;
-        wrap.appendChild(chip);
-      }
-      pv.appendChild(wrap);
-    });
-
-    $('#dzInfo').textContent = selectedFiles.length ? `ملفات مختارة: ${selectedFiles.length}` : '';
-  }
-
-  let isSaving = false;
-
-  async function submitNew(ev){
-    ev.preventDefault();
-    if (isSaving) return;
-    isSaving = true;
-
-    const submitBtn = $('#formNew button[type="submit"]');
-    const oldLabel = submitBtn.innerHTML;
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ms-1"></i> جاري الحفظ...';
-
-    try{
-      if (!selectedFiles.length){
-        toast('رفع مرفق إلزامي', 'error');
-        return;
-      }
-
-      const dep   = $('#fDepartment').value;
-      const staff = $('#fStaff').value;
-      const type  = $('#fTaskType').value;
-      const assetSel = $('#fAsset');
-      const assetID  = assetSel.value;
-      const assetName = assetSel.selectedOptions[0]?.textContent || assetID;
-      const start = $('#fStart').value;
-
-      if (!dep || !staff || !type || !assetID || !start){
-        toast('يرجى استكمال الحقول الإلزامية', 'error');
-        return;
-      }
-
-      const payload = {
-        department: dep,
-        staff: staff,
-        taskType: type,
-        assetID: assetID,
-        assetName: assetName,
-        startDate: start,
-        dueDate: $('#fDue').value,
-        completedDate: $('#fCompleted').value,
-        status: $('#fStatus').value,
-        priority: $('#fPriority').value,
-        downtimeHours: $('#fDown').value || '0',
-        notes: ''
-      };
-
-      const res = await API.addRecord(payload);
-      const recordId = res.ID || '';
-      const timestamp = res.Timestamp || '';
-
-      const prog = $('#dzProgress');
-      const bar  = prog.querySelector('.progress-bar');
-      prog.classList.remove('d-none');
-
-      const uploadErrors = [];
-      for (let i=0;i<selectedFiles.length;i++){
-        const f = selectedFiles[i];
-        try{
-          const base64 = await fileToBase64(f);
-          await API.uploadFile({
-            department: dep,
-            fileName: f.name,
-            mimeType: f.type || 'application/octet-stream',
-            fileData: base64,
-            recordId: recordId,
-            timestamp: timestamp
-          });
-          bar.style.width = ((i+1)/selectedFiles.length*100).toFixed(0) + '%';
-        }catch(e){
-          console.error('upload error', e);
-          uploadErrors.push(f.name);
-        }
-      }
-
-      prog.classList.add('d-none');
-      bar.style.width = '0%';
-
-      if (uploadErrors.length){
-        toast('تمت إضافة المهمة لكن فشل رفع بعض الملفات: ' + uploadErrors.join(', '), 'warning');
-      }else{
-        toast('تمت إضافة المهمة ورفع المرفقات بنجاح', 'success');
-      }
-
-      resetFilesUI();
-      $('#formNew').reset();
-      await loadAll();
-    }catch(e){
-      console.error('submitNew error', e);
-      toast('فشل حفظ المهمة: ' + e.message, 'error');
-    }finally{
-      isSaving = false;
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = oldLabel;
-    }
-  }
-
-  function fileToBase64(file){
-    return new Promise((resolve,reject)=>{
-      const r = new FileReader();
-      r.onload  = e => resolve(e.target.result.split(',')[1]);
-      r.onerror = () => reject(new Error('file read error'));
-      r.readAsDataURL(file);
-    });
-  }
-</script>
-</body>
-</html>
+function setup() {
+  return repairSheets();
+}
