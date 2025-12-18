@@ -491,7 +491,7 @@
                         <span class="sub" id="kpi-maintenance-pending"></span>
                     </div>
                 </a>
-                <a href="pages/needleـstickـanalysis.html" target="_blank" class="kpi-card">
+                <a href="pages/needlestick-analysis.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon needlestick"><i class="fas fa-syringe"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-needlestick">-</h3>
@@ -742,17 +742,27 @@
             return { ok: false, ...res };
         }
 
+        // جلب JSON بأمان
+        async function fetchJsonSafe(url) {
+            const r = await fetch(url, { method: 'GET', redirect: 'follow' });
+            const text = await r.text();
+            try { return JSON.parse(text); } catch { return { ok: false, error: 'Non-JSON', raw: text.slice(0, 200) }; }
+        }
+
         // دالة ذكية: GET ثم fallback POST
         async function getStatsSmart(url, action) {
             // 1) جرب GET
             try {
-                const r = await fetch(url + `?action=${encodeURIComponent(action)}`);
-                const j = await r.json();
-                if (j) return j;
-            } catch(e) { console.log('GET failed for', action, e); }
+                const j = await fetchJsonSafe(url + '?action=' + encodeURIComponent(action));
+                if (j && (j.ok || j.success || j.status === 'success' || j.total !== undefined || j.data)) return j;
+            } catch (e) { console.log('GET failed for', action); }
 
-            // 2) جرب POST بنفس apiCall
-            return await apiCall(url, action, {});
+            // 2) جرب POST
+            try {
+                return await apiCall(url, action, {});
+            } catch (e) {
+                return { ok: false, error: e.message };
+            }
         }
 
         // دالة JSONP للوخز الإبري - الـ API يستخدم callback ثابت
@@ -823,16 +833,21 @@
             console.log('Loading dashboard data...');
 
             try {
-                // جلب البيانات بالتوازي
-                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
+                // جلب البيانات بالتوازي مع getStatsSmart
+                const [complaintsRes, incidentsRes, risksRaw, roundsRes, needlestickRaw, calibrationRes, maintenanceRaw] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
-                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
+                    getStatsSmart(APIs.risks, 'metrics'),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    loadNeedlestickData(),
-                    fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
-                    fetch(APIs.maintenance + '?action=getKPIs').then(r => r.json()).catch(e => { console.error('Maintenance error:', e); return { success: false }; })
+                    getStatsSmart(APIs.needlestick, 'getStats'),
+                    fetch(APIs.calibration).then(r => r.json()).catch(() => ({ status: 'error' })),
+                    getStatsSmart(APIs.maintenance, 'getKPIs')
                 ]);
+
+                // تطبيع البيانات
+                const risksRes = normalize(risksRaw);
+                const needlestickRes = normalize(needlestickRaw);
+                const maintenanceRes = normalize(maintenanceRaw);
 
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);
@@ -919,20 +934,14 @@
                     console.warn('Rounds API failed:', roundsRes);
                 }
 
-                // الوخز الإبري (JSONP) مع normalize
+                // الوخز الإبري - يدعم صيغ مختلفة
                 console.log('Needlestick:', needlestickRes);
-                const n = normalize(needlestickRes);
-                if (n.ok || n.total !== undefined) {
-                    document.getElementById('kpi-needlestick').textContent = n.total || 0;
-                    if (n.thisMonth > 0) {
-                        document.getElementById('kpi-needlestick-month').textContent = `${n.thisMonth} هذا الشهر`;
-                    } else {
-                        document.getElementById('kpi-needlestick-month').textContent = '';
-                    }
-                } else {
-                    document.getElementById('kpi-needlestick').textContent = '--';
-                    document.getElementById('kpi-needlestick-month').textContent = '';
-                }
+                const nData = needlestickRes.data || needlestickRes;
+                const totalNeedle = nData.total ?? nData.count ?? nData.thisMonthTotal ?? 0;
+                const monthNeedle = nData.thisMonth ?? nData.month ?? nData.monthCount ?? 0;
+
+                document.getElementById('kpi-needlestick').textContent = totalNeedle || '--';
+                document.getElementById('kpi-needlestick-month').textContent = monthNeedle ? `${monthNeedle} هذا الشهر` : '';
 
                 // المعايرة/الصيانة - حساب الإحصائيات من البيانات
                 const calStats = calculateCalibrationStats(calibrationRes);
@@ -967,19 +976,26 @@
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
                 }
 
-                // الصيانة - عرض إحصائيات الصيانة (getKPIs) مع normalize
+                // الصيانة - عرض إحصائيات الصيانة (getKPIs)
                 console.log('Processing Maintenance:', maintenanceRes);
-                const m = normalize(maintenanceRes);
-                if (m.ok || m.totalDevices !== undefined) {
-                    const totalDevices = m.totalDevices || 0;
-                    const completed = m.completed || 0;
-                    const notServiced = m.notServiced || 0;
-                    const overdue = m.overdue || 0;
-                    const completionRate = m.completionRate || 0;
-                    
-                    // عرض عدد الأجهزة الكلية
+                const mData = maintenanceRes.data || maintenanceRes;
+
+                // التحقق من وجود بيانات الإحصائيات
+                const hasStats = (mData.totalDevices !== undefined) || (mData.total !== undefined) || 
+                                 (mData.completed !== undefined) || (mData.pending !== undefined) || (mData.overdue !== undefined);
+
+                if (!hasStats) {
+                    document.getElementById('kpi-maintenance-total').textContent = '--';
+                    document.getElementById('kpi-maintenance-pending').textContent = 'API لا يرجع إحصائيات';
+                } else {
+                    const totalDevices = Number(mData.totalDevices || mData.total || 0);
+                    const completed = Number(mData.completed || mData.done || 0);
+                    const notServiced = Number(mData.notServiced || mData.pending || Math.max(totalDevices - completed, 0));
+                    const overdue = Number(mData.overdue || 0);
+                    const completionRate = Number(mData.completionRate || 0);
+
                     document.getElementById('kpi-maintenance-total').textContent = totalDevices;
-                    
+
                     const pendingEl = document.getElementById('kpi-maintenance-pending');
                     if (notServiced > 0) {
                         pendingEl.textContent = `${notServiced} لم تتم صيانتها`;
@@ -989,9 +1005,6 @@
                         pendingEl.classList.remove('danger');
                         pendingEl.style.color = '#28a745';
                     }
-                } else {
-                    document.getElementById('kpi-maintenance-total').textContent = '--';
-                    document.getElementById('kpi-maintenance-pending').textContent = 'لا توجد بيانات';
                 }
 
                 // تحديث التنبيهات - إرسال كل البيانات

@@ -1,0 +1,81 @@
+حل عملي “Front-end فقط” يخليك تعرف الحقيقة ويصلح 80% من الحالات
+1) بدّل استدعاء الصيانة إلى “GET ثم fallback POST”
+
+أضف هذي الدوال (مرة واحدة فوق loadDashboardData()):
+
+async function fetchJsonSafe(url) {
+  const r = await fetch(url, { method: 'GET', redirect: 'follow' });
+  const text = await r.text();
+  try { return JSON.parse(text); }
+  catch { return { ok:false, error:'Non-JSON', raw:text.slice(0,200) }; }
+}
+
+async function getStatsSmart(url, action) {
+  // 1) جرّب GET?action=
+  try {
+    const j = await fetchJsonSafe(url + '?action=' + encodeURIComponent(action));
+    if (j && (j.ok || j.success || j.status === 'success' || j.total !== undefined || j.data)) return j;
+  } catch {}
+
+  // 2) جرّب POST بنفس apiCall (تفادي مشاكل preflight كثيرًا)
+  return await apiCall(url, action, {});
+}
+
+
+ثم في Promise.all بدّل maintenance فقط:
+
+const maintenanceResRaw = await getStatsSmart(APIs.maintenance, 'getStats');
+console.log('Maintenance RAW:', maintenanceResRaw);
+
+
+بهذه الحركة:
+
+لو GET كان يفشل → بيشتغل POST
+
+ولو الاثنين رجعوا “ok/time/version” → تعرف 100% أن الـ backend ما يعطي stats
+
+فكرة “استخدام طلبات بسيطة لتفادي preflight” مع Apps Script تُستخدم كثيرًا لأن preflight/OPTIONS غير مدعوم بشكل جيد في GAS Web Apps. 
+MDN Web Docs
++1
+
+2) اعرض رسالة صريحة بدل “لا توجد بيانات”
+
+بعد ما تستلم maintenanceResRaw:
+
+const m = maintenanceResRaw?.data || maintenanceResRaw;
+
+const hasStats = (m?.total !== undefined) || (m?.pending !== undefined) || (m?.completed !== undefined) || (m?.overdue !== undefined);
+
+if (!hasStats) {
+  document.getElementById('kpi-maintenance-total').textContent = '--';
+  document.getElementById('kpi-maintenance-pending').textContent = 'API لا يرجع إحصائيات';
+} else {
+  const total = Number(m.total || 0);
+  const completed = Number(m.completed || m.done || 0);
+  const pending = Number(m.pending || m.overdue || Math.max(total - completed, 0));
+
+  document.getElementById('kpi-maintenance-total').textContent = total;
+  document.getElementById('kpi-maintenance-pending').textContent =
+    pending > 0 ? `${pending} بانتظار الصيانة` : `${completed} مكتملة`;
+}
+
+لماذا “الوخز” يطلع “-” في الصورة؟
+
+نفس الفكرة: أنت تستدعيه بـ GET:
+
+fetch(APIs.needlestick + '?action=getStats').then(r => r.json())
+
+
+إذا الرابط يرجع 400/HTML/redirect فـ .json() تفشل، وتدخل عندك catch وتطلع success:false → فتظل “-”. وMDN يوضح أن fetch() قد لا يرمي خطأ في حالات HTTP error، وresponse.json() يفشل لو الرد ليس JSON. 
+MDN Web Docs
+
+✅ طبّق نفس getStatsSmart() على needlestick أيضاً.
+
+شيء سريع لازم تصلحه في “رابط صفحة الوخز”
+
+عندك:
+
+href="pages/needleـstickـanalysis.html"
+
+
+فيه حرف “ـ” داخل اسم الملف. هذا يخلي اسم الملف يختلف فعليًا عن needlestick-analysis.html حتى لو شكله قريب، فممكن الصفحة ما تفتح أو تفتح ملف غلط. (هذا غير مشكلة الـ KPI، لكنه مهم).

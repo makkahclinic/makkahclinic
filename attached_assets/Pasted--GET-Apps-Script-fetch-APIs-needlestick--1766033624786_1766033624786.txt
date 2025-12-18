@@ -1,0 +1,149 @@
+) السبب الحقيقي: GET على Apps Script غير ثابت + ردود مختلفة
+
+أنت الآن تعمل:
+
+fetch(APIs.needlestick + '?action=getStats').then(r => r.json())
+fetch(APIs.maintenance + '?action=getStats').then(r => r.json())
+fetch(APIs.risks + '?action=metrics').then(r => r.json())
+
+
+وهذا كثيرًا يفشل (CORS / Redirect / HTML / 400)، بينما عندك apiCall() بـ text/plain وهو أفضل لأنه يقلل مشاكل preflight. 
+Google Groups
++1
+
+✅ الحل: GET ثم fallback POST بنفس apiCall().
+
+2) أضف هذه الدوال فوق loadDashboardData() مباشرة
+function normalize(res) {
+  if (!res) return { ok: false };
+  if (res.ok === true) return res;
+  if (res.success === true) return { ok: true, ...(res.data || {}), ...res };
+  if (res.status === 'success') return { ok: true, ...(res.data || {}), ...res };
+  if (res.data && (res.data.ok || res.data.success || res.data.status === 'success')) return normalize(res.data);
+  return { ok: false, ...res };
+}
+
+async function fetchJsonSafe(url) {
+  const r = await fetch(url, { method: 'GET', redirect: 'follow' });
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { return { ok:false, error:'Non-JSON', raw:text.slice(0,200) }; }
+}
+
+// يحاول GET?action=.. ثم لو فشل يحاول POST بنفس apiCall
+async function getStatsSmart(url, action) {
+  // 1) GET
+  try {
+    const j = await fetchJsonSafe(url + '?action=' + encodeURIComponent(action));
+    // لو رجع JSON لكنه “غلط/فارغ/غير stats” برضه نكمل نحاول POST
+    if (j && (j.ok || j.success || j.status === 'success' || j.total !== undefined || j.data)) return j;
+  } catch (e) {}
+
+  // 2) POST
+  try {
+    return await apiCall(url, action, {});
+  } catch (e) {
+    return { ok:false, error: e.message };
+  }
+}
+
+3) عدّل Promise.all داخل loadDashboardData() (استبدال 3 fetch فقط)
+
+بدّل هذا الجزء:
+
+const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
+  apiCall(APIs.complaints, 'getComplaintStats', {}),
+  apiCall(APIs.incidents, 'getIncidentStats', {}),
+  fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(...),
+  apiCall(APIs.rounds, 'getMetrics', {}),
+  fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(...),
+  fetch(APIs.calibration).then(r => r.json()).catch(...),
+  fetch(APIs.maintenance + '?action=getStats').then(r => r.json()).catch(...)
+]);
+
+
+إلى:
+
+const [complaintsRes, incidentsRes, risksRaw, roundsRes, needlestickRaw, calibrationRes, maintenanceRaw] = await Promise.all([
+  apiCall(APIs.complaints, 'getComplaintStats', {}),
+  apiCall(APIs.incidents, 'getIncidentStats', {}),
+  getStatsSmart(APIs.risks, 'metrics'),
+  apiCall(APIs.rounds, 'getMetrics', {}),
+  getStatsSmart(APIs.needlestick, 'getStats'),
+  fetch(APIs.calibration).then(r => r.json()).catch(() => ({ status: 'error' })),
+  getStatsSmart(APIs.maintenance, 'getStats')
+]);
+
+const risksRes = normalize(risksRaw);
+const needlestickRes = normalize(needlestickRaw);
+const maintenanceRes = normalize(maintenanceRaw);
+
+
+كذا حتى لو GET فشل للوخز (اللي غالبًا حاصل)، راح يجرب POST تلقائيًا.
+
+4) إصلاح عرض الوخز (لأنه قد يرجع بصيغة مختلفة)
+
+استبدل بلوك الوخز عندك بـ:
+
+const n = needlestickRes.data || needlestickRes;
+const totalNeedle = n.total ?? n.count ?? n.thisMonthTotal ?? 0;
+const monthNeedle = n.thisMonth ?? n.month ?? n.monthCount ?? 0;
+
+document.getElementById('kpi-needlestick').textContent = totalNeedle || 0;
+document.getElementById('kpi-needlestick-month').textContent = monthNeedle ? `${monthNeedle} هذا الشهر` : '';
+
+
+لو ظل صفر بعد هذا التعديل، معناها الـ API نفسه لا يرجع أرقام أو يرفض الوصول.
+
+5) إصلاح الصيانة: لو الـ API ما عنده stats أصلًا اعرض “غير متوفر”
+
+استبدل بلوك الصيانة بـ:
+
+const m = maintenanceRes.data || maintenanceRes;
+
+// إذا الـ endpoint مجرد ping (ok/time/version) → لا stats
+const hasStats = (m.total !== undefined) || (m.completed !== undefined) || (m.pending !== undefined) || (m.overdue !== undefined);
+
+if (!hasStats) {
+  document.getElementById('kpi-maintenance-total').textContent = '--';
+  document.getElementById('kpi-maintenance-pending').textContent = 'API لا يرجع إحصائيات';
+} else {
+  const total = Number(m.total || 0);
+  const completed = Number(m.completed || m.done || 0);
+  const pending = Number(m.pending || m.overdue || Math.max(total - completed, 0));
+
+  document.getElementById('kpi-maintenance-total').textContent = total;
+
+  const pendingEl = document.getElementById('kpi-maintenance-pending');
+  if (pending > 0) {
+    pendingEl.textContent = `${pending} بانتظار الصيانة`;
+    pendingEl.classList.add('danger');
+  } else {
+    pendingEl.textContent = `${completed} مكتملة`;
+    pendingEl.classList.remove('danger');
+    pendingEl.style.color = '#28a745';
+  }
+}
+
+
+هذا يوضح لك الحقيقة بدل ما تحس “الكود خربان”: أحيانًا الـ API نفسه ما يوفر الرقم.
+
+6) خطأ مهم في رابط صفحة الوخز (ليس API)
+
+عندك:
+
+href="pages/needleـstickـanalysis.html"
+
+
+الشرطة “ـ” (tatweel) داخل الاسم ممكن تخلي الرابط يشير لملف غير موجود حتى لو شكله صحيح.
+
+✅ خلّه اسم بسيط:
+
+href="pages/needlestick-analysis.html"
+
+الخلاصة
+
+الوخز: غالبًا يشتغل بمجرد ما تعمل fallback POST + normalize (لأن GET كثيرًا يفشل مع Apps Script). 
+Google Groups
++1
+
+الصيانة: إذا الـ endpoint ما يرجع total/pending أصلًا، الداشبورد ما يقدر يطلع رقم صحيح—لكن بالباتش فوق راح يبين لك “API لا يرجع إحصائيات” بدل “-”.
