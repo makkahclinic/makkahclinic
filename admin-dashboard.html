@@ -488,7 +488,8 @@
                     <div class="kpi-info">
                         <h3 id="kpi-maintenance-total">-</h3>
                         <p>صيانة الأجهزة</p>
-                        <span class="sub" id="kpi-maintenance-pending"></span>
+                        <span class="sub" id="kpi-maintenance-completed" style="color:#28a745"></span>
+                        <span class="sub" id="kpi-maintenance-overdue"></span>
                     </div>
                 </a>
                 <a href="pages/needleـstickـanalysis.html" target="_blank" class="kpi-card">
@@ -753,6 +754,14 @@
             }
         }
 
+        async function fetchJsonp(url) {
+            const r = await fetch(url, { redirect: 'follow' });
+            const text = await r.text();
+            const m = text.match(/^[a-zA-Z_$][\w$]*\s*\((.*)\)\s*;?\s*$/s);
+            if (m && m[1]) return JSON.parse(m[1]);
+            return JSON.parse(text);
+        }
+
         async function loadDashboardData() {
             const refreshBtn = document.getElementById('refreshBtn');
             refreshBtn.classList.add('loading');
@@ -760,15 +769,14 @@
             console.log('Loading dashboard data...');
 
             try {
-                // جلب البيانات بالتوازي
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
                     fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
+                    fetchJsonp(APIs.needlestick + '?action=data').catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
-                    fetch(APIs.maintenance + '?action=getStats').then(r => r.json()).catch(e => { console.error('Maintenance error:', e); return { success: false }; })
+                    apiCall(APIs.maintenance, 'getKPIs', {})
                 ]);
 
                 console.log('Complaints:', complaintsRes);
@@ -856,15 +864,23 @@
                     console.warn('Rounds API failed:', roundsRes);
                 }
 
-                // الوخز الإبري
-                if (needlestickRes.success) {
-                    const n = needlestickRes.data || needlestickRes;
-                    document.getElementById('kpi-needlestick').textContent = n.total || 0;
-                    document.getElementById('kpi-needlestick-month').textContent = n.thisMonth ? `${n.thisMonth} هذا الشهر` : '';
+                // الوخز الإبري - البيانات ترجع كـ array في data
+                console.log('Needlestick:', needlestickRes);
+                if (needlestickRes.success && Array.isArray(needlestickRes.data)) {
+                    const records = needlestickRes.data;
+                    const total = records.length;
+                    const now = new Date();
+                    const thisMonth = records.filter(r => {
+                        const d = new Date(r.date || r.timestamp);
+                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    }).length;
+                    document.getElementById('kpi-needlestick').textContent = total;
+                    document.getElementById('kpi-needlestick-month').textContent = thisMonth > 0 ? `${thisMonth} هذا الشهر` : '';
                 } else if (needlestickRes.total !== undefined) {
                     document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
                     document.getElementById('kpi-needlestick-month').textContent = needlestickRes.thisMonth ? `${needlestickRes.thisMonth} هذا الشهر` : '';
                 } else {
+                    document.getElementById('kpi-needlestick').textContent = '-';
                     console.warn('Needlestick API failed:', needlestickRes);
                 }
 
@@ -903,26 +919,32 @@
 
                 // الصيانة - عرض إحصائيات الصيانة
                 console.log('Processing Maintenance:', maintenanceRes);
-                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.total !== undefined)) {
+                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.totalDevices !== undefined || maintenanceRes.total !== undefined)) {
                     const m = maintenanceRes.data || maintenanceRes;
-                    const total = m.total || 0;
-                    const completed = m.completed || m.done || 0;
-                    const pending = m.pending || m.overdue || (total - completed) || 0;
+                    const totalDevices = m.totalDevices || m.total || 0;
+                    const servicedDevices = m.servicedDevices || m.completed || m.done || 0;
+                    const overdueDevices = m.overdueDevices || m.overdue || 0;
                     
-                    document.getElementById('kpi-maintenance-total').textContent = total;
+                    document.getElementById('kpi-maintenance-total').textContent = totalDevices;
                     
-                    const pendingEl = document.getElementById('kpi-maintenance-pending');
-                    if (pending > 0) {
-                        pendingEl.textContent = `${pending} بانتظار الصيانة`;
-                        pendingEl.classList.add('danger');
+                    const completedEl = document.getElementById('kpi-maintenance-completed');
+                    const overdueEl = document.getElementById('kpi-maintenance-overdue');
+                    
+                    completedEl.textContent = `مصان ${servicedDevices}`;
+                    completedEl.style.color = '#28a745';
+                    
+                    if (overdueDevices > 0) {
+                        overdueEl.textContent = `متأخر ${overdueDevices}`;
+                        overdueEl.style.color = '#DC143C';
+                        overdueEl.classList.add('danger');
                     } else {
-                        pendingEl.textContent = `${completed} مكتملة`;
-                        pendingEl.classList.remove('danger');
-                        pendingEl.style.color = '#28a745';
+                        overdueEl.textContent = '';
+                        overdueEl.classList.remove('danger');
                     }
                 } else {
                     document.getElementById('kpi-maintenance-total').textContent = '--';
-                    document.getElementById('kpi-maintenance-pending').textContent = 'لا توجد بيانات';
+                    document.getElementById('kpi-maintenance-completed').textContent = '';
+                    document.getElementById('kpi-maintenance-overdue').textContent = 'لا توجد بيانات';
                 }
 
                 // تحديث التنبيهات - إرسال كل البيانات
