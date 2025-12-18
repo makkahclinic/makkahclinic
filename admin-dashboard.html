@@ -1344,7 +1344,7 @@
                 return;
             }
             
-            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً من:\n• Firebase Auth (الحساب)\n• Firestore (الصلاحيات)\n\n${email}\n\nهل أنت متأكد؟`)) return;
+            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً من:\n• Firebase Auth (الحساب)\n• Firestore staff_roles (الصلاحيات)\n• Firestore membershipRequests (الطلبات)\n\n${email}\n\nهل أنت متأكد؟`)) return;
             if (!confirm('تأكيد نهائي: هذا الإجراء لا يمكن التراجع عنه!')) return;
             
             try {
@@ -1358,8 +1358,17 @@
                 // 2. Delete from Firestore staff_roles
                 await deleteDoc(doc(db, "staff_roles", uid));
                 
+                // 3. Delete from membershipRequests (find by email)
+                const requestsSnap = await getDocs(collection(db, "membershipRequests"));
+                for (const docSnap of requestsSnap.docs) {
+                    if (docSnap.data().email === email) {
+                        await deleteDoc(doc(db, "membershipRequests", docSnap.id));
+                        console.log('Deleted from membershipRequests:', docSnap.id);
+                    }
+                }
+                
                 if (apiResult.authDeleted) {
-                    showToast('تم حذف المستخدم بالكامل من Firebase', '#dc3545');
+                    showToast('تم حذف المستخدم بالكامل من كل الأنظمة');
                 } else {
                     showToast('تم الحذف من Firestore (الحساب قد يكون محذوف مسبقاً من Auth)', '#f59e0b');
                 }
@@ -1459,25 +1468,40 @@
         
         // دوال الموافقة والرفض
         window.approveRequest = async function(requestId, uid, email) {
-            if (!confirm(`هل تريد قبول طلب ${email}؟`)) return;
+            // اختيار الدور
+            const roleChoice = prompt(`اختر الدور للمستخدم ${email}:\n\n1 = عضو (member)\n2 = رئيس لجنة (chair)\n3 = مشاهد (viewer)\n4 = موظف (staff)\n\nأدخل الرقم:`);
+            
+            if (!roleChoice) return;
+            
+            const roleMap = { '1': 'member', '2': 'chair', '3': 'viewer', '4': 'staff' };
+            const selectedRole = roleMap[roleChoice];
+            
+            if (!selectedRole) {
+                alert('اختيار غير صحيح. أدخل رقم من 1-4');
+                return;
+            }
+            
+            if (!confirm(`هل تريد قبول ${email} كـ "${selectedRole}"؟`)) return;
             
             try {
                 // تحديث حالة الطلب
                 await updateDoc(doc(db, "membershipRequests", requestId), {
                     status: 'approved',
                     reviewedAt: new Date(),
-                    reviewedBy: auth.currentUser.email
+                    reviewedBy: auth.currentUser.email,
+                    assignedRole: selectedRole
                 });
                 
-                // إضافة صلاحية للمستخدم
+                // إضافة صلاحية للمستخدم - باستخدام الـ UID الصحيح
                 await setDoc(doc(db, "staff_roles", uid), {
-                    role: 'staff',
+                    role: selectedRole,
                     email: email,
+                    status: 'active',
                     approvedAt: new Date().toISOString(),
                     approvedBy: auth.currentUser.email
                 });
                 
-                alert('تم قبول الطلب بنجاح! يمكن للمستخدم الآن الدخول.');
+                alert(`تم قبول الطلب بنجاح! الدور: ${selectedRole}\nيمكن للمستخدم الآن الدخول.`);
                 loadMembershipRequests();
             } catch (e) {
                 console.error('Error approving:', e);
@@ -1755,17 +1779,28 @@
                 showToast('ليس لديك صلاحية لهذا الإجراء', true);
                 return;
             }
-            if (!confirm(`⚠️ سيتم حذف المستخدم نهائياً من Firebase Auth و Firestore\n\n${email}`)) return;
+            if (!confirm(`⚠️ سيتم حذف المستخدم نهائياً من:\n• Firebase Auth\n• staff_roles\n• membershipRequests\n\n${email}`)) return;
             if (!confirm('تأكيد نهائي: لا يمكن التراجع!')) return;
             
             try {
-                // حذف من Firebase Auth عبر السيرفر
+                // 1. حذف من Firebase Auth عبر السيرفر
                 if (email) {
                     await fetch(`/api/admin/user/${encodeURIComponent(email)}`, { method: 'DELETE' });
                 }
-                // حذف من Firestore
+                // 2. حذف من Firestore staff_roles
                 await deleteDoc(doc(db, "staff_roles", uid));
-                showToast('تم حذف المستخدم بالكامل');
+                
+                // 3. حذف من membershipRequests
+                if (email) {
+                    const requestsSnap = await getDocs(collection(db, "membershipRequests"));
+                    for (const docSnap of requestsSnap.docs) {
+                        if (docSnap.data().email === email) {
+                            await deleteDoc(doc(db, "membershipRequests", docSnap.id));
+                        }
+                    }
+                }
+                
+                showToast('تم حذف المستخدم بالكامل من كل الأنظمة');
                 loadPermissions();
             } catch (e) {
                 console.error('Error deleting:', e);
