@@ -646,32 +646,45 @@
             try {
                 const response = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action, ...payload })
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action, payload }),
+                    redirect: 'follow'
                 });
-                return await response.json();
+                const text = await response.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Parse error:', text.substring(0, 200));
+                    return { ok: false, error: 'Invalid response' };
+                }
             } catch (e) {
                 console.error(`API Error (${action}):`, e);
-                return { success: false, error: e.message };
+                return { ok: false, error: e.message };
             }
         }
 
         async function loadDashboardData() {
             const refreshBtn = document.getElementById('refreshBtn');
             refreshBtn.classList.add('loading');
+            
+            console.log('Loading dashboard data...');
 
             try {
                 // جلب البيانات بالتوازي
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
-                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(() => ({ success: false })),
+                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(() => ({ success: false }))
+                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; })
                 ]);
 
-                // الشكاوى
-                if (complaintsRes.success && complaintsRes.stats) {
+                console.log('Complaints:', complaintsRes);
+                console.log('Incidents:', incidentsRes);
+                console.log('Risks:', risksRes);
+
+                // الشكاوى (تستخدم ok كمفتاح النجاح)
+                if (complaintsRes.ok && complaintsRes.stats) {
                     const s = complaintsRes.stats;
                     const openComplaints = (s.new || 0) + (s.in_progress || 0);
                     document.getElementById('kpi-complaints-open').textContent = openComplaints;
@@ -680,21 +693,25 @@
                     document.getElementById('stat-complaints-progress').textContent = s.in_progress || 0;
                     document.getElementById('stat-complaints-escalated').textContent = s.escalated || 0;
                     document.getElementById('stat-complaints-closed').textContent = s.closed || 0;
+                } else {
+                    console.warn('Complaints API failed:', complaintsRes);
                 }
 
-                // الحوادث
-                if (incidentsRes.success && incidentsRes.stats) {
+                // الحوادث (تستخدم ok كمفتاح النجاح)
+                if (incidentsRes.ok && incidentsRes.stats) {
                     const s = incidentsRes.stats;
-                    const openIncidents = (s.new || 0) + (s.in_progress || 0);
+                    const openIncidents = (s.new || 0) + (s.in_progress || 0) + (s.under_review || 0);
                     document.getElementById('kpi-incidents-open').textContent = openIncidents;
                     document.getElementById('kpi-incidents-escalated').textContent = s.escalated ? `${s.escalated} مصعّدة` : '';
                     document.getElementById('stat-incidents-new').textContent = s.new || 0;
-                    document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
+                    document.getElementById('stat-incidents-progress').textContent = (s.in_progress || 0) + (s.under_review || 0);
                     document.getElementById('stat-incidents-escalated').textContent = s.escalated || 0;
                     document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
+                } else {
+                    console.warn('Incidents API failed:', incidentsRes);
                 }
 
-                // سجل المخاطر
+                // سجل المخاطر (تستخدم success كمفتاح النجاح)
                 if (risksRes.success && risksRes.data) {
                     const r = risksRes.data;
                     document.getElementById('kpi-risks-active').textContent = r.active || 0;
@@ -703,13 +720,17 @@
                     document.getElementById('stat-risks-medium').textContent = r.medium || 0;
                     document.getElementById('stat-risks-low').textContent = r.low || 0;
                     document.getElementById('stat-risks-resolved').textContent = r.resolved || 0;
+                } else {
+                    console.warn('Risks API failed:', risksRes);
                 }
 
                 // الجولات
-                if (roundsRes.success && roundsRes.data) {
+                if (roundsRes.ok && roundsRes.data) {
                     const rd = roundsRes.data;
-                    document.getElementById('kpi-rounds-today').textContent = rd.todayCompleted || 0;
+                    document.getElementById('kpi-rounds-today').textContent = rd.todayCompleted || rd.completed || 0;
                     document.getElementById('kpi-rounds-delayed').textContent = rd.delayed ? `${rd.delayed} متأخرة` : '';
+                } else {
+                    console.warn('Rounds API failed:', roundsRes);
                 }
 
                 // الوخز الإبري
@@ -717,6 +738,8 @@
                     const n = needlestickRes.data;
                     document.getElementById('kpi-needlestick').textContent = n.total || 0;
                     document.getElementById('kpi-needlestick-month').textContent = n.thisMonth ? `${n.thisMonth} هذا الشهر` : '';
+                } else {
+                    console.warn('Needlestick API failed:', needlestickRes);
                 }
 
                 // المعايرة (placeholder)
@@ -738,7 +761,7 @@
             const alerts = [];
 
             // تنبيهات الشكاوى المصعّدة
-            if (complaints.success && complaints.stats?.escalated > 0) {
+            if (complaints.ok && complaints.stats?.escalated > 0) {
                 alerts.push({
                     type: 'danger',
                     icon: 'fa-comment-dots',
@@ -749,7 +772,7 @@
             }
 
             // تنبيهات الحوادث المصعّدة
-            if (incidents.success && incidents.stats?.escalated > 0) {
+            if (incidents.ok && incidents.stats?.escalated > 0) {
                 alerts.push({
                     type: 'danger',
                     icon: 'fa-exclamation-triangle',
@@ -771,7 +794,7 @@
             }
 
             // شكاوى جديدة
-            if (complaints.success && complaints.stats?.new > 0) {
+            if (complaints.ok && complaints.stats?.new > 0) {
                 alerts.push({
                     type: 'info',
                     icon: 'fa-inbox',
