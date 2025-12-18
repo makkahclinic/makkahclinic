@@ -488,11 +488,11 @@
                     <div class="kpi-info">
                         <h3 id="kpi-maintenance-total">-</h3>
                         <p>صيانة الأجهزة</p>
-                        <span class="sub" id="kpi-maintenance-completed"></span>
+                        <span class="sub" id="kpi-maintenance-completed" style="color:#28a745"></span>
                         <span class="sub" id="kpi-maintenance-overdue"></span>
                     </div>
                 </a>
-                <a href="pages/needlestick-analysis.html" target="_blank" class="kpi-card">
+                <a href="pages/needleـstickـanalysis.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon needlestick"><i class="fas fa-syringe"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-needlestick">-</h3>
@@ -733,109 +733,6 @@
             }
         }
 
-        // Normalizer للتعامل مع اختلاف مفاتيح JSON
-        function normalize(res) {
-            if (!res) return { ok: false };
-            if (res.ok === true) return res;
-            if (res.success === true) return { ok: true, ...(res.data || {}), ...res };
-            if (res.status === 'success') return { ok: true, ...(res.data || {}), ...res };
-            if (res.data && (res.data.ok || res.data.success || res.data.status === 'success')) return normalize(res.data);
-            return { ok: false, ...res };
-        }
-
-        // فك JSONP أو JSON
-        function parseJsonOrJsonp(text) {
-            // JSON عادي
-            try { return JSON.parse(text); } catch {}
-            // JSONP: callback({...})
-            const m = text.match(/^[a-zA-Z_$][\w$]*\((.*)\)\s*;?\s*$/s);
-            if (m && m[1]) {
-                try { return JSON.parse(m[1]); } catch {}
-            }
-            return null;
-        }
-
-        // جلب JSON/JSONP بأمان
-        async function fetchJsonFlexible(url) {
-            const r = await fetch(url, { method: 'GET', redirect: 'follow' });
-            const text = await r.text();
-            const parsed = parseJsonOrJsonp(text);
-            return parsed ?? { ok: false, error: 'Non-JSON', raw: text.slice(0, 200) };
-        }
-
-        // تجربة actions مختلفة لحد ما نلقى اللي يدعمه الـ API
-        async function tryActions(url, actions) {
-            for (const a of actions) {
-                try {
-                    const r = await fetch(url + '?action=' + encodeURIComponent(a));
-                    const t = await r.text();
-                    if (!t.includes('Action not found') && !t.includes('error')) {
-                        const json = parseJsonOrJsonp(t);
-                        if (json && (json.success !== false)) {
-                            return { action: a, raw: t, json };
-                        }
-                    }
-                } catch {}
-            }
-            return null;
-        }
-
-        // دالة ذكية: GET ثم fallback POST
-        async function getStatsSmart(url, action) {
-            // 1) جرب GET
-            try {
-                const j = await fetchJsonFlexible(url + '?action=' + encodeURIComponent(action));
-                if (j && (j.ok || j.success || j.status === 'success' || j.total !== undefined || j.data)) return j;
-            } catch (e) { console.log('GET failed for', action); }
-
-            // 2) جرب POST
-            try {
-                return await apiCall(url, action, {});
-            } catch (e) {
-                return { ok: false, error: e.message };
-            }
-        }
-
-        // دالة JSONP للوخز الإبري - الـ API يستخدم callback ثابت
-        function loadNeedlestickData() {
-            return new Promise((resolve) => {
-                const timeout = setTimeout(() => {
-                    delete window.callback;
-                    resolve({ success: false, total: 0 });
-                }, 10000);
-                
-                // الـ API يستخدم callback ثابت اسمه "callback"
-                window.callback = function(data) {
-                    clearTimeout(timeout);
-                    document.getElementById('needlestickScript')?.remove();
-                    
-                    if (data && data.status === 'success' && data.rows) {
-                        const total = data.rows.length;
-                        const now = new Date();
-                        const thisMonth = data.rows.filter(r => {
-                            const dateStr = r["تاريخ الحادث"] || r["التاريخ"] || "";
-                            if (!dateStr) return false;
-                            const d = new Date(dateStr);
-                            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                        }).length;
-                        resolve({ success: true, total, thisMonth });
-                    } else {
-                        resolve({ success: false, total: 0 });
-                    }
-                };
-                
-                const script = document.createElement('script');
-                script.id = 'needlestickScript';
-                script.src = `${APIs.needlestick}?action=data`;
-                script.onerror = () => {
-                    clearTimeout(timeout);
-                    delete window.callback;
-                    resolve({ success: false, total: 0 });
-                };
-                document.body.appendChild(script);
-            });
-        }
-
         async function apiCall(url, action, payload = {}) {
             try {
                 const response = await fetch(url, {
@@ -865,20 +762,15 @@
 
             try {
                 // جلب البيانات بالتوازي
-                const [complaintsRes, incidentsRes, risksRaw, roundsRes, needlestickRes, calibrationRes, maintTry] = await Promise.all([
+                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
-                    getStatsSmart(APIs.risks, 'metrics'),
+                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    loadNeedlestickData(),
-                    fetch(APIs.calibration).then(r => r.json()).catch(() => ({ status: 'error' })),
-                    tryActions(APIs.maintenance, ['getKPIs', 'getStats', 'stats', 'metrics', 'getMetrics', 'summary', 'dashboard'])
+                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
+                    fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
+                    fetch(APIs.maintenance + '?action=getStats').then(r => r.json()).catch(e => { console.error('Maintenance error:', e); return { success: false }; })
                 ]);
-
-                // تطبيع البيانات
-                const risksRes = normalize(risksRaw);
-                const maintenanceRes = maintTry ? normalize(maintTry.json) : { ok: false };
-                console.log('Maintenance action probe:', maintTry);
 
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);
@@ -965,14 +857,17 @@
                     console.warn('Rounds API failed:', roundsRes);
                 }
 
-                // الوخز الإبري - يدعم صيغ مختلفة
-                console.log('Needlestick:', needlestickRes);
-                const nData = needlestickRes.data || needlestickRes;
-                const totalNeedle = nData.total ?? nData.count ?? nData.thisMonthTotal ?? 0;
-                const monthNeedle = nData.thisMonth ?? nData.month ?? nData.monthCount ?? 0;
-
-                document.getElementById('kpi-needlestick').textContent = totalNeedle || '--';
-                document.getElementById('kpi-needlestick-month').textContent = monthNeedle ? `${monthNeedle} هذا الشهر` : '';
+                // الوخز الإبري
+                if (needlestickRes.success) {
+                    const n = needlestickRes.data || needlestickRes;
+                    document.getElementById('kpi-needlestick').textContent = n.total || 0;
+                    document.getElementById('kpi-needlestick-month').textContent = n.thisMonth ? `${n.thisMonth} هذا الشهر` : '';
+                } else if (needlestickRes.total !== undefined) {
+                    document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
+                    document.getElementById('kpi-needlestick-month').textContent = needlestickRes.thisMonth ? `${needlestickRes.thisMonth} هذا الشهر` : '';
+                } else {
+                    console.warn('Needlestick API failed:', needlestickRes);
+                }
 
                 // المعايرة/الصيانة - حساب الإحصائيات من البيانات
                 const calStats = calculateCalibrationStats(calibrationRes);
@@ -1007,50 +902,34 @@
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
                 }
 
-                // الصيانة - عرض إحصائيات الصيانة (3 أرقام)
+                // الصيانة - عرض إحصائيات الصيانة
                 console.log('Processing Maintenance:', maintenanceRes);
-                const m = maintenanceRes.data || maintenanceRes;
-
-                // التحقق من وجود بيانات الإحصائيات
-                const hasMaintenanceStats = (m.totalDevices !== undefined) || (m.servicedDevices !== undefined) || 
-                                            (m.overdueDevices !== undefined) || (m.overdue !== undefined);
-
-                if (!hasMaintenanceStats) {
-                    document.getElementById('kpi-maintenance-total').textContent = '--';
-                    document.getElementById('kpi-maintenance-completed').textContent = 'API لا يرجع إحصائيات';
-                    document.getElementById('kpi-maintenance-overdue').textContent = '';
-                } else {
-                    // عدد الأجهزة كاملة
-                    const totalDevices = Number(m.totalDevices ?? 0);
-                    // عدد الأجهزة المصانة
-                    const servicedDevices = Number(m.servicedDevices ?? m.completed ?? 0);
-                    // عدد الأجهزة المتأخرة
-                    const overdueDevices = Number(m.overdueDevices ?? m.overdue ?? 0);
-
-                    // عرض عدد الأجهزة الكلية
+                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.totalDevices !== undefined || maintenanceRes.total !== undefined)) {
+                    const m = maintenanceRes.data || maintenanceRes;
+                    const totalDevices = m.totalDevices || m.total || 0;
+                    const servicedDevices = m.servicedDevices || m.completed || m.done || 0;
+                    const overdueDevices = m.overdueDevices || m.overdue || 0;
+                    
                     document.getElementById('kpi-maintenance-total').textContent = totalDevices;
-
-                    // عرض الأجهزة المصانة والمتأخرة في سطر واحد
+                    
                     const completedEl = document.getElementById('kpi-maintenance-completed');
                     const overdueEl = document.getElementById('kpi-maintenance-overdue');
-
+                    
+                    completedEl.textContent = `مصان ${servicedDevices}`;
+                    completedEl.style.color = '#28a745';
+                    
                     if (overdueDevices > 0) {
-                        completedEl.textContent = `مصان ${servicedDevices}`;
-                        completedEl.style.color = '#28a745';
-                        completedEl.classList.remove('danger');
-                        
                         overdueEl.textContent = `متأخر ${overdueDevices}`;
-                        overdueEl.classList.add('danger');
                         overdueEl.style.color = '#DC143C';
+                        overdueEl.classList.add('danger');
                     } else {
-                        completedEl.textContent = `مصان ${servicedDevices}`;
-                        completedEl.style.color = '#28a745';
-                        completedEl.classList.remove('danger');
-                        
-                        overdueEl.textContent = 'لا يوجد تأخير';
+                        overdueEl.textContent = '';
                         overdueEl.classList.remove('danger');
-                        overdueEl.style.color = '#28a745';
                     }
+                } else {
+                    document.getElementById('kpi-maintenance-total').textContent = '--';
+                    document.getElementById('kpi-maintenance-completed').textContent = '';
+                    document.getElementById('kpi-maintenance-overdue').textContent = 'لا توجد بيانات';
                 }
 
                 // تحديث التنبيهات - إرسال كل البيانات
