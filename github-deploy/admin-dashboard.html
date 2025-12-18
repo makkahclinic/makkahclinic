@@ -615,8 +615,49 @@
             incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
             risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
             rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec",
-            needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec"
+            needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec",
+            calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec"
         };
+        
+        // دالة حساب إحصائيات المعايرة
+        function calculateCalibrationStats(data) {
+            if (!data || data.status !== 'success' || !data.data) {
+                return { compliance: 0, overdue: 0, pass: 0, total: 0 };
+            }
+            
+            const assetsMap = data.data.assetsMap || {};
+            const records = data.data.records || [];
+            
+            // حساب إجمالي المهام
+            let totalTasks = 0;
+            Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
+            
+            // حساب المطابق والمتأخر
+            let pass = 0, overdue = 0;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // تجميع أحدث سجل لكل جهاز
+            const latestRecords = {};
+            records.forEach(r => {
+                if (!latestRecords[r.assetID] || new Date(r.date) > new Date(latestRecords[r.assetID].date)) {
+                    latestRecords[r.assetID] = r;
+                }
+            });
+            
+            Object.values(latestRecords).forEach(r => {
+                if (r.result === 'Pass') pass++;
+                
+                if (r.nextDue) {
+                    const nextDue = new Date(r.nextDue);
+                    if (nextDue < today) overdue++;
+                }
+            });
+            
+            const compliance = totalTasks > 0 ? Math.round((pass / totalTasks) * 100) : 0;
+            
+            return { compliance, overdue, pass, total: totalTasks };
+        }
 
         // التاريخ الهجري
         const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
@@ -671,18 +712,20 @@
 
             try {
                 // جلب البيانات بالتوازي
-                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes] = await Promise.all([
+                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
                     fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
-                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; })
+                    fetch(APIs.needlestick + '?action=getStats').then(r => r.json()).catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
+                    fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; })
                 ]);
 
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);
                 console.log('Risks:', risksRes);
                 console.log('Rounds:', roundsRes);
+                console.log('Calibration:', calibrationRes);
 
                 // الشكاوى - البيانات ترجع مباشرة وليس في stats
                 if (complaintsRes.ok) {
@@ -758,9 +801,26 @@
                     console.warn('Needlestick API failed:', needlestickRes);
                 }
 
-                // المعايرة (placeholder)
-                document.getElementById('kpi-calibration-rate').textContent = '--';
-                document.getElementById('kpi-calibration-pending').textContent = 'قريباً';
+                // المعايرة - حساب الإحصائيات من البيانات
+                const calStats = calculateCalibrationStats(calibrationRes);
+                console.log('Calibration Stats:', calStats);
+                
+                if (calStats.total > 0) {
+                    // نسبة الامتثال كرقم رئيسي
+                    document.getElementById('kpi-calibration-rate').textContent = calStats.compliance + '%';
+                    
+                    // التفاصيل: المتأخرات أو عدد الأجهزة
+                    if (calStats.overdue > 0) {
+                        document.getElementById('kpi-calibration-pending').textContent = `${calStats.overdue} متأخر`;
+                        document.getElementById('kpi-calibration-pending').style.color = '#DC143C';
+                    } else {
+                        document.getElementById('kpi-calibration-pending').textContent = `${calStats.total} جهاز`;
+                        document.getElementById('kpi-calibration-pending').style.color = '';
+                    }
+                } else {
+                    document.getElementById('kpi-calibration-rate').textContent = '--';
+                    document.getElementById('kpi-calibration-pending').textContent = 'لا توجد بيانات';
+                }
 
                 // تحديث التنبيهات
                 updateAlerts(complaintsRes, incidentsRes, risksRes);
