@@ -465,14 +465,6 @@
             <div class="hint">إجمالي ساعات التوقف المسجلة</div>
           </div>
         </div>
-        <div class="col-6 col-lg-3">
-          <div class="card-glass kpi emerald h-100">
-            <div class="kpi-icon"><i class="fa-solid fa-shield-check"></i></div>
-            <div class="label"><i class="fa-solid fa-percent"></i> نسبة الامتثال (Compliance)</div>
-            <div id="kpiCompliance" class="value">—</div>
-            <div id="kpiComplianceHint" class="hint">مصان — / إجمالي —</div>
-          </div>
-        </div>
       </div>
 
       <div class="row g-3 mt-2">
@@ -1009,43 +1001,9 @@
     }
   }
 
-  /*************** Compliance Calculation ****************/
-  function calcComplianceFromState() {
-    const allIds = new Set();
-    Object.values(App.assetsMap || {}).forEach(list => {
-      if (!Array.isArray(list)) return;
-      list.forEach(a => {
-        const id = String(a.id || '').trim();
-        if (id) allIds.add(id);
-      });
-    });
-    const totalDevices = allIds.size;
-
-    const latestByAsset = {};
-    (App.records || []).forEach(r => {
-      const assetId = String(r.AssetID || '').trim();
-      if (!assetId) return;
-
-      const d = new Date(r.CompletedDate || r.Timestamp || r.StartDate || r.DueDate || 0);
-      if (isNaN(d)) return;
-
-      if (!latestByAsset[assetId] || d > latestByAsset[assetId].d) {
-        latestByAsset[assetId] = { d, r };
-      }
-    });
-
-    let servicedDevices = 0;
-    Object.values(latestByAsset).forEach(({ r }) => {
-      if (String(r.Status || '').trim() === 'Completed') servicedDevices++;
-    });
-
-    const compliance = totalDevices ? Math.round((servicedDevices / totalDevices) * 100) : 0;
-
-    return { totalDevices, servicedDevices, compliance };
-  }
-
   /*************** KPIs ****************/
   function updateKPIs(kpisData){
+    // نعتمد كليًا على الباك إند
     const data = kpisData || {};
     animateValue($('#kpiNotServiced'), data.notServiced ?? 0);
     animateValue($('#kpiOverdue'),      data.overdue      ?? 0);
@@ -1055,23 +1013,6 @@
     animateValue($('#kpiCritical'),     data.critical     ?? 0);
     animateValue($('#kpiUncompleted'),  data.uncompleted  ?? 0);
     animateValue($('#kpiDowntime'),     data.downtime     ?? 0);
-
-    // Compliance (محسوب من الـ Front-end)
-    const c = calcComplianceFromState();
-    const el = $('#kpiCompliance');
-    const hint = $('#kpiComplianceHint');
-
-    if (el) {
-      animateValue(el, c.compliance, '%');
-      el.style.color =
-        c.compliance >= 90 ? '#22c55e' :
-        c.compliance >= 75 ? '#f59e0b' :
-        '#ef4444';
-    }
-
-    if (hint) {
-      hint.textContent = `مصان ${c.servicedDevices} / إجمالي ${c.totalDevices}`;
-    }
 
     updateAlertsList();
   }

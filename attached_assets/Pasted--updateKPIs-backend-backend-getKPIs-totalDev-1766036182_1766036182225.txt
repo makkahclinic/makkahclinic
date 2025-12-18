@@ -1,0 +1,114 @@
+نت عندك في الواجهة updateKPIs() يقرأ من الـ backend. والـ backend الحالي (getKPIs) ما يرجّع totalDevices/servicedDevices بشكل ثابت. لذلك أفضل حل آمن:
+
+نحسب الـ Compliance في الـ Front-end من البيانات الموجودة (assetsMap + records) بدون تعديل API.
+
+ونضيف كرت KPI جديد في الداشبورد فقط.
+
+هذا أقل تغيير وأقل مخاطرة.
+
+✅ 1) أضف KPI جديد في HTML (داخل row الأول من KPIs)
+
+ضع هذا البلوك داخل:
+
+<div class="row g-3">
+
+
+مثلاً بعد كرت “المكتملة” أو أي مكان:
+
+<div class="col-6 col-lg-3">
+  <div class="card-glass kpi emerald h-100">
+    <div class="kpi-icon"><i class="fa-solid fa-shield-check"></i></div>
+    <div class="label"><i class="fa-solid fa-percent"></i> نسبة الامتثال (Compliance)</div>
+    <div id="kpiCompliance" class="value">—</div>
+    <div id="kpiComplianceHint" class="hint">مصان — / إجمالي —</div>
+  </div>
+</div>
+
+✅ 2) أضف دالة حساب الـ Compliance (ضعها تحت classify مباشرة)
+
+ضع هذا الكود داخل <script> (أي مكان فوق loadAll()):
+
+// ===== Compliance = (عدد الأجهزة المصانة / إجمالي الأجهزة) =====
+function calcComplianceFromState() {
+  // إجمالي الأجهزة من assetsMap (Unique AssetID)
+  const allIds = new Set();
+  Object.values(App.assetsMap || {}).forEach(list => {
+    if (!Array.isArray(list)) return;
+    list.forEach(a => {
+      const id = String(a.id || '').trim();
+      if (id) allIds.add(id);
+    });
+  });
+  const totalDevices = allIds.size;
+
+  // آخر سجل لكل جهاز
+  const latestByAsset = {};
+  (App.records || []).forEach(r => {
+    const assetId = String(r.AssetID || '').trim();
+    if (!assetId) return;
+
+    const d = new Date(r.CompletedDate || r.Timestamp || r.StartDate || r.DueDate || 0);
+    if (isNaN(d)) return;
+
+    if (!latestByAsset[assetId] || d > latestByAsset[assetId].d) {
+      latestByAsset[assetId] = { d, r };
+    }
+  });
+
+  // أجهزة مصانة = آخر حالة Completed
+  let servicedDevices = 0;
+  Object.values(latestByAsset).forEach(({ r }) => {
+    if (String(r.Status || '').trim() === 'Completed') servicedDevices++;
+  });
+
+  const compliance = totalDevices ? Math.round((servicedDevices / totalDevices) * 100) : 0;
+
+  return { totalDevices, servicedDevices, compliance };
+}
+
+✅ 3) عدّل updateKPIs() ليعرض الـ Compliance (بدون ما يغير باقي أرقامك)
+
+استبدل دالة updateKPIs(kpisData) عندك بهذه النسخة (هي نفسها + إضافة Compliance فقط):
+
+function updateKPIs(kpisData){
+  const data = kpisData || {};
+
+  animateValue($('#kpiNotServiced'), data.notServiced ?? 0);
+  animateValue($('#kpiOverdue'),      data.overdue      ?? 0);
+  animateValue($('#kpiDueThisMonth'), data.dueThisMonth ?? 0);
+  animateValue($('#kpiOutOfService'), data.outOfService ?? 0);
+  animateValue($('#kpiCompleted'),    data.completed    ?? 0);
+  animateValue($('#kpiCritical'),     data.critical     ?? 0);
+  animateValue($('#kpiUncompleted'),  data.uncompleted  ?? 0);
+  animateValue($('#kpiDowntime'),     data.downtime     ?? 0);
+
+  // ✅ Compliance (محسوب من الـ Front-end)
+  const c = calcComplianceFromState();
+  const el = $('#kpiCompliance');
+  const hint = $('#kpiComplianceHint');
+
+  if (el) {
+    animateValue(el, c.compliance, '%');
+    // تلوين واضح
+    el.style.color =
+      c.compliance >= 90 ? '#22c55e' :
+      c.compliance >= 75 ? '#f59e0b' :
+      '#ef4444';
+  }
+
+  if (hint) {
+    hint.textContent = `مصان ${c.servicedDevices} / إجمالي ${c.totalDevices}`;
+  }
+
+  updateAlertsList();
+}
+
+✅ النتيجة
+
+يظهر لك كرت جديد “Compliance” كنسبة %
+
+يتحدث مع زر “تحديث” ومع التحديث التلقائي
+
+ما يعتمد على أي تغيير في Apps Script
+
+ما يلمس تصميمك ولا جداولك ولا Charts
