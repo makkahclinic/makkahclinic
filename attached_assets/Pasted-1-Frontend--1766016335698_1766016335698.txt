@@ -1,0 +1,232 @@
+1) حل فوري في الـ Frontend: امنع الإرسال المكرر (قفل + تعطيل زر الحفظ)
+
+أضف متغير قفل أعلى السكربت:
+
+let isSaving = false;
+
+
+ثم عدّل الـ submit listener بهذه الطريقة (مهم: تعطيل الزر + try/finally):
+
+document.getElementById('riskForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  if (isSaving) return;            // ✅ يمنع أي إرسال متكرر
+  isSaving = true;
+
+  const submitBtn = e.submitter || document.querySelector('#riskForm button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+
+  setSaveBadge('warn', '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...');
+
+  try {
+    const editId = document.getElementById('editId').value;
+    const score = probability * impact;
+
+    // ✅ requestId ثابت لنفس المحاولة (مفيد لو بتسوي حماية سيرفر)
+    const requestId = (crypto?.randomUUID ? crypto.randomUUID() : 'req-' + Date.now() + '-' + Math.random());
+
+    const payload = {
+      requestId,
+      risk: document.getElementById('riskDesc').value,
+      category: document.getElementById('category').value,
+      owner: document.getElementById('owner').value,
+      probability,
+      impact,
+      mitigation: document.getElementById('mitigation').value,
+      status: document.getElementById('status').value,
+      reviewDate: document.getElementById('reviewDate').value,
+      sourceEvidence: document.getElementById('source').value,
+      updatedBy: 'user'
+    };
+
+    if (editId) payload.id = editId;
+
+    const action = editId ? 'update' : 'add';
+
+    if (WEB_APP_URL) {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload })
+      });
+
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Save failed');
+
+      setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
+      await loadRisks();
+    } else {
+      // local fallback (نفس منطقك)
+      const localData = {
+        ...payload,
+        id: editId || 'R-' + Date.now(),
+        score,
+        level: getLevel(score),
+        lastUpdated: new Date().toISOString()
+      };
+
+      if (editId) {
+        const idx = allRisks.findIndex(r => r.id === editId);
+        if (idx !== -1) allRisks[idx] = localData;
+      } else {
+        allRisks.push(localData);
+      }
+      saveToLocalStorage();
+      setSaveBadge('ok', '<i class="fas fa-check-circle"></i> تم الحفظ ✓');
+      updateStats(); applyFilters(); renderHeatmap(); checkCriticalAlert();
+    }
+
+    showToast(editId ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح', 'success');
+    resetForm();
+  } catch (err) {
+    console.error(err);
+    showToast('فشل الحفظ. حاول مرة أخرى.', 'error');
+    setSaveBadge('err', '<i class="fas fa-triangle-exclamation"></i> تعذر الحفظ');
+  } finally {
+    isSaving = false;
+    if (submitBtn) submitBtn.disabled = false;
+  }
+});
+
+
+فكرة تعطيل زر الإرسال لمنع “double submit” هي الحل القياسي. 
+andycarter.dev
++1
+
+2) حل قوي في الـ Backend (Apps Script): قفل + ID قوي + منع التكرار (Idempotency)
+
+حتى لو أصلحت الـ Frontend، الأفضل تحمي الـ Backend لأن أي عميل/تأخير ممكن يكرر الطلب.
+
+(أ) غيّر توليد الـ ID في addRisk إلى UUID (بدل timestamp بالثواني)
+
+عندك الآن ID بالثواني yyyyMMdd-HHmmss — لو وصل طلبين بنفس الثانية ممكن تتكرر الـ ID. الأفضل:
+
+const id = String(p.id || '').trim() || ('R-' + Utilities.getUuid());
+
+
+Utilities.getUuid موثّق رسميًا من Google Apps Script. 
+Google for Developers
+
+(ب) استخدم LockService لمنع الكتابة المتزامنة على الشيت
+
+لفّ عمليات add/update/delete بقفل:
+
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try { return fn(); }
+  finally { lock.releaseLock(); }
+}
+
+
+واستخدمه داخل doPost:
+
+function doPost(e) {
+  return withLock_(() => {
+    try {
+      const body = e.postData?.contents ? JSON.parse(e.postData.contents) : {};
+      const action = String(body.action || '').toLowerCase();
+      const payload = body.payload || {};
+
+      if (WRITE_TOKEN && String(payload.token || '') !== WRITE_TOKEN) {
+        return jsonOutput({ ok: false, error: 'Unauthorized' });
+      }
+
+      if (action === 'add') return jsonOutput(addRisk(payload));
+      if (action === 'update') return jsonOutput(updateRisk(payload));
+      if (action === 'delete') return jsonOutput(deleteRisk(payload));
+
+      return jsonOutput({ ok: false, error: 'Unknown action' });
+    } catch (err) {
+      return jsonOutput({ ok: false, error: String(err) });
+    }
+  });
+}
+
+(ج) امنع التكرار بنفس requestId عبر CacheService (Idempotency)
+
+طالما أضفنا requestId من الـ Frontend، نقدر نمنع تكرار نفس العملية خلال دقائق:
+
+function addRisk(p) {
+  const sh = getSheet_();
+
+  // ✅ Idempotency (منع نفس الطلب يتكرر)
+  const requestId = String(p.requestId || '').trim();
+  if (requestId) {
+    const cache = CacheService.getScriptCache();
+    const key = 'RR_ADD_' + requestId;
+    const existing = cache.get(key);
+    if (existing) return { ok: true, id: existing, deduped: true };
+
+    // نكمل الإضافة ثم نخزن النتيجة
+    const result = addRiskInternal_(sh, p);
+    cache.put(key, result.id, 300); // 5 دقائق
+    return result;
+  }
+
+  return addRiskInternal_(sh, p);
+}
+
+function addRiskInternal_(sh, p) {
+  const prob = clamp_(p.probability, 1, 5);
+  const impact = clamp_(p.impact, 1, 5);
+  const score = prob * impact;
+  const lvl = levelFromScore_(score).label;
+
+  const id = String(p.id || '').trim() || ('R-' + Utilities.getUuid());
+
+  // ✅ إذا وصل نفس id مرة ثانية، لا تضيف صف جديد
+  const row = findRowById_(sh, id);
+  if (row !== -1) return { ok: true, id, deduped: true };
+
+  sh.appendRow([
+    id,
+    String(p.risk || ''),
+    String(p.category || ''),
+    String(p.owner || ''),
+    prob,
+    impact,
+    score,
+    lvl,
+    String(p.mitigation || ''),
+    String(p.status || 'مفتوح'),
+    String(p.reviewDate || ''),
+    String(p.sourceEvidence || ''),
+    new Date().toISOString(),
+    String(p.updatedBy || 'system')
+  ]);
+
+  return { ok: true, id };
+}
+
+
+CacheService موثق رسميًا. 
+Google for Developers
+
+3) ملاحظات “خلل/تحسين” إضافية في كودك (مهمة)
+
+متغير useLocalStorage غير معرّف في الـ Frontend (يصير global ضمنيًا). الأفضل عرّفه:
+
+let useLocalStorage = true;
+
+
+resetForm() لا يعيد select الخاص بـ riskDesc إذا تحول textarea (بعد اختيار “أخرى”). هذا يسبب سلوك غريب لاحقًا. الحل: داخل resetForm، إذا كان riskDesc textarea، رجّعه select ثم buildRiskDropdown().
+
+findRowById_: الأفضل تبحث فقط في عمود الـ ID بدل TextFinder على الشيت كامل (أضمن وأسرع):
+
+function findRowById_(sh, id) {
+  const last = sh.getLastRow();
+  if (last < 2) return -1;
+  const finder = sh.getRange(2, 1, last - 1, 1).createTextFinder(id).matchEntireCell(true).findNext();
+  return finder ? finder.getRow() : -1;
+}
+
+الخلاصة العملية
+
+لازم: قفل في الـ Frontend (isSaving + disable button) → ينهي 90% من المشكلة. 
+andycarter.dev
++1
+
+ضروري: حماية Backend (UUID + LockService + CacheService idempotency) → يمنع التكرار حتى لو العميل كرر الطلب. 
+Google for Developers
++1

@@ -39,23 +39,32 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  try {
-    const body = e.postData?.contents ? JSON.parse(e.postData.contents) : {};
-    const action = String(body.action || '').toLowerCase();
-    const payload = body.payload || {};
+  return withLock_(function() {
+    try {
+      const body = e.postData?.contents ? JSON.parse(e.postData.contents) : {};
+      const action = String(body.action || '').toLowerCase();
+      const payload = body.payload || {};
 
-    if (WRITE_TOKEN && String(payload.token || '') !== WRITE_TOKEN) {
-      return jsonOutput({ ok: false, error: 'Unauthorized' });
+      if (WRITE_TOKEN && String(payload.token || '') !== WRITE_TOKEN) {
+        return jsonOutput({ ok: false, error: 'Unauthorized' });
+      }
+
+      if (action === 'add') return jsonOutput(addRisk(payload));
+      if (action === 'update') return jsonOutput(updateRisk(payload));
+      if (action === 'delete') return jsonOutput(deleteRisk(payload));
+
+      return jsonOutput({ ok: false, error: 'Unknown action' });
+    } catch (err) {
+      return jsonOutput({ ok: false, error: String(err) });
     }
+  });
+}
 
-    if (action === 'add') return jsonOutput(addRisk(payload));
-    if (action === 'update') return jsonOutput(updateRisk(payload));
-    if (action === 'delete') return jsonOutput(deleteRisk(payload));
-
-    return jsonOutput({ ok: false, error: 'Unknown action' });
-  } catch (err) {
-    return jsonOutput({ ok: false, error: String(err) });
-  }
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try { return fn(); }
+  finally { lock.releaseLock(); }
 }
 
 function jsonOutput(obj) {
@@ -107,7 +116,9 @@ function levelFromScore_(score) {
 }
 
 function findRowById_(sh, id) {
-  const finder = sh.createTextFinder(id).matchEntireCell(true).findNext();
+  const last = sh.getLastRow();
+  if (last < 2) return -1;
+  const finder = sh.getRange(2, 1, last - 1, 1).createTextFinder(id).matchEntireCell(true).findNext();
   return finder ? finder.getRow() : -1;
 }
 
@@ -209,12 +220,34 @@ function getMasterList() {
 function addRisk(p) {
   const sh = getSheet_();
 
+  // Idempotency: منع تكرار نفس الطلب
+  const requestId = String(p.requestId || '').trim();
+  if (requestId) {
+    const cache = CacheService.getScriptCache();
+    const key = 'RR_ADD_' + requestId;
+    const existing = cache.get(key);
+    if (existing) return { ok: true, id: existing, deduped: true };
+    
+    const result = addRiskInternal_(sh, p);
+    cache.put(key, result.id, 300); // 5 دقائق
+    return result;
+  }
+
+  return addRiskInternal_(sh, p);
+}
+
+function addRiskInternal_(sh, p) {
   const prob = clamp_(p.probability, 1, 5);
   const impact = clamp_(p.impact, 1, 5);
   const score = prob * impact;
   const lvl = levelFromScore_(score).label;
 
-  const id = 'R-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
+  // UUID بدل timestamp
+  const id = String(p.id || '').trim() || ('R-' + Utilities.getUuid());
+
+  // إذا وصل نفس id مرة ثانية، لا تضيف صف جديد
+  const row = findRowById_(sh, id);
+  if (row !== -1) return { ok: true, id, deduped: true };
 
   sh.appendRow([
     id,
