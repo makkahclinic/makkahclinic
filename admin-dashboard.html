@@ -1338,16 +1338,29 @@
                 return;
             }
             
-            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً\n\n${email}\n\nهل أنت متأكد؟`)) return;
+            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً من:\n• Firebase Auth (الحساب)\n• Firestore (الصلاحيات)\n\n${email}\n\nهل أنت متأكد؟`)) return;
             if (!confirm('تأكيد نهائي: هذا الإجراء لا يمكن التراجع عنه!')) return;
             
             try {
+                // 1. Delete from Firebase Auth via server API
+                const apiResponse = await fetch(`/api/admin/user/${encodeURIComponent(email)}`, {
+                    method: 'DELETE'
+                });
+                const apiResult = await apiResponse.json();
+                console.log('Server delete result:', apiResult);
+                
+                // 2. Delete from Firestore staff_roles
                 await deleteDoc(doc(db, "staff_roles", uid));
-                showToast('تم حذف المستخدم بنجاح', '#dc3545');
+                
+                if (apiResult.authDeleted) {
+                    showToast('تم حذف المستخدم بالكامل من Firebase', '#dc3545');
+                } else {
+                    showToast('تم الحذف من Firestore (الحساب قد يكون محذوف مسبقاً من Auth)', '#f59e0b');
+                }
                 loadUsers();
             } catch (e) {
                 console.error('خطأ:', e);
-                alert('فشل في حذف المستخدم');
+                alert('فشل في حذف المستخدم: ' + e.message);
             }
         };
 
@@ -1603,7 +1616,7 @@
                                     <button onclick="toggleUserStatus('${u.uid}', ${isSuspended})" style="background:${isSuspended ? '#d1fae5' : '#fef3c7'}; color:${isSuspended ? '#10b981' : '#f59e0b'}; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
                                         <i class="fas fa-${isSuspended ? 'play-circle' : 'pause-circle'}"></i> ${isSuspended ? 'تفعيل' : 'تعليق'}
                                     </button>
-                                    <button onclick="deleteUser('${u.uid}')" style="background:#fee2e2; color:#dc3545; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
+                                    <button onclick="deleteUserFromPermissions('${u.uid}', '${u.email || ''}')" style="background:#fee2e2; color:#dc3545; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
                                         <i class="fas fa-trash"></i> حذف
                                     </button>
                                 </div>
@@ -1731,16 +1744,22 @@
             }
         };
         
-        window.deleteUser = async function(uid) {
+        window.deleteUserFromPermissions = async function(uid, email) {
             if (currentUserRole !== 'admin') {
                 showToast('ليس لديك صلاحية لهذا الإجراء', true);
                 return;
             }
-            if (!confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً؟ لن يتمكن من الدخول بعد الحذف.')) return;
+            if (!confirm(`⚠️ سيتم حذف المستخدم نهائياً من Firebase Auth و Firestore\n\n${email}`)) return;
+            if (!confirm('تأكيد نهائي: لا يمكن التراجع!')) return;
             
             try {
+                // حذف من Firebase Auth عبر السيرفر
+                if (email) {
+                    await fetch(`/api/admin/user/${encodeURIComponent(email)}`, { method: 'DELETE' });
+                }
+                // حذف من Firestore
                 await deleteDoc(doc(db, "staff_roles", uid));
-                showToast('تم حذف المستخدم');
+                showToast('تم حذف المستخدم بالكامل');
                 loadPermissions();
             } catch (e) {
                 console.error('Error deleting:', e);
