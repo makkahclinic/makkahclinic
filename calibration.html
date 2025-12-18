@@ -3,748 +3,1296 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>سجل معايرة الأجهزة (CAL) - مجمع مكة الطبي</title>
+  <title>بوابة سباهي | سجل معايرة الأجهزة (CAL) - مجمع مكة الطبي</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap"
+        rel="stylesheet" />
 
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            primary: '#1e3a5f',
-            secondary: '#c9a962',
-            accent: '#DC143C',
-            success: '#10b981',
-            danger: '#ef4444',
-            warning: '#f59e0b'
+            primary: '#8B0000',
+            secondary: '#D4AF37',
+            accent: '#B8860B',
+            light: '#F5F5F5',
+            dark: '#2C2C2C',
+            success: '#28a745',
+            danger: '#dc3545',
+            warning: '#f59e0b',
+            info: '#17a2b8'
           },
-          fontFamily: { sans: ['Tajawal', 'sans-serif'] }
+          fontFamily: {
+            sans: ['Tajawal', 'sans-serif']
+          },
+          boxShadow: {
+            'gold-glow': '0 0 15px rgba(212, 175, 55, 0.5)',
+            'crimson-glow': '0 0 15px rgba(139, 0, 0, 0.3)'
+          },
+          keyframes: {
+            'pulsating-alert': {
+              '0%, 100%': { boxShadow: '0 0 5px rgba(220, 53, 69, 0.5)' },
+              '50%': { boxShadow: '0 0 20px rgba(220, 53, 69, 0.8)' }
+            },
+            'upcoming-glow': {
+              '0%, 100%': { backgroundColor: 'rgba(212, 175, 55, 0.1)' },
+              '50%': { backgroundColor: 'rgba(212, 175, 55, 0.3)' }
+            }
+          },
+          animation: {
+            'pulsate-alert': 'pulsating-alert 2s infinite',
+            'upcoming-glow': 'upcoming-glow 3s infinite'
+          }
         }
       }
     };
   </script>
 
   <style>
-    .gradient-header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); }
-    .gold-border { border-color: #c9a962; }
-    
-    .accordion-content { 
-      max-height: 0; 
-      overflow: hidden; 
-      transition: max-height 0.4s ease-out; 
-    }
-    .accordion-content.open { max-height: 5000px; }
-    
-    .accordion-btn.active i.fa-chevron-down { transform: rotate(180deg); }
-    .accordion-btn i.fa-chevron-down { transition: transform 0.3s ease; }
-    
-    .status-pass { background: #dcfce7; color: #166534; }
-    .status-fail { background: #fee2e2; color: #991b1b; }
-    .status-upcoming { background: #fef3c7; color: #92400e; }
-    .status-overdue { background: #fecaca; color: #dc2626; animation: pulse-red 2s infinite; }
-    
-    @keyframes pulse-red {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-      50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-    }
-    
-    .kpi-card { transition: transform 0.2s, box-shadow 0.2s; }
-    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
-    
+    .circular-chart { display: block; margin: 10px auto; }
+    .circle-bg { fill: none; stroke: #eee; stroke-width: 3.8; }
+    .circle { fill: none; stroke-linecap: round; transition: stroke-dasharray 0.6s ease;
+              transform: rotate(-90deg); transform-origin: 50% 50%; }
+    .percentage { fill: #666; font-family: 'Tajawal', sans-serif;
+                  text-anchor: middle; font-weight: bold; }
+    .row-upcoming { border-right: 4px solid #D4AF37; }
+    .gradient-header { background: linear-gradient(135deg, #8B0000 0%, #D4AF37 100%); }
+    .gradient-kpi { background: linear-gradient(135deg, #F5F5F5 0%, #E8E8E8 100%); }
+    .schedule-table { font-size: 0.75rem; }
+    .schedule-table th { background-color: #8B0000; color: white; padding: 6px 8px; }
+    .schedule-table td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+    .schedule-table tr:nth-child(even) { background-color: #f9fafb; }
+    .schedule-table tr:hover { background-color: #f3f4f6; }
+
     @media print {
-      .no-print { display: none !important; }
-      .print-show { display: block !important; }
+      body { background-color: white; }
+      header, #smart-alert-banner, #dashboard-kpis, #compliance-indicators,
+      #form-container, #table-controls, .shadow-md, .shadow-lg {
+        display: none !important;
+      }
+      #table-container { display: block !important; box-shadow: none;
+                         width: 100%; margin: 0; padding: 0; }
+      table { font-size: 10pt; border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ccc; padding: 5px; }
+      .row-upcoming, .bg-red-50 { -webkit-print-color-adjust: exact; color-adjust: exact; }
+      .row-upcoming { background-color: rgba(212, 175, 55, 0.1) !important;
+                      animation: none !important; }
+      .bg-red-50 { background-color: rgba(220, 53, 69, 0.1) !important; }
     }
   </style>
 </head>
 
-<body class="bg-gray-50 font-sans">
+<body class="bg-gray-100 font-sans antialiased">
+  <section id="fms-calibration" class="container mx-auto p-4 md:p-8">
 
-  <!-- ========== الهيدر ========== -->
-  <header class="gradient-header text-white shadow-xl">
-    <div class="container mx-auto px-4 py-6">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <div class="w-16 h-16 bg-white rounded-full p-2 shadow-lg flex items-center justify-center">
-            <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-transparent.png"
-                 alt="شعار المجمع" class="w-12 h-12 object-contain"
-                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🏥</text></svg>'">
-          </div>
+    <!-- =================== الهيدر =================== -->
+    <header class="mb-6 gradient-header text-white shadow-lg rounded-lg overflow-hidden">
+      <div class="p-6 flex flex-col lg:flex-row items-start justify-between">
+        <div class="flex items-center mb-4 lg:mb-0 lg:w-1/3">
+          <img src="logo-transparent.png"
+               alt="شعار مجمع مكة الطبي"
+               class="h-16 w-16 mr-4 rounded-full bg-white p-1"
+               onerror="this.src='logo-new.png'" />
           <div>
-            <h1 class="text-2xl md:text-3xl font-bold">سجل معايرة الأجهزة الطبية</h1>
-            <p class="text-white/80 text-sm">CAL Log - مجمع مكة الطبي بالزاهر</p>
+            <h1 class="text-2xl font-bold">نظام إدارة معايرة الأجهزة (CAL Log)</h1>
+            <p class="text-white/90">مجمع مكة الطبي بالزاهر - بوابة سباهي الإلكترونية</p>
           </div>
         </div>
-        <div class="text-left hidden md:block">
-          <a href="cbahi-portal.html" class="inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">
-            <i class="fas fa-arrow-left"></i>
-            <span>العودة للبوابة</span>
-          </a>
+
+        <!-- جدول متابعة المعايرة -->
+        <div class="lg:w-2/3 bg-white/10 backdrop-blur-sm rounded-lg p-4">
+          <h3 class="text-lg font-bold mb-3 text-center text-white border-b border-white/30 pb-2">
+            جدول متابعة المعايرة - مجمع مكة الطبي
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="min-w-full schedule-table bg-white/90 text-dark rounded-lg">
+              <thead>
+                <tr>
+                  <th class="text-center">القسم</th>
+                  <th class="text-center">الأجهزة</th>
+                  <th class="text-center">التكرار</th>
+                  <th class="text-center">المسؤول</th>
+                  <th class="text-center">الجهة/التوثيق</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="text-center font-semibold">🩻 الأشعة</td>
+                  <td>X-Ray / Portable / Dental / Mammogram / Ultrasound</td>
+                  <td class="text-center">سنويًا</td>
+                  <td class="text-center">أ. بلال نتو</td>
+                  <td class="text-center">NRRC – LOG-FMS-2025-021</td>
+                </tr>
+                <tr>
+                  <td class="text-center font-semibold">🧪 المختبر</td>
+                  <td>Biochem / Heme / Centrifuge / Micropipettes / Incubator / Refrigerator</td>
+                  <td class="text-center">نصف سنوي/سنوي</td>
+                  <td class="text-center">أ. هيثم الجعلي</td>
+                  <td class="text-center">FMS Approved Vendors – LOG-FMS-2025-020</td>
+                </tr>
+                <tr>
+                  <td class="text-center font-semibold">🧴 CSSD</td>
+                  <td>Autoclave / Dry Heat / Sealer / Ultrasonic</td>
+                  <td class="text-center">سنويًا</td>
+                  <td class="text-center">د. مجدي عسكر</td>
+                  <td class="text-center">Indicators – LOG-FMS-2025-022</td>
+                </tr>
+                <tr>
+                  <td class="text-center font-semibold">⚡ الطوارئ</td>
+                  <td>Defib / ECG / Suction / O2 Flow / PulseOx</td>
+                  <td class="text-center">سنوي + يومي</td>
+                  <td class="text-center">د. معاذ البيوش</td>
+                  <td class="text-center">FMS+EOC – LOG-FMS-2025-023</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
-  </header>
+      <div class="px-6 py-3 bg-white/20 text-center">
+        <p class="text-sm font-medium">آخر تحديث: <span id="last-update">--</span></p>
+      </div>
+    </header>
 
-  <main class="container mx-auto px-4 py-6 space-y-6">
-
-    <!-- ========== شاشة التحميل ========== -->
-    <div id="loading-overlay" class="fixed inset-0 bg-white/90 flex items-center justify-center z-50">
+    <!-- =================== شاشة التحميل =================== -->
+    <div id="loading-overlay"
+         class="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
       <div class="text-center">
-        <i class="fas fa-cog fa-spin text-5xl text-primary mb-4"></i>
-        <p class="text-xl font-bold text-primary">جاري تحميل البيانات...</p>
+        <i class="fas fa-spinner fa-spin text-4xl text-primary mb-4"></i>
+        <p class="text-lg font-semibold text-dark">جاري التحميل والمعالجة...</p>
+        <p class="text-sm text-gray-600 mt-2">يرجى الانتظار بينما يتم تحميل البيانات</p>
       </div>
     </div>
 
-    <!-- ========== KPIs ========== -->
-    <section id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="kpi-card bg-white rounded-xl p-4 shadow-md border-r-4 border-primary">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-            <i class="fas fa-tools text-primary text-xl"></i>
-          </div>
-          <div>
-            <p class="text-gray-500 text-sm">إجمالي السجلات</p>
-            <p id="kpi-total" class="text-2xl font-bold text-primary">0</p>
-          </div>
+    <!-- =================== تنبيهات ذكية =================== -->
+    <div id="smart-alert-banner"
+         class="hidden mb-6 p-4 bg-gradient-to-r from-warning/20 to-danger/20 border-r-4 border-warning text-dark rounded-lg shadow-sm">
+      <div class="flex items-start">
+        <i class="fas fa-exclamation-triangle text-warning text-xl ml-2 mt-1"></i>
+        <div>
+          <p id="alert-message" class="font-semibold"></p>
+          <button id="dismiss-alert"
+                  class="mt-2 text-sm bg-white/50 hover:bg-white/70 px-3 py-1 rounded transition duration-150">
+            إخفاء التنبيه
+          </button>
         </div>
       </div>
-      
-      <div class="kpi-card bg-white rounded-xl p-4 shadow-md border-r-4 border-success">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
-            <i class="fas fa-check-circle text-success text-xl"></i>
-          </div>
-          <div>
-            <p class="text-gray-500 text-sm">مطابق (Pass)</p>
-            <p id="kpi-pass" class="text-2xl font-bold text-success">0</p>
-          </div>
-        </div>
-      </div>
-      
-      <div class="kpi-card bg-white rounded-xl p-4 shadow-md border-r-4 border-danger">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 bg-danger/10 rounded-full flex items-center justify-center">
-            <i class="fas fa-times-circle text-danger text-xl"></i>
-          </div>
-          <div>
-            <p class="text-gray-500 text-sm">غير مطابق (Fail)</p>
-            <p id="kpi-fail" class="text-2xl font-bold text-danger">0</p>
-          </div>
-        </div>
-      </div>
-      
-      <div class="kpi-card bg-white rounded-xl p-4 shadow-md border-r-4 border-warning">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
-            <i class="fas fa-clock text-warning text-xl"></i>
-          </div>
-          <div>
-            <p class="text-gray-500 text-sm">متأخرة</p>
-            <p id="kpi-overdue" class="text-2xl font-bold text-warning">0</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    </div>
 
-    <!-- ========== نموذج التسجيل (Accordion) ========== -->
-    <section class="bg-white rounded-xl shadow-md overflow-hidden">
-      <button id="form-toggle" class="accordion-btn w-full flex items-center justify-between p-4 bg-primary text-white hover:bg-primary/90 transition">
-        <div class="flex items-center gap-3">
-          <i class="fas fa-plus-circle text-xl"></i>
-          <span class="text-lg font-bold">تسجيل معايرة جديدة</span>
-        </div>
-        <i class="fas fa-chevron-down text-xl"></i>
-      </button>
-      
-      <div id="form-content" class="accordion-content">
-        <form id="calForm" class="p-6 space-y-4">
-          <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">القسم *</label>
-              <select id="department" required class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary">
-                <option value="">-- اختر القسم --</option>
-              </select>
-            </div>
-            
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">الجهاز *</label>
-              <select id="assetSelect" required class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary">
-                <option value="">-- اختر الجهاز --</option>
-              </select>
-            </div>
-            
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">الفني المنفذ *</label>
-              <select id="staff" required class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary">
-                <option value="">-- اختر الفني --</option>
-              </select>
-            </div>
-            
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">تاريخ الاختبار *</label>
-              <input type="date" id="testDate" required class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary">
-            </div>
-            
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">التكرار *</label>
-              <select id="frequency" required class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary">
-                <option value="">-- اختر --</option>
-                <option value="يومي">يومي</option>
-                <option value="أسبوعي">أسبوعي</option>
-                <option value="شهري">شهري</option>
-                <option value="ربع سنوي">ربع سنوي</option>
-                <option value="نصف سنوي">نصف سنوي</option>
-                <option value="سنوي">سنوي</option>
-              </select>
-            </div>
-            
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">النتيجة *</label>
-              <select id="result" required class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary">
-                <option value="">-- اختر --</option>
-                <option value="Pass">✅ مطابق (Pass)</option>
-                <option value="Fail">❌ غير مطابق (Fail)</option>
-              </select>
-            </div>
+    <!-- =================== مؤشرات KPI =================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div class="lg:col-span-2" id="dashboard-kpis">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 shadow-crimson-glow gradient-kpi p-5 rounded-lg border-t-4 border-secondary">
+          <div id="kpi-pass"
+               class="text-center p-3 bg-white rounded-lg transition duration-300 hover:shadow-lg border border-success/20">
+            <i class="fas fa-check-circle text-3xl text-success mb-2"></i>
+            <p class="text-2xl font-bold" id="count-pass">0</p>
+            <p class="text-sm text-gray-600">✅ مطابق (Pass)</p>
           </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">إرفاق تقرير (PDF/صورة)</label>
-            <input type="file" id="reportFile" accept=".pdf,.jpg,.jpeg,.png" class="w-full border border-gray-300 rounded-lg p-3 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-primary file:text-white file:cursor-pointer">
+          <div id="kpi-fail"
+               class="text-center p-3 bg-white rounded-lg transition duration-300 hover:shadow-lg border border-danger/20">
+            <i class="fas fa-times-circle text-3xl text-danger mb-2"></i>
+            <p class="text-2xl font-bold" id="count-fail">0</p>
+            <p class="text-sm text-gray-600">❌ غير مطابق (Fail)</p>
           </div>
-          
-          <div class="flex gap-3 pt-4">
-            <button type="submit" class="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-6 rounded-lg font-bold transition flex items-center justify-center gap-2">
-              <i class="fas fa-save"></i>
-              <span>حفظ وإنشاء الشهادة</span>
-            </button>
-            <button type="reset" class="bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 px-6 rounded-lg font-bold transition">
-              <i class="fas fa-redo"></i>
-            </button>
+          <div id="kpi-overdue"
+               class="text-center p-3 bg-white rounded-lg transition duration-300 hover:shadow-lg border border-warning/20">
+            <i class="fas fa-exclamation-circle text-3xl text-warning mb-2"></i>
+            <p class="text-2xl font-bold" id="count-overdue">0</p>
+            <p class="text-sm text-gray-600">⚠️ متأخر (Overdue)</p>
           </div>
-        </form>
-      </div>
-    </section>
-
-    <!-- ========== جدول المتابعة (Accordion) ========== -->
-    <section class="bg-white rounded-xl shadow-md overflow-hidden no-print">
-      <button id="schedule-toggle" class="accordion-btn w-full flex items-center justify-between p-4 bg-secondary text-white hover:bg-secondary/90 transition">
-        <div class="flex items-center gap-3">
-          <i class="fas fa-calendar-alt text-xl"></i>
-          <span class="text-lg font-bold">جدول متابعة المعايرة</span>
-        </div>
-        <i class="fas fa-chevron-down text-xl"></i>
-      </button>
-      
-      <div id="schedule-content" class="accordion-content">
-        <div class="p-4 overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="bg-gray-100">
-              <tr>
-                <th class="p-3 text-right font-bold">القسم</th>
-                <th class="p-3 text-right font-bold">الأجهزة</th>
-                <th class="p-3 text-center font-bold">التكرار</th>
-                <th class="p-3 text-center font-bold">المسؤول</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y">
-              <tr class="hover:bg-gray-50">
-                <td class="p-3 font-semibold">🩻 الأشعة (RAD)</td>
-                <td class="p-3">X-Ray, Portable, Dental, Mammogram, Ultrasound</td>
-                <td class="p-3 text-center"><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">سنوي</span></td>
-                <td class="p-3 text-center">أ. بلال نتو</td>
-              </tr>
-              <tr class="hover:bg-gray-50">
-                <td class="p-3 font-semibold">🧪 المختبر (LAB)</td>
-                <td class="p-3">Biochem, Heme, Centrifuge, Micropipettes, Incubator</td>
-                <td class="p-3 text-center"><span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">نصف سنوي</span></td>
-                <td class="p-3 text-center">أ. هيثم الجعلي</td>
-              </tr>
-              <tr class="hover:bg-gray-50">
-                <td class="p-3 font-semibold">🧴 التعقيم (CSSD)</td>
-                <td class="p-3">Autoclave, Dry Heat, Sealer, Ultrasonic</td>
-                <td class="p-3 text-center"><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">سنوي</span></td>
-                <td class="p-3 text-center">د. مجدي عسكر</td>
-              </tr>
-              <tr class="hover:bg-gray-50">
-                <td class="p-3 font-semibold">⚡ الطوارئ (ER)</td>
-                <td class="p-3">Defib, ECG, Suction, O2 Flow, PulseOx</td>
-                <td class="p-3 text-center"><span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs">يومي + سنوي</span></td>
-                <td class="p-3 text-center">د. معاذ البيوش</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- ========== سجل المعايرات (Accordion) ========== -->
-    <section class="bg-white rounded-xl shadow-md overflow-hidden">
-      <button id="records-toggle" class="accordion-btn active w-full flex items-center justify-between p-4 bg-gray-700 text-white hover:bg-gray-600 transition">
-        <div class="flex items-center gap-3">
-          <i class="fas fa-database text-xl"></i>
-          <span class="text-lg font-bold">سجل المعايرات</span>
-          <span id="records-count" class="bg-white/20 px-3 py-1 rounded-full text-sm">0 سجل</span>
-        </div>
-        <i class="fas fa-chevron-down text-xl"></i>
-      </button>
-      
-      <div id="records-content" class="accordion-content open">
-        <!-- أدوات التحكم -->
-        <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center justify-between no-print">
-          <div class="flex flex-wrap gap-2">
-            <select id="filterDept" class="border rounded-lg px-3 py-2 text-sm">
-              <option value="">كل الأقسام</option>
-              <option value="RAD">الأشعة</option>
-              <option value="LAB">المختبر</option>
-              <option value="CSSD">التعقيم</option>
-              <option value="ER">الطوارئ</option>
-            </select>
-            <select id="filterResult" class="border rounded-lg px-3 py-2 text-sm">
-              <option value="">كل النتائج</option>
-              <option value="Pass">مطابق</option>
-              <option value="Fail">غير مطابق</option>
-            </select>
-            <input type="text" id="searchBox" placeholder="بحث..." class="border rounded-lg px-3 py-2 text-sm w-40">
+          <div id="kpi-upcoming"
+               class="text-center p-3 bg-white rounded-lg transition duration-300 hover:shadow-lg border border-secondary/20">
+            <i class="fas fa-hourglass-half text-3xl text-secondary mb-2"></i>
+            <p class="text-2xl font-bold" id="count-upcoming">0</p>
+            <p class="text-sm text-gray-600">⏳ قادم (30 يوم)</p>
           </div>
-          <div class="flex gap-2">
-            <button onclick="window.print()" class="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-              <i class="fas fa-print"></i> طباعة
-            </button>
-            <button onclick="exportCSV()" class="bg-success hover:bg-success/90 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-              <i class="fas fa-file-excel"></i> تصدير
-            </button>
-          </div>
-        </div>
-        
-        <!-- الجدول -->
-        <div class="overflow-x-auto">
-          <table id="calTable" class="min-w-full text-sm">
-            <thead class="bg-gray-100 sticky top-0">
-              <tr>
-                <th class="p-3 text-right font-bold">#</th>
-                <th class="p-3 text-right font-bold">التاريخ</th>
-                <th class="p-3 text-right font-bold">القسم</th>
-                <th class="p-3 text-right font-bold">الجهاز</th>
-                <th class="p-3 text-right font-bold">الفني</th>
-                <th class="p-3 text-center font-bold">النتيجة</th>
-                <th class="p-3 text-center font-bold">الاستحقاق</th>
-                <th class="p-3 text-center font-bold">الحالة</th>
-                <th class="p-3 text-center font-bold no-print">الملفات</th>
-              </tr>
-            </thead>
-            <tbody id="calTableBody" class="divide-y"></tbody>
-          </table>
-        </div>
-        
-        <!-- Pagination -->
-        <div id="pagination" class="p-4 border-t bg-gray-50 flex items-center justify-between no-print">
-          <div class="text-sm text-gray-600">
-            <span>صفحة <span id="currentPage">1</span> من <span id="totalPages">1</span></span>
-          </div>
-          <div class="flex gap-2">
-            <button id="btnFirst" onclick="goToPage(1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">
-              <i class="fas fa-angle-double-right"></i>
-            </button>
-            <button id="btnPrev" onclick="goToPage(currentPage - 1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">
-              <i class="fas fa-angle-right"></i>
-            </button>
-            <button id="btnNext" onclick="goToPage(currentPage + 1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">
-              <i class="fas fa-angle-left"></i>
-            </button>
-            <button id="btnLast" onclick="goToPage(totalPages)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">
-              <i class="fas fa-angle-double-left"></i>
-            </button>
+          <div id="kpi-unscheduled"
+               class="text-center p-3 bg-white rounded-lg transition duration-300 hover:shadow-lg border border-gray-300">
+            <i class="fas fa-calendar-times text-3xl text-gray-500 mb-2"></i>
+            <p class="text-2xl font-bold" id="count-unscheduled">0</p>
+            <p class="text-sm text-gray-600">🕓 بدون موعد</p>
           </div>
         </div>
       </div>
-    </section>
 
-  </main>
+      <!-- مؤشرات الالتزام -->
+      <div class="bg-white p-5 rounded-lg shadow-lg border border-secondary/20"
+           id="compliance-indicators">
+        <h2 class="text-lg font-semibold mb-4 text-primary border-b pb-2">
+          مؤشرات الالتزام (Compliance)
+        </h2>
+        <div class="flex justify-center items-center mb-6">
+          <div id="overall-compliance-chart" class="w-32 h-32"></div>
+        </div>
+        <h2 class="text-md font-semibold mb-3 text-center text-dark">التزام الأقسام</h2>
+        <div class="grid grid-cols-4 gap-2 text-center" id="department-compliance"></div>
+      </div>
+    </div>
 
-  <!-- Footer -->
-  <footer class="bg-primary text-white text-center py-4 mt-8">
-    <p class="text-sm">مجمع مكة الطبي بالزاهر &copy; 2025 - نظام إدارة معايرة الأجهزة</p>
-  </footer>
+    <!-- =================== المحتوى الرئيسي =================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
+      <!-- ===== نموذج الإدخال ===== -->
+      <div class="lg:col-span-1" id="form-container">
+        <div class="bg-white p-6 rounded-lg shadow-lg border border-secondary/20 sticky top-8">
+          <h2 class="text-xl font-bold mb-5 border-b pb-2 text-primary flex items-center">
+            <i class="fas fa-plus-circle ml-2 text-secondary"></i>
+            إضافة سجل جديد
+          </h2>
+
+          <form id="calibration-form">
+            <div class="space-y-4">
+              <div>
+                <label for="department" class="block text-sm font-medium text-gray-700 mb-1">
+                  القسم <span class="text-danger">*</span>
+                </label>
+                <select id="department" name="department" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary transition duration-150">
+                  <option value="">اختر القسم...</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="staff" class="block text-sm font-medium text-gray-700 mb-1">
+                  اسم المسؤول <span class="text-danger">*</span>
+                </label>
+                <input type="text" id="staff" name="staff" required list="staff-list"
+                       placeholder="ادخل اسم المسؤول أو اختره"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary transition duration-150" />
+                <datalist id="staff-list"></datalist>
+              </div>
+
+              <div>
+                <label for="asset" class="block text-sm font-medium text-gray-700 mb-1">
+                  المهمة / الجهاز (Task) <span class="text-danger">*</span>
+                </label>
+                <select id="asset" name="asset" required disabled
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 focus:outline-none focus:ring-primary focus:border-primary transition duration-150">
+                  <option value="">اختر القسم أولاً...</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="testDate" class="block text-sm font-medium text-gray-700 mb-1">
+                  تاريخ الفحص <span class="text-danger">*</span>
+                </label>
+                <input type="date" id="testDate" name="testDate" required
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary transition duration-150" />
+              </div>
+
+              <div>
+                <label for="frequency" class="block text-sm font-medium text-gray-700 mb-1">
+                  التكرار <span class="text-danger">*</span>
+                </label>
+                <select id="frequency" name="frequency" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary transition duration-150">
+                  <option value="">اختر التكرار...</option>
+                  <option value="يومي">يومي (Daily)</option>
+                  <option value="أسبوعي">أسبوعي (Weekly)</option>
+                  <option value="شهري">شهري (Monthly)</option>
+                  <option value="نصف سنوي">نصف سنوي (Semi-Annually)</option>
+                  <option value="سنوي">سنوي (Annually)</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="nextDue" class="block text-sm font-medium text-gray-700 mb-1">
+                  تاريخ الاستحقاق القادم
+                </label>
+                <input type="date" id="nextDue" name="nextDue" readonly
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  النتيجة <span class="text-danger">*</span>
+                </label>
+                <div class="flex items-center space-x-4 rtl:space-x-reverse">
+                  <label class="flex items-center cursor-pointer bg-success/10 p-2 rounded-lg transition duration-150 hover:bg-success/20">
+                    <input type="radio" name="result" value="Pass" required
+                           class="form-radio h-4 w-4 text-success" />
+                    <span class="mr-2 text-success font-semibold">✅ مطابق (Pass)</span>
+                  </label>
+                  <label class="flex items-center cursor-pointer bg-danger/10 p-2 rounded-lg transition duration-150 hover:bg-danger/20">
+                    <input type="radio" name="result" value="Fail"
+                           class="form-radio h-4 w-4 text-danger" />
+                    <span class="mr-2 text-danger font-semibold">❌ غير مطابق (Fail)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label for="certificateFile"
+                       class="block text-sm font-medium text-gray-700 mb-1">
+                  رفع التقرير (PDF/صورة) <span class="text-danger">*</span>
+                </label>
+                <input type="file" id="certificateFile" name="certificateFile"
+                       accept="application/pdf,image/*" required
+                       class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/80 transition duration-150" />
+                <p id="file-status" class="text-xs text-gray-500 mt-1"></p>
+              </div>
+
+              <button type="submit" id="submit-btn"
+                      class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition duration-150 ease-in-out">
+                <i class="fas fa-save ml-2"></i>
+                حفظ السجل ورفع التقرير
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ===== جدول السجلات ===== -->
+      <div class="lg:col-span-2">
+        <div class="bg-white p-6 rounded-lg shadow-lg border border-secondary/20" id="table-container">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4"
+               id="table-controls">
+            <h2 class="text-xl font-bold text-primary flex items-center">
+              <i class="fas fa-table ml-2 text-secondary"></i>
+              سجل المعايرات والفحوصات
+            </h2>
+            <div class="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-3 rtl:space-x-reverse w-full md:w-auto">
+              <div class="flex space-x-2 w-full md:w-auto">
+                <select id="department-filter"
+                        class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm w-full md:w-auto">
+                  <option value="">جميع الأقسام</option>
+                </select>
+                <input type="text" id="search-input" placeholder="بحث في السجلات..."
+                       class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm w-full md:w-auto" />
+              </div>
+              <div class="flex space-x-2 w-full md:w-auto">
+                <button id="refresh-btn"
+                        class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-accent transition duration-150 ease-in-out text-sm flex items-center">
+                  <i class="fas fa-sync-alt ml-1"></i> تحديث
+                </button>
+                <button id="print-btn" onclick="window.print()"
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition duration-150 ease-in-out text-sm flex items-center">
+                  <i class="fas fa-print ml-1"></i> طباعة
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-lg border border-gray-200">
+            <table class="min-w-full divide-y divide-gray-200" id="logs-table">
+              <thead class="bg-primary text-white">
+                <tr>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">الوقت</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">القسم</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">المسؤول</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">المهمة/الجهاز</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">تاريخ الفحص</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">الاستحقاق</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">النتيجة</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">التقرير</th>
+                </tr>
+              </thead>
+              <tbody id="log-table-body" class="bg-white divide-y divide-gray-200">
+                <tr>
+                  <td colspan="8" class="text-center py-4">جاري تحميل البيانات...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Controls -->
+          <div class="mt-4 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
+            <div class="flex items-center gap-4">
+              <div id="table-stats">إجمالي السجلات: <span id="total-records">0</span></div>
+              <div id="filter-stats" class="hidden">
+                (تم تصفية: <span id="filtered-count">0</span> من <span id="total-count">0</span>)
+              </div>
+            </div>
+            <div id="pagination-controls" class="flex items-center gap-2">
+              <button id="first-page" onclick="goToPage(1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-angle-double-right"></i>
+              </button>
+              <button id="prev-page" onclick="goToPage(currentPage - 1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-angle-right"></i>
+              </button>
+              <span class="px-3">
+                صفحة <span id="current-page-num">1</span> من <span id="total-pages">1</span>
+              </span>
+              <button id="next-page" onclick="goToPage(currentPage + 1)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-angle-left"></i>
+              </button>
+              <button id="last-page" onclick="goToPage(totalPages)" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-angle-double-left"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =================== السكربت =================== -->
   <script>
-    // ==================== المتغيرات ====================
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxxUGk2dy9cOyAcLrJHMkjHc03EbLMwpLW8F5xVKAoTL_ILKJDMnDwCb4E4PyAPOgHf/exec';
-    
-    let allRecords = [];
-    let filteredRecords = [];
+    // رابط الـ Web App
+    const CAL_API_URL =
+      'https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec';
+
+    // حالة عامة
     let assetsMap = {};
     let staffList = [];
+    let allRecords = [];
+    let filteredRecords = [];
+    let DEPARTMENTS_LIST = [];
+    let uploadedFileBase64 = null;
+    let uploadedFileMimeType = null;
+    let uploadedFileName = null;
     
     // Pagination
     const RECORDS_PER_PAGE = 25;
     let currentPage = 1;
-    let totalPages = 1;
 
-    // ==================== Accordion ====================
-    document.querySelectorAll('.accordion-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const content = btn.nextElementSibling;
-        const isOpen = content.classList.contains('open');
-        
-        content.classList.toggle('open');
-        btn.classList.toggle('active');
-      });
-    });
+    // عناصر DOM
+    const elements = {
+      loadingOverlay: document.getElementById('loading-overlay'),
+      form: document.getElementById('calibration-form'),
+      departmentSelect: document.getElementById('department'),
+      assetSelect: document.getElementById('asset'),
+      testDateInput: document.getElementById('testDate'),
+      frequencySelect: document.getElementById('frequency'),
+      nextDueInput: document.getElementById('nextDue'),
+      certificateFileInput: document.getElementById('certificateFile'),
+      fileStatus: document.getElementById('file-status'),
+      submitBtn: document.getElementById('submit-btn'),
+      tableBody: document.getElementById('log-table-body'),
+      searchInput: document.getElementById('search-input'),
+      staffDatalist: document.getElementById('staff-list'),
+      alertBanner: document.getElementById('smart-alert-banner'),
+      alertMessage: document.getElementById('alert-message'),
+      departmentFilter: document.getElementById('department-filter'),
+      refreshBtn: document.getElementById('refresh-btn'),
+      dismissAlert: document.getElementById('dismiss-alert'),
+      lastUpdate: document.getElementById('last-update'),
+      tableStats: document.getElementById('table-stats'),
+      filterStats: document.getElementById('filter-stats'),
+      totalRecords: document.getElementById('total-records'),
+      filteredCount: document.getElementById('filtered-count'),
+      totalCount: document.getElementById('total-count')
+    };
 
-    // ==================== تحميل البيانات ====================
-    async function loadData() {
+    // ================ دوال مساعدة للتواريخ ================
+    function todayYMD() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${da}`;
+    }
+
+    function parseYMD(value) {
+      if (!value) return null;
+      const s = value.toString().trim();
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return null;
+      const y = parseInt(m[1], 10);
+      const mo = parseInt(m[2], 10);
+      const d = parseInt(m[3], 10);
+      if (!y || !mo || !d) return null;
+      return new Date(y, mo - 1, d);
+    }
+
+    function compareYMD(a, b) {
+      const da = parseYMD(a);
+      const db = parseYMD(b);
+      if (!da || !db) return 0;
+      const ay = da.getFullYear(), am = da.getMonth(), ad = da.getDate();
+      const by = db.getFullYear(), bm = db.getMonth(), bd = db.getDate();
+      if (ay === by && am === bm && ad === bd) return 0;
+      if (ay < by || (ay === by && am < bm) || (ay === by && am === bm && ad < bd)) return -1;
+      return 1;
+    }
+
+    // تجاوز يوم الجمعة (إجازة أسبوعية)
+    function skipFriday(date) {
+      // إذا كان اليوم جمعة (5)، ننتقل للسبت
+      if (date.getDay() === 5) {
+        date.setDate(date.getDate() + 1);
+      }
+      return date;
+    }
+
+    function addDaysYMD(ymd, days, skipFridayFlag = false) {
+      const d = parseYMD(ymd);
+      if (!d) return '';
+      d.setDate(d.getDate() + days);
+      // تجاوز الجمعة إذا طُلب
+      if (skipFridayFlag) skipFriday(d);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${da}`;
+    }
+
+    function addMonthsYMD(ymd, months) {
+      const d = parseYMD(ymd);
+      if (!d) return '';
+      d.setMonth(d.getMonth() + months);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${da}`;
+    }
+
+    function addYearsYMD(ymd, years) {
+      const d = parseYMD(ymd);
+      if (!d) return '';
+      d.setFullYear(d.getFullYear() + years);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${da}`;
+    }
+
+    function displayDate(value) {
+      if (!value) return '—';
+      const s = value.toString().trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      // لو تايم ستامب: نأخذ التاريخ فقط
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      return s;
+    }
+
+    function getTodayClear() {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+
+    function showLoading(isLoading) {
+      elements.loadingOverlay.classList.toggle('hidden', !isLoading);
+    }
+
+    function toggleSubmitLoading(isLoading) {
+      elements.submitBtn.disabled = isLoading;
+      elements.submitBtn.innerHTML = isLoading
+        ? '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الحفظ...'
+        : '<i class="fas fa-save ml-2"></i> حفظ السجل ورفع التقرير';
+    }
+
+    function showNotification(message, type = 'success') {
+      alert((type === 'success' ? '✅ نجاح: ' : '❌ خطأ: ') + message);
+    }
+
+    // ================= التهيئة =================
+    document.addEventListener('DOMContentLoaded', init);
+
+    async function init() {
+      console.log('🚀 بدء تشغيل نظام معايرة الأجهزة...');
+      setupEventListeners();
+      elements.testDateInput.value = todayYMD();
+      calculateNextDue();
+      await fetchData();
+    }
+
+    function setupEventListeners() {
+      elements.departmentSelect.addEventListener('change', handleDepartmentChange);
+      elements.testDateInput.addEventListener('change', calculateNextDue);
+      elements.frequencySelect.addEventListener('change', calculateNextDue);
+      elements.certificateFileInput.addEventListener('change', handleFileUpload);
+      elements.form.addEventListener('submit', handleSubmit);
+      elements.searchInput.addEventListener('keyup', filterTable);
+      elements.departmentFilter.addEventListener('change', filterTable);
+      elements.refreshBtn.addEventListener('click', () => fetchData(true));
+      elements.dismissAlert.addEventListener('click', () =>
+        elements.alertBanner.classList.add('hidden')
+      );
+    }
+
+    // ================ جلب البيانات من الـ API ================
+    async function fetchData(forceRefresh = false) {
+      showLoading(true);
       try {
-        const res = await fetch(API_URL);
-        const json = await res.json();
-        
-        if (json.status === 'success' && json.data) {
-          assetsMap = json.data.assetsMap || {};
-          staffList = json.data.staffList || [];
-          allRecords = json.data.records || [];
-          
-          populateDropdowns();
-          applyFilters();
-          updateKPIs();
+        console.log('📥 جلب البيانات من API...');
+        const url = forceRefresh ? `${CAL_API_URL}?refresh=true` : CAL_API_URL;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Non-JSON response:', text);
+          throw new Error('استجابة غير متوقعة من الخادم.');
         }
-      } catch (err) {
-        console.error('Error loading data:', err);
-        showToast('خطأ في تحميل البيانات', 'error');
-      } finally {
-        document.getElementById('loading-overlay').style.display = 'none';
-      }
-    }
 
-    // ==================== تعبئة القوائم ====================
-    function populateDropdowns() {
-      const deptSelect = document.getElementById('department');
-      const staffSelect = document.getElementById('staff');
-      
-      // الأقسام
-      Object.keys(assetsMap).forEach(dept => {
-        const opt = document.createElement('option');
-        opt.value = dept;
-        opt.textContent = getDeptName(dept);
-        deptSelect.appendChild(opt);
-      });
-      
-      // الموظفين
-      staffList.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        staffSelect.appendChild(opt);
-      });
-      
-      // عند تغيير القسم
-      deptSelect.addEventListener('change', () => {
-        const assetSelect = document.getElementById('assetSelect');
-        assetSelect.innerHTML = '<option value="">-- اختر الجهاز --</option>';
-        
-        const assets = assetsMap[deptSelect.value] || [];
-        assets.forEach(a => {
-          const opt = document.createElement('option');
-          opt.value = a.id;
-          opt.textContent = `${a.id} - ${a.name}`;
-          assetSelect.appendChild(opt);
-        });
-      });
-    }
-
-    function getDeptName(code) {
-      const names = { RAD: 'الأشعة', LAB: 'المختبر', CSSD: 'التعقيم', ER: 'الطوارئ' };
-      return names[code] || code;
-    }
-
-    // ==================== KPIs ====================
-    function updateKPIs() {
-      const total = allRecords.length;
-      const pass = allRecords.filter(r => r.Result === 'Pass').length;
-      const fail = allRecords.filter(r => r.Result === 'Fail').length;
-      const overdue = allRecords.filter(r => isOverdue(r.NextDue)).length;
-      
-      document.getElementById('kpi-total').textContent = total;
-      document.getElementById('kpi-pass').textContent = pass;
-      document.getElementById('kpi-fail').textContent = fail;
-      document.getElementById('kpi-overdue').textContent = overdue;
-    }
-
-    function isOverdue(dateStr) {
-      if (!dateStr) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const due = new Date(dateStr);
-      return due < today;
-    }
-
-    function isUpcoming(dateStr) {
-      if (!dateStr) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const due = new Date(dateStr);
-      const diff = (due - today) / (1000 * 60 * 60 * 24);
-      return diff >= 0 && diff <= 3;
-    }
-
-    // ==================== الفلترة ====================
-    function applyFilters() {
-      const dept = document.getElementById('filterDept').value;
-      const result = document.getElementById('filterResult').value;
-      const search = document.getElementById('searchBox').value.toLowerCase();
-      
-      filteredRecords = allRecords.filter(r => {
-        if (dept && r.Department !== dept) return false;
-        if (result && r.Result !== result) return false;
-        if (search) {
-          const text = `${r.AssetID} ${r.AssetName} ${r.Staff} ${r.Department}`.toLowerCase();
-          if (!text.includes(search)) return false;
+        const data = await response.json();
+        if (!data || data.status !== 'success') {
+          throw new Error(data && data.message ? data.message : 'فشل في جلب البيانات.');
         }
-        return true;
-      });
-      
-      // ترتيب من الأحدث
-      filteredRecords.sort((a, b) => new Date(b.TestDate) - new Date(a.TestDate));
-      
-      currentPage = 1;
-      totalPages = Math.ceil(filteredRecords.length / RECORDS_PER_PAGE) || 1;
-      
-      document.getElementById('records-count').textContent = `${filteredRecords.length} سجل`;
-      
-      renderTable();
-    }
 
-    // الأحداث
-    document.getElementById('filterDept').addEventListener('change', applyFilters);
-    document.getElementById('filterResult').addEventListener('change', applyFilters);
-    document.getElementById('searchBox').addEventListener('input', applyFilters);
+        assetsMap = data.data.assetsMap || {};
+        staffList = data.data.staffList || [];
+        allRecords = (data.data.records || []).map(record => ({
+          Timestamp: record.Timestamp,
+          department: record.Department,
+          staff: record.Staff,
+          assetID: record.AssetID,
+          assetName: record.AssetName,
+          testDate: record.TestDate,
+          frequency: record.Frequency,
+          nextDue: record.NextDue,
+          result: record.Result,
+          CertificateLink:
+            record.Certificate || record.CertificateLink || record.CertificatePdf || '',
+          FileLink: record.File || record.FileLink || ''
+        }));
 
-    // ==================== عرض الجدول ====================
-    function renderTable() {
-      const tbody = document.getElementById('calTableBody');
-      const start = (currentPage - 1) * RECORDS_PER_PAGE;
-      const end = start + RECORDS_PER_PAGE;
-      const pageData = filteredRecords.slice(start, end);
-      
-      tbody.innerHTML = '';
-      
-      if (pageData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-gray-500">لا توجد سجلات</td></tr>';
-        return;
-      }
-      
-      pageData.forEach((r, idx) => {
-        const overdue = isOverdue(r.NextDue);
-        const upcoming = isUpcoming(r.NextDue);
-        
-        let statusBadge = '';
-        let rowClass = '';
-        
-        if (overdue) {
-          statusBadge = '<span class="status-overdue px-2 py-1 rounded text-xs font-bold">متأخر</span>';
-          rowClass = 'bg-red-50';
-        } else if (upcoming) {
-          statusBadge = '<span class="status-upcoming px-2 py-1 rounded text-xs font-bold">قريب</span>';
-          rowClass = 'bg-yellow-50';
-        } else {
-          statusBadge = '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">سليم</span>';
-        }
-        
-        const resultBadge = r.Result === 'Pass'
-          ? '<span class="status-pass px-2 py-1 rounded text-xs font-bold">مطابق</span>'
-          : '<span class="status-fail px-2 py-1 rounded text-xs font-bold">غير مطابق</span>';
-        
-        const fileLinks = [];
-        if (r.File) fileLinks.push(`<a href="${r.File}" target="_blank" class="text-blue-600 hover:underline"><i class="fas fa-file-pdf"></i></a>`);
-        if (r.Certificate) fileLinks.push(`<a href="${r.Certificate}" target="_blank" class="text-green-600 hover:underline"><i class="fas fa-certificate"></i></a>`);
-        
-        tbody.innerHTML += `
-          <tr class="${rowClass} hover:bg-gray-100 transition">
-            <td class="p-3 text-gray-500">${start + idx + 1}</td>
-            <td class="p-3">${r.TestDate || '-'}</td>
-            <td class="p-3"><span class="bg-gray-100 px-2 py-1 rounded text-xs">${r.Department}</span></td>
-            <td class="p-3 font-medium">${r.AssetName || r.AssetID}</td>
-            <td class="p-3">${r.Staff}</td>
-            <td class="p-3 text-center">${resultBadge}</td>
-            <td class="p-3 text-center">${r.NextDue || '-'}</td>
-            <td class="p-3 text-center">${statusBadge}</td>
-            <td class="p-3 text-center no-print">${fileLinks.join(' ') || '-'}</td>
-          </tr>
-        `;
-      });
-      
-      updatePaginationUI();
-    }
-
-    // ==================== Pagination ====================
-    function goToPage(page) {
-      if (page < 1 || page > totalPages) return;
-      currentPage = page;
-      renderTable();
-    }
-
-    function updatePaginationUI() {
-      document.getElementById('currentPage').textContent = currentPage;
-      document.getElementById('totalPages').textContent = totalPages;
-      
-      document.getElementById('btnFirst').disabled = currentPage === 1;
-      document.getElementById('btnPrev').disabled = currentPage === 1;
-      document.getElementById('btnNext').disabled = currentPage === totalPages;
-      document.getElementById('btnLast').disabled = currentPage === totalPages;
-    }
-
-    // ==================== حساب الاستحقاق مع تجاوز الجمعة ====================
-    function calculateNextDue(testDate, frequency) {
-      if (!testDate) return '';
-      
-      const d = new Date(testDate);
-      
-      switch (frequency) {
-        case 'يومي':
-          d.setDate(d.getDate() + 1);
-          // تجاوز الجمعة (5)
-          if (d.getDay() === 5) d.setDate(d.getDate() + 1);
-          break;
-        case 'أسبوعي':
-          d.setDate(d.getDate() + 7);
-          break;
-        case 'شهري':
-          d.setMonth(d.getMonth() + 1);
-          break;
-        case 'ربع سنوي':
-          d.setMonth(d.getMonth() + 3);
-          break;
-        case 'نصف سنوي':
-          d.setMonth(d.getMonth() + 6);
-          break;
-        case 'سنوي':
-          d.setFullYear(d.getFullYear() + 1);
-          break;
-      }
-      
-      return d.toISOString().split('T')[0];
-    }
-
-    // ==================== إرسال النموذج ====================
-    document.getElementById('calForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const dept = document.getElementById('department').value;
-      const assetID = document.getElementById('assetSelect').value;
-      const staff = document.getElementById('staff').value;
-      const testDate = document.getElementById('testDate').value;
-      const frequency = document.getElementById('frequency').value;
-      const result = document.getElementById('result').value;
-      const fileInput = document.getElementById('reportFile');
-      
-      // حساب الاستحقاق
-      const nextDue = calculateNextDue(testDate, frequency);
-      
-      // اسم الجهاز
-      const assets = assetsMap[dept] || [];
-      const asset = assets.find(a => a.id === assetID);
-      const assetName = asset ? asset.name : assetID;
-      
-      const payload = {
-        data: { department: dept, assetID, assetName, staff, testDate, frequency, nextDue, result },
-        fileData: {}
-      };
-      
-      // الملف
-      if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        const base64 = await fileToBase64(file);
-        payload.fileData = { base64, mimeType: file.type, fileName: file.name };
-      }
-      
-      try {
-        showToast('جاري الحفظ...', 'info');
-        
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        
-        const json = await res.json();
-        
-        if (json.status === 'success') {
-          showToast('تم الحفظ بنجاح!', 'success');
-          
-          if (json.data && json.data.newRecord) {
-            allRecords.unshift(json.data.newRecord);
-            applyFilters();
-            updateKPIs();
-          }
-          
-          document.getElementById('calForm').reset();
-        } else {
-          showToast(json.message || 'خطأ في الحفظ', 'error');
-        }
+        DEPARTMENTS_LIST = Object.keys(assetsMap || {});
+        populateDepartments();
+        processData();
+        updateLastUpdateTime();
       } catch (err) {
         console.error(err);
-        showToast('خطأ في الاتصال', 'error');
+        elements.tableBody.innerHTML =
+          '<tr><td colspan="8" class="text-center py-4 text-danger">حدث خطأ أثناء تحميل البيانات. يرجى التحقق من الاتصال وصلاحيات السكربت.</td></tr>';
+        showNotification('فشل في جلب البيانات: ' + err.message, 'error');
+      } finally {
+        showLoading(false);
       }
-    });
+    }
 
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+    function updateLastUpdateTime() {
+      const now = new Date();
+      elements.lastUpdate.textContent = now.toLocaleString('ar-SA', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     }
 
-    // ==================== تصدير CSV ====================
-    function exportCSV() {
-      if (filteredRecords.length === 0) {
-        showToast('لا توجد بيانات للتصدير', 'warning');
+    function processData() {
+      renderStaffList();
+      const statuses = calculateAssetStatuses(allRecords);
+      renderDashboard(statuses);
+      renderTable(allRecords);
+      checkSmartAlerts(statuses);
+      updateTableStats();
+    }
+
+    // ================ النموذج ================
+    function populateDepartments() {
+      elements.departmentSelect.innerHTML = '<option value="">اختر القسم...</option>';
+      elements.departmentFilter.innerHTML = '<option value="">جميع الأقسام</option>';
+
+      DEPARTMENTS_LIST.sort().forEach(dept => {
+        const opt1 = document.createElement('option');
+        opt1.value = dept;
+        opt1.textContent = dept;
+        elements.departmentSelect.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = dept;
+        opt2.textContent = dept;
+        elements.departmentFilter.appendChild(opt2);
+      });
+    }
+
+    function handleDepartmentChange() {
+      const department = elements.departmentSelect.value;
+      elements.assetSelect.innerHTML = '<option value="">اختر المهمة/الجهاز...</option>';
+
+      if (department && assetsMap[department]) {
+        const sortedAssets = assetsMap[department].slice().sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        sortedAssets.forEach(asset => {
+          const option = document.createElement('option');
+          option.value = asset.id;
+          option.textContent = asset.name;
+          elements.assetSelect.appendChild(option);
+        });
+        elements.assetSelect.disabled = false;
+        elements.assetSelect.classList.remove('bg-gray-100');
+      } else {
+        elements.assetSelect.disabled = true;
+        elements.assetSelect.classList.add('bg-gray-100');
+      }
+    }
+
+    // ✅ حساب تاريخ الاستحقاق (يومي/أسبوعي/شهري/نصف سنوي/سنوي)
+    function calculateNextDue() {
+      const testDateValue = elements.testDateInput.value; // yyyy-MM-dd
+      let frequency = elements.frequencySelect.value;     // مثل "يومي"
+
+      if (!testDateValue || !frequency) {
+        elements.nextDueInput.value = '';
         return;
       }
-      
-      const headers = ['التاريخ', 'القسم', 'الجهاز', 'الفني', 'النتيجة', 'الاستحقاق'];
-      const rows = filteredRecords.map(r => [
-        r.TestDate, r.Department, r.AssetName || r.AssetID, r.Staff, r.Result, r.NextDue
-      ]);
-      
-      const csv = '\ufeff' + [headers, ...rows].map(r => r.join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `calibration_${new Date().toISOString().split('T')[0]}.csv`;
-      a.click();
-      
-      showToast('تم التصدير بنجاح', 'success');
+
+      // لو مستقبلا كتبنا "يومي (Daily)" ننظفه:
+      frequency = frequency.split('(')[0].trim();
+
+      let nextYMD = testDateValue;
+
+      switch (frequency) {
+        case 'يومي':
+          // تجاوز الجمعة (إجازة) في التكرار اليومي
+          nextYMD = addDaysYMD(testDateValue, 1, true);
+          break;
+        case 'أسبوعي':
+          nextYMD = addDaysYMD(testDateValue, 7);
+          break;
+        case 'شهري':
+          nextYMD = addMonthsYMD(testDateValue, 1);
+          break;
+        case 'نصف سنوي':
+          nextYMD = addMonthsYMD(testDateValue, 6);
+          break;
+        case 'سنوي':
+          nextYMD = addYearsYMD(testDateValue, 1);
+          break;
+        default:
+          nextYMD = testDateValue;
+      }
+
+      elements.nextDueInput.value = nextYMD || '';
     }
 
-    // ==================== Toast ====================
-    function showToast(msg, type = 'info') {
-      const colors = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        warning: 'bg-yellow-500',
-        info: 'bg-blue-500'
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      elements.fileStatus.textContent = '';
+      uploadedFileBase64 = null;
+
+      if (!file) return;
+
+      if (!file.type.match('application/pdf') && !file.type.match('image.*')) {
+        showNotification('يرجى رفع ملف PDF أو صورة فقط.', 'error');
+        event.target.value = '';
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        showNotification('حجم الملف يتجاوز الحد المسموح (10 ميجابايت).', 'error');
+        event.target.value = '';
+        return;
+      }
+
+      elements.fileStatus.textContent = 'جاري معالجة الملف...';
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        uploadedFileBase64 = e.target.result.split(',')[1];
+        uploadedFileMimeType = file.type;
+        uploadedFileName = file.name;
+        elements.fileStatus.textContent = `تمت معالجة: ${file.name}`;
       };
-      
-      const toast = document.createElement('div');
-      toast.className = `fixed bottom-4 left-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-pulse`;
-      toast.textContent = msg;
-      document.body.appendChild(toast);
-      
-      setTimeout(() => toast.remove(), 3000);
+      reader.onerror = function () {
+        showNotification('حدث خطأ أثناء قراءة الملف.', 'error');
+        elements.fileStatus.textContent = 'خطأ في المعالجة.';
+      };
+      reader.readAsDataURL(file);
     }
 
-    // ==================== تحديد تاريخ اليوم ====================
-    document.getElementById('testDate').valueAsDate = new Date();
+    async function handleSubmit(event) {
+      event.preventDefault();
 
-    // ==================== التشغيل ====================
-    loadData();
+      if (!uploadedFileBase64) {
+        showNotification('يرجى رفع التقرير ومعالجته قبل الحفظ.', 'error');
+        return;
+      }
+
+      const formData = new FormData(elements.form);
+      const selectedAssetOption =
+        elements.assetSelect.options[elements.assetSelect.selectedIndex];
+      const assetName = selectedAssetOption ? selectedAssetOption.textContent : '';
+
+      const payload = {
+        action: 'logCalibration',
+        data: {
+          department: formData.get('department'),
+          staff: formData.get('staff'),
+          assetID: formData.get('asset'),
+          assetName: assetName,
+          testDate: formData.get('testDate'),
+          frequency: formData.get('frequency'),
+          nextDue: formData.get('nextDue'),
+          result: formData.get('result')
+        },
+        fileData: {
+          fileName: uploadedFileName,
+          mimeType: uploadedFileMimeType,
+          base64: uploadedFileBase64
+        }
+      };
+
+      toggleSubmitLoading(true);
+
+      try {
+        console.log('📤 إرسال البيانات إلى API...');
+        const response = await fetch(CAL_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(payload)
+        });
+
+        const responseText = await response.text();
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (e) {
+          console.error('Invalid JSON:', responseText);
+          throw new Error('استجابة غير صالحة من الخادم (تحقق من Apps Script).');
+        }
+
+        if (responseData.status !== 'success') {
+          throw new Error(responseData.message || 'فشل الحفظ في الواجهة الخلفية.');
+        }
+
+        showNotification(
+          responseData.message || 'تم حفظ السجل وإنشاء الشهادة بنجاح.',
+          'success'
+        );
+
+        if (responseData.data && responseData.data.newRecord) {
+          const n = responseData.data.newRecord;
+          allRecords.unshift({
+            Timestamp: n.Timestamp,
+            department: n.Department,
+            staff: n.Staff,
+            assetID: n.AssetID,
+            assetName: n.AssetName,
+            testDate: n.TestDate,
+            frequency: n.Frequency,
+            nextDue: n.NextDue,
+            result: n.Result,
+            CertificateLink:
+              n.Certificate || n.CertificatePdf || '',
+            FileLink: n.File || ''
+          });
+          processData();
+        } else {
+          // كخيار احتياطي: إعادة تحميل من الشيت
+          await fetchData(true);
+        }
+
+        resetForm();
+      } catch (err) {
+        console.error(err);
+        showNotification('فشل في حفظ السجل: ' + err.message, 'error');
+      } finally {
+        toggleSubmitLoading(false);
+      }
+    }
+
+    function resetForm() {
+      elements.form.reset();
+      uploadedFileBase64 = null;
+      elements.fileStatus.textContent = '';
+      elements.assetSelect.disabled = true;
+      elements.assetSelect.classList.add('bg-gray-100');
+      elements.assetSelect.innerHTML = '<option value="">اختر القسم أولاً...</option>';
+      elements.testDateInput.value = todayYMD();
+      calculateNextDue();
+    }
+
+    // ================ حساب المؤشرات ================
+    function calculateAssetStatuses(records) {
+      console.group('🔍 تحليل مؤشرات الالتزام');
+
+      const statuses = {
+        Pass: 0,
+        Fail: 0,
+        Overdue: 0,
+        Upcoming: 0,
+        Unscheduled: 0,
+        DepartmentCompliance: {},
+        Assets: {}
+      };
+
+      DEPARTMENTS_LIST.forEach(dept => {
+        statuses.DepartmentCompliance[dept] = {
+          pass: 0,
+          total: 0,
+          taskCount: assetsMap[dept]?.length || 0
+        };
+      });
+
+      const latestRecords = {};
+      const sorted = [...records].sort((a, b) =>
+        a.Timestamp < b.Timestamp ? 1 : -1
+      );
+
+      sorted.forEach(r => {
+        if (r.assetID && !latestRecords[r.assetID]) {
+          latestRecords[r.assetID] = r;
+        }
+      });
+
+      const today = todayYMD();
+      const upcomingThreshold = addDaysYMD(today, 30);
+
+      Object.values(latestRecords).forEach(r => {
+        const deptStats = statuses.DepartmentCompliance[r.department];
+        if (!deptStats) return;
+
+        if (r.result === 'Pass') statuses.Pass++;
+        else statuses.Fail++;
+
+        deptStats.total++;
+        if (r.result === 'Pass') deptStats.pass++;
+
+        const nd = r.nextDue;
+        if (nd) {
+          if (compareYMD(nd, today) === -1) {
+            statuses.Overdue++;
+          } else if (
+            compareYMD(nd, today) >= 0 &&
+            compareYMD(nd, upcomingThreshold) <= 0
+          ) {
+            statuses.Upcoming++;
+          }
+        }
+
+        statuses.Assets[r.assetID] = r;
+      });
+
+      let totalManagedTasks = 0;
+      Object.values(assetsMap).forEach(arr => (totalManagedTasks += arr.length));
+      statuses.Unscheduled = Math.max(
+        0,
+        totalManagedTasks - Object.keys(latestRecords).length
+      );
+
+      console.groupEnd();
+      return statuses;
+    }
+
+    function renderDashboard(statuses) {
+      document.getElementById('count-pass').textContent = statuses.Pass;
+      document.getElementById('count-fail').textContent = statuses.Fail;
+      document.getElementById('count-overdue').textContent = statuses.Overdue;
+      document.getElementById('count-upcoming').textContent = statuses.Upcoming;
+      document.getElementById('count-unscheduled').textContent =
+        statuses.Unscheduled;
+
+      const failKpi = document.getElementById('kpi-fail');
+      failKpi.classList.toggle('animate-pulsate-alert', statuses.Fail > 0);
+
+      const overdueKpi = document.getElementById('kpi-overdue');
+      overdueKpi.classList.toggle('animate-pulsate-alert', statuses.Overdue > 0);
+
+      let totalTasks = 0;
+      Object.values(assetsMap).forEach(arr => (totalTasks += arr.length));
+
+      let overallCompliance = 100;
+      if (totalTasks > 0) {
+        overallCompliance = (statuses.Pass / totalTasks) * 100;
+      }
+
+      renderCircularChart(
+        'overall-compliance-chart',
+        overallCompliance,
+        '#8B0000',
+        false
+      );
+
+      const deptContainer = document.getElementById('department-compliance');
+      deptContainer.innerHTML = '';
+
+      DEPARTMENTS_LIST.forEach(dept => {
+        const stats = statuses.DepartmentCompliance[dept];
+        let compliance = 100;
+        if (stats.taskCount > 0) {
+          compliance = (stats.pass / stats.taskCount) * 100;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex flex-col items-center';
+
+        const chartDiv = document.createElement('div');
+        chartDiv.id = `compliance-${dept}`;
+        wrapper.appendChild(chartDiv);
+
+        renderCircularChart(chartDiv.id, compliance, '#D4AF37', true);
+
+        const label = document.createElement('p');
+        label.className = 'text-xs font-semibold mt-1';
+        label.textContent = dept;
+        wrapper.appendChild(label);
+
+        deptContainer.appendChild(wrapper);
+      });
+    }
+
+    function renderCircularChart(containerId, percentage, defaultColor, isSmall) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      let dynamicColor = defaultColor;
+      if (percentage < 60) dynamicColor = '#dc3545';
+      else if (percentage < 90) dynamicColor = '#D4AF37';
+      else if (percentage >= 95) dynamicColor = '#28a745';
+
+      const radius = 15.9155;
+      const circumference = 100;
+      const dasharray = `${(percentage / 100) * circumference} ${circumference}`;
+      const sizeClass = isSmall ? 'w-16 h-16' : 'w-24 h-24';
+      const strokeWidth = isSmall ? '3.8' : '2.8';
+      const fontSize = isSmall ? '0.4em' : '0.5em';
+
+      container.innerHTML = `
+        <svg viewBox="0 0 36 36" class="circular-chart ${sizeClass}">
+          <path class="circle-bg" stroke-width="3.8"
+                d="M18 2.0845 a ${radius} ${radius} 0 0 1 0 31.831 a ${radius} ${radius} 0 0 1 0 -31.831" />
+          <path class="circle" stroke="${dynamicColor}" stroke-width="${strokeWidth}"
+                stroke-dasharray="${dasharray}"
+                d="M18 2.0845 a ${radius} ${radius} 0 0 1 0 31.831 a ${radius} ${radius} 0 0 1 0 -31.831" />
+          <text x="18" y="20.35" class="percentage" style="font-size: ${fontSize};">
+            ${Math.round(percentage)}%
+          </text>
+        </svg>
+      `;
+    }
+
+    let totalPages = 1;
+
+    function goToPage(page) {
+      const maxPage = Math.ceil(filteredRecords.length / RECORDS_PER_PAGE) || 1;
+      if (page < 1) page = 1;
+      if (page > maxPage) page = maxPage;
+      currentPage = page;
+      renderTablePage();
+      updatePaginationControls();
+    }
+
+    function updatePaginationControls() {
+      totalPages = Math.ceil(filteredRecords.length / RECORDS_PER_PAGE) || 1;
+      document.getElementById('current-page-num').textContent = currentPage;
+      document.getElementById('total-pages').textContent = totalPages;
+      
+      document.getElementById('first-page').disabled = currentPage === 1;
+      document.getElementById('prev-page').disabled = currentPage === 1;
+      document.getElementById('next-page').disabled = currentPage >= totalPages;
+      document.getElementById('last-page').disabled = currentPage >= totalPages;
+    }
+
+    function renderTable(records) {
+      if (!records || records.length === 0) {
+        filteredRecords = [];
+        elements.tableBody.innerHTML =
+          '<tr><td colspan="8" class="text-center py-4">لا توجد سجلات متاحة.</td></tr>';
+        updatePaginationControls();
+        return;
+      }
+
+      // ترتيب السجلات من الأحدث للأقدم
+      filteredRecords = [...records].sort((a, b) =>
+        a.Timestamp < b.Timestamp ? 1 : -1
+      );
+      
+      currentPage = 1;
+      renderTablePage();
+      updatePaginationControls();
+    }
+
+    function renderTablePage() {
+      if (!filteredRecords || filteredRecords.length === 0) {
+        elements.tableBody.innerHTML =
+          '<tr><td colspan="8" class="text-center py-4">لا توجد سجلات متاحة.</td></tr>';
+        return;
+      }
+
+      const today = todayYMD();
+      const weeklyThreshold = addDaysYMD(today, 7);
+
+      // حساب نطاق الصفحة
+      const startIndex = (currentPage - 1) * RECORDS_PER_PAGE;
+      const endIndex = startIndex + RECORDS_PER_PAGE;
+      const pageRecords = filteredRecords.slice(startIndex, endIndex);
+
+      elements.tableBody.innerHTML = pageRecords
+        .map(record => {
+          const isPass = record.result === 'Pass';
+          const resultHtml = `
+            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+              isPass ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'
+            }">
+              ${isPass ? '✅ مطابق' : '❌ غير مطابق'}
+            </span>
+          `;
+
+          let certificateHtml = 'N/A';
+          if (record.CertificateLink && record.CertificateLink !== 'N/A') {
+            certificateHtml = `
+              <a href="${record.CertificateLink}" target="_blank"
+                 class="text-primary hover:text-primary/80 transition duration-150 flex items-center justify-center bg-white border border-primary rounded-lg px-3 py-2 hover:bg-primary/10">
+                <i class="fas fa-file-pdf ml-1 text-danger"></i>
+                <span>عرض الشهادة</span>
+              </a>
+            `;
+          } else if (record.FileLink && record.FileLink !== 'N/A') {
+            certificateHtml = `
+              <a href="${record.FileLink}" target="_blank"
+                 class="text-primary hover:text-primary/80 transition duration-150 flex items-center justify-center bg-white border border-primary rounded-lg px-3 py-2 hover:bg-primary/10">
+                <i class="fas fa-file-alt ml-1 text-info"></i>
+                <span>عرض التقرير</span>
+              </a>
+            `;
+          }
+
+          let rowClass = '';
+          const nd = record.nextDue;
+          if (nd) {
+            if (compareYMD(nd, today) === -1) {
+              rowClass = 'bg-danger/10';
+            } else if (
+              compareYMD(nd, today) >= 0 &&
+              compareYMD(nd, weeklyThreshold) <= 0
+            ) {
+              rowClass = 'row-upcoming animate-upcoming-glow';
+            }
+          }
+
+          const assetDisplay = record.assetName || record.assetID || '';
+
+          return `
+            <tr class="${rowClass} hover:bg-gray-50 transition duration-150">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                ${displayDate(record.Timestamp)}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-dark">
+                ${record.department}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-dark">
+                ${record.staff}
+              </td>
+              <td class="px-6 py-4 text-sm text-dark max-w-sm truncate" title="${assetDisplay}">
+                ${assetDisplay}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                ${displayDate(record.testDate)}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">
+                ${displayDate(record.nextDue)}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                ${resultHtml}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                ${certificateHtml}
+              </td>
+            </tr>
+          `;
+        })
+        .join('');
+
+      updateTableStats();
+    }
+
+    function renderStaffList() {
+      elements.staffDatalist.innerHTML = staffList
+        .map(s => `<option value="${s}">`)
+        .join('');
+    }
+
+    function updateTableStats() {
+      elements.totalRecords.textContent = allRecords.length || 0;
+    }
+
+    function checkSmartAlerts(statuses) {
+      const today = todayYMD();
+      const weeklyThreshold = addDaysYMD(today, 7);
+      const imminentDepartments = new Set();
+
+      Object.values(statuses.Assets).forEach(asset => {
+        const nd = asset.nextDue;
+        if (
+          nd &&
+          compareYMD(nd, today) >= 0 &&
+          compareYMD(nd, weeklyThreshold) <= 0
+        ) {
+          imminentDepartments.add(asset.department);
+        }
+      });
+
+      const alerts = [];
+      if (statuses.Unscheduled > 0) {
+        alerts.push(
+          `<i class="fas fa-info-circle ml-2"></i>تنبيه: توجد <strong>${statuses.Unscheduled}</strong> مهمة/مهام لم يتم تسجيل أي سجل لها (بدون موعد).`
+        );
+      }
+      if (imminentDepartments.size > 0) {
+        alerts.push(
+          `<i class="fas fa-exclamation-triangle ml-2"></i>تنبيه هام: توجد معايرات مستحقة (أو متأخرة) هذا الأسبوع لقسم/أقسام: <strong>${Array.from(
+            imminentDepartments
+          ).join(', ')}</strong>.`
+        );
+      }
+
+      if (alerts.length > 0) {
+        elements.alertBanner.classList.remove('hidden');
+        elements.alertMessage.innerHTML = alerts.join('<br><br>');
+      } else {
+        elements.alertBanner.classList.add('hidden');
+      }
+    }
+
+    // ================ البحث والفلترة ================
+    function filterTable() {
+      const searchFilter = elements.searchInput.value.trim().toUpperCase();
+      const departmentFilter = elements.departmentFilter.value;
+
+      // ترتيب جميع السجلات من الأحدث للأقدم
+      const sorted = [...allRecords].sort((a, b) =>
+        a.Timestamp < b.Timestamp ? 1 : -1
+      );
+
+      // تطبيق الفلترة
+      filteredRecords = sorted.filter(record => {
+        let matchSearch = true;
+        let matchDept = true;
+
+        // فلتر البحث النصي
+        if (searchFilter) {
+          const searchableText = [
+            record.Timestamp || '',
+            record.department || '',
+            record.staff || '',
+            record.assetID || '',
+            record.assetName || '',
+            record.testDate || '',
+            record.nextDue || '',
+            record.result || ''
+          ].join(' ').toUpperCase();
+          
+          matchSearch = searchableText.includes(searchFilter);
+        }
+
+        // فلتر القسم
+        if (departmentFilter) {
+          matchDept = record.department === departmentFilter;
+        }
+
+        return matchSearch && matchDept;
+      });
+
+      // إعادة رسم الجدول من الصفحة الأولى
+      currentPage = 1;
+      renderTablePage();
+      updatePaginationControls();
+      updateFilterStats();
+    }
+
+    function updateFilterStats() {
+      if (elements.searchInput.value || elements.departmentFilter.value) {
+        elements.filterStats.classList.remove('hidden');
+        elements.filteredCount.textContent = filteredRecords.length;
+        elements.totalCount.textContent = allRecords.length;
+      } else {
+        elements.filterStats.classList.add('hidden');
+      }
+    }
   </script>
-
 </body>
 </html>
