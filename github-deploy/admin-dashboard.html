@@ -732,6 +732,29 @@
             }
         }
 
+        // Normalizer للتعامل مع اختلاف مفاتيح JSON
+        function normalize(res) {
+            if (!res) return { ok: false };
+            if (res.ok === true) return res;
+            if (res.success === true) return { ok: true, ...(res.data || {}), ...res };
+            if (res.status === 'success') return { ok: true, ...(res.data || {}), ...res };
+            if (res.data && (res.data.ok || res.data.success || res.data.status === 'success')) return normalize(res.data);
+            return { ok: false, ...res };
+        }
+
+        // دالة ذكية: GET ثم fallback POST
+        async function getStatsSmart(url, action) {
+            // 1) جرب GET
+            try {
+                const r = await fetch(url + `?action=${encodeURIComponent(action)}`);
+                const j = await r.json();
+                if (j) return j;
+            } catch(e) { console.log('GET failed for', action, e); }
+
+            // 2) جرب POST بنفس apiCall
+            return await apiCall(url, action, {});
+        }
+
         // دالة JSONP للوخز الإبري
         function loadNeedlestickData() {
             return new Promise((resolve) => {
@@ -897,12 +920,13 @@
                     console.warn('Rounds API failed:', roundsRes);
                 }
 
-                // الوخز الإبري (JSONP)
+                // الوخز الإبري (JSONP) مع normalize
                 console.log('Needlestick:', needlestickRes);
-                if (needlestickRes.success) {
-                    document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
-                    if (needlestickRes.thisMonth > 0) {
-                        document.getElementById('kpi-needlestick-month').textContent = `${needlestickRes.thisMonth} هذا الشهر`;
+                const n = normalize(needlestickRes);
+                if (n.ok || n.total !== undefined) {
+                    document.getElementById('kpi-needlestick').textContent = n.total || 0;
+                    if (n.thisMonth > 0) {
+                        document.getElementById('kpi-needlestick-month').textContent = `${n.thisMonth} هذا الشهر`;
                     } else {
                         document.getElementById('kpi-needlestick-month').textContent = '';
                     }
@@ -944,10 +968,10 @@
                     document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
                 }
 
-                // الصيانة - عرض إحصائيات الصيانة (getKPIs)
+                // الصيانة - عرض إحصائيات الصيانة (getKPIs) مع normalize
                 console.log('Processing Maintenance:', maintenanceRes);
-                if (maintenanceRes && maintenanceRes.success && maintenanceRes.data) {
-                    const m = maintenanceRes.data;
+                const m = normalize(maintenanceRes);
+                if (m.ok || m.totalDevices !== undefined) {
                     const totalDevices = m.totalDevices || 0;
                     const completed = m.completed || 0;
                     const notServiced = m.notServiced || 0;
