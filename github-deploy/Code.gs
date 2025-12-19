@@ -194,12 +194,19 @@
         .setMimeType(ContentService.MimeType.JSON);
     }
     
+    if (action === 'getEmergencyAnalytics') {
+      const result = getEmergencyAnalytics();
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
       .setMimeType(ContentService.MimeType.JSON);
   }
   
   // Emergency Report Functions
-  const EOC_SPREADSHEET_ID = '1cGxMCYqGfPH2UiE-nsCoytIRjIPSDYxutnq04XF5YGs';
+  // الشيت الرئيسي للطوارئ والإخلاء
+  const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
   
   function submitEmergencyReport(params) {
     try {
@@ -301,6 +308,70 @@
       }
       
       return { ok: true, message: 'Status updated successfully' };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function getEmergencyAnalytics() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('بلاغات_الطوارئ');
+      
+      if (!sheet) {
+        return { ok: true, analytics: { total: 0, byType: {}, byStatus: {}, byLocation: {} } };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        return { ok: true, analytics: { total: 0, byType: {}, byStatus: {}, byLocation: {} } };
+      }
+      
+      const analytics = {
+        total: data.length - 1,
+        byType: {},
+        byStatus: {},
+        byLocation: {},
+        today: 0,
+        thisWeek: 0,
+        thisMonth: 0,
+        avgResponseTime: 0
+      };
+      
+      const now = new Date();
+      const todayStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      for (let i = 1; i < data.length; i++) {
+        const type = data[i][3] || 'غير محدد';
+        const location = data[i][4] || 'غير محدد';
+        const status = data[i][6] || 'جديد';
+        const dateStr = String(data[i][1]);
+        
+        // Count by type
+        analytics.byType[type] = (analytics.byType[type] || 0) + 1;
+        
+        // Count by status
+        analytics.byStatus[status] = (analytics.byStatus[status] || 0) + 1;
+        
+        // Count by location (floor)
+        const floor = location.includes('الأرضي') ? 'الأرضي' : 
+                     location.includes('الأول') ? 'الأول' : 
+                     location.includes('الثاني') ? 'الثاني' : 'أخرى';
+        analytics.byLocation[floor] = (analytics.byLocation[floor] || 0) + 1;
+        
+        // Time-based counts
+        if (dateStr.includes(todayStr)) analytics.today++;
+        
+        try {
+          const reportDate = new Date(dateStr);
+          if (reportDate >= weekAgo) analytics.thisWeek++;
+          if (reportDate >= monthAgo) analytics.thisMonth++;
+        } catch(e) {}
+      }
+      
+      return { ok: true, analytics: analytics };
     } catch (err) {
       return { ok: false, error: err.message };
     }
