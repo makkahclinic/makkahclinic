@@ -793,7 +793,7 @@
     </div>
 
     <script>
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztSmY_O_ITwKYXVNzs2wH8Wsid05XEZ5bEG6KJf4453dlFE8JHG_zRmuJbOksa6UgogQ/exec';
+        const API_BASE = '/api/eoc';
 
         const scenarios = {
             fire: {
@@ -944,12 +944,12 @@
         async function loadDrillLog() {
             const container = document.getElementById('drillLog');
             try {
-                const response = await fetch(`${APPS_SCRIPT_URL}?action=getDrills`);
+                const response = await fetch(`${API_BASE}/drills`);
                 if (!response.ok) throw new Error('Failed to fetch');
                 
                 const data = await response.json();
-                if (data.drills && data.drills.length > 0) {
-                    container.innerHTML = data.drills.map(drill => `
+                if (data.ok && data.drills && data.drills.length > 0) {
+                    container.innerHTML = data.drills.slice(0, 10).map(drill => `
                         <div class="drill-item">
                             <div class="drill-info">
                                 <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
@@ -960,46 +960,33 @@
                         </div>
                     `).join('');
                 } else {
-                    container.innerHTML = `
-                        <div class="drill-item">
-                            <div class="drill-info">
-                                <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
-                                <span>تمرين إخلاء حريق</span>
-                            </div>
-                            <span class="drill-date">2025-01-15</span>
-                            <span class="drill-result success">ناجح</span>
-                        </div>
-                        <div class="drill-item">
-                            <div class="drill-info">
-                                <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
-                                <span>تمرين انقطاع كهرباء</span>
-                            </div>
-                            <span class="drill-date">2024-12-10</span>
-                            <span class="drill-result success">ناجح</span>
-                        </div>
-                    `;
+                    showDefaultDrills(container);
                 }
             } catch (error) {
                 console.error('Error loading drills:', error);
-                container.innerHTML = `
-                    <div class="drill-item">
-                        <div class="drill-info">
-                            <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
-                            <span>تمرين إخلاء حريق</span>
-                        </div>
-                        <span class="drill-date">2025-01-15</span>
-                        <span class="drill-result success">ناجح</span>
-                    </div>
-                    <div class="drill-item">
-                        <div class="drill-info">
-                            <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
-                            <span>تمرين انقطاع كهرباء</span>
-                        </div>
-                        <span class="drill-date">2024-12-10</span>
-                        <span class="drill-result success">ناجح</span>
-                    </div>
-                `;
+                showDefaultDrills(container);
             }
+        }
+        
+        function showDefaultDrills(container) {
+            container.innerHTML = `
+                <div class="drill-item">
+                    <div class="drill-info">
+                        <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
+                        <span>تمرين إخلاء حريق</span>
+                    </div>
+                    <span class="drill-date">2025-01-15</span>
+                    <span class="drill-result success">ناجح</span>
+                </div>
+                <div class="drill-item">
+                    <div class="drill-info">
+                        <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
+                        <span>تمرين انقطاع كهرباء</span>
+                    </div>
+                    <span class="drill-date">2024-12-10</span>
+                    <span class="drill-result success">ناجح</span>
+                </div>
+            `;
         }
 
         document.addEventListener('DOMContentLoaded', () => {

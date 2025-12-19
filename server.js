@@ -1036,6 +1036,58 @@ app.get('/api/emergency-docs', async (req, res) => {
   }
 });
 
+// EOC Drills API - Emergency Drills Log
+const EOC_DRILLS_SPREADSHEET_ID = '1so2p5mp7Pe8A0TAaOCZvSHqWN6Df5NH___D0FouW_as';
+
+app.get('/api/eoc/drills', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: EOC_DRILLS_SPREADSHEET_ID,
+      range: 'A2:F50'
+    });
+    
+    const rows = response.data.values || [];
+    const drills = rows
+      .filter(row => row[0])
+      .map(row => ({
+        date: row[0] || '',
+        type: row[1] || 'تمرين إخلاء',
+        location: row[2] || '',
+        participants: row[3] || '',
+        result: row[4] || 'ناجح',
+        notes: row[5] || ''
+      }));
+    
+    res.json({ ok: true, drills });
+  } catch (err) {
+    console.error('Error fetching EOC drills:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// EOC Log Drill - Record new drill
+app.post('/api/eoc/drills', async (req, res) => {
+  try {
+    const { date, type, location, participants, result, notes } = req.body;
+    const sheets = await getGoogleSheetsClient();
+    
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: EOC_DRILLS_SPREADSHEET_ID,
+      range: 'A:F',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[date, type, location, participants, result, notes]]
+      }
+    });
+    
+    res.json({ ok: true, message: 'Drill logged successfully' });
+  } catch (err) {
+    console.error('Error logging drill:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Static file serving
 app.use(express.static(path.join(__dirname), {
   extensions: ['html'],
