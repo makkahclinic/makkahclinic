@@ -200,6 +200,24 @@
         .setMimeType(ContentService.MimeType.JSON);
     }
     
+    if (action === 'setActiveCommand') {
+      const result = setActiveCommand(e.parameter);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    if (action === 'getActiveCommand') {
+      const result = getActiveCommand();
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    if (action === 'clearActiveCommand') {
+      const result = clearActiveCommand();
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
       .setMimeType(ContentService.MimeType.JSON);
   }
@@ -372,6 +390,92 @@
       }
       
       return { ok: true, analytics: analytics };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  // Active Command Functions for Emergency Display Screen
+  function setActiveCommand(params) {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      let sheet = ss.getSheetByName('أوامر_نشطة');
+      
+      if (!sheet) {
+        sheet = ss.insertSheet('أوامر_نشطة');
+        sheet.appendRow(['active', 'responseType', 'reportType', 'location', 'muster', 'timestamp']);
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length > 1) {
+        sheet.deleteRows(2, data.length - 1);
+      }
+      
+      sheet.appendRow([
+        'true',
+        params.responseType || '',
+        params.reportType || '',
+        params.location || '',
+        params.muster || '',
+        new Date().toISOString()
+      ]);
+      
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function getActiveCommand() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('أوامر_نشطة');
+      
+      if (!sheet) {
+        return { ok: true, command: null };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        return { ok: true, command: null };
+      }
+      
+      const row = data[1];
+      if (row[0] !== 'true') {
+        return { ok: true, command: null };
+      }
+      
+      return {
+        ok: true,
+        command: {
+          active: true,
+          responseType: row[1],
+          reportType: row[2],
+          location: row[3],
+          muster: row[4],
+          timestamp: row[5]
+        }
+      };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function clearActiveCommand() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('أوامر_نشطة');
+      
+      if (!sheet) {
+        return { ok: true };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length > 1) {
+        sheet.getRange(2, 1).setValue('false');
+      }
+      
+      return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
     }
