@@ -999,6 +999,43 @@ app.get('/api/admin/auth-users', async (req, res) => {
   }
 });
 
+// Emergency Plan Documents API
+app.get('/api/emergency-docs', async (req, res) => {
+  try {
+    const emergencyDocsSpreadsheetId = process.env.EMERGENCY_DOCS_SPREADSHEET_ID;
+    if (!emergencyDocsSpreadsheetId) {
+      throw new Error('EMERGENCY_DOCS_SPREADSHEET_ID not configured');
+    }
+    
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: emergencyDocsSpreadsheetId,
+      range: 'A2:C100'
+    });
+    
+    const rows = response.data.values || [];
+    const documents = rows
+      .filter(row => row[0] && row[2] && !row[0].startsWith('Sources'))
+      .map(row => {
+        const filename = row[0] || '';
+        const desc = row[1] || filename;
+        const url = row[2] || '';
+        
+        const typeMatch = filename.match(/EOC-([A-Z]+)-/);
+        const type = typeMatch ? typeMatch[1] : 'other';
+        
+        const name = desc.replace(/-/g, '/');
+        
+        return { name, desc, type, url };
+      });
+    
+    res.json({ ok: true, documents });
+  } catch (err) {
+    console.error('Error fetching emergency docs:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Static file serving
 app.use(express.static(path.join(__dirname), {
   extensions: ['html'],
