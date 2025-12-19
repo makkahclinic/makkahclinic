@@ -637,53 +637,158 @@
         .error-state small {
             display: block;
             margin-top: 5px;
-            opacity: 0.6;
-            font-size: 0.85rem;
         }
-
-        .report-notes {
-            font-size: 0.85rem;
-            opacity: 0.7;
-            margin-top: 5px;
-            font-style: italic;
+        
+        /* Emergency Alert Popup */
+        .new-report-alert {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #DC143C, #b91c1c);
+            color: #fff;
+            padding: 30px 40px;
+            border-radius: 20px;
+            z-index: 10000;
+            box-shadow: 0 0 50px rgba(220,20,60,0.8);
+            animation: alertPulse 0.5s ease-in-out infinite alternate;
+            text-align: center;
+            min-width: 350px;
         }
-
+        
+        @keyframes alertPulse {
+            0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 50px rgba(220,20,60,0.8); }
+            100% { transform: translate(-50%, -50%) scale(1.02); box-shadow: 0 0 80px rgba(220,20,60,1); }
+        }
+        
+        .new-report-alert .alert-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .new-report-alert .alert-content > i {
+            font-size: 3rem;
+            animation: shake 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: rotate(-5deg); }
+            50% { transform: rotate(5deg); }
+        }
+        
+        .new-report-alert strong {
+            font-size: 1.5rem;
+        }
+        
+        .new-report-alert p {
+            font-size: 1.1rem;
+            margin: 5px 0;
+        }
+        
+        /* Emergency Location Highlight */
+        .room-btn.emergency-highlight {
+            background: linear-gradient(135deg, #DC143C, #ff4444) !important;
+            color: #fff !important;
+            animation: emergencyBlink 0.5s ease-in-out infinite alternate;
+            border: 3px solid #fff !important;
+            transform: scale(1.1);
+            z-index: 100;
+        }
+        
+        @keyframes emergencyBlink {
+            0% { opacity: 1; box-shadow: 0 0 20px #DC143C; }
+            100% { opacity: 0.7; box-shadow: 0 0 40px #ff0000; }
+        }
+        
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 25px;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.info { background: var(--info); }
+        
+        /* Action Buttons */
         .report-actions {
             margin-top: 10px;
             display: flex;
-            gap: 8px;
+            gap: 10px;
         }
-
+        
         .action-btn {
             padding: 8px 16px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-family: inherit;
-            font-size: 0.85rem;
+            font-family: 'Tajawal', sans-serif;
             font-weight: 600;
             display: flex;
             align-items: center;
             gap: 6px;
             transition: all 0.3s;
         }
-
+        
         .action-btn.respond {
             background: var(--warning);
             color: #000;
         }
-
-        .action-btn.respond:hover {
-            background: #d97706;
-        }
-
+        
         .action-btn.resolve {
             background: var(--success);
             color: #fff;
         }
-
-        .action-btn.resolve:hover {
-            background: #059669;
+        
+        .action-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .resolved-badge {
+            color: var(--success);
+            font-size: 0.85rem;
+        }
+        
+        .loading-spinner {
+            text-align: center;
+            padding: 30px;
+        }
+        
+        .loading-spinner i {
+            font-size: 2rem;
+            color: var(--secondary);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .report-notes {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin-top: 5px;
+            font-style: italic;
         }
 
         .resolved-badge {
@@ -1375,26 +1480,84 @@
         }
         
         function showNewReportAlert(report) {
+            console.log('🚨 New report alert:', report);
+            
+            // Highlight location on map
+            highlightEmergencyLocation(report.location);
+            
             const alertDiv = document.createElement('div');
             alertDiv.className = 'new-report-alert';
             alertDiv.innerHTML = `
                 <div class="alert-content">
                     <i class="fas fa-exclamation-triangle"></i>
                     <div>
-                        <strong>بلاغ جديد!</strong>
-                        <p>${report.type} - ${report.location}</p>
+                        <strong>🚨 بلاغ طوارئ جديد!</strong>
+                        <p><strong>${report.type}</strong></p>
+                        <p><i class="fas fa-map-marker-alt"></i> ${report.location}</p>
                     </div>
+                    <button onclick="this.parentElement.parentElement.remove()" style="background:#fff;color:#c00;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;">إغلاق</button>
                 </div>
             `;
             document.body.appendChild(alertDiv);
             
-            // Play alert sound
-            try {
-                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleR0VOITk+8qlXBdBhOz6zaNaGABHgOH7yKZdHRVSePT7yaRZGg9Qf/T7x6RYGBBSfvT8x6RYFxBTgPT8x6NYFxBUgfT8xqNXFxBWg/X8xaJXFhBXhfX9xKFWFRBZh/X9w6BWFBBbiPb9wZ9VExBdjPb9wJ1UEhBfj/f9vpxTEQ9hlvf9vJpRDw9knvj9uZdPDQ5qpvn9tpNMCw1xr/r9so9JCAF3ufv9rYpFAwB/w/z9qIQ/AP+H0P39on44ALqR2f79nHAzALmZ4P7+l2gvALuh5v7+kWAqALyo7f7+i1clAL6v8/7+hU8gAL+29v7+fkgbAL+9+f7+d0AWAMDBAv/+cDgRAMHEBP/+ajIMAMHHBv/+YysHAMHJCP/+XCQCAMHLCv/+VSEAAMMNDP/+TRj//cMPDv/+Rg/2/sMRD//+Pwbs/sQTEf/+OPnj/sUVEv/+MPTb/sYXE//+KeXR/scZFP/+Itvn/sgbFf/+HM7d/skdFv/+FM3T/sodGP/+DMjK/sodGf/+Bb++/csfGv/+Ab23/csgG//+ALmw+8shHP/+ALS');
-                audio.play().catch(() => {});
-            } catch(e) {}
+            // Play loud siren sound multiple times
+            playEmergencySiren();
             
-            setTimeout(() => alertDiv.remove(), 5000);
+            // Change page status to alert mode
+            const statusBadge = document.querySelector('.status-badge');
+            if (statusBadge) {
+                statusBadge.className = 'status-badge status-alert';
+                statusBadge.innerHTML = '<i class="fas fa-exclamation-triangle"></i> حالة طوارئ!';
+            }
+            
+            setTimeout(() => alertDiv.remove(), 15000);
+        }
+        
+        function playEmergencySiren() {
+            // Create oscillator-based siren for loud alert
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = 'sawtooth';
+                gainNode.gain.value = 0.3;
+                
+                // Siren effect - alternating frequencies
+                oscillator.start();
+                let high = true;
+                const sirenInterval = setInterval(() => {
+                    oscillator.frequency.value = high ? 800 : 600;
+                    high = !high;
+                }, 300);
+                
+                // Stop after 3 seconds
+                setTimeout(() => {
+                    clearInterval(sirenInterval);
+                    oscillator.stop();
+                    audioContext.close();
+                }, 3000);
+            } catch(e) {
+                console.log('Audio not supported');
+            }
+        }
+        
+        function highlightEmergencyLocation(locationText) {
+            // Remove previous highlights
+            document.querySelectorAll('.room-btn.emergency-highlight').forEach(btn => {
+                btn.classList.remove('emergency-highlight');
+            });
+            
+            // Find matching room button and highlight it
+            document.querySelectorAll('.room-btn').forEach(btn => {
+                if (locationText && locationText.includes(btn.textContent.trim())) {
+                    btn.classList.add('emergency-highlight');
+                    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
         }
         
         function showToast(message, type = 'info') {
