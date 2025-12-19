@@ -641,6 +641,126 @@
             font-size: 0.85rem;
         }
 
+        .report-notes {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .report-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s;
+        }
+
+        .action-btn.respond {
+            background: var(--warning);
+            color: #000;
+        }
+
+        .action-btn.respond:hover {
+            background: #d97706;
+        }
+
+        .action-btn.resolve {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .action-btn.resolve:hover {
+            background: #059669;
+        }
+
+        .resolved-badge {
+            color: var(--success);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .new-report-alert {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, var(--danger), #b91c1c);
+            color: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(220, 20, 60, 0.4);
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out, pulse 1s infinite;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .alert-content {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .alert-content i {
+            font-size: 2rem;
+        }
+
+        .alert-content strong {
+            display: block;
+            font-size: 1.1rem;
+        }
+
+        .alert-content p {
+            margin-top: 5px;
+            opacity: 0.9;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            animation: toastIn 0.3s ease-out;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        .toast.success {
+            background: var(--success);
+        }
+
+        .toast.error {
+            background: var(--danger);
+        }
+
         .drill-result {
             padding: 4px 10px;
             border-radius: 12px;
@@ -1133,6 +1253,8 @@
             `;
         }
 
+        let lastReportCount = 0;
+        
         async function loadReports() {
             const container = document.getElementById('reportsLog');
             try {
@@ -1155,18 +1277,28 @@
                 }
                 
                 if (data.reports && data.reports.length > 0) {
+                    // Check for new reports
+                    const newCount = data.reports.filter(r => r.status === 'جديد').length;
+                    if (newCount > lastReportCount && lastReportCount > 0) {
+                        showNewReportAlert(data.reports[0]);
+                    }
+                    lastReportCount = newCount;
+                    
                     container.innerHTML = data.reports.slice(0, 10).map(report => {
                         const statusClass = report.status === 'جديد' ? 'new' : 
                                            report.status === 'قيد المعالجة' ? 'pending' : 'resolved';
                         const typeIcon = getReportTypeIcon(report.type);
+                        const actionBtns = getActionButtons(report);
                         return `
-                            <div class="report-item ${statusClass}">
+                            <div class="report-item ${statusClass}" data-report-id="${report.id}">
                                 <div class="report-header">
                                     <span class="report-type"><i class="${typeIcon}"></i> ${report.type}</span>
                                     <span class="report-status ${statusClass}">${report.status}</span>
                                 </div>
                                 <div class="report-location"><i class="fas fa-map-marker-alt"></i> ${report.location}</div>
                                 <div class="report-time"><i class="fas fa-clock"></i> ${report.date} - ${report.time}</div>
+                                ${report.notes ? `<div class="report-notes"><i class="fas fa-sticky-note"></i> ${report.notes}</div>` : ''}
+                                <div class="report-actions">${actionBtns}</div>
                             </div>
                         `;
                     }).join('');
@@ -1188,6 +1320,84 @@
                     </div>
                 `;
             }
+        }
+        
+        function getActionButtons(report) {
+            if (report.status === 'جديد') {
+                return `
+                    <button class="action-btn respond" onclick="updateStatus('${report.id}', 'قيد المعالجة')">
+                        <i class="fas fa-user-check"></i> استجابة
+                    </button>
+                `;
+            } else if (report.status === 'قيد المعالجة') {
+                return `
+                    <button class="action-btn resolve" onclick="updateStatus('${report.id}', 'مغلق')">
+                        <i class="fas fa-check-circle"></i> إغلاق
+                    </button>
+                `;
+            }
+            return '<span class="resolved-badge"><i class="fas fa-check"></i> تم الإغلاق</span>';
+        }
+        
+        async function updateStatus(reportId, newStatus) {
+            const responder = prompt('اسم المستجيب:');
+            if (!responder) return;
+            
+            const actionNotes = prompt('ملاحظات الإجراء (اختياري):') || '';
+            
+            try {
+                const params = new URLSearchParams({
+                    action: 'updateEmergencyStatus',
+                    reportId: reportId,
+                    status: newStatus,
+                    responder: responder,
+                    actionNotes: actionNotes
+                });
+                
+                const response = await fetch(WEB_APP_URL + '?' + params.toString());
+                const data = await response.json();
+                
+                if (data.ok) {
+                    showToast('تم تحديث الحالة بنجاح', 'success');
+                    loadReports();
+                } else {
+                    showToast('خطأ: ' + (data.error || 'فشل التحديث'), 'error');
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                showToast('تعذر الاتصال بالخادم', 'error');
+            }
+        }
+        
+        function showNewReportAlert(report) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'new-report-alert';
+            alertDiv.innerHTML = `
+                <div class="alert-content">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <strong>بلاغ جديد!</strong>
+                        <p>${report.type} - ${report.location}</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            // Play alert sound
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleR0VOITk+8qlXBdBhOz6zaNaGABHgOH7yKZdHRVSePT7yaRZGg9Qf/T7x6RYGBBSfvT8x6RYFxBTgPT8x6NYFxBUgfT8xqNXFxBWg/X8xaJXFhBXhfX9xKFWFRBZh/X9w6BWFBBbiPb9wZ9VExBdjPb9wJ1UEhBfj/f9vpxTEQ9hlvf9vJpRDw9knvj9uZdPDQ5qpvn9tpNMCw1xr/r9so9JCAF3ufv9rYpFAwB/w/z9qIQ/AP+H0P39on44ALqR2f79nHAzALmZ4P7+l2gvALuh5v7+kWAqALyo7f7+i1clAL6v8/7+hU8gAL+29v7+fkgbAL+9+f7+d0AWAMDBAv/+cDgRAMHEBP/+ajIMAMHHBv/+YysHAMHJCP/+XCQCAMHLCv/+VSEAAMMNDP/+TRj//cMPDv/+Rg/2/sMRD//+Pwbs/sQTEf/+OPnj/sUVEv/+MPTb/sYXE//+KeXR/scZFP/+Itvn/sgbFf/+HM7d/skdFv/+FM3T/sodGP/+DMjK/sodGf/+Bb++/csfGv/+Ab23/csgG//+ALmw+8shHP/+ALS');
+                audio.play().catch(() => {});
+            } catch(e) {}
+            
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
         }
         
         function getReportTypeIcon(type) {
