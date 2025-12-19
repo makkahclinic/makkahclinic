@@ -996,35 +996,125 @@
             box-shadow: 0 0 30px rgba(220, 20, 60, 0.7);
         }
         
-        .selected-areas {
-            margin-top: 15px;
-            padding: 15px;
-            background: rgba(0,0,0,0.3);
+        /* أزرار الاختيار السريع للأدوار */
+        .quick-floor-btns {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        
+        .quick-floor-btn {
+            padding: 10px 15px;
+            background: rgba(30, 58, 95, 0.8);
+            border: 2px solid rgba(255,255,255,0.3);
             border-radius: 8px;
-            min-height: 50px;
+            color: rgba(255,255,255,0.8);
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .quick-floor-btn:hover {
+            background: rgba(201, 169, 98, 0.3);
+            border-color: var(--secondary);
+        }
+        
+        .quick-floor-btn.active {
+            background: var(--secondary);
+            border-color: var(--secondary);
+            color: var(--primary);
+            font-weight: 700;
+        }
+        
+        /* شبكة أقسام toggle */
+        .dept-toggle-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .dept-group {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        
+        .dept-group-title {
+            color: var(--secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .dept-toggle-btns {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
         }
         
-        .selected-areas .placeholder {
-            opacity: 0.5;
+        .dept-toggle-btn {
+            padding: 10px 16px;
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 25px;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            position: relative;
         }
         
-        .selected-area-tag {
-            background: var(--danger);
+        .dept-toggle-btn:hover {
+            background: rgba(201, 169, 98, 0.2);
+            border-color: var(--secondary);
             color: #fff;
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 0.85rem;
+            transform: scale(1.02);
+        }
+        
+        /* تأثير اللمبة المضاءة */
+        .dept-toggle-btn.active {
+            background: linear-gradient(135deg, var(--danger), #ff6b6b);
+            border-color: #fff;
+            color: #fff;
+            font-weight: 700;
+            box-shadow: 0 0 15px rgba(220, 20, 60, 0.5), 0 0 30px rgba(220, 20, 60, 0.3);
+            animation: btnGlow 1.5s ease-in-out infinite alternate;
+        }
+        
+        .dept-toggle-btn.active::before {
+            content: '✓';
+            margin-left: 6px;
+        }
+        
+        @keyframes btnGlow {
+            0% { box-shadow: 0 0 15px rgba(220, 20, 60, 0.5), 0 0 30px rgba(220, 20, 60, 0.3); }
+            100% { box-shadow: 0 0 20px rgba(220, 20, 60, 0.7), 0 0 40px rgba(220, 20, 60, 0.4); }
+        }
+        
+        /* عداد المحدد */
+        .selection-counter {
+            margin-top: 15px;
+            padding: 12px 20px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 2px solid var(--success);
+            border-radius: 10px;
+            color: var(--success);
+            font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 5px;
+            justify-content: center;
+            gap: 8px;
+            font-size: 1rem;
         }
         
-        .selected-area-tag .remove-tag {
-            cursor: pointer;
-            opacity: 0.7;
+        .selection-counter.has-selection {
+            background: rgba(220, 20, 60, 0.15);
+            border-color: var(--danger);
+            color: var(--danger);
         }
         
         .evacuation-actions {
@@ -1851,23 +1941,58 @@
                     <!-- الخطوة 2: أماكن الإخلاء -->
                     <div class="evac-step">
                         <h3><span class="step-num">2</span> حدد الأماكن المطلوب إخلاؤها</h3>
-                        <p class="step-hint">انقر على الأقسام في الخريطة أعلاه أو اختر أدوار كاملة:</p>
-                        <div class="floor-select-grid">
-                            <button class="floor-select-btn" onclick="selectEvacFloor(2)">
-                                <i class="fas fa-building"></i> الدور الثاني (كامل)
+                        <p class="step-hint">اضغط على الأماكن لتفعيلها أو إلغائها:</p>
+                        
+                        <!-- اختيار سريع للأدوار -->
+                        <div class="quick-floor-btns">
+                            <button class="quick-floor-btn" onclick="toggleQuickFloor('all')">
+                                <i class="fas fa-building"></i> المبنى بالكامل
                             </button>
-                            <button class="floor-select-btn" onclick="selectEvacFloor(1)">
-                                <i class="fas fa-building"></i> الدور الأول (كامل)
-                            </button>
-                            <button class="floor-select-btn" onclick="selectEvacFloor(0)">
-                                <i class="fas fa-building"></i> الدور الأرضي (كامل)
-                            </button>
-                            <button class="floor-select-btn danger" onclick="selectEvacFloor('all')">
-                                <i class="fas fa-exclamation-circle"></i> المبنى بالكامل
-                            </button>
+                            <button class="quick-floor-btn" onclick="toggleQuickFloor(2)">الدور الثاني</button>
+                            <button class="quick-floor-btn" onclick="toggleQuickFloor(1)">الدور الأول</button>
+                            <button class="quick-floor-btn" onclick="toggleQuickFloor(0)">الدور الأرضي</button>
                         </div>
-                        <div class="selected-areas" id="selectedAreas">
-                            <span class="placeholder">لم يتم تحديد أي مكان</span>
+                        
+                        <!-- أزرار الأقسام الثابتة -->
+                        <div class="dept-toggle-grid">
+                            <div class="dept-group">
+                                <div class="dept-group-title">الدور الثاني</div>
+                                <div class="dept-toggle-btns">
+                                    <button class="dept-toggle-btn" data-dept="dental" onclick="toggleDept('dental')">الأسنان</button>
+                                    <button class="dept-toggle-btn" data-dept="internal2" onclick="toggleDept('internal2')">الباطنية 2</button>
+                                    <button class="dept-toggle-btn" data-dept="internal3" onclick="toggleDept('internal3')">الباطنية 3</button>
+                                </div>
+                            </div>
+                            <div class="dept-group">
+                                <div class="dept-group-title">الدور الأول</div>
+                                <div class="dept-toggle-btns">
+                                    <button class="dept-toggle-btn" data-dept="reception" onclick="toggleDept('reception')">الاستقبال</button>
+                                    <button class="dept-toggle-btn" data-dept="internal1" onclick="toggleDept('internal1')">الباطنية</button>
+                                    <button class="dept-toggle-btn" data-dept="bones" onclick="toggleDept('bones')">العظام</button>
+                                    <button class="dept-toggle-btn" data-dept="emergency" onclick="toggleDept('emergency')">الطوارئ</button>
+                                    <button class="dept-toggle-btn" data-dept="general" onclick="toggleDept('general')">الطب العام</button>
+                                    <button class="dept-toggle-btn" data-dept="bandage" onclick="toggleDept('bandage')">الضماد</button>
+                                    <button class="dept-toggle-btn" data-dept="women" onclick="toggleDept('women')">النساء والولادة</button>
+                                    <button class="dept-toggle-btn" data-dept="menReception" onclick="toggleDept('menReception')">استقبال رجال</button>
+                                    <button class="dept-toggle-btn" data-dept="womenReception" onclick="toggleDept('womenReception')">استقبال نساء</button>
+                                </div>
+                            </div>
+                            <div class="dept-group">
+                                <div class="dept-group-title">الدور الأرضي</div>
+                                <div class="dept-toggle-btns">
+                                    <button class="dept-toggle-btn" data-dept="lab" onclick="toggleDept('lab')">المختبر</button>
+                                    <button class="dept-toggle-btn" data-dept="admin" onclick="toggleDept('admin')">مكاتب إدارية</button>
+                                    <button class="dept-toggle-btn" data-dept="physio" onclick="toggleDept('physio')">العلاج الطبيعي</button>
+                                    <button class="dept-toggle-btn" data-dept="xray" onclick="toggleDept('xray')">الأشعة</button>
+                                    <button class="dept-toggle-btn" data-dept="ultrasound" onclick="toggleDept('ultrasound')">الألتراساوند</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- عداد المحدد -->
+                        <div class="selection-counter" id="selectionCounter">
+                            <i class="fas fa-check-circle"></i>
+                            <span id="selectedCount">0</span> مكان محدد
                         </div>
                     </div>
                     
@@ -2915,6 +3040,73 @@
             
             updateSelectedAreasDisplay();
             updateEvacButtonState();
+        }
+        
+        // Toggle قسم فردي (لمبة)
+        function toggleDept(deptId) {
+            const btn = document.querySelector(`.dept-toggle-btn[data-dept="${deptId}"]`);
+            
+            if (evacState.areas.has(deptId)) {
+                // إلغاء التحديد
+                evacState.areas.delete(deptId);
+                btn.classList.remove('active');
+            } else {
+                // تحديد
+                evacState.areas.add(deptId);
+                btn.classList.add('active');
+            }
+            
+            updateSelectionCounter();
+            updateEvacButtonState();
+        }
+        
+        // Toggle اختيار سريع للأدوار
+        function toggleQuickFloor(floor) {
+            const allBtns = document.querySelectorAll('.quick-floor-btn');
+            let floorDeptList;
+            
+            if (floor === 'all') {
+                floorDeptList = Object.values(floorDepts).flat();
+            } else {
+                floorDeptList = floorDepts[floor] || [];
+            }
+            
+            // Check if all depts of this floor are selected
+            const allSelected = floorDeptList.every(d => evacState.areas.has(d));
+            
+            if (allSelected) {
+                // Deselect all
+                floorDeptList.forEach(d => {
+                    evacState.areas.delete(d);
+                    const btn = document.querySelector(`.dept-toggle-btn[data-dept="${d}"]`);
+                    if (btn) btn.classList.remove('active');
+                });
+            } else {
+                // Select all
+                floorDeptList.forEach(d => {
+                    evacState.areas.add(d);
+                    const btn = document.querySelector(`.dept-toggle-btn[data-dept="${d}"]`);
+                    if (btn) btn.classList.add('active');
+                });
+            }
+            
+            updateSelectionCounter();
+            updateEvacButtonState();
+        }
+        
+        // تحديث عداد المحدد
+        function updateSelectionCounter() {
+            const counter = document.getElementById('selectionCounter');
+            const countEl = document.getElementById('selectedCount');
+            const count = evacState.areas.size;
+            
+            countEl.textContent = count;
+            
+            if (count > 0) {
+                counter.classList.add('has-selection');
+            } else {
+                counter.classList.remove('has-selection');
+            }
         }
         
         function selectMusterForEvac(point) {
