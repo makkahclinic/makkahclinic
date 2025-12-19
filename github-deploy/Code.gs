@@ -176,8 +176,83 @@
         .setMimeType(ContentService.MimeType.JSON);
     }
     
+    if (action === 'submitEmergencyReport') {
+      const result = submitEmergencyReport(e.parameter);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    if (action === 'getEmergencyReports') {
+      const result = getEmergencyReports();
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Emergency Report Functions
+  const EOC_SPREADSHEET_ID = '1cGxMCYqGfPH2UiE-nsCoytIRjIPSDYxutnq04XF5YGs';
+  
+  function submitEmergencyReport(params) {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      let sheet = ss.getSheetByName('بلاغات_الطوارئ');
+      
+      // Create sheet if not exists
+      if (!sheet) {
+        sheet = ss.insertSheet('بلاغات_الطوارئ');
+        sheet.appendRow(['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الكارثة', 'الموقع', 'ملاحظات', 'الحالة']);
+      }
+      
+      sheet.appendRow([
+        params.reportId || 'EMR-' + Date.now(),
+        params.date || new Date().toLocaleDateString('ar-SA'),
+        params.time || new Date().toLocaleTimeString('ar-SA'),
+        params.disasterType,
+        params.location,
+        params.notes || '',
+        'جديد'
+      ]);
+      
+      return { ok: true, reportId: params.reportId };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function getEmergencyReports() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('بلاغات_الطوارئ');
+      
+      if (!sheet) {
+        return { ok: true, reports: [] };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        return { ok: true, reports: [] };
+      }
+      
+      const reports = [];
+      for (let i = data.length - 1; i >= 1; i--) {
+        reports.push({
+          id: data[i][0],
+          date: data[i][1],
+          time: data[i][2],
+          type: data[i][3],
+          location: data[i][4],
+          notes: data[i][5],
+          status: data[i][6] || 'جديد'
+        });
+      }
+      
+      return { ok: true, reports: reports.slice(0, 20) };
+    } catch (err) {
+      return { ok: false, error: err.message, reports: [] };
+    }
   }
   
   function getSheet(name) {
