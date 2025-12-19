@@ -115,6 +115,31 @@
             color: var(--primary);
         }
 
+        .report-emergency-btn {
+            background: linear-gradient(135deg, var(--danger), #b91c1c);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+            animation: pulse-btn 2s infinite;
+        }
+
+        .report-emergency-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(220, 20, 60, 0.4);
+        }
+
+        @keyframes pulse-btn {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 20, 60, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(220, 20, 60, 0); }
+        }
+
         .main-container {
             display: grid;
             grid-template-columns: 1fr 400px;
@@ -511,6 +536,111 @@
             opacity: 0.7;
         }
 
+        .reports-log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .report-item {
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-right: 3px solid var(--secondary);
+        }
+
+        .report-item.new {
+            border-right-color: var(--danger);
+            background: rgba(220, 20, 60, 0.1);
+        }
+
+        .report-item.pending {
+            border-right-color: var(--warning);
+        }
+
+        .report-item.resolved {
+            border-right-color: var(--success);
+        }
+
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .report-type {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .report-type i {
+            color: var(--danger);
+        }
+
+        .report-status {
+            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .report-status.new {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .report-status.pending {
+            background: var(--warning);
+            color: #000;
+        }
+
+        .report-status.resolved {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .report-location, .report-time {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+        }
+
+        .no-reports {
+            text-align: center;
+            padding: 30px;
+            opacity: 0.7;
+        }
+
+        .no-reports i {
+            font-size: 2rem;
+            color: var(--success);
+            margin-bottom: 10px;
+        }
+
+        .error-state {
+            text-align: center;
+            padding: 20px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .error-state i {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .error-state small {
+            display: block;
+            margin-top: 5px;
+            opacity: 0.6;
+            font-size: 0.85rem;
+        }
+
         .drill-result {
             padding: 4px 10px;
             border-radius: 12px;
@@ -571,6 +701,10 @@
             <h1><i class="fas fa-shield-alt"></i> مركز القيادة <span>والتحكم EOC</span></h1>
         </div>
         <div class="header-status">
+            <a href="emergency-report.html" class="report-emergency-btn">
+                <i class="fas fa-exclamation-triangle"></i>
+                إبلاغ طوارئ
+            </a>
             <div class="status-badge status-normal" id="systemStatus">
                 <i class="fas fa-check-circle"></i>
                 <span>الوضع طبيعي</span>
@@ -789,6 +923,15 @@
                     </div>
                 </div>
             </div>
+
+            <div class="panel-card">
+                <h3 class="section-title"><i class="fas fa-bell"></i> البلاغات الواردة</h3>
+                <div class="reports-log" id="reportsLog">
+                    <div class="loading-spinner">
+                        <i class="fas fa-spinner"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -989,8 +1132,76 @@
             `;
         }
 
+        async function loadReports() {
+            const container = document.getElementById('reportsLog');
+            try {
+                const response = await fetch(`${API_BASE}/reports`);
+                const data = await response.json();
+                
+                if (!response.ok || !data.ok) {
+                    container.innerHTML = `
+                        <div class="error-state">
+                            <i class="fas fa-exclamation-triangle" style="color: var(--warning);"></i>
+                            <p>خطأ في جلب البلاغات</p>
+                            <small>${data.error || 'يرجى المحاولة لاحقاً'}</small>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                if (data.reports && data.reports.length > 0) {
+                    container.innerHTML = data.reports.slice(0, 10).map(report => {
+                        const statusClass = report.status === 'جديد' ? 'new' : 
+                                           report.status === 'قيد المعالجة' ? 'pending' : 'resolved';
+                        const typeIcon = getReportTypeIcon(report.type);
+                        return `
+                            <div class="report-item ${statusClass}">
+                                <div class="report-header">
+                                    <span class="report-type"><i class="${typeIcon}"></i> ${report.type}</span>
+                                    <span class="report-status ${statusClass}">${report.status}</span>
+                                </div>
+                                <div class="report-location"><i class="fas fa-map-marker-alt"></i> ${report.location}</div>
+                                <div class="report-time"><i class="fas fa-clock"></i> ${report.date} - ${report.time}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = `
+                        <div class="no-reports">
+                            <i class="fas fa-check-circle"></i>
+                            <p>لا توجد بلاغات حالياً</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                container.innerHTML = `
+                    <div class="error-state">
+                        <i class="fas fa-wifi" style="color: var(--danger);"></i>
+                        <p>تعذر الاتصال بالخادم</p>
+                        <small>تحقق من اتصال الإنترنت</small>
+                    </div>
+                `;
+            }
+        }
+        
+        function getReportTypeIcon(type) {
+            const icons = {
+                'حريق': 'fas fa-fire',
+                'انقطاع كهرباء': 'fas fa-bolt',
+                'تسرب مياه': 'fas fa-water',
+                'إغماء/إصابة': 'fas fa-ambulance',
+                'تفشي عدوى': 'fas fa-virus',
+                'أخرى': 'fas fa-exclamation-circle'
+            };
+            return icons[type] || 'fas fa-exclamation-triangle';
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             loadDrillLog();
+            loadReports();
+            
+            setInterval(loadReports, 30000);
         });
     </script>
 </body>

@@ -1036,8 +1036,186 @@ app.get('/api/emergency-docs', async (req, res) => {
   }
 });
 
+// EOC Emergency Plan Spreadsheet (Contains Room Codes + Reports Log)
+const EOC_PLAN_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+
 // EOC Drills API - Emergency Drills Log
 const EOC_DRILLS_SPREADSHEET_ID = '1so2p5mp7Pe8A0TAaOCZvSHqWN6Df5NH___D0FouW_as';
+
+// ============================================
+// EOC Room Codes API - Get room codes from sheet
+// ============================================
+app.get('/api/eoc/room-codes', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
+      range: 'تكويد الغرف!A2:C100'
+    });
+    
+    const rows = response.data.values || [];
+    const rooms = rows
+      .filter(row => row[0])
+      .map(row => ({
+        code: row[0] || '',
+        name: row[1] || '',
+        floor: row[2] || ''
+      }));
+    
+    res.json({ ok: true, rooms });
+  } catch (err) {
+    console.error('Error fetching room codes:', err.message);
+    res.json({ 
+      ok: true, 
+      rooms: [
+        { code: 'G01', name: 'المختبر', floor: 'الدور الأرضي' },
+        { code: 'G02', name: 'مكاتب إدارية', floor: 'الدور الأرضي' },
+        { code: 'G03', name: 'العلاج الطبيعي', floor: 'الدور الأرضي' },
+        { code: 'G04', name: 'الأشعة', floor: 'الدور الأرضي' },
+        { code: 'G05', name: 'الألتراساوند', floor: 'الدور الأرضي' },
+        { code: 'F01', name: 'الاستقبال الرئيسي', floor: 'الدور الأول' },
+        { code: 'F02', name: 'الباطنية', floor: 'الدور الأول' },
+        { code: 'F03', name: 'العظام', floor: 'الدور الأول' },
+        { code: 'F04', name: 'الطوارئ', floor: 'الدور الأول' },
+        { code: 'F05', name: 'الطب العام', floor: 'الدور الأول' },
+        { code: 'F06', name: 'الضماد', floor: 'الدور الأول' },
+        { code: 'F07', name: 'النساء والولادة', floor: 'الدور الأول' },
+        { code: 'S01', name: 'الأسنان', floor: 'الدور الثاني' },
+        { code: 'S02', name: 'الباطنية 2', floor: 'الدور الثاني' },
+        { code: 'S03', name: 'الباطنية 3', floor: 'الدور الثاني' }
+      ]
+    });
+  }
+});
+
+// ============================================
+// EOC Emergency Report API - Submit emergency report
+// ============================================
+app.post('/api/eoc/report', async (req, res) => {
+  try {
+    const { disasterType, location, notes } = req.body;
+    
+    // Validate required fields
+    if (!disasterType || typeof disasterType !== 'string' || disasterType.trim() === '') {
+      return res.status(400).json({ ok: false, error: 'نوع الطوارئ مطلوب' });
+    }
+    if (!location || typeof location !== 'string' || location.trim() === '') {
+      return res.status(400).json({ ok: false, error: 'الموقع مطلوب' });
+    }
+    
+    const validDisasterTypes = ['حريق', 'انقطاع كهرباء', 'تسرب مياه', 'إغماء/إصابة', 'تفشي عدوى', 'أخرى'];
+    if (!validDisasterTypes.includes(disasterType)) {
+      return res.status(400).json({ ok: false, error: 'نوع الطوارئ غير صالح' });
+    }
+    
+    const reportId = 'EMR-' + Date.now();
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ar-SA');
+    const timeStr = now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+    
+    const sheets = await getGoogleSheetsClient();
+    let appendSuccess = false;
+    
+    // Try to append to Reports_Log sheet
+    try {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
+        range: 'بلاغات_الطوارئ!A:G',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [[reportId, dateStr, timeStr, disasterType.trim(), location.trim(), (notes || '').trim(), 'جديد']]
+        }
+      });
+      appendSuccess = true;
+    } catch (sheetErr) {
+      // If sheet doesn't exist, create it
+      console.log('Creating emergency reports sheet...', sheetErr.message);
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: { title: 'بلاغات_الطوارئ' }
+              }
+            }]
+          }
+        });
+        
+        // Add headers
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
+          range: 'بلاغات_الطوارئ!A1:G1',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الطوارئ', 'الموقع', 'ملاحظات', 'الحالة']]
+          }
+        });
+        
+        // Append the report
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
+          range: 'بلاغات_الطوارئ!A:G',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [[reportId, dateStr, timeStr, disasterType.trim(), location.trim(), (notes || '').trim(), 'جديد']]
+          }
+        });
+        appendSuccess = true;
+      } catch (createErr) {
+        console.error('Error creating sheet:', createErr.message);
+        return res.status(500).json({ ok: false, error: 'فشل في حفظ البلاغ: ' + createErr.message });
+      }
+    }
+    
+    if (!appendSuccess) {
+      return res.status(500).json({ ok: false, error: 'فشل في حفظ البلاغ في النظام' });
+    }
+    
+    console.log(`Emergency report submitted: ${reportId} - ${disasterType} at ${location}`);
+    res.json({ ok: true, reportId, message: 'تم إرسال البلاغ بنجاح' });
+  } catch (err) {
+    console.error('Error submitting report:', err.message);
+    res.status(500).json({ ok: false, error: 'حدث خطأ في النظام: ' + err.message });
+  }
+});
+
+// ============================================
+// EOC Emergency Reports List API
+// ============================================
+app.get('/api/eoc/reports', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
+      range: 'بلاغات_الطوارئ!A2:G100'
+    });
+    
+    const rows = response.data.values || [];
+    const reports = rows
+      .filter(row => row[0])
+      .map(row => ({
+        id: row[0] || '',
+        date: row[1] || '',
+        time: row[2] || '',
+        type: row[3] || '',
+        location: row[4] || '',
+        notes: row[5] || '',
+        status: row[6] || 'جديد'
+      }))
+      .reverse();
+    
+    res.json({ ok: true, reports });
+  } catch (err) {
+    console.error('Error fetching reports:', err.message);
+    // Return empty array only if sheet doesn't exist
+    if (err.message && err.message.includes('Unable to parse range')) {
+      res.json({ ok: true, reports: [], message: 'لا توجد بلاغات بعد' });
+    } else {
+      res.status(500).json({ ok: false, error: 'فشل في جلب البلاغات: ' + err.message, reports: [] });
+    }
+  }
+});
 
 app.get('/api/eoc/drills', async (req, res) => {
   try {
