@@ -221,6 +221,61 @@
             outline: none;
             border-color: var(--secondary);
         }
+        
+        .or-divider {
+            text-align: center;
+            margin: 15px 0;
+            position: relative;
+        }
+        
+        .or-divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .or-divider span {
+            background: rgba(30, 58, 95, 0.9);
+            padding: 0 15px;
+            position: relative;
+            color: var(--secondary);
+            font-weight: 600;
+        }
+        
+        .room-select-container {
+            margin-bottom: 10px;
+        }
+        
+        .room-select-container select {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 1rem;
+            font-family: inherit;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: left 15px center;
+            background-size: 24px;
+        }
+        
+        .room-select-container select:focus {
+            outline: none;
+            border-color: var(--secondary);
+        }
+        
+        .room-select-container select option {
+            background: #1e3a5f;
+            color: #fff;
+        }
 
         .room-suggestions {
             position: absolute;
@@ -564,8 +619,16 @@
                             <span>الدور الثاني</span>
                         </div>
                     </div>
+                    <div class="or-divider">
+                        <span>أو اختر كود موقعك</span>
+                    </div>
+                    <div class="room-select-container">
+                        <select id="roomCodeSelect" onchange="selectRoomFromDropdown(this.value)">
+                            <option value="">اختر من قائمة الغرف...</option>
+                        </select>
+                    </div>
                     <div class="room-code-input">
-                        <input type="text" id="roomCode" placeholder="أو اكتب كود الغرفة (مثال: G01, F05)" oninput="searchRooms(this.value)" onfocus="showSuggestions()">
+                        <input type="text" id="roomCode" placeholder="أو اكتب كود الغرفة يدوياً (مثال: G01, F05)" oninput="searchRooms(this.value)" onfocus="showSuggestions()">
                         <div class="room-suggestions" id="roomSuggestions"></div>
                     </div>
                 </div>
@@ -635,31 +698,60 @@
     </div>
 
     <script>
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbztSmY_O_ITwKYXVNzs2wH8Wsid05XEZ5bEG6KJf4453dlFE8JHG_zRmuJbOksa6UgogQ/exec';
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwkQPKt7LJNrlJB3LiHszOdHvxjgDHLvgoIpPV2L0zj4LCf_sxbLbaNHPeZEWQEflwl/exec';
         
         let selectedDisaster = null;
         let selectedLocation = null;
-        let roomCodes = [
-            { code: 'G01', name: 'المختبر', floor: 'أرضي' },
-            { code: 'G02', name: 'الأشعة', floor: 'أرضي' },
-            { code: 'G03', name: 'الموجات', floor: 'أرضي' },
-            { code: 'G04', name: 'العلاج الطبيعي', floor: 'أرضي' },
-            { code: 'G05', name: 'المكاتب الإدارية', floor: 'أرضي' },
-            { code: 'F01', name: 'الاستقبال', floor: 'أول' },
-            { code: 'F02', name: 'الباطنية', floor: 'أول' },
-            { code: 'F03', name: 'العظام', floor: 'أول' },
-            { code: 'F04', name: 'الطوارئ', floor: 'أول' },
-            { code: 'F05', name: 'الطب العام', floor: 'أول' },
-            { code: 'F06', name: 'الضماد', floor: 'أول' },
-            { code: 'F07', name: 'النساء والولادة', floor: 'أول' },
-            { code: 'S01', name: 'الأسنان', floor: 'ثاني' },
-            { code: 'S02', name: 'الباطنية 2', floor: 'ثاني' },
-            { code: 'S03', name: 'الباطنية 3', floor: 'ثاني' }
-        ];
+        let selectedFloor = null;
+        let selectedRoomCode = null;
+        let roomCodes = [];
 
         async function loadRoomCodes() {
-            // Room codes are pre-loaded for offline access
-            // Can optionally fetch from Apps Script if needed
+            try {
+                const params = new URLSearchParams({ action: 'getRoomCodes' });
+                const res = await fetch(WEB_APP_URL + '?' + params.toString());
+                const data = await res.json();
+                
+                if (data.ok && data.rooms) {
+                    roomCodes = data.rooms;
+                    populateRoomDropdown();
+                }
+            } catch (err) {
+                console.error('Failed to load rooms:', err);
+                // Use fallback rooms
+                roomCodes = [
+                    { code: 'DIR-B-01', name: 'المدير العام' },
+                    { code: 'ADM-B-01', name: 'بلال' },
+                    { code: 'REC-G-01', name: 'استقبال الأول' },
+                    { code: 'MED-G-01', name: 'دكتور محمد الأمين' }
+                ];
+                populateRoomDropdown();
+            }
+        }
+        
+        function populateRoomDropdown() {
+            const select = document.getElementById('roomCodeSelect');
+            select.innerHTML = '<option value="">اختر من قائمة الغرف...</option>';
+            
+            roomCodes.forEach(room => {
+                const option = document.createElement('option');
+                option.value = `${room.code} - ${room.name}`;
+                option.textContent = `${room.code} - ${room.name}`;
+                select.appendChild(option);
+            });
+        }
+        
+        function selectRoomFromDropdown(value) {
+            if (value) {
+                selectedRoomCode = value;
+                selectedLocation = value;
+                document.getElementById('roomCode').value = '';
+                document.getElementById('roomSuggestions').classList.remove('show');
+            } else {
+                selectedRoomCode = null;
+                if (!selectedFloor) selectedLocation = null;
+            }
+            checkFormValid();
         }
 
         function selectDisaster(el) {
@@ -672,9 +764,8 @@
         function selectLocation(el) {
             document.querySelectorAll('.location-btn').forEach(btn => btn.classList.remove('selected'));
             el.classList.add('selected');
-            selectedLocation = el.dataset.location;
-            document.getElementById('roomCode').value = '';
-            document.getElementById('roomSuggestions').classList.remove('show');
+            selectedFloor = el.dataset.location;
+            selectedLocation = selectedFloor;
             checkFormValid();
         }
 
@@ -720,7 +811,28 @@
         }
 
         function checkFormValid() {
-            const valid = selectedDisaster && selectedLocation;
+            const roomCodeInput = document.getElementById('roomCode').value.trim();
+            const roomCodeSelect = document.getElementById('roomCodeSelect').value;
+            
+            // الموقع صالح إذا: اختار الدور أو اختار من القائمة أو كتب كود
+            const hasLocation = selectedFloor || roomCodeSelect || roomCodeInput;
+            
+            // تحديث selectedLocation للإرسال
+            if (roomCodeInput) {
+                selectedLocation = roomCodeInput;
+            } else if (roomCodeSelect) {
+                selectedLocation = roomCodeSelect;
+            } else if (selectedFloor) {
+                selectedLocation = selectedFloor;
+            }
+            
+            // إضافة كود الغرفة للدور إذا موجود
+            if (selectedFloor && (roomCodeInput || roomCodeSelect)) {
+                const roomInfo = roomCodeInput || roomCodeSelect;
+                selectedLocation = `${selectedFloor} - ${roomInfo}`;
+            }
+            
+            const valid = selectedDisaster && hasLocation;
             document.getElementById('submitBtn').disabled = !valid;
         }
 
@@ -774,8 +886,11 @@
         function resetForm() {
             selectedDisaster = null;
             selectedLocation = null;
+            selectedFloor = null;
+            selectedRoomCode = null;
             document.querySelectorAll('.disaster-btn, .location-btn').forEach(btn => btn.classList.remove('selected'));
             document.getElementById('roomCode').value = '';
+            document.getElementById('roomCodeSelect').value = '';
             document.getElementById('notes').value = '';
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('reportForm').style.display = 'block';

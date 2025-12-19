@@ -212,6 +212,12 @@
         .setMimeType(ContentService.MimeType.JSON);
     }
     
+    if (action === 'getRoomCodes') {
+      const result = getRoomCodes();
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     if (action === 'clearActiveCommand') {
       const result = clearActiveCommand();
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -478,6 +484,36 @@
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  }
+  
+  function getRoomCodes() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('Rooms');
+      
+      if (!sheet) {
+        return { ok: true, rooms: [] };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        return { ok: true, rooms: [] };
+      }
+      
+      const rooms = [];
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0]) {
+          rooms.push({
+            code: String(data[i][0]),
+            name: String(data[i][1] || '')
+          });
+        }
+      }
+      
+      return { ok: true, rooms: rooms };
+    } catch (err) {
+      return { ok: false, error: err.message, rooms: [] };
     }
   }
   
