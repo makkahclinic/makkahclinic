@@ -1253,7 +1253,8 @@
             `;
         }
 
-        let lastReportCount = 0;
+        let seenReportIds = new Set();
+        let isFirstLoad = true;
         
         async function loadReports() {
             const container = document.getElementById('reportsLog');
@@ -1277,12 +1278,16 @@
                 }
                 
                 if (data.reports && data.reports.length > 0) {
-                    // Check for new reports
-                    const newCount = data.reports.filter(r => r.status === 'جديد').length;
-                    if (newCount > lastReportCount && lastReportCount > 0) {
-                        showNewReportAlert(data.reports[0]);
+                    // Check for new reports (not seen before)
+                    const newReports = data.reports.filter(r => r.status === 'جديد' && !seenReportIds.has(r.id));
+                    
+                    if (!isFirstLoad && newReports.length > 0) {
+                        showNewReportAlert(newReports[0]);
                     }
-                    lastReportCount = newCount;
+                    
+                    // Update seen IDs
+                    data.reports.forEach(r => seenReportIds.add(r.id));
+                    isFirstLoad = false;
                     
                     container.innerHTML = data.reports.slice(0, 10).map(report => {
                         const statusClass = report.status === 'جديد' ? 'new' : 
