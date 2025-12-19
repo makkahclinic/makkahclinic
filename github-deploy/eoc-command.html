@@ -1358,8 +1358,7 @@
             `;
         }
 
-        let seenReportIds = new Set();
-        let isFirstLoad = true;
+        let alertedReportIds = new Set();
         
         async function loadReports() {
             const container = document.getElementById('reportsLog');
@@ -1383,16 +1382,14 @@
                 }
                 
                 if (data.reports && data.reports.length > 0) {
-                    // Check for new reports (not seen before)
-                    const newReports = data.reports.filter(r => r.status === 'جديد' && !seenReportIds.has(r.id));
+                    // Check for NEW status reports that we haven't alerted about
+                    const pendingAlerts = data.reports.filter(r => r.status === 'جديد' && !alertedReportIds.has(r.id));
                     
-                    if (!isFirstLoad && newReports.length > 0) {
-                        showNewReportAlert(newReports[0]);
+                    // Alert for each new report
+                    if (pendingAlerts.length > 0) {
+                        showNewReportAlert(pendingAlerts[0]);
+                        pendingAlerts.forEach(r => alertedReportIds.add(r.id));
                     }
-                    
-                    // Update seen IDs
-                    data.reports.forEach(r => seenReportIds.add(r.id));
-                    isFirstLoad = false;
                     
                     container.innerHTML = data.reports.slice(0, 10).map(report => {
                         const statusClass = report.status === 'جديد' ? 'new' : 
