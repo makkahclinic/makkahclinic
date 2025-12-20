@@ -1,0 +1,101 @@
+تمام—هنا المشكلة ليست الصفّارة. حسب الكود الذي أرسلته، شاشة Emergency.html ما راح تتحرك (تتحول من “الوضع آمن”) إلا إذا getActiveCommand رجّع أمر نشط. وإذا رجّع command: null أو الاستدعاء فشل، ستبقى الشاشة “آمنة” دائمًا.
+
+1) أول تشخيص سريع (خلال 10 ثواني)
+
+افتح Emergency.html ثم افتح Console واكتب:
+
+checkActiveCommand()
+
+
+وبعدها:
+
+console.log(currentCommand)
+
+
+إذا طلع null → يعني ما فيه أمر نشط يصل من السكربت.
+
+إذا طلع أمر لكنه ما يغيّر الشاشة → عندك خطأ داخل activateEmergency.
+
+وفق توثيق Google Apps Script، الطلبات GET تدخل doGet(e) ومعلمات الرابط تكون في e.parameter، والطلبات POST تدخل doPost(e) ومحتوى البودي في e.postData.contents. 
+Google for Developers
++1
+
+2) السبب الأكثر شيوعًا عندك: الأمر “لا يُكتب أصلًا”
+
+أنت في Apps Script عامل setActiveCommand داخل doGet (يعني يتوقع باراميترات على الرابط)، لكن كثير من الناس يرسلونه بـ POST/fetch فيفشل لأن doPost عندك ما فيه case لـ setActiveCommand (فتطلع “Unknown action”).
+وهنا النتيجة: لن يتسجل أمر نشط → Emergency.html تبقى Safe. 
+Google for Developers
++1
+
+✅ الحل الصحيح: أرسل setActiveCommand بـ JSONP/GET (زي ما أنت عامل دالة jsonp هنا).
+
+كود الإرسال الصحيح من صفحة الإدارة (eoc-command.html)
+
+استخدم نفس jsonp() وأرسل:
+
+await jsonp('setActiveCommand', {
+  responseType: 'إخلاء',      // أو توجيه / عزل
+  reportType: 'حريق',          // نوع البلاغ
+  location: 'الدور الأول - العيادات',
+  muster: 'نقطة التجمع A'
+});
+
+
+ولمسح الأمر:
+
+await jsonp('clearActiveCommand', {});
+
+
+Google نفسها تشرح فكرة تحويل JSON إلى JSONP عبر callback + MimeType.JAVASCRIPT. 
+Google for Developers
+
+3) حتى لو وصل الأمر: كود Emergency.html لا يعرض (إخلاء/توجيه/عزل)
+
+لاحظ: activateEmergency() عندك يتجاهل responseType بالكامل، ويعرض فقط reportType وlocation.
+
+أضف هذا الجزء داخل activateEmergency(command) بعد سطر:
+
+document.getElementById('emergencyLocation').textContent = command.location || '-';
+
+✅ إظهار نوع الأمر (إخلاء/توجيه/عزل) وتغيير العناوين
+const response = String(command.responseType || '').trim();
+
+if (response.includes('إخلاء') || response.includes('اخلاء') || response.toLowerCase().includes('evac')) {
+  document.getElementById('emergencyTitle').textContent = 'أمر إخلاء';
+  document.getElementById('instructionTitle').textContent = 'إخلاء فوري - اتجه إلى:';
+} else if (response.includes('عزل') || response.toLowerCase().includes('isol')) {
+  document.getElementById('emergencyTitle').textContent = 'أمر عزل';
+  document.getElementById('instructionTitle').textContent = 'عزل المنطقة فورًا - الموقع:';
+  // اجعل اللون بنفسجي للعزل حتى لو نوع البلاغ غير ذلك
+  document.body.className = 'infection';
+} else if (response.includes('توجيه') || response.includes('توجه') || response.toLowerCase().includes('direct')) {
+  document.getElementById('emergencyTitle').textContent = 'أمر توجيه';
+  document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+} else {
+  document.getElementById('emergencyTitle').textContent = 'تنبيه طوارئ';
+  document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+}
+
+✅ إصلاح عرض نقطة التجمع (إظهار/إخفاء بشكل صحيح)
+
+حاليًا أنت تُظهرها فقط إذا موجودة، لكن ما تُخفيها إذا الأمر الجديد ما فيه muster. أضف:
+
+const musterVal = command.muster || command.musterPoint || '';
+if (musterVal) {
+  document.getElementById('musterSection').style.display = 'block';
+  document.getElementById('musterPoint').textContent = musterVal;
+} else {
+  document.getElementById('musterSection').style.display = 'none';
+  document.getElementById('musterPoint').textContent = '-';
+}
+
+4) اجعل الاستقبال “أقوى” (مقاومة لأي اختلافات)
+
+بدّل شرط التفعيل في checkActiveCommand() من:
+
+if (cmd && cmd.active) {
+
+
+إلى:
+
+if (cmd && (cmd.active === true || String(cmd.active).toLowerCase() === 'true')) {

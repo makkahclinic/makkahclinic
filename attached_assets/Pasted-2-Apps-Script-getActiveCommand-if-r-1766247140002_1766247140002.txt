@@ -1,0 +1,161 @@
+2) إصلاح قاتل في Apps Script (سبب شائع جدًا عندك)
+
+في كودك getActiveCommand() أنت تتحقق هكذا:
+
+if (row[0] !== 'true') return { ok:true, command:null };
+
+
+لو الخلية أصبحت TRUE (Boolean) أو "TRUE" أو فيها مسافة… هذا الشرط يفشل → يرجّع command:null دائمًا.
+
+✅ عدّل getActiveCommand() بهذا الشكل (مقاوم لكل الحالات)
+
+استبدل شرط التفعيل فقط:
+
+const flag = String(row[0]).toLowerCase().trim();
+if (flag !== 'true' && flag !== 'yes' && flag !== '1') {
+  return { ok: true, command: null };
+}
+
+
+هذا التعديل وحده يحل 80% من حالات “ما في أمر نشط” رغم أن المدير يضغط إصدار الأمر.
+
+✅ تعديل مهم ثاني: لا ترجع ok:true عند “Unknown action”
+
+الآن doGet عندك في النهاية يرجع { ok:true, message:'Safety Rounds API is running' } حتى لو action غلط أو الدالة غير موجودة… وهذا يخدع صفحة الإدارة أنها نجحت!
+
+بدل آخر سطر في doGet إلى:
+
+return output_({ ok: false, error: 'Unknown action: ' + (action || '') });
+
+
+هذا مرتبط بخدمة ContentService/JSONP وطريقة الرد في web app 
+Google for Developers
++1
+.
+
+مهم جدًا: تأكد أنك “نشرت” التعديل
+
+إذا عدّلت السكربت ولم تحدّث Deployment، /exec قد يبقى على نسخة قديمة. تحديث النسخ يتم من Deploy → Manage deployments → Edit → New version → Deploy 
+Google for Developers
++1
+.
+
+3) إصلاح Emergency.html (المنطق + ترتيب العناصر + إخلاء/توجيه/عزل)
+
+عندك الآن:
+
+enableSoundBtn و soundGate و sirenAudio بعد <script> → لذلك يحصل Missing element، وتظل المتغيرات null.
+
+✅ الحل الصحيح: انقل الصوت/البوابة قبل السكربت
+
+انقل هذا الجزء:
+
+<div id="soundGate"...>...</div>
+<audio id="sirenAudio"...>...</audio>
+
+
+واجعله فوق <script> مباشرة (قبل بداية السكربت).
+
+✅ ثم استبدل جزء التحقق في Emergency.html بهذا (جاهز نسخ/لصق)
+
+ضع هذا داخل السكربت (واستبدل checkActiveCommand + بداية الصوت عندك):
+
+function isTrue(v){
+  const s = String(v).toLowerCase().trim();
+  return v === true || s === 'true' || s === 'yes' || s === '1';
+}
+
+function showSoundGate(){
+  const g = document.getElementById('soundGate');
+  if (g) g.classList.remove('hidden');
+}
+function hideSoundGate(){
+  const g = document.getElementById('soundGate');
+  if (g) g.classList.add('hidden');
+}
+
+async function startSiren(){
+  const a = document.getElementById('sirenAudio');
+  if (!a) return;
+  try {
+    await a.play();
+  } catch(e){
+    // autoplay قد يُمنع بدون تفاعل
+    showSoundGate();
+  }
+}
+function stopSiren(){
+  const a = document.getElementById('sirenAudio');
+  if (!a) return;
+  a.pause();
+  a.currentTime = 0;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('enableSoundBtn');
+  if (btn) btn.addEventListener('click', async () => {
+    const a = document.getElementById('sirenAudio');
+    if (!a) return;
+    try { await a.play(); hideSoundGate(); a.pause(); a.currentTime = 0; } catch(e){}
+  });
+});
+
+✅ أهم تعديل: اجعل Emergency.html يعرض “إخلاء/توجيه/عزل” حسب responseType
+
+أضف داخل activateEmergency(command) بعد تحديث emergencyLocation:
+
+const resp = String(command.responseType || '').toLowerCase().trim();
+
+if (resp.includes('full_evacuation') || resp.includes('إخلاء') || resp.includes('اخلاء')) {
+  document.getElementById('emergencyTitle').textContent = 'أمر إخلاء';
+  document.getElementById('instructionTitle').textContent = 'إخلاء فوري - اتجه إلى:';
+} else if (resp.includes('send_team') || resp.includes('توجيه') || resp.includes('توجه')) {
+  document.getElementById('emergencyTitle').textContent = 'أمر توجيه';
+  document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+} else if (resp.includes('isolation_evacuation') || resp.includes('عزل')) {
+  document.getElementById('emergencyTitle').textContent = 'أمر عزل';
+  document.getElementById('instructionTitle').textContent = 'عزل المنطقة فورًا - الموقع:';
+  document.body.className = 'infection';
+}
+
+✅ عدّل شرط التفعيل (مهم)
+
+استبدل:
+
+if (cmd && cmd.active) {
+
+
+بـ:
+
+if (cmd && isTrue(cmd.active)) {
+
+
+(هذا يحميك لو رجعت active كنص أو Boolean).
+
+✅ خلّها “فورية”
+
+بدل 5000ms إلى 1000ms:
+
+setInterval(checkActiveCommand, 1000);
+
+4) إصلاح eoc-command.html (حتى تتأكد أن الأمر انحفظ فعلاً)
+
+عندك sendCommandToBackend(commandData) ممتازة لأنها تستخدم JSONP (وهذا صحيح مع Apps Script) 
+Google for Developers
++1
+
+لكن اجعل issueCommand ينتظر الإرسال ويظهر خطأ لو ما انحفظ:
+
+بدل:
+
+sendCommandToBackend(commandData);
+
+
+إلى:
+
+await sendCommandToBackend(commandData);
+
+
+وعدل دالة issueCommand() لتكون async function issueCommand(){...}
+
+ثم داخل sendCommandToBackend تأكد ترجع ok/save (بعد تعديل doGet ليعيد ok:false عند Unknown action سيصير أي خطأ واضح جدًا).

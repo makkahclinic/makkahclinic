@@ -2727,7 +2727,7 @@
             document.getElementById('issueCommandBtn').disabled = !canIssue;
         }
         
-        function issueCommand() {
+        async function issueCommand() {
             const selectedTypeBtn = document.querySelector('.response-type-btn.selected');
             if (!selectedTypeBtn) return;
             
@@ -2736,7 +2736,6 @@
             const customLocation = document.getElementById('responseTargetLocation').value;
             const musterPoint = document.getElementById('responseMusterPoint').value;
             
-            // Build command message
             let commandData = {
                 type: responseType,
                 reportType: currentReport?.type || '',
@@ -2745,7 +2744,6 @@
                 timestamp: new Date().toLocaleString('ar-SA')
             };
             
-            // Determine location
             if (targetType === 'report_location') {
                 commandData.location = currentReport?.location || '';
             } else if (targetType === 'custom') {
@@ -2757,19 +2755,16 @@
                 commandData.location = floorNames[targetType] || targetType;
             }
             
-            // Determine muster point
             if (musterPoint === 'A') {
                 commandData.muster = 'نقطة تجمع A - الموقف الأمامي';
             } else if (musterPoint === 'B') {
                 commandData.muster = 'نقطة تجمع B - الساحة الخلفية';
             }
             
-            // Close modal and show command screen
             closeResponseModal();
             showCommandScreen(commandData);
             
-            // Send command to backend for display screens
-            sendCommandToBackend(commandData);
+            await sendCommandToBackend(commandData);
         }
         
         async function sendCommandToBackend(commandData) {

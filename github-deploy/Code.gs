@@ -233,7 +233,7 @@
       return output_(result);
     }
     
-    return output_({ ok: true, message: 'Safety Rounds API is running' });
+    return output_({ ok: false, error: 'Unknown action: ' + (action || '') });
   }
   
   // Emergency Report Functions
@@ -453,7 +453,8 @@
       }
       
       const row = data[1];
-      if (row[0] !== 'true') {
+      const flag = String(row[0]).toLowerCase().trim();
+      if (flag !== 'true' && flag !== 'yes' && flag !== '1') {
         return { ok: true, command: null };
       }
       

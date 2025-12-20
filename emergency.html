@@ -445,6 +445,22 @@
     <div class="footer">
         مجمع مكة الطبي بالزاهر - نظام الطوارئ المركزي
     </div>
+
+    <!-- بوابة تفعيل الصوت (تظهر فقط إذا المتصفح منع التشغيل) -->
+    <div id="soundGate" class="sound-gate hidden">
+      <div class="sound-card">
+        <div class="sound-title">تفعيل صوت الإنذار</div>
+        <div class="sound-sub">
+          اضغط مرة واحدة للسماح بتشغيل صفارة الطوارئ على هذه الشاشة.
+        </div>
+        <button id="enableSoundBtn" class="sound-btn">تفعيل الصوت</button>
+      </div>
+    </div>
+
+    <!-- ملف الصفارة -->
+    <audio id="sirenAudio" preload="auto" loop>
+      <source src="https://www.m2020m.org/assets/siren.mp3" type="audio/mpeg">
+    </audio>
     
     <script>
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbztSmY_O_ITwKYXVNzs2wH8Wsid05XEZ5bEG6KJf4453dlFE8JHG_zRmuJbOksa6UgogQ/exec';
@@ -454,49 +470,57 @@
         let timerInterval = null;
         let commandStartTime = null;
 
-        const sirenAudio = document.getElementById('sirenAudio');
-        const soundGate = document.getElementById('soundGate');
-        const enableSoundBtn = document.getElementById('enableSoundBtn');
+        function isTrue(v){
+          const s = String(v).toLowerCase().trim();
+          return v === true || s === 'true' || s === 'yes' || s === '1';
+        }
 
-        let audioUnlocked = false;
-
-        function showSoundGate(){ soundGate.classList.remove('hidden'); }
-        function hideSoundGate(){ soundGate.classList.add('hidden'); }
+        function showSoundGate(){
+          const g = document.getElementById('soundGate');
+          if (g) g.classList.remove('hidden');
+        }
+        function hideSoundGate(){
+          const g = document.getElementById('soundGate');
+          if (g) g.classList.add('hidden');
+        }
 
         async function startSiren(){
-          if (!sirenAudio) return;
-          try{
-            sirenAudio.volume = 1.0;
-            await sirenAudio.play();
+          const a = document.getElementById('sirenAudio');
+          if (!a) return;
+          try {
+            a.volume = 1.0;
+            await a.play();
           } catch(e){
             showSoundGate();
           }
         }
 
         function stopSiren(){
-          if (!sirenAudio) return;
-          try{
-            sirenAudio.pause();
-            sirenAudio.currentTime = 0;
+          const a = document.getElementById('sirenAudio');
+          if (!a) return;
+          try {
+            a.pause();
+            a.currentTime = 0;
           } catch(e){}
         }
 
-        async function unlockSound(){
-          try{
-            await sirenAudio.play();
-            audioUnlocked = true;
-            hideSoundGate();
-
-            if (!currentCommand){
-              sirenAudio.pause();
-              sirenAudio.currentTime = 0;
+        document.addEventListener('DOMContentLoaded', () => {
+          const btn = document.getElementById('enableSoundBtn');
+          if (btn) btn.addEventListener('click', async () => {
+            const a = document.getElementById('sirenAudio');
+            if (!a) return;
+            try { 
+              await a.play(); 
+              hideSoundGate(); 
+              if (!currentCommand) {
+                a.pause(); 
+                a.currentTime = 0; 
+              }
+            } catch(e){
+              console.warn('unlockSound failed:', e);
             }
-          } catch(e){
-            console.warn('unlockSound failed:', e);
-          }
-        }
-
-        enableSoundBtn.addEventListener('click', unlockSound);
+          });
+        });
 
         function jsonp(action, params = {}) {
             return new Promise((resolve, reject) => {
@@ -534,7 +558,7 @@
                 const data = await jsonp('getActiveCommand', {});
                 const cmd = data && data.ok ? data.command : null;
 
-                if (cmd && cmd.active) {
+                if (cmd && isTrue(cmd.active)) {
                     if (!currentCommand || currentCommand.timestamp !== cmd.timestamp) {
                         activateEmergency(cmd);
                     }
@@ -566,6 +590,19 @@
 
             document.getElementById('emergencyType').textContent = command.reportType || 'طوارئ';
             document.getElementById('emergencyLocation').textContent = command.location || '-';
+
+            const resp = String(command.responseType || '').toLowerCase().trim();
+            if (resp.includes('full_evacuation') || resp.includes('إخلاء') || resp.includes('اخلاء')) {
+              document.getElementById('emergencyTitle').textContent = 'أمر إخلاء';
+              document.getElementById('instructionTitle').textContent = 'إخلاء فوري - اتجه إلى:';
+            } else if (resp.includes('send_team') || resp.includes('توجيه') || resp.includes('توجه')) {
+              document.getElementById('emergencyTitle').textContent = 'أمر توجيه';
+              document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+            } else if (resp.includes('isolation_evacuation') || resp.includes('عزل')) {
+              document.getElementById('emergencyTitle').textContent = 'أمر عزل';
+              document.getElementById('instructionTitle').textContent = 'عزل المنطقة فورًا - الموقع:';
+              document.body.className = 'infection';
+            }
 
             const iconEl = document.getElementById('emergencyIcon');
             if (bodyClass === 'fire') {
@@ -625,24 +662,8 @@
             document.getElementById('elapsedTime').textContent = '00:00';
         }
 
-        setInterval(checkActiveCommand, 5000);
+        setInterval(checkActiveCommand, 1000);
         checkActiveCommand();
     </script>
-
-    <!-- بوابة تفعيل الصوت (تظهر فقط إذا المتصفح منع التشغيل) -->
-    <div id="soundGate" class="sound-gate hidden">
-      <div class="sound-card">
-        <div class="sound-title">تفعيل صوت الإنذار</div>
-        <div class="sound-sub">
-          اضغط مرة واحدة للسماح بتشغيل صفارة الطوارئ على هذه الشاشة.
-        </div>
-        <button id="enableSoundBtn" class="sound-btn">تفعيل الصوت</button>
-      </div>
-    </div>
-
-    <!-- ملف الصفارة -->
-    <audio id="sirenAudio" preload="auto" loop>
-      <source src="https://www.m2020m.org/assets/siren.mp3" type="audio/mpeg">
-    </audio>
 </body>
 </html>
