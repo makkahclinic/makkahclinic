@@ -699,59 +699,57 @@
 
     <script>
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwkQPKt7LJNrlJB3LiHszOdHvxjgDHLvgoIpPV2L0zj4LCf_sxbLbaNHPeZEWQEflwl/exec';
-        
+
         let selectedDisaster = null;
         let selectedLocation = null;
         let selectedFloor = null;
-        let selectedRoomCode = null;
         let roomCodes = [];
+
+        function jsonp(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+                params.action = action;
+                params.callback = cb;
+
+                const s = document.createElement("script");
+                s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+
+                window[cb] = (data) => { cleanup(); resolve(data); };
+                s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+                function cleanup() {
+                    try { delete window[cb]; } catch(e) {}
+                    if (s.parentNode) s.parentNode.removeChild(s);
+                }
+                document.body.appendChild(s);
+            });
+        }
 
         async function loadRoomCodes() {
             try {
-                const params = new URLSearchParams({ action: 'getRoomCodes' });
-                const res = await fetch(WEB_APP_URL + '?' + params.toString());
-                const data = await res.json();
-                
-                if (data.ok && data.rooms) {
+                const data = await jsonp('getRoomCodes', {});
+                if (data.ok && Array.isArray(data.rooms)) {
                     roomCodes = data.rooms;
                     populateRoomDropdown();
                 }
-            } catch (err) {
-                console.error('Failed to load rooms:', err);
-                // Use fallback rooms
+            } catch (e) {
                 roomCodes = [
                     { code: 'DIR-B-01', name: 'المدير العام' },
-                    { code: 'ADM-B-01', name: 'بلال' },
-                    { code: 'REC-G-01', name: 'استقبال الأول' },
-                    { code: 'MED-G-01', name: 'دكتور محمد الأمين' }
+                    { code: 'REC-G-01', name: 'استقبال الأول' }
                 ];
                 populateRoomDropdown();
             }
         }
-        
+
         function populateRoomDropdown() {
             const select = document.getElementById('roomCodeSelect');
             select.innerHTML = '<option value="">اختر من قائمة الغرف...</option>';
-            
-            roomCodes.forEach(room => {
-                const option = document.createElement('option');
-                option.value = `${room.code} - ${room.name}`;
-                option.textContent = `${room.code} - ${room.name}`;
-                select.appendChild(option);
+            roomCodes.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.code + ' - ' + r.name;
+                opt.textContent = r.code + ' - ' + r.name;
+                select.appendChild(opt);
             });
-        }
-        
-        function selectRoomFromDropdown(value) {
-            if (value) {
-                selectedRoomCode = value;
-                selectedLocation = value;
-                document.getElementById('roomCode').value = '';
-                document.getElementById('roomSuggestions').classList.remove('show');
-            } else {
-                selectedRoomCode = null;
-                if (!selectedFloor) selectedLocation = null;
-            }
-            checkFormValid();
         }
 
         function selectDisaster(el) {
@@ -765,79 +763,70 @@
             document.querySelectorAll('.location-btn').forEach(btn => btn.classList.remove('selected'));
             el.classList.add('selected');
             selectedFloor = el.dataset.location;
-            selectedLocation = selectedFloor;
+            checkFormValid();
+        }
+
+        function selectRoomFromDropdown(value) {
+            document.getElementById('roomCode').value = '';
+            document.getElementById('roomSuggestions').classList.remove('show');
             checkFormValid();
         }
 
         function searchRooms(query) {
-            if (!query || query.length < 1) {
-                document.getElementById('roomSuggestions').classList.remove('show');
-                return;
-            }
-
-            document.querySelectorAll('.location-btn').forEach(btn => btn.classList.remove('selected'));
-
-            const filtered = roomCodes.filter(r => 
-                r.code.toLowerCase().includes(query.toLowerCase()) ||
-                r.name.includes(query)
-            ).slice(0, 5);
-
             const container = document.getElementById('roomSuggestions');
-            if (filtered.length > 0) {
-                container.innerHTML = filtered.map(r => `
-                    <div class="room-suggestion" onclick="selectRoomCode('${r.code}', '${r.name}')">
-                        <strong>${r.code}</strong> - ${r.name}
-                    </div>
-                `).join('');
-                container.classList.add('show');
-            } else {
-                container.classList.remove('show');
-            }
+            if (!query) { container.classList.remove('show'); checkFormValid(); return; }
 
-            selectedLocation = query;
+            const filtered = roomCodes.filter(r =>
+                r.code.toLowerCase().includes(query.toLowerCase()) ||
+                (r.name || '').includes(query)
+            ).slice(0, 6);
+
+            if (!filtered.length) { container.classList.remove('show'); checkFormValid(); return; }
+
+            container.innerHTML = filtered.map(r => 
+                '<div class="room-suggestion" onclick="selectRoomCode(\'' + r.code + '\', \'' + r.name + '\')">' +
+                '<strong>' + r.code + '</strong> - ' + r.name +
+                '</div>'
+            ).join('');
+            container.classList.add('show');
+
             checkFormValid();
         }
 
         function selectRoomCode(code, name) {
-            document.getElementById('roomCode').value = `${code} - ${name}`;
-            selectedLocation = `${code} - ${name}`;
+            document.getElementById('roomCode').value = code + ' - ' + name;
             document.getElementById('roomSuggestions').classList.remove('show');
             checkFormValid();
         }
 
         function showSuggestions() {
-            const query = document.getElementById('roomCode').value;
-            if (query) searchRooms(query);
+            const q = document.getElementById('roomCode').value.trim();
+            if (q) searchRooms(q);
+        }
+
+        function buildSelectedLocation() {
+            const roomText = document.getElementById('roomCode').value.trim();
+            const roomSelect = document.getElementById('roomCodeSelect').value;
+
+            let loc = '';
+            const chosenRoom = roomText || roomSelect;
+
+            if (selectedFloor && chosenRoom) loc = selectedFloor + ' - ' + chosenRoom;
+            else if (chosenRoom) loc = chosenRoom;
+            else if (selectedFloor) loc = selectedFloor;
+
+            return loc;
         }
 
         function checkFormValid() {
-            const roomCodeInput = document.getElementById('roomCode').value.trim();
-            const roomCodeSelect = document.getElementById('roomCodeSelect').value;
-            
-            // الموقع صالح إذا: اختار الدور أو اختار من القائمة أو كتب كود
-            const hasLocation = selectedFloor || roomCodeSelect || roomCodeInput;
-            
-            // تحديث selectedLocation للإرسال
-            if (roomCodeInput) {
-                selectedLocation = roomCodeInput;
-            } else if (roomCodeSelect) {
-                selectedLocation = roomCodeSelect;
-            } else if (selectedFloor) {
-                selectedLocation = selectedFloor;
-            }
-            
-            // إضافة كود الغرفة للدور إذا موجود
-            if (selectedFloor && (roomCodeInput || roomCodeSelect)) {
-                const roomInfo = roomCodeInput || roomCodeSelect;
-                selectedLocation = `${selectedFloor} - ${roomInfo}`;
-            }
-            
-            const valid = selectedDisaster && hasLocation;
-            document.getElementById('submitBtn').disabled = !valid;
+            const loc = buildSelectedLocation();
+            selectedLocation = loc;
+            document.getElementById('submitBtn').disabled = !(selectedDisaster && loc);
         }
 
         async function submitReport() {
-            if (!selectedDisaster || !selectedLocation) return;
+            const loc = buildSelectedLocation();
+            if (!selectedDisaster || !loc) return;
 
             const loading = document.getElementById('loading');
             loading.classList.add('show');
@@ -847,39 +836,28 @@
             const reportId = 'EMR-' + now.getTime();
 
             try {
-                const params = new URLSearchParams({
-                    action: 'submitEmergencyReport',
+                const data = await jsonp('submitEmergencyReport', {
                     reportId: reportId,
                     disasterType: selectedDisaster,
-                    location: selectedLocation,
+                    location: loc,
                     notes: notes,
                     date: now.toLocaleDateString('ar-SA'),
                     time: now.toLocaleTimeString('ar-SA')
                 });
 
-                const res = await fetch(WEB_APP_URL + '?' + params.toString(), {
-                    method: 'GET',
-                    mode: 'cors'
-                });
-
-                const data = await res.json();
-                
                 loading.classList.remove('show');
 
-                if (data.ok) {
+                if (data && data.ok) {
                     document.getElementById('reportForm').style.display = 'none';
                     document.getElementById('successScreen').classList.add('show');
                     document.getElementById('reportNumber').textContent = reportId;
                 } else {
-                    alert('حدث خطأ: ' + (data.error || 'يرجى المحاولة مرة أخرى'));
+                    alert('تعذر تسجيل البلاغ. اتصل 911 فورًا إذا الحالة خطيرة.');
                 }
-            } catch (err) {
+
+            } catch (e) {
                 loading.classList.remove('show');
-                // Show success even if Apps Script fails - emergency reports are critical
-                document.getElementById('reportForm').style.display = 'none';
-                document.getElementById('successScreen').classList.add('show');
-                document.getElementById('reportNumber').textContent = reportId;
-                console.error('Apps Script error (report shown anyway):', err);
+                alert('فشل الاتصال بالنظام. اتصل 911 فورًا إذا الحالة خطيرة.');
             }
         }
 
@@ -887,7 +865,6 @@
             selectedDisaster = null;
             selectedLocation = null;
             selectedFloor = null;
-            selectedRoomCode = null;
             document.querySelectorAll('.disaster-btn, .location-btn').forEach(btn => btn.classList.remove('selected'));
             document.getElementById('roomCode').value = '';
             document.getElementById('roomCodeSelect').value = '';
