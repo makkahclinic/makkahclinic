@@ -172,11 +172,28 @@
         .emergency-screen.active {
             display: block;
         }
+
+        .emergency-logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 15px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+
+        .emergency-logo img {
+            width: 70px;
+            height: auto;
+        }
         
         .emergency-icon {
-            font-size: 8rem;
+            font-size: 6rem;
             animation: iconBlink 0.5s ease-in-out infinite alternate;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         @keyframes iconBlink {
@@ -185,9 +202,10 @@
         }
         
         .emergency-screen h1 {
-            font-size: 4rem;
+            font-size: 3.5rem;
             font-weight: 900;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+            text-shadow: 0 3px 15px rgba(0,0,0,0.5);
             animation: textBlink 0.6s ease-in-out infinite alternate;
         }
         
@@ -197,43 +215,48 @@
         }
         
         .emergency-type {
-            font-size: 2.5rem;
-            background: rgba(0,0,0,0.4);
-            padding: 15px 50px;
+            font-size: 2rem;
+            background: rgba(0,0,0,0.5);
+            padding: 12px 40px;
             border-radius: 50px;
             display: inline-block;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-weight: 700;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
         
         .instruction-box {
-            background: rgba(0,0,0,0.3);
-            padding: 25px;
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
             border-radius: 20px;
-            margin: 20px 0;
+            margin: 15px 0;
+            border: 2px solid rgba(255,255,255,0.2);
         }
         
         .instruction-box h2 {
-            font-size: 2rem;
-            margin-bottom: 15px;
+            font-size: 1.6rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
         
         .instruction-box .location {
-            font-size: 3rem;
+            font-size: 2.5rem;
             font-weight: 900;
-            color: #fef08a;
+            color: #fff;
+            text-shadow: 0 3px 10px rgba(0,0,0,0.5);
         }
         
         .muster-point {
-            background: rgba(0,0,0,0.5);
-            padding: 20px;
+            background: rgba(34,197,94,0.3);
+            padding: 15px;
             border-radius: 15px;
-            margin-top: 15px;
+            margin-top: 12px;
+            border: 2px solid rgba(34,197,94,0.5);
         }
         
         .muster-point h3 {
-            font-size: 1.5rem;
-            margin-bottom: 10px;
+            font-size: 1.3rem;
+            margin-bottom: 8px;
         }
         
         .muster-point .point-name {
@@ -404,6 +427,9 @@
         </div>
         
         <div class="emergency-screen" id="emergencyScreen">
+            <div class="emergency-logo">
+                <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع">
+            </div>
             <div class="emergency-icon" id="emergencyIcon">
                 <i class="fas fa-exclamation-triangle"></i>
             </div>
@@ -620,47 +646,53 @@
             document.getElementById('safeScreen').classList.add('hidden');
             document.getElementById('emergencyScreen').classList.add('active');
 
-            let bodyClass = 'other';
+            const resp = String(command.responseType || '').toLowerCase().trim();
             const rt = String(command.reportType || '');
+            let bodyClass = 'other';
+            let iconHtml = '<i class="fas fa-exclamation-triangle"></i>';
 
-            if (rt.includes('حريق') || rt.includes('دخان')) bodyClass = 'fire';
-            else if (rt.includes('إغماء') || rt.includes('إصابة')) bodyClass = 'injury';
-            else if (rt.includes('عدوى')) bodyClass = 'infection';
-            else if (rt.includes('كهرباء')) bodyClass = 'power';
-            else if (rt.includes('مياه') || rt.includes('تسرب')) bodyClass = 'water';
+            // اللون حسب نوع الأمر (responseType) أولاً
+            if (resp.includes('full_evacuation') || resp.includes('إخلاء') || resp.includes('اخلاء')) {
+                bodyClass = 'fire'; // أحمر للإخلاء
+                document.getElementById('emergencyTitle').textContent = 'أمر إخلاء';
+                document.getElementById('instructionTitle').textContent = 'إخلاء فوري - اتجه إلى:';
+                iconHtml = '<i class="fas fa-running"></i>';
+            } else if (resp.includes('send_team') || resp.includes('توجيه') || resp.includes('توجه')) {
+                bodyClass = 'injury'; // برتقالي للتوجيه
+                document.getElementById('emergencyTitle').textContent = 'أمر توجيه';
+                document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+                iconHtml = '<i class="fas fa-user-shield"></i>';
+            } else if (resp.includes('isolation_evacuation') || resp.includes('عزل')) {
+                bodyClass = 'infection'; // بنفسجي للعزل
+                document.getElementById('emergencyTitle').textContent = 'أمر عزل';
+                document.getElementById('instructionTitle').textContent = 'عزل المنطقة فورًا - الموقع:';
+                iconHtml = '<i class="fas fa-virus"></i>';
+            } else {
+                // إذا لم يكن هناك responseType، نستخدم reportType للون
+                if (rt.includes('حريق') || rt.includes('دخان')) {
+                    bodyClass = 'fire';
+                    iconHtml = '<i class="fas fa-fire"></i>';
+                } else if (rt.includes('إغماء') || rt.includes('إصابة')) {
+                    bodyClass = 'injury';
+                    iconHtml = '<i class="fas fa-user-injured"></i>';
+                } else if (rt.includes('عدوى')) {
+                    bodyClass = 'infection';
+                    iconHtml = '<i class="fas fa-virus"></i>';
+                } else if (rt.includes('كهرباء')) {
+                    bodyClass = 'power';
+                    iconHtml = '<i class="fas fa-bolt"></i>';
+                } else if (rt.includes('مياه') || rt.includes('تسرب')) {
+                    bodyClass = 'water';
+                    iconHtml = '<i class="fas fa-water"></i>';
+                }
+                document.getElementById('emergencyTitle').textContent = 'تنبيه طوارئ';
+                document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+            }
 
             document.body.className = bodyClass;
-
+            document.getElementById('emergencyIcon').innerHTML = iconHtml;
             document.getElementById('emergencyType').textContent = command.reportType || 'طوارئ';
             document.getElementById('emergencyLocation').textContent = command.location || '-';
-
-            const resp = String(command.responseType || '').toLowerCase().trim();
-            if (resp.includes('full_evacuation') || resp.includes('إخلاء') || resp.includes('اخلاء')) {
-              document.getElementById('emergencyTitle').textContent = 'أمر إخلاء';
-              document.getElementById('instructionTitle').textContent = 'إخلاء فوري - اتجه إلى:';
-            } else if (resp.includes('send_team') || resp.includes('توجيه') || resp.includes('توجه')) {
-              document.getElementById('emergencyTitle').textContent = 'أمر توجيه';
-              document.getElementById('instructionTitle').textContent = 'التوجيهات:';
-            } else if (resp.includes('isolation_evacuation') || resp.includes('عزل')) {
-              document.getElementById('emergencyTitle').textContent = 'أمر عزل';
-              document.getElementById('instructionTitle').textContent = 'عزل المنطقة فورًا - الموقع:';
-              document.body.className = 'infection';
-            }
-
-            const iconEl = document.getElementById('emergencyIcon');
-            if (bodyClass === 'fire') {
-                iconEl.innerHTML = '<i class="fas fa-fire"></i>';
-            } else if (bodyClass === 'injury') {
-                iconEl.innerHTML = '<i class="fas fa-user-injured"></i>';
-            } else if (bodyClass === 'infection') {
-                iconEl.innerHTML = '<i class="fas fa-virus"></i>';
-            } else if (bodyClass === 'power') {
-                iconEl.innerHTML = '<i class="fas fa-bolt"></i>';
-            } else if (bodyClass === 'water') {
-                iconEl.innerHTML = '<i class="fas fa-water"></i>';
-            } else {
-                iconEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
-            }
 
             if (command.muster || command.musterPoint) {
                 document.getElementById('musterSection').style.display = 'block';
