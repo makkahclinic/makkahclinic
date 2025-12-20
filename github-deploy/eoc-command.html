@@ -2154,11 +2154,11 @@
                 
                 <!-- تحديد الهدف (أزرار متعددة الاختيار) -->
                 <div id="responseTarget" style="display: none;">
-                    <h3><i class="fas fa-crosshairs"></i> حدد المواقع (يمكن اختيار أكثر من موقع):</h3>
+                    <h3 id="locationSelectionTitle"><i class="fas fa-crosshairs"></i> حدد المواقع (يمكن اختيار أكثر من موقع):</h3>
                     <div class="location-buttons-grid" id="locationButtonsGrid">
                         <!-- سيتم ملؤها بالجافاسكربت -->
                     </div>
-                    <input type="text" id="responseTargetLocation" placeholder="أو اكتب موقع آخر..." style="display: none; margin-top: 10px;" onkeyup="updateIssueButtonState()">
+                    <input type="text" id="responseTargetLocation" placeholder="اكتب كود الموقع أو وصفه..." style="margin-top: 10px;" onkeyup="updateIssueButtonState()">
                     
                     <div id="responseMusterDiv" style="display: none; margin-top: 15px;">
                         <h3><i class="fas fa-map-marker-alt"></i> نقطة التجمع:</h3>
@@ -2762,48 +2762,73 @@
             const locationGrid = document.getElementById('locationButtonsGrid');
             const musterDiv = document.getElementById('responseMusterDiv');
             const customInput = document.getElementById('responseTargetLocation');
+            const locationTitle = document.getElementById('locationSelectionTitle');
             
             // إعادة تعيين الاختيارات
             selectedLocations = [];
-            customInput.style.display = 'none';
-            customInput.value = '';
+            if (customInput) {
+                customInput.style.display = 'block'; // دائماً يظهر لكتابة موقع إضافي
+                customInput.value = '';
+            }
             
             // إنشاء أزرار المواقع حسب نوع الاستجابة
             let locationOptions = [];
+            let titleText = '';
+            let placeholder = '';
             
             if (type === 'full_evacuation') {
+                titleText = 'حدد موقع الإخلاء (يمكن اختيار أكثر من موقع):';
+                placeholder = 'أو اكتب موقع/كود إضافي...';
                 locationOptions = [
                     { id: 'building', label: 'المبنى بالكامل', icon: 'fas fa-building' },
                     { id: 'floor2', label: 'الدور الثاني', icon: 'fas fa-arrow-up' },
                     { id: 'floor1', label: 'الدور الأول', icon: 'fas fa-minus' },
-                    { id: 'floor0', label: 'الدور الأرضي', icon: 'fas fa-arrow-down' }
-                ];
-                musterDiv.style.display = 'block';
-            } else if (type === 'send_team') {
-                locationOptions = [
+                    { id: 'floor0', label: 'الدور الأرضي', icon: 'fas fa-arrow-down' },
                     { id: 'report_location', label: 'موقع البلاغ', icon: 'fas fa-map-pin' }
                 ];
-                customInput.style.display = 'block';
-                customInput.placeholder = 'أو اكتب موقع آخر...';
-                musterDiv.style.display = 'none';
-            } else if (type === 'isolation_evacuation') {
+                if (musterDiv) musterDiv.style.display = 'block';
+            } else if (type === 'send_team') {
+                titleText = 'حدد موقع التوجيه (يمكن اختيار أكثر من موقع):';
+                placeholder = 'اكتب كود الموقع أو وصفه...';
                 locationOptions = [
                     { id: 'report_location', label: 'موقع البلاغ', icon: 'fas fa-map-pin' },
                     { id: 'floor2', label: 'الدور الثاني', icon: 'fas fa-arrow-up' },
                     { id: 'floor1', label: 'الدور الأول', icon: 'fas fa-minus' },
                     { id: 'floor0', label: 'الدور الأرضي', icon: 'fas fa-arrow-down' }
                 ];
-                musterDiv.style.display = 'block';
+                if (musterDiv) musterDiv.style.display = 'none';
+            } else if (type === 'isolation_evacuation') {
+                titleText = 'حدد موقع العزل وعدم الاقتراب (يمكن اختيار أكثر من موقع):';
+                placeholder = 'اكتب كود الموقع أو وصفه...';
+                locationOptions = [
+                    { id: 'report_location', label: 'موقع البلاغ', icon: 'fas fa-map-pin' },
+                    { id: 'floor2', label: 'الدور الثاني', icon: 'fas fa-arrow-up' },
+                    { id: 'floor1', label: 'الدور الأول', icon: 'fas fa-minus' },
+                    { id: 'floor0', label: 'الدور الأرضي', icon: 'fas fa-arrow-down' }
+                ];
+                if (musterDiv) musterDiv.style.display = 'block';
+            }
+            
+            // تحديث العنوان
+            if (locationTitle) {
+                locationTitle.innerHTML = `<i class="fas fa-crosshairs"></i> ${titleText}`;
+            }
+            
+            // تحديث placeholder
+            if (customInput) {
+                customInput.placeholder = placeholder;
             }
             
             // إنشاء الأزرار
-            locationGrid.innerHTML = locationOptions.map(opt => `
-                <button type="button" class="location-btn" data-location="${opt.id}" onclick="toggleLocation('${opt.id}')">
-                    <i class="${opt.icon}"></i> ${opt.label}
-                </button>
-            `).join('');
+            if (locationGrid) {
+                locationGrid.innerHTML = locationOptions.map(opt => `
+                    <button type="button" class="location-btn" data-location="${opt.id}" onclick="toggleLocation('${opt.id}')">
+                        <i class="${opt.icon}"></i> ${opt.label}
+                    </button>
+                `).join('');
+            }
             
-            targetDiv.style.display = 'block';
+            if (targetDiv) targetDiv.style.display = 'block';
             updateIssueButtonState();
         }
         
