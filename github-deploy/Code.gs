@@ -168,64 +168,72 @@
   }
   
   function doGet(e) {
-    const action = e && e.parameter && e.parameter.action;
+    const p = e && e.parameter ? e.parameter : {};
+    const action = p.action;
+    const callback = p.callback;
+    
+    function output_(obj) {
+      const json = JSON.stringify(obj);
+      if (callback) {
+        const safe = String(callback).replace(/[^\w$.]/g, '');
+        return ContentService.createTextOutput(safe + '(' + json + ');')
+          .setMimeType(ContentService.MimeType.JAVASCRIPT);
+      }
+      return ContentService.createTextOutput(json)
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     
     if (action === 'debug') {
       const result = debugInfo();
-      return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return output_({ ok: true, ...result });
     }
     
     if (action === 'submitEmergencyReport') {
-      const result = submitEmergencyReport(e.parameter);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      const result = submitEmergencyReport(p);
+      return output_(result);
     }
     
     if (action === 'getEmergencyReports') {
-      const result = getEmergencyReports();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      const result = getEmergencyReports(p);
+      return output_(result);
     }
     
     if (action === 'updateEmergencyStatus') {
-      const result = updateEmergencyReportStatus(e.parameter);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      const result = updateEmergencyReportStatus(p);
+      return output_(result);
     }
     
     if (action === 'getEmergencyAnalytics') {
       const result = getEmergencyAnalytics();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      return output_(result);
     }
     
     if (action === 'setActiveCommand') {
-      const result = setActiveCommand(e.parameter);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      const result = setActiveCommand(p);
+      return output_(result);
     }
     
     if (action === 'getActiveCommand') {
       const result = getActiveCommand();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      return output_(result);
     }
     
     if (action === 'getRoomCodes') {
       const result = getRoomCodes();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      return output_(result);
     }
     
     if (action === 'clearActiveCommand') {
       const result = clearActiveCommand();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      return output_(result);
     }
     
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
-      .setMimeType(ContentService.MimeType.JSON);
+    if (action === 'getEocDrills') {
+      const result = getEocDrills(p);
+      return output_(result);
+    }
+    
+    return output_({ ok: true, message: 'Safety Rounds API is running' });
   }
   
   // Emergency Report Functions
@@ -484,6 +492,37 @@
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  }
+  
+  function getEocDrills(params) {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('EOC_DRILLS');
+      
+      if (!sheet) {
+        return { ok: true, drills: [] };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        return { ok: true, drills: [] };
+      }
+      
+      const limit = Math.min(parseInt(params.limit || '10', 10), 100);
+      const drills = [];
+      
+      for (let i = data.length - 1; i >= 1 && drills.length < limit; i--) {
+        drills.push({
+          date: data[i][0] || '',
+          type: data[i][1] || '',
+          result: data[i][2] || 'ناجح'
+        });
+      }
+      
+      return { ok: true, drills: drills };
+    } catch (err) {
+      return { ok: false, error: err.message, drills: [] };
     }
   }
   

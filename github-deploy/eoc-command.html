@@ -1968,13 +1968,13 @@
                                 <div class="dept-toggle-btns">
                                     <button class="dept-toggle-btn" data-dept="reception" onclick="toggleDept('reception')">الاستقبال</button>
                                     <button class="dept-toggle-btn" data-dept="internal1" onclick="toggleDept('internal1')">الباطنية</button>
-                                    <button class="dept-toggle-btn" data-dept="bones" onclick="toggleDept('bones')">العظام</button>
+                                    <button class="dept-toggle-btn" data-dept="ortho" onclick="toggleDept('ortho')">العظام</button>
                                     <button class="dept-toggle-btn" data-dept="emergency" onclick="toggleDept('emergency')">الطوارئ</button>
                                     <button class="dept-toggle-btn" data-dept="general" onclick="toggleDept('general')">الطب العام</button>
-                                    <button class="dept-toggle-btn" data-dept="bandage" onclick="toggleDept('bandage')">الضماد</button>
-                                    <button class="dept-toggle-btn" data-dept="women" onclick="toggleDept('women')">النساء والولادة</button>
-                                    <button class="dept-toggle-btn" data-dept="menReception" onclick="toggleDept('menReception')">استقبال رجال</button>
-                                    <button class="dept-toggle-btn" data-dept="womenReception" onclick="toggleDept('womenReception')">استقبال نساء</button>
+                                    <button class="dept-toggle-btn" data-dept="dressing" onclick="toggleDept('dressing')">الضماد</button>
+                                    <button class="dept-toggle-btn" data-dept="obgyn" onclick="toggleDept('obgyn')">النساء والولادة</button>
+                                    <button class="dept-toggle-btn" data-dept="menreception" onclick="toggleDept('menreception')">استقبال رجال</button>
+                                    <button class="dept-toggle-btn" data-dept="womenreception" onclick="toggleDept('womenreception')">استقبال نساء</button>
                                 </div>
                             </div>
                             <div class="dept-group">
@@ -3257,11 +3257,214 @@
             card.classList.toggle('selected');
         }
 
+        /************* EOC PATCH BLOCK *************/
+        const EOC_WEB = (typeof WEB_APP_URL !== 'undefined') ? WEB_APP_URL : '';
+        let alertedReportIds = new Set();
+
+        function jsonp(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+                params.action = action;
+                params.callback = cb;
+
+                const qs = new URLSearchParams(params).toString();
+                const s = document.createElement("script");
+                s.src = EOC_WEB + "?" + qs;
+
+                window[cb] = (data) => { cleanup(); resolve(data); };
+                s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+                function cleanup() {
+                    try { delete window[cb]; } catch(e) {}
+                    if (s.parentNode) s.parentNode.removeChild(s);
+                }
+                document.body.appendChild(s);
+            });
+        }
+
+        function updateSelectedAreasDisplay() {
+            const container = document.getElementById('selectedAreas');
+            if (!container) return;
+        }
+
+        function highlightEmergencyLocation(locationText) {
+            document.querySelectorAll('.dept-card, .dept-toggle-btn')
+                .forEach(el => el.classList.remove('emergency-highlight'));
+
+            if (!locationText) return;
+
+            document.querySelectorAll('.dept-card').forEach(card => {
+                const label = card.textContent.trim();
+                if (label && locationText.includes(label)) {
+                    card.classList.add('emergency-highlight');
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+
+            document.querySelectorAll('.dept-toggle-btn').forEach(btn => {
+                const label = btn.textContent.trim();
+                if (label && locationText.includes(label)) btn.classList.add('emergency-highlight');
+            });
+        }
+
+        function applyEvacVisual(scope) {
+            const floors = [
+                { n: 2, name: 'floor2-status' },
+                { n: 1, name: 'floor1-status' },
+                { n: 0, name: 'floor0-status' },
+            ];
+
+            floors.forEach(f => {
+                const el = document.getElementById(f.name);
+                if (!el) return;
+
+                const shouldEvac =
+                    scope.kind === 'building' ||
+                    (scope.kind === 'floor2' && f.n === 2) ||
+                    (scope.kind === 'floor1' && f.n === 1) ||
+                    (scope.kind === 'floor0' && f.n === 0);
+
+                if (shouldEvac) {
+                    el.className = 'floor-status evacuating';
+                    el.textContent = 'إخلاء';
+                    const floorBox = document.querySelector(`.floor[data-floor="${f.n}"]`);
+                    if (floorBox) floorBox.classList.add('evacuating');
+                } else {
+                    el.className = 'floor-status safe';
+                    el.textContent = 'آمن';
+                    const floorBox = document.querySelector(`.floor[data-floor="${f.n}"]`);
+                    if (floorBox) floorBox.classList.remove('evacuating');
+                }
+            });
+        }
+
+        async function updateStatus(reportId, newStatus) {
+            const responder = prompt('اسم المستجيب:');
+            if (!responder) return;
+            const actionNotes = prompt('ملاحظات الإجراء (اختياري):') || '';
+
+            try {
+                const data = await jsonp('updateEmergencyStatus', {
+                    reportId,
+                    status: newStatus,
+                    responder,
+                    actionNotes
+                });
+
+                if (data && data.ok) {
+                    showToast('تم تحديث الحالة بنجاح', 'success');
+                    loadReports();
+                } else {
+                    showToast('فشل التحديث: ' + (data.error || ''), 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            }
+        }
+
+        async function loadReportsJSONP() {
+            const container = document.getElementById('reportsLog');
+            try {
+                const data = await jsonp('getEmergencyReports', { limit: 20 });
+
+                if (!data.ok) throw new Error(data.error || 'API error');
+
+                const reports = data.reports || [];
+                if (!reports.length) {
+                    container.innerHTML = '<div class="no-reports"><i class="fas fa-check-circle"></i><p>لا توجد بلاغات حالياً</p></div>';
+                    return;
+                }
+
+                const newOnes = reports.filter(r => r.status === 'جديد' && !alertedReportIds.has(r.id));
+                if (newOnes.length) {
+                    newOnes.forEach(r => alertedReportIds.add(r.id));
+                    showNewReportAlert(newOnes[0]);
+                }
+
+                container.innerHTML = reports.slice(0, 10).map(report => {
+                    const statusClass = report.status === 'جديد' ? 'new'
+                        : report.status === 'قيد المعالجة' ? 'pending' : 'resolved';
+
+                    const typeIcon = getReportTypeIcon(report.type);
+
+                    return `
+                        <div class="report-item ${statusClass}" data-report-id="${report.id}">
+                            <div class="report-header">
+                                <span class="report-type"><i class="${typeIcon}"></i> ${report.type}</span>
+                                <span class="report-status ${statusClass}">${report.status}</span>
+                            </div>
+                            <div class="report-location"><i class="fas fa-map-marker-alt"></i> ${report.location}</div>
+                            <div class="report-time"><i class="fas fa-clock"></i> ${report.date} - ${report.time}</div>
+                            ${report.notes ? '<div class="report-notes"><i class="fas fa-sticky-note"></i> ' + report.notes + '</div>' : ''}
+                            <div class="report-actions">
+                                ${getActionButtons(report)}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                console.error(e);
+                container.innerHTML = '<div class="error-state"><i class="fas fa-wifi" style="color: var(--danger);"></i><p>تعذر الاتصال بخادم البلاغات</p><small>تأكد من Web App Deployment</small></div>';
+            }
+        }
+
+        async function loadDrillLogJSONP() {
+            const container = document.getElementById('drillLog');
+            try {
+                const data = await jsonp('getEocDrills', { limit: 10 });
+                if (data.ok && data.drills && data.drills.length) {
+                    container.innerHTML = data.drills.map(d => `
+                        <div class="drill-item">
+                            <div class="drill-info">
+                                <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
+                                <span>${d.type || 'تمرين'}</span>
+                            </div>
+                            <span class="drill-date">${d.date || ''}</span>
+                            <span class="drill-result success">${d.result || 'ناجح'}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    showDefaultDrills(container);
+                }
+            } catch (e) {
+                showDefaultDrills(container);
+            }
+        }
+
+        async function sendCommandToBackend(commandData) {
+            await jsonp('setActiveCommand', {
+                commandId: 'CMD-' + Date.now(),
+                responseType: commandData.type,
+                reportType: commandData.reportType,
+                location: commandData.location,
+                muster: commandData.muster || '',
+                issuedBy: 'EOC',
+                reportId: commandData.reportId || '',
+                mode: 'real'
+            });
+        }
+
+        async function clearCommandFromBackend() {
+            await jsonp('clearActiveCommand', {});
+        }
+
+        async function pollActiveCommand() {
+            try {
+                const data = await jsonp('getActiveCommand', {});
+                if (data.ok && data.active && data.command) {
+                    console.log('Active command:', data.command);
+                }
+            } catch(e) {}
+        }
+        /************* END PATCH *************/
+
         document.addEventListener('DOMContentLoaded', () => {
-            loadDrillLog();
-            loadReports();
+            loadDrillLogJSONP();
+            loadReportsJSONP();
             
-            setInterval(loadReports, 30000);
+            setInterval(loadReportsJSONP, 5000);
+            setInterval(pollActiveCommand, 5000);
         });
     </script>
 </body>

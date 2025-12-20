@@ -1,0 +1,597 @@
+A) إصلاح Google Apps Script (ضروري)
+
+مشكلتك الحالية إن صفحة EOC تنادي Actions مثل:
+updateEmergencyStatus / setActiveCommand / clearActiveCommand / getActiveCommand / getEocDrills
+وهي غير موجودة في سكربتك → فالتحديثات/الأوامر ما تتسجل.
+
+✅ افتح Code.gs في Apps Script، وأضف هذا القسم في آخر الملف (أو مكان مناسب).
+(ويعمل JSONP لتجاوز مشاكل CORS—شرح CORS: MDN 
+MDN Web Docs
+، وTextOutput/ContentService رسميًا 
+Google for Developers
++1
+، وLockService لمنع تعارض الكتابة 
+Google for Developers
+)
+
+مهم: تأكد EOC_SPREADSHEET_ID هو شيت EOC الحقيقي عندك.
+
+/*************** EOC API (Apps Script) ***************/
+const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA'; // <-- ضع ID شيت EOC الصحيح
+const EOC_REPORTS_SHEET = 'بلاغات_الطوارئ';
+const EOC_COMMAND_SHEET = 'EOC_COMMAND';
+const EOC_DRILLS_SHEET  = 'EOC_DRILLS';
+
+function output_(obj, callback) {
+  const json = JSON.stringify(obj);
+  if (callback) {
+    const safe = String(callback).replace(/[^\w$.]/g, '');
+    return ContentService.createTextOutput(`${safe}(${json});`)
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getOrCreateSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    if (headers && headers.length) sh.appendRow(headers);
+  } else if (headers && headers.length && sh.getLastRow() === 0) {
+    sh.appendRow(headers);
+  }
+  return sh;
+}
+
+function eocNow_() {
+  return Utilities.formatDate(new Date(), "Asia/Riyadh", "yyyy-MM-dd HH:mm:ss");
+}
+
+function eocDate_() {
+  return Utilities.formatDate(new Date(), "Asia/Riyadh", "yyyy-MM-dd");
+}
+
+function eocTime_() {
+  return Utilities.formatDate(new Date(), "Asia/Riyadh", "HH:mm");
+}
+
+function submitEmergencyReport_(p) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = getOrCreateSheet_(ss, EOC_REPORTS_SHEET, [
+      'رقم البلاغ','التاريخ','الوقت','نوع الكارثة','الموقع','ملاحظات','الحالة',
+      'المستجيب','ملاحظات الإجراء','آخر تحديث'
+    ]);
+
+    const id = p.reportId || ('EMR-' + Date.now());
+    sh.appendRow([
+      id,
+      p.date || eocDate_(),
+      p.time || eocTime_(),
+      p.disasterType || '',
+      p.location || '',
+      p.notes || '',
+      'جديد',
+      '',
+      '',
+      eocNow_()
+    ]);
+
+    return { ok: true, reportId: id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getEmergencyReports_(p) {
+  const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(EOC_REPORTS_SHEET);
+  if (!sh) return { ok: true, reports: [] };
+
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) return { ok: true, reports: [] };
+
+  const limit = Math.min(parseInt(p.limit || '30', 10), 200);
+  const reports = [];
+
+  for (let i = data.length - 1; i >= 1 && reports.length < limit; i--) {
+    reports.push({
+      id: data[i][0],
+      date: data[i][1],
+      time: data[i][2],
+      type: data[i][3],
+      location: data[i][4],
+      notes: data[i][5],
+      status: data[i][6] || 'جديد',
+      responder: data[i][7] || '',
+      actionNotes: data[i][8] || '',
+      updatedAt: data[i][9] || ''
+    });
+  }
+  return { ok: true, reports };
+}
+
+function updateEmergencyStatus_(p) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(EOC_REPORTS_SHEET);
+    if (!sh) return { ok: false, error: 'Sheet not found: ' + EOC_REPORTS_SHEET };
+
+    const data = sh.getDataRange().getValues();
+    const reportId = String(p.reportId || '').trim();
+    if (!reportId) return { ok: false, error: 'reportId required' };
+
+    let row = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === reportId) { row = i + 1; break; }
+    }
+    if (row === -1) return { ok: false, error: 'Report not found' };
+
+    // الأعمدة: G status, H responder, I actionNotes, J updatedAt
+    sh.getRange(row, 7).setValue(p.status || 'قيد المعالجة');
+    sh.getRange(row, 8).setValue(p.responder || '');
+    sh.getRange(row, 9).setValue(p.actionNotes || '');
+    sh.getRange(row,10).setValue(eocNow_());
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setActiveCommand_(p) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = getOrCreateSheet_(ss, EOC_COMMAND_SHEET, [
+      'active','commandId','createdAt','issuedBy','reportId',
+      'responseType','reportType','location','muster','mode'
+    ]);
+
+    const commandId = p.commandId || ('CMD-' + Date.now());
+    const row = 2; // نستخدم صف ثابت لأمر واحد نشط
+    sh.getRange(row, 1, 1, 10).setValues([[
+      'Yes',
+      commandId,
+      eocNow_(),
+      p.issuedBy || '',
+      p.reportId || '',
+      p.responseType || '',
+      p.reportType || '',
+      p.location || '',
+      p.muster || '',
+      p.mode || 'real'
+    ]]);
+
+    return { ok: true, commandId };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function clearActiveCommand_() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(EOC_COMMAND_SHEET);
+    if (!sh || sh.getLastRow() < 2) return { ok: true };
+
+    sh.getRange(2, 1).setValue('No'); // active = No
+    sh.getRange(2, 3).setValue(eocNow_()); // تحديث وقت
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getActiveCommand_() {
+  const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(EOC_COMMAND_SHEET);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, active: false };
+
+  const row = sh.getRange(2, 1, 1, 10).getValues()[0];
+  const active = String(row[0]).toLowerCase() === 'yes';
+
+  return {
+    ok: true,
+    active,
+    command: active ? {
+      commandId: row[1],
+      createdAt: row[2],
+      issuedBy: row[3],
+      reportId: row[4],
+      responseType: row[5],
+      reportType: row[6],
+      location: row[7],
+      muster: row[8],
+      mode: row[9]
+    } : null
+  };
+}
+
+function getEocDrills_(p) {
+  const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(EOC_DRILLS_SHEET);
+  if (!sh) return { ok: true, drills: [] };
+
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) return { ok: true, drills: [] };
+
+  const limit = Math.min(parseInt(p.limit || '10', 10), 100);
+  const drills = [];
+  for (let i = data.length - 1; i >= 1 && drills.length < limit; i--) {
+    drills.push({
+      date: data[i][0] || '',
+      type: data[i][1] || '',
+      result: data[i][2] || 'ناجح'
+    });
+  }
+  return { ok: true, drills };
+}
+
+/*** أضف هذه الحالات داخل doGet الحالي عندك (بدون ما تكسر debug) ***/
+function handleEocActions_(p) {
+  const action = p.action;
+  if (action === 'submitEmergencyReport') return submitEmergencyReport_(p);
+  if (action === 'getEmergencyReports') return getEmergencyReports_(p);
+  if (action === 'updateEmergencyStatus') return updateEmergencyStatus_(p);
+
+  if (action === 'setActiveCommand') return setActiveCommand_(p);
+  if (action === 'clearActiveCommand') return clearActiveCommand_();
+  if (action === 'getActiveCommand') return getActiveCommand_();
+
+  if (action === 'getEocDrills') return getEocDrills_(p);
+  return null;
+}
+
+
+✅ الآن عدّل doGet الموجود عندك: داخل doGet(e) قبل الـreturn النهائي، أضف:
+
+const p = e && e.parameter ? e.parameter : {};
+const eoc = handleEocActions_(p);
+if (eoc) return output_(eoc, p.callback);
+
+
+ثم Deploy Web App من جديد.
+
+B) إصلاح eoc-command.html (مرة واحدة بدون خربطة)
+
+عندك 3 مشاكل واضحة من console:
+
+/api/eoc/drills = 404
+
+Cannot set properties of null بسبب selectedAreas
+
+CORS/فشل fetch أحيانًا
+
+✅ الحل: لا تستخدم /api/eoc نهائيًا.
+استخدم JSONP على WEB_APP_URL (نفس اللي عندك) — وهذا يتجاوز CORS. 
+MDN Web Docs
++2
+Google for Developers
++2
+
+1) عدّل IDs المتناقضة في الـHTML (5 تعديلات فقط)
+
+في نافذة الإخلاء عندك بدّل:
+
+bones → ortho
+
+bandage → dressing
+
+women → obgyn
+
+menReception → menreception
+
+womenReception → womenreception
+
+يعني هذه الأسطر تصير مثلًا:
+
+<button class="dept-toggle-btn" data-dept="ortho" onclick="toggleDept('ortho')">العظام</button>
+<button class="dept-toggle-btn" data-dept="dressing" onclick="toggleDept('dressing')">الضماد</button>
+<button class="dept-toggle-btn" data-dept="obgyn" onclick="toggleDept('obgyn')">النساء والولادة</button>
+<button class="dept-toggle-btn" data-dept="menreception" onclick="toggleDept('menreception')">استقبال رجال</button>
+<button class="dept-toggle-btn" data-dept="womenreception" onclick="toggleDept('womenreception')">استقبال نساء</button>
+
+2) في نهاية <script> (قبل </script>) الصق “Patch Block” التالي
+
+هذا يستبدل استدعاءات الشبكة كلها ويصلح null error ويشغّل التنبيهات + إصدار أوامر + إرسالها لشاشة Emergency.html.
+
+/************* EOC PATCH BLOCK (paste at END of script) *************/
+const EOC_WEB = (typeof WEB_APP_URL !== 'undefined') ? WEB_APP_URL : '';
+let alertedReportIds = alertedReportIds || new Set();
+
+function jsonp(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    params.action = action;
+    params.callback = cb;
+
+    const qs = new URLSearchParams(params).toString();
+    const s = document.createElement("script");
+    s.src = EOC_WEB + "?" + qs;
+
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+    function cleanup() {
+      try { delete window[cb]; } catch(e) {}
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }
+    document.body.appendChild(s);
+  });
+}
+
+/* === Fix: null innerHTML crash (selectedAreas not in DOM) === */
+function updateSelectedAreasDisplay() {
+  const container = document.getElementById('selectedAreas');
+  if (!container) return; // يمنع crash
+}
+
+/* === Fix: highlight uses dept-card/dept-toggle-btn بدل room-btn === */
+function highlightEmergencyLocation(locationText) {
+  document.querySelectorAll('.dept-card, .dept-toggle-btn')
+    .forEach(el => el.classList.remove('emergency-highlight'));
+
+  if (!locationText) return;
+
+  document.querySelectorAll('.dept-card').forEach(card => {
+    const label = card.textContent.trim();
+    if (label && locationText.includes(label)) {
+      card.classList.add('emergency-highlight');
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  document.querySelectorAll('.dept-toggle-btn').forEach(btn => {
+    const label = btn.textContent.trim();
+    if (label && locationText.includes(label)) btn.classList.add('emergency-highlight');
+  });
+}
+
+/* === Map visual apply (إخلاء كامل/دور) === */
+function applyEvacVisual(scope) {
+  // scope: { kind: 'building' | 'floor0' | 'floor1' | 'floor2' }
+  const floors = [
+    { n: 2, name: 'floor2-status' },
+    { n: 1, name: 'floor1-status' },
+    { n: 0, name: 'floor0-status' },
+  ];
+
+  floors.forEach(f => {
+    const el = document.getElementById(f.name);
+    if (!el) return;
+
+    const shouldEvac =
+      scope.kind === 'building' ||
+      (scope.kind === 'floor2' && f.n === 2) ||
+      (scope.kind === 'floor1' && f.n === 1) ||
+      (scope.kind === 'floor0' && f.n === 0);
+
+    if (shouldEvac) {
+      el.className = 'floor-status evacuating';
+      el.textContent = 'إخلاء';
+      const floorBox = document.querySelector(`.floor[data-floor="${f.n}"]`);
+      if (floorBox) floorBox.classList.add('evacuating');
+    } else {
+      el.className = 'floor-status safe';
+      el.textContent = 'آمن';
+      const floorBox = document.querySelector(`.floor[data-floor="${f.n}"]`);
+      if (floorBox) floorBox.classList.remove('evacuating');
+    }
+  });
+}
+
+/* === Backend status update (من غير CORS) === */
+async function updateStatus(reportId, newStatus) {
+  const responder = prompt('اسم المستجيب:');
+  if (!responder) return;
+  const actionNotes = prompt('ملاحظات الإجراء (اختياري):') || '';
+
+  const data = await jsonp('updateEmergencyStatus', {
+    reportId,
+    status: newStatus,
+    responder,
+    actionNotes
+  });
+
+  if (data && data.ok) {
+    showToast('تم تحديث الحالة بنجاح', 'success');
+    loadReports();
+  } else {
+    showToast('فشل التحديث: ' + (data.error || ''), 'error');
+  }
+}
+
+/* === Load reports realtime-ish === */
+async function loadReports() {
+  const container = document.getElementById('reportsLog');
+  try {
+    const data = await jsonp('getEmergencyReports', { limit: 20 });
+
+    if (!data.ok) throw new Error(data.error || 'API error');
+
+    const reports = data.reports || [];
+    if (!reports.length) {
+      container.innerHTML = `<div class="no-reports"><i class="fas fa-check-circle"></i><p>لا توجد بلاغات حالياً</p></div>`;
+      return;
+    }
+
+    // Alert new ones
+    const newOnes = reports.filter(r => r.status === 'جديد' && !alertedReportIds.has(r.id));
+    if (newOnes.length) {
+      newOnes.forEach(r => alertedReportIds.add(r.id));
+      showNewReportAlert(newOnes[0]);
+    }
+
+    container.innerHTML = reports.slice(0, 10).map(report => {
+      const statusClass = report.status === 'جديد' ? 'new'
+        : report.status === 'قيد المعالجة' ? 'pending' : 'resolved';
+
+      const typeIcon = getReportTypeIcon(report.type);
+
+      return `
+        <div class="report-item ${statusClass}" data-report-id="${report.id}">
+          <div class="report-header">
+            <span class="report-type"><i class="${typeIcon}"></i> ${report.type}</span>
+            <span class="report-status ${statusClass}">${report.status}</span>
+          </div>
+          <div class="report-location"><i class="fas fa-map-marker-alt"></i> ${report.location}</div>
+          <div class="report-time"><i class="fas fa-clock"></i> ${report.date} - ${report.time}</div>
+          ${report.notes ? `<div class="report-notes"><i class="fas fa-sticky-note"></i> ${report.notes}</div>` : ''}
+          <div class="report-actions">
+            ${getActionButtons(report)}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = `
+      <div class="error-state">
+        <i class="fas fa-wifi" style="color: var(--danger);"></i>
+        <p>تعذر الاتصال بخادم البلاغات</p>
+        <small>تأكد من Web App Deployment</small>
+      </div>
+    `;
+  }
+}
+
+/* === drills from Apps Script (بدل /api/eoc/drills 404) === */
+async function loadDrillLog() {
+  const container = document.getElementById('drillLog');
+  try {
+    const data = await jsonp('getEocDrills', { limit: 10 });
+    if (data.ok && data.drills && data.drills.length) {
+      container.innerHTML = data.drills.map(d => `
+        <div class="drill-item">
+          <div class="drill-info">
+            <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
+            <span>${d.type || 'تمرين'}</span>
+          </div>
+          <span class="drill-date">${d.date || ''}</span>
+          <span class="drill-result success">${d.result || 'ناجح'}</span>
+        </div>
+      `).join('');
+    } else {
+      showDefaultDrills(container);
+    }
+  } catch (e) {
+    showDefaultDrills(container);
+  }
+}
+
+/* === send/clear active command to backend (للشاشة الكبيرة Emergency.html) === */
+async function sendCommandToBackend(commandData) {
+  // commandData: {type, reportType, location, muster, reportId}
+  await jsonp('setActiveCommand', {
+    commandId: 'CMD-' + Date.now(),
+    responseType: commandData.type,
+    reportType: commandData.reportType,
+    location: commandData.location,
+    muster: commandData.muster || '',
+    issuedBy: 'EOC',
+    reportId: commandData.reportId || '',
+    mode: 'real'
+  });
+}
+
+async function clearCommandFromBackend() {
+  await jsonp('clearActiveCommand', {});
+}
+
+/* === Auto apply map when full evacuation issued === */
+const _origShowCommandScreen = typeof showCommandScreen === 'function' ? showCommandScreen : null;
+function showCommandScreen(commandData) {
+  if (_origShowCommandScreen) _origShowCommandScreen(commandData);
+
+  if (commandData.type === 'full_evacuation') {
+    if (commandData.location === 'المبنى بالكامل') applyEvacVisual({ kind: 'building' });
+    if (commandData.location === 'الدور الثاني') applyEvacVisual({ kind: 'floor2' });
+    if (commandData.location === 'الدور الأول') applyEvacVisual({ kind: 'floor1' });
+    if (commandData.location === 'الدور الأرضي') applyEvacVisual({ kind: 'floor0' });
+  } else {
+    highlightEmergencyLocation(commandData.location);
+  }
+}
+
+/* === Poll active command (اختياري، يفيد لو أكثر من شاشة) === */
+async function pollActiveCommand() {
+  try {
+    const data = await jsonp('getActiveCommand', {});
+    if (data.ok && data.active && data.command) {
+      // هنا تقدر تعرض Banner صغير داخل لوحة القيادة إذا تبغى
+      // أو تتركها للشاشة العامة Emergency.html
+    }
+  } catch(e) {}
+}
+
+/* تشغيل */
+document.addEventListener('DOMContentLoaded', () => {
+  loadDrillLog();
+  loadReports();
+  setInterval(loadReports, 5000);     // كل 5 ثواني بدل 30
+  setInterval(pollActiveCommand, 5000);
+});
+/************* END PATCH *************/
+
+
+ملاحظة: MDN توضح ليه CORS يسبب فشل fetch من دومين إلى دومين وكيف الحل يكون بتغيير طريقة الطلب أو ترويسات السيرفر. 
+MDN Web Docs
+
+C) شاشة الطوارئ العامة Emergency.html (علشان الأمر يروح للكل)
+
+في صفحة https://www.m2020m.org/Emergency.html (أو أي شاشة عرض)، أضف سكربت بسيط يقرأ Active Command ويعرضه كل 2–5 ثواني:
+
+<script>
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbztSmY_O_ITwKYXVNzs2wH8Wsid05XEZ5bEG6KJf4453dlFE8JHG_zRmuJbOksa6UgogQ/exec';
+
+function jsonp(action, params={}) {
+  return new Promise((resolve,reject)=>{
+    const cb="cb_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+    params.action=action; params.callback=cb;
+    const s=document.createElement("script");
+    s.src = WEB_APP_URL+"?"+new URLSearchParams(params).toString();
+    window[cb]=(d)=>{cleanup();resolve(d);}
+    s.onerror=()=>{cleanup();reject();}
+    function cleanup(){ try{delete window[cb]}catch(e){} s.remove(); }
+    document.body.appendChild(s);
+  });
+}
+
+async function tick(){
+  const data = await jsonp('getActiveCommand',{});
+  if(data.ok && data.active && data.command){
+    // اعرض الأمر على الشاشة بشكل كبير
+    document.getElementById('cmd').textContent =
+      `${data.command.reportType} | ${data.command.responseType} | ${data.command.location} | ${data.command.muster || ''}`;
+    document.body.classList.add('alert');
+  } else {
+    document.getElementById('cmd').textContent = 'لا يوجد أمر نشط';
+    document.body.classList.remove('alert');
+  }
+}
+setInterval(tick, 2000);
+tick();
+</script>
+<div id="cmd" style="font-size:32px; font-weight:800;"></div>
+
+D) خلاصة “التصميم الجديد بدون تكرار”
+
+البلاغات تُسجل في الشيت ✅
+
+شاشة القيادة تسحب البلاغات كل 5 ثواني وتفتح Modal تلقائي ✅
+
+تختار الاستجابة (إخلاء مبنى/دور/توجيه فريق/عزل) ✅
+
+يصدر أمر واحد Active Command يُعرض في Emergency.html ✅
+
+لا نحتاج شاشتين مكررة للإخلاء—أمر واحد هو الحقيقة ✅
