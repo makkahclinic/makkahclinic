@@ -1462,6 +1462,83 @@
             border-color: #8b5cf6;
         }
         
+        /* أزرار اختيار المواقع المتعددة */
+        .location-buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .location-btn {
+            padding: 12px 15px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .location-btn:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: var(--secondary);
+        }
+        
+        .location-btn.selected {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+        
+        .location-btn i {
+            font-size: 0.85rem;
+        }
+        
+        /* أزرار نقاط التجمع */
+        .muster-buttons-grid {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .muster-btn {
+            flex: 1;
+            min-width: 200px;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .muster-btn:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: var(--secondary);
+        }
+        
+        .muster-btn.selected {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+        
         #responseTarget select, #responseTarget input {
             width: 100%;
             padding: 12px 15px;
@@ -2075,21 +2152,24 @@
                     </button>
                 </div>
                 
-                <!-- تحديد الهدف -->
+                <!-- تحديد الهدف (أزرار متعددة الاختيار) -->
                 <div id="responseTarget" style="display: none;">
-                    <h3><i class="fas fa-crosshairs"></i> حدد الموقع:</h3>
-                    <select id="responseTargetType" onchange="onTargetTypeChange(); updateIssueButtonState();">
-                        <option value="">اختر...</option>
-                    </select>
-                    <input type="text" id="responseTargetLocation" style="display: none;" onkeyup="updateIssueButtonState()">
+                    <h3><i class="fas fa-crosshairs"></i> حدد المواقع (يمكن اختيار أكثر من موقع):</h3>
+                    <div class="location-buttons-grid" id="locationButtonsGrid">
+                        <!-- سيتم ملؤها بالجافاسكربت -->
+                    </div>
+                    <input type="text" id="responseTargetLocation" placeholder="أو اكتب موقع آخر..." style="display: none; margin-top: 10px;" onkeyup="updateIssueButtonState()">
                     
                     <div id="responseMusterDiv" style="display: none; margin-top: 15px;">
                         <h3><i class="fas fa-map-marker-alt"></i> نقطة التجمع:</h3>
-                        <select id="responseMusterPoint" onchange="updateIssueButtonState()">
-                            <option value="">اختر نقطة التجمع...</option>
-                            <option value="A">نقطة A - الموقف الأمامي</option>
-                            <option value="B">نقطة B - الساحة الخلفية</option>
-                        </select>
+                        <div class="muster-buttons-grid">
+                            <button type="button" class="muster-btn" data-muster="A" onclick="toggleMuster('A')">
+                                <i class="fas fa-map-marker-alt"></i> نقطة A - الموقف الأمامي
+                            </button>
+                            <button type="button" class="muster-btn" data-muster="B" onclick="toggleMuster('B')">
+                                <i class="fas fa-map-marker-alt"></i> نقطة B - الساحة الخلفية
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -2626,6 +2706,10 @@
             showResponseModal(report);
         }
         
+        // متغيرات لتخزين الاختيارات المتعددة
+        let selectedLocations = [];
+        let selectedMuster = '';
+
         function showResponseModal(report) {
             const modal = document.getElementById('responseModal');
             
@@ -2638,9 +2722,12 @@
             // Reset selections
             document.querySelectorAll('.response-type-btn').forEach(b => b.classList.remove('selected'));
             document.getElementById('responseTarget').style.display = 'none';
-            document.getElementById('responseTargetType').value = '';
+            document.getElementById('locationButtonsGrid').innerHTML = '';
             document.getElementById('responseTargetLocation').value = '';
-            document.getElementById('responseMusterPoint').value = '';
+            document.getElementById('responseTargetLocation').style.display = 'none';
+            document.querySelectorAll('.muster-btn').forEach(b => b.classList.remove('selected'));
+            selectedLocations = [];
+            selectedMuster = '';
             document.getElementById('issueCommandBtn').disabled = true;
             
             modal.classList.add('active');
@@ -2655,53 +2742,78 @@
             document.querySelector(`[data-response="${type}"]`).classList.add('selected');
             
             const targetDiv = document.getElementById('responseTarget');
-            const targetTypeSelect = document.getElementById('responseTargetType');
+            const locationGrid = document.getElementById('locationButtonsGrid');
             const musterDiv = document.getElementById('responseMusterDiv');
+            const customInput = document.getElementById('responseTargetLocation');
             
-            // Show target options based on response type
+            // إعادة تعيين الاختيارات
+            selectedLocations = [];
+            customInput.style.display = 'none';
+            customInput.value = '';
+            
+            // إنشاء أزرار المواقع حسب نوع الاستجابة
+            let locationOptions = [];
+            
             if (type === 'full_evacuation') {
-                targetDiv.style.display = 'block';
-                targetTypeSelect.innerHTML = `
-                    <option value="">اختر نطاق الإخلاء...</option>
-                    <option value="building">المبنى بالكامل</option>
-                    <option value="floor2">الدور الثاني فقط</option>
-                    <option value="floor1">الدور الأول فقط</option>
-                    <option value="floor0">الدور الأرضي فقط</option>
-                `;
+                locationOptions = [
+                    { id: 'building', label: 'المبنى بالكامل', icon: 'fas fa-building' },
+                    { id: 'floor2', label: 'الدور الثاني', icon: 'fas fa-arrow-up' },
+                    { id: 'floor1', label: 'الدور الأول', icon: 'fas fa-minus' },
+                    { id: 'floor0', label: 'الدور الأرضي', icon: 'fas fa-arrow-down' }
+                ];
                 musterDiv.style.display = 'block';
             } else if (type === 'send_team') {
-                targetDiv.style.display = 'block';
-                targetTypeSelect.innerHTML = `
-                    <option value="">اختر الموقع...</option>
-                    <option value="report_location">موقع البلاغ (${currentReport?.location || ''})</option>
-                    <option value="custom">موقع آخر (حدد)</option>
-                `;
+                locationOptions = [
+                    { id: 'report_location', label: 'موقع البلاغ', icon: 'fas fa-map-pin' }
+                ];
+                customInput.style.display = 'block';
+                customInput.placeholder = 'أو اكتب موقع آخر...';
                 musterDiv.style.display = 'none';
             } else if (type === 'isolation_evacuation') {
-                targetDiv.style.display = 'block';
-                targetTypeSelect.innerHTML = `
-                    <option value="">اختر منطقة العزل...</option>
-                    <option value="report_location">موقع البلاغ (${currentReport?.location || ''})</option>
-                    <option value="floor2">الدور الثاني</option>
-                    <option value="floor1">الدور الأول</option>
-                    <option value="floor0">الدور الأرضي</option>
-                    <option value="custom">منطقة أخرى (حدد)</option>
-                `;
+                locationOptions = [
+                    { id: 'report_location', label: 'موقع البلاغ', icon: 'fas fa-map-pin' },
+                    { id: 'floor2', label: 'الدور الثاني', icon: 'fas fa-arrow-up' },
+                    { id: 'floor1', label: 'الدور الأول', icon: 'fas fa-minus' },
+                    { id: 'floor0', label: 'الدور الأرضي', icon: 'fas fa-arrow-down' }
+                ];
                 musterDiv.style.display = 'block';
+            }
+            
+            // إنشاء الأزرار
+            locationGrid.innerHTML = locationOptions.map(opt => `
+                <button type="button" class="location-btn" data-location="${opt.id}" onclick="toggleLocation('${opt.id}')">
+                    <i class="${opt.icon}"></i> ${opt.label}
+                </button>
+            `).join('');
+            
+            targetDiv.style.display = 'block';
+            updateIssueButtonState();
+        }
+        
+        function toggleLocation(locationId) {
+            const btn = document.querySelector(`.location-btn[data-location="${locationId}"]`);
+            
+            if (selectedLocations.includes(locationId)) {
+                // إلغاء الاختيار
+                selectedLocations = selectedLocations.filter(l => l !== locationId);
+                btn.classList.remove('selected');
+            } else {
+                // إضافة الاختيار
+                selectedLocations.push(locationId);
+                btn.classList.add('selected');
             }
             
             updateIssueButtonState();
         }
         
-        function onTargetTypeChange() {
-            const targetType = document.getElementById('responseTargetType').value;
-            const customLocation = document.getElementById('responseTargetLocation');
+        function toggleMuster(musterId) {
+            document.querySelectorAll('.muster-btn').forEach(b => b.classList.remove('selected'));
             
-            if (targetType === 'custom') {
-                customLocation.style.display = 'block';
-                customLocation.placeholder = 'اكتب الموقع المحدد...';
+            if (selectedMuster === musterId) {
+                selectedMuster = '';
             } else {
-                customLocation.style.display = 'none';
+                selectedMuster = musterId;
+                document.querySelector(`.muster-btn[data-muster="${musterId}"]`).classList.add('selected');
             }
             
             updateIssueButtonState();
@@ -2709,22 +2821,23 @@
         
         function updateIssueButtonState() {
             const selectedType = document.querySelector('.response-type-btn.selected');
-            const targetType = document.getElementById('responseTargetType').value;
             const customLocation = document.getElementById('responseTargetLocation');
-            const musterPoint = document.getElementById('responseMusterPoint').value;
             const musterDiv = document.getElementById('responseMusterDiv');
             
-            let canIssue = selectedType && targetType;
-            
-            if (targetType === 'custom' && !customLocation.value.trim()) {
-                canIssue = false;
+            // يجب اختيار نوع الاستجابة
+            if (!selectedType) {
+                document.getElementById('issueCommandBtn').disabled = true;
+                return;
             }
             
-            if (musterDiv.style.display !== 'none' && !musterPoint) {
-                canIssue = false;
-            }
+            // يجب اختيار موقع واحد على الأقل أو كتابة موقع مخصص
+            const hasLocation = selectedLocations.length > 0 || customLocation.value.trim();
             
-            document.getElementById('issueCommandBtn').disabled = !canIssue;
+            // يجب اختيار نقطة تجمع إذا كانت ظاهرة
+            const needsMuster = musterDiv.style.display !== 'none';
+            const hasMuster = !needsMuster || selectedMuster;
+            
+            document.getElementById('issueCommandBtn').disabled = !(hasLocation && hasMuster);
         }
         
         async function issueCommand() {
@@ -2732,32 +2845,39 @@
             if (!selectedTypeBtn) return;
             
             const responseType = selectedTypeBtn.dataset.response;
-            const targetType = document.getElementById('responseTargetType').value;
-            const customLocation = document.getElementById('responseTargetLocation').value;
-            const musterPoint = document.getElementById('responseMusterPoint').value;
+            const customLocation = document.getElementById('responseTargetLocation').value.trim();
+            
+            // تجميع المواقع المختارة
+            const floorNames = { 
+                floor0: 'الدور الأرضي', 
+                floor1: 'الدور الأول', 
+                floor2: 'الدور الثاني',
+                building: 'المبنى بالكامل',
+                report_location: currentReport?.location || 'موقع البلاغ'
+            };
+            
+            let locationParts = [];
+            selectedLocations.forEach(locId => {
+                locationParts.push(floorNames[locId] || locId);
+            });
+            
+            // إضافة الموقع المخصص إذا كتبه
+            if (customLocation) {
+                locationParts.push(customLocation);
+            }
             
             let commandData = {
                 type: responseType,
                 reportType: currentReport?.type || '',
-                location: '',
+                location: locationParts.join(' + '),
                 muster: '',
                 timestamp: new Date().toLocaleString('ar-SA')
             };
             
-            if (targetType === 'report_location') {
-                commandData.location = currentReport?.location || '';
-            } else if (targetType === 'custom') {
-                commandData.location = customLocation;
-            } else if (targetType === 'building') {
-                commandData.location = 'المبنى بالكامل';
-            } else if (targetType.startsWith('floor')) {
-                const floorNames = { floor0: 'الدور الأرضي', floor1: 'الدور الأول', floor2: 'الدور الثاني' };
-                commandData.location = floorNames[targetType] || targetType;
-            }
-            
-            if (musterPoint === 'A') {
+            // نقطة التجمع
+            if (selectedMuster === 'A') {
                 commandData.muster = 'نقطة تجمع A - الموقف الأمامي';
-            } else if (musterPoint === 'B') {
+            } else if (selectedMuster === 'B') {
                 commandData.muster = 'نقطة تجمع B - الساحة الخلفية';
             }
             
