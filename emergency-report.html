@@ -754,18 +754,24 @@
         }
 
         async function loadRoomCodes() {
+            const select = document.getElementById('roomCodeSelect');
+            select.innerHTML = '<option value="">جاري تحميل الغرف...</option>';
+            
             try {
                 const data = await jsonp('getRoomCodes', {});
-                if (data.ok && Array.isArray(data.rooms)) {
+                console.log('Room codes response:', data);
+                
+                if (data && data.ok && Array.isArray(data.rooms) && data.rooms.length > 0) {
                     roomCodes = data.rooms;
                     populateRoomDropdown();
+                    console.log('Loaded ' + roomCodes.length + ' rooms from server');
+                } else {
+                    throw new Error('Empty or invalid response');
                 }
             } catch (e) {
-                roomCodes = [
-                    { code: 'DIR-B-01', name: 'المدير العام' },
-                    { code: 'REC-G-01', name: 'استقبال الأول' }
-                ];
-                populateRoomDropdown();
+                console.error('Failed to load rooms:', e);
+                select.innerHTML = '<option value="">فشل تحميل الغرف - اكتب الموقع يدوياً</option>';
+                roomCodes = [];
             }
         }
 
