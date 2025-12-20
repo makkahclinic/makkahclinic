@@ -534,6 +534,94 @@
             color: var(--primary);
         }
 
+        /* تعليمات الطوارئ حسب النوع */
+        .emergency-instructions {
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 25px 0;
+            text-align: right;
+            border: 2px solid var(--warning);
+        }
+
+        .instructions-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            color: var(--warning);
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .instructions-header i {
+            font-size: 1.5rem;
+        }
+
+        .instruction-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            border-right: 4px solid var(--secondary);
+        }
+
+        .instruction-step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-num {
+            background: var(--secondary);
+            color: var(--primary);
+            min-width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .step-text {
+            flex: 1;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .step-text strong {
+            color: var(--secondary);
+        }
+
+        .emergency-call-box {
+            background: linear-gradient(135deg, var(--danger), #b91c1c);
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .emergency-call-box a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 1.3rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .emergency-call-box small {
+            display: block;
+            opacity: 0.9;
+            margin-top: 5px;
+            font-size: 0.85rem;
+        }
+
         .report-id {
             background: rgba(0,0,0,0.3);
             padding: 15px;
@@ -718,6 +806,24 @@
             <div class="report-id">
                 <span>رقم البلاغ</span>
                 <strong id="reportNumber">---</strong>
+            </div>
+
+            <!-- تعليمات الطوارئ حسب النوع -->
+            <div class="emergency-instructions" id="emergencyInstructions">
+                <div class="instructions-header">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="instructionsTitle">اتبع التعليمات التالية:</span>
+                </div>
+                <div id="instructionsContent">
+                    <!-- سيتم ملؤها بالجافاسكربت -->
+                </div>
+                <div class="emergency-call-box" id="emergencyCallBox">
+                    <a href="tel:911" id="emergencyCallLink">
+                        <i class="fas fa-phone-alt"></i>
+                        <span id="emergencyCallNumber">اتصل 911</span>
+                    </a>
+                    <small id="emergencyCallLabel">الطوارئ الموحد</small>
+                </div>
             </div>
 
             <h3 style="margin-bottom: 15px; color: var(--secondary);">أرقام الطوارئ للاتصال الفوري:</h3>
@@ -975,6 +1081,7 @@
                     document.getElementById('reportForm').style.display = 'none';
                     document.getElementById('successScreen').classList.add('show');
                     document.getElementById('reportNumber').textContent = reportId;
+                    showEmergencyInstructions(selectedDisaster);
                 } else {
                     alert('تعذر تسجيل البلاغ. اتصل 911 فورًا إذا الحالة خطيرة.');
                 }
@@ -982,6 +1089,109 @@
             } catch (e) {
                 loading.classList.remove('show');
                 alert('فشل الاتصال بالنظام. اتصل 911 فورًا إذا الحالة خطيرة.');
+            }
+        }
+
+        // بنك تعليمات الطوارئ حسب النوع
+        const emergencyInstructions = {
+            fire: {
+                title: '🔥 تعليمات الحريق - RACE',
+                call: { number: '998', label: 'الدفاع المدني' },
+                steps: [
+                    '<strong>أنقِذ</strong> أي شخص في خطر مباشر (بدون تعريض نفسك)',
+                    '<strong>فعّل الإنذار</strong> واتصل بالدفاع المدني 998',
+                    '<strong>أغلق الأبواب</strong> لمنع انتشار الدخان',
+                    '<strong>أطفئ</strong> فقط إذا كان صغيراً وآمناً (طفاية PASS)',
+                    '<strong>أخلِ المكان</strong> عبر السلالم ولا تستخدم المصعد',
+                    '<strong>توجه لنقطة التجمع</strong> وأبلغ عن أي مفقود'
+                ]
+            },
+            power: {
+                title: '⚡ تعليمات انقطاع الكهرباء',
+                call: null,
+                steps: [
+                    '<strong>سلامة المرضى أولاً</strong>: ثبّت الأجهزة الحرجة على البطارية',
+                    '<strong>بلّغ الصيانة</strong> وتأكد من تشغيل المولد',
+                    '<strong>أولوية الطاقة</strong>: ركّز على المناطق الحرجة (طوارئ/عناية)',
+                    '<strong>أوقف غير الضروري</strong> لتخفيف الأحمال',
+                    '<strong>احمِ الأدوية</strong>: قلّل فتح الثلاجات وراقب الحرارة',
+                    '<strong>جهّز للنقل</strong> إذا طال الانقطاع'
+                ]
+            },
+            water: {
+                title: '💧 تعليمات تسرب المياه',
+                call: null,
+                steps: [
+                    '<strong>سلامة كهربائية</strong>: أبعد الناس عن منطقة التسرب',
+                    '<strong>أوقف المصدر</strong>: أغلق المحبس إن أمكن بأمان',
+                    '<strong>بلّغ الصيانة</strong> فوراً',
+                    '<strong>احمِ الأجهزة</strong>: ارفعها أو غطّها',
+                    '<strong>جفف سريعاً</strong> لمنع التلوث والعفن',
+                    '<strong>لا تفتح المنطقة</strong> حتى تقييم السلامة'
+                ]
+            },
+            medical: {
+                title: '🚑 تعليمات الإغماء/الإصابة',
+                call: { number: '997', label: 'الهلال الأحمر' },
+                steps: [
+                    '<strong>تأمين المكان</strong>: لا تعرّض نفسك للخطر',
+                    '<strong>تحقق من الاستجابة</strong>: إذا غير مستجيب → ابدأ CPR',
+                    '<strong>اطلب المساعدة</strong>: نادِ فريق الطوارئ + أحضر AED',
+                    '<strong>نزيف</strong>: أوقفه بضغط مباشر',
+                    '<strong>كسور</strong>: ثبّت ولا تحرّك المصاب',
+                    '<strong>راقب العلامات الحيوية</strong> حتى وصول الفريق'
+                ]
+            },
+            infection: {
+                title: '🦠 تعليمات تفشي العدوى',
+                call: { number: '937', label: 'وزارة الصحة' },
+                steps: [
+                    '<strong>عزل فوري</strong> للحالة/الموقع مع لافتة عزل',
+                    '<strong>البس معدات الوقاية</strong> المناسبة (PPE)',
+                    '<strong>بلّغ مكافحة العدوى</strong> وفعّل فريق التفشي',
+                    '<strong>قيّد الحركة</strong>: امنع الزوار وتحكم بالدخول/الخروج',
+                    '<strong>نظافة اليدين</strong>: الالتزام الصارم + تطهير الأسطح',
+                    '<strong>تتبع المخالطين</strong> وراقب الأعراض'
+                ]
+            },
+            other: {
+                title: '⚠️ تعليمات عامة للطوارئ',
+                call: { number: '911', label: 'الطوارئ الموحد' },
+                steps: [
+                    '<strong>حافظ على هدوئك</strong> وقيّم الموقف',
+                    '<strong>بلّغ المسؤول</strong> فوراً',
+                    '<strong>أبعد المتواجدين</strong> عن منطقة الخطر',
+                    '<strong>لا تحاول المخاطرة</strong> بنفسك',
+                    '<strong>انتظر التعليمات</strong> من فريق الطوارئ',
+                    '<strong>وثّق الحادثة</strong> بعد الاستقرار'
+                ]
+            }
+        };
+
+        function showEmergencyInstructions(disasterType) {
+            const instructions = emergencyInstructions[disasterType] || emergencyInstructions.other;
+            
+            // تحديث العنوان
+            document.getElementById('instructionsTitle').textContent = instructions.title;
+            
+            // بناء الخطوات
+            const content = document.getElementById('instructionsContent');
+            content.innerHTML = instructions.steps.map((step, i) => `
+                <div class="instruction-step">
+                    <span class="step-num">${i + 1}</span>
+                    <span class="step-text">${step}</span>
+                </div>
+            `).join('');
+            
+            // تحديث رقم الاتصال أو إخفاؤه
+            const callBox = document.getElementById('emergencyCallBox');
+            if (instructions.call) {
+                callBox.style.display = 'block';
+                document.getElementById('emergencyCallLink').href = 'tel:' + instructions.call.number;
+                document.getElementById('emergencyCallNumber').textContent = 'اتصل ' + instructions.call.number;
+                document.getElementById('emergencyCallLabel').textContent = instructions.call.label;
+            } else {
+                callBox.style.display = 'none';
             }
         }
 
