@@ -364,35 +364,95 @@
             }
         }
         
-        /* زر تفعيل الصوت - يظهر في الزاوية فقط عند الحاجة */
-        .sound-gate{
+        /* شاشة البداية */
+        .start-screen {
           position: fixed;
-          bottom: 20px;
-          left: 20px;
-          z-index: 9999;
+          inset: 0;
+          background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          text-align: center;
+          padding: 20px;
         }
-        .sound-gate.hidden{ display:none; }
-
-        .sound-btn{
-          border: 0;
-          border-radius: 50px;
-          padding: 12px 20px;
-          font-size: 1rem;
-          font-weight: 700;
-          cursor: pointer;
-          background: #DC143C;
+        .start-screen.hidden { display: none; }
+        
+        .start-logo {
+          width: 120px;
+          height: 120px;
+          background: rgba(255,255,255,0.1);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 25px;
+          border: 3px solid rgba(201, 169, 98, 0.5);
+        }
+        .start-logo img {
+          width: 80px;
+          height: auto;
+        }
+        
+        .start-title {
+          font-size: 1.8rem;
+          font-weight: 900;
+          color: #c9a962;
+          margin-bottom: 10px;
+        }
+        
+        .start-subtitle {
+          font-size: 1.1rem;
+          color: rgba(255,255,255,0.8);
+          margin-bottom: 30px;
+          line-height: 1.6;
+        }
+        
+        .start-btn {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
           color: #fff;
-          box-shadow: 0 4px 20px rgba(220,20,60,0.5);
-          animation: pulseBtn 1s ease-in-out infinite;
+          border: none;
+          padding: 20px 50px;
+          font-size: 1.4rem;
+          font-weight: 900;
+          border-radius: 60px;
+          cursor: pointer;
+          box-shadow: 0 8px 30px rgba(34, 197, 94, 0.4);
+          transition: transform 0.2s, box-shadow 0.2s;
         }
-
-        @keyframes pulseBtn {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
+        .start-btn:hover {
+          transform: scale(1.05);
+          box-shadow: 0 12px 40px rgba(34, 197, 94, 0.5);
+        }
+        .start-btn i {
+          margin-left: 10px;
+        }
+        
+        .start-note {
+          margin-top: 25px;
+          font-size: 0.9rem;
+          color: rgba(255,255,255,0.5);
         }
     </style>
 </head>
 <body class="safe">
+    <!-- شاشة البداية -->
+    <div class="start-screen" id="startScreen">
+      <div class="start-logo">
+        <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع">
+      </div>
+      <div class="start-title">نظام إنذار الطوارئ</div>
+      <div class="start-subtitle">
+        اضغط الزر أدناه لتفعيل المراقبة<br>
+        سيصدر صوت تنبيه عند أي حالة طوارئ
+      </div>
+      <button class="start-btn" id="startBtn">
+        <i class="fas fa-bell"></i>
+        ابدأ المراقبة
+      </button>
+      <div class="start-note">اترك هذه الصفحة مفتوحة</div>
+    </div>
     <div class="container">
         <div class="safe-screen" id="safeScreen">
             <div class="logo-container">
@@ -583,9 +643,35 @@
         document.addEventListener('touchstart', unlockAudioOnInteraction);
         document.addEventListener('keydown', unlockAudioOnInteraction);
 
+        let monitoringStarted = false;
+
+        function startMonitoring() {
+          if (monitoringStarted) return;
+          monitoringStarted = true;
+          
+          // تفعيل الصوت
+          try {
+            initAudioContext();
+            audioUnlocked = true;
+          } catch(e) {}
+          
+          // إخفاء شاشة البداية
+          const startScreen = document.getElementById('startScreen');
+          if (startScreen) startScreen.classList.add('hidden');
+          
+          // بدء المراقبة
+          checkActiveCommand();
+          setInterval(checkActiveCommand, 5000);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-          const btn = document.getElementById('enableSoundBtn');
-          if (btn) btn.addEventListener('click', unlockAudioOnInteraction);
+          // زر البداية
+          const startBtn = document.getElementById('startBtn');
+          if (startBtn) startBtn.addEventListener('click', startMonitoring);
+          
+          // زر الصوت الاحتياطي
+          const soundBtn = document.getElementById('enableSoundBtn');
+          if (soundBtn) soundBtn.addEventListener('click', unlockAudioOnInteraction);
         });
 
         function jsonp(action, params = {}) {
@@ -734,8 +820,7 @@
             document.getElementById('elapsedTime').textContent = '00:00';
         }
 
-        setInterval(checkActiveCommand, 1000);
-        checkActiveCommand();
+        // المراقبة تبدأ فقط بعد الضغط على زر "ابدأ المراقبة"
     </script>
 </body>
 </html>
