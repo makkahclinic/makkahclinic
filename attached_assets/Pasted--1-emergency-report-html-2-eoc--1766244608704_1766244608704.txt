@@ -1,0 +1,285 @@
+(1) أي موظف يرفع البلاغ من emergency-report.html → البلاغ يُكتب في شيت الطوارئ.
+(2) الإدارة على eoc-command.html تستقبل البلاغ (مع صفّارة) → تختار نوع الاستجابة وتضغط “إصدار الأمر” → يُحفظ “أمر نشط” في شيت الأوامر.
+(3) الشاشات الموزّعة على Emergency.html (وحتى نفس شاشة الإدارة) تراقب “الأمر النشط” وتُظهره وتُشغّل صفّارة.
+
+الآن “العيوب” عندك فعليًا في 3 نقاط:
+
+واجهة البلاغ: كلمة “إبلاغ/البلاغ” غير بارزة مقارنة بالأرقام/الدوائر (الخطوات) وزر الإرسال. (زر الإرسال حاليًا مكتوب “إرسال البلاغ الآن” 
+
+emergency-report
+
+، وخطوة العنوان فيها رقم داخل دائرة 
+
+emergency-report
+
+).
+
+Apps Script: دالة البلاغ ترجع reportId بطريقة قد تكون خاطئة إذا لم يُرسل من الواجهة أو تغيّر لاحقًا، وتخزين التاريخ/الوقت بصيغة محلية قد يسبب مشاكل في التحليل/الفرز. (الواجهة ترسل date/time بصيغة toLocaleDateString('ar-SA') 
+
+emergency-report
+
+).
+
+eoc-command.html: جزء “إصدار الأمر” يرسل setActiveCommand باستخدام fetch 
+
+eoc-command
+
+ بينما باقي أجزاء الصفحة بدأت تستخدم JSONP (وهذا غالبًا سبب أن الأمر لا يصل/لا يُقرأ بسبب CORS).
+
+وتحت هذا الحل الجاهز بالتعديلات (قص ولصق):
+
+1) تعديل emergency-report.html لإبراز “إبلاغ” أكبر من الأرقام
+A) كبّر نص عنوان الخطوة واجعل الرقم أصغر (بدون تغيير كبير في الـHTML)
+
+أضف هذا بعد بلوك .step-title و .step-number (الموجود عندك 
+
+emergency-report
+
+):
+
+/* اجعل عنوان الخطوة أوضح من رقم الخطوة */
+.step-title > span:not(.step-number){
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.step-number{
+  width: 26px;
+  height: 26px;
+  font-size: 0.9rem;
+}
+@media (max-width: 480px){
+  .step-title > span:not(.step-number){ font-size: 1.15rem; }
+  .step-number{ width: 24px; height: 24px; font-size: 0.85rem; }
+}
+
+B) اجعل زر الإرسال “إبلاغ” كلمة كبيرة جدًا (هذا يحقق طلبك حرفيًا)
+
+استبدل زر الإرسال الحالي (الموجود عندك 
+
+emergency-report
+
+) بهذا:
+
+<button class="submit-btn" id="submitBtn" onclick="submitReport()" disabled>
+  <i class="fas fa-paper-plane"></i>
+  <span class="cta-text">
+    <span class="cta-main">إبلاغ</span>
+    <span class="cta-sub">الآن</span>
+  </span>
+</button>
+
+
+ثم أضف CSS التالي تحت .submit-btn (الموجود عندك 
+
+emergency-report
+
+):
+
+.submit-btn .cta-text{
+  display:flex;
+  flex-direction:column;
+  line-height: 1.05;
+  text-align: center;
+}
+.submit-btn .cta-main{
+  font-size: 1.65rem;
+  font-weight: 900;
+}
+.submit-btn .cta-sub{
+  font-size: 0.95rem;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+2) تصحيح Google Apps Script (البلاغات + القراءة + تحديث الحالة)
+
+أهم تصحيحين:
+
+توحيد reportId وإرجاعه بشكل صحيح.
+
+توحيد التاريخ/الوقت بصيغة ثابتة (Riyadh) بدل نص محلي قد يصعب تحليله لاحقًا.
+
+استبدل دوال الطوارئ الثلاث التالية في السكربت عندك:
+
+A) submitEmergencyReport (بديل كامل)
+function submitEmergencyReport(params) {
+  try {
+    const lock = LockService.getScriptLock();
+    lock.tryLock(10000);
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('بلاغات_الطوارئ');
+
+    if (!sheet) {
+      sheet = ss.insertSheet('بلاغات_الطوارئ');
+      sheet.appendRow(['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الكارثة', 'الموقع', 'ملاحظات', 'الحالة', 'المستجيب', 'إجراءات']);
+    }
+
+    const now = getSaudiDate();
+    const reportId = String(params.reportId || ('EMR-' + now.getTime()));
+
+    // تخزين ثابت يسهل الفرز والتحليل
+    const dateStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
+    const timeStr = Utilities.formatDate(now, 'Asia/Riyadh', 'HH:mm:ss');
+
+    sheet.appendRow([
+      reportId,
+      dateStr,
+      timeStr,
+      String(params.disasterType || '').trim(),
+      String(params.location || '').trim(),
+      String(params.notes || '').trim(),
+      'جديد',
+      '', // responder
+      ''  // actionNotes
+    ]);
+
+    lock.releaseLock();
+    return { ok: true, reportId };
+
+  } catch (err) {
+    try { LockService.getScriptLock().releaseLock(); } catch(e) {}
+    return { ok: false, error: err.message };
+  }
+}
+
+B) getEmergencyReports (بديل يقبل limit)
+function getEmergencyReports(params) {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('بلاغات_الطوارئ');
+    if (!sheet) return { ok: true, reports: [] };
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { ok: true, reports: [] };
+
+    const limit = Math.min(parseInt((params && params.limit) || '20', 10) || 20, 200);
+
+    const reports = [];
+    for (let i = data.length - 1; i >= 1 && reports.length < limit; i--) {
+      reports.push({
+        id: data[i][0],
+        date: data[i][1],
+        time: data[i][2],
+        type: data[i][3],
+        location: data[i][4],
+        notes: data[i][5],
+        status: data[i][6] || 'جديد'
+      });
+    }
+    return { ok: true, reports };
+
+  } catch (err) {
+    return { ok: false, error: err.message, reports: [] };
+  }
+}
+
+C) updateEmergencyReportStatus (تحسين بسيط + أعمدة ثابتة)
+function updateEmergencyReportStatus(params) {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('بلاغات_الطوارئ');
+    if (!sheet) return { ok: false, error: 'Sheet not found' };
+
+    const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(params.reportId)) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) return { ok: false, error: 'Report not found' };
+
+    sheet.getRange(rowIndex, 7).setValue(String(params.status || '').trim());
+
+    // responder = col 8, actionNotes = col 9
+    if (sheet.getLastColumn() < 8) sheet.getRange(1, 8).setValue('المستجيب');
+    if (sheet.getLastColumn() < 9) sheet.getRange(1, 9).setValue('إجراءات');
+
+    if (params.responder) sheet.getRange(rowIndex, 8).setValue(String(params.responder).trim());
+    if (params.actionNotes) sheet.getRange(rowIndex, 9).setValue(String(params.actionNotes).trim());
+
+    return { ok: true, message: 'Status updated successfully' };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+
+ملاحظة: في واجهة البلاغ أنت حاليًا ترسل date/time محليًا 
+
+emergency-report
+
+ — بعد التعديل أعلاه، حتى لو استمر الإرسال، السكربت سيحفظ صيغة ثابتة (أفضل للتحليل والفرز).
+
+3) تصحيح eoc-command.html ليصدر الأمر ويصل للشاشات دائمًا
+أهم شيء: استبدل fetch في إرسال الأمر بـ JSONP
+
+عندك الآن fetch داخل sendCommandToBackend 
+
+eoc-command
+
+. استبدل الدالة كاملة بهذا:
+
+async function sendCommandToBackend(commandData) {
+  try {
+    const res = await jsonp('setActiveCommand', {
+      responseType: commandData.type,
+      reportType: commandData.reportType,
+      location: commandData.location,
+      muster: commandData.muster || ''
+    });
+
+    if (!res || !res.ok) {
+      throw new Error(res?.error || 'setActiveCommand failed');
+    }
+  } catch (error) {
+    console.error('Error sending command:', error);
+    showToast('فشل إرسال الأمر للشاشات', 'error');
+  }
+}
+
+كذلك: clearActiveCommand لازم يكون JSONP
+
+عندك الآن fetch في clearCommandFromBackend 
+
+eoc-command
+
+. استبدله:
+
+async function clearCommandFromBackend() {
+  try {
+    const res = await jsonp('clearActiveCommand', {});
+    if (!res || !res.ok) throw new Error(res?.error || 'clearActiveCommand failed');
+  } catch (e) {
+    console.error('Error clearing command:', e);
+  }
+}
+
+اجعل تحديث البلاغات يعتمد دائمًا على JSONP (بدون CORS)
+
+عندك نسخة JSONP اسمها loadReportsJSONP() 
+
+eoc-command
+
+. أسهل “ترقيع مضمون” بدون بحث داخل الملف:
+
+ضع هذا بعد تعريف loadReportsJSONP:
+
+// اجبر أي استدعاء قديم لـ loadReports() يمر عبر JSONP
+async function loadReports() { return loadReportsJSONP(); }
+
+// تحديث تلقائي كل 2 ثانية
+setInterval(loadReports, 2000);
+loadReports();
+
+
+وبكذا حتى لو في أماكن تنادي loadReports() (مثل ما يحدث بعد تحديث الحالة 
+
+eoc-command
+
+) سيعمل بدون CORS.
