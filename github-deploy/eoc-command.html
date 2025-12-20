@@ -2712,23 +2712,40 @@
 
         function showResponseModal(report) {
             const modal = document.getElementById('responseModal');
+            if (!modal) {
+                console.error('Response modal not found');
+                return;
+            }
             
             // Fill report details
-            document.getElementById('reportTypeDisplay').textContent = report.type;
-            document.getElementById('reportLocationDisplay').textContent = report.location;
-            document.getElementById('reportTimeDisplay').textContent = `${report.date} - ${report.time}`;
-            document.getElementById('reportNotesDisplay').textContent = report.notes || 'لا توجد ملاحظات';
+            const typeDisplay = document.getElementById('reportTypeDisplay');
+            const locDisplay = document.getElementById('reportLocationDisplay');
+            const timeDisplay = document.getElementById('reportTimeDisplay');
+            const notesDisplay = document.getElementById('reportNotesDisplay');
+            
+            if (typeDisplay) typeDisplay.textContent = report.type;
+            if (locDisplay) locDisplay.textContent = report.location;
+            if (timeDisplay) timeDisplay.textContent = `${report.date} - ${report.time}`;
+            if (notesDisplay) notesDisplay.textContent = report.notes || 'لا توجد ملاحظات';
             
             // Reset selections
             document.querySelectorAll('.response-type-btn').forEach(b => b.classList.remove('selected'));
-            document.getElementById('responseTarget').style.display = 'none';
-            document.getElementById('locationButtonsGrid').innerHTML = '';
-            document.getElementById('responseTargetLocation').value = '';
-            document.getElementById('responseTargetLocation').style.display = 'none';
+            
+            const responseTarget = document.getElementById('responseTarget');
+            const locationGrid = document.getElementById('locationButtonsGrid');
+            const targetLocation = document.getElementById('responseTargetLocation');
+            const issueBtn = document.getElementById('issueCommandBtn');
+            
+            if (responseTarget) responseTarget.style.display = 'none';
+            if (locationGrid) locationGrid.innerHTML = '';
+            if (targetLocation) {
+                targetLocation.value = '';
+                targetLocation.style.display = 'none';
+            }
             document.querySelectorAll('.muster-btn').forEach(b => b.classList.remove('selected'));
             selectedLocations = [];
             selectedMuster = '';
-            document.getElementById('issueCommandBtn').disabled = true;
+            if (issueBtn) issueBtn.disabled = true;
             
             modal.classList.add('active');
         }
@@ -2823,21 +2840,25 @@
             const selectedType = document.querySelector('.response-type-btn.selected');
             const customLocation = document.getElementById('responseTargetLocation');
             const musterDiv = document.getElementById('responseMusterDiv');
+            const issueBtn = document.getElementById('issueCommandBtn');
+            
+            if (!issueBtn) return;
             
             // يجب اختيار نوع الاستجابة
             if (!selectedType) {
-                document.getElementById('issueCommandBtn').disabled = true;
+                issueBtn.disabled = true;
                 return;
             }
             
             // يجب اختيار موقع واحد على الأقل أو كتابة موقع مخصص
-            const hasLocation = selectedLocations.length > 0 || customLocation.value.trim();
+            const customVal = customLocation ? customLocation.value.trim() : '';
+            const hasLocation = selectedLocations.length > 0 || customVal;
             
             // يجب اختيار نقطة تجمع إذا كانت ظاهرة
-            const needsMuster = musterDiv.style.display !== 'none';
+            const needsMuster = musterDiv && musterDiv.style.display !== 'none';
             const hasMuster = !needsMuster || selectedMuster;
             
-            document.getElementById('issueCommandBtn').disabled = !(hasLocation && hasMuster);
+            issueBtn.disabled = !(hasLocation && hasMuster);
         }
         
         async function issueCommand() {
