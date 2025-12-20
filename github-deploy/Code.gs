@@ -242,47 +242,58 @@
   
   function submitEmergencyReport(params) {
     try {
+      const lock = LockService.getScriptLock();
+      lock.tryLock(10000);
+
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       let sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      // Create sheet if not exists
+
       if (!sheet) {
         sheet = ss.insertSheet('بلاغات_الطوارئ');
-        sheet.appendRow(['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الكارثة', 'الموقع', 'ملاحظات', 'الحالة']);
+        sheet.appendRow(['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الكارثة', 'الموقع', 'ملاحظات', 'الحالة', 'المستجيب', 'إجراءات']);
       }
-      
+
+      const now = new Date();
+      const reportId = String(params.reportId || ('EMR-' + now.getTime()));
+
+      // تخزين ثابت يسهل الفرز والتحليل
+      const dateStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
+      const timeStr = Utilities.formatDate(now, 'Asia/Riyadh', 'HH:mm:ss');
+
       sheet.appendRow([
-        params.reportId || 'EMR-' + Date.now(),
-        params.date || new Date().toLocaleDateString('ar-SA'),
-        params.time || new Date().toLocaleTimeString('ar-SA'),
-        params.disasterType,
-        params.location,
-        params.notes || '',
-        'جديد'
+        reportId,
+        dateStr,
+        timeStr,
+        String(params.disasterType || '').trim(),
+        String(params.location || '').trim(),
+        String(params.notes || '').trim(),
+        'جديد',
+        '',
+        ''
       ]);
-      
-      return { ok: true, reportId: params.reportId };
+
+      lock.releaseLock();
+      return { ok: true, reportId };
+
     } catch (err) {
+      try { LockService.getScriptLock().releaseLock(); } catch(e) {}
       return { ok: false, error: err.message };
     }
   }
   
-  function getEmergencyReports() {
+  function getEmergencyReports(params) {
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       const sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      if (!sheet) {
-        return { ok: true, reports: [] };
-      }
-      
+      if (!sheet) return { ok: true, reports: [] };
+
       const data = sheet.getDataRange().getValues();
-      if (data.length < 2) {
-        return { ok: true, reports: [] };
-      }
-      
+      if (data.length < 2) return { ok: true, reports: [] };
+
+      const limit = Math.min(parseInt((params && params.limit) || '20', 10) || 20, 200);
+
       const reports = [];
-      for (let i = data.length - 1; i >= 1; i--) {
+      for (let i = data.length - 1; i >= 1 && reports.length < limit; i--) {
         reports.push({
           id: data[i][0],
           date: data[i][1],
@@ -293,8 +304,8 @@
           status: data[i][6] || 'جديد'
         });
       }
-      
-      return { ok: true, reports: reports.slice(0, 20) };
+      return { ok: true, reports };
+
     } catch (err) {
       return { ok: false, error: err.message, reports: [] };
     }
@@ -304,41 +315,28 @@
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       const sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      if (!sheet) {
-        return { ok: false, error: 'Sheet not found' };
-      }
-      
+      if (!sheet) return { ok: false, error: 'Sheet not found' };
+
       const data = sheet.getDataRange().getValues();
       let rowIndex = -1;
-      
+
       for (let i = 1; i < data.length; i++) {
-        if (data[i][0] === params.reportId) {
+        if (String(data[i][0]) === String(params.reportId)) {
           rowIndex = i + 1;
           break;
         }
       }
-      
-      if (rowIndex === -1) {
-        return { ok: false, error: 'Report not found' };
-      }
-      
-      sheet.getRange(rowIndex, 7).setValue(params.status);
-      
-      if (params.responder) {
-        if (sheet.getLastColumn() < 8) {
-          sheet.getRange(1, 8).setValue('المستجيب');
-        }
-        sheet.getRange(rowIndex, 8).setValue(params.responder);
-      }
-      
-      if (params.actionNotes) {
-        if (sheet.getLastColumn() < 9) {
-          sheet.getRange(1, 9).setValue('إجراءات');
-        }
-        sheet.getRange(rowIndex, 9).setValue(params.actionNotes);
-      }
-      
+      if (rowIndex === -1) return { ok: false, error: 'Report not found' };
+
+      sheet.getRange(rowIndex, 7).setValue(String(params.status || '').trim());
+
+      // responder = col 8, actionNotes = col 9
+      if (sheet.getLastColumn() < 8) sheet.getRange(1, 8).setValue('المستجيب');
+      if (sheet.getLastColumn() < 9) sheet.getRange(1, 9).setValue('إجراءات');
+
+      if (params.responder) sheet.getRange(rowIndex, 8).setValue(String(params.responder).trim());
+      if (params.actionNotes) sheet.getRange(rowIndex, 9).setValue(String(params.actionNotes).trim());
+
       return { ok: true, message: 'Status updated successfully' };
     } catch (err) {
       return { ok: false, error: err.message };
