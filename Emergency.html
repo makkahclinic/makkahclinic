@@ -339,6 +339,50 @@
                 font-size: 3rem;
             }
         }
+        
+        /* بوابة تفعيل الصوت عند منع autoplay */
+        .sound-gate{
+          position: fixed;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0,0,0,0.55);
+          backdrop-filter: blur(4px);
+          z-index: 9999;
+        }
+        .sound-gate.hidden{ display:none; }
+
+        .sound-card{
+          width: min(520px, 92vw);
+          background: rgba(0,0,0,0.55);
+          border: 2px solid rgba(201,169,98,0.65);
+          border-radius: 18px;
+          padding: 22px 18px;
+          text-align: center;
+        }
+        .sound-title{
+          font-size: 1.6rem;
+          font-weight: 900;
+          margin-bottom: 8px;
+        }
+        .sound-sub{
+          font-size: 1.05rem;
+          line-height: 1.6;
+          opacity: 0.9;
+          margin-bottom: 14px;
+        }
+        .sound-btn{
+          width: 100%;
+          border: 0;
+          border-radius: 12px;
+          padding: 14px 18px;
+          font-size: 1.15rem;
+          font-weight: 900;
+          cursor: pointer;
+          background: #c9a962;
+          color: #0f172a;
+        }
     </style>
 </head>
 <body class="safe">
@@ -409,6 +453,50 @@
         let sirenInterval = null;
         let timerInterval = null;
         let commandStartTime = null;
+
+        const sirenAudio = document.getElementById('sirenAudio');
+        const soundGate = document.getElementById('soundGate');
+        const enableSoundBtn = document.getElementById('enableSoundBtn');
+
+        let audioUnlocked = false;
+
+        function showSoundGate(){ soundGate.classList.remove('hidden'); }
+        function hideSoundGate(){ soundGate.classList.add('hidden'); }
+
+        async function startSiren(){
+          if (!sirenAudio) return;
+          try{
+            sirenAudio.volume = 1.0;
+            await sirenAudio.play();
+          } catch(e){
+            showSoundGate();
+          }
+        }
+
+        function stopSiren(){
+          if (!sirenAudio) return;
+          try{
+            sirenAudio.pause();
+            sirenAudio.currentTime = 0;
+          } catch(e){}
+        }
+
+        async function unlockSound(){
+          try{
+            await sirenAudio.play();
+            audioUnlocked = true;
+            hideSoundGate();
+
+            if (!currentCommand){
+              sirenAudio.pause();
+              sirenAudio.currentTime = 0;
+            }
+          } catch(e){
+            console.warn('unlockSound failed:', e);
+          }
+        }
+
+        enableSoundBtn.addEventListener('click', unlockSound);
 
         function jsonp(action, params = {}) {
             return new Promise((resolve, reject) => {
@@ -497,8 +585,12 @@
             if (command.muster || command.musterPoint) {
                 document.getElementById('musterSection').style.display = 'block';
                 document.getElementById('musterPoint').textContent = command.muster || command.musterPoint;
+            } else {
+                document.getElementById('musterSection').style.display = 'none';
+                document.getElementById('musterPoint').textContent = '-';
             }
 
+            startSiren();
             startTimer();
         }
 
@@ -507,6 +599,10 @@
             document.getElementById('safeScreen').classList.remove('hidden');
             document.getElementById('emergencyScreen').classList.remove('active');
             document.body.className = 'safe';
+            stopSiren();
+            hideSoundGate();
+            document.getElementById('musterSection').style.display = 'none';
+            document.getElementById('musterPoint').textContent = '-';
             stopTimer();
         }
 
@@ -532,5 +628,21 @@
         setInterval(checkActiveCommand, 5000);
         checkActiveCommand();
     </script>
+
+    <!-- بوابة تفعيل الصوت (تظهر فقط إذا المتصفح منع التشغيل) -->
+    <div id="soundGate" class="sound-gate hidden">
+      <div class="sound-card">
+        <div class="sound-title">تفعيل صوت الإنذار</div>
+        <div class="sound-sub">
+          اضغط مرة واحدة للسماح بتشغيل صفارة الطوارئ على هذه الشاشة.
+        </div>
+        <button id="enableSoundBtn" class="sound-btn">تفعيل الصوت</button>
+      </div>
+    </div>
+
+    <!-- ملف الصفارة -->
+    <audio id="sirenAudio" preload="auto" loop>
+      <source src="https://www.m2020m.org/assets/siren.mp3" type="audio/mpeg">
+    </audio>
 </body>
 </html>
