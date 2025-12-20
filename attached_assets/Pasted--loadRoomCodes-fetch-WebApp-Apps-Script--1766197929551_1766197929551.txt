@@ -1,0 +1,75 @@
+✅ loadRoomCodes() عندك يستخدم fetch() على WebApp في Apps Script
+وغالبًا المتصفح يمنع قراءة الرد بسبب CORS → فيدخل على catch ويستخدم قائمة fallback الصغيرة (4 غرف) … فيبان لك إنه “ما نزل كل Rooms”.
+
+الحل النهائي: خلِّ تحميل الغرف JSONP بدل fetch (نفس فكرة patch اللي سويناه في eoc-command).
+
+✅ الصق هذا “بدل” دالة loadRoomCodes() الحالية في emergency-report.html
+
+وخلي populateRoomDropdown() مثل ما هو عندك.
+
+// ✅ JSONP helper (يحُل CORS مع Apps Script)
+function jsonp(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    params.action = action;
+    params.callback = cb;
+
+    const qs = new URLSearchParams(params).toString();
+    const s = document.createElement("script");
+    s.src = WEB_APP_URL + "?" + qs;
+
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error("JSONP failed")); };
+
+    function cleanup() {
+      try { delete window[cb]; } catch(e) {}
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }
+
+    document.body.appendChild(s);
+  });
+}
+
+// ✅ استبدال loadRoomCodes بـ JSONP (يعبي كل الغرف من شيت Rooms)
+async function loadRoomCodes() {
+  try {
+    const data = await jsonp('getRoomCodes');
+
+    if (!data || !data.ok) {
+      throw new Error((data && data.error) ? data.error : "getRoomCodes returned invalid response");
+    }
+
+    roomCodes = Array.isArray(data.rooms) ? data.rooms : [];
+    populateRoomDropdown();
+
+    // ✅ لو رجع فاضي، نوضح السبب في console
+    if (!roomCodes.length) {
+      console.warn("Rooms returned empty. تأكد أن اسم الشيت بالضبط: Rooms وأن الأكواد في العمود A والأسماء في العمود B.");
+    }
+
+  } catch (err) {
+    console.error('Failed to load rooms via JSONP:', err);
+
+    // fallback فقط لو فشل السيرفر فعلاً
+    roomCodes = [
+      { code: 'DIR-B-01', name: 'المدير العام' },
+      { code: 'ADM-B-01', name: 'بلال' },
+      { code: 'REC-G-01', name: 'استقبال الأول' },
+      { code: 'MED-G-01', name: 'دكتور محمد الأمين' }
+    ];
+    populateRoomDropdown();
+  }
+}
+
+✅ مهم جدًا (خطوة واحدة)
+
+تأكد إن WEB_APP_URL في emergency-report.html هو نفسه اللي فيه دوال:
+getRoomCodes / submitEmergencyReport / getEmergencyReports
+(يعني نفس WebApp اللي انت شغال عليه في النظام).
+
+ليه هذا يضمن تحميل “كل” الغرف؟
+
+لأن JSONP ما يحتاج CORS أصلاً، فيتجاوز حظر المتصفح ويقرأ الرد كامل.
+وبما إن Apps Script عندك يدعم callback في doGet، فالشغل بيكون مباشر.
+
+إذا طبّقت هذا ولسه الغرف ناقصة: وقتها المشكلة بتكون 100% من تبويب Rooms نفسه (اسم الشيت أو الأعمدة)، لكن غالبًا الآن السبب CORS/FETCH.
