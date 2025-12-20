@@ -343,105 +343,86 @@
     
     <script>
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwkQPKt7LJNrlJB3LiHszOdHvxjgDHLvgoIpPV2L0zj4LCf_sxbLbaNHPeZEWQEflwl/exec';
-        
+
         let currentCommand = null;
         let sirenInterval = null;
         let timerInterval = null;
         let commandStartTime = null;
-        
-        // تحديث الوقت
+
+        function jsonp(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+                params.action = action;
+                params.callback = cb;
+
+                const s = document.createElement("script");
+                s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+
+                window[cb] = (data) => { cleanup(); resolve(data); };
+                s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+                function cleanup() {
+                    try { delete window[cb]; } catch(e) {}
+                    if (s.parentNode) s.parentNode.removeChild(s);
+                }
+                document.body.appendChild(s);
+            });
+        }
+
         function updateClock() {
             const now = new Date();
-            document.getElementById('currentTime').textContent = now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('currentTime').textContent =
+                now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
         }
-        
         setInterval(updateClock, 1000);
         updateClock();
-        
-        // جلب الأوامر النشطة
+
         async function checkActiveCommand() {
             try {
-                const params = new URLSearchParams({ action: 'getActiveCommand' });
-                const response = await fetch(WEB_APP_URL + '?' + params.toString(), {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-                const data = await response.json();
-                
-                if (data.ok && data.command && data.command.active) {
-                    if (!currentCommand || currentCommand.timestamp !== data.command.timestamp) {
-                        activateEmergency(data.command);
+                const data = await jsonp('getActiveCommand', {});
+                const cmd = data && data.ok ? data.command : null;
+
+                if (cmd && cmd.active) {
+                    if (!currentCommand || currentCommand.timestamp !== cmd.timestamp) {
+                        activateEmergency(cmd);
                     }
                 } else {
-                    if (currentCommand) {
-                        deactivateEmergency();
-                    }
+                    if (currentCommand) deactivateEmergency();
                 }
-            } catch (error) {
-                console.error('Error checking command:', error);
+            } catch (e) {
+                console.error('checkActiveCommand:', e);
             }
         }
-        
-        // تفعيل حالة الطوارئ
+
         function activateEmergency(command) {
             currentCommand = command;
-            commandStartTime = new Date(command.timestamp);
-            
-            // إخفاء شاشة الأمان وإظهار شاشة الطوارئ
+            commandStartTime = new Date(command.timestamp || Date.now());
+
             document.getElementById('safeScreen').classList.add('hidden');
             document.getElementById('emergencyScreen').classList.add('active');
-            
-            // تحديد نوع الطوارئ واللون
-            const body = document.body;
-            body.className = '';
-            
-            let icon, title, bodyClass;
-            
-            switch(command.responseType) {
-                case 'full_evacuation':
-                    bodyClass = 'fire';
-                    icon = 'fa-running';
-                    title = 'إخلاء فوري!';
-                    break;
-                case 'send_team':
-                    bodyClass = 'injury';
-                    icon = 'fa-users';
-                    title = 'توجه الفريق!';
-                    break;
-                case 'isolation_evacuation':
-                    bodyClass = 'infection';
-                    icon = 'fa-shield-virus';
-                    title = 'إخلاء وعزل!';
-                    break;
-                default:
-                    bodyClass = 'other';
-                    icon = 'fa-exclamation-triangle';
-                    title = 'تنبيه طوارئ!';
-            }
-            
-            // تحديد اللون حسب نوع البلاغ
-            if (command.reportType) {
-                if (command.reportType.includes('حريق') || command.reportType.includes('دخان')) {
-                    bodyClass = 'fire';
-                } else if (command.reportType.includes('إغماء') || command.reportType.includes('إصابة')) {
-                    bodyClass = 'injury';
-                } else if (command.reportType.includes('عدوى')) {
-                    bodyClass = 'infection';
-                } else if (command.reportType.includes('كهرباء')) {
-                    bodyClass = 'power';
-                } else if (command.reportType.includes('مياه')) {
-                    bodyClass = 'water';
-                }
-            }
-            
-            body.classList.add(bodyClass);
-            
-            document.getElementById('emergencyIcon').innerHTML = `<i class="fas ${icon}"></i>`;
+
+            let bodyClass = 'other';
+            const rt = String(command.reportType || '');
+
+            if (rt.includes('حريق') || rt.includes('دخان')) bodyClass = 'fire';
+            else if (rt.includes('إغماء') || rt.includes('إصابة')) bodyClass = 'injury';
+            else if (rt.includes('عدوى')) bodyClass = 'infection';
+            else if (rt.includes('كهرباء')) bodyClass = 'power';
+            else if (rt.includes('مياه')) bodyClass = 'water';
+
+            document.body.className = bodyClass;
+
+            let icon = 'fa-exclamation-triangle';
+            let title = 'تنبيه طوارئ!';
+            if (command.responseType === 'full_evacuation') { icon='fa-running'; title='إخلاء فوري!'; }
+            if (command.responseType === 'send_team') { icon='fa-users'; title='توجيه فريق!'; }
+            if (command.responseType === 'isolation_evacuation') { icon='fa-shield-virus'; title='عزل وإخلاء!'; }
+
+            document.getElementById('emergencyIcon').innerHTML = '<i class="fas ' + icon + '"></i>';
             document.getElementById('emergencyTitle').textContent = title;
             document.getElementById('emergencyType').textContent = command.reportType || 'طوارئ';
             document.getElementById('emergencyLocation').textContent = command.location || '-';
-            
-            // نقطة التجمع
+
             const musterSection = document.getElementById('musterSection');
             if (command.muster) {
                 musterSection.style.display = 'block';
@@ -449,86 +430,68 @@
             } else {
                 musterSection.style.display = 'none';
             }
-            
-            // تشغيل العداد
+
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(updateTimer, 1000);
             updateTimer();
-            
-            // تشغيل السايرن
+
             startSiren();
         }
-        
-        // إلغاء حالة الطوارئ
+
         function deactivateEmergency() {
             currentCommand = null;
-            
             document.body.className = 'safe';
+
             document.getElementById('safeScreen').classList.remove('hidden');
             document.getElementById('emergencyScreen').classList.remove('active');
-            
+
             stopSiren();
-            
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
         }
-        
-        // تحديث العداد
+
         function updateTimer() {
             if (!commandStartTime) return;
-            
             const elapsed = Math.floor((Date.now() - commandStartTime.getTime()) / 1000);
             const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
             const secs = (elapsed % 60).toString().padStart(2, '0');
-            document.getElementById('elapsedTime').textContent = `${mins}:${secs}`;
+            document.getElementById('elapsedTime').textContent = mins + ':' + secs;
         }
-        
-        // تشغيل السايرن
+
         function startSiren() {
             playEmergencySiren();
+            if (sirenInterval) clearInterval(sirenInterval);
             sirenInterval = setInterval(playEmergencySiren, 10000);
         }
-        
         function stopSiren() {
-            if (sirenInterval) {
-                clearInterval(sirenInterval);
-                sirenInterval = null;
-            }
+            if (sirenInterval) { clearInterval(sirenInterval); sirenInterval = null; }
         }
-        
+
         function playEmergencySiren() {
             try {
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
-                
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
-                
                 oscillator.type = 'sawtooth';
                 gainNode.gain.value = 0.4;
-                
+
                 oscillator.start();
                 let high = true;
                 const sirenEffect = setInterval(() => {
                     oscillator.frequency.value = high ? 800 : 600;
                     high = !high;
                 }, 300);
-                
+
                 setTimeout(() => {
                     clearInterval(sirenEffect);
                     oscillator.stop();
                     audioContext.close();
                 }, 3000);
-            } catch(e) {
-                console.log('Audio not supported');
-            }
+            } catch (e) {}
         }
-        
-        // التحقق كل 3 ثواني
-        setInterval(checkActiveCommand, 3000);
+
+        setInterval(checkActiveCommand, 2000);
         checkActiveCommand();
     </script>
 </body>

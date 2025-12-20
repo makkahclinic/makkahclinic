@@ -3459,6 +3459,220 @@
         }
         /************* END PATCH *************/
 
+        /* ===== EOC PATCH v2 ===== */
+        (function () {
+            if (window.__EOC_PATCH_V2__) return;
+            window.__EOC_PATCH_V2__ = true;
+
+            if (!window.WEB_APP_URL) {
+                console.error('WEB_APP_URL is missing');
+                return;
+            }
+
+            const css = `
+            .dept-card.emergency-highlight, .dept-toggle-btn.emergency-highlight{
+                background: linear-gradient(135deg,#DC143C,#ff4444) !important;
+                color:#fff !important;
+                border:3px solid #fff !important;
+                box-shadow:0 0 30px rgba(220,20,60,.7) !important;
+                animation: emergencyBlink .6s ease-in-out infinite alternate;
+            }`;
+            const st = document.createElement('style');
+            st.textContent = css;
+            document.head.appendChild(st);
+
+            window.__eocJsonp = function(action, params = {}) {
+                return new Promise((resolve, reject) => {
+                    const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+                    params.action = action;
+                    params.callback = cb;
+
+                    const s = document.createElement("script");
+                    s.src = window.WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+
+                    window[cb] = (data) => { cleanup(); resolve(data); };
+                    s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+                    function cleanup() {
+                        try { delete window[cb]; } catch(e) {}
+                        if (s.parentNode) s.parentNode.removeChild(s);
+                    }
+                    document.body.appendChild(s);
+                });
+            };
+
+            function ensureSelectedAreasContainer() {
+                if (document.getElementById('selectedAreas')) return;
+                const counter = document.getElementById('selectionCounter');
+                if (!counter) return;
+                const div = document.createElement('div');
+                div.id = 'selectedAreas';
+                div.style.marginTop = '12px';
+                div.style.opacity = '0.95';
+                div.style.fontSize = '0.95rem';
+                counter.insertAdjacentElement('afterend', div);
+            }
+
+            window.updateSelectedAreasDisplay = function() {
+                ensureSelectedAreasContainer();
+                const container = document.getElementById('selectedAreas');
+                if (!container || !window.evacState) return;
+
+                if (window.evacState.areas.size === 0) {
+                    container.innerHTML = '<div style="opacity:.7">لم يتم تحديد أي مكان</div>';
+                    return;
+                }
+
+                let html = '<div style="margin-bottom:6px;color:#c9a962;font-weight:700">المحدد:</div>';
+                window.evacState.areas.forEach(area => {
+                    const name = (window.deptNames && window.deptNames[area]) ? window.deptNames[area] : area;
+                    html += '<span style="display:inline-block;margin:4px;padding:6px 12px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(0,0,0,.25)">' + name + '</span>';
+                });
+                container.innerHTML = html;
+            };
+
+            window.highlightEmergencyLocation = function(locationText) {
+                document.querySelectorAll('.dept-card, .dept-toggle-btn')
+                    .forEach(el => el.classList.remove('emergency-highlight'));
+
+                if (!locationText) return;
+
+                document.querySelectorAll('.dept-card').forEach(card => {
+                    const label = card.textContent.trim();
+                    if (label && locationText.includes(label)) card.classList.add('emergency-highlight');
+                });
+                document.querySelectorAll('.dept-toggle-btn').forEach(btn => {
+                    const label = btn.textContent.trim();
+                    if (label && locationText.includes(label)) btn.classList.add('emergency-highlight');
+                });
+            };
+
+            const lastAlertKey = 'eoc_last_alerted';
+            const remembered = localStorage.getItem(lastAlertKey);
+            if (remembered) window.alertedReportIds = new Set(JSON.parse(remembered));
+
+            const origLoadReports = window.loadReportsJSONP;
+            window.loadReportsJSONP = async function() {
+                const container = document.getElementById('reportsLog');
+                try {
+                    const data = await window.__eocJsonp('getEmergencyReports', { limit: 20 });
+                    if (!data.ok) throw new Error(data.error || 'API error');
+
+                    const reports = data.reports || [];
+                    if (!reports.length) {
+                        container.innerHTML = '<div class="no-reports"><i class="fas fa-check-circle"></i><p>لا توجد بلاغات حالياً</p></div>';
+                        return;
+                    }
+
+                    const newOnes = reports.filter(r => r.status === 'جديد' && !window.alertedReportIds.has(r.id));
+                    if (newOnes.length) {
+                        newOnes.forEach(r => window.alertedReportIds.add(r.id));
+                        localStorage.setItem(lastAlertKey, JSON.stringify(Array.from(window.alertedReportIds)));
+
+                        const t = String(newOnes[0].type || '');
+                        if (t.includes('حريق') || t.includes('دخان')) window.showScenario && window.showScenario('fire');
+                        else if (t.includes('كهرباء')) window.showScenario && window.showScenario('power');
+                        else if (t.includes('عدوى')) window.showScenario && window.showScenario('outbreak');
+                        else if (t.includes('إخلاء')) window.showScenario && window.showScenario('evacuate');
+
+                        window.showNewReportAlert && window.showNewReportAlert(newOnes[0]);
+                    }
+
+                    container.innerHTML = reports.slice(0, 10).map(report => {
+                        const statusClass = report.status === 'جديد' ? 'new'
+                            : report.status === 'قيد المعالجة' ? 'pending' : 'resolved';
+
+                        const typeIcon = window.getReportTypeIcon ? window.getReportTypeIcon(report.type) : 'fas fa-exclamation-triangle';
+                        return `
+                            <div class="report-item ${statusClass}" data-report-id="${report.id}">
+                                <div class="report-header">
+                                    <span class="report-type"><i class="${typeIcon}"></i> ${report.type}</span>
+                                    <span class="report-status ${statusClass}">${report.status}</span>
+                                </div>
+                                <div class="report-location"><i class="fas fa-map-marker-alt"></i> ${report.location}</div>
+                                <div class="report-time"><i class="fas fa-clock"></i> ${report.date} - ${report.time}</div>
+                                ${report.notes ? `<div class="report-notes"><i class="fas fa-sticky-note"></i> ${report.notes}</div>` : ''}
+                                <div class="report-actions">${window.getActionButtons ? window.getActionButtons(report) : ''}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } catch(e) {
+                    console.error(e);
+                    container.innerHTML = '<div class="error-state"><i class="fas fa-wifi" style="color: var(--danger);"></i><p>تعذر الاتصال بخادم البلاغات</p></div>';
+                }
+            };
+
+            window.updateStatus = async function(reportId, newStatus) {
+                const responder = prompt('اسم المستجيب:');
+                if (!responder) return;
+                const actionNotes = prompt('ملاحظات الإجراء (اختياري):') || '';
+
+                const data = await window.__eocJsonp('updateEmergencyReportStatus', {
+                    reportId, status: newStatus, responder, actionNotes
+                });
+
+                if (data && data.ok) {
+                    window.showToast && window.showToast('تم تحديث الحالة بنجاح', 'success');
+                    window.loadReportsJSONP();
+                } else {
+                    window.showToast && window.showToast('فشل التحديث', 'error');
+                }
+            };
+
+            window.sendCommandToBackend = async function(commandData) {
+                await window.__eocJsonp('setActiveCommand', {
+                    responseType: commandData.type,
+                    reportType: commandData.reportType,
+                    location: commandData.location,
+                    muster: commandData.muster || ''
+                });
+            };
+
+            window.clearCommandFromBackend = async function() {
+                await window.__eocJsonp('clearActiveCommand', {});
+            };
+
+            window.activateEvacuation = function() {
+                if (!window.evacState || !window.evacState.type || window.evacState.areas.size === 0 || !window.evacState.muster) {
+                    alert('يرجى استكمال جميع الخطوات');
+                    return;
+                }
+
+                const areas = Array.from(window.evacState.areas).map(a => (window.deptNames && window.deptNames[a]) || a);
+                let location = 'مناطق محددة: ' + areas.join('، ');
+
+                if (window.floorDepts) {
+                    const all = Object.values(window.floorDepts).flat();
+                    const allSelected = all.every(d => window.evacState.areas.has(d));
+                    if (allSelected) location = 'المبنى بالكامل';
+                }
+
+                const commandData = {
+                    type: 'full_evacuation',
+                    reportType: (window.typeLabels && window.typeLabels[window.evacState.type]) || 'إخلاء',
+                    location,
+                    muster: (window.musterInfo && window.musterInfo[window.evacState.muster]) || '',
+                    reportId: (window.currentReport && window.currentReport.id) ? window.currentReport.id : ''
+                };
+
+                window.closeEvacuationPanel && window.closeEvacuationPanel();
+                window.showCommandScreen && window.showCommandScreen(commandData);
+                window.sendCommandToBackend(commandData);
+
+                if (window.currentReport && window.currentReport.id) {
+                    window.updateStatus(window.currentReport.id, 'قيد المعالجة');
+                }
+            };
+
+            setTimeout(() => {
+                window.loadDrillLogJSONP && window.loadDrillLogJSONP();
+                window.loadReportsJSONP && window.loadReportsJSONP();
+            }, 300);
+
+            setInterval(() => window.loadReportsJSONP && window.loadReportsJSONP(), 5000);
+        })();
+        /* ===== END PATCH v2 ===== */
+
         document.addEventListener('DOMContentLoaded', () => {
             loadDrillLogJSONP();
             loadReportsJSONP();

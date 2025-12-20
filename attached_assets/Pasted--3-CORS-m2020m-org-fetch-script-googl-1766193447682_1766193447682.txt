@@ -1,0 +1,930 @@
+لكن عندك 3 مشاكل جوهرية تسبب اللخبطة:
+
+CORS: صفحاتك على m2020m.org تحاول تعمل fetch على script.google.com — لازم السيرفر يرجّع Access-Control-Allow-Origin وإلا المتصفح يمنع قراءة الرد. (هذا سبب “Failed to fetch / 404 / لا يعرض”) 
+MDN Web Docs
+
+✅ الحل الثابت: JSONP (وأنت أصلًا داعمه عندك عبر callback في doGet).
+
+Active Command شكل البيانات: getActiveCommand() يرجّع {ok:true, command:{active:true,...}} — لازم كل الشاشات تقرأ نفس الشكل.
+
+أخطاء DOM: selectedAreas غير موجود → innerHTML of null (لازم نمنع الكراش أو ننشئ العنصر تلقائيًا).
+
+أعطيك الآن 3 أكواد جاهزة:
+
+(1) إصلاح/تقوية جزء EOC في Apps Script
+
+(2) سكربت شاشة الطوارئ Emergency.html (JSONP)
+
+(3) سكربت صفحة الإبلاغ emergency-report.html (JSONP + بدون نجاح وهمي)
+
+(4) PATCH v2 لصفحة eoc-command.html (يصلح 404، يزيل التكرار، ويخلّي الإخلاء “أمر واحد” يطلع للشاشات)
+
+مهم جدًا: لازم كل الصفحات تستخدم نفس WEB_APP_URL (نفس الـDeployment). ومتطلبات Web App في Apps Script موضحة رسميًا: لازم doGet/doPost ويرجع TextOutput/HtmlOutput. 
+Google for Developers
++2
+Google for Developers
++2
+
+0) وحّد WEB_APP_URL في كل الصفحات
+
+استخدم نفس الرابط هذا (اللي انت حاطه في الإبلاغ والطوارئ):
+
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwkQPKt7LJNrlJB3LiHszOdHvxjgDHLvgoIpPV2L0zj4LCf_sxbLbaNHPeZEWQEflwl/exec';
+
+1) Apps Script — استبدل دوال EOC بهذه النسخة (آمنة + Lock + أعمدة ثابتة)
+
+استخدم LockService لمنع تضارب الكتابة عند عدة بلاغات في نفس اللحظة 
+Google for Developers
+
+انسخ/الصق هذا بدل دوال:
+submitEmergencyReport / getEmergencyReports / updateEmergencyReportStatus / setActiveCommand / getActiveCommand / clearActiveCommand / getEocDrills / getRoomCodes
+
+// ====== EOC (SAFE) ======
+const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+const SHEET_REPORTS = 'بلاغات_الطوارئ';
+const SHEET_COMMAND = 'أوامر_نشطة';
+const SHEET_DRILLS  = 'EOC_DRILLS';
+const SHEET_ROOMS   = 'Rooms';
+
+function eocNow_() {
+  return Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm:ss');
+}
+
+function eocSs_() {
+  return SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+}
+
+function ensureSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.appendRow(headers);
+  } else if (sh.getLastRow() === 0) {
+    sh.appendRow(headers);
+  }
+  return sh;
+}
+
+function ensureCol_(sh, headerName) {
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  let idx = headers.indexOf(headerName);
+  if (idx !== -1) return idx + 1; // 1-based
+  // أضف عمود جديد في النهاية
+  const newCol = sh.getLastColumn() + 1;
+  sh.getRange(1, newCol).setValue(headerName);
+  return newCol;
+}
+
+function submitEmergencyReport(params) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = eocSs_();
+    const sh = ensureSheet_(ss, SHEET_REPORTS, [
+      'رقم البلاغ','التاريخ','الوقت','نوع الكارثة','الموقع','ملاحظات','الحالة',
+      'المستجيب','إجراءات','آخر تحديث'
+    ]);
+
+    const id = params.reportId || ('EMR-' + Date.now());
+    const dateStr = params.date || Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd');
+    const timeStr = params.time || Utilities.formatDate(new Date(), 'Asia/Riyadh', 'HH:mm');
+
+    sh.appendRow([
+      id,
+      dateStr,
+      timeStr,
+      params.disasterType || '',
+      params.location || '',
+      params.notes || '',
+      'جديد',
+      '',
+      '',
+      eocNow_()
+    ]);
+
+    return { ok: true, reportId: id };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getEmergencyReports(params) {
+  try {
+    const ss = eocSs_();
+    const sh = ss.getSheetByName(SHEET_REPORTS);
+    if (!sh) return { ok: true, reports: [] };
+
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return { ok: true, reports: [] };
+
+    const limit = Math.min(parseInt((params && params.limit) || '20', 10), 200);
+
+    const reports = [];
+    for (let i = data.length - 1; i >= 1 && reports.length < limit; i--) {
+      reports.push({
+        id: data[i][0],
+        date: data[i][1],
+        time: data[i][2],
+        type: data[i][3],
+        location: data[i][4],
+        notes: data[i][5],
+        status: data[i][6] || 'جديد',
+        responder: data[i][7] || '',
+        actionNotes: data[i][8] || '',
+        updatedAt: data[i][9] || ''
+      });
+    }
+    return { ok: true, reports };
+  } catch (err) {
+    return { ok: false, error: err.message, reports: [] };
+  }
+}
+
+function updateEmergencyReportStatus(params) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = eocSs_();
+    const sh = ss.getSheetByName(SHEET_REPORTS);
+    if (!sh) return { ok: false, error: 'Sheet not found: ' + SHEET_REPORTS };
+
+    const data = sh.getDataRange().getValues();
+    const id = String(params.reportId || '').trim();
+    if (!id) return { ok: false, error: 'reportId required' };
+
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === id) { rowIndex = i + 1; break; }
+    }
+    if (rowIndex === -1) return { ok: false, error: 'Report not found' };
+
+    const colStatus = ensureCol_(sh, 'الحالة');
+    const colResponder = ensureCol_(sh, 'المستجيب');
+    const colActions = ensureCol_(sh, 'إجراءات');
+    const colUpdated = ensureCol_(sh, 'آخر تحديث');
+
+    sh.getRange(rowIndex, colStatus).setValue(params.status || 'قيد المعالجة');
+    sh.getRange(rowIndex, colResponder).setValue(params.responder || '');
+    sh.getRange(rowIndex, colActions).setValue(params.actionNotes || '');
+    sh.getRange(rowIndex, colUpdated).setValue(eocNow_());
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setActiveCommand(params) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = eocSs_();
+    const sh = ensureSheet_(ss, SHEET_COMMAND, ['active','responseType','reportType','location','muster','timestamp']);
+
+    // ثبّت الأمر في الصف 2 بدل الحذف (أكثر أمانًا)
+    if (sh.getLastRow() < 2) sh.appendRow(['false','','','','','']);
+
+    sh.getRange(2, 1, 1, 6).setValues([[
+      'true',
+      params.responseType || '',
+      params.reportType || '',
+      params.location || '',
+      params.muster || '',
+      new Date().toISOString()
+    ]]);
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getActiveCommand() {
+  try {
+    const ss = eocSs_();
+    const sh = ss.getSheetByName(SHEET_COMMAND);
+    if (!sh || sh.getLastRow() < 2) return { ok: true, command: null };
+
+    const row = sh.getRange(2, 1, 1, 6).getValues()[0];
+    if (String(row[0]) !== 'true') return { ok: true, command: null };
+
+    return {
+      ok: true,
+      command: {
+        active: true,
+        responseType: row[1],
+        reportType: row[2],
+        location: row[3],
+        muster: row[4],
+        timestamp: row[5]
+      }
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function clearActiveCommand() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = eocSs_();
+    const sh = ss.getSheetByName(SHEET_COMMAND);
+    if (!sh || sh.getLastRow() < 2) return { ok: true };
+
+    sh.getRange(2, 1).setValue('false');
+    sh.getRange(2, 6).setValue(new Date().toISOString());
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getEocDrills(params) {
+  try {
+    const ss = eocSs_();
+    const sh = ss.getSheetByName(SHEET_DRILLS);
+    if (!sh) return { ok: true, drills: [] };
+
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return { ok: true, drills: [] };
+
+    const limit = Math.min(parseInt((params && params.limit) || '10', 10), 100);
+    const drills = [];
+    for (let i = data.length - 1; i >= 1 && drills.length < limit; i--) {
+      drills.push({
+        date: data[i][0] || '',
+        type: data[i][1] || '',
+        result: data[i][2] || 'ناجح'
+      });
+    }
+    return { ok: true, drills };
+  } catch (err) {
+    return { ok: false, error: err.message, drills: [] };
+  }
+}
+
+function getRoomCodes() {
+  try {
+    const ss = eocSs_();
+    const sh = ss.getSheetByName(SHEET_ROOMS);
+    if (!sh) return { ok: true, rooms: [] };
+
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return { ok: true, rooms: [] };
+
+    const rooms = [];
+    for (let i = 1; i < data.length; i++) {
+      const code = String(data[i][0] || '').trim();
+      if (!code) continue;
+      rooms.push({
+        code,
+        name: String(data[i][1] || '').trim()
+      });
+    }
+    return { ok: true, rooms };
+  } catch (err) {
+    return { ok: false, error: err.message, rooms: [] };
+  }
+}
+
+
+بعد هذا: Deploy Web App من جديد. إعدادات Web App (access/executeAs) موضحة رسميًا 
+Google for Developers
++1
+
+2) Emergency.html — استبدل <script> بالكامل بهذا (JSONP بدل fetch)
+
+هذا يمنع CORS ويقرأ getActiveCommand صح. 
+MDN Web Docs
++1
+
+<script>
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwkQPKt7LJNrlJB3LiHszOdHvxjgDHLvgoIpPV2L0zj4LCf_sxbLbaNHPeZEWQEflwl/exec';
+
+let currentCommand = null;
+let sirenInterval = null;
+let timerInterval = null;
+let commandStartTime = null;
+
+function jsonp(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    params.action = action;
+    params.callback = cb;
+
+    const s = document.createElement("script");
+    s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+    function cleanup() {
+      try { delete window[cb]; } catch(e) {}
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }
+    document.body.appendChild(s);
+  });
+}
+
+// الساعة
+function updateClock() {
+  const now = new Date();
+  document.getElementById('currentTime').textContent =
+    now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// poll
+async function checkActiveCommand() {
+  try {
+    const data = await jsonp('getActiveCommand', {});
+    const cmd = data && data.ok ? data.command : null;
+
+    if (cmd && cmd.active) {
+      if (!currentCommand || currentCommand.timestamp !== cmd.timestamp) {
+        activateEmergency(cmd);
+      }
+    } else {
+      if (currentCommand) deactivateEmergency();
+    }
+  } catch (e) {
+    console.error('checkActiveCommand:', e);
+  }
+}
+
+function activateEmergency(command) {
+  currentCommand = command;
+  commandStartTime = new Date(command.timestamp || Date.now());
+
+  document.getElementById('safeScreen').classList.add('hidden');
+  document.getElementById('emergencyScreen').classList.add('active');
+
+  // اللون حسب نوع البلاغ
+  let bodyClass = 'other';
+  const rt = String(command.reportType || '');
+
+  if (rt.includes('حريق') || rt.includes('دخان')) bodyClass = 'fire';
+  else if (rt.includes('إغماء') || rt.includes('إصابة')) bodyClass = 'injury';
+  else if (rt.includes('عدوى')) bodyClass = 'infection';
+  else if (rt.includes('كهرباء')) bodyClass = 'power';
+  else if (rt.includes('مياه')) bodyClass = 'water';
+
+  document.body.className = bodyClass;
+
+  // العنوان حسب نوع الأمر
+  let icon = 'fa-exclamation-triangle';
+  let title = 'تنبيه طوارئ!';
+  if (command.responseType === 'full_evacuation') { icon='fa-running'; title='إخلاء فوري!'; }
+  if (command.responseType === 'send_team') { icon='fa-users'; title='توجيه فريق!'; }
+  if (command.responseType === 'isolation_evacuation') { icon='fa-shield-virus'; title='عزل وإخلاء!'; }
+
+  document.getElementById('emergencyIcon').innerHTML = `<i class="fas ${icon}"></i>`;
+  document.getElementById('emergencyTitle').textContent = title;
+  document.getElementById('emergencyType').textContent = command.reportType || 'طوارئ';
+  document.getElementById('emergencyLocation').textContent = command.location || '-';
+
+  const musterSection = document.getElementById('musterSection');
+  if (command.muster) {
+    musterSection.style.display = 'block';
+    document.getElementById('musterPoint').textContent = command.muster;
+  } else {
+    musterSection.style.display = 'none';
+  }
+
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+  updateTimer();
+
+  startSiren();
+}
+
+function deactivateEmergency() {
+  currentCommand = null;
+  document.body.className = 'safe';
+
+  document.getElementById('safeScreen').classList.remove('hidden');
+  document.getElementById('emergencyScreen').classList.remove('active');
+
+  stopSiren();
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+}
+
+function updateTimer() {
+  if (!commandStartTime) return;
+  const elapsed = Math.floor((Date.now() - commandStartTime.getTime()) / 1000);
+  const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+  const secs = (elapsed % 60).toString().padStart(2, '0');
+  document.getElementById('elapsedTime').textContent = `${mins}:${secs}`;
+}
+
+function startSiren() {
+  playEmergencySiren();
+  if (sirenInterval) clearInterval(sirenInterval);
+  sirenInterval = setInterval(playEmergencySiren, 10000);
+}
+function stopSiren() {
+  if (sirenInterval) { clearInterval(sirenInterval); sirenInterval = null; }
+}
+
+function playEmergencySiren() {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.type = 'sawtooth';
+    gainNode.gain.value = 0.4;
+
+    oscillator.start();
+    let high = true;
+    const sirenEffect = setInterval(() => {
+      oscillator.frequency.value = high ? 800 : 600;
+      high = !high;
+    }, 300);
+
+    setTimeout(() => {
+      clearInterval(sirenEffect);
+      oscillator.stop();
+      audioContext.close();
+    }, 3000);
+  } catch (e) {}
+}
+
+// كل 2 ثانية
+setInterval(checkActiveCommand, 2000);
+checkActiveCommand();
+</script>
+
+3) emergency-report.html — استبدل <script> بهذا (JSONP + بدون “نجاح وهمي”)
+
+(هذا يمنع البلاغات الوهمية + يحمّل الغرف من getRoomCodes بدون CORS) 
+MDN Web Docs
++1
+
+<script>
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwkQPKt7LJNrlJB3LiHszOdHvxjgDHLvgoIpPV2L0zj4LCf_sxbLbaNHPeZEWQEflwl/exec';
+
+let selectedDisaster = null;
+let selectedLocation = null;
+let selectedFloor = null;
+let roomCodes = [];
+
+function jsonp(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    params.action = action;
+    params.callback = cb;
+
+    const s = document.createElement("script");
+    s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+    function cleanup() {
+      try { delete window[cb]; } catch(e) {}
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }
+    document.body.appendChild(s);
+  });
+}
+
+async function loadRoomCodes() {
+  try {
+    const data = await jsonp('getRoomCodes', {});
+    if (data.ok && Array.isArray(data.rooms)) {
+      roomCodes = data.rooms;
+      populateRoomDropdown();
+    }
+  } catch (e) {
+    roomCodes = [
+      { code: 'DIR-B-01', name: 'المدير العام' },
+      { code: 'REC-G-01', name: 'استقبال الأول' }
+    ];
+    populateRoomDropdown();
+  }
+}
+
+function populateRoomDropdown() {
+  const select = document.getElementById('roomCodeSelect');
+  select.innerHTML = '<option value="">اختر من قائمة الغرف...</option>';
+  roomCodes.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = `${r.code} - ${r.name}`;
+    opt.textContent = `${r.code} - ${r.name}`;
+    select.appendChild(opt);
+  });
+}
+
+function selectDisaster(el) {
+  document.querySelectorAll('.disaster-btn').forEach(btn => btn.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedDisaster = el.dataset.type;
+  checkFormValid();
+}
+
+function selectLocation(el) {
+  document.querySelectorAll('.location-btn').forEach(btn => btn.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedFloor = el.dataset.location;
+  checkFormValid();
+}
+
+function selectRoomFromDropdown(value) {
+  document.getElementById('roomCode').value = '';
+  document.getElementById('roomSuggestions').classList.remove('show');
+  checkFormValid();
+}
+
+function searchRooms(query) {
+  const container = document.getElementById('roomSuggestions');
+  if (!query) { container.classList.remove('show'); checkFormValid(); return; }
+
+  const filtered = roomCodes.filter(r =>
+    r.code.toLowerCase().includes(query.toLowerCase()) ||
+    (r.name || '').includes(query)
+  ).slice(0, 6);
+
+  if (!filtered.length) { container.classList.remove('show'); checkFormValid(); return; }
+
+  container.innerHTML = filtered.map(r => `
+    <div class="room-suggestion" onclick="selectRoomCode('${r.code}', '${r.name}')">
+      <strong>${r.code}</strong> - ${r.name}
+    </div>
+  `).join('');
+  container.classList.add('show');
+
+  checkFormValid();
+}
+
+function selectRoomCode(code, name) {
+  document.getElementById('roomCode').value = `${code} - ${name}`;
+  document.getElementById('roomSuggestions').classList.remove('show');
+  checkFormValid();
+}
+
+function showSuggestions() {
+  const q = document.getElementById('roomCode').value.trim();
+  if (q) searchRooms(q);
+}
+
+function buildSelectedLocation() {
+  const roomText = document.getElementById('roomCode').value.trim();
+  const roomSelect = document.getElementById('roomCodeSelect').value;
+
+  let loc = '';
+  const chosenRoom = roomText || roomSelect;
+
+  if (selectedFloor && chosenRoom) loc = `${selectedFloor} - ${chosenRoom}`;
+  else if (chosenRoom) loc = chosenRoom;
+  else if (selectedFloor) loc = selectedFloor;
+
+  return loc;
+}
+
+function checkFormValid() {
+  const loc = buildSelectedLocation();
+  selectedLocation = loc;
+  document.getElementById('submitBtn').disabled = !(selectedDisaster && loc);
+}
+
+async function submitReport() {
+  const loc = buildSelectedLocation();
+  if (!selectedDisaster || !loc) return;
+
+  const loading = document.getElementById('loading');
+  loading.classList.add('show');
+
+  const notes = document.getElementById('notes').value;
+  const now = new Date();
+  const reportId = 'EMR-' + now.getTime();
+
+  try {
+    const data = await jsonp('submitEmergencyReport', {
+      reportId,
+      disasterType: selectedDisaster,
+      location: loc,
+      notes,
+      date: now.toLocaleDateString('ar-SA'),
+      time: now.toLocaleTimeString('ar-SA')
+    });
+
+    loading.classList.remove('show');
+
+    if (data && data.ok) {
+      document.getElementById('reportForm').style.display = 'none';
+      document.getElementById('successScreen').classList.add('show');
+      document.getElementById('reportNumber').textContent = reportId;
+    } else {
+      alert('تعذر تسجيل البلاغ. اتصل 911 فورًا إذا الحالة خطيرة.');
+    }
+
+  } catch (e) {
+    loading.classList.remove('show');
+    alert('فشل الاتصال بالنظام. اتصل 911 فورًا إذا الحالة خطيرة.');
+  }
+}
+
+function resetForm() {
+  selectedDisaster = null;
+  selectedLocation = null;
+  selectedFloor = null;
+  document.querySelectorAll('.disaster-btn, .location-btn').forEach(btn => btn.classList.remove('selected'));
+  document.getElementById('roomCode').value = '';
+  document.getElementById('roomCodeSelect').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('reportForm').style.display = 'block';
+  document.getElementById('successScreen').classList.remove('show');
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.room-code-input')) {
+    document.getElementById('roomSuggestions').classList.remove('show');
+  }
+});
+
+loadRoomCodes();
+</script>
+
+4) eoc-command.html — PATCH v2 (الصقه آخر <script> واحذف PATCH القديم)
+
+هذا PATCH:
+
+يبدّل loadReportsJSONP/loadDrillLogJSONP/updateStatus/sendCommandToBackend/clearCommandFromBackend
+
+يضيف highlight صحيح للأقسام (بدل .room-btn)
+
+يلغي تكرار شاشة الإخلاء: زر “تفعيل الإخلاء” يتحول إلى أمر واحد Active Command يطلع لـ Emergency.html
+
+/* ===== EOC PATCH v2 (paste at END of script) ===== */
+(function () {
+  if (window.__EOC_PATCH_V2__) return;
+  window.__EOC_PATCH_V2__ = true;
+
+  // لازم WEB_APP_URL موجود
+  if (!window.WEB_APP_URL) {
+    console.error('WEB_APP_URL is missing');
+    return;
+  }
+
+  // Inject CSS للـhighlight الصحيح (بدل room-btn)
+  const css = `
+  .dept-card.emergency-highlight, .dept-toggle-btn.emergency-highlight{
+    background: linear-gradient(135deg,#DC143C,#ff4444) !important;
+    color:#fff !important;
+    border:3px solid #fff !important;
+    box-shadow:0 0 30px rgba(220,20,60,.7) !important;
+    animation: emergencyBlink .6s ease-in-out infinite alternate;
+  }`;
+  const st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  window.__eocJsonp = function(action, params = {}) {
+    return new Promise((resolve, reject) => {
+      const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+      params.action = action;
+      params.callback = cb;
+
+      const s = document.createElement("script");
+      s.src = window.WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+
+      window[cb] = (data) => { cleanup(); resolve(data); };
+      s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+      function cleanup() {
+        try { delete window[cb]; } catch(e) {}
+        if (s.parentNode) s.parentNode.removeChild(s);
+      }
+      document.body.appendChild(s);
+    });
+  };
+
+  // selectedAreas container: أنشئه تلقائيًا لتفادي null + يعطيك عرض جميل
+  function ensureSelectedAreasContainer() {
+    if (document.getElementById('selectedAreas')) return;
+    const counter = document.getElementById('selectionCounter');
+    if (!counter) return;
+    const div = document.createElement('div');
+    div.id = 'selectedAreas';
+    div.style.marginTop = '12px';
+    div.style.opacity = '0.95';
+    div.style.fontSize = '0.95rem';
+    counter.insertAdjacentElement('afterend', div);
+  }
+
+  // Override: updateSelectedAreasDisplay
+  window.updateSelectedAreasDisplay = function() {
+    ensureSelectedAreasContainer();
+    const container = document.getElementById('selectedAreas');
+    if (!container || !window.evacState) return;
+
+    if (window.evacState.areas.size === 0) {
+      container.innerHTML = `<div style="opacity:.7">لم يتم تحديد أي مكان</div>`;
+      return;
+    }
+
+    let html = `<div style="margin-bottom:6px;color:#c9a962;font-weight:700">المحدد:</div>`;
+    window.evacState.areas.forEach(area => {
+      const name = (window.deptNames && window.deptNames[area]) ? window.deptNames[area] : area;
+      html += `<span style="display:inline-block;margin:4px;padding:6px 12px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(0,0,0,.25)">${name}</span>`;
+    });
+    container.innerHTML = html;
+  };
+
+  // Override highlightEmergencyLocation
+  window.highlightEmergencyLocation = function(locationText) {
+    document.querySelectorAll('.dept-card, .dept-toggle-btn')
+      .forEach(el => el.classList.remove('emergency-highlight'));
+
+    if (!locationText) return;
+
+    document.querySelectorAll('.dept-card').forEach(card => {
+      const label = card.textContent.trim();
+      if (label && locationText.includes(label)) card.classList.add('emergency-highlight');
+    });
+    document.querySelectorAll('.dept-toggle-btn').forEach(btn => {
+      const label = btn.textContent.trim();
+      if (label && locationText.includes(label)) btn.classList.add('emergency-highlight');
+    });
+  };
+
+  // Drills
+  window.loadDrillLogJSONP = async function() {
+    const container = document.getElementById('drillLog');
+    try {
+      const data = await window.__eocJsonp('getEocDrills', { limit: 10 });
+      if (data.ok && data.drills && data.drills.length) {
+        container.innerHTML = data.drills.map(d => `
+          <div class="drill-item">
+            <div class="drill-info">
+              <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
+              <span>${d.type || 'تمرين'}</span>
+            </div>
+            <span class="drill-date">${d.date || ''}</span>
+            <span class="drill-result success">${d.result || 'ناجح'}</span>
+          </div>
+        `).join('');
+      } else {
+        window.showDefaultDrills(container);
+      }
+    } catch(e) {
+      window.showDefaultDrills(container);
+    }
+  };
+
+  // Update status (JSONP)
+  window.updateStatus = async function(reportId, newStatus) {
+    const responder = prompt('اسم المستجيب:');
+    if (!responder) return;
+    const actionNotes = prompt('ملاحظات الإجراء (اختياري):') || '';
+
+    const data = await window.__eocJsonp('updateEmergencyStatus', {
+      reportId, status: newStatus, responder, actionNotes
+    });
+
+    if (data && data.ok) {
+      window.showToast('تم تحديث الحالة بنجاح', 'success');
+      window.loadReportsJSONP();
+    } else {
+      window.showToast('فشل التحديث', 'error');
+    }
+  };
+
+  // Reports realtime + avoid repeat alerts after refresh
+  const lastAlertKey = 'eoc_last_alerted';
+  const remembered = localStorage.getItem(lastAlertKey);
+  if (remembered) window.alertedReportIds = new Set(JSON.parse(remembered));
+
+  window.loadReportsJSONP = async function() {
+    const container = document.getElementById('reportsLog');
+    try {
+      const data = await window.__eocJsonp('getEmergencyReports', { limit: 20 });
+      if (!data.ok) throw new Error(data.error || 'API error');
+
+      const reports = data.reports || [];
+      if (!reports.length) {
+        container.innerHTML = `<div class="no-reports"><i class="fas fa-check-circle"></i><p>لا توجد بلاغات حالياً</p></div>`;
+        return;
+      }
+
+      // New alert -> open modal + auto scenario
+      const newOnes = reports.filter(r => r.status === 'جديد' && !window.alertedReportIds.has(r.id));
+      if (newOnes.length) {
+        newOnes.forEach(r => window.alertedReportIds.add(r.id));
+        localStorage.setItem(lastAlertKey, JSON.stringify(Array.from(window.alertedReportIds)));
+
+        // Auto show scenario panel
+        const t = String(newOnes[0].type || '');
+        if (t.includes('حريق') || t.includes('دخان')) window.showScenario('fire');
+        else if (t.includes('كهرباء')) window.showScenario('power');
+        else if (t.includes('عدوى')) window.showScenario('outbreak');
+        else if (t.includes('إخلاء')) window.showScenario('evacuate');
+
+        window.showNewReportAlert(newOnes[0]);
+      }
+
+      container.innerHTML = reports.slice(0, 10).map(report => {
+        const statusClass = report.status === 'جديد' ? 'new'
+          : report.status === 'قيد المعالجة' ? 'pending' : 'resolved';
+
+        const typeIcon = window.getReportTypeIcon(report.type);
+        return `
+          <div class="report-item ${statusClass}" data-report-id="${report.id}">
+            <div class="report-header">
+              <span class="report-type"><i class="${typeIcon}"></i> ${report.type}</span>
+              <span class="report-status ${statusClass}">${report.status}</span>
+            </div>
+            <div class="report-location"><i class="fas fa-map-marker-alt"></i> ${report.location}</div>
+            <div class="report-time"><i class="fas fa-clock"></i> ${report.date} - ${report.time}</div>
+            ${report.notes ? `<div class="report-notes"><i class="fas fa-sticky-note"></i> ${report.notes}</div>` : ''}
+            <div class="report-actions">${window.getActionButtons(report)}</div>
+          </div>
+        `;
+      }).join('');
+    } catch(e) {
+      console.error(e);
+      container.innerHTML = `<div class="error-state"><i class="fas fa-wifi" style="color: var(--danger);"></i><p>تعذر الاتصال بخادم البلاغات</p></div>`;
+    }
+  };
+
+  // Override send/clear command (JSONP)
+  window.sendCommandToBackend = async function(commandData) {
+    await window.__eocJsonp('setActiveCommand', {
+      responseType: commandData.type,
+      reportType: commandData.reportType,
+      location: commandData.location,
+      muster: commandData.muster || ''
+    });
+  };
+
+  window.clearCommandFromBackend = async function() {
+    await window.__eocJsonp('clearActiveCommand', {});
+  };
+
+  // حذف التكرار: تفعيل الإخلاء من المودال يصير "أمر واحد" بدل شاشة ثانية
+  window.activateEvacuation = function() {
+    if (!window.evacState || !window.evacState.type || window.evacState.areas.size === 0 || !window.evacState.muster) {
+      alert('يرجى استكمال جميع الخطوات');
+      return;
+    }
+
+    const areas = Array.from(window.evacState.areas).map(a => window.deptNames[a] || a);
+    let location = 'مناطق محددة: ' + areas.join('، ');
+
+    // إذا كل الأقسام محددة = مبنى بالكامل
+    const all = Object.values(window.floorDepts).flat();
+    const allSelected = all.every(d => window.evacState.areas.has(d));
+    if (allSelected) location = 'المبنى بالكامل';
+
+    const commandData = {
+      type: 'full_evacuation',
+      reportType: window.typeLabels[window.evacState.type] || 'إخلاء',
+      location,
+      muster: window.musterInfo[window.evacState.muster] || '',
+      reportId: (window.currentReport && window.currentReport.id) ? window.currentReport.id : ''
+    };
+
+    window.closeEvacuationPanel();
+    window.showCommandScreen(commandData);
+    window.sendCommandToBackend(commandData);
+
+    // لو عندك بلاغ مفتوح، اعتبره "قيد المعالجة" تلقائيًا
+    if (window.currentReport && window.currentReport.id) {
+      window.updateStatus(window.currentReport.id, 'قيد المعالجة');
+    }
+  };
+
+  // تشغيل فعلي
+  setTimeout(() => {
+    window.loadDrillLogJSONP();
+    window.loadReportsJSONP();
+  }, 300);
+
+  setInterval(() => window.loadReportsJSONP(), 5000);
+})();
+
+الآن “يشتغل كيف؟” (سريع)
+
+البلاغ يطلع من صفحة الإبلاغ → يتسجل في الشيت
+
+eoc-command يسحب البلاغ كل 5 ثواني → يفتح Modal + يعرض خطوات السيناريو تلقائيًا
+
+تختار الاستجابة وتصدر أمر → يتسجل في أوامر_نشطة
+
+Emergency.html تسحب getActiveCommand كل 2 ثانية → تعرض الأمر بشكل كامل
+
+سبب إننا استخدمنا JSONP بدل fetch: لأن fetch cross-origin يحتاج CORS headers من السيرفر، وإلا المتصفح يمنع قراءة الرد. 
+MDN Web Docs

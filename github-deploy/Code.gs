@@ -236,53 +236,89 @@
     return output_({ ok: true, message: 'Safety Rounds API is running' });
   }
   
-  // Emergency Report Functions
-  // الشيت الرئيسي للطوارئ والإخلاء
+  // ====== EOC (SAFE) ======
   const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
-  
+  const SHEET_REPORTS = 'بلاغات_الطوارئ';
+  const SHEET_COMMAND = 'أوامر_نشطة';
+  const SHEET_DRILLS  = 'EOC_DRILLS';
+  const SHEET_ROOMS   = 'Rooms';
+
+  function eocNow_() {
+    return Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm:ss');
+  }
+
+  function eocSs_() {
+    return SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+  }
+
+  function ensureSheet_(ss, name, headers) {
+    let sh = ss.getSheetByName(name);
+    if (!sh) {
+      sh = ss.insertSheet(name);
+      sh.appendRow(headers);
+    } else if (sh.getLastRow() === 0) {
+      sh.appendRow(headers);
+    }
+    return sh;
+  }
+
+  function ensureCol_(sh, headerName) {
+    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    let idx = headers.indexOf(headerName);
+    if (idx !== -1) return idx + 1;
+    const newCol = sh.getLastColumn() + 1;
+    sh.getRange(1, newCol).setValue(headerName);
+    return newCol;
+  }
+
   function submitEmergencyReport(params) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      let sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      // Create sheet if not exists
-      if (!sheet) {
-        sheet = ss.insertSheet('بلاغات_الطوارئ');
-        sheet.appendRow(['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الكارثة', 'الموقع', 'ملاحظات', 'الحالة']);
-      }
-      
-      sheet.appendRow([
-        params.reportId || 'EMR-' + Date.now(),
-        params.date || new Date().toLocaleDateString('ar-SA'),
-        params.time || new Date().toLocaleTimeString('ar-SA'),
-        params.disasterType,
-        params.location,
-        params.notes || '',
-        'جديد'
+      const ss = eocSs_();
+      const sh = ensureSheet_(ss, SHEET_REPORTS, [
+        'رقم البلاغ','التاريخ','الوقت','نوع الكارثة','الموقع','ملاحظات','الحالة',
+        'المستجيب','إجراءات','آخر تحديث'
       ]);
-      
-      return { ok: true, reportId: params.reportId };
+
+      const id = params.reportId || ('EMR-' + Date.now());
+      const dateStr = params.date || Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd');
+      const timeStr = params.time || Utilities.formatDate(new Date(), 'Asia/Riyadh', 'HH:mm');
+
+      sh.appendRow([
+        id,
+        dateStr,
+        timeStr,
+        params.disasterType || '',
+        params.location || '',
+        params.notes || '',
+        'جديد',
+        '',
+        '',
+        eocNow_()
+      ]);
+
+      return { ok: true, reportId: id };
     } catch (err) {
       return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
     }
   }
-  
-  function getEmergencyReports() {
+
+  function getEmergencyReports(params) {
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      if (!sheet) {
-        return { ok: true, reports: [] };
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length < 2) {
-        return { ok: true, reports: [] };
-      }
-      
+      const ss = eocSs_();
+      const sh = ss.getSheetByName(SHEET_REPORTS);
+      if (!sh) return { ok: true, reports: [] };
+
+      const data = sh.getDataRange().getValues();
+      if (data.length < 2) return { ok: true, reports: [] };
+
+      const limit = Math.min(parseInt((params && params.limit) || '20', 10), 200);
+
       const reports = [];
-      for (let i = data.length - 1; i >= 1; i--) {
+      for (let i = data.length - 1; i >= 1 && reports.length < limit; i--) {
         reports.push({
           id: data[i][0],
           date: data[i][1],
@@ -290,65 +326,58 @@
           type: data[i][3],
           location: data[i][4],
           notes: data[i][5],
-          status: data[i][6] || 'جديد'
+          status: data[i][6] || 'جديد',
+          responder: data[i][7] || '',
+          actionNotes: data[i][8] || '',
+          updatedAt: data[i][9] || ''
         });
       }
-      
-      return { ok: true, reports: reports.slice(0, 20) };
+      return { ok: true, reports };
     } catch (err) {
       return { ok: false, error: err.message, reports: [] };
     }
   }
-  
+
   function updateEmergencyReportStatus(params) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      if (!sheet) {
-        return { ok: false, error: 'Sheet not found' };
-      }
-      
-      const data = sheet.getDataRange().getValues();
+      const ss = eocSs_();
+      const sh = ss.getSheetByName(SHEET_REPORTS);
+      if (!sh) return { ok: false, error: 'Sheet not found: ' + SHEET_REPORTS };
+
+      const data = sh.getDataRange().getValues();
+      const id = String(params.reportId || '').trim();
+      if (!id) return { ok: false, error: 'reportId required' };
+
       let rowIndex = -1;
-      
       for (let i = 1; i < data.length; i++) {
-        if (data[i][0] === params.reportId) {
-          rowIndex = i + 1;
-          break;
-        }
+        if (String(data[i][0]).trim() === id) { rowIndex = i + 1; break; }
       }
-      
-      if (rowIndex === -1) {
-        return { ok: false, error: 'Report not found' };
-      }
-      
-      sheet.getRange(rowIndex, 7).setValue(params.status);
-      
-      if (params.responder) {
-        if (sheet.getLastColumn() < 8) {
-          sheet.getRange(1, 8).setValue('المستجيب');
-        }
-        sheet.getRange(rowIndex, 8).setValue(params.responder);
-      }
-      
-      if (params.actionNotes) {
-        if (sheet.getLastColumn() < 9) {
-          sheet.getRange(1, 9).setValue('إجراءات');
-        }
-        sheet.getRange(rowIndex, 9).setValue(params.actionNotes);
-      }
-      
-      return { ok: true, message: 'Status updated successfully' };
+      if (rowIndex === -1) return { ok: false, error: 'Report not found' };
+
+      const colStatus = ensureCol_(sh, 'الحالة');
+      const colResponder = ensureCol_(sh, 'المستجيب');
+      const colActions = ensureCol_(sh, 'إجراءات');
+      const colUpdated = ensureCol_(sh, 'آخر تحديث');
+
+      sh.getRange(rowIndex, colStatus).setValue(params.status || 'قيد المعالجة');
+      sh.getRange(rowIndex, colResponder).setValue(params.responder || '');
+      sh.getRange(rowIndex, colActions).setValue(params.actionNotes || '');
+      sh.getRange(rowIndex, colUpdated).setValue(eocNow_());
+
+      return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
     }
   }
-  
+
   function getEmergencyAnalytics() {
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('بلاغات_الطوارئ');
+      const ss = eocSs_();
+      const sheet = ss.getSheetByName(SHEET_REPORTS);
       
       if (!sheet) {
         return { ok: true, analytics: { total: 0, byType: {}, byStatus: {}, byLocation: {} } };
@@ -366,8 +395,7 @@
         byLocation: {},
         today: 0,
         thisWeek: 0,
-        thisMonth: 0,
-        avgResponseTime: 0
+        thisMonth: 0
       };
       
       const now = new Date();
@@ -381,19 +409,14 @@
         const status = data[i][6] || 'جديد';
         const dateStr = String(data[i][1]);
         
-        // Count by type
         analytics.byType[type] = (analytics.byType[type] || 0) + 1;
-        
-        // Count by status
         analytics.byStatus[status] = (analytics.byStatus[status] || 0) + 1;
         
-        // Count by location (floor)
         const floor = location.includes('الأرضي') ? 'الأرضي' : 
                      location.includes('الأول') ? 'الأول' : 
                      location.includes('الثاني') ? 'الثاني' : 'أخرى';
         analytics.byLocation[floor] = (analytics.byLocation[floor] || 0) + 1;
         
-        // Time-based counts
         if (dateStr.includes(todayStr)) analytics.today++;
         
         try {
@@ -408,57 +431,42 @@
       return { ok: false, error: err.message };
     }
   }
-  
-  // Active Command Functions for Emergency Display Screen
+
   function setActiveCommand(params) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      let sheet = ss.getSheetByName('أوامر_نشطة');
-      
-      if (!sheet) {
-        sheet = ss.insertSheet('أوامر_نشطة');
-        sheet.appendRow(['active', 'responseType', 'reportType', 'location', 'muster', 'timestamp']);
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length > 1) {
-        sheet.deleteRows(2, data.length - 1);
-      }
-      
-      sheet.appendRow([
+      const ss = eocSs_();
+      const sh = ensureSheet_(ss, SHEET_COMMAND, ['active','responseType','reportType','location','muster','timestamp']);
+
+      if (sh.getLastRow() < 2) sh.appendRow(['false','','','','','']);
+
+      sh.getRange(2, 1, 1, 6).setValues([[
         'true',
         params.responseType || '',
         params.reportType || '',
         params.location || '',
         params.muster || '',
         new Date().toISOString()
-      ]);
-      
+      ]]);
+
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
     }
   }
-  
+
   function getActiveCommand() {
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('أوامر_نشطة');
-      
-      if (!sheet) {
-        return { ok: true, command: null };
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length < 2) {
-        return { ok: true, command: null };
-      }
-      
-      const row = data[1];
-      if (row[0] !== 'true') {
-        return { ok: true, command: null };
-      }
-      
+      const ss = eocSs_();
+      const sh = ss.getSheetByName(SHEET_COMMAND);
+      if (!sh || sh.getLastRow() < 2) return { ok: true, command: null };
+
+      const row = sh.getRange(2, 1, 1, 6).getValues()[0];
+      if (String(row[0]) !== 'true') return { ok: true, command: null };
+
       return {
         ok: true,
         command: {
@@ -474,44 +482,36 @@
       return { ok: false, error: err.message };
     }
   }
-  
+
   function clearActiveCommand() {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('أوامر_نشطة');
-      
-      if (!sheet) {
-        return { ok: true };
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length > 1) {
-        sheet.getRange(2, 1).setValue('false');
-      }
-      
+      const ss = eocSs_();
+      const sh = ss.getSheetByName(SHEET_COMMAND);
+      if (!sh || sh.getLastRow() < 2) return { ok: true };
+
+      sh.getRange(2, 1).setValue('false');
+      sh.getRange(2, 6).setValue(new Date().toISOString());
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
     }
   }
-  
+
   function getEocDrills(params) {
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('EOC_DRILLS');
-      
-      if (!sheet) {
-        return { ok: true, drills: [] };
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length < 2) {
-        return { ok: true, drills: [] };
-      }
-      
-      const limit = Math.min(parseInt(params.limit || '10', 10), 100);
+      const ss = eocSs_();
+      const sh = ss.getSheetByName(SHEET_DRILLS);
+      if (!sh) return { ok: true, drills: [] };
+
+      const data = sh.getDataRange().getValues();
+      if (data.length < 2) return { ok: true, drills: [] };
+
+      const limit = Math.min(parseInt((params && params.limit) || '10', 10), 100);
       const drills = [];
-      
       for (let i = data.length - 1; i >= 1 && drills.length < limit; i--) {
         drills.push({
           date: data[i][0] || '',
@@ -519,38 +519,31 @@
           result: data[i][2] || 'ناجح'
         });
       }
-      
-      return { ok: true, drills: drills };
+      return { ok: true, drills };
     } catch (err) {
       return { ok: false, error: err.message, drills: [] };
     }
   }
-  
+
   function getRoomCodes() {
     try {
-      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('Rooms');
-      
-      if (!sheet) {
-        return { ok: true, rooms: [] };
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length < 2) {
-        return { ok: true, rooms: [] };
-      }
-      
+      const ss = eocSs_();
+      const sh = ss.getSheetByName(SHEET_ROOMS);
+      if (!sh) return { ok: true, rooms: [] };
+
+      const data = sh.getDataRange().getValues();
+      if (data.length < 2) return { ok: true, rooms: [] };
+
       const rooms = [];
       for (let i = 1; i < data.length; i++) {
-        if (data[i][0]) {
-          rooms.push({
-            code: String(data[i][0]),
-            name: String(data[i][1] || '')
-          });
-        }
+        const code = String(data[i][0] || '').trim();
+        if (!code) continue;
+        rooms.push({
+          code,
+          name: String(data[i][1] || '').trim()
+        });
       }
-      
-      return { ok: true, rooms: rooms };
+      return { ok: true, rooms };
     } catch (err) {
       return { ok: false, error: err.message, rooms: [] };
     }
