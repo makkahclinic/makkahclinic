@@ -1,0 +1,891 @@
+نخلي EOC Command = مركز تدريب + استقبال بلاغات (بدون تعارض)، ونوحّد السيناريوهات الخمسة مع نفس “ستايل التعليمات” (الأصفر/الأحمر) اللي عندك في شاشة الإبلاغ.
+
+وبالنسبة للصوت “غصب” على أجهزة الناس: من المتصفح لا يمكن بدون تفاعل أول مرة (سياسة Chrome تمنع play() بدون user gesture). 
+Chrome for Developers
+
+لكن على شاشات الكشك/TV داخل المجمع تقدر تخلي موقعكم فقط مسموح له autoplay عبر سياسات Chrome enterprise أو فلاغ كشك. 
+Chrome for Developers
+
+الآن نروح لطلبك: تحويل صفحة eoc-command.html إلى تدريب + سجلات + طباعة.
+
+A) المطلوب النهائي (حسب كلامك)
+1) مركز تدريب (Training)
+
+سيناريوهات 5 فقط:
+
+حريق
+
+انقطاع كهرباء
+
+تفشي مرض
+
+تسرب مياه
+
+إغماء/إصابة
+
+لكل سيناريو: تعليمات “افعل الآن” باللون الأصفر + “تحذير/لا تفعل” باللون الأحمر (نفس روح شاشة الإبلاغ).
+
+زر مبهر: “جلسة تدريب عملي”
+
+يبدأ جلسة + مؤقت
+
+عند “إنهاء التدريب” يفتح اختيار الحضور (قائمة متدربين) + اسم المدرب + ملاحظات
+
+يحفظ سجل التدريب في Google Sheet
+
+قابل للطباعة كصفحة حضور/محضر (window.print). 
+MDN Web Docs
+
+2) سجل البلاغات الحقيقي
+
+موجود عندك — نضيف:
+
+فلترة زمنية (من/إلى)
+
+زر طباعة للسجل/بلاغ محدد.
+
+3) 3 أيقونات وسط الصفحة (Quick Actions)
+
+🟡 جلسة تدريب عملي
+
+🧾 سجل التدريب
+
+🔔 سجل البلاغات
+
+B) لازم نضيف 3 Endpoints في Apps Script (لحفظ/قراءة التدريب)
+
+هذا جزء أساسي عشان “سجل التدريب” يكون حقيقي وقابل للطباعة + أرشفة.
+
+ملاحظة: Web Apps في Apps Script تستقبل GET في doGet(e) وباراميترات URL داخل e.parameter. 
+Google for Developers
+
+وJSONP مدعوم رسميًا عبر ContentService بإرجاع JS مع callback. 
+Google for Developers
+
+✅ Patch لسكربت Google Apps Script (أضفه داخل نفس سكربتك)
+
+ضع هذا تحت ثوابت EOC (بعد EOC_SPREADSHEET_ID):
+
+// ===================== TRAINING (DRILLS) =====================
+const TRAINING_ROSTER_SHEET = 'Training_Roster';
+const TRAINING_LOG_SHEET = 'Training_Log';
+
+function ensureSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.appendRow(headers);
+  }
+  return sh;
+}
+
+function getTrainingRoster() {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+    const sh = ensureSheet_(ss, TRAINING_ROSTER_SHEET, [
+      'Name','Department','Role','Active'
+    ]);
+
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return { ok:true, roster: [] };
+
+    const roster = [];
+    for (let i=1; i<data.length; i++){
+      const name = String(data[i][0]||'').trim();
+      if (!name) continue;
+      const active = String(data[i][3]||'').trim();
+      if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+
+      roster.push({
+        name,
+        department: String(data[i][1]||'').trim(),
+        role: String(data[i][2]||'').trim()
+      });
+    }
+    return { ok:true, roster };
+  } catch(err){
+    return { ok:false, error: err.message, roster: [] };
+  }
+}
+
+function saveTrainingSession(p) {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+    const sh = ensureSheet_(ss, TRAINING_LOG_SHEET, [
+      'Session_ID','Date','Start_Time','End_Time','Duration_Min',
+      'Scenario_Key','Scenario_Label','Trainer','Attendees','Notes'
+    ]);
+
+    const tz = 'Asia/Riyadh';
+    const now = new Date();
+
+    const sessionId = String(p.sessionId || ('TRN-' + now.getTime()));
+    const scenarioKey = String(p.scenarioKey || '').trim();
+    const scenarioLabel = String(p.scenarioLabel || '').trim();
+    const trainer = String(p.trainer || '').trim();
+    const attendees = String(p.attendees || '').trim(); // CSV names
+    const notes = String(p.notes || '').trim();
+
+    const startIso = String(p.startIso || '');
+    const endIso   = String(p.endIso || '');
+
+    const startDate = startIso ? new Date(startIso) : now;
+    const endDate   = endIso ? new Date(endIso) : now;
+
+    const dateStr = Utilities.formatDate(startDate, tz, 'yyyy-MM-dd');
+    const startStr = Utilities.formatDate(startDate, tz, 'HH:mm');
+    const endStr   = Utilities.formatDate(endDate, tz, 'HH:mm');
+
+    const durMin = Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
+
+    sh.appendRow([
+      sessionId, dateStr, startStr, endStr, durMin,
+      scenarioKey, scenarioLabel, trainer, attendees, notes
+    ]);
+
+    return { ok:true, sessionId };
+  } catch(err){
+    return { ok:false, error: err.message };
+  }
+}
+
+function getTrainingSessions(p) {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(TRAINING_LOG_SHEET);
+    if (!sh) return { ok:true, sessions: [] };
+
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return { ok:true, sessions: [] };
+
+    const startDate = String(p.startDate || '').trim(); // yyyy-mm-dd
+    const endDate   = String(p.endDate || '').trim();
+
+    const sessions = [];
+    for (let i=1; i<data.length; i++){
+      const dateStr = String(data[i][1]||'').trim();
+      if (startDate && dateStr < startDate) continue;
+      if (endDate && dateStr > endDate) continue;
+
+      sessions.push({
+        sessionId: data[i][0],
+        date: data[i][1],
+        startTime: data[i][2],
+        endTime: data[i][3],
+        durationMin: data[i][4],
+        scenarioKey: data[i][5],
+        scenarioLabel: data[i][6],
+        trainer: data[i][7],
+        attendees: data[i][8],
+        notes: data[i][9]
+      });
+    }
+
+    sessions.reverse(); // الأحدث أولاً
+    return { ok:true, sessions };
+  } catch(err){
+    return { ok:false, error: err.message, sessions: [] };
+  }
+}
+
+ثم داخل doGet(e) أضف هذه Actions:
+
+ابحث عن سلسلة if (action === '...') وأضف:
+
+if (action === 'getTrainingRoster') return output_(getTrainingRoster());
+if (action === 'saveTrainingSession') return output_(saveTrainingSession(p));
+if (action === 'getTrainingSessions') return output_(getTrainingSessions(p));
+
+
+وبعد التعديل لازم Deploy نسخة جديدة للـ Web App، لأن /exec قد يبقى على نسخة قديمة. 
+Google for Developers
++1
+
+C) Patch داخل eoc-command.html (واجهة التدريب + سجل التدريب + الفلاتر + طباعة)
+
+أنا راح أعطيك “بلوك جاهز” تضيفه بدون ما نكسر نظام استقبال البلاغات الحالي.
+
+1) استبدل سيناريوهات التدريب (5 فقط)
+
+في HTML عندك (قسم .emergency-scenarios) غيّر الأزرار إلى:
+
+<div class="emergency-scenarios">
+  <button class="scenario-btn fire" onclick="showScenario('fire')">
+    <i class="fas fa-fire"></i> حريق
+  </button>
+  <button class="scenario-btn power" onclick="showScenario('power')">
+    <i class="fas fa-bolt"></i> انقطاع كهرباء
+  </button>
+  <button class="scenario-btn outbreak" onclick="showScenario('outbreak')">
+    <i class="fas fa-virus"></i> تفشي مرض
+  </button>
+  <button class="scenario-btn water" onclick="showScenario('water')">
+    <i class="fas fa-water"></i> تسرب مياه
+  </button>
+  <button class="scenario-btn injury" onclick="showScenario('injury')">
+    <i class="fas fa-user-injured"></i> إغماء / إصابة
+  </button>
+</div>
+
+
+أضف في CSS ألوان water/injury (سأضعها تحت).
+
+2) أضف ستايل “تعليمات أصفر/أحمر” + “3 أيقونات وسط”
+
+ضع هذا في <style> آخر شيء:
+
+/* ===== Quick Actions (3 icons) ===== */
+.quick-actions{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+.quick-action{
+  background: rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 14px 14px;
+  cursor:pointer;
+  transition: .2s;
+  display:flex;
+  align-items:center;
+  gap: 12px;
+}
+.quick-action:hover{ transform: scale(1.01); border-color: rgba(201,169,98,0.55); }
+.quick-action .qa-ico{
+  width: 44px; height:44px; border-radius: 14px;
+  display:flex; align-items:center; justify-content:center;
+  font-size: 1.25rem;
+  background: rgba(201,169,98,0.15);
+  border: 1px solid rgba(201,169,98,0.35);
+  color: var(--secondary);
+}
+.quick-action .qa-title{ font-weight: 800; }
+.quick-action .qa-sub{ opacity: .75; font-size: .85rem; margin-top:2px; }
+
+/* ===== Scenario color helpers ===== */
+.scenario-btn.water { border-color: #0ea5e9; }
+.scenario-btn.water:hover, .scenario-btn.water.active { background: rgba(14,165,233,0.18); }
+.scenario-btn.water i { color: #0ea5e9; }
+
+.scenario-btn.injury { border-color: #f59e0b; }
+.scenario-btn.injury:hover, .scenario-btn.injury.active { background: rgba(245,158,11,0.18); }
+.scenario-btn.injury i { color: #f59e0b; }
+
+/* ===== Training Guide style (yellow/red like report screen) ===== */
+.guide-wrap{ display:grid; gap: 10px; margin-top: 10px; }
+.guide-card{
+  border-radius: 14px;
+  padding: 14px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.18);
+}
+.guide-title{
+  display:flex; align-items:center; gap:10px;
+  font-weight: 900; font-size: 1rem;
+  margin-bottom: 8px;
+}
+.guide-list{ margin:0; padding:0 18px 0 0; }
+.guide-list li{ margin: 8px 0; line-height: 1.6; opacity: .95; }
+
+.guide-yellow{
+  border-color: rgba(245,158,11,0.55);
+  background: rgba(245,158,11,0.12);
+}
+.guide-yellow .guide-title{ color: #fef08a; }
+
+.guide-red{
+  border-color: rgba(220,20,60,0.55);
+  background: rgba(220,20,60,0.12);
+}
+.guide-red .guide-title{ color: #fecaca; }
+
+/* ===== Training modals ===== */
+.modal{
+  display:none; position:fixed; inset:0;
+  background: rgba(0,0,0,0.85);
+  z-index: 30000; padding: 20px; overflow:auto;
+}
+.modal.active{ display:flex; align-items:flex-start; justify-content:center; }
+.modal-card{
+  width:min(920px, 96vw);
+  background: linear-gradient(135deg, #1e3a5f, #0f172a);
+  border: 2px solid rgba(201,169,98,0.45);
+  border-radius: 18px;
+  padding: 18px;
+}
+.modal-head{
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom: 12px;
+}
+.modal-head h2{ margin:0; font-size: 1.2rem; color: var(--secondary); }
+.modal-close{
+  width:42px;height:42px;border-radius:12px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color:#fff; cursor:pointer;
+}
+.field{
+  display:grid; gap:8px; margin: 10px 0;
+}
+.field label{ font-size:.9rem; opacity:.85; }
+.field input, .field textarea{
+  width:100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border:1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color:#fff;
+  font-family:'Tajawal', sans-serif;
+}
+.field textarea{ min-height: 90px; resize: vertical; }
+
+.roster{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.roster-card{
+  border:1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 10px;
+  display:flex;
+  gap: 10px;
+  align-items:flex-start;
+}
+.roster-card input{ margin-top: 4px; }
+.roster-card .name{ font-weight: 900; }
+.roster-card .meta{ opacity:.75; font-size:.85rem; margin-top: 2px; }
+
+.modal-actions{
+  display:flex; gap: 10px; margin-top: 14px;
+}
+.btn{
+  border:0; border-radius: 12px;
+  padding: 12px 14px;
+  cursor:pointer;
+  font-family:'Tajawal', sans-serif;
+  font-weight:900;
+}
+.btn-primary{ background: linear-gradient(135deg, #DC143C, #b91c1c); color:#fff; flex: 2; }
+.btn-ghost{ background: rgba(255,255,255,0.10); color:#fff; flex: 1; border:1px solid rgba(255,255,255,0.18); }
+
+/* Print helper */
+@media print {
+  body { background: #fff !important; color:#000 !important; }
+  .header, .quick-actions, .toast, .modal { display:none !important; }
+  .panel-card, .building-section { border: 1px solid #ccc !important; background:#fff !important; color:#000 !important; }
+}
+
+3) أضف “3 أيقونات وسط” داخل <div class="control-panel"> في الأعلى
+
+ضع هذا كأول Card داخل control-panel (قبل “سيناريوهات الطوارئ”):
+
+<div class="panel-card">
+  <h3 class="section-title"><i class="fas fa-graduation-cap"></i> مركز التدريب</h3>
+
+  <div class="quick-actions">
+    <div class="quick-action" onclick="openTrainingStart()">
+      <div class="qa-ico"><i class="fas fa-dumbbell"></i></div>
+      <div>
+        <div class="qa-title">جلسة تدريب عملي</div>
+        <div class="qa-sub">بدء + مؤقت + حضور</div>
+      </div>
+    </div>
+
+    <div class="quick-action" onclick="openTrainingLog()">
+      <div class="qa-ico"><i class="fas fa-clipboard-list"></i></div>
+      <div>
+        <div class="qa-title">سجل التدريب</div>
+        <div class="qa-sub">فلترة + طباعة</div>
+      </div>
+    </div>
+
+    <div class="quick-action" onclick="openIncidentsLog()">
+      <div class="qa-ico"><i class="fas fa-bell"></i></div>
+      <div>
+        <div class="qa-title">سجل البلاغات</div>
+        <div class="qa-sub">فلترة + طباعة</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="trainingRunBadge" style="display:none; margin-top:10px; padding:10px 12px; border-radius:12px; border:1px solid rgba(245,158,11,0.4); background:rgba(245,158,11,0.12);">
+    <strong id="trainingRunTitle">تدريب جارٍ</strong>
+    <span style="opacity:.8;"> — </span>
+    <span id="trainingRunTimer" style="font-family:monospace; font-weight:900;">00:00</span>
+    <button class="btn btn-primary" style="margin-top:10px; width:100%;" onclick="endTrainingRun()">
+      <i class="fas fa-flag-checkered"></i> إنهاء التدريب وتسجيل الحضور
+    </button>
+  </div>
+</div>
+
+4) عدّل scenarios في JS إلى 5 فقط + تعليمات أصفر/أحمر
+
+استبدل الـ scenarios = { ... } عندك بهذا:
+
+const scenarios = {
+  fire: {
+    key: 'fire',
+    label: 'حريق',
+    icon: 'fas fa-fire',
+    color: '#ef4444',
+    yellow: [
+      'RACE: إبعاد الأشخاص من الخطر ثم تفعيل الإنذار ثم إغلاق الأبواب لاحتواء الدخان ثم الإطفاء إن كان آمنًا.',
+      'فعّل جرس الإنذار واتبع مسار الإخلاء المعلن.',
+      'أغلق الأبواب خلفك لتقليل انتشار الدخان.'
+    ],
+    red: [
+      'لا تستخدم المصاعد.',
+      'لا تفتح بابًا ساخنًا.',
+      'لا تحاول الإطفاء إذا كان الحريق أكبر من قدرتك أو يوجد دخان كثيف.'
+    ]
+  },
+  power: {
+    key: 'power',
+    label: 'انقطاع كهرباء',
+    icon: 'fas fa-bolt',
+    color: '#f59e0b',
+    yellow: [
+      'تأكد من سلامة المرضى والأجهزة الحرجة (UPS/بطاريات).',
+      'بلّغ الصيانة وEOC فورًا لتأكيد تشغيل المولد.',
+      'قلّل الأحمال غير الضرورية لحماية الأنظمة الأساسية.'
+    ],
+    red: [
+      'لا تشغّل أجهزة إضافية بدون توجيه (قد تُحمّل المولد).',
+      'لا تترك مرضى الأجهزة الحرجة بدون مراقبة.'
+    ]
+  },
+  outbreak: {
+    key: 'outbreak',
+    label: 'تفشي مرض',
+    icon: 'fas fa-virus',
+    color: '#8b5cf6',
+    yellow: [
+      'عزل فوري للحالة/المنطقة وتقييد الدخول.',
+      'تفعيل إجراءات مكافحة العدوى + معدات الوقاية المناسبة.',
+      'تتبع المخالطين ورفع البلاغ حسب سياسة المنشأة.'
+    ],
+    red: [
+      'لا تنقل الحالة بين الأقسام بدون تنسيق.',
+      'لا تسمح بتجمعات غير ضرورية في منطقة العزل.'
+    ]
+  },
+  water: {
+    key: 'water',
+    label: 'تسرب مياه',
+    icon: 'fas fa-water',
+    color: '#0ea5e9',
+    yellow: [
+      'أبعد الناس عن المنطقة خاصة قرب الكهرباء/الأجهزة.',
+      'أوقف المصدر (إن أمكن) وبلّغ الصيانة فورًا.',
+      'احمِ المعدات والمواد الحساسة وانقلها بعيدًا.'
+    ],
+    red: [
+      'لا تلمس مقابس/أسلاك قرب الماء.',
+      'لا تعيد فتح المنطقة قبل تقييم السلامة والتنظيف.'
+    ]
+  },
+  injury: {
+    key: 'injury',
+    label: 'إغماء / إصابة',
+    icon: 'fas fa-user-injured',
+    color: '#f59e0b',
+    yellow: [
+      'تأكد من سلامة المكان ثم افحص الاستجابة والتنفس بسرعة.',
+      'اطلب المساعدة فورًا وأحضر AED إن توفر.',
+      'ابدأ CPR إذا كان لا يستجيب ولا يتنفس بشكل طبيعي.'
+    ],
+    red: [
+      'لا تحرك المصاب إذا اشتبهت بإصابة بالعمود الفقري.',
+      'لا تؤخر طلب المساعدة أو بدء الإسعاف.'
+    ]
+  }
+};
+
+function renderTrainingGuide(type){
+  const s = scenarios[type];
+  if (!s) return;
+
+  // عنوان اللوحة
+  document.getElementById('responseTitle').innerHTML = `
+    <i class="${s.icon}" style="color:${s.color}"></i>
+    <span>تدريب: ${s.label}</span>
+  `;
+
+  // محتوى الخطوات (نفس responseSteps)
+  const yellowHtml = s.yellow.map(x => `<li>${x}</li>`).join('');
+  const redHtml = s.red.map(x => `<li>${x}</li>`).join('');
+
+  document.getElementById('responseSteps').innerHTML = `
+    <div class="guide-wrap">
+      <div class="guide-card guide-yellow">
+        <div class="guide-title"><i class="fas fa-bolt"></i> افعل الآن</div>
+        <ul class="guide-list">${yellowHtml}</ul>
+      </div>
+      <div class="guide-card guide-red">
+        <div class="guide-title"><i class="fas fa-triangle-exclamation"></i> تحذير</div>
+        <ul class="guide-list">${redHtml}</ul>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('responsePanel').classList.add('active');
+}
+
+
+ثم اجعل showScenario(type) عندك يستدعي renderTrainingGuide(type) بدل “الخطوات القديمة”:
+
+function showScenario(type) {
+  currentScenario = type;
+
+  document.querySelectorAll('.scenario-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`.scenario-btn.${type}`)?.classList.add('active');
+
+  renderTrainingGuide(type);
+}
+
+
+ملاحظة علمية قصيرة: RACE/PASS في الحريق شائع في برامج المستشفيات. 
+UCLA Health
+
+CPR/AED خطواتها الأساسية موثوقة في مراجع طبية معروفة. 
+Mayo Clinic
++1
+
+D) إضافة مودالات التدريب + سجل التدريب + الطباعة (جاهز)
+
+ضع هذا قبل </body> (بعد نهاية الصفحة):
+
+<!-- ===== Training Start Modal ===== -->
+<div class="modal" id="trainingStartModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2><i class="fas fa-dumbbell"></i> بدء جلسة تدريب عملي</h2>
+      <button class="modal-close" onclick="closeModal('trainingStartModal')"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="field">
+      <label>السيناريو المختار</label>
+      <input id="trScenario" readonly>
+    </div>
+
+    <div class="field">
+      <label>اسم المدرب</label>
+      <input id="trTrainer" placeholder="اكتب اسم المدرب...">
+    </div>
+
+    <div class="field">
+      <label>ملاحظات (اختياري)</label>
+      <textarea id="trNotes" placeholder="هدف التدريب/ملاحظات..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('trainingStartModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="startTrainingRun()">ابدأ التدريب الآن</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Training Attendance Modal ===== -->
+<div class="modal" id="trainingAttendanceModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2><i class="fas fa-users"></i> تسجيل حضور التدريب</h2>
+      <button class="modal-close" onclick="closeModal('trainingAttendanceModal')"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="field">
+      <label>بحث سريع عن متدرب</label>
+      <input id="rosterSearch" placeholder="اكتب اسم المتدرب..." oninput="renderRoster()">
+    </div>
+
+    <div class="roster" id="rosterGrid"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('trainingAttendanceModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveTrainingRun()">حفظ + طباعة المحضر</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Training Log Modal ===== -->
+<div class="modal" id="trainingLogModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2><i class="fas fa-clipboard-list"></i> سجل التدريب</h2>
+      <button class="modal-close" onclick="closeModal('trainingLogModal')"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="field" style="flex:1; min-width:220px;">
+        <label>من تاريخ</label>
+        <input id="trFrom" type="date">
+      </div>
+      <div class="field" style="flex:1; min-width:220px;">
+        <label>إلى تاريخ</label>
+        <input id="trTo" type="date">
+      </div>
+      <div class="field" style="flex:1; min-width:220px; align-self:end;">
+        <button class="btn btn-primary" style="width:100%;" onclick="loadTrainingSessions()">تحديث</button>
+      </div>
+    </div>
+
+    <div id="trainingLogTable" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+E) JS Block للتدريب + الحفظ + الطباعة
+
+أضف هذا في نهاية <script> عندك (بعد دوال showToast وغيرها). يعتمد على jsonp الموجود عندك:
+
+// ===== Training State =====
+let trainingRoster = [];
+let trainingRun = null; // {sessionId, scenarioKey, scenarioLabel, trainer, notes, startMs, endMs}
+let trainingTimerInt = null;
+
+function apiCall(action, params){
+  // استخدم jsonp الموجود في ملفك
+  return jsonp(action, params);
+}
+
+function openModal(id){ document.getElementById(id)?.classList.add('active'); }
+function closeModal(id){ document.getElementById(id)?.classList.remove('active'); }
+
+function openTrainingStart(){
+  if (!currentScenario) {
+    showToast('اختر سيناريو تدريب أولاً', 'info');
+    return;
+  }
+  const s = scenarios[currentScenario];
+  document.getElementById('trScenario').value = `${s.label} (${s.key})`;
+  document.getElementById('trTrainer').value = '';
+  document.getElementById('trNotes').value = '';
+  openModal('trainingStartModal');
+}
+
+function startTrainingRun(){
+  const s = scenarios[currentScenario];
+  const trainer = (document.getElementById('trTrainer').value || '').trim();
+  if (!trainer) {
+    showToast('اكتب اسم المدرب', 'error');
+    return;
+  }
+  const notes = (document.getElementById('trNotes').value || '').trim();
+
+  trainingRun = {
+    sessionId: 'TRN-' + Date.now(),
+    scenarioKey: s.key,
+    scenarioLabel: s.label,
+    trainer,
+    notes,
+    startMs: Date.now(),
+    endMs: null
+  };
+
+  closeModal('trainingStartModal');
+
+  // إظهار شريط "تدريب جارٍ"
+  document.getElementById('trainingRunBadge').style.display = 'block';
+  document.getElementById('trainingRunTitle').textContent = `تدريب جارٍ: ${s.label} — المدرب: ${trainer}`;
+  startTrainingTimer();
+  showToast('بدأت جلسة التدريب', 'success');
+}
+
+function startTrainingTimer(){
+  if (trainingTimerInt) clearInterval(trainingTimerInt);
+  trainingTimerInt = setInterval(() => {
+    if (!trainingRun) return;
+    const sec = Math.floor((Date.now() - trainingRun.startMs) / 1000);
+    const m = String(Math.floor(sec/60)).padStart(2,'0');
+    const s = String(sec%60).padStart(2,'0');
+    document.getElementById('trainingRunTimer').textContent = `${m}:${s}`;
+  }, 500);
+}
+
+function endTrainingRun(){
+  if (!trainingRun) return;
+  trainingRun.endMs = Date.now();
+  // افتح حضور
+  openModal('trainingAttendanceModal');
+  renderRoster();
+}
+
+async function loadTrainingRoster(){
+  try{
+    const res = await apiCall('getTrainingRoster', {});
+    trainingRoster = (res && res.ok && res.roster) ? res.roster : [];
+  } catch(e){
+    trainingRoster = [];
+  }
+}
+
+function renderRoster(){
+  const q = (document.getElementById('rosterSearch')?.value || '').trim();
+  const grid = document.getElementById('rosterGrid');
+  if (!grid) return;
+
+  const list = trainingRoster.filter(x => !q || x.name.includes(q));
+  if (!list.length){
+    grid.innerHTML = `<div style="opacity:.75">لا توجد أسماء — أضفها في Sheet: ${'Training_Roster'}</div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map((p, idx) => `
+    <label class="roster-card">
+      <input type="checkbox" data-name="${p.name}">
+      <div>
+        <div class="name">${p.name}</div>
+        <div class="meta">${p.department || ''}${p.role ? ' — ' + p.role : ''}</div>
+      </div>
+    </label>
+  `).join('');
+}
+
+function getSelectedAttendees(){
+  const checks = Array.from(document.querySelectorAll('#rosterGrid input[type="checkbox"]:checked'));
+  return checks.map(c => c.getAttribute('data-name')).filter(Boolean);
+}
+
+async function saveTrainingRun(){
+  if (!trainingRun) return;
+
+  const attendees = getSelectedAttendees();
+  if (!attendees.length){
+    showToast('اختر الحضور (على الأقل اسم واحد)', 'error');
+    return;
+  }
+
+  const startIso = new Date(trainingRun.startMs).toISOString();
+  const endIso = new Date(trainingRun.endMs || Date.now()).toISOString();
+
+  const payload = {
+    sessionId: trainingRun.sessionId,
+    scenarioKey: trainingRun.scenarioKey,
+    scenarioLabel: trainingRun.scenarioLabel,
+    trainer: trainingRun.trainer,
+    attendees: attendees.join(', '),
+    notes: trainingRun.notes || '',
+    startIso,
+    endIso
+  };
+
+  const res = await apiCall('saveTrainingSession', payload);
+  if (!res || !res.ok){
+    showToast('فشل حفظ التدريب: ' + (res?.error || ''), 'error');
+    return;
+  }
+
+  closeModal('trainingAttendanceModal');
+
+  // إنهاء حالة التدريب
+  if (trainingTimerInt) clearInterval(trainingTimerInt);
+  trainingTimerInt = null;
+  document.getElementById('trainingRunBadge').style.display = 'none';
+
+  // طباعة محضر
+  printTrainingSession({
+    ...payload,
+    durationMin: Math.max(0, Math.round((new Date(endIso)-new Date(startIso))/60000))
+  });
+
+  trainingRun = null;
+  showToast('تم حفظ التدريب بنجاح', 'success');
+}
+
+function printTrainingSession(s){
+  const win = window.open('', '_blank');
+  const html = `
+  <html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>محضر تدريب - ${s.scenarioLabel}</title>
+    <style>
+      body{ font-family: Arial, sans-serif; padding:20px; }
+      h1{ margin:0 0 10px; }
+      .box{ border:1px solid #ccc; border-radius:10px; padding:14px; margin:10px 0; }
+      .row{ display:flex; gap:14px; flex-wrap:wrap; }
+      .cell{ flex:1; min-width:240px; }
+      table{ width:100%; border-collapse:collapse; margin-top:10px; }
+      th,td{ border:1px solid #ddd; padding:8px; text-align:right; }
+    </style>
+  </head>
+  <body>
+    <h1>محضر جلسة تدريب عملي</h1>
+    <div class="box">
+      <div class="row">
+        <div class="cell"><b>رقم الجلسة:</b> ${s.sessionId}</div>
+        <div class="cell"><b>السيناريو:</b> ${s.scenarioLabel}</div>
+        <div class="cell"><b>المدرب:</b> ${s.trainer}</div>
+        <div class="cell"><b>المدة (دقيقة):</b> ${s.durationMin || ''}</div>
+      </div>
+    </div>
+    <div class="box">
+      <b>الحضور:</b>
+      <div style="margin-top:8px; line-height:1.8;">${(s.attendees||'').split(',').map(x=>x.trim()).filter(Boolean).join(' ، ')}</div>
+    </div>
+    <div class="box">
+      <b>ملاحظات:</b>
+      <div style="margin-top:8px; white-space:pre-wrap;">${s.notes || '-'}</div>
+    </div>
+    <script>
+      window.print(); // فتح نافذة الطباعة
+    </script>
+  </body>
+  </html>`;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+
+window.print() موثق رسميًا في MDN كطريقة لفتح نافذة الطباعة/حفظ PDF. 
+MDN Web Docs
+
+F) فلترة سجل البلاغات الحقيقي + طباعة
+
+أبسط حل الآن بدون تغيير كبير في سكربت البلاغات:
+
+نضيف inputs “من/إلى”
+
+نفلتر Client-side بعد getEmergencyReports(limit=200).
+
+إذا تبغى فلترة Server-side (أفضل)، نضيف في Apps Script دعم startDate/endDate لـ getEmergencyReports مثل ما Web Apps توصي بتمرير باراميترات في e.parameter. 
+Google for Developers
+
+ملاحظة مهمة لتوحيد “سباهي / تدريب”
+
+الحريق: RACE/PASS أسلوب تدريب شائع في المنشآت الصحية. 
+UCLA Health
+
+الكهرباء: أنظمة الكهرباء الأساسية في المنشآت الصحية تُدار بفروع (Life safety / Critical… إلخ) ويُتوقع انتقال خلال ثوانٍ—مذكور في مراجع جودة واعتمادات وNFPA/Guidance. 
+Joint Commission
++2
+FEMA
++2
+
+الإغماء/الإصابة: خطوات CPR/AED الأساسية موثوقة طبيًا. 
+Mayo Clinic
++1
+
+تسرب المياه: CDC تؤكد أهمية التقييم والتنظيف قبل إعادة فتح مناطق متضررة بالماء. 
+CDC
+
+تفشي المرض: مبادئ العزل/الاحتياطات/مكافحة العدوى مدعومة في إرشادات CDC. 
+CDC
++1
+
+اللي باقي (وأنا أكمله لك فورًا بعد ما تركب البلوكات)
+
+ربط “سجل البلاغات” بفلترة زمنية + زر طباعة للسجل.
+
+جعل جلسة التدريب (اختياري) ترسل أمر “تمرين” للشاشات (Emergency.html) بدون ما تعتبر بلاغ حقيقي.
+
+إضافة “قائمة المتدربين” تلقائيًا من شيت Training_Roster + زر “تحديد الكل” + “توقيع” إن تبغى.
+
+إذا تبغى أعملها بشكل نهائي “نسخة واحدة نظيفة” بدل لصق بلوكات (أريح لك): قلّي فقط هل تبي حفظ التدريب في نفس ملف EOC_SPREADSHEET_ID ولا ملف مستقل؟
