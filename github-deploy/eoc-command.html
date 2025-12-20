@@ -2774,17 +2774,20 @@
         
         async function sendCommandToBackend(commandData) {
             try {
-                const params = new URLSearchParams({
-                    action: 'setActiveCommand',
+                const res = await jsonp('setActiveCommand', {
                     responseType: commandData.type,
                     reportType: commandData.reportType,
                     location: commandData.location,
-                    muster: commandData.muster
+                    muster: commandData.muster || ''
                 });
-                
-                await fetch(WEB_APP_URL + '?' + params.toString());
+
+                if (!res || !res.ok) {
+                    throw new Error(res?.error || 'setActiveCommand failed');
+                }
+                console.log('Command sent to backend successfully');
             } catch (error) {
                 console.error('Error sending command:', error);
+                showToast('فشل إرسال الأمر للشاشات', 'error');
             }
         }
         
@@ -2897,10 +2900,11 @@
         
         async function clearCommandFromBackend() {
             try {
-                const params = new URLSearchParams({ action: 'clearActiveCommand' });
-                await fetch(WEB_APP_URL + '?' + params.toString());
-            } catch (error) {
-                console.error('Error clearing command:', error);
+                const res = await jsonp('clearActiveCommand', {});
+                if (!res || !res.ok) throw new Error(res?.error || 'clearActiveCommand failed');
+                console.log('Command cleared from backend');
+            } catch (e) {
+                console.error('Error clearing command:', e);
             }
         }
         
