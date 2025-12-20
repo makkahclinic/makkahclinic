@@ -457,11 +457,6 @@
       </div>
     </div>
 
-    <!-- ملف الصفارة -->
-    <audio id="sirenAudio" preload="auto" loop>
-      <source src="https://www.m2020m.org/assets/siren.mp3" type="audio/mpeg">
-    </audio>
-    
     <script>
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbztSmY_O_ITwKYXVNzs2wH8Wsid05XEZ5bEG6KJf4453dlFE8JHG_zRmuJbOksa6UgogQ/exec';
 
@@ -469,6 +464,77 @@
         let sirenInterval = null;
         let timerInterval = null;
         let commandStartTime = null;
+
+        // Web Audio API Siren System
+        let audioCtx = null;
+        let sirenOsc1 = null;
+        let sirenOsc2 = null;
+        let sirenGain = null;
+        let sirenPlaying = false;
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function startSiren() {
+            try {
+                initAudioContext();
+                if (sirenPlaying) return;
+                sirenPlaying = true;
+
+                sirenGain = audioCtx.createGain();
+                sirenGain.gain.value = 0.6;
+                sirenGain.connect(audioCtx.destination);
+
+                sirenOsc1 = audioCtx.createOscillator();
+                sirenOsc1.type = 'sawtooth';
+                sirenOsc1.frequency.value = 600;
+                sirenOsc1.connect(sirenGain);
+                sirenOsc1.start();
+
+                sirenOsc2 = audioCtx.createOscillator();
+                sirenOsc2.type = 'square';
+                sirenOsc2.frequency.value = 800;
+                sirenOsc2.connect(sirenGain);
+                sirenOsc2.start();
+
+                let ascending = true;
+                sirenInterval = setInterval(() => {
+                    if (!sirenOsc1 || !sirenOsc2) return;
+                    const now = audioCtx.currentTime;
+                    if (ascending) {
+                        sirenOsc1.frequency.linearRampToValueAtTime(1200, now + 0.5);
+                        sirenOsc2.frequency.linearRampToValueAtTime(1400, now + 0.5);
+                    } else {
+                        sirenOsc1.frequency.linearRampToValueAtTime(400, now + 0.5);
+                        sirenOsc2.frequency.linearRampToValueAtTime(600, now + 0.5);
+                    }
+                    ascending = !ascending;
+                }, 500);
+
+            } catch(e) {
+                console.error('Siren error:', e);
+                showSoundGate();
+            }
+        }
+
+        function stopSiren() {
+            sirenPlaying = false;
+            if (sirenInterval) {
+                clearInterval(sirenInterval);
+                sirenInterval = null;
+            }
+            try {
+                if (sirenOsc1) { sirenOsc1.stop(); sirenOsc1.disconnect(); sirenOsc1 = null; }
+                if (sirenOsc2) { sirenOsc2.stop(); sirenOsc2.disconnect(); sirenOsc2 = null; }
+                if (sirenGain) { sirenGain.disconnect(); sirenGain = null; }
+            } catch(e) {}
+        }
 
         function isTrue(v){
           const s = String(v).toLowerCase().trim();
@@ -484,37 +550,14 @@
           if (g) g.classList.add('hidden');
         }
 
-        async function startSiren(){
-          const a = document.getElementById('sirenAudio');
-          if (!a) return;
-          try {
-            a.volume = 1.0;
-            await a.play();
-          } catch(e){
-            showSoundGate();
-          }
-        }
-
-        function stopSiren(){
-          const a = document.getElementById('sirenAudio');
-          if (!a) return;
-          try {
-            a.pause();
-            a.currentTime = 0;
-          } catch(e){}
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
           const btn = document.getElementById('enableSoundBtn');
-          if (btn) btn.addEventListener('click', async () => {
-            const a = document.getElementById('sirenAudio');
-            if (!a) return;
-            try { 
-              await a.play(); 
-              hideSoundGate(); 
-              if (!currentCommand) {
-                a.pause(); 
-                a.currentTime = 0; 
+          if (btn) btn.addEventListener('click', () => {
+            try {
+              initAudioContext();
+              hideSoundGate();
+              if (currentCommand) {
+                startSiren();
               }
             } catch(e){
               console.warn('unlockSound failed:', e);
