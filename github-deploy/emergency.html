@@ -547,6 +547,8 @@
           return v === true || s === 'true' || s === 'yes' || s === '1';
         }
 
+        let audioUnlocked = false;
+
         function showSoundGate(){
           const g = document.getElementById('soundGate');
           if (g) g.classList.remove('hidden');
@@ -556,19 +558,34 @@
           if (g) g.classList.add('hidden');
         }
 
+        // تفعيل الصوت بأي نقرة على الصفحة
+        function unlockAudioOnInteraction() {
+          if (audioUnlocked) return;
+          try {
+            initAudioContext();
+            audioUnlocked = true;
+            hideSoundGate();
+            // إذا كان هناك إنذار نشط، شغل الصوت فوراً
+            if (currentCommand && !sirenPlaying) {
+              startSiren();
+            }
+            // أزل المستمعين بعد التفعيل
+            document.removeEventListener('click', unlockAudioOnInteraction);
+            document.removeEventListener('touchstart', unlockAudioOnInteraction);
+            document.removeEventListener('keydown', unlockAudioOnInteraction);
+          } catch(e) {
+            console.warn('Audio unlock failed:', e);
+          }
+        }
+
+        // استمع لأي تفاعل مع الصفحة
+        document.addEventListener('click', unlockAudioOnInteraction);
+        document.addEventListener('touchstart', unlockAudioOnInteraction);
+        document.addEventListener('keydown', unlockAudioOnInteraction);
+
         document.addEventListener('DOMContentLoaded', () => {
           const btn = document.getElementById('enableSoundBtn');
-          if (btn) btn.addEventListener('click', () => {
-            try {
-              initAudioContext();
-              hideSoundGate();
-              if (currentCommand) {
-                startSiren();
-              }
-            } catch(e){
-              console.warn('unlockSound failed:', e);
-            }
-          });
+          if (btn) btn.addEventListener('click', unlockAudioOnInteraction);
         });
 
         function jsonp(action, params = {}) {
