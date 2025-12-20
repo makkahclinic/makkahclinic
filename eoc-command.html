@@ -2075,21 +2075,24 @@
                     </button>
                 </div>
                 
-                <!-- تحديد الهدف -->
+                <!-- تحديد الهدف (أزرار متعددة الاختيار) -->
                 <div id="responseTarget" style="display: none;">
-                    <h3><i class="fas fa-crosshairs"></i> حدد الموقع:</h3>
-                    <select id="responseTargetType" onchange="onTargetTypeChange(); updateIssueButtonState();">
-                        <option value="">اختر...</option>
-                    </select>
-                    <input type="text" id="responseTargetLocation" style="display: none;" onkeyup="updateIssueButtonState()">
+                    <h3><i class="fas fa-crosshairs"></i> حدد المواقع (يمكن اختيار أكثر من موقع):</h3>
+                    <div class="location-buttons-grid" id="locationButtonsGrid">
+                        <!-- سيتم ملؤها بالجافاسكربت -->
+                    </div>
+                    <input type="text" id="responseTargetLocation" placeholder="أو اكتب موقع آخر..." style="display: none; margin-top: 10px;" onkeyup="updateIssueButtonState()">
                     
                     <div id="responseMusterDiv" style="display: none; margin-top: 15px;">
                         <h3><i class="fas fa-map-marker-alt"></i> نقطة التجمع:</h3>
-                        <select id="responseMusterPoint" onchange="updateIssueButtonState()">
-                            <option value="">اختر نقطة التجمع...</option>
-                            <option value="A">نقطة A - الموقف الأمامي</option>
-                            <option value="B">نقطة B - الساحة الخلفية</option>
-                        </select>
+                        <div class="muster-buttons-grid">
+                            <button type="button" class="muster-btn" data-muster="A" onclick="toggleMuster('A')">
+                                <i class="fas fa-map-marker-alt"></i> نقطة A - الموقف الأمامي
+                            </button>
+                            <button type="button" class="muster-btn" data-muster="B" onclick="toggleMuster('B')">
+                                <i class="fas fa-map-marker-alt"></i> نقطة B - الساحة الخلفية
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -2765,6 +2768,21 @@
             showCommandScreen(commandData);
             
             await sendCommandToBackend(commandData);
+            
+            // تحديث حالة البلاغ إلى "قيد المعالجة"
+            if (currentReport && currentReport.id) {
+                try {
+                    await jsonp('updateEmergencyStatus', {
+                        reportId: currentReport.id,
+                        status: 'قيد المعالجة',
+                        responder: 'EOC',
+                        actionNotes: 'تم إصدار أمر: ' + commandData.type
+                    });
+                    console.log('Report status updated');
+                } catch(e) {
+                    console.warn('Failed to update report status:', e);
+                }
+            }
         }
         
         async function sendCommandToBackend(commandData) {
