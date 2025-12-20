@@ -2363,7 +2363,7 @@
             currentScenario = null;
         }
 
-        function activateEmergency() {
+        async function activateEmergency() {
             if (!emergencyActive) {
                 emergencyActive = true;
                 document.getElementById('systemStatus').className = 'status-badge status-alert';
@@ -2383,6 +2383,28 @@
                     <i class="fas fa-check-circle"></i>
                     إنهاء حالة الطوارئ
                 `;
+                
+                // إرسال الأمر للـ Backend ليظهر في Emergency.html
+                const commandData = {
+                    type: currentScenario || 'evacuation',
+                    reportType: currentScenario === 'fire' ? 'حريق' : 
+                               currentScenario === 'power' ? 'انقطاع كهرباء' :
+                               currentScenario === 'infection' ? 'تفشي عدوى' : 'إخلاء عام',
+                    location: 'جميع الأدوار',
+                    muster: 'نقطة التجمع الرئيسية'
+                };
+                
+                try {
+                    await window.__eocJsonp('setActiveCommand', {
+                        responseType: commandData.type,
+                        reportType: commandData.reportType,
+                        location: commandData.location,
+                        muster: commandData.muster
+                    });
+                    console.log('Command sent to backend successfully');
+                } catch(e) {
+                    console.error('Error sending command:', e);
+                }
                 
                 alert('تم تفعيل حالة الطوارئ!\nيرجى اتباع إجراءات الإخلاء.');
             } else {
@@ -2404,6 +2426,14 @@
                     <i class="fas fa-bell"></i>
                     تفعيل حالة الطوارئ
                 `;
+                
+                // إلغاء الأمر من الـ Backend
+                try {
+                    await window.__eocJsonp('clearActiveCommand', {});
+                    console.log('Command cleared from backend');
+                } catch(e) {
+                    console.error('Error clearing command:', e);
+                }
             }
         }
 
