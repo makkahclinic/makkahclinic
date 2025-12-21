@@ -2137,19 +2137,26 @@
         scenarioLabel: scenarioLabel(APP.train.scenarioKey),
         trainer: trainer,
         attendees: attendees,
-        notes: 'تمرين عملي'
+        notes: 'تمرين عملي',
+        startIso: start.toISOString(),
+        endIso: now.toISOString()
       };
 
+      console.log('=== SAVING TRAINING SESSION ===');
+      console.log('Payload:', JSON.stringify(payload, null, 2));
+      console.log('Calling: logTrainingSession');
+
       try{
-        // action in Apps Script is logTrainingSession (and you can alias saveTrainingSession there)
         const res = await jsonp('logTrainingSession', payload);
+        console.log('Response:', JSON.stringify(res, null, 2));
         if (!res || !res.ok) throw new Error(res?.error || 'logTrainingSession failed');
         toast('تم حفظ جلسة التدريب', 'success');
         closeTrainingModal();
         await refreshMiniTraining();
       } catch(e){
-        console.error(e);
-        toast('تعذر حفظ التدريب (تحقق من Apps Script Action logTrainingSession)', 'error');
+        console.error('SAVE ERROR:', e);
+        alert('خطأ في الحفظ: ' + e.message + '\n\nتأكد من نشر Apps Script جديد!');
+        toast('تعذر حفظ التدريب', 'error');
       }
     }
 
@@ -2360,6 +2367,45 @@
     }
 
     document.addEventListener('DOMContentLoaded', init);
+
+    /******************************************************
+     * DEBUG: Test Apps Script directly
+     ******************************************************/
+    async function testAppsScript(){
+      console.log('=== TESTING APPS SCRIPT ===');
+      console.log('Web App URL:', WEB_APP_URL);
+      
+      const testPayload = {
+        startTime: '10:00',
+        endTime: '10:05',
+        durationMin: '5',
+        scenarioKey: 'fire',
+        scenarioLabel: 'حريق (اختبار)',
+        trainer: 'TEST_USER',
+        attendees: 'Test Person 1',
+        notes: 'هذا اختبار - يمكن حذفه',
+        startIso: new Date().toISOString(),
+        endIso: new Date().toISOString()
+      };
+      
+      console.log('Test Payload:', testPayload);
+      
+      try {
+        const res = await jsonp('logTrainingSession', testPayload);
+        console.log('Test Response:', res);
+        if (res && res.ok) {
+          alert('نجح الاختبار! sessionId = ' + res.sessionId + '\n\nتحقق من شيت Training_Log');
+        } else {
+          alert('فشل الاختبار!\n\nالخطأ: ' + (res?.error || JSON.stringify(res)) + '\n\nتأكد من نشر Apps Script جديد!');
+        }
+      } catch(e) {
+        console.error('Test Error:', e);
+        alert('فشل الاختبار!\n\n' + e.message + '\n\nتأكد من:\n1. نشر Apps Script (Deploy → New version)\n2. رابط Web App صحيح');
+      }
+    }
+    
+    // Add test button to console
+    console.log('%c اختبار Apps Script: اكتب testAppsScript() في Console ', 'background: #1e3a5f; color: #c9a962; font-size: 14px; padding: 5px;');
 
     /******************************************************
      * Notes:
