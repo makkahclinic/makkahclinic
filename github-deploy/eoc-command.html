@@ -2269,12 +2269,21 @@
         const res = await jsonp('logTrainingSession', payload);
         console.log('Response:', JSON.stringify(res, null, 2));
         if (!res || !res.ok) throw new Error(res?.error || 'logTrainingSession failed');
-        showBigSuccess('تم حفظ جلسة التدريب بنجاح! ✅\n\nرقم الجلسة: ' + (res.sessionId || ''));
+        
+        const sid = res.sessionId || res.session_id || '';
+        showBigSuccess('تم حفظ جلسة التدريب بنجاح! ✅\n\nالسيناريو: ' + scenarioLabel(APP.train.scenarioKey) + '\nالمدرب: ' + trainer + '\nالحضور: ' + APP.train.selectedRoster.size + ' متدرب' + (sid ? '\n\nرقم الجلسة: ' + sid : ''));
+        
         closeTrainingModal();
-        await refreshMiniTraining();
+        
+        // تحديث السجل مباشرة
+        setTimeout(async () => {
+          await refreshMiniTraining();
+          console.log('Mini training refreshed after save');
+        }, 500);
+        
       } catch(e){
         console.error('SAVE ERROR:', e);
-        showBigError('فشل الحفظ!\n\n' + e.message + '\n\nتأكد من نشر Apps Script جديد');
+        showBigError('فشل الحفظ!\n\n' + e.message + '\n\n⚠️ تأكد من نشر Apps Script جديد:\nDeploy → Manage deployments → ✏️ → New version');
       } finally {
         if (btn) {
           btn.innerHTML = originalHTML;
@@ -2301,12 +2310,14 @@
       try{
         const from = document.getElementById('trainFrom')?.value || '';
         const to = document.getElementById('trainTo')?.value || '';
+        console.log('Loading training log with dates:', from, to);
         const list = await fetchTrainingSessions(250, from, to);
+        console.log('Training sessions loaded:', list.length, 'sessions');
         APP.caches.trainingSessions = list;
         renderTrainingTable(list);
       } catch(e){
-        console.error(e);
-        body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:22px;color:var(--danger)">تعذر تحميل سجل التدريب</td></tr>`;
+        console.error('Load training log error:', e);
+        body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:22px;color:var(--danger)">تعذر تحميل سجل التدريب<br><small style="opacity:.7">تأكد من نشر Apps Script</small></td></tr>`;
       }
     }
 
