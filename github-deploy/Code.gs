@@ -654,18 +654,29 @@
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       const sh = ss.getSheetByName(SHEET_TRAINING_LOG);
-      if (!sh) return { ok: true, sessions: [] };
+      if (!sh) return { ok: true, sessions: [], debug: 'Sheet not found' };
 
-      const data = sh.getDataRange().getValues();
+      const lastRow = sh.getLastRow();
+      if (lastRow <= 1) return { ok: true, sessions: [], debug: 'No data rows (lastRow=' + lastRow + ')' };
+
+      const data = sh.getRange(2, 1, lastRow - 1, 10).getValues();
       const sessions = [];
 
       const limit = Math.min(Number(params.limit) || 50, 300);
       const startDate = String(params.startDate || '').trim();
       const endDate = String(params.endDate || '').trim();
 
-      for (let i = data.length - 1; i >= 1 && sessions.length < limit; i--) {
+      for (let i = data.length - 1; i >= 0 && sessions.length < limit; i--) {
         const r = data[i];
-        const d = String(r[1] || '').trim();
+        if (!r[0]) continue;
+        
+        let dateVal = r[1];
+        let d = '';
+        if (dateVal instanceof Date) {
+          d = Utilities.formatDate(dateVal, 'Asia/Riyadh', 'yyyy-MM-dd');
+        } else {
+          d = String(dateVal || '').trim();
+        }
 
         if (startDate && d < startDate) continue;
         if (endDate && d > endDate) continue;
@@ -684,7 +695,7 @@
         });
       }
 
-      return { ok: true, sessions };
+      return { ok: true, sessions, debug: 'Found ' + data.length + ' rows, returned ' + sessions.length + ' sessions' };
     } catch(err){ return { ok: false, error: err.message, sessions: [] }; }
   }
   /******************** END EOC CONFIG APIs ********************/
