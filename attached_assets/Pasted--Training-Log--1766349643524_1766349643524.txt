@@ -1,0 +1,101 @@
+المشكلة مو في حفظ التدريب (واضح من صورة الـ Training_Log إن الصفوف تُكتب)، المشكلة في شكل الاستجابة (Response Shape) اللي ترجع للواجهة:
+
+صفحة سجل التدريب عندك (في emergency-report.html) غالبًا تقرأ data.drills.
+
+لكن الـ WebApp عند action=getTrainingSessions يرجع فقط sessions (وهذا واضح من صفحة الـ JSON اللي فتحتها: فيها sessions فقط بدون drills).
+
+النتيجة: الواجهة تقول “لا توجد جلسات” لأنها ما لقت drills.
+
+الحل الأسرع (ويخليك “100/100” لأنّه Backward Compatible):
+خلّي getTrainingSessions يرجّع sessions + drills معًا مثل getDrillLog.
+
+✅ التعديل المطلوب في Apps Script (بالضبط أين أغيّر)
+1) داخل doGet(e) ابحث عن هذا الجزء:
+if (action === 'getTrainingSessions') {
+  return output_(getTrainingSessions(p));
+}
+
+2) امسحه بالكامل واستبدله بهذا (نفس المكان):
+if (action === 'getTrainingSessions') {
+  const out = getTrainingSessions(p);
+
+  // لو فيه خطأ حقيقي، رجّعه كما هو (لا نخفيه)
+  if (!out || out.ok === false) return output_(out);
+
+  const sessions = Array.isArray(out.sessions) ? out.sessions : [];
+  const drills = sessions.map(s => ({
+    date: s.date || '',
+    type: s.scenarioLabel || s.scenarioKey || '',
+    result: 'ناجح',
+    trainer: s.trainer || ''
+  }));
+
+  return output_({ ok: true, sessions, drills, debug: out.debug || '' });
+}
+
+
+كذا… سواء الواجهة تطلب sessions أو drills راح تشتغل.
+
+✅ 3) عدّل بلوك getDrillLog عندك (عشان ما “يخفي” الأخطاء)
+
+أنت كاتب:
+
+if (action === 'getDrillLog') {
+  const out = getTrainingSessions(p);
+  const sessions = (out && out.sessions) ? out.sessions : [];
+  ...
+  return output_({ ok: true, sessions, drills, debug: out.debug || '' });
+}
+
+
+المشكلة هنا أنك ترجع ok:true حتى لو getTrainingSessions فشل.
+
+استبدله بهذا:
+
+if (action === 'getDrillLog') {
+  const out = getTrainingSessions(p);
+  if (!out || out.ok === false) return output_(out);
+
+  const sessions = Array.isArray(out.sessions) ? out.sessions : [];
+  const drills = sessions.map(s => ({
+    date: s.date || '',
+    type: s.scenarioLabel || s.scenarioKey || '',
+    result: 'ناجح',
+    trainer: s.trainer || ''
+  }));
+
+  return output_({ ok: true, sessions, drills, debug: out.debug || '' });
+}
+
+✅ 4) بعد ما تعدل Apps Script
+
+لازم تعمل Deploy جديد للـ Web App (New version) وإلا موقعك سيظل يضرب النسخة القديمة.
+توثيق Web Apps وـ doGet/doPost موجود رسميًا هنا.
+
+حل بديل (لو تبغى تعديل الواجهة بدل الباك-اند)
+
+في صفحة emergency-report.html (أو الملف اللي يرسم الجدول)، ابحث عن مكان يقرأ:
+
+data.drills
+
+
+وخليه يقرأ الاثنين:
+
+const list = (data.sessions && data.sessions.length) ? data.sessions : (data.drills || []);
+
+
+لكن أنا أنصحك بالحل الأول لأنه يشغّل كل النسخ القديمة والجديدة بدون ما تتوه بين الصفحات.
+
+ملاحظة مهمة عن رسائل Console عندك
+
+التحذيرات مثل:
+
+chrome.runtime...
+
+Host is not supported
+هذه غالبًا من إضافات المتصفح (مثل محافظ/Extensions) وليست سبب المشكلة. (ما فيها “jsonp failed” أو SyntaxError من كودك).
+
+توثيق تقني (عشان تتأكد إن أسلوب JSONP صحيح)
+
+إرجاع JSONP في Apps Script يتم عادة عبر ContentService.createTextOutput() مع MimeType.JAVASCRIPT داخل doGet.
+واستخدام LockService للحماية أثناء الكتابة على الشيت صحيح.

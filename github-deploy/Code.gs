@@ -212,13 +212,28 @@
     }
     
     if (action === 'getTrainingSessions') {
-      return output_(getTrainingSessions(p));
+      const out = getTrainingSessions(p);
+      
+      // لو فيه خطأ حقيقي، رجّعه كما هو
+      if (!out || out.ok === false) return output_(out);
+      
+      const sessions = Array.isArray(out.sessions) ? out.sessions : [];
+      const drills = sessions.map(s => ({
+        date: s.date || '',
+        type: s.scenarioLabel || s.scenarioKey || '',
+        result: 'ناجح',
+        trainer: s.trainer || ''
+      }));
+      
+      return output_({ ok: true, sessions, drills, debug: out.debug || '' });
     }
     
     // Aliases (compatibility) - يرجع sessions + drills للتوافق
     if (action === 'getDrillLog') {
       const out = getTrainingSessions(p);
-      const sessions = (out && out.sessions) ? out.sessions : [];
+      if (!out || out.ok === false) return output_(out);
+      
+      const sessions = Array.isArray(out.sessions) ? out.sessions : [];
       const drills = sessions.map(s => ({
         date: s.date || '',
         type: s.scenarioLabel || s.scenarioKey || '',
