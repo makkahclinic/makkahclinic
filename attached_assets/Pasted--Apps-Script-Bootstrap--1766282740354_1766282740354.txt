@@ -1,0 +1,312 @@
+تمام — كود الـApps Script عندك صار قريب جدًا من الصورة النهائية (والـBootstrap ممتاز وفكرته صحيحة). بقيت لك ٤ إصلاحات “حاسمة” عشان كل شيء يشتغل بدون تضارب + يكون التدريب/السجلات مربوطة صح.
+
+ملاحظة مرجعية: في Web Apps، أي باراميترات في الرابط تدخل doGet(e) عبر e.parameter، وطلبات POST تدخل doPost(e) عبر e.postData—هذا موثق رسميًا. 
+Google for Developers
+
+وJSONP بالـContentService يتعمل بإرجاع JavaScript مع callback + MimeType.JAVASCRIPT. 
+Google for Developers
+
+1) خطأ “سجل التدريب” — اختلاف اسم الـAction
+
+في doGet أنت حاط:
+
+if (action === 'logTrainingSession') return output_(logTrainingSession(p));
+
+
+لكن في واجهتك (EOC) أنت غالبًا ترسل saveTrainingSession أو اسم ثاني. هذا وحده يكسر الربط.
+
+✅ الحل الأفضل: اعمل Alias بدون ما تغيّر الواجهة:
+
+أضف تحت if (action === 'logTrainingSession') مباشرة:
+
+if (action === 'saveTrainingSession') {
+  return output_(logTrainingSession(p));
+}
+
+2) أكبر خلل عندك الآن: أوامر_نشطة هيدر 11 عمود… لكن setActiveCommand يكتب 6 أعمدة فقط
+
+أنت جهزت HEADERS_ACTIVE (11 حقل) وهذا ممتاز للتدريب + التمييز بين real/training…
+لكن دوال الأوامر النشطة تحت ما زالت النسخة القديمة:
+
+تكتب 'true' كنص
+
+ما تكتب mode / scenarioKey / scenarioLabel / sessionId / trainer
+
+✅ المطلوب: استبدال 3 دوال بالكامل: setActiveCommand, getActiveCommand, clearActiveCommand
+
+وأنصح بقفل (Lock) لأن أكثر من جهاز قد يرسل أوامر بنفس اللحظة، وLockService موثق رسميًا لهذا الغرض. 
+Google for Developers
++1
+
+ويفضل SpreadsheetApp.flush() قبل تحرير القفل كما يوصي التوثيق. 
+Google for Developers
+
+ضع هذا البلوك بدل الدوال الثلاث الحالية (انسخ/الصق):
+
+function isTrueFlag_(v) {
+  const s = String(v).toLowerCase().trim();
+  return v === true || s === 'true' || s === 'yes' || s === '1';
+}
+
+// Active Command Functions for Emergency Display Screen (UPDATED)
+function setActiveCommand(params) {
+  ensureEocReady_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000); // :contentReference[oaicite:4]{index=4}
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sheet) sheet = ss.insertSheet(SHEET_ACTIVE_CMD);
+
+    // تأكد الهيدرز الصحيحة (11 عمود)
+    sheet.getRange(1, 1, 1, HEADERS_ACTIVE.length).setValues([HEADERS_ACTIVE]);
+
+    // امسح أي أوامر سابقة (اترك الهيدر)
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) sheet.deleteRows(2, lastRow - 1);
+
+    sheet.appendRow([
+      true,                                // active (Boolean)
+      params.responseType || '',
+      params.reportType || '',
+      params.location || '',
+      params.muster || '',
+      new Date().toISOString(),
+      params.mode || 'real',               // real | training
+      params.scenarioKey || '',
+      params.scenarioLabel || '',
+      params.sessionId || '',
+      params.trainer || ''
+    ]);
+
+    SpreadsheetApp.flush(); // :contentReference[oaicite:5]{index=5}
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getActiveCommand() {
+  ensureEocReady_();
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sheet) return { ok: true, command: null };
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { ok: true, command: null };
+
+    const row = data[1];
+    if (!isTrueFlag_(row[0])) return { ok: true, command: null };
+
+    return {
+      ok: true,
+      command: {
+        active: true,
+        responseType: row[1] || '',
+        reportType: row[2] || '',
+        location: row[3] || '',
+        muster: row[4] || '',
+        timestamp: row[5] || '',
+        mode: row[6] || 'real',
+        scenarioKey: row[7] || '',
+        scenarioLabel: row[8] || '',
+        sessionId: row[9] || '',
+        trainer: row[10] || ''
+      }
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function clearActiveCommand() {
+  ensureEocReady_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000); // :contentReference[oaicite:6]{index=6}
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sheet) return { ok: true };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { ok: true };
+
+    sheet.getRange(2, 1).setValue(false); // Boolean
+    SpreadsheetApp.flush(); // :contentReference[oaicite:7]{index=7}
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+✅ بعد هذا التعديل: شاشة الطوارئ (Emergency.html) ستقدر تفرق بين real و training بسهولة، وتعرض تعليمات السيناريو حسب scenarioKey.
+
+3) logTrainingSession: اجعله “مرن” مع أي بيانات تجي من الواجهة
+
+الآن logTrainingSession عندك يعتمد على:
+
+startTime/endTime/durationMin
+ولو الواجهة ما أرسلتها = تسجل فاضي.
+
+✅ خليه يقبل:
+
+durationMin أو duration (مثلاً “00:12:30”)
+
+startIso/endIso أو يشتقها تلقائيًا
+
+استبدل دالة logTrainingSession بهذه النسخة:
+
+function durationToMinutes_(v) {
+  if (v === null || v === undefined || v === '') return 0;
+
+  const n = Number(v);
+  if (!isNaN(n) && n >= 0) return Math.round(n);
+
+  const m = String(v).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return 0;
+
+  const hh = Number(m[1] || 0);
+  const mm = Number(m[2] || 0);
+  const ss = Number(m[3] || 0);
+  return Math.max(0, Math.round((hh * 3600 + mm * 60 + ss) / 60));
+}
+
+function logTrainingSession(params) {
+  try {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000); // :contentReference[oaicite:8]{index=8}
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    let sh = ss.getSheetByName(SHEET_TRAINING_LOG);
+    if (!sh) {
+      sh = ss.insertSheet(SHEET_TRAINING_LOG);
+      sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
+    }
+
+    const tz = 'Asia/Riyadh';
+    const now = new Date();
+
+    const sessionId = String(params.session_id || params.sessionId || ('TRN-' + now.getTime()));
+    const startIso = String(params.startIso || '');
+    const endIso = String(params.endIso || '');
+
+    const startDate = startIso ? new Date(startIso) : now;
+    const endDate = endIso ? new Date(endIso) : now;
+
+    const dateStr = Utilities.formatDate(startDate, tz, 'yyyy-MM-dd');
+    const startTime = String(params.start_time || params.startTime || Utilities.formatDate(startDate, tz, 'HH:mm'));
+    const endTime = String(params.end_time || params.endTime || Utilities.formatDate(endDate, tz, 'HH:mm'));
+
+    let durationMin = durationToMinutes_(params.duration_min || params.durationMin || params.duration);
+    if (!durationMin && startIso && endIso) {
+      durationMin = Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
+    }
+
+    sh.appendRow([
+      sessionId,
+      dateStr,
+      startTime,
+      endTime,
+      durationMin,
+      String(params.scenarioKey || ''),
+      String(params.scenarioLabel || ''),
+      String(params.trainer || ''),
+      String(params.attendees || ''),
+      String(params.notes || '')
+    ]);
+
+    SpreadsheetApp.flush(); // :contentReference[oaicite:9]{index=9}
+    lock.releaseLock();
+
+    return { ok: true, sessionId };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+4) فلترة زمنية للسجلات (Training + Reports) من السكربت مباشرة
+
+أنت الآن ترجع آخر 50 فقط بدون فلترة. الأفضل يدعم:
+
+startDate=yyyy-mm-dd
+
+endDate=yyyy-mm-dd
+
+limit
+
+✅ عدّل getTrainingSessions بهذه النسخة:
+
+function getTrainingSessions(params) {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_TRAINING_LOG);
+    if (!sh) return { ok: true, sessions: [] };
+
+    const data = sh.getDataRange().getValues();
+    const sessions = [];
+
+    const limit = Math.min(Number(params.limit) || 50, 300);
+    const startDate = String(params.startDate || '').trim(); // yyyy-mm-dd
+    const endDate = String(params.endDate || '').trim();
+
+    for (let i = data.length - 1; i >= 1 && sessions.length < limit; i--) {
+      const r = data[i];
+      const d = String(r[1] || '').trim(); // date
+
+      if (startDate && d < startDate) continue;
+      if (endDate && d > endDate) continue;
+
+      sessions.push({
+        sessionId: String(r[0] || ''),
+        date: d,
+        startTime: String(r[2] || ''),
+        endTime: String(r[3] || ''),
+        durationMin: Number(r[4] || 0),
+        scenarioKey: String(r[5] || ''),
+        scenarioLabel: String(r[6] || ''),
+        trainer: String(r[7] || ''),
+        attendees: String(r[8] || ''),
+        notes: String(r[9] || '')
+      });
+    }
+
+    return { ok: true, sessions };
+  } catch (err) {
+    return { ok: false, error: err.message, sessions: [] };
+  }
+}
+
+
+وبنفس الفكرة (اختياري لكن ممتاز) أضف startDate/endDate في getEmergencyReports أيضًا.
+
+5) أهم خطوة تشغيلية بعد كل التعديلات
+
+بعد ما تعدّل Apps Script:
+
+لازم تعمل Deploy نسخة جديدة للـWeb App عشان /exec يأخذ آخر تحديث. 
+Google for Developers
+
+اختبار سريع بعد الإصلاحات (روابط)
+
+تأكد الشيتات تُبنى تلقائيًا:
+
+.../exec?action=getBuildingConfig
+
+
+اختبر كتابة أمر تدريب:
+
+.../exec?action=setActiveCommand&mode=training&responseType=training&scenarioKey=fire&scenarioLabel=حريق&trainer=TEST&location=TEST
+
+
+ثم:
+
+.../exec?action=getActiveCommand
+
+
+لازم يرجع command فيه mode و scenarioKey بدل null.

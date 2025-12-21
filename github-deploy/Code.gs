@@ -203,6 +203,10 @@
       return output_(logTrainingSession(p));
     }
     
+    if (action === 'saveTrainingSession') {
+      return output_(logTrainingSession(p));
+    }
+    
     if (action === 'getTrainingSessions') {
       return output_(getTrainingSessions(p));
     }
@@ -447,32 +451,65 @@
     } catch(err){ return { ok: false, error: err.message }; }
   }
 
+  function durationToMinutes_(v) {
+    if (v === null || v === undefined || v === '') return 0;
+    const n = Number(v);
+    if (!isNaN(n) && n >= 0) return Math.round(n);
+    const m = String(v).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return 0;
+    const hh = Number(m[1] || 0);
+    const mm = Number(m[2] || 0);
+    const ss = Number(m[3] || 0);
+    return Math.max(0, Math.round((hh * 3600 + mm * 60 + ss) / 60));
+  }
+
   function logTrainingSession(params) {
     try {
       const lock = LockService.getScriptLock();
-      lock.tryLock(10000);
+      lock.waitLock(10000);
+
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       let sh = ss.getSheetByName(SHEET_TRAINING_LOG);
       if (!sh) {
         sh = ss.insertSheet(SHEET_TRAINING_LOG);
         sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
       }
+
+      const tz = 'Asia/Riyadh';
       const now = new Date();
-      const sessionId = 'TRN-' + now.getTime();
-      const dateStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
+
+      const sessionId = String(params.session_id || params.sessionId || ('TRN-' + now.getTime()));
+      const startIso = String(params.startIso || '');
+      const endIso = String(params.endIso || '');
+
+      const startDate = startIso ? new Date(startIso) : now;
+      const endDate = endIso ? new Date(endIso) : now;
+
+      const dateStr = Utilities.formatDate(startDate, tz, 'yyyy-MM-dd');
+      const startTime = String(params.start_time || params.startTime || Utilities.formatDate(startDate, tz, 'HH:mm'));
+      const endTime = String(params.end_time || params.endTime || Utilities.formatDate(endDate, tz, 'HH:mm'));
+
+      let durationMin = durationToMinutes_(params.duration_min || params.durationMin || params.duration);
+      if (!durationMin && startIso && endIso) {
+        durationMin = Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
+      }
+
       sh.appendRow([
         sessionId,
         dateStr,
-        String(params.startTime || ''),
-        String(params.endTime || ''),
-        Number(params.durationMin || 0),
+        startTime,
+        endTime,
+        durationMin,
         String(params.scenarioKey || ''),
         String(params.scenarioLabel || ''),
         String(params.trainer || ''),
         String(params.attendees || ''),
         String(params.notes || '')
       ]);
+
+      SpreadsheetApp.flush();
       lock.releaseLock();
+
       return { ok: true, sessionId };
     } catch(err){ return { ok: false, error: err.message }; }
   }
@@ -482,26 +519,37 @@
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       const sh = ss.getSheetByName(SHEET_TRAINING_LOG);
       if (!sh) return { ok: true, sessions: [] };
+
       const data = sh.getDataRange().getValues();
       const sessions = [];
-      const limit = Number(params.limit) || 50;
-      for (let i = data.length - 1; i >= 1 && sessions.length < limit; i--){
+
+      const limit = Math.min(Number(params.limit) || 50, 300);
+      const startDate = String(params.startDate || '').trim();
+      const endDate = String(params.endDate || '').trim();
+
+      for (let i = data.length - 1; i >= 1 && sessions.length < limit; i--) {
         const r = data[i];
+        const d = String(r[1] || '').trim();
+
+        if (startDate && d < startDate) continue;
+        if (endDate && d > endDate) continue;
+
         sessions.push({
-          sessionId: String(r[0]||''),
-          date: String(r[1]||''),
-          startTime: String(r[2]||''),
-          endTime: String(r[3]||''),
-          durationMin: Number(r[4]||0),
-          scenarioKey: String(r[5]||''),
-          scenarioLabel: String(r[6]||''),
-          trainer: String(r[7]||''),
-          attendees: String(r[8]||''),
-          notes: String(r[9]||'')
+          sessionId: String(r[0] || ''),
+          date: d,
+          startTime: String(r[2] || ''),
+          endTime: String(r[3] || ''),
+          durationMin: Number(r[4] || 0),
+          scenarioKey: String(r[5] || ''),
+          scenarioLabel: String(r[6] || ''),
+          trainer: String(r[7] || ''),
+          attendees: String(r[8] || ''),
+          notes: String(r[9] || '')
         });
       }
+
       return { ok: true, sessions };
-    } catch(err){ return { ok: false, error: err.message }; }
+    } catch(err){ return { ok: false, error: err.message, sessions: [] }; }
   }
   /******************** END EOC CONFIG APIs ********************/
   
@@ -673,65 +721,75 @@
   }
   
   // Active Command Functions for Emergency Display Screen
+  function isTrueFlag_(v) {
+    const s = String(v).toLowerCase().trim();
+    return v === true || s === 'true' || s === 'yes' || s === '1';
+  }
+
   function setActiveCommand(params) {
+    ensureEocReady_();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      let sheet = ss.getSheetByName('أوامر_نشطة');
-      
-      if (!sheet) {
-        sheet = ss.insertSheet('أوامر_نشطة');
-        sheet.appendRow(['active', 'responseType', 'reportType', 'location', 'muster', 'timestamp']);
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length > 1) {
-        sheet.deleteRows(2, data.length - 1);
-      }
-      
+      let sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) sheet = ss.insertSheet(SHEET_ACTIVE_CMD);
+
+      sheet.getRange(1, 1, 1, HEADERS_ACTIVE.length).setValues([HEADERS_ACTIVE]);
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) sheet.deleteRows(2, lastRow - 1);
+
       sheet.appendRow([
-        'true',
+        true,
         params.responseType || '',
         params.reportType || '',
         params.location || '',
         params.muster || '',
-        new Date().toISOString()
+        new Date().toISOString(),
+        params.mode || 'real',
+        params.scenarioKey || '',
+        params.scenarioLabel || '',
+        params.sessionId || '',
+        params.trainer || ''
       ]);
-      
+
+      SpreadsheetApp.flush();
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
     }
   }
-  
+
   function getActiveCommand() {
+    ensureEocReady_();
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('أوامر_نشطة');
-      
-      if (!sheet) {
-        return { ok: true, command: null };
-      }
-      
+      const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) return { ok: true, command: null };
+
       const data = sheet.getDataRange().getValues();
-      if (data.length < 2) {
-        return { ok: true, command: null };
-      }
-      
+      if (data.length < 2) return { ok: true, command: null };
+
       const row = data[1];
-      const flag = String(row[0]).toLowerCase().trim();
-      if (flag !== 'true' && flag !== 'yes' && flag !== '1') {
-        return { ok: true, command: null };
-      }
-      
+      if (!isTrueFlag_(row[0])) return { ok: true, command: null };
+
       return {
         ok: true,
         command: {
           active: true,
-          responseType: row[1],
-          reportType: row[2],
-          location: row[3],
-          muster: row[4],
-          timestamp: row[5]
+          responseType: row[1] || '',
+          reportType: row[2] || '',
+          location: row[3] || '',
+          muster: row[4] || '',
+          timestamp: row[5] || '',
+          mode: row[6] || 'real',
+          scenarioKey: row[7] || '',
+          scenarioLabel: row[8] || '',
+          sessionId: row[9] || '',
+          trainer: row[10] || ''
         }
       };
     } catch (err) {
@@ -740,22 +798,24 @@
   }
   
   function clearActiveCommand() {
+    ensureEocReady_();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sheet = ss.getSheetByName('أوامر_نشطة');
-      
-      if (!sheet) {
-        return { ok: true };
-      }
-      
-      const data = sheet.getDataRange().getValues();
-      if (data.length > 1) {
-        sheet.getRange(2, 1).setValue('false');
-      }
-      
+      const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) return { ok: true };
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return { ok: true };
+
+      sheet.getRange(2, 1).setValue(false);
+      SpreadsheetApp.flush();
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
     }
   }
   
