@@ -305,6 +305,86 @@
             gap: 10px;
         }
 
+        /* زر تفعيل الطوارئ الرئيسي */
+        .activate-emergency-card {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.3), rgba(185, 28, 28, 0.4)) !important;
+            border: 2px solid #dc2626 !important;
+        }
+        
+        .main-activate-btn {
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            transition: all 0.3s;
+            animation: emergencyPulse 2s infinite;
+        }
+        
+        .main-activate-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 30px rgba(220, 38, 38, 0.6);
+        }
+        
+        .main-activate-btn i {
+            font-size: 1.5rem;
+            animation: bellRing 1s infinite;
+        }
+        
+        @keyframes emergencyPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.4); }
+            50% { box-shadow: 0 0 40px rgba(220, 38, 38, 0.8); }
+        }
+        
+        @keyframes bellRing {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(15deg); }
+            75% { transform: rotate(-15deg); }
+        }
+        
+        /* سيناريوهات للعرض فقط */
+        .scenarios-readonly {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 8px;
+        }
+        
+        .scenario-info {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 10px 8px;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+        
+        .scenario-info:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .scenario-info i {
+            font-size: 1.2rem;
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .scenario-info.fire i { color: #ef4444; }
+        .scenario-info.power i { color: #f59e0b; }
+        .scenario-info.water i { color: #3b82f6; }
+        .scenario-info.medical i { color: #22c55e; }
+        .scenario-info.outbreak i { color: #8b5cf6; }
+
         .scenario-btn {
             background: rgba(255,255,255,0.05);
             border: 2px solid rgba(255,255,255,0.1);
@@ -2803,29 +2883,37 @@
                 </div>
             </div>
 
+            <!-- زر تفعيل الطوارئ الرئيسي -->
+            <div class="panel-card activate-emergency-card">
+                <button class="main-activate-btn" onclick="openEmergencyControl()">
+                    <i class="fas fa-bell"></i>
+                    <span>تفعيل حالة الطوارئ</span>
+                </button>
+            </div>
+
             <div class="panel-card">
-                <h3 class="section-title"><i class="fas fa-exclamation-triangle"></i> سيناريوهات الطوارئ</h3>
-                <div class="emergency-scenarios">
-                    <button class="scenario-btn fire" onclick="showScenario('fire')">
+                <h3 class="section-title"><i class="fas fa-book-open"></i> دليل السيناريوهات</h3>
+                <div class="emergency-scenarios scenarios-readonly">
+                    <div class="scenario-info fire" onclick="showScenario('fire')">
                         <i class="fas fa-fire"></i>
-                        حريق
-                    </button>
-                    <button class="scenario-btn power" onclick="showScenario('power')">
+                        <span>حريق</span>
+                    </div>
+                    <div class="scenario-info power" onclick="showScenario('power')">
                         <i class="fas fa-bolt"></i>
-                        انقطاع كهرباء
-                    </button>
-                    <button class="scenario-btn water" onclick="showScenario('water')">
+                        <span>انقطاع كهرباء</span>
+                    </div>
+                    <div class="scenario-info water" onclick="showScenario('water')">
                         <i class="fas fa-tint"></i>
-                        تسرب مياه
-                    </button>
-                    <button class="scenario-btn medical" onclick="showScenario('medical')">
+                        <span>تسرب مياه</span>
+                    </div>
+                    <div class="scenario-info medical" onclick="showScenario('medical')">
                         <i class="fas fa-heartbeat"></i>
-                        إغماء/إصابة
-                    </button>
-                    <button class="scenario-btn outbreak" onclick="showScenario('outbreak')">
+                        <span>إغماء/إصابة</span>
+                    </div>
+                    <div class="scenario-info outbreak" onclick="showScenario('outbreak')">
                         <i class="fas fa-virus"></i>
-                        تفشي عدوى
-                    </button>
+                        <span>تفشي عدوى</span>
+                    </div>
                 </div>
             </div>
 
@@ -3137,12 +3225,18 @@
             event.target.closest('.dept-card').classList.add('selected');
         }
 
+        /* فتح صفحة الطوارئ في وضع التحكم */
+        function openEmergencyControl() {
+            window.open('emergency.html?mode=control', '_blank');
+        }
+
         function showScenario(type) {
             currentScenario = type;
             const scenario = scenarios[type];
             
-            document.querySelectorAll('.scenario-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`.scenario-btn.${type}`).classList.add('active');
+            document.querySelectorAll('.scenario-info').forEach(el => el.classList.remove('active'));
+            const activeInfo = document.querySelector(`.scenario-info.${type}`);
+            if (activeInfo) activeInfo.classList.add('active');
             
             document.getElementById('responseTitle').innerHTML = `
                 <i class="${scenario.icon}" style="color: ${scenario.color}"></i>

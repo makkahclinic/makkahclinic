@@ -197,6 +197,155 @@
             animation: none !important;
         }
         
+        body.control-mode {
+            background: linear-gradient(135deg, #1e3a5f, #0f172a);
+            animation: none !important;
+        }
+        
+        /* واجهة التحكم */
+        .control-panel {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .control-panel.active {
+            display: block;
+        }
+        
+        .control-header {
+            margin-bottom: 25px;
+        }
+        
+        .control-header h1 {
+            font-size: 1.6rem;
+            color: #c9a962;
+            margin-bottom: 8px;
+        }
+        
+        .control-header p {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.95rem;
+        }
+        
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .scenario-card {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            padding: 20px 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        
+        .scenario-card:hover {
+            transform: scale(1.03);
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .scenario-card.selected {
+            border-color: #c9a962;
+            background: rgba(201, 169, 98, 0.2);
+            box-shadow: 0 0 20px rgba(201, 169, 98, 0.3);
+        }
+        
+        .scenario-card i {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .scenario-card.fire i { color: #ef4444; }
+        .scenario-card.power i { color: #f59e0b; }
+        .scenario-card.water i { color: #3b82f6; }
+        .scenario-card.medical i { color: #22c55e; }
+        .scenario-card.infection i { color: #8b5cf6; }
+        .scenario-card.drill i { color: #10b981; }
+        
+        .scenario-card span {
+            display: block;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        
+        .drill-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: rgba(16, 185, 129, 0.2);
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        
+        .drill-toggle input {
+            width: 20px;
+            height: 20px;
+            accent-color: #10b981;
+        }
+        
+        .drill-toggle label {
+            font-size: 1rem;
+            color: #10b981;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .activate-control-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .activate-control-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 30px rgba(220, 38, 38, 0.5);
+        }
+        
+        .activate-control-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .activate-control-btn.drill-mode {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .back-link {
+            margin-top: 20px;
+            display: inline-block;
+            color: rgba(255,255,255,0.6);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .back-link:hover {
+            color: #fff;
+        }
+        
         /* ملخص الخطوات */
         .steps-summary {
             background: rgba(0,0,0,0.5);
@@ -525,6 +674,51 @@
       <div class="start-note">اترك هذه الصفحة مفتوحة</div>
     </div>
     <div class="container">
+        <!-- واجهة التحكم (تظهر فقط في وضع التحكم) -->
+        <div class="control-panel" id="controlPanel">
+            <div class="control-header">
+                <h1><i class="fas fa-broadcast-tower"></i> تفعيل حالة الطوارئ</h1>
+                <p>اختر نوع الطوارئ للتفعيل</p>
+            </div>
+            
+            <div class="scenario-grid">
+                <div class="scenario-card fire" onclick="selectScenario('fire', event)">
+                    <i class="fas fa-fire"></i>
+                    <span>حريق</span>
+                </div>
+                <div class="scenario-card power" onclick="selectScenario('power', event)">
+                    <i class="fas fa-bolt"></i>
+                    <span>انقطاع كهرباء</span>
+                </div>
+                <div class="scenario-card water" onclick="selectScenario('water', event)">
+                    <i class="fas fa-tint"></i>
+                    <span>تسرب مياه</span>
+                </div>
+                <div class="scenario-card medical" onclick="selectScenario('injury', event)">
+                    <i class="fas fa-heartbeat"></i>
+                    <span>إغماء/إصابة</span>
+                </div>
+                <div class="scenario-card infection" onclick="selectScenario('infection', event)">
+                    <i class="fas fa-virus"></i>
+                    <span>تفشي عدوى</span>
+                </div>
+            </div>
+            
+            <div class="drill-toggle" onclick="toggleDrill(event)">
+                <input type="checkbox" id="drillCheckbox">
+                <label for="drillCheckbox">🎯 تمرين فقط (بدون صوت)</label>
+            </div>
+            
+            <button class="activate-control-btn" id="activateControlBtn" onclick="activateFromControl()" disabled>
+                <i class="fas fa-bell"></i>
+                <span>اختر نوع الطوارئ أولاً</span>
+            </button>
+            
+            <a href="eoc-command.html" class="back-link">
+                <i class="fas fa-arrow-right"></i> العودة لمركز القيادة
+            </a>
+        </div>
+        
         <div class="safe-screen" id="safeScreen">
             <div class="logo-container">
                 <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع" id="logoImg">
@@ -745,6 +939,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+          // تهيئة وضع التحكم إذا كان مفعلاً
+          initControlMode();
+          
           // زر البداية
           const startBtn = document.getElementById('startBtn');
           if (startBtn) startBtn.addEventListener('click', startMonitoring);
@@ -802,7 +999,106 @@
             }
         }
 
-        // الخطوات لكل نوع طوارئ
+        // ========== وضع التحكم ==========
+        let controlMode = false;
+        let selectedScenario = null;
+        let isDrillMode = false;
+        
+        const typeLabels = {
+            'fire': 'حريق',
+            'power': 'انقطاع كهرباء',
+            'water': 'تسرب مياه',
+            'injury': 'إغماء/إصابة',
+            'infection': 'تفشي عدوى'
+        };
+        
+        function initControlMode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('mode') === 'control') {
+                controlMode = true;
+                document.body.classList.add('control-mode');
+                document.getElementById('startScreen').style.display = 'none';
+                document.getElementById('safeScreen').classList.add('hidden');
+                document.getElementById('controlPanel').classList.add('active');
+            }
+        }
+        
+        function selectScenario(type, evt) {
+            selectedScenario = type;
+            document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('selected'));
+            const target = evt ? evt.target : event.target;
+            if (target) {
+                const card = target.closest('.scenario-card');
+                if (card) card.classList.add('selected');
+            }
+            updateActivateButton();
+        }
+        
+        function toggleDrill(evt) {
+            if (evt) evt.stopPropagation();
+            const checkbox = document.getElementById('drillCheckbox');
+            isDrillMode = !isDrillMode;
+            checkbox.checked = isDrillMode;
+            updateActivateButton();
+        }
+        
+        function updateActivateButton() {
+            const btn = document.getElementById('activateControlBtn');
+            if (!selectedScenario) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-bell"></i><span>اختر نوع الطوارئ أولاً</span>';
+                btn.classList.remove('drill-mode');
+            } else {
+                btn.disabled = false;
+                const label = typeLabels[selectedScenario];
+                if (isDrillMode) {
+                    btn.innerHTML = `<i class="fas fa-clipboard-check"></i><span>تفعيل تمرين: ${label}</span>`;
+                    btn.classList.add('drill-mode');
+                } else {
+                    btn.innerHTML = `<i class="fas fa-bell"></i><span>تفعيل طوارئ: ${label}</span>`;
+                    btn.classList.remove('drill-mode');
+                }
+            }
+        }
+        
+        async function activateFromControl() {
+            if (!selectedScenario) return;
+            
+            const label = typeLabels[selectedScenario];
+            const confirmMsg = isDrillMode
+                ? `هل تريد تفعيل تمرين: ${label}؟`
+                : `⚠️ هل تريد تفعيل طوارئ حقيقية: ${label}؟\n\nسيتم إشعار جميع الموظفين!`;
+            
+            if (!confirm(confirmMsg)) return;
+            
+            const btn = document.getElementById('activateControlBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>جاري التفعيل...</span>';
+            
+            const payload = {
+                responseType: selectedScenario,
+                reportType: label,
+                location: 'جميع الأدوار',
+                muster: 'نقطة التجمع A - الموقف الأمامي',
+                isDrill: isDrillMode
+            };
+            
+            try {
+                await jsonp('setActiveCommand', payload);
+                
+                // إخفاء واجهة التحكم وعرض حالة الطوارئ
+                document.getElementById('controlPanel').classList.remove('active');
+                activateEmergency(payload);
+                
+            } catch(e) {
+                console.error('Activation error:', e);
+                // حتى لو فشل الاتصال، نفعّل محلياً
+                document.getElementById('controlPanel').classList.remove('active');
+                activateEmergency(payload);
+            }
+        }
+        
+        // ========== الخطوات ==========
         const scenarioSteps = {
             'fire': ['أنقذ أي شخص في خطر', 'اضغط زر الإنذار وأبلغ 998', 'أغلق الأبواب لمنع الدخان', 'أخلِ المبنى فوراً', 'لا تستخدم المصعد!'],
             'حريق': ['أنقذ أي شخص في خطر', 'اضغط زر الإنذار وأبلغ 998', 'أغلق الأبواب لمنع الدخان', 'أخلِ المبنى فوراً', 'لا تستخدم المصعد!'],
