@@ -522,7 +522,14 @@
   function getTrainingRoster() {
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      const sh = ss.getSheetByName(SHEET_ROSTER);
+      let sh = ss.getSheetByName(SHEET_ROSTER);
+
+      // إذا لم يوجد أو فارغ، حاول الاستيراد من Staff
+      if (!sh || sh.getLastRow() <= 1) {
+        importRosterFromStaff_(ss);
+        sh = ss.getSheetByName(SHEET_ROSTER);
+      }
+
       if (!sh) return { ok: true, roster: [] };
       const data = sh.getDataRange().getValues();
       const roster = [];
@@ -534,6 +541,37 @@
       }
       return { ok: true, roster };
     } catch(err){ return { ok: false, error: err.message }; }
+  }
+
+  /** استيراد قائمة المتدربين من شيت Staff إذا كان Training_Roster فارغاً */
+  function importRosterFromStaff_(ss) {
+    try {
+      const staffSh = ss.getSheetByName('Staff');
+      if (!staffSh || staffSh.getLastRow() <= 1) return;
+
+      let rosterSh = ss.getSheetByName(SHEET_ROSTER);
+      if (!rosterSh) {
+        rosterSh = ss.insertSheet(SHEET_ROSTER);
+        rosterSh.getRange(1,1,1,4).setValues([['الاسم', 'القسم', 'الدور', 'نشط']]);
+      }
+
+      // اقرأ Staff (A=اسم، B=رقم/قسم)
+      const staffData = staffSh.getDataRange().getValues();
+      const rows = [];
+      for (let i = 1; i < staffData.length; i++) {
+        const name = String(staffData[i][0] || '').trim();
+        const dept = String(staffData[i][1] || '').trim();
+        if (name) {
+          rows.push([name, dept, '', 'نعم']);
+        }
+      }
+
+      if (rows.length > 0) {
+        rosterSh.getRange(2, 1, rows.length, 4).setValues(rows);
+      }
+    } catch (e) {
+      Logger.log('importRosterFromStaff_ error: ' + e.message);
+    }
   }
 
   function durationToMinutes_(v) {

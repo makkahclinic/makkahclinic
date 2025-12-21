@@ -1,0 +1,242 @@
+1) إصلاح حفظ جلسة التدريب (eoc-command.html)
+A) أضف متغيرين أعلى سكربت التدريب
+
+ابحث عن:
+
+let sessionTimer = null;
+let sessionSeconds = 0;
+
+
+وخلي بعدها مباشرة:
+
+let sessionStartedAt = null;   // وقت بداية الجلسة (للحفظ)
+let sessionScenarioKey = null; // مفتاح السيناريو (fire/power/...)
+
+B) عدّل openTrainingModal لتسجيل وقت البداية
+
+ابحث عن دالة openTrainingModal() واستبدل أولها بهذا (أو أضف الأسطر الناقصة):
+
+function openTrainingModal() {
+    document.getElementById('trainingModal').classList.add('active');
+
+    // ✅ سجل وقت بداية الجلسة
+    sessionStartedAt = new Date();
+
+    renderTraineesGrid();
+    sessionSeconds = 0;
+    updateTimerDisplay();
+    startSessionTimer();
+}
+
+C) عدّل selectTrainingScenario ليخزن scenarioKey
+
+داخل selectTrainingScenario(scenarioKey) أضف هذا السطر في البداية:
+
+sessionScenarioKey = scenarioKey;
+
+
+تصير:
+
+function selectTrainingScenario(scenarioKey) {
+    sessionScenarioKey = scenarioKey; // ✅ مهم للحفظ في الشيت
+    selectedTrainingScenario = scenarioKey;
+    ...
+}
+
+D) استبدل “saveTrainingSession” باستدعاء “logTrainingSession”
+
+ابحث داخل saveTrainingSession() عن هذا السطر:
+
+const data = await window.__eocJsonp('saveTrainingSession', sessionData);
+
+
+امسحه بالكامل واستبدله بهذا:
+
+// ✅ جهز payload مطابق للـ Apps Script (logTrainingSession)
+const endAt = new Date();
+const pad2 = (n) => String(n).padStart(2, '0');
+const fmtTime = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+// attendees نص واحد (أسماء)
+const attendeesStr = traineesNames.join('، ');
+
+// durationMin رقم
+const durationMin = Math.max(1, Math.round(sessionSeconds / 60));
+
+// ✅ هذا هو النداء الصحيح
+const data = await window.__eocJsonp('logTrainingSession', {
+  startTime: fmtTime(sessionStartedAt || new Date()),
+  endTime: fmtTime(endAt),
+  durationMin: durationMin,
+  scenarioKey: sessionScenarioKey || selectedTrainingScenario || '',
+  scenarioLabel: trainingScenarios[selectedTrainingScenario]?.name || '',
+  trainer: trainerName,
+  attendees: attendeesStr,
+  notes: '' // اختياري
+});
+
+
+وبعدها عدّل شرط النجاح داخل نفس الدالة. ابحث عن:
+
+if (data && data.ok) {
+
+
+واتركه كما هو (ممتاز) — لكن غيّر رسالة النجاح لتعرض sessionId إذا تحب:
+
+if (data && data.ok) {
+  showToast('تم حفظ جلسة التدريب بنجاح! رقم الجلسة: ' + (data.sessionId || ''), 'success');
+  closeTrainingModal();
+  // تحديث السجل بعد الحفظ
+  // openTrainingLogModal();  // اختياري
+} else {
+  showToast('خطأ في حفظ الجلسة: ' + (data?.error || ''), 'error');
+}
+
+2) إصلاح “سجل التدريب” الذي لا يقرأ من الشيت
+
+أنت حالياً تستدعي:
+
+__eocJsonp('getDrillLog', { limit: 50 })
+
+
+لكن Apps Script عندك اسمه:
+
+getTrainingSessions
+
+A) عدّل loadTrainingLogData
+
+ابحث داخل loadTrainingLogData() عن:
+
+const data = await window.__eocJsonp('getDrillLog', { limit: 50 });
+
+
+استبدله بـ:
+
+const data = await window.__eocJsonp('getTrainingSessions', { limit: 50 });
+
+B) عدّل قراءة النتائج
+
+بعدها مباشرة عندك غالبًا:
+
+if (data && data.ok && data.drills) {
+  allTrainingSessions = data.drills;
+
+
+غيّرها إلى:
+
+if (data && data.ok && data.sessions) {
+  allTrainingSessions = data.sessions;
+
+C) عدّل renderTrainingLogTable ليتعامل مع شكل sessions
+
+لأن getTrainingSessions يرجّع حقول مثل:
+
+startTime, endTime, durationMin, scenarioLabel, trainer, attendees
+
+ففي الجدول بدّل:
+
+s.time ← خليها s.startTime
+
+s.duration ← خليها s.durationMin + ' دقيقة'
+
+s.traineesCount ← احسبها من attendees
+
+أضف helper فوق renderTrainingLogTable:
+
+function countAttendees(attendeesStr){
+  if (!attendeesStr) return 0;
+  const parts = String(attendeesStr).split(/[,،]/).map(x => x.trim()).filter(Boolean);
+  return parts.length;
+}
+
+
+ثم داخل الجدول استخدم:
+
+<td>${s.startTime || '-'}</td>
+<td>${countAttendees(s.attendees)}</td>
+<td>${(s.durationMin || 0)} دقيقة</td>
+
+3) لماذا “قائمة المتدربين” لا تأتي من الإكسل؟
+
+في صورتك واضح إن عندك شيت Training_Roster موجود… لكن الرسالة تقول ما فيه بيانات.
+
+السبب يكون واحد من الاثنين:
+
+Training_Roster فاضي (فيه هيدر فقط).
+
+الواجهة لسه تقرأ من بيانات ثابتة (traineesData) وليس من API getTrainingRoster.
+
+الحل السريع المضمون (بدون إعادة بناء الصفحة):
+
+داخل openTrainingModal() قبل renderTraineesGrid() أضف تحميل roster من الشيت:
+
+async function loadRosterFromSheet(){
+  try{
+    const res = await window.__eocJsonp('getTrainingRoster', {});
+    if (res && res.ok && Array.isArray(res.roster) && res.roster.length){
+      // نحول roster لهيكل traineesData الحالي
+      traineesData = res.roster.map((r, idx) => ({
+        id: idx + 1,
+        name: r.name,
+        dept: r.department || '',
+        role: r.role || ''
+      }));
+    } else {
+      traineesData = [];
+    }
+  }catch(e){
+    traineesData = [];
+  }
+}
+
+
+ثم عدّل openTrainingModal() هكذا:
+
+async function openTrainingModal() {
+  document.getElementById('trainingModal').classList.add('active');
+  sessionStartedAt = new Date();
+
+  await loadRosterFromSheet();   // ✅ من الشيت
+  renderTraineesGrid();
+
+  sessionSeconds = 0;
+  updateTimerDisplay();
+  startSessionTimer();
+}
+
+
+وأضف داخل renderTraineesGrid() لو القائمة فاضية:
+
+function renderTraineesGrid() {
+  const grid = document.getElementById('traineesGrid');
+  if (!traineesData || traineesData.length === 0){
+    grid.innerHTML = `<div style="opacity:.75;padding:12px;text-align:center">
+      لا توجد قائمة متدربين في الشيت (Training_Roster).<br>
+      أضف أسماء في Training_Roster أو فعل الاستيراد من Staff.
+    </div>`;
+    return;
+  }
+  ...
+}
+
+
+ملاحظة: لو تبغى Training_Roster يتعبّى تلقائيًا من Staff في Apps Script، قلّي و أعطيك Patch صغير ينسخ A,B من شيت Staff إلى Training_Roster إذا كان فاضي.
+
+4) موضوع “الصوت غصب”
+
+على المتصفح العادي: لا يمكن إجبار الصوت يشتغل بدون تفاعل المستخدم (سياسة Autoplay). كروم يسمح بالصوت إذا كان فيه تفاعل (click/tap…) أو شروط مثل MEI أو PWA… وإلا سيتم منع التشغيل .
+وفي Web Audio تحديدًا: لو أنشأت AudioContext قبل “user gesture” غالبًا يكون suspended ولازم تعمل resume() بعد تفاعل المستخدم .
+
+الاستثناء الواقعي الوحيد: أجهزة “managed / kiosk” عندكم (إدارة تقنية) ممكن يضبطون سياسات Chrome Enterprise للسماح بالأوتوبلاي للصوت لمواقع محددة — هذا هو الطريق “الغصب” الوحيد عمليًا لأنه على مستوى الجهاز/المتصفح، مو على مستوى كود الصفحة.
+
+5) اختبار سريع بعد التعديل
+
+افتح صفحة التدريب → اختر سيناريو → اختر متدربين → اكتب اسم المدرب → اضغط حفظ.
+
+راح تشوف في Network طلب لـ:
+.../exec?action=logTrainingSession&...
+
+ويفترض يرجع:
+{ ok:true, sessionId:"TRN-..." }
+
+إذا رجع لك Unknown action → معناها السكربت المنشور (Deploy) لسه قديم وتحتاج تنشر آخر نسخة.
