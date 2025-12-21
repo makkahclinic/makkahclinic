@@ -168,6 +168,9 @@
   }
   
   function doGet(e) {
+    // تجهيز الشيتات تلقائياً
+    ensureEocReady_();
+    
     const p = e && e.parameter ? e.parameter : {};
     const action = p.action;
     const callback = p.callback;
@@ -181,6 +184,27 @@
       }
       return ContentService.createTextOutput(json)
         .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // EOC Config APIs
+    if (action === 'getBuildingConfig') {
+      return output_(getBuildingConfig());
+    }
+    
+    if (action === 'getScenarioGuides') {
+      return output_(getScenarioGuides());
+    }
+    
+    if (action === 'getTrainingRoster') {
+      return output_(getTrainingRoster());
+    }
+    
+    if (action === 'logTrainingSession') {
+      return output_(logTrainingSession(p));
+    }
+    
+    if (action === 'getTrainingSessions') {
+      return output_(getTrainingSessions(p));
     }
     
     if (action === 'debug') {
@@ -239,6 +263,247 @@
   // Emergency Report Functions
   // الشيت الرئيسي للطوارئ والإخلاء
   const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+
+  /******************** EOC BOOTSTRAP ********************/
+  const EOC_BOOTSTRAP_VERSION = 1;
+
+  // أسماء الشيتات
+  const SHEET_MAP = 'EOC_MAP';
+  const SHEET_MUSTER = 'EOC_MUSTER';
+  const SHEET_SCENARIOS = 'EOC_SCENARIOS';
+  const SHEET_ROSTER = 'Training_Roster';
+  const SHEET_TRAINING_LOG = 'Training_Log';
+  const SHEET_ACTIVE_CMD = 'أوامر_نشطة';
+
+  // هيدرز
+  const HEADERS_MAP = ['floor_order','floor_key','floor_name','dept_id','dept_name','dept_icon','active'];
+  const HEADERS_MUSTER = ['key','name','description','active'];
+  const HEADERS_SCEN = ['scenario_key','scenario_label','bucket','step_no','icon','text','active'];
+  const HEADERS_ROSTER = ['name','department','role','active'];
+  const HEADERS_TRAINING = ['session_id','date','start_time','end_time','duration_min','scenario_key','scenario_label','trainer','attendees','notes'];
+  const HEADERS_ACTIVE = ['active','responseType','reportType','location','muster','timestamp','mode','scenarioKey','scenarioLabel','sessionId','trainer'];
+
+  function ensureEocReady_() {
+    const props = PropertiesService.getScriptProperties();
+    const v = Number(props.getProperty('EOC_BOOTSTRAP_VERSION') || '0');
+    if (v === EOC_BOOTSTRAP_VERSION) return;
+
+    setupEocWorkbook_();
+    props.setProperty('EOC_BOOTSTRAP_VERSION', String(EOC_BOOTSTRAP_VERSION));
+  }
+
+  function setupEocWorkbook_() {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+    const shMap = ensureSheet_(ss, SHEET_MAP, HEADERS_MAP);
+    const shMuster = ensureSheet_(ss, SHEET_MUSTER, HEADERS_MUSTER);
+    const shScen = ensureSheet_(ss, SHEET_SCENARIOS, HEADERS_SCEN);
+    ensureSheet_(ss, SHEET_ROSTER, HEADERS_ROSTER);
+    ensureSheet_(ss, SHEET_TRAINING_LOG, HEADERS_TRAINING);
+    ensureSheet_(ss, SHEET_ACTIVE_CMD, HEADERS_ACTIVE);
+
+    if (shMap.getLastRow() === 1) seedMap_(shMap);
+    if (shMuster.getLastRow() === 1) {
+      shMuster.appendRow(['A','نقطة تجمع A','الموقف الأمامي','نعم']);
+      shMuster.appendRow(['B','نقطة تجمع B','الساحة الخلفية','نعم']);
+    }
+    if (shScen.getLastRow() === 1) seedScenarios_(shScen);
+  }
+
+  function ensureSheet_(ss, name, headers) {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return sh;
+  }
+
+  function seedMap_(sh) {
+    const rows = [
+      [2,'2','الدور الثاني','dental','الأسنان','fa-tooth','نعم'],
+      [2,'2','الدور الثاني','internal2','الباطنية 2','fa-stethoscope','نعم'],
+      [2,'2','الدور الثاني','internal3','الباطنية 3','fa-stethoscope','نعم'],
+      [1,'1','الدور الأول','reception','الاستقبال','fa-concierge-bell','نعم'],
+      [1,'1','الدور الأول','internal1','الباطنية','fa-stethoscope','نعم'],
+      [1,'1','الدور الأول','ortho','العظام','fa-bone','نعم'],
+      [1,'1','الدور الأول','emergency','الطوارئ','fa-ambulance','نعم'],
+      [1,'1','الدور الأول','general','الطب العام','fa-user-md','نعم'],
+      [1,'1','الدور الأول','dressing','الضماد','fa-band-aid','نعم'],
+      [1,'1','الدور الأول','obgyn','النساء والولادة','fa-baby','نعم'],
+      [1,'1','الدور الأول','menreception','استقبال رجال','fa-male','نعم'],
+      [1,'1','الدور الأول','womenreception','استقبال نساء','fa-female','نعم'],
+      [0,'0','الدور الأرضي','lab','المختبر','fa-flask','نعم'],
+      [0,'0','الدور الأرضي','admin','مكاتب إدارية','fa-building','نعم'],
+      [0,'0','الدور الأرضي','physio','العلاج الطبيعي','fa-walking','نعم'],
+      [0,'0','الدور الأرضي','xray','الأشعة','fa-x-ray','نعم'],
+      [0,'0','الدور الأرضي','ultrasound','الألتراساوند','fa-wave-square','نعم'],
+    ];
+    sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+  }
+
+  function seedScenarios_(sh) {
+    const rows = [
+      ['fire','حريق','DO',1,'fa-bolt','أبعد الأشخاص من الخطر فورًا.','نعم'],
+      ['fire','حريق','DO',2,'fa-bell','فعّل الإنذار واتبع مسار الإخلاء.','نعم'],
+      ['fire','حريق','DO',3,'fa-door-closed','أغلق الأبواب لاحتواء الدخان.','نعم'],
+      ['fire','حريق','DONT',1,'fa-elevator','لا تستخدم المصاعد.','نعم'],
+      ['fire','حريق','DONT',2,'fa-hand','لا تفتح بابًا ساخنًا.','نعم'],
+      ['power','انقطاع كهرباء','DO',1,'fa-battery-full','ثبّت الأجهزة الحرجة على UPS/بطاريات.','نعم'],
+      ['power','انقطاع كهرباء','DO',2,'fa-tools','بلّغ الصيانة وEOC لتأكيد تشغيل المولد.','نعم'],
+      ['power','انقطاع كهرباء','DONT',1,'fa-plug','لا تشغّل أحمال إضافية بدون توجيه.','نعم'],
+      ['water','تسرب مياه','DO',1,'fa-triangle-exclamation','أبعد الناس عن منطقة التسرب.','نعم'],
+      ['water','تسرب مياه','DO',2,'fa-bolt','افصل الكهرباء عن المنطقة إن لزم.','نعم'],
+      ['water','تسرب مياه','DONT',1,'fa-plug-circle-xmark','لا تلمس مقابس/أسلاك قرب الماء.','نعم'],
+      ['injury','إغماء/إصابة','DO',1,'fa-user-check','أمّن المكان وافحص الاستجابة والتنفس.','نعم'],
+      ['injury','إغماء/إصابة','DO',2,'fa-phone','اطلب المساعدة وأحضر AED إن توفر.','نعم'],
+      ['injury','إغماء/إصابة','DONT',1,'fa-arrows-up-down-left-right','لا تحرك المصاب مع اشتباه العمود الفقري.','نعم'],
+      ['outbreak','تفشي عدوى','DO',1,'fa-lock','عزل فوري للحالة/المنطقة وتقييد الدخول.','نعم'],
+      ['outbreak','تفشي عدوى','DO',2,'fa-mask-face','استخدم معدات الوقاية المناسبة.','نعم'],
+      ['outbreak','تفشي عدوى','DONT',1,'fa-people-group','لا تسمح بتجمعات داخل منطقة العزل.','نعم'],
+    ];
+    sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+  }
+  /******************** END BOOTSTRAP ********************/
+
+  /******************** EOC CONFIG APIs ********************/
+  function getBuildingConfig() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const mapSh = ss.getSheetByName(SHEET_MAP);
+      const mustSh = ss.getSheetByName(SHEET_MUSTER);
+      const map = mapSh ? mapSh.getDataRange().getValues() : [];
+      const mus = mustSh ? mustSh.getDataRange().getValues() : [];
+
+      const floorsByKey = {};
+      for (let i=1; i<map.length; i++){
+        const r = map[i];
+        const active = String(r[6]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        const floorOrder = Number(r[0]);
+        const floorKey = String(r[1]||'').trim();
+        const floorName = String(r[2]||'').trim();
+        const deptId = String(r[3]||'').trim();
+        const deptName = String(r[4]||'').trim();
+        const deptIcon = String(r[5]||'').trim();
+        const k = floorKey || String(floorOrder);
+        if (!floorsByKey[k]) floorsByKey[k] = { floorOrder, floorKey: k, floorName, departments: [] };
+        floorsByKey[k].departments.push({ id: deptId, name: deptName, icon: deptIcon });
+      }
+      const floors = Object.values(floorsByKey).sort((a,b)=>b.floorOrder-a.floorOrder);
+
+      const muster = [];
+      for (let i=1; i<mus.length; i++){
+        const r = mus[i];
+        const active = String(r[3]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        muster.push({ key: String(r[0]||'').trim(), name: String(r[1]||'').trim(), desc: String(r[2]||'').trim() });
+      }
+      return { ok:true, floors, muster };
+    } catch(err){ return { ok:false, error: err.message }; }
+  }
+
+  function getScenarioGuides() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName(SHEET_SCENARIOS);
+      const data = sh ? sh.getDataRange().getValues() : [];
+      const out = {};
+      for (let i=1; i<data.length; i++){
+        const r = data[i];
+        const active = String(r[6]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        const key = String(r[0]||'').trim();
+        const label = String(r[1]||'').trim();
+        const bucket = String(r[2]||'').trim();
+        const stepNo = Number(r[3]||0);
+        const icon = String(r[4]||'').trim();
+        const text = String(r[5]||'').trim();
+        if (!out[key]) out[key] = { key, label, DO: [], DONT: [] };
+        out[key].label = label;
+        out[key][bucket] = out[key][bucket] || [];
+        out[key][bucket].push({ stepNo, icon, text });
+      }
+      Object.values(out).forEach(s=>{
+        if (s.DO) s.DO.sort((a,b)=>a.stepNo-b.stepNo);
+        if (s.DONT) s.DONT.sort((a,b)=>a.stepNo-b.stepNo);
+      });
+      return { ok:true, scenarios: out };
+    } catch(err){ return { ok:false, error: err.message }; }
+  }
+
+  function getTrainingRoster() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName(SHEET_ROSTER);
+      if (!sh) return { ok: true, roster: [] };
+      const data = sh.getDataRange().getValues();
+      const roster = [];
+      for (let i=1; i<data.length; i++){
+        const r = data[i];
+        const active = String(r[3]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        roster.push({ name: String(r[0]||'').trim(), department: String(r[1]||'').trim(), role: String(r[2]||'').trim() });
+      }
+      return { ok: true, roster };
+    } catch(err){ return { ok: false, error: err.message }; }
+  }
+
+  function logTrainingSession(params) {
+    try {
+      const lock = LockService.getScriptLock();
+      lock.tryLock(10000);
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      let sh = ss.getSheetByName(SHEET_TRAINING_LOG);
+      if (!sh) {
+        sh = ss.insertSheet(SHEET_TRAINING_LOG);
+        sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
+      }
+      const now = new Date();
+      const sessionId = 'TRN-' + now.getTime();
+      const dateStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
+      sh.appendRow([
+        sessionId,
+        dateStr,
+        String(params.startTime || ''),
+        String(params.endTime || ''),
+        Number(params.durationMin || 0),
+        String(params.scenarioKey || ''),
+        String(params.scenarioLabel || ''),
+        String(params.trainer || ''),
+        String(params.attendees || ''),
+        String(params.notes || '')
+      ]);
+      lock.releaseLock();
+      return { ok: true, sessionId };
+    } catch(err){ return { ok: false, error: err.message }; }
+  }
+
+  function getTrainingSessions(params) {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName(SHEET_TRAINING_LOG);
+      if (!sh) return { ok: true, sessions: [] };
+      const data = sh.getDataRange().getValues();
+      const sessions = [];
+      const limit = Number(params.limit) || 50;
+      for (let i = data.length - 1; i >= 1 && sessions.length < limit; i--){
+        const r = data[i];
+        sessions.push({
+          sessionId: String(r[0]||''),
+          date: String(r[1]||''),
+          startTime: String(r[2]||''),
+          endTime: String(r[3]||''),
+          durationMin: Number(r[4]||0),
+          scenarioKey: String(r[5]||''),
+          scenarioLabel: String(r[6]||''),
+          trainer: String(r[7]||''),
+          attendees: String(r[8]||''),
+          notes: String(r[9]||'')
+        });
+      }
+      return { ok: true, sessions };
+    } catch(err){ return { ok: false, error: err.message }; }
+  }
+  /******************** END EOC CONFIG APIs ********************/
   
   function submitEmergencyReport(params) {
     try {

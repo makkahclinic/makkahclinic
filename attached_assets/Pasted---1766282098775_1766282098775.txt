@@ -1,0 +1,409 @@
+فاهمك تمامًا: تبغى الشيت يتجهّز تلقائيًا (الأدوار/الأقسام/نقاط التجمع/قائمة المتدربين/تعليمات السيناريوهات) بدون ما تروح تنشئه يدويًا، وبعدها أنت تتحكم من “الإكسل/Google Sheet” فقط.
+
+هذا بالضبط يتعمل عبر Apps Script: أول ما يشتغل الـWeb App (أو مرة واحدة من زر Run) يقوم ينشئ الشيتات + الهيدرز + بيانات افتراضية.
+Apps Script يدعم فتح الشيت بالـID وإنشاء أوراق وإضافة صفوف. 
+Google for Developers
++1
+
+وكذلك الـWeb App يستقبل باراميترات GET في doGet(e) داخل e.parameter. 
+Google for Developers
+
+1) الخلل الحالي عندك (مختصر وواضح)
+A) سجل التدريب “غير مربوط”
+
+في كودك تستدعي:
+
+window.__eocJsonp('getDrillLog', { limit: 50 })
+
+
+لكن ما عندك Action اسمها getDrillLog في السكربت (الموجود عندك هو getEocDrills أو لازم نعمل getTrainingSessions).
+عشان كذا السجل ما يجيب بيانات.
+
+B) مفاتيح السيناريوهات متضاربة
+
+أحيانًا medical وأحيانًا injury… وأحيانًا infection وأحيانًا outbreak.
+إذا ما وحدتها، الإرسال للشاشة النهائية + الربط مع الشيت يتكسر.
+
+C) حالات البلاغات غير موحدة
+
+مرة تستخدم “تم الحل”، ومرة “مغلق”. لازم توحيد.
+
+2) الحل اللي تريده: “Bootstrap” يجهز الشيتات تلقائيًا
+
+الآتي كود Apps Script تنسخه كما هو داخل نفس مشروع السكربت اللي عندك (نفس اللي فيه doGet/doPost) — وبعدها:
+
+بدون أي شغل يدوي: الشيتات تُنشأ تلقائيًا أول مرة (أو بمجرد تشغيل دالة مرة واحدة).
+
+وتقدر تضيف/تحذف دور/قسم/نقطة تجمع/متدرب من الشيت فقط.
+
+هذا يعتمد على SpreadsheetApp وContentService وWeb Apps رسميًا. 
+Google for Developers
++2
+Google for Developers
++2
+
+2.1 أضف هذا البلوك في Apps Script
+
+ضعه أسفل تعريف EOC_SPREADSHEET_ID عندك.
+
+/******************** EOC BOOTSTRAP ********************/
+const EOC_BOOTSTRAP_VERSION = 1;
+
+// أسماء الشيتات
+const SHEET_MAP = 'EOC_MAP';
+const SHEET_MUSTER = 'EOC_MUSTER';
+const SHEET_SCENARIOS = 'EOC_SCENARIOS';
+const SHEET_ROSTER = 'Training_Roster';
+const SHEET_TRAINING_LOG = 'Training_Log';
+const SHEET_ACTIVE_CMD = 'أوامر_نشطة';
+
+// هيدرز
+const HEADERS_MAP = ['floor_order','floor_key','floor_name','dept_id','dept_name','dept_icon','active'];
+const HEADERS_MUSTER = ['key','name','description','active'];
+const HEADERS_SCEN = ['scenario_key','scenario_label','bucket','step_no','icon','text','active']; // bucket: DO / DONT
+const HEADERS_ROSTER = ['name','department','role','active'];
+const HEADERS_TRAINING = ['session_id','date','start_time','end_time','duration_min','scenario_key','scenario_label','trainer','attendees','notes'];
+const HEADERS_ACTIVE = ['active','responseType','reportType','location','muster','timestamp','mode','scenarioKey','scenarioLabel','sessionId','trainer'];
+
+function ensureEocReady_() {
+  const props = PropertiesService.getScriptProperties();
+  const v = Number(props.getProperty('EOC_BOOTSTRAP_VERSION') || '0');
+  if (v === EOC_BOOTSTRAP_VERSION) return;
+
+  setupEocWorkbook_();
+  props.setProperty('EOC_BOOTSTRAP_VERSION', String(EOC_BOOTSTRAP_VERSION));
+}
+
+// تنشئ الشيتات + تعبئة افتراضية (مرة واحدة)
+function setupEocWorkbook_() {
+  const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+  const shMap = ensureSheet_(ss, SHEET_MAP, HEADERS_MAP);
+  const shMuster = ensureSheet_(ss, SHEET_MUSTER, HEADERS_MUSTER);
+  const shScen = ensureSheet_(ss, SHEET_SCENARIOS, HEADERS_SCEN);
+  ensureSheet_(ss, SHEET_ROSTER, HEADERS_ROSTER);         // بدون بيانات افتراضية
+  ensureSheet_(ss, SHEET_TRAINING_LOG, HEADERS_TRAINING); // بدون بيانات افتراضية
+  ensureSheet_(ss, SHEET_ACTIVE_CMD, HEADERS_ACTIVE);
+
+  // Seed Map if empty
+  if (shMap.getLastRow() === 1) seedMap_(shMap);
+
+  // Seed Muster if empty
+  if (shMuster.getLastRow() === 1) {
+    shMuster.appendRow(['A','نقطة تجمع A','الموقف الأمامي','نعم']);
+    shMuster.appendRow(['B','نقطة تجمع B','الساحة الخلفية','نعم']);
+  }
+
+  // Seed Scenarios if empty
+  if (shScen.getLastRow() === 1) seedScenarios_(shScen);
+}
+
+function ensureSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+
+  // ضع الهيدرز دائمًا في الصف الأول (بدون مسح بيانات)
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // لو فيه أعمدة زيادة، اتركها
+  return sh;
+}
+
+function seedMap_(sh) {
+  const rows = [
+    // floor 2
+    [2,'2','الدور الثاني','dental','الأسنان','fa-tooth','نعم'],
+    [2,'2','الدور الثاني','internal2','الباطنية 2','fa-stethoscope','نعم'],
+    [2,'2','الدور الثاني','internal3','الباطنية 3','fa-stethoscope','نعم'],
+
+    // floor 1
+    [1,'1','الدور الأول','reception','الاستقبال','fa-concierge-bell','نعم'],
+    [1,'1','الدور الأول','internal1','الباطنية','fa-stethoscope','نعم'],
+    [1,'1','الدور الأول','ortho','العظام','fa-bone','نعم'],
+    [1,'1','الدور الأول','emergency','الطوارئ','fa-ambulance','نعم'],
+    [1,'1','الدور الأول','general','الطب العام','fa-user-md','نعم'],
+    [1,'1','الدور الأول','dressing','الضماد','fa-band-aid','نعم'],
+    [1,'1','الدور الأول','obgyn','النساء والولادة','fa-baby','نعم'],
+    [1,'1','الدور الأول','menreception','استقبال رجال','fa-male','نعم'],
+    [1,'1','الدور الأول','womenreception','استقبال نساء','fa-female','نعم'],
+
+    // floor 0
+    [0,'0','الدور الأرضي','lab','المختبر','fa-flask','نعم'],
+    [0,'0','الدور الأرضي','admin','مكاتب إدارية','fa-building','نعم'],
+    [0,'0','الدور الأرضي','physio','العلاج الطبيعي','fa-walking','نعم'],
+    [0,'0','الدور الأرضي','xray','الأشعة','fa-x-ray','نعم'],
+    [0,'0','الدور الأرضي','ultrasound','الألتراساوند','fa-wave-square','نعم'],
+  ];
+  sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+}
+
+function seedScenarios_(sh) {
+  const rows = [
+    // fire
+    ['fire','حريق','DO',1,'fa-bolt','أبعد الأشخاص من الخطر فورًا.','نعم'],
+    ['fire','حريق','DO',2,'fa-bell','فعّل الإنذار واتبع مسار الإخلاء.','نعم'],
+    ['fire','حريق','DO',3,'fa-door-closed','أغلق الأبواب لاحتواء الدخان.','نعم'],
+    ['fire','حريق','DONT',1,'fa-elevator','لا تستخدم المصاعد.','نعم'],
+    ['fire','حريق','DONT',2,'fa-hand','لا تفتح بابًا ساخنًا.','نعم'],
+
+    // power
+    ['power','انقطاع كهرباء','DO',1,'fa-battery-full','ثبّت الأجهزة الحرجة على UPS/بطاريات.','نعم'],
+    ['power','انقطاع كهرباء','DO',2,'fa-tools','بلّغ الصيانة وEOC لتأكيد تشغيل المولد.','نعم'],
+    ['power','انقطاع كهرباء','DONT',1,'fa-plug','لا تشغّل أحمال إضافية بدون توجيه.','نعم'],
+
+    // water
+    ['water','تسرب مياه','DO',1,'fa-triangle-exclamation','أبعد الناس عن منطقة التسرب.','نعم'],
+    ['water','تسرب مياه','DO',2,'fa-bolt','افصل الكهرباء عن المنطقة إن لزم.','نعم'],
+    ['water','تسرب مياه','DONT',1,'fa-plug-circle-xmark','لا تلمس مقابس/أسلاك قرب الماء.','نعم'],
+
+    // injury
+    ['injury','إغماء/إصابة','DO',1,'fa-user-check','أمّن المكان وافحص الاستجابة والتنفس.','نعم'],
+    ['injury','إغماء/إصابة','DO',2,'fa-phone','اطلب المساعدة وأحضر AED إن توفر.','نعم'],
+    ['injury','إغماء/إصابة','DONT',1,'fa-arrows-up-down-left-right','لا تحرك المصاب مع اشتباه العمود الفقري.','نعم'],
+
+    // outbreak
+    ['outbreak','تفشي مرض','DO',1,'fa-lock','عزل فوري للحالة/المنطقة وتقييد الدخول.','نعم'],
+    ['outbreak','تفشي مرض','DO',2,'fa-mask-face','استخدم معدات الوقاية المناسبة.','نعم'],
+    ['outbreak','تفشي مرض','DONT',1,'fa-people-group','لا تسمح بتجمعات داخل منطقة العزل.','نعم'],
+  ];
+  sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+}
+/******************** END BOOTSTRAP ********************/
+
+✅ أهم خطوة: نُشغّل الـBootstrap تلقائيًا
+
+في أول سطر داخل doGet(e) وداخل doPost(e) (بداية الدالة) أضف:
+
+ensureEocReady_();
+
+
+هذا يخلي الشيتات تتجهز تلقائيًا مع أول استخدام للمنظومة (بدون ما تدخل أنت تسويها).
+وبما أن doGet/doPost هي نقطة دخول الـWeb App، هذا مطابق لدليل Google. 
+Google for Developers
+
+3) أضف Actions لقراءة الكونفيج من الشيت (حتى الواجهة تبني الخريطة تلقائيًا)
+
+أضف هذه الدوال في Apps Script:
+
+function getBuildingConfig() {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+    const mapSh = ss.getSheetByName(SHEET_MAP);
+    const mustSh = ss.getSheetByName(SHEET_MUSTER);
+
+    const map = mapSh ? mapSh.getDataRange().getValues() : [];
+    const mus = mustSh ? mustSh.getDataRange().getValues() : [];
+
+    const floorsByKey = {};
+    for (let i=1; i<map.length; i++){
+      const r = map[i];
+      const active = String(r[6]||'').trim();
+      if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+
+      const floorOrder = Number(r[0]);
+      const floorKey = String(r[1]||'').trim();
+      const floorName = String(r[2]||'').trim();
+      const deptId = String(r[3]||'').trim();
+      const deptName = String(r[4]||'').trim();
+      const deptIcon = String(r[5]||'').trim(); // FontAwesome class like fa-tooth
+
+      const k = floorKey || String(floorOrder);
+      if (!floorsByKey[k]) {
+        floorsByKey[k] = { floorOrder, floorKey: k, floorName, departments: [] };
+      }
+      floorsByKey[k].departments.push({ id: deptId, name: deptName, icon: deptIcon });
+    }
+
+    const floors = Object.values(floorsByKey).sort((a,b)=>b.floorOrder-a.floorOrder);
+
+    const muster = [];
+    for (let i=1; i<mus.length; i++){
+      const r = mus[i];
+      const active = String(r[3]||'').trim();
+      if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+      muster.push({
+        key: String(r[0]||'').trim(),
+        name: String(r[1]||'').trim(),
+        desc: String(r[2]||'').trim()
+      });
+    }
+
+    return { ok:true, floors, muster };
+  } catch(err){
+    return { ok:false, error: err.message };
+  }
+}
+
+function getScenarioGuides() {
+  try {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_SCENARIOS);
+    const data = sh ? sh.getDataRange().getValues() : [];
+
+    const out = {};
+    for (let i=1; i<data.length; i++){
+      const r = data[i];
+      const active = String(r[6]||'').trim();
+      if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+
+      const key = String(r[0]||'').trim();
+      const label = String(r[1]||'').trim();
+      const bucket = String(r[2]||'').trim(); // DO / DONT
+      const stepNo = Number(r[3]||0);
+      const icon = String(r[4]||'').trim();
+      const text = String(r[5]||'').trim();
+
+      if (!out[key]) out[key] = { key, label, DO: [], DONT: [] };
+      out[key].label = label;
+
+      out[key][bucket] = out[key][bucket] || [];
+      out[key][bucket].push({ stepNo, icon, text });
+    }
+
+    // ترتيب
+    Object.values(out).forEach(s=>{
+      if (s.DO) s.DO.sort((a,b)=>a.stepNo-b.stepNo);
+      if (s.DONT) s.DONT.sort((a,b)=>a.stepNo-b.stepNo);
+    });
+
+    return { ok:true, scenarios: out };
+  } catch(err){
+    return { ok:false, error: err.message };
+  }
+}
+
+
+ثم داخل doGet(e) أضف:
+
+if (action === 'getBuildingConfig') return output_(getBuildingConfig());
+if (action === 'getScenarioGuides') return output_(getScenarioGuides());
+
+
+ContentService/JSONP موثق رسميًا في دليل Google. 
+Google for Developers
++1
+
+4) تعديل بسيط في eoc-command.html: بدل ما الخريطة ثابتة… تبنيها من الشيت
+
+بدون ما أعيد كتابة ملفك كله، هذا “باتش” سريع:
+
+A) في الـHTML: أعطِ حاويات IDs
+
+استبدل:
+
+<div class="building-view"> ... </div>
+
+
+بـ:
+
+<div class="building-view" id="buildingView"></div>
+
+
+واستبدل:
+
+<div class="muster-points"> ... </div>
+
+
+بـ:
+
+<div class="muster-points" id="musterPoints"></div>
+
+B) في JS: أضف هذا
+let BUILDING_CFG = null;
+let deptNames = {};
+let floorDepts = {};
+let musterInfo = {};
+
+async function initBuildingFromSheet(){
+  const res = await window.__eocJsonp('getBuildingConfig', {});
+  if (!res || !res.ok) {
+    console.error('getBuildingConfig failed', res);
+    return;
+  }
+  BUILDING_CFG = res;
+
+  // lookups
+  deptNames = {};
+  floorDepts = {};
+  (res.floors || []).forEach(f=>{
+    floorDepts[Number(f.floorOrder)] = [];
+    (f.departments || []).forEach(d=>{
+      deptNames[d.id] = d.name;
+      floorDepts[Number(f.floorOrder)].push(d.id);
+    });
+  });
+
+  musterInfo = {};
+  (res.muster || []).forEach(m=>{
+    musterInfo[m.key] = `${m.name} - ${m.desc}`;
+  });
+
+  renderBuilding(res);
+  renderMuster(res);
+}
+
+function renderBuilding(cfg){
+  const view = document.getElementById('buildingView');
+  if (!view) return;
+
+  view.innerHTML = (cfg.floors || []).map(f => `
+    <div class="floor" data-floor="${f.floorOrder}" onclick="selectFloor(${f.floorOrder})">
+      <div class="floor-header">
+        <div class="floor-name">
+          <div class="floor-icon"><i class="fas fa-building"></i></div>
+          <span>${f.floorName}</span>
+        </div>
+        <span class="floor-status safe" id="floor${f.floorOrder}-status">آمن</span>
+      </div>
+      <div class="departments-grid">
+        ${(f.departments||[]).map(d=>`
+          <div class="dept-card" onclick="event.stopPropagation(); selectDept('${d.id}')">
+            <i class="fas ${d.icon || 'fa-circle-info'}"></i>
+            ${d.name}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderMuster(cfg){
+  const box = document.getElementById('musterPoints');
+  if (!box) return;
+
+  box.innerHTML = (cfg.muster || []).map(m => `
+    <div class="muster-card" id="muster${m.key}" onclick="toggleMusterPoint('${m.key}')">
+      <i class="fas fa-map-marker-alt"></i>
+      <h4>${m.name}</h4>
+      <p>${m.desc}</p>
+    </div>
+  `).join('');
+}
+
+// شغلها عند التحميل
+document.addEventListener('DOMContentLoaded', () => {
+  initBuildingFromSheet();
+});
+
+
+الآن أي تعديل في الشيت:
+
+تضيف صف جديد في EOC_MAP ⇒ يظهر دور/قسم جديد تلقائيًا
+
+تغيّر اسم ⇒ يتغير في الصفحة
+
+تحذف/تعطّل active ⇒ يختفي
+
+5) الخطوة اللي بعدها (بعد ما الشيت صار جاهز)
+
+استبدال traineesData في التدريب بتحميل roster من Training_Roster (بدل أسماء وهمية).
+
+ربط “سجل التدريب” بـ getTrainingSessions (بدل getDrillLog).
+
+توحيد الإرسال للشاشة النهائية: real/training + scenarioKey.
+
+ملاحظة تشغيلية
+
+بعد أي تعديل على Apps Script لازم Deploy نسخة جديدة للـWeb App عشان /exec يقرأ آخر نسخة. هذا ضمن دليل Web Apps. 
+Google for Developers
