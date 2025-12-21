@@ -69,13 +69,16 @@
       border:1px solid rgba(16,185,129,.45);
       color:var(--success);
       background:rgba(16,185,129,.12);
+      cursor:pointer;user-select:none;
     }
+    .status-badge:hover{filter:brightness(1.06)}
     .status-badge.alert{
       border-color:rgba(220,20,60,.6);
       color:var(--danger);
       background:rgba(220,20,60,.14);
       animation:pulse 1.5s infinite;
     }
+    .status-badge.alert:hover{filter:brightness(1.10)}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 
     .main-container{
@@ -570,7 +573,10 @@
         <i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ
       </a>
 
-      <div class="status-badge" id="systemStatus">
+      <div class="status-badge" id="systemStatus"
+           role="button" tabindex="0"
+           onclick="onStatusBadgeClick()"
+           onkeydown="if(event.key==='Enter' || event.key===' '){event.preventDefault(); onStatusBadgeClick();}">
         <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
       </div>
 
@@ -606,10 +612,6 @@
           <button class="main-activate-btn" onclick="openActivationModal()" style="flex:1;min-width:150px">
             <i class="fas fa-bell"></i>
             <span>تفعيل حالة الطوارئ</span>
-          </button>
-          <button class="main-cancel-btn" id="cancelEmergencyBtn" onclick="cancelActiveCommand()" style="flex:1;min-width:150px;display:none">
-            <i class="fas fa-stop-circle"></i>
-            <span>إلغاء حالة الطوارئ</span>
           </button>
         </div>
         <div style="margin-top:10px;color:var(--muted);font-weight:800;font-size:.9rem;line-height:1.6">
@@ -1070,10 +1072,130 @@
       if (!el) return;
       if (on){
         el.classList.add('alert');
-        el.innerHTML = `<i class="fas fa-triangle-exclamation"></i><span>${escapeHtml(label || 'حالة طوارئ')}</span>`;
+        el.innerHTML = `<i class="fas fa-stop-circle"></i><span>${escapeHtml(label || 'إلغاء حالة الطوارئ')}</span>`;
       } else {
         el.classList.remove('alert');
         el.innerHTML = `<i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>`;
+      }
+    }
+
+    /******************************************************
+     * Emergency Alarm Sound System
+     ******************************************************/
+    let alarmAudioCtx = null;
+    let alarmOscillator = null;
+    let alarmGain = null;
+    let alarmInterval = null;
+
+    function playAlarmSound(){
+      try {
+        // Stop any existing alarm
+        stopAlarmSound();
+
+        alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        alarmGain = alarmAudioCtx.createGain();
+        alarmGain.connect(alarmAudioCtx.destination);
+        alarmGain.gain.value = 0.8;
+
+        let isHigh = true;
+        function beep(){
+          if (alarmOscillator) {
+            try { alarmOscillator.stop(); } catch(e){}
+          }
+          alarmOscillator = alarmAudioCtx.createOscillator();
+          alarmOscillator.type = 'square';
+          alarmOscillator.frequency.value = isHigh ? 880 : 440;
+          alarmOscillator.connect(alarmGain);
+          alarmOscillator.start();
+          isHigh = !isHigh;
+        }
+
+        beep();
+        alarmInterval = setInterval(beep, 500);
+
+        // Auto-stop after 10 seconds
+        setTimeout(stopAlarmSound, 10000);
+      } catch(e){
+        console.warn('Could not play alarm:', e);
+      }
+    }
+
+    function stopAlarmSound(){
+      if (alarmInterval) {
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+      }
+      if (alarmOscillator) {
+        try { alarmOscillator.stop(); } catch(e){}
+        alarmOscillator = null;
+      }
+      if (alarmAudioCtx) {
+        try { alarmAudioCtx.close(); } catch(e){}
+        alarmAudioCtx = null;
+      }
+    }
+
+    /******************************************************
+     * Active Command Sync & Status Badge Click
+     ******************************************************/
+    let ACTIVE_CMD_CACHE = null;
+
+    async function syncActiveCommandUI() {
+      try {
+        const ac = await jsonp('getActiveCommand', {});
+        const cmd = (ac && ac.ok) ? ac.command : null;
+
+        if (cmd && (cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
+          ACTIVE_CMD_CACHE = cmd;
+
+          const isTraining =
+            String(cmd.mode || '').toLowerCase() === 'training' ||
+            String(cmd.reportType || '').includes('تمرين') ||
+            String(cmd.reportType || '').includes('🎯');
+
+          setStatusAlert(true, isTraining ? 'إيقاف التمرين' : 'إلغاء حالة الطوارئ');
+        } else {
+          ACTIVE_CMD_CACHE = null;
+          setStatusAlert(false);
+        }
+      } catch (e) {
+        console.error('syncActiveCommandUI:', e);
+      }
+    }
+
+    async function onStatusBadgeClick(){
+      try {
+        const ac = await jsonp('getActiveCommand', {});
+        const cmd = (ac && ac.ok) ? ac.command : null;
+
+        if (!cmd || !(cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
+          toast('لا توجد حالة طوارئ نشطة حالياً', 'info');
+          return;
+        }
+
+        const isTraining =
+          String(cmd.mode || '').toLowerCase() === 'training' ||
+          String(cmd.reportType || '').includes('تمرين') ||
+          String(cmd.reportType || '').includes('🎯');
+
+        const who = prompt(isTraining ? 'اسم من يريد إيقاف التمرين:' : 'اسم من يريد إلغاء حالة الطوارئ:');
+        if (!who) return;
+        const reason = prompt('سبب الإغلاق (اختياري):') || '';
+
+        const res = await jsonp('closeActiveCommand', {
+          closedBy: who,
+          closeReason: reason
+        });
+
+        if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+        stopAlarmSound();
+        toast(isTraining ? 'تم إيقاف التمرين' : 'تم إلغاء حالة الطوارئ', 'success');
+        await syncActiveCommandUI();
+        await refreshLists();
+      } catch (e) {
+        console.error(e);
+        toast('فشل الإلغاء — تأكد من إضافة closeActiveCommand في Apps Script', 'error');
       }
     }
 
@@ -1732,9 +1854,9 @@
           localStorage.setItem('eoc_alerted_reports', JSON.stringify(Array.from(APP.alerted)));
 
           const r = newOnes[0];
-          // alert
-          setStatusAlert(true, 'بلاغ جديد!');
-          toast('بلاغ جديد: ' + (r.type || ''), 'warn');
+          // alert with loud sound
+          playAlarmSound();
+          toast('🚨 بلاغ طوارئ جديد: ' + (r.type || ''), 'error');
           highlightLocation(r.location);
 
           // open response flow
@@ -1988,39 +2110,10 @@
         if (!r || !r.ok) throw new Error(r?.error || 'clearActiveCommand failed');
         toast('تم إيقاف عرض التمرين على الشاشات', 'success');
         setStatusAlert(false);
-        updateCancelButtonVisibility();
+        await syncActiveCommandUI();
       } catch(e){
         console.error(e);
         toast('تعذر إيقاف العرض', 'error');
-      }
-    }
-
-    async function cancelActiveCommand(){
-      if (!confirm('هل تريد إلغاء حالة الطوارئ النشطة؟')) return;
-      try{
-        const r = await jsonp('clearActiveCommand', {});
-        if (!r || !r.ok) throw new Error(r?.error || 'clearActiveCommand failed');
-        toast('تم إلغاء حالة الطوارئ', 'success');
-        setStatusAlert(false);
-        updateCancelButtonVisibility();
-      } catch(e){
-        console.error(e);
-        toast('تعذر إلغاء حالة الطوارئ', 'error');
-      }
-    }
-
-    async function updateCancelButtonVisibility(){
-      try{
-        const ac = await jsonp('getActiveCommand', {});
-        const cmd = (ac && ac.ok) ? ac.command : null;
-        const btn = document.getElementById('cancelEmergencyBtn');
-        if (cmd && cmd.active) {
-          btn.style.display = 'flex';
-        } else {
-          btn.style.display = 'none';
-        }
-      } catch(e){
-        console.error(e);
       }
     }
 
@@ -2259,7 +2352,7 @@
       await pollReports();
 
       // check if emergency is active
-      await updateCancelButtonVisibility();
+      await syncActiveCommandUI();
 
       // polling every 5 seconds
       setInterval(pollReports, 5000);
@@ -2267,8 +2360,8 @@
       // small refresh training list every 30s
       setInterval(refreshMiniTraining, 30000);
 
-      // check cancel button every 10 seconds
-      setInterval(updateCancelButtonVisibility, 10000);
+      // sync active command every 5 seconds
+      setInterval(syncActiveCommandUI, 5000);
     }
 
     document.addEventListener('DOMContentLoaded', init);

@@ -273,6 +273,11 @@
       const result = clearActiveCommand();
       return output_(result);
     }
+
+    if (action === 'closeActiveCommand') {
+      const result = closeActiveCommand(p);
+      return output_(result);
+    }
     
     if (action === 'getEocDrills') {
       const result = getEocDrills(p);
@@ -935,6 +940,62 @@
       sheet.getRange(2, 1).setValue(false);
       SpreadsheetApp.flush();
       return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /** إغلاق رسمي للأمر النشط مع تسجيل من أغلق ولماذا */
+  function closeActiveCommand(params) {
+    ensureEocReady_();
+    const closedBy = String(params.closedBy || '').trim();
+    if (!closedBy) return { ok: false, error: 'closedBy is required' };
+
+    const closeReason = String(params.closeReason || '').trim();
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) return { ok: false, error: 'No active command sheet' };
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return { ok: false, error: 'No active command' };
+
+      const data = sheet.getDataRange().getValues();
+      const row = data[1];
+      if (!isTrueFlag_(row[0])) return { ok: false, error: 'No active command' };
+
+      // Set active to false
+      sheet.getRange(2, 1).setValue(false);
+
+      // Log closure to Training_Log if it was a training, or to emergency reports log
+      const mode = String(row[6] || 'real').toLowerCase();
+      const endTs = new Date().toISOString();
+
+      // Try to log in EOC_COMMAND_LOG if exists
+      let logSh = ss.getSheetByName('EOC_COMMAND_LOG');
+      if (!logSh) {
+        logSh = ss.insertSheet('EOC_COMMAND_LOG');
+        logSh.getRange(1,1,1,8).setValues([['timestamp', 'action', 'mode', 'responseType', 'location', 'closedBy', 'closeReason', 'notes']]);
+      }
+
+      logSh.appendRow([
+        endTs,
+        'close',
+        mode,
+        String(row[1] || ''),
+        String(row[3] || ''),
+        closedBy,
+        closeReason,
+        mode === 'training' ? 'إيقاف تمرين' : 'إلغاء طوارئ'
+      ]);
+
+      SpreadsheetApp.flush();
+      return { ok: true, closedAt: endTs };
     } catch (err) {
       return { ok: false, error: err.message };
     } finally {

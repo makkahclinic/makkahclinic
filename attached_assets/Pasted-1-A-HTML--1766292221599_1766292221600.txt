@@ -1,0 +1,383 @@
+1) “الوضع طبيعي” تتحول أحمر نابض وقت الطوارئ وتكون قابلة للنقر للإلغاء
+(A) تعديل الـ HTML في الهيدر
+
+ابحث عن هذا:
+
+<div class="status-badge" id="systemStatus">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</div>
+
+
+استبدله بهذا:
+
+<div class="status-badge" id="systemStatus"
+     role="button" tabindex="0"
+     onclick="onStatusBadgeClick()"
+     onkeydown="if(event.key==='Enter' || event.key===' '){event.preventDefault(); onStatusBadgeClick();}">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</div>
+
+(B) تعديل CSS للـ status badge (عشان يكون واضح أنه clickable)
+
+داخل CSS عند .status-badge{...} أضف:
+
+.status-badge{ cursor:pointer; user-select:none; }
+.status-badge:hover{ filter: brightness(1.06); }
+.status-badge.alert:hover{ filter: brightness(1.10); }
+
+(C) احذف زر الإلغاء الموجود داخل الكارد (لأن الإلغاء يصير من الشارة نفسها)
+
+ابحث عن هذا في كارد التفعيل:
+
+<button class="main-cancel-btn" id="cancelEmergencyBtn" onclick="cancelActiveCommand()" style="flex:1;min-width:150px;display:none">
+  <i class="fas fa-stop-circle"></i>
+  <span>إلغاء حالة الطوارئ</span>
+</button>
+
+
+امسحه بالكامل.
+
+ثم امسح CSS الخاص به (لأنه صار غير مستخدم). ابحث عن:
+
+.main-cancel-btn{...}
+.main-cancel-btn:hover{...}
+
+
+وامسح البلوكين.
+
+كذا تكون “حركة الإلغاء” مو مكررة في مكانين، وكل شيء موحد من الشارة فوق.
+
+(D) تعديل JavaScript: خلّي الشارة تتزامن مع الأمر النشط من السيرفر
+1) أضف هذه الدوال (ضعها بعد jsonp() مباشرة)
+let ACTIVE_CMD_CACHE = null;
+
+async function syncActiveCommandUI() {
+  try {
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = (ac && ac.ok) ? ac.command : null;
+
+    // cmd في كودك الحالي قد يرجع null أو {active:true,...}
+    if (cmd && (cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
+      ACTIVE_CMD_CACHE = cmd;
+
+      const isTraining =
+        String(cmd.mode || '').toLowerCase() === 'training' ||
+        String(cmd.reportType || '').includes('تمرين') ||
+        String(cmd.reportType || '').includes('🎯');
+
+      setStatusAlert(true, isTraining ? 'إيقاف التمرين' : 'إلغاء حالة الطوارئ');
+    } else {
+      ACTIVE_CMD_CACHE = null;
+      setStatusAlert(false);
+    }
+  } catch (e) {
+    console.error('syncActiveCommandUI:', e);
+  }
+}
+
+function setStatusAlert(on, label){
+  const el = document.getElementById('systemStatus');
+  if (!el) return;
+
+  if (on){
+    el.classList.add('alert');
+    el.innerHTML = `<i class="fas fa-stop-circle"></i><span>${escapeHtml(label || 'إلغاء حالة الطوارئ')}</span>`;
+  } else {
+    el.classList.remove('alert');
+    el.innerHTML = `<i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>`;
+  }
+}
+
+/**
+ * عند الضغط على الشارة:
+ * - إذا ما فيه أمر نشط: لا تسوي شيء (أو افتح التفعيل لو تبغى)
+ * - إذا فيه أمر: اطلب الاسم + السبب -> أغلق عبر closeActiveCommand (مع سجل)
+ */
+async function onStatusBadgeClick(){
+  try {
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = (ac && ac.ok) ? ac.command : null;
+
+    if (!cmd || !(cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
+      toast('لا توجد حالة طوارئ نشطة حالياً', 'info');
+      return;
+    }
+
+    const isTraining =
+      String(cmd.mode || '').toLowerCase() === 'training' ||
+      String(cmd.reportType || '').includes('تمرين') ||
+      String(cmd.reportType || '').includes('🎯');
+
+    const who = prompt(isTraining ? 'اسم من يريد إيقاف التمرين:' : 'اسم من يريد إلغاء حالة الطوارئ:');
+    if (!who) return;
+    const reason = prompt('سبب الإغلاق (اختياري):') || '';
+
+    // الأفضل: closeActiveCommand (يعتمد على تعديل Apps Script بالأسفل)
+    const res = await jsonp('closeActiveCommand', {
+      closedBy: who,
+      closeReason: reason
+    });
+
+    if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+    toast(isTraining ? 'تم إيقاف التمرين' : 'تم إلغاء حالة الطوارئ', 'success');
+    await syncActiveCommandUI();
+    await refreshLists?.(); // إذا عندك هذه الدالة
+  } catch (e) {
+    console.error(e);
+    toast('فشل الإلغاء — تأكد أنك أضفت closeActiveCommand في Apps Script', 'error');
+  }
+}
+
+2) احذف أي استدعاء قديم لإظهار/إخفاء زر الإلغاء
+
+ابحث واحذف:
+
+updateCancelButtonVisibility() (الدالة بالكامل)
+
+وأي setInterval(updateCancelButtonVisibility, ...)
+
+وأي استدعاء await updateCancelButtonVisibility();
+
+3) في init() (أو DOMContentLoaded) أضف مزامنة الحالة
+
+ابحث عن آخر await updateCancelButtonVisibility(); (أو مكانها) وضع بدلها:
+
+await syncActiveCommandUI();
+setInterval(syncActiveCommandUI, 5000);
+
+4) في pollReports() امسح هذا السطر
+
+إذا عندك:
+
+setStatusAlert(true, 'بلاغ جديد!');
+
+
+امسحه.
+الشارة الآن تمثل “أمر نشط” فقط، والبلاغ الجديد يظهر بالـ toast + نافذة القرار.
+
+2) هل مشكلة التدريب اتحلت؟ (الحفظ + ظهور المتدربين من الشيت)
+(A) حفظ التدريب
+
+في كودك الحالي (الذي أرسلته) أنت تستخدم:
+
+const res = await jsonp('logTrainingSession', payload);
+
+
+وهذا صح لأن الـ Apps Script عندك فيه action === 'logTrainingSession'.
+
+لو ما زال “حفظ جلسة التدريب” لا يحفظ، غالباً واحد من التالي:
+
+الـ WEB_APP_URL مو نفس آخر Deploy (أنت تعدل سكربت لكن ما عملت Deploy نسخة جديدة).
+
+أنت تفتح شيت غلط: الحفظ يتم في Training_Log داخل ملف EOC_SPREADSHEET_ID.
+
+اسم الـ action في الواجهة لا يطابق Apps Script (لازم يكون logTrainingSession حرفياً).
+
+(B) ليش قائمة المتدربين ما كانت تجي من الإكسل؟
+
+لأن الواجهة تقرأ من شيت Training_Roster عبر getTrainingRoster() وليس من شيت Staff.
+إذا Training_Roster فاضي → القائمة تطلع فاضية.
+
+أفضل حل “بدون تعب يدوي”: نخلي Apps Script ينسخ تلقائياً من Staff إلى Training_Roster إذا كان roster فاضي (تعديل بالأسفل).
+
+4) العيب الجوهري: ريفريش الصفحة يلخبط/يلغي “القفل” — لازم إغلاق رسمي باسم + سبب + سجل
+
+الحل الصحيح لازم يكون من السيرفر (Apps Script) مو من الواجهة فقط:
+
+منع overwrite: إذا فيه أمر نشط، setActiveCommand يرفض إصدار أمر جديد إلا إذا وضعت force=true.
+
+إغلاق رسمي: closeActiveCommand(closedBy, closeReason)
+
+يغيّر active → false
+
+يسجل في سجل أوامر (Command Log) من بدأ/من أغلق/الوقت/السبب
+
+هذا يتوافق مع توصية استخدام LockService للكتابة الآمنة على الشيت.
+
+(A) تعديلات Apps Script (انسخ/الصق)
+1) في قسم الـ BOOTSTRAP constants أضف:
+const SHEET_CMD_LOG = 'EOC_COMMAND_LOG';
+const HEADERS_CMD_LOG = [
+  'command_id','start_ts','end_ts',
+  'mode','responseType','reportType','location','muster',
+  'scenarioKey','scenarioLabel','issuedBy','closedBy','closeReason','reportId'
+];
+
+2) داخل setupEocWorkbook_() أضف:
+ensureSheet_(ss, SHEET_CMD_LOG, HEADERS_CMD_LOG);
+
+3) داخل doGet(e) أضف route جديد:
+if (action === 'closeActiveCommand') {
+  const result = closeActiveCommand(p);
+  return output_(result);
+}
+
+4) استبدل دالة setActiveCommand(params) عندك بهذه النسخة (تحمي من overwrite + تسجل البداية):
+function setActiveCommand(params) {
+  try {
+    const lock = LockService.getScriptLock();
+    lock.tryLock(10000);
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+    // Ensure sheets
+    ensureSheet_(ss, SHEET_ACTIVE_CMD, HEADERS_ACTIVE);
+    ensureSheet_(ss, SHEET_CMD_LOG, HEADERS_CMD_LOG);
+
+    const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    const logSh = ss.getSheetByName(SHEET_CMD_LOG);
+
+    const data = sheet.getDataRange().getValues();
+    let hasActive = false;
+    let existing = null;
+
+    if (data.length >= 2) {
+      const flag = String(data[1][0] || '').toLowerCase().trim();
+      hasActive = (flag === 'true' || flag === 'yes' || flag === '1');
+      if (hasActive) {
+        existing = {
+          responseType: data[1][1],
+          reportType: data[1][2],
+          location: data[1][3],
+          muster: data[1][4],
+          timestamp: data[1][5],
+          mode: data[1][6] || 'real',
+          scenarioKey: data[1][7] || '',
+          scenarioLabel: data[1][8] || '',
+          sessionId: data[1][9] || '',
+          trainer: data[1][10] || ''
+        };
+      }
+    }
+
+    const force = String(params.force || '').toLowerCase().trim();
+    const isForce = (force === 'true' || force === 'yes' || force === '1');
+
+    if (hasActive && !isForce) {
+      lock.releaseLock();
+      return { ok: false, error: 'ACTIVE_COMMAND_EXISTS', command: existing };
+    }
+
+    // clear old rows
+    if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+
+    const cmdId = String(params.commandId || ('CMD-' + Date.now()));
+    const ts = new Date().toISOString();
+
+    const row = [
+      'true',
+      String(params.responseType || ''),
+      String(params.reportType || ''),
+      String(params.location || ''),
+      String(params.muster || ''),
+      ts,
+      String(params.mode || 'real'),
+      String(params.scenarioKey || ''),
+      String(params.scenarioLabel || ''),
+      String(params.sessionId || ''),
+      String(params.trainer || '')
+    ];
+    sheet.appendRow(row);
+
+    // log start
+    logSh.appendRow([
+      cmdId, ts, '',
+      String(params.mode || 'real'),
+      String(params.responseType || ''),
+      String(params.reportType || ''),
+      String(params.location || ''),
+      String(params.muster || ''),
+      String(params.scenarioKey || ''),
+      String(params.scenarioLabel || ''),
+      String(params.issuedBy || ''),
+      '', '', String(params.reportId || '')
+    ]);
+
+    lock.releaseLock();
+    return { ok: true, commandId: cmdId, timestamp: ts };
+  } catch (err) {
+    try { LockService.getScriptLock().releaseLock(); } catch(e) {}
+    return { ok: false, error: err.message };
+  }
+}
+
+5) أضف دالة closeActiveCommand(params) (تسجل الإغلاق باسم + سبب):
+function closeActiveCommand(params) {
+  try {
+    const closedBy = String(params.closedBy || '').trim();
+    if (!closedBy) return { ok: false, error: 'closedBy is required' };
+
+    const closeReason = String(params.closeReason || '').trim();
+
+    const lock = LockService.getScriptLock();
+    lock.tryLock(10000);
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    ensureSheet_(ss, SHEET_ACTIVE_CMD, HEADERS_ACTIVE);
+    ensureSheet_(ss, SHEET_CMD_LOG, HEADERS_CMD_LOG);
+
+    const sh = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    const logSh = ss.getSheetByName(SHEET_CMD_LOG);
+
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) {
+      lock.releaseLock();
+      return { ok: false, error: 'No active command' };
+    }
+
+    const row = data[1];
+    const flag = String(row[0] || '').toLowerCase().trim();
+    const isActive = (flag === 'true' || flag === 'yes' || flag === '1');
+    if (!isActive) {
+      lock.releaseLock();
+      return { ok: false, error: 'No active command' };
+    }
+
+    const endTs = new Date().toISOString();
+    sh.getRange(2, 1).setValue('false');
+
+    // find last log row for this command (best effort)
+    const logData = logSh.getDataRange().getValues();
+    for (let i = logData.length - 1; i >= 1; i--) {
+      // end_ts is col 3; close only the latest open row
+      const endCell = String(logData[i][2] || '').trim();
+      if (!endCell) {
+        logSh.getRange(i + 1, 3).setValue(endTs);              // end_ts
+        logSh.getRange(i + 1, 12).setValue(closedBy);          // closedBy
+        logSh.getRange(i + 1, 13).setValue(closeReason);       // closeReason
+        break;
+      }
+    }
+
+    lock.releaseLock();
+    return { ok: true, endTs: endTs, closedBy: closedBy };
+  } catch (err) {
+    try { LockService.getScriptLock().releaseLock(); } catch(e) {}
+    return { ok: false, error: err.message };
+  }
+}
+
+6) عدّل getActiveCommand() ليُرجع mode/trainer… (عشان الواجهة تعرف تدريب ولا طوارئ)
+
+استبدل return داخل getActiveCommand() بهذا الشكل:
+
+return {
+  ok: true,
+  command: {
+    active: true,
+    responseType: row[1],
+    reportType: row[2],
+    location: row[3],
+    muster: row[4],
+    timestamp: row[5],
+    mode: row[6] || 'real',
+    scenarioKey: row[7] || '',
+    scenarioLabel: row[8] || '',
+    sessionId: row[9] || '',
+    trainer: row[10] || ''
+  }
+};
+
+
+مهم: كل هذه النقطة (LockService + منع overwrite + سجل إغلاق) عشان ما يصير “ريفريش” أو أي مستخدم يغيّر الحالة بدون توثيق.
