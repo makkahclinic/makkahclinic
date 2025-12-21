@@ -173,6 +173,77 @@
         .emergency-screen.active {
             display: block;
         }
+        
+        /* Badge تمرين */
+        .drill-badge {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            animation: drillPulse 1.5s infinite;
+            box-shadow: 0 0 30px rgba(34, 197, 94, 0.6);
+        }
+        
+        @keyframes drillPulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(34, 197, 94, 0.6); }
+            50% { box-shadow: 0 0 50px rgba(34, 197, 94, 0.9); }
+        }
+        
+        body.drill {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            animation: none !important;
+        }
+        
+        /* ملخص الخطوات */
+        .steps-summary {
+            background: rgba(0,0,0,0.5);
+            border-radius: 12px;
+            padding: 12px;
+            margin: 10px 0;
+            text-align: right;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .steps-summary h3 {
+            color: #fbbf24;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+        
+        .step-item-mini {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .step-item-mini:last-child {
+            border-bottom: none;
+        }
+        
+        .step-num-mini {
+            background: #fbbf24;
+            color: #000;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        
+        .step-text-mini {
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
 
         .emergency-logo {
             width: 60px;
@@ -474,6 +545,9 @@
             <div class="emergency-logo">
                 <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع">
             </div>
+            <div class="drill-badge" id="drillBadge" style="display: none;">
+                🎯 تمرين - DRILL
+            </div>
             <div class="emergency-icon" id="emergencyIcon">
                 <i class="fas fa-exclamation-triangle"></i>
             </div>
@@ -483,6 +557,12 @@
             <div class="instruction-box">
                 <h2 id="instructionTitle">التوجيهات:</h2>
                 <div class="location" id="emergencyLocation">-</div>
+            </div>
+            
+            <!-- ملخص الخطوات -->
+            <div class="steps-summary" id="stepsSummary" style="display: none;">
+                <h3><i class="fas fa-list-ol"></i> الخطوات:</h3>
+                <div id="stepsContent"></div>
             </div>
             
             <div class="muster-point" id="musterSection" style="display: none;">
@@ -722,6 +802,21 @@
             }
         }
 
+        // الخطوات لكل نوع طوارئ
+        const scenarioSteps = {
+            'fire': ['أنقذ أي شخص في خطر', 'اضغط زر الإنذار وأبلغ 998', 'أغلق الأبواب لمنع الدخان', 'أخلِ المبنى فوراً', 'لا تستخدم المصعد!'],
+            'حريق': ['أنقذ أي شخص في خطر', 'اضغط زر الإنذار وأبلغ 998', 'أغلق الأبواب لمنع الدخان', 'أخلِ المبنى فوراً', 'لا تستخدم المصعد!'],
+            'power': ['تأكد من تشغيل المولد', 'تحقق من UPS والأجهزة', 'طمئن المرضى', 'أبلغ فريق الصيانة'],
+            'كهرباء': ['تأكد من تشغيل المولد', 'تحقق من UPS والأجهزة', 'طمئن المرضى', 'أبلغ فريق الصيانة'],
+            'water': ['أغلق محبس المياه', 'أبعد الأجهزة الكهربائية', 'ضع علامات تحذيرية', 'أبلغ الصيانة'],
+            'مياه': ['أغلق محبس المياه', 'أبعد الأجهزة الكهربائية', 'ضع علامات تحذيرية', 'أبلغ الصيانة'],
+            'injury': ['تأمين المكان', 'افحص الوعي والتنفس', 'اتصل بـ 997', 'قدم الإسعافات الأولية'],
+            'إغماء': ['تأمين المكان', 'افحص الوعي والتنفس', 'اتصل بـ 997', 'قدم الإسعافات الأولية'],
+            'إصابة': ['تأمين المكان', 'افحص الوعي والتنفس', 'اتصل بـ 997', 'قدم الإسعافات الأولية'],
+            'infection': ['اعزل الحالة فوراً', 'ارتدِ معدات الوقاية', 'أبلغ مكافحة العدوى', 'تتبع المخالطين'],
+            'عدوى': ['اعزل الحالة فوراً', 'ارتدِ معدات الوقاية', 'أبلغ مكافحة العدوى', 'تتبع المخالطين']
+        };
+
         function activateEmergency(command) {
             currentCommand = command;
             commandStartTime = new Date(command.timestamp || Date.now());
@@ -731,8 +826,20 @@
 
             const resp = String(command.responseType || '').toLowerCase().trim();
             const rt = String(command.reportType || '');
+            const isDrill = command.isDrill === true || command.isDrill === 'true' || resp === 'drill' || rt.includes('تمرين');
             let bodyClass = 'other';
             let iconHtml = '<i class="fas fa-exclamation-triangle"></i>';
+            
+            // عرض/إخفاء badge التمرين
+            const drillBadge = document.getElementById('drillBadge');
+            if (isDrill) {
+                drillBadge.style.display = 'block';
+                bodyClass = 'drill';
+                iconHtml = '<i class="fas fa-clipboard-check"></i>';
+                document.getElementById('emergencyTitle').textContent = 'تمرين طوارئ';
+            } else {
+                drillBadge.style.display = 'none';
+            }
 
             // اللون حسب نوع الأمر (responseType) أولاً
             if (resp.includes('full_evacuation') || resp.includes('إخلاء') || resp.includes('اخلاء')) {
@@ -784,8 +891,38 @@
                 document.getElementById('musterSection').style.display = 'none';
                 document.getElementById('musterPoint').textContent = '-';
             }
+            
+            // عرض الخطوات
+            const stepsContainer = document.getElementById('stepsSummary');
+            const stepsContent = document.getElementById('stepsContent');
+            let steps = scenarioSteps[resp] || scenarioSteps[rt] || null;
+            
+            // محاولة البحث بالنص
+            if (!steps) {
+                for (let key in scenarioSteps) {
+                    if (rt.includes(key) || resp.includes(key)) {
+                        steps = scenarioSteps[key];
+                        break;
+                    }
+                }
+            }
+            
+            if (steps && steps.length > 0) {
+                stepsContent.innerHTML = steps.map((step, i) => `
+                    <div class="step-item-mini">
+                        <span class="step-num-mini">${i + 1}</span>
+                        <span class="step-text-mini">${step}</span>
+                    </div>
+                `).join('');
+                stepsContainer.style.display = 'block';
+            } else {
+                stepsContainer.style.display = 'none';
+            }
 
-            startSiren();
+            // تشغيل الصوت فقط إذا لم يكن تمرين
+            if (!isDrill) {
+                startSiren();
+            }
             startTimer();
         }
 
