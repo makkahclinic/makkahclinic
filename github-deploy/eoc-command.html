@@ -608,11 +608,16 @@
 
       <!-- DEBUG: Test Button - يمكن حذفه بعد حل المشكلة -->
       <div style="margin:10px 0;padding:10px;background:rgba(220,20,60,.15);border:2px dashed #dc143c;border-radius:12px;text-align:center">
-        <div style="color:#dc143c;font-weight:900;margin-bottom:8px"><i class="fas fa-bug"></i> اختبار تقني</div>
-        <button onclick="testAppsScript()" style="background:#dc143c;color:#fff;padding:10px 20px;border:0;border-radius:8px;cursor:pointer;font-weight:900;font-family:Tajawal">
-          <i class="fas fa-flask"></i> اختبار حفظ التدريب
-        </button>
-        <div style="color:#999;font-size:.8rem;margin-top:6px">اضغط هنا لاختبار اتصال Apps Script</div>
+        <div style="color:#dc143c;font-weight:900;margin-bottom:8px"><i class="fas fa-bug"></i> تشخيص المشكلة</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button onclick="testAppsScript()" style="background:#dc143c;color:#fff;padding:10px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:900;font-family:Tajawal">
+            <i class="fas fa-flask"></i> اختبار الحفظ
+          </button>
+          <button onclick="testGetSessions()" style="background:#059669;color:#fff;padding:10px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:900;font-family:Tajawal">
+            <i class="fas fa-download"></i> اختبار السحب
+          </button>
+        </div>
+        <div style="color:#999;font-size:.8rem;margin-top:6px">اضغط "اختبار السحب" لفحص لماذا السجل فارغ</div>
       </div>
 
       <div class="panel-card activate-emergency-card">
@@ -2506,6 +2511,48 @@
     /******************************************************
      * DEBUG: Test Apps Script directly
      ******************************************************/
+    async function testGetSessions(){
+      console.log('=== TESTING getTrainingSessions ===');
+      const btn = event?.target?.closest('button');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      }
+      
+      try {
+        const res = await jsonp('getTrainingSessions', { limit: '50' });
+        console.log('getTrainingSessions Response:', res);
+        
+        if (!res) {
+          showBigError('لم يتم استلام رد من Apps Script!\n\nتأكد من:\n1. نشر Apps Script جديد\n2. الرابط صحيح');
+          return;
+        }
+        
+        if (!res.ok) {
+          showBigError('خطأ من Apps Script:\n\n' + (res.error || 'Unknown error'));
+          return;
+        }
+        
+        const sessions = res.sessions || [];
+        if (sessions.length === 0) {
+          showBigError('Apps Script أرجع مصفوفة فارغة!\n\nالشيت يحتوي على بيانات لكن الدالة لا تقرأها.\n\nتأكد من نشر Code.gs الجديد.');
+        } else {
+          showBigSuccess('تم سحب ' + sessions.length + ' جلسة بنجاح! ✅\n\nأول جلسة:\n' + sessions[0].scenarioLabel + ' - ' + sessions[0].date);
+          // تحديث السجل
+          APP.caches.trainingSessions = sessions;
+          renderMiniTraining();
+        }
+      } catch(e) {
+        console.error('Test Error:', e);
+        showBigError('فشل الاختبار:\n\n' + e.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-download"></i> اختبار السحب';
+        }
+      }
+    }
+
     async function testAppsScript(){
       console.log('=== TESTING APPS SCRIPT ===');
       console.log('Web App URL:', WEB_APP_URL);
