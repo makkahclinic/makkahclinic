@@ -1,0 +1,181 @@
+مام—من الصورة اللي عندك مشاكل الإضافات (ethereum.js / chrome.runtime) اللي في الـConsole ما لها علاقة بنظامك (هي من إضافات المتصفح). جرّب “Incognito” بدون إضافات لو تبغى Console نظيف.
+
+والآن نركز على مشكلتين أساسيتين عندك:
+
+سجل التدريب لا يتم حفظه/لا يظهر
+
+زر “الوضع طبيعي” لازم يصير أحمر وقت الطوارئ ويكون قابل للنقر للإلغاء بشكل نظامي + تسجيل من أغلق ولماذا
+
+1) ليش “سجل التدريب” ما يظهر؟ (وأحيانًا كأنه ما ينحفظ)
+السبب الأكثر شيوعًا (90%):
+
+أنت عدّلت Apps Script لكن ما حدّثت Deployment للـWeb App؛ بالتالي موقعك يتصل بنسخة قديمة لا تحفظ أو لا ترجع السجل. لازم بعد أي تعديل:
+Deploy → Manage deployments → Edit → New version → Update.
+
+تذكير: الـWeb App في Apps Script يعتمد على “إصدار Deployment” وليس مجرد Save داخل المشروع.
+
+السبب الثاني الشائع:
+
+الواجهة أحيانًا تطلب Action قديم/تتوقع اسم حقل قديم.
+أنت الآن ترجع sessions في getTrainingSessions، لكن بعض الواجهات القديمة كانت تتوقع drills.
+الحل الأفضل: خلّي السيرفر يرجّع الاثنين (sessions + drills) لتضمن توافق كل الصفحات.
+
+2) تعديل مباشر في Apps Script (عشان السجل يظهر 100%)
+(أ) عدّل جزء doGet الخاص بـ getDrillLog
+
+ابحث عن هذا في doGet عندك:
+
+if (action === 'getDrillLog') {
+  return output_(getTrainingSessions(p));
+}
+
+
+امسحه واستبدله بهذا (يرجع sessions + drills):
+
+if (action === 'getDrillLog') {
+  const out = getTrainingSessions(p); // { ok:true, sessions:[...] }
+  const sessions = (out && out.sessions) ? out.sessions : [];
+  const drills = sessions.map(s => ({
+    date: s.date || '',
+    type: s.scenarioLabel || s.scenarioKey || '',
+    result: 'ناجح',
+    trainer: s.trainer || ''
+  }));
+  return output_({ ok: true, sessions, drills });
+}
+
+
+هذا يخلي أي صفحة قديمة تعتمد على drills تشتغل، والصفحات الجديدة تعتمد على sessions.
+
+(ب) تأكد إن الـWeb App يرجّع JSONP صح
+
+فكرتك (callback) صحيحة. Apps Script Web App يدعم doGet ومعه e.parameter و ContentService للإخراج.
+
+(ج) بعد التعديل: لازم تعمل Update Deployment
+
+(هذا أهم شيء)
+
+3) تعديل مباشر في صفحة eoc-command.html عشان “حفظ التدريب” ما يفشل
+
+في كودك الحالي، دالة saveTrainingSession() ممتازة لكنها تعتمد أن Action اسمها logTrainingSession (وهذا موجود عندك).
+أنا أنصحك تغيّرها لتستخدم alias الموجود عندك saveTrainingSession (أنت عامل له ربط في doGet)، عشان لو الصفحة القديمة تستدعيه يمشي.
+
+ابحث داخل saveTrainingSession() عن:
+const res = await jsonp('logTrainingSession', payload);
+
+واستبدله بـ:
+const res = await jsonp('saveTrainingSession', payload);
+
+
+وبكذا لو مستقبلاً غيرت الداخل، تظل الواجهة ثابتة.
+
+ملاحظة: doGet/doPost وقراءة باراميترات الويب (e.parameter) شيء قياسي في Apps Script Web Apps.
+
+4) زر “الوضع طبيعي” — اجعله أحمر وقت الطوارئ + قابل للنقر للإلغاء (مع تسجيل الاسم والسبب)
+
+أنت الآن عندك:
+
+<div class="status-badge" id="systemStatus">...</div>
+
+(أ) تعديل HTML بسيط (اجعله clickable)
+
+بدّل السطر إلى:
+
+<div class="status-badge" id="systemStatus" style="cursor:pointer" title="اضغط للتحكم في حالة الطوارئ">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</div>
+
+(ب) اربطه بكود “إغلاق نظامي” بدل clear
+
+أنت عندك في Apps Script دالة closeActiveCommand(params) ممتازة لأنها تسجل من أغلق ولماذا.
+إذن: لازم الواجهة تستخدمها بدل clearActiveCommand.
+
+1) أضف هذا في init() بعد ما تعمل loadCoreData:
+document.getElementById('systemStatus')?.addEventListener('click', onStatusBadgeClick);
+await syncActiveCommandUI();
+
+2) أضف هذي الدوال:
+async function syncActiveCommandUI(){
+  try{
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = (ac && ac.ok) ? ac.command : null;
+    if (cmd && cmd.active){
+      const label = (String(cmd.mode||'').toLowerCase()==='training') ? '🎯 تمرين جاري' : 'حالة طوارئ!';
+      setStatusAlert(true, label);
+    } else {
+      setStatusAlert(false);
+    }
+    updateCancelButtonVisibility();
+  } catch(e){
+    console.error(e);
+  }
+}
+
+async function onStatusBadgeClick(){
+  try{
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = (ac && ac.ok) ? ac.command : null;
+
+    if (!cmd || !cmd.active){
+      toast('لا يوجد أمر نشط حالياً', 'warn');
+      return;
+    }
+
+    const closedBy = prompt('اكتب اسم الشخص الذي سيغلق الحالة:');
+    if (!closedBy) return;
+
+    const closeReason = prompt('سبب الإغلاق (اختياري):') || '';
+
+    const res = await jsonp('closeActiveCommand', {
+      closedBy: closedBy,
+      closeReason: closeReason
+    });
+
+    if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+    toast('تم إغلاق الحالة وتوثيق الإغلاق', 'success');
+    setStatusAlert(false);
+    await syncActiveCommandUI();
+  } catch(e){
+    console.error(e);
+    toast('تعذر إغلاق الحالة: ' + (e.message || ''), 'error');
+  }
+}
+
+(ج) خفّف “الخلل الجوهري” حق الريفرش
+
+الريفرش لا يجب أن “يقفل” الأمر نفسه—الأمر الحقيقي في الشيت.
+المشكلة اللي تصير غالبًا هي أن الواجهة ترجع خضراء لأنك ما تسوي syncActiveCommandUI() عند التحميل.
+الحل فوق يعالجها: عند أي Refresh، يرجع يقرأ الأمر النشط ويحدث اللون.
+
+5) موضوع “الصوت غصب” على أجهزة الناس
+
+لا تقدر تضمن تشغيل الصوت تلقائيًا “غصب” على كل الأجهزة—Chrome وسياسات المتصفحات تمنع تشغيل الصوت بدون تفاعل المستخدم (click/tap) إلا في حالات Allow-list أو إذا الموقع اكتسب Media Engagement عالي.
+
+فكرتك الحالية (Start Screen وزر تفعيل الصوت) هي الطريقة الصحيحة.
+
+6) شي لازم تحذفه فورًا من الـHTML (يعطيك “نقص نقاط”)
+
+في كودك ظهر نص مثل:
+
+:contentReference[oaicite:3]{index=3}
+
+
+هذا ليس HTML وسيظهر كنص/يشوه الصفحة. احذفه بالكامل.
+
+اختبار سريع جدًا بعد التعديلات (بدون تخمين)
+
+بعد ما تعمل Update Deployment
+افتح في المتصفح:
+
+اختبار حفظ تدريب مباشر:
+
+WEB_APP_URL?action=logTrainingSession&scenarioKey=fire&scenarioLabel=حريق&trainer=TEST&attendees=TEST&startTime=10:00&endTime=10:05&durationMin=5
+
+
+اختبار قراءة السجل:
+
+WEB_APP_URL?action=getTrainingSessions&limit=5
+
+
+إذا الأولى رجعت {ok:true} لازم تشوف صف جديد في Training_Log.

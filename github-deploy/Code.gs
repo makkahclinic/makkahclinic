@@ -215,9 +215,17 @@
       return output_(getTrainingSessions(p));
     }
     
-    // Aliases (compatibility)
+    // Aliases (compatibility) - يرجع sessions + drills للتوافق
     if (action === 'getDrillLog') {
-      return output_(getTrainingSessions(p));
+      const out = getTrainingSessions(p);
+      const sessions = (out && out.sessions) ? out.sessions : [];
+      const drills = sessions.map(s => ({
+        date: s.date || '',
+        type: s.scenarioLabel || s.scenarioKey || '',
+        result: 'ناجح',
+        trainer: s.trainer || ''
+      }));
+      return output_({ ok: true, sessions, drills, debug: out.debug || '' });
     }
     
     if (action === 'updateEmergencyReportStatus') {
