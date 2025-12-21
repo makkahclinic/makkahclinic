@@ -592,14 +592,20 @@
   }
 
   function logTrainingSession(params) {
+    const lock = LockService.getScriptLock();
     try {
-      const lock = LockService.getScriptLock();
       lock.waitLock(10000);
 
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       let sh = ss.getSheetByName(SHEET_TRAINING_LOG);
       if (!sh) {
         sh = ss.insertSheet(SHEET_TRAINING_LOG);
+        sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
+      }
+
+      // تأكد من وجود الهيدرز
+      const lastRow = sh.getLastRow();
+      if (lastRow === 0 || lastRow === 1) {
         sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
       }
 
@@ -636,10 +642,12 @@
       ]);
 
       SpreadsheetApp.flush();
-      lock.releaseLock();
-
       return { ok: true, sessionId };
-    } catch(err){ return { ok: false, error: err.message }; }
+    } catch(err) {
+      return { ok: false, error: err.message };
+    } finally {
+      try { lock.releaseLock(); } catch(e) {}
+    }
   }
 
   function getTrainingSessions(params) {

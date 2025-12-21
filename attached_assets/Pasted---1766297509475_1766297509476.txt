@@ -1,0 +1,335 @@
+— سبب سجل التدريب ما ينحفظ غالبًا واحد (أو أكثر) من الثلاثة التالية، ومعها التعديل “امسح/ضع” بشكل واضح:
+
+الواجهة تنادي Action غلط (زي saveTrainingSession أو getDrillLog) بينما الـ Apps Script عندك يعرّف logTrainingSession و getTrainingSessions.
+
+عدّلت الـ Apps Script لكن ما سوّيت Deploy لإصدار جديد → موقعك ما زال يكلّم النسخة القديمة من الـ Web App. (إصدارات Apps Script لازم تُنشر كـ Version/Deployment)
+
+JSONP = GET؛ إذا قائمة الحضور طويلة جدًا، ممكن رابط الطلب يصير طويل ويطيح الطلب (يصير “ما يحفظ” بدون ما تنتبه).
+
+أعطيك الآن التعديلات الجاهزة (Frontend + Apps Script) + توحيد “الوضع طبيعي” مع الإلغاء + قفل الإنهاء باسم الشخص وتسجيله.
+
+A) إصلاح “سجل التدريب لا ينحفظ” (أهم شي)
+A1) في ملف eoc-command.html
+
+ابحث عن دالة: saveTrainingSession()
+وتأكد إن هذا السطر هو الموجود داخلها:
+
+✅ لازم يكون:
+
+const res = await jsonp('logTrainingSession', payload);
+
+
+❌ إذا عندك شيء مثل:
+
+jsonp('saveTrainingSession', payload)
+// أو
+__eocJsonp('saveTrainingSession', ...)
+
+
+امسحه واستبدله بـ logTrainingSession مثل السطر الصحيح فوق.
+
+ملاحظة: أنت في آخر كود أرسلته بالفعل كاتب logTrainingSession ✅، فلو ما زال ما يحفظ، الغالب السبب (A2) أو (A3).
+
+A2) عدّل الـ Apps Script ليقبل الأسماء القديمة (عشان ما تتعب إذا عندك ملف قديم منشور)
+
+في doGet(e) عند الـ Apps Script، أضف هذين الـ if (ضعهم قريب من باقي Actions):
+
+// ✅ aliases لتوافق الأكواد القديمة
+if (action === 'saveTrainingSession') {
+  return output_(logTrainingSession(p));
+}
+
+if (action === 'getDrillLog') {
+  return output_(getTrainingSessions(p));
+}
+
+
+ليش؟ لأن JSONP مع Web App يعتمد على action في الرابط، وهذا بالضبط اللي يشرحه توثيق Web Apps وقراءة e.parameter ، وتوليد JSON/JSONP عبر ContentService 
+Google for Developers
+.
+
+A3) ثبّت قفل LockService بشكل “مضمون” (حتى ما يعلق/يفشل بدون تحرير)
+
+داخل logTrainingSession(params) عندك، بدّل جسم الدالة بهذا الشكل (نفس منطقك بس بـ waitLock و finally) — هذا يقلل أخطاء التزامن في الشيتات 
+Google for Developers
+:
+
+❌ امسح دالتك الحالية logTrainingSession
+✅ وضع هذه:
+
+function logTrainingSession(params) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // أو waitLock أفضل من tryLock
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+    let sh = ss.getSheetByName(SHEET_TRAINING_LOG);
+    if (!sh) sh = ss.insertSheet(SHEET_TRAINING_LOG);
+
+    // تأكد من الهيدرز مرة واحدة
+    const lastRow = sh.getLastRow();
+    if (lastRow === 0) {
+      sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
+    } else if (lastRow === 1) {
+      // إذا أول صف فاضي/ناقص، اكتب الهيدرز
+      sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
+    }
+
+    const now = new Date();
+    const sessionId = 'TRN-' + now.getTime();
+    const dateStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
+
+    sh.appendRow([
+      sessionId,
+      dateStr,
+      String(params.startTime || ''),
+      String(params.endTime || ''),
+      Number(params.durationMin || 0),
+      String(params.scenarioKey || ''),
+      String(params.scenarioLabel || ''),
+      String(params.trainer || ''),
+      String(params.attendees || ''),
+      String(params.notes || '')
+    ]);
+
+    return { ok: true, sessionId };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+A4) لا تنس أهم خطوة: إعادة نشر Web App بعد تعديل Apps Script
+
+بعد ما تعدل السكربت:
+
+Deploy → Manage deployments → Edit → New version → Deploy
+وإلا الموقع بيكلّم النسخة القديمة.
+
+A5) اختبار سريع (يعطيك جواب فوري هل الحفظ يشتغل)
+
+افتح في المتصفح (غيّر WEB_APP_URL حقك نفسه):
+
+WEB_APP_URL?action=logTrainingSession&startTime=10:00&endTime=10:10&durationMin=10&scenarioKey=fire&scenarioLabel=حريق&trainer=TEST&attendees=A|B|C&notes=TEST
+
+
+إذا رجع { ok:true } = الباك اند شغال، والمشكلة تكون من الواجهة/طول الرابط/عدم Deploy.
+
+B) توحيد “الوضع طبيعي” ليصير أحمر نابض وقت الطوارئ + قابل للنقر للإلغاء (مع تسجيل اسم من أغلق)
+
+أنت الآن عندك:
+
+setStatusAlert() يغيّر الشكل ✅
+
+وفي نفس الوقت عندك زر منفصل cancelEmergencyBtn ❌ (ازدواجية)
+
+B1) امسح زر الإلغاء المنفصل من الـ HTML
+
+ابحث عن هذا البلوك داخل كودك:
+
+<button class="main-cancel-btn" id="cancelEmergencyBtn" ...>...</button>
+
+
+✅ امسحه بالكامل (وأي CSS متعلق بـ .main-cancel-btn لو ما عاد تستخدمه).
+
+B2) خلّي “systemStatus” نفسه زر clickable
+
+بدّل:
+
+<div class="status-badge" id="systemStatus"> ... </div>
+
+
+إلى:
+
+<button class="status-badge" id="systemStatus" type="button" onclick="onStatusBadgeClick()">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</button>
+
+
+وبـ CSS أضف/عدّل داخل .status-badge:
+
+.status-badge{
+  cursor:pointer;
+  border:none;
+  outline:none;
+}
+
+B3) أضف دالة النقر (اسم + سبب + تسجيل)
+
+ضع هذا في الـ JS عندك:
+
+async function onStatusBadgeClick(){
+  // إذا مافي حالة نشطة لا تعمل شيء
+  const ac = await jsonp('getActiveCommand', {});
+  const cmd = (ac && ac.ok) ? ac.command : null;
+
+  if (!cmd || !cmd.active) return;
+
+  const closer = prompt('اسم الشخص الذي أنهى الحالة:');
+  if (!closer) return;
+
+  const notes = prompt('سبب الإنهاء/ملاحظات (اختياري):') || '';
+
+  if (!confirm('تأكيد إنهاء الحالة ومسحها من الشاشات؟')) return;
+
+  const res = await jsonp('closeActiveCommand', {
+    closedBy: closer,
+    closeNotes: notes
+  });
+
+  if (res && res.ok) {
+    setStatusAlert(false);
+    toast('تم إنهاء الحالة وتسجيل الإنهاء', 'success');
+  } else {
+    toast('فشل إنهاء الحالة: ' + (res?.error || ''), 'error');
+  }
+}
+
+C) منع “الريفريش” من إظهار النظام كأنه طبيعي أو يسبب لخبطة/إقفال بدون نظام
+
+المشكلة اللي وصفتها تصير لأن الصفحة بعد Refresh ما تعمل Sync مع الأمر النشط، أو الإلغاء يتم بدون هوية.
+
+C1) عند بداية init() أضف مزامنة للحالة النشطة
+
+أضف:
+
+async function syncActiveCommandState(){
+  try{
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = (ac && ac.ok) ? ac.command : null;
+
+    if (cmd && cmd.active){
+      // خليها حمراء نابضة
+      const label = (String(cmd.mode||'').toLowerCase()==='training') ? '🎯 تمرين جاري' : 'حالة طوارئ!';
+      setStatusAlert(true, label);
+    } else {
+      setStatusAlert(false);
+    }
+  } catch(e){}
+}
+
+
+ثم داخل init() بعد await loadCoreData(); مباشرة:
+
+await syncActiveCommandState();
+setInterval(syncActiveCommandState, 8000);
+
+
+بهذا: أي Refresh سيقرأ من الشيت ويعرض الحالة الصحيحة، وما يصير “تجاوز” بصري.
+
+D) تعديل Apps Script لإغلاق “رسمي” مع سجل (اسم + ملاحظات)
+D1) أضف شيت لوج للأوامر (مرة واحدة)
+
+ضمن bootstrap عندك، أضف:
+
+const SHEET_CMD_LOG = 'EOC_COMMAND_LOG';
+const HEADERS_CMD_LOG = ['event_id','event_type','timestamp','by','notes','responseType','reportType','location','muster','mode','scenarioKey','scenarioLabel'];
+
+
+وفي setupEocWorkbook_() أضف:
+
+ensureSheet_(ss, SHEET_CMD_LOG, HEADERS_CMD_LOG);
+
+D2) أضف Action جديد: closeActiveCommand
+
+أضف في doGet:
+
+if (action === 'closeActiveCommand') {
+  return output_(closeActiveCommand(p));
+}
+
+
+ثم أضف الدالة:
+
+function closeActiveCommand(p){
+  try{
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sh || sh.getLastRow() < 2) return { ok:false, error:'لا يوجد أمر نشط' };
+
+    const row = sh.getRange(2,1,1,sh.getLastColumn()).getValues()[0];
+
+    // اجلب القيم الأساسية (حسب ترتيب HEADERS_ACTIVE عندك)
+    const responseType = row[1] || '';
+    const reportType    = row[2] || '';
+    const location      = row[3] || '';
+    const muster        = row[4] || '';
+    const timestamp     = row[5] || '';
+    const mode          = row[6] || '';
+    const scenarioKey   = row[7] || '';
+    const scenarioLabel = row[8] || '';
+
+    // اقفل
+    sh.getRange(2,1).setValue('false');
+
+    // سجل في اللوج
+    const log = ss.getSheetByName(SHEET_CMD_LOG) || ss.insertSheet(SHEET_CMD_LOG);
+    if (log.getLastRow() === 0) log.getRange(1,1,1,HEADERS_CMD_LOG.length).setValues([HEADERS_CMD_LOG]);
+
+    log.appendRow([
+      'EVT-' + Date.now(),
+      'CLEAR',
+      new Date().toISOString(),
+      String(p.closedBy || 'UNKNOWN'),
+      String(p.closeNotes || ''),
+      responseType,
+      reportType,
+      location,
+      muster,
+      mode,
+      scenarioKey,
+      scenarioLabel
+    ]);
+
+    return { ok:true };
+  } catch(err){
+    return { ok:false, error: err.message };
+  }
+}
+
+
+كذا أنت حققت طلبك: “مين قفل + ليش + متى” ويتخزن في سجل ثابت.
+
+ولأن Web Apps تمرير البراميتر + doGet/doPost موثق رسميًا 
+Google for Developers
+، وكذلك LockService لو حبيت تضيف قفل هنا أيضًا 
+Google for Developers
+.
+
+E) موضوع “الصوت غصب” — الحقيقة التقنية
+
+على متصفحات مثل Chrome/Safari/Firefox: تشغيل الصوت تلقائيًا بدون تفاعل المستخدم غالبًا ممنوع (Autoplay with sound يتطلب click/tap أو شروط خاصة) 
+Chrome for Developers
++2
+MDN Web Docs
++2
+.
+عشان كذا “زر التفعيل” اللي عندك في شاشة الطوارئ هو الحل الصحيح.
+
+الحلول العملية إذا تبيه أقرب لـ “غصب” داخل بيئة مستشفى:
+
+خلي الأجهزة “Kiosk/Managed” (Chrome Enterprise) وتسمح Autoplay لروابط موقعكم (Chrome ذكر وجود سياسات Enterprise مثل AutoplayAllowlist) 
+Chrome for Developers
+.
+
+أو تثبيت الموقع كـ PWA على الأجهزة، وهذا أحيانًا يرفع احتمال السماح بالصوت حسب سياسة المتصفح 
+Chrome for Developers
+.
+
+وإلا فنيًا لن تضمن 100% بدون تفاعل.
+
+الخلاصة التنفيذية السريعة (Checklist)
+
+Frontend: تأكد saveTrainingSession() ينادي logTrainingSession.
+
+Apps Script: أضف alias لـ saveTrainingSession و getDrillLog (لو عندك أكواد قديمة)، وحسّن logTrainingSession بـ waitLock + finally. 
+Google for Developers
+
+Deploy جديد للـ Web App بعد أي تعديل.
+
+وحّد status badge: خليه زر clickable للإلغاء + سجل إغلاق رسمي بـ closeActiveCommand.
+
+Sync عند init + interval عشان Refresh ما يلبّس الحالة.
+
+إذا تبغاني أمشي عليك “بحث داخل الكود” بأسلوب: انسخ/الصق ه
