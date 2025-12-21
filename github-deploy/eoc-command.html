@@ -134,6 +134,25 @@
       border:2px solid rgba(220,20,60,.7);
       background:linear-gradient(135deg, rgba(220,20,60,.22), rgba(185,28,28,.25));
     }
+    .main-cancel-btn{
+      background:linear-gradient(135deg,#6b7280,#4b5563);
+      border:none;
+      color:#fff;
+      padding:16px 24px;
+      border-radius:12px;
+      font-size:1.1rem;
+      font-weight:800;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      transition:all .3s;
+    }
+    .main-cancel-btn:hover{
+      background:linear-gradient(135deg,#4b5563,#374151);
+      transform:scale(1.02);
+    }
     .main-activate-btn{
       width:100%;
       padding:18px;
@@ -583,10 +602,16 @@
       </div>
 
       <div class="panel-card activate-emergency-card">
-        <button class="main-activate-btn" onclick="openActivationModal()">
-          <i class="fas fa-bell"></i>
-          <span>تفعيل حالة الطوارئ</span>
-        </button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="main-activate-btn" onclick="openActivationModal()" style="flex:1;min-width:150px">
+            <i class="fas fa-bell"></i>
+            <span>تفعيل حالة الطوارئ</span>
+          </button>
+          <button class="main-cancel-btn" id="cancelEmergencyBtn" onclick="cancelActiveCommand()" style="flex:1;min-width:150px;display:none">
+            <i class="fas fa-stop-circle"></i>
+            <span>إلغاء حالة الطوارئ</span>
+          </button>
+        </div>
         <div style="margin-top:10px;color:var(--muted);font-weight:800;font-size:.9rem;line-height:1.6">
           <i class="fas fa-info-circle"></i>
           التفعيل اليدوي يفتح نفس شاشة القرار مثل البلاغ الحقيقي (اختيار نوع الاستجابة + موقع + نقطة تجمع) ثم يرسل أمر الشاشات.
@@ -1571,6 +1596,7 @@
         openCommandScreen(cmd, report);
         toast('تم إرسال الأمر للشاشات بنجاح', 'success');
         setStatusAlert(true, report.isDrill ? '🎯 تمرين جاري' : 'حالة طوارئ!');
+        updateCancelButtonVisibility();
 
       } catch(e){
         console.error(e);
@@ -1962,9 +1988,39 @@
         if (!r || !r.ok) throw new Error(r?.error || 'clearActiveCommand failed');
         toast('تم إيقاف عرض التمرين على الشاشات', 'success');
         setStatusAlert(false);
+        updateCancelButtonVisibility();
       } catch(e){
         console.error(e);
         toast('تعذر إيقاف العرض', 'error');
+      }
+    }
+
+    async function cancelActiveCommand(){
+      if (!confirm('هل تريد إلغاء حالة الطوارئ النشطة؟')) return;
+      try{
+        const r = await jsonp('clearActiveCommand', {});
+        if (!r || !r.ok) throw new Error(r?.error || 'clearActiveCommand failed');
+        toast('تم إلغاء حالة الطوارئ', 'success');
+        setStatusAlert(false);
+        updateCancelButtonVisibility();
+      } catch(e){
+        console.error(e);
+        toast('تعذر إلغاء حالة الطوارئ', 'error');
+      }
+    }
+
+    async function updateCancelButtonVisibility(){
+      try{
+        const ac = await jsonp('getActiveCommand', {});
+        const cmd = (ac && ac.ok) ? ac.command : null;
+        const btn = document.getElementById('cancelEmergencyBtn');
+        if (cmd && cmd.active) {
+          btn.style.display = 'flex';
+        } else {
+          btn.style.display = 'none';
+        }
+      } catch(e){
+        console.error(e);
       }
     }
 
@@ -2202,11 +2258,17 @@
       await refreshMiniTraining();
       await pollReports();
 
+      // check if emergency is active
+      await updateCancelButtonVisibility();
+
       // polling every 5 seconds
       setInterval(pollReports, 5000);
 
       // small refresh training list every 30s
       setInterval(refreshMiniTraining, 30000);
+
+      // check cancel button every 10 seconds
+      setInterval(updateCancelButtonVisibility, 10000);
     }
 
     document.addEventListener('DOMContentLoaded', init);
