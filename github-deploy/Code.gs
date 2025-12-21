@@ -249,6 +249,11 @@
       return output_(result);
     }
     
+    if (action === 'getEmergencyStaff') {
+      const result = getEmergencyStaff();
+      return output_(result);
+    }
+    
     if (action === 'setActiveCommand') {
       const result = setActiveCommand(p);
       return output_(result);
@@ -460,6 +465,27 @@
       });
       return { ok:true, scenarios: out };
     } catch(err){ return { ok:false, error: err.message }; }
+  }
+
+  function getEmergencyStaff() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName('Staff');
+      if (!sh) return { ok: true, staff: [] };
+
+      const data = sh.getDataRange().getValues();
+      const staff = [];
+      for (let i = 1; i < data.length; i++) {
+        const name = String(data[i][0] || '').trim();
+        const phone = String(data[i][1] || '').trim();
+        if (name && phone) {
+          staff.push({ name, phone });
+        }
+      }
+      return { ok: true, staff };
+    } catch (err) {
+      return { ok: false, error: err.message, staff: [] };
+    }
   }
 
   function getScenarioProfiles() {

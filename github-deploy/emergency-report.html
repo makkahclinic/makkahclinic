@@ -58,9 +58,101 @@
             .submit-btn { padding: 16px; font-size: 1.1rem; }
         }
 
-        .container {
-            max-width: 600px;
+        .page-layout {
+            display: flex;
+            gap: 20px;
+            max-width: 900px;
             margin: 0 auto;
+        }
+
+        .container {
+            flex: 1;
+            max-width: 600px;
+        }
+
+        .staff-sidebar {
+            width: 220px;
+            flex-shrink: 0;
+        }
+
+        .staff-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 20px;
+        }
+
+        .staff-card-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--secondary);
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .staff-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .staff-item {
+            background: rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 12px;
+            transition: all 0.3s;
+        }
+
+        .staff-item:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        .staff-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+
+        .staff-phone {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .staff-phone a {
+            color: var(--success);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            direction: ltr;
+        }
+
+        .staff-phone a:hover {
+            text-decoration: underline;
+        }
+
+        .staff-phone i {
+            color: var(--success);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .page-layout {
+                flex-direction: column;
+            }
+            .staff-sidebar {
+                width: 100%;
+                order: -1;
+            }
+            .staff-card {
+                position: static;
+            }
         }
 
         .header {
@@ -759,14 +851,15 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <img src="logo-new.png" alt="مجمع مكة الطبي">
-            <h1><i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ سريع</h1>
-            <p>أبلغ عن أي حالة طارئة في ثوانٍ</p>
-        </div>
+    <div class="page-layout">
+        <div class="container">
+            <div class="header">
+                <img src="logo-new.png" alt="مجمع مكة الطبي">
+                <h1><i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ سريع</h1>
+                <p>أبلغ عن أي حالة طارئة في ثوانٍ</p>
+            </div>
 
-        <div id="reportForm">
+            <div id="reportForm">
             <div class="emergency-alert">
                 <i class="fas fa-bell"></i>
                 <h2>في حالة الطوارئ الخطيرة اتصل فوراً على 911</h2>
@@ -894,6 +987,21 @@
             <button class="new-report-btn" onclick="resetForm()">
                 <i class="fas fa-redo"></i> بلاغ جديد
             </button>
+        </div>
+        </div>
+
+        <div class="staff-sidebar">
+            <div class="staff-card">
+                <div class="staff-card-title">
+                    <i class="fas fa-user-tie"></i>
+                    <span>المسؤولون</span>
+                </div>
+                <div class="staff-list" id="staffList">
+                    <div style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.9rem">
+                        <i class="fas fa-spinner fa-spin"></i> تحميل...
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1269,8 +1377,30 @@
         });
 
         loadRoomCodes();
+        loadStaff();
         
         window.scrollTo(0, 0);
+
+        function loadStaff() {
+            jsonp('getEmergencyStaff').then(res => {
+                const list = document.getElementById('staffList');
+                if (res.ok && res.staff && res.staff.length > 0) {
+                    list.innerHTML = res.staff.map(s => `
+                        <div class="staff-item">
+                            <div class="staff-name">${s.name}</div>
+                            <div class="staff-phone">
+                                <i class="fas fa-phone-alt"></i>
+                                <a href="tel:${s.phone}">${s.phone}</a>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.85rem">لا يوجد مسؤولون</div>';
+                }
+            }).catch(() => {
+                document.getElementById('staffList').innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.85rem">خطأ في التحميل</div>';
+            });
+        }
     </script>
 </body>
 </html>
