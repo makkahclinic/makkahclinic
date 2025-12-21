@@ -1,0 +1,222 @@
+فيه كم خلل مهم (بعضها “حرِج”) في صفحة eoc-command.html + لازم تتأكد إن الـ Apps Script متوافق معها. تحت بكتب لك بالضبط: امسح ايش / استبدل ايش / أضف ايش.
+
+1) خلل ظاهر في صفحتك الآن: سطور :contentReference[oaicite...]
+
+في كودك فيه سطور مثل:
+
+:contentReference[oaicite:3]{index=3}
+
+:contentReference[oaicite:4]{index=4}
+
+هذه مو JavaScript ولا HTML وبتطلع كنص/أو تسبب تلخبط بالصفحة.
+
+إيش تسوي؟
+
+ابحث داخل الملف عن كلمة contentReference
+
+امسح السطر كامل (وأي شيء شبيه فيها)
+
+2) (اللي طلبته رقم 1) توحيد “الوضع طبيعي” وإلغاء زر الإلغاء المنفصل
+
+أنت الآن عندك:
+
+Badge: #systemStatus
+
+وزر منفصل: #cancelEmergencyBtn
+
+أنت تبغى الـ Badge نفسه يصير:
+
+أخضر طبيعي
+
+أحمر نابض وقت الطوارئ
+
+قابل للنقر لإلغاء الطوارئ (ويطلب اسم الشخص + سبب الإغلاق ويتسجل)
+
+(A) تعديل HTML: خلّي الـ badge زر
+
+استبدل هذا:
+
+<div class="status-badge" id="systemStatus">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</div>
+
+
+بهذا:
+
+<button type="button" class="status-badge" id="systemStatus" onclick="onStatusBadgeClick()">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</button>
+
+(B) تعديل CSS للـ badge كزر
+
+أضف داخل CSS (قريب من .status-badge):
+
+.status-badge{
+  cursor:pointer;
+  border:1px solid rgba(16,185,129,.45);
+}
+.status-badge{appearance:none;background:rgba(16,185,129,.12);}
+.status-badge:hover{transform:translateY(-1px)}
+
+(C) احذف زر الإلغاء المنفصل
+
+ابحث عن هذا البلوك واحذفه:
+
+<button class="main-cancel-btn" id="cancelEmergencyBtn" onclick="cancelActiveCommand()" ...>
+
+
+وكمان احذف دالة updateCancelButtonVisibility() بالكامل + أي setInterval(updateCancelButtonVisibility, ...) لأنها ماعادت مطلوبة.
+
+3) خلل منطقي: أنت تحوّل الحالة للأحمر عند “بلاغ جديد” قبل إصدار أمر
+
+في pollReports() عندك هذا:
+
+setStatusAlert(true, 'بلاغ جديد!');
+
+
+هذا يخلي “الوضع طبيعي” يصير أحمر حتى لو ما تم إصدار أمر.
+
+استبدله بـ:
+
+// لا تغيّر حالة النظام عند مجرد وصول بلاغ
+toast('بلاغ جديد: ' + (r.type || ''), 'warn');
+
+
+وخلي الأحمر فقط إذا فيه Active Command فعلي (من الشيت).
+
+4) الخلل الجوهري اللي ذكرتَه: الريفرش/أي أحد يقدر يقفل الطوارئ بدون سجل
+
+حتى لو واجهتك حالة “تقفل” بعد ريفرش—الحل الصح مو في الواجهة فقط.
+لازم “القفل/الإلغاء” يكون Server-side ويتسجل باسم الشخص والسبب (وهذا بالضبط شغل LockService). 
+Google for Developers
+
+المطلوب في Apps Script (ضروري)
+
+أنت حالياً تستخدم:
+
+clearActiveCommand (يمسح بدون اسم/سبب)
+
+و setActiveCommand (يسمح بالكتابة فوق أي أمر قائم)
+
+لازم تضيف 3 أشياء:
+
+(A) شيت سجل إغلاق/إلغاء الأوامر
+
+أنشئ شيت جديد مثلاً: EOC_COMMAND_LOG
+Headers مثال:
+['ts','action','closer','reason','prev_responseType','prev_reportType','prev_location','prev_muster','prev_mode']
+
+(B) API جديد: closeActiveCommand
+
+بدل clearActiveCommand مباشرة، نسوي Action جديد:
+
+يقرأ الأمر الحالي
+
+يطلب closerName و reason
+
+يسجل في EOC_COMMAND_LOG
+
+ثم يعطل الأمر
+
+(C) حماية ضد “الكتابة فوق أمر نشط”
+
+في setActiveCommand:
+
+إذا فيه أمر نشط mode=real
+امنع أي أمر “real” جديد إلا إذا عندك override passcode (اختياري)
+هذا يمنع المصيبة لو أحد ضغط تفعيل بالغلط أو حصل ريفرش/تداخل.
+
+هذا النوع من الحماية لازم يكون في Apps Script نفسه لأن Web App endpoints (doGet/doPost) هي مصدر الحقيقة. 
+Google for Developers
++1
+
+5) مشكلة التدريب: ليش “القائمة من الإكسل” ما تطلع؟
+
+الصفحة تقرأ المتدربين من Action:
+
+jsonp('getTrainingRoster', {})
+
+
+و getTrainingRoster() في Apps Script يقرأ شيت:
+Training_Roster
+
+أنت بالصورة حاط الأسماء داخل شيت اسمها Staff (ومعناه: طبيعي ما راح يطلعوا في التدريب).
+
+الحل الأسرع (بدون كود):
+
+انقل/انسخ بيانات Staff إلى Training_Roster بالهيدرز:
+name | department | role | active
+وخلي active = نعم للناس اللي تبغاهم يظهروا.
+
+الحل الأفضل (بكود):
+خلّ getTrainingRoster():
+
+إذا Training_Roster فاضي → يقرأ من Staff تلقائياً
+
+6) سبب “حفظ جلسة التدريب” ما يحفظ (والصورة اللي أرسلتها)
+
+في كودك الجديد أنت تحفظ بـ:
+
+jsonp('logTrainingSession', payload)
+
+
+وهذا صحيح فقط إذا عندك في Apps Script:
+
+if (action === 'logTrainingSession') return output_(logTrainingSession(p));
+
+
+لو ما حفظ:
+
+90% السبب واحد من التالي:
+
+أنت في الواجهة ما زلت تستدعي Action غلط (مثل saveTrainingSession أو getDrillLog)
+
+Apps Script Web App مو منشور آخر نسخة (Deploy جديد)
+
+الشيت Training_Log غير موجود بسبب bootstrap version قديم
+
+ملاحظة مهمة: الـ JSONP شغال عندك بالطريقة الصحيحة طالما Apps Script يرجّع JavaScript عند وجود callback. 
+Google for Developers
+
+7) نقطة “الصوت غصب”
+
+ما تقدر تضمن تشغيل الصوت تلقائياً “غصب” على متصفحات حديثة بدون تفاعل المستخدم (سياسة Autoplay تمنع تشغيل الصوت بدون user gesture). 
+Google for Developers
++1
+
+اللي سويته بشاشة البداية وزر التفعيل هو الطريقة الصحيحة عملياً.
+
+الآن: وش تضيف في JS للـ Badge عشان يلغي؟
+
+أضف هذه الدالة في eoc-command.html (بعد jsonp):
+
+async function onStatusBadgeClick(){
+  try{
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = ac && ac.ok ? ac.command : null;
+
+    if (!cmd || !cmd.active){
+      toast('لا توجد حالة طوارئ نشطة', 'warn');
+      return;
+    }
+
+    const closer = prompt('اسم من يقوم بالإلغاء:');
+    if (!closer) return;
+
+    const reason = prompt('سبب الإلغاء (اختياري):') || '';
+
+    // لازم تنفذها في Apps Script: closeActiveCommand
+    const res = await jsonp('closeActiveCommand', { closer, reason });
+    if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+    setStatusAlert(false);
+    toast('تم إلغاء حالة الطوارئ وتسجيلها في السجل', 'success');
+    await refreshLists();
+  } catch(e){
+    console.error(e);
+    toast('تعذر الإلغاء: ' + (e.message || ''), 'error');
+  }
+}
+
+
+ملاحظة: هذا يتطلب منك إضافة closeActiveCommand في Apps Script.
