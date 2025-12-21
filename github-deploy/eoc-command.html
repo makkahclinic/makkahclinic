@@ -2082,11 +2082,28 @@
     /******************************************************
      * Training sessions (log)
      ******************************************************/
-    async function fetchTrainingSessions(limit=120, startDate='', endDate=''){
-      // supports startDate/endDate if you add it in Apps Script; if not, it will just return latest.
-      const res = await jsonp('getTrainingSessions', { limit:String(limit), startDate, endDate });
+    function toYMD(value){
+      if (!value) return '';
+      const s = String(value).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const d = new Date(value);
+      if (!isNaN(d.getTime())){
+        const y = d.getFullYear();
+        const m = String(d.getMonth()+1).padStart(2,'0');
+        const day = String(d.getDate()).padStart(2,'0');
+        return `${y}-${m}-${day}`;
+      }
+      return s;
+    }
+
+    async function fetchTrainingSessions(limit=250){
+      const res = await jsonp('getTrainingSessions', { limit:String(limit) });
       if (!res || !res.ok) throw new Error(res?.error || 'getTrainingSessions failed');
-      return Array.isArray(res.sessions) ? res.sessions : [];
+      const sessions = Array.isArray(res.sessions) ? res.sessions : [];
+      return sessions.map(s => ({
+        ...s,
+        _dateYMD: toYMD(s.date),
+      }));
     }
 
     async function refreshMiniTraining(){
@@ -2121,7 +2138,7 @@
               <i class="fas fa-user-tie"></i> ${escapeHtml(s.trainer||'-')}
             </div>
             <div style="margin-top:4px;opacity:.75;font-weight:800;font-size:.9rem">
-              <i class="fas fa-clock"></i> ${escapeHtml(s.date||'')} - ${escapeHtml(s.startTime||'')}
+              <i class="fas fa-clock"></i> ${escapeHtml(s._dateYMD || toYMD(s.date) || '')} - ${escapeHtml(s.startTime||'')}
             </div>
           </div>
         `;
@@ -2426,13 +2443,11 @@
       const body = document.getElementById('trainLogBody');
       body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:22px"><i class="fas fa-spinner fa-spin"></i> تحميل...</td></tr>`;
       try{
-        const from = document.getElementById('trainFrom')?.value || '';
-        const to = document.getElementById('trainTo')?.value || '';
-        console.log('Loading training log with dates:', from, to);
-        const list = await fetchTrainingSessions(250, from, to);
+        console.log('Loading training log...');
+        const list = await fetchTrainingSessions(250);
         console.log('Training sessions loaded:', list.length, 'sessions');
         APP.caches.trainingSessions = list;
-        renderTrainingTable(list);
+        applyTrainingFilter();
       } catch(e){
         console.error('Load training log error:', e);
         body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:22px;color:var(--danger)">تعذر تحميل سجل التدريب<br><small style="opacity:.7">تأكد من نشر Apps Script</small></td></tr>`;
@@ -2448,7 +2463,7 @@
       body.innerHTML = list.map((s,i)=>`
         <tr>
           <td>${i+1}</td>
-          <td>${escapeHtml(s.date||'')}</td>
+          <td>${escapeHtml(s._dateYMD || toYMD(s.date) || '')}</td>
           <td>${escapeHtml(s.startTime||'')}</td>
           <td>${escapeHtml(s.endTime||'')}</td>
           <td>${escapeHtml(String(s.durationMin ?? ''))}</td>
@@ -2464,7 +2479,7 @@
       const from = document.getElementById('trainFrom').value;
       const to = document.getElementById('trainTo').value;
       const filtered = (APP.caches.trainingSessions||[]).filter(s=>{
-        const d = String(s.date||'');
+        const d = s._dateYMD || toYMD(s.date);
         if (from && d < from) return false;
         if (to && d > to) return false;
         return true;
@@ -2480,7 +2495,7 @@
         <div class="mini-item" style="border-radius:16px;padding:14px">
           <div style="font-weight:1000;color:var(--secondary);margin-bottom:10px"><i class="fas fa-calendar"></i> بيانات الجلسة</div>
           <div style="display:grid;gap:6px;font-weight:900">
-            <div>التاريخ: ${escapeHtml(s.date||'-')}</div>
+            <div>التاريخ: ${escapeHtml(s._dateYMD || toYMD(s.date) || '-')}</div>
             <div>البداية: ${escapeHtml(s.startTime||'-')}</div>
             <div>النهاية: ${escapeHtml(s.endTime||'-')}</div>
             <div>المدة: ${escapeHtml(String(s.durationMin ?? '-'))} دقيقة</div>

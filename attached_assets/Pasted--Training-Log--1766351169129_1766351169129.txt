@@ -1,0 +1,200 @@
+تمام — المشكلة مو من الشيت. الدليل: عندك بيانات موجودة فعلًا داخل Training_Log (واضح من صورة الشيت)، والـ WebApp يرجّع sessions (واضح من صفحة الـ JSON). المشكلة صارت في الفلترة/تنسيق التاريخ + اختلاف اسم الحقل بين الواجهة والـ API (وأحيانًا URL غلط أو نسخة قديمة غير مُنشورة).
+خلّيني أعطيك الحل “امسح/حط” بشكل عملي.
+
+1) سبب عدم ظهور سجل التدريب (الجذر الحقيقي)
+السبب رقم (A): تاريخ الجلسات يرجع كسلسلة طويلة مثل:
+Sun Dec 21 2025 03:00:00 GMT-0500 ...
+وأنت في الواجهة تقارنها مع مدخلات type="date" التي تعطي:
+2025-12-08 و 2025-12-21
+فتصير المقارنة النصية غلط، فيتم استبعاد كل السجلات (فتظهر “لا توجد جلسات”).
+
+هذا يحصل كثيرًا لأن Google Sheets يرجّع التاريخ كـ Date object، وإذا سويت String(date) يعطي النص الطويل. Google for Developers+1
+
+السبب رقم (B): الواجهة أحيانًا تتوقع drills بينما الـ API يرجّع sessions فقط (أنت عالجت جزئيًا بـ alias getDrillLog — ممتاز).
+السبب رقم (C) (خطير عندك في emergency.html/شاشة العرض): عندك سطر غلط:
+const WEB_APP_URL = 'const WEB_APP_URL = 'https://script.google.com/macros/s/...../exec';
+
+هذا يكسر كل JSONP لأن المتغير صار نص غير صالح. (هذا وحده كفيل يوقف أي تحميل).
+
+2) الحل السريع المؤكد (Front-end) — بدون ما تعتمد على فلترة الـ Backend
+✅ في صفحة eoc-command.html (أو emergency-report.html إذا هي نفس الكود)
+ابحث عن الدالة:
+async function fetchTrainingSessions(limit=120, startDate='', endDate=''){
+  const res = await jsonp('getTrainingSessions', { limit:String(limit), startDate, endDate });
+  ...
+}
+
+✂️ امسحها بالكامل واستبدلها بهذه (مهم: بدون startDate/endDate للباكند):
+function toYMD(value){
+  if (!value) return '';
+  // already YYYY-MM-DD
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // try parse any other date string / Date
+  const d = new Date(value);
+  if (!isNaN(d.getTime())){
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  return s;
+}
+
+async function fetchTrainingSessions(limit=250){
+  const res = await jsonp('getTrainingSessions', { limit:String(limit) });
+  if (!res || !res.ok) throw new Error(res?.error || 'getTrainingSessions failed');
+
+  const sessions = Array.isArray(res.sessions) ? res.sessions : [];
+  // normalize for filtering + UI
+  return sessions.map(s => ({
+    ...s,
+    _dateYMD: toYMD(s.date),
+  }));
+}
+
+ثم عدّل فلتر التدريب داخل:
+applyTrainingFilter() (أو أي فلتر عندك للتدريب)
+✂️ امسح شرط المقارنة القديم مثل:
+const d = String(s.date||'');
+if (from && d < from) return false;
+if (to && d > to) return false;
+
+✅ واستبدله بهذا:
+const d = s._dateYMD || toYMD(s.date);
+if (from && d < from) return false;
+if (to && d > to) return false;
+return true;
+
+وأيضًا في renderTrainingTable(list) بدّل عرض التاريخ من:
+<td>${escapeHtml(s.date||'')}</td>
+
+إلى:
+<td>${escapeHtml(s._dateYMD || toYMD(s.date) || '')}</td>
+
+✅ بهذا الشكل السجل يظهر فورًا حتى لو الـ API يرجّع تاريخ بصيغة “Sun Dec …”.
+
+3) الحل الصحيح (Back-end) — لو تبغى الفلترة تتم في Apps Script
+أنت بالفعل كتبت نسخة جديدة من getTrainingSessions في آخر الكود (تحويل Date → yyyy-MM-dd).
+بس انتبه: إذا لم تعمل Deploy جديد فـ /exec مازال يشغّل النسخة القديمة (وهذا شائع جدًا).
+Google Apps Script Web App لازم “Manage deployments → Edit → New version → Deploy” عشان يتحدّث /exec. Google for Developers
+
+4) إصلاح “الوضع طبيعي” ليصير أحمر نابض + قابل للنقر لإلغاء الطوارئ (توحيد التحكم)
+(A) تعديل HTML في الهيدر
+بدّل:
+<div class="status-badge" id="systemStatus">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</div>
+
+إلى:
+<button class="status-badge" id="systemStatus" type="button" onclick="onStatusBadgeClick()">
+  <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
+</button>
+
+(B) تعديل CSS (عشان زر ما يطلع شكله غريب)
+أضف تحت .status-badge:
+.status-badge{
+  cursor:pointer;
+  border:none;
+}
+.status-badge:active{ transform: scale(.98); }
+
+(C) امسح زر الإلغاء الزائد أو وحّده
+عندك زر cancelEmergencyBtn — إذا تبغى “مكان واحد فقط” للإلغاء:
+
+
+إمّا تحذفه من الـ HTML بالكامل
+
+
+أو تخليه لكن يخدم نفس الدالة onStatusBadgeClick().
+
+
+(D) أضف الدالة هذه في JS (بدل clearActiveCommand)
+async function onStatusBadgeClick(){
+  try{
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = ac && ac.ok ? ac.command : null;
+
+    if (!cmd || !cmd.active){
+      toast('لا توجد حالة طوارئ نشطة', 'warn');
+      return;
+    }
+
+    const closedBy = prompt('اسم الشخص الذي سيُنهي الحالة:');
+    if (!closedBy) return;
+
+    const closeReason = prompt('سبب الإنهاء (اختياري):') || '';
+
+    // ✅ إغلاق رسمي مع تسجيل
+    const res = await jsonp('closeActiveCommand', { closedBy, closeReason });
+    if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+    setStatusAlert(false);
+    toast('تم إنهاء الحالة وتسجيل من أغلقها', 'success');
+    await refreshLists();
+    await syncActiveCommandUI();
+  } catch(e){
+    console.error(e);
+    toast('تعذر إنهاء الحالة: ' + (e.message || ''), 'error');
+  }
+}
+
+
+استخدام closeActiveCommand + LockService هو الأسلم لتجنب التعارض وتسجيل الإغلاق رسميًا. Google for Developers+1
+
+
+5) منع “الرفرش يقفل الطوارئ” (تثبيت الحالة بعد التحديث)
+المفروض الرفرش ما يمسح الأمر من الشاشات لأن الأمر محفوظ في الشيت.
+لكن الذي يسبب إحساس “اختفت” هو أن الواجهة ترجع “طبيعي” مؤقتًا بعد الرفرش.
+✅ الحل: عند التحميل اقرأ الأمر النشط واضبط UI فورًا.
+أضف:
+async function syncActiveCommandUI(){
+  try{
+    const ac = await jsonp('getActiveCommand', {});
+    const cmd = (ac && ac.ok) ? ac.command : null;
+
+    if (cmd && cmd.active){
+      const label = (String(cmd.mode||'').toLowerCase()==='training') ? '🎯 تمرين جاري' : 'حالة طوارئ!';
+      setStatusAlert(true, label);
+    } else {
+      setStatusAlert(false);
+    }
+  } catch(e) {
+    console.warn('syncActiveCommandUI failed', e);
+  }
+}
+
+ثم داخل init() بعد loadCoreData() مباشرة:
+await syncActiveCommandUI();
+setInterval(syncActiveCommandUI, 5000);
+
+
+6) إصلاح خطأ WEB_APP_URL في شاشة العرض (emergency.html)
+في كودك الحالي عندك سطر مكسور. ✂️ امسحه بالكامل:
+const WEB_APP_URL = 'const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzNH6oKKX09plvwfS4g-fTp2H91ZO7DWLTS6kKjpvbqPQibTf0nAr8-0xJvGYie1GPL2A/exec';
+
+✅ واكتب بدلها:
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzNH6oKKX09plvwfS4g-fTp2H91ZO7DWLTS6kKjpvbqPQibTf0nAr8-0xJvGYie1GPL2A/exec';
+
+
+ملاحظة مهمة عن الصوت (لا يمكن “غصب” بدون تفاعل)
+حتى لو كودك صحيح، المتصفح قد يمنع تشغيل الصوت تلقائيًا إلا بعد تفاعل المستخدم (Click/Touch) — وهذا سلوك قياسي في Chrome/متصفحات أخرى. Chrome for Developers+1
+والحل اللي عندك (Start button + unlockAudio) هو الصحيح.
+
+خلاصة التنفيذ (مختصر جدًا)
+
+
+Front-end: طبّق toYMD() + لا ترسل startDate/endDate للباكند + فلترة محلية → السجل يطلع فورًا.
+
+
+Back-end: لو تبغى فلترة من الشيت: لازم getTrainingSessions يحوّل التاريخ لـ yyyy-MM-dd + Deploy جديد. Google for Developers
+
+
+UI: خلِّ systemStatus زر clickable ينهي الحالة عبر closeActiveCommand (اسم + سبب + تسجيل).
+
+
+Fix WEB_APP_URL في شاشة العرض لأنه مكسور.
+
+
+إذا تبغى، انسخ لي جزء JavaScript الخاص بسجل التدريب من صفحتك (اللي فيه loadTrainingLog و applyTrainingFilter) وأنا أعطيك patch جاهز 100% مطابق حرفيًا لنفس أسماء الدوال عندك بدون ما تتعب.
