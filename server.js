@@ -62,6 +62,17 @@ app.post('/api/sheets/update-cell', async (req, res) => {
   }
 });
 
+// Download endpoint for github-deploy files
+app.get('/download/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'github-deploy', filename);
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, filename);
+  } else {
+    res.status(404).send('File not found');
+  }
+});
+
 // Debug endpoint to see raw sheet data
 app.get('/api/debug/sheet/:name', async (req, res) => {
   try {
