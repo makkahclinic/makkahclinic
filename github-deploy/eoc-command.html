@@ -62,6 +62,8 @@
       0%,100%{box-shadow:0 0 0 0 rgba(220,20,60,.35)}
       50%{box-shadow:0 0 0 10px rgba(220,20,60,0)}
     }
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes popIn{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
 
     .status-badge{
       display:flex;align-items:center;gap:8px;
@@ -1066,6 +1068,37 @@
       t.innerHTML = `<i class="fas ${type==='success'?'fa-check-circle':type==='error'?'fa-triangle-exclamation':type==='warn'?'fa-circle-exclamation':'fa-circle-info'}"></i> ${escapeHtml(message)}`;
       document.body.appendChild(t);
       setTimeout(()=>t.remove(), 3200);
+    }
+
+    function showBigSuccess(message) {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn .3s';
+      overlay.innerHTML = `
+        <div style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;padding:40px 50px;border-radius:24px;text-align:center;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,.5);animation:popIn .4s">
+          <div style="font-size:4rem;margin-bottom:20px">✅</div>
+          <div style="font-size:1.4rem;font-weight:900;white-space:pre-line;line-height:1.8">${escapeHtml(message)}</div>
+          <button onclick="this.closest('div').parentElement.remove()" style="margin-top:25px;background:#fff;color:#059669;border:0;padding:14px 40px;border-radius:12px;font-weight:900;font-size:1.1rem;cursor:pointer;font-family:Tajawal">
+            <i class="fas fa-check"></i> حسناً
+          </button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      setTimeout(() => overlay.remove(), 8000);
+    }
+
+    function showBigError(message) {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn .3s';
+      overlay.innerHTML = `
+        <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;padding:40px 50px;border-radius:24px;text-align:center;max-width:90vw;box-shadow:0 25px 50px rgba(0,0,0,.5);animation:popIn .4s">
+          <div style="font-size:4rem;margin-bottom:20px">❌</div>
+          <div style="font-size:1.2rem;font-weight:900;white-space:pre-line;line-height:1.8">${escapeHtml(message)}</div>
+          <button onclick="this.closest('div').parentElement.remove()" style="margin-top:25px;background:#fff;color:#dc2626;border:0;padding:14px 40px;border-radius:12px;font-weight:900;font-size:1.1rem;cursor:pointer;font-family:Tajawal">
+            <i class="fas fa-times"></i> إغلاق
+          </button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
     }
 
     function escapeHtml(str){
@@ -2122,6 +2155,13 @@
         toast('اختر سيناريو التدريب أولاً', 'warn');
         return;
       }
+      const btn = event?.target?.closest('button');
+      const originalHTML = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+      }
+      
       const trainer = getSelectedTrainer() || 'TRAINER';
       const payload = {
         responseType: 'training',
@@ -2136,15 +2176,27 @@
       try{
         const r = await jsonp('setActiveCommand', payload);
         if (!r || !r.ok) throw new Error(r?.error || 'setActiveCommand failed');
-        toast('تم إرسال التمرين للشاشات', 'success');
+        showBigSuccess('تم إرسال التمرين للشاشات بنجاح! 📺');
         setStatusAlert(true, '🎯 تمرين جاري');
       } catch(e){
         console.error(e);
         toast('فشل إرسال التمرين للشاشات', 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+        }
       }
     }
 
     async function stopTrainingOnScreens(){
+      const btn = event?.target?.closest('button');
+      const originalHTML = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإيقاف...';
+      }
+      
       try{
         const ac = await jsonp('getActiveCommand', {});
         const cmd = (ac && ac.ok) ? ac.command : null;
@@ -2158,12 +2210,17 @@
         }
         const r = await jsonp('clearActiveCommand', {});
         if (!r || !r.ok) throw new Error(r?.error || 'clearActiveCommand failed');
-        toast('تم إيقاف عرض التمرين على الشاشات', 'success');
+        showBigSuccess('تم إيقاف عرض التمرين! ⏹️');
         setStatusAlert(false);
         await syncActiveCommandUI();
       } catch(e){
         console.error(e);
         toast('تعذر إيقاف العرض', 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+        }
       }
     }
 
@@ -2172,6 +2229,14 @@
       if (!APP.train.scenarioKey || !trainer || APP.train.selectedRoster.size===0){
         toast('أكمل بيانات التدريب', 'error');
         return;
+      }
+
+      const btn = document.getElementById('saveTrainingBtn');
+      const originalHTML = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+        btn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
       }
 
       const attendees = Array.from(APP.train.selectedRoster).map(id=>{
@@ -2199,19 +2264,23 @@
 
       console.log('=== SAVING TRAINING SESSION ===');
       console.log('Payload:', JSON.stringify(payload, null, 2));
-      console.log('Calling: logTrainingSession');
 
       try{
         const res = await jsonp('logTrainingSession', payload);
         console.log('Response:', JSON.stringify(res, null, 2));
         if (!res || !res.ok) throw new Error(res?.error || 'logTrainingSession failed');
-        toast('تم حفظ جلسة التدريب', 'success');
+        showBigSuccess('تم حفظ جلسة التدريب بنجاح! ✅\n\nرقم الجلسة: ' + (res.sessionId || ''));
         closeTrainingModal();
         await refreshMiniTraining();
       } catch(e){
         console.error('SAVE ERROR:', e);
-        alert('خطأ في الحفظ: ' + e.message + '\n\nتأكد من نشر Apps Script جديد!');
-        toast('تعذر حفظ التدريب', 'error');
+        showBigError('فشل الحفظ!\n\n' + e.message + '\n\nتأكد من نشر Apps Script جديد');
+      } finally {
+        if (btn) {
+          btn.innerHTML = originalHTML;
+          btn.style.background = '';
+          updateTrainingSaveState();
+        }
       }
     }
 
