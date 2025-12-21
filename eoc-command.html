@@ -859,7 +859,10 @@
         <div>
           <div style="margin-bottom:12px">
             <div style="color:var(--secondary);font-weight:900;margin-bottom:8px"><i class="fas fa-user-tie"></i> اسم المدرب</div>
-            <input id="trainerName" class="loc-custom" placeholder="اكتب اسم المدرب..." oninput="updateTrainingSaveState()">
+            <select id="trainerSelect" class="loc-custom" onchange="onTrainerSelectChange()" style="margin-bottom:8px">
+              <option value="">-- اختر المدرب --</option>
+            </select>
+            <input id="trainerName" class="loc-custom" placeholder="اكتب اسم المدرب الخارجي..." oninput="updateTrainingSaveState()" style="display:none">
           </div>
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
@@ -1298,6 +1301,7 @@
         renderBuilding();
         renderMuster();
         renderRoster();
+        populateTrainerDropdown();
 
         // default show fire guide
         showScenarioGuide('fire');
@@ -2066,9 +2070,51 @@
 
     function updateTrainingSaveState(){
       updateRosterCount();
-      const trainer = document.getElementById('trainerName').value.trim();
+      const trainer = getSelectedTrainer();
       const can = !!APP.train.scenarioKey && APP.train.selectedRoster.size>0 && !!trainer;
       document.getElementById('saveTrainingBtn').disabled = !can;
+    }
+
+    function getSelectedTrainer(){
+      const sel = document.getElementById('trainerSelect');
+      const inp = document.getElementById('trainerName');
+      if (sel.value === '__external__') {
+        return inp.value.trim();
+      }
+      return sel.value;
+    }
+
+    function onTrainerSelectChange(){
+      const sel = document.getElementById('trainerSelect');
+      const inp = document.getElementById('trainerName');
+      if (sel.value === '__external__') {
+        inp.style.display = 'block';
+        inp.focus();
+      } else {
+        inp.style.display = 'none';
+        inp.value = '';
+      }
+      updateTrainingSaveState();
+    }
+
+    function populateTrainerDropdown(){
+      const sel = document.getElementById('trainerSelect');
+      sel.innerHTML = '<option value="">-- اختر المدرب --</option>';
+      
+      // Add staff from roster
+      APP.roster.forEach((p, idx) => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name + (p.department ? ' - ' + p.department : '');
+        sel.appendChild(opt);
+      });
+      
+      // Add external trainer option
+      const extOpt = document.createElement('option');
+      extOpt.value = '__external__';
+      extOpt.textContent = '👤 مدرب خارجي (اكتب الاسم)';
+      extOpt.style.fontWeight = '900';
+      sel.appendChild(extOpt);
     }
 
     async function broadcastTrainingToScreens(){
@@ -2076,7 +2122,7 @@
         toast('اختر سيناريو التدريب أولاً', 'warn');
         return;
       }
-      const trainer = document.getElementById('trainerName').value.trim() || 'TRAINER';
+      const trainer = getSelectedTrainer() || 'TRAINER';
       const payload = {
         responseType: 'training',
         reportType: '🎯 تمرين - ' + scenarioLabel(APP.train.scenarioKey),
@@ -2122,7 +2168,7 @@
     }
 
     async function saveTrainingSession(){
-      const trainer = document.getElementById('trainerName').value.trim();
+      const trainer = getSelectedTrainer();
       if (!APP.train.scenarioKey || !trainer || APP.train.selectedRoster.size===0){
         toast('أكمل بيانات التدريب', 'error');
         return;
