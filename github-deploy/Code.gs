@@ -195,6 +195,10 @@
       return output_(getScenarioGuides());
     }
     
+    if (action === 'getScenarioProfiles') {
+      return output_(getScenarioProfiles());
+    }
+    
     if (action === 'getTrainingRoster') {
       return output_(getTrainingRoster());
     }
@@ -209,6 +213,15 @@
     
     if (action === 'getTrainingSessions') {
       return output_(getTrainingSessions(p));
+    }
+    
+    // Aliases (compatibility)
+    if (action === 'getDrillLog') {
+      return output_(getTrainingSessions(p));
+    }
+    
+    if (action === 'updateEmergencyReportStatus') {
+      return output_(updateEmergencyReportStatus(p));
     }
     
     if (action === 'debug') {
@@ -269,7 +282,7 @@
   const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
 
   /******************** EOC BOOTSTRAP ********************/
-  const EOC_BOOTSTRAP_VERSION = 1;
+  const EOC_BOOTSTRAP_VERSION = 2;
 
   // أسماء الشيتات
   const SHEET_MAP = 'EOC_MAP';
@@ -278,6 +291,7 @@
   const SHEET_ROSTER = 'Training_Roster';
   const SHEET_TRAINING_LOG = 'Training_Log';
   const SHEET_ACTIVE_CMD = 'أوامر_نشطة';
+  const SHEET_PROFILE = 'EOC_PROFILE';
 
   // هيدرز
   const HEADERS_MAP = ['floor_order','floor_key','floor_name','dept_id','dept_name','dept_icon','active'];
@@ -286,6 +300,7 @@
   const HEADERS_ROSTER = ['name','department','role','active'];
   const HEADERS_TRAINING = ['session_id','date','start_time','end_time','duration_min','scenario_key','scenario_label','trainer','attendees','notes'];
   const HEADERS_ACTIVE = ['active','responseType','reportType','location','muster','timestamp','mode','scenarioKey','scenarioLabel','sessionId','trainer'];
+  const HEADERS_PROFILE = ['scenario_key','scenario_label','icon','color','default_responseType','body_class','active'];
 
   function ensureEocReady_() {
     const props = PropertiesService.getScriptProperties();
@@ -302,6 +317,7 @@
     const shMap = ensureSheet_(ss, SHEET_MAP, HEADERS_MAP);
     const shMuster = ensureSheet_(ss, SHEET_MUSTER, HEADERS_MUSTER);
     const shScen = ensureSheet_(ss, SHEET_SCENARIOS, HEADERS_SCEN);
+    const shProfile = ensureSheet_(ss, SHEET_PROFILE, HEADERS_PROFILE);
     ensureSheet_(ss, SHEET_ROSTER, HEADERS_ROSTER);
     ensureSheet_(ss, SHEET_TRAINING_LOG, HEADERS_TRAINING);
     ensureSheet_(ss, SHEET_ACTIVE_CMD, HEADERS_ACTIVE);
@@ -312,6 +328,18 @@
       shMuster.appendRow(['B','نقطة تجمع B','الساحة الخلفية','نعم']);
     }
     if (shScen.getLastRow() === 1) seedScenarios_(shScen);
+    if (shProfile.getLastRow() === 1) seedProfiles_(shProfile);
+  }
+
+  function seedProfiles_(sh) {
+    const rows = [
+      ['fire','حريق','fa-fire','#ef4444','full_evacuation','fire','نعم'],
+      ['power','انقطاع كهرباء','fa-bolt','#f59e0b','send_team','power','نعم'],
+      ['water','تسرب مياه','fa-tint','#0ea5e9','send_team','water','نعم'],
+      ['injury','إغماء/إصابة','fa-heartbeat','#dc2626','send_team','injury','نعم'],
+      ['outbreak','تفشي عدوى','fa-virus','#8b5cf6','isolation_evacuation','infection','نعم'],
+    ];
+    sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
   }
 
   function ensureSheet_(ss, name, headers) {
@@ -432,6 +460,37 @@
       });
       return { ok:true, scenarios: out };
     } catch(err){ return { ok:false, error: err.message }; }
+  }
+
+  function getScenarioProfiles() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName(SHEET_PROFILE);
+      if (!sh) return { ok: true, profiles: {} };
+
+      const data = sh.getDataRange().getValues();
+      const profiles = {};
+      for (let i = 1; i < data.length; i++) {
+        const r = data[i];
+        const active = String(r[6] || '').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+
+        const key = String(r[0] || '').trim();
+        if (!key) continue;
+
+        profiles[key] = {
+          scenarioKey: key,
+          scenarioLabel: String(r[1] || '').trim(),
+          icon: String(r[2] || '').trim(),
+          color: String(r[3] || '').trim(),
+          defaultResponseType: String(r[4] || '').trim(),
+          bodyClass: String(r[5] || '').trim(),
+        };
+      }
+      return { ok: true, profiles };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   }
 
   function getTrainingRoster() {

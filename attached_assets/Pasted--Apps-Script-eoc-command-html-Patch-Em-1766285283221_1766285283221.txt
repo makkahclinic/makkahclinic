@@ -1,0 +1,509 @@
+خلّيني أوضح لك نقطتين مهمتين ثم أعطيك تعديلات جاهزة (Apps Script + eoc-command.html + Patch لشاشة Emergency) بحيث:
+
+ما يصير كل شيء “إخلاء”
+
+الأوامر تكون صحيحة لكل حالة (حريق/كهرباء/مياه/إغماء/عدوى)
+
+السيناريوهات والتعليمات تتسحب من الشيت (تضيف/تحذف من الإكسل بدون ما تعدّل كود)
+
+الصوت يبقى بنفس فكرتك: المستخدم يضغط “تفعيل النظام” مرة واحدة فقط
+
+1) هل يمكن تشغيل الصوت “غصب” بدون أي تفاعل من المستخدم؟
+
+لا بشكل موثوق — أغلب المتصفحات تمنع تشغيل الصوت تلقائياً بدون “تفاعل مستخدم” (click/tap/keydown) أو سماح مسبق للموقع. هذا جزء من سياسات autoplay لحماية المستخدم.
+
+Chrome يقيّد Web Audio/Audio autoplay ويحتاج تفاعل أو استثناءات مثل MEI (Media Engagement Index).
+
+WebKit/Safari كذلك يفرض user gesture لتشغيل الصوت/الفيديو في أغلب الحالات.
+
+وعملياً audio.play() قد يفشل (promise reject) إن لم يوجد تفاعل.
+
+إذًا أفضل حل عملي (وهو اللي عندك الآن): شاشة “ابدأ المراقبة” + زر واحد يفتح الصوت مرة واحدة — ممتاز، خليها.
+
+2) لماذا يظهر “إخلاء” وهو ليس إخلاء؟
+
+لأن عندك خلط بين مفهومين لازم نفصلهم دائمًا:
+
+scenarioKey = نوع الحدث (fire / power / water / injury / outbreak)
+
+responseType = نوع الأمر الإداري (full_evacuation / send_team / isolation_evacuation)
+
+mode = real أو drill (تمرين)
+
+إذا أرسلت responseType=full_evacuation لكل شيء → شاشة Emergency ستفهمه “إخلاء” حتى لو الحدث كهرباء أو مياه.
+
+الحل الصح: نخلي لكل سيناريو “default responseType” من شيت (EOC_PROFILE).
+مثلاً:
+
+fire → full_evacuation
+
+power → send_team
+
+water → send_team
+
+injury → send_team
+
+outbreak → isolation_evacuation
+والتمرين = نفس السيناريو لكن mode=drill.
+
+A) تعديل Apps Script (أهم شيء: الشيتات + الأوامر + التدريب)
+
+أنت عندك أساس ممتاز (EOC_MAP / EOC_MUSTER / EOC_SCENARIOS / Training_Roster / Training_Log / أوامر_نشطة).
+بس ناقصك 3 أشياء:
+
+شيت Profile يحدد لكل سيناريو: أيقونة + لون + default responseType + body_class
+
+setActiveCommand / getActiveCommand لازم تحفظ وترجع (mode + scenarioKey + scenarioLabel)
+
+سجل التدريب عندك UI ينادي saveTrainingSession/getDrillLog لكن في Apps Script عندك logTrainingSession/getTrainingSessions → لازم توحيد أو عمل alias
+
+A1) أضف شيت جديد EOC_PROFILE + API
+
+ضع هذا داخل جزء الـ EOC BOOTSTRAP (جنب تعريفات الشيتات):
+
+// ✅ ارفع النسخة لتجهيز الشيت مرة واحدة
+const EOC_BOOTSTRAP_VERSION = 2;
+
+const SHEET_PROFILE = 'EOC_PROFILE';
+const HEADERS_PROFILE = ['scenario_key','scenario_label','icon','color','default_responseType','body_class','active'];
+
+
+ثم داخل setupEocWorkbook_() أضف:
+
+const shProfile = ensureSheet_(ss, SHEET_PROFILE, HEADERS_PROFILE);
+
+if (shProfile.getLastRow() === 1) seedProfiles_(shProfile);
+
+
+وأضف الدالة:
+
+function seedProfiles_(sh){
+  const rows = [
+    ['fire','حريق','fa-fire','#ef4444','full_evacuation','fire','نعم'],
+    ['power','انقطاع كهرباء','fa-bolt','#f59e0b','send_team','power','نعم'],
+    ['water','تسرب مياه','fa-tint','#0ea5e9','send_team','water','نعم'],
+    ['injury','إغماء/إصابة','fa-heartbeat','#dc2626','send_team','injury','نعم'],
+    ['outbreak','تفشي عدوى','fa-virus','#8b5cf6','isolation_evacuation','infection','نعم'],
+  ];
+  sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+}
+
+
+وأضف API:
+
+function getScenarioProfiles(){
+  try{
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_PROFILE);
+    if (!sh) return { ok:true, profiles:{} };
+
+    const data = sh.getDataRange().getValues();
+    const profiles = {};
+    for (let i=1;i<data.length;i++){
+      const r=data[i];
+      const active = String(r[6]||'').trim();
+      if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+
+      const key = String(r[0]||'').trim();
+      if (!key) continue;
+
+      profiles[key]={
+        scenarioKey:key,
+        scenarioLabel:String(r[1]||'').trim(),
+        icon:String(r[2]||'').trim(),
+        color:String(r[3]||'').trim(),
+        defaultResponseType:String(r[4]||'').trim(),
+        bodyClass:String(r[5]||'').trim(),
+      };
+    }
+    return { ok:true, profiles };
+  }catch(err){
+    return { ok:false, error: err.message };
+  }
+}
+
+
+وفي doGet أضف:
+
+if (action === 'getScenarioProfiles') {
+  return output_(getScenarioProfiles());
+}
+
+A2) استبدل دوال Active Command الثلاثة (مهم جداً)
+
+استبدل دوال:
+
+setActiveCommand
+
+getActiveCommand
+
+clearActiveCommand
+
+بهذا الشكل (يحفظ mode + scenarioKey + scenarioLabel + trainer + sessionId):
+
+function setActiveCommand(params) {
+  try {
+    ensureEocReady_();
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sheet = ensureSheet_(ss, SHEET_ACTIVE_CMD, HEADERS_ACTIVE);
+
+    // امسح أي صف قديم (نحتفظ بصف واحد نشط فقط)
+    if (sheet.getLastRow() > 1) {
+      sheet.deleteRows(2, sheet.getLastRow() - 1);
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const row = [
+      'true',
+      String(params.responseType || '').trim(),               // 1
+      String(params.reportType || '').trim(),                 // 2
+      String(params.location || '').trim(),                   // 3
+      String(params.muster || '').trim(),                     // 4
+      String(params.timestamp || nowIso).trim(),              // 5
+      String(params.mode || 'real').trim(),                   // 6  real/drill
+      String(params.scenarioKey || '').trim(),                // 7
+      String(params.scenarioLabel || '').trim(),              // 8
+      String(params.sessionId || '').trim(),                  // 9
+      String(params.trainer || '').trim(),                    // 10
+    ];
+
+    sheet.appendRow(row);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function getActiveCommand() {
+  try {
+    ensureEocReady_();
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sheet || sheet.getLastRow() < 2) return { ok: true, command: null };
+
+    const row = sheet.getRange(2, 1, 1, HEADERS_ACTIVE.length).getValues()[0];
+    const flag = String(row[0] || '').toLowerCase().trim();
+    if (flag !== 'true' && flag !== 'yes' && flag !== '1') return { ok: true, command: null };
+
+    return {
+      ok: true,
+      command: {
+        active: true,
+        responseType: row[1] || '',
+        reportType: row[2] || '',
+        location: row[3] || '',
+        muster: row[4] || '',
+        timestamp: row[5] || '',
+        mode: row[6] || 'real',
+        scenarioKey: row[7] || '',
+        scenarioLabel: row[8] || '',
+        sessionId: row[9] || '',
+        trainer: row[10] || ''
+      }
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function clearActiveCommand() {
+  try {
+    ensureEocReady_();
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sheet || sheet.getLastRow() < 2) return { ok: true };
+
+    sheet.getRange(2, 1).setValue('false');
+    sheet.getRange(2, 6).setValue(new Date().toISOString()); // حدّث الوقت
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+A3) أصلح “سجل التدريب” (الخلل الحقيقي)
+
+عندك في الـ HTML استدعاءات مثل:
+
+getDrillLog
+
+saveTrainingSession
+
+لكن في Apps Script عندك:
+
+getTrainingSessions
+
+logTrainingSession
+
+إما تعدّل الـ HTML (الأفضل) أو تعمل alias في Apps Script (أسرع لمنع كسر أي واجهة).
+أنا أعطيك alias جاهز:
+
+أضف داخل doGet:
+
+if (action === 'saveTrainingSession') return output_(saveTrainingSession(p));
+if (action === 'getDrillLog') return output_(getDrillLog(p));
+
+
+وأضف الدوال:
+
+function durationToMinutes_(dur){
+  const s = String(dur || '').trim();
+  if (!s) return 0;
+  const parts = s.split(':').map(x=>parseInt(x,10));
+  if (parts.some(isNaN)) return 0;
+
+  // HH:MM:SS
+  if (parts.length === 3) return parts[0]*60 + parts[1] + Math.round(parts[2]/60);
+  // MM:SS
+  if (parts.length === 2) return parts[0] + Math.round(parts[1]/60);
+  // minutes
+  if (parts.length === 1) return parts[0];
+  return 0;
+}
+
+function saveTrainingSession(p){
+  try{
+    const profilesRes = getScenarioProfiles();
+    const profiles = (profilesRes && profilesRes.ok) ? profilesRes.profiles : {};
+
+    const scenarioLabel = String(p.scenario || p.scenarioLabel || '').trim();
+    let scenarioKey = String(p.scenarioKey || '').trim();
+
+    if (!scenarioKey && scenarioLabel) {
+      // حاول تطابق بالاسم
+      for (const k in profiles){
+        if (profiles[k].scenarioLabel === scenarioLabel) { scenarioKey = k; break; }
+      }
+    }
+
+    const now = new Date();
+    const startTime = String(p.time || Utilities.formatDate(now,'Asia/Riyadh','HH:mm:ss'));
+    const durationMin = durationToMinutes_(p.duration || p.durationMin || '');
+
+    const end = new Date(now.getTime() + durationMin*60000);
+    const endTime = Utilities.formatDate(end,'Asia/Riyadh','HH:mm:ss');
+
+    return logTrainingSession({
+      startTime,
+      endTime,
+      durationMin,
+      scenarioKey,
+      scenarioLabel: scenarioLabel || (profiles[scenarioKey]?.scenarioLabel || ''),
+      trainer: String(p.trainer || '').trim(),
+      attendees: String(p.trainees || p.attendees || '').trim(),
+      notes: String(p.notes || '').trim()
+    });
+  }catch(err){
+    return { ok:false, error: err.message };
+  }
+}
+
+function getDrillLog(p){
+  const res = getTrainingSessions({ limit: p.limit || 50 });
+  if (!res.ok) return { ok:false, error: res.error, drills: [] };
+
+  const drills = (res.sessions || []).map(s => ({
+    date: s.date,
+    time: s.startTime,
+    scenario: s.scenarioLabel,
+    trainer: s.trainer,
+    trainees: s.attendees,
+    traineesCount: s.attendees ? s.attendees.split('،').filter(Boolean).length : 0,
+    duration: (s.durationMin ? (s.durationMin + ' دقيقة') : '')
+  }));
+
+  return { ok:true, drills };
+}
+
+B) Patch لشاشة Emergency.html (بدون ما نخرب “تفعيل الصوت”)
+
+أنت تبغى:
+
+ما يقول “إخلاء” إلا إذا الأمر فعلاً full_evacuation
+
+ويعرض تعليمات السيناريو (افعل/لا تفعل) من الشيت EOC_SCENARIOS
+
+ويظهر “تمرين” إذا mode=drill
+
+B1) أضف داخل <div class="emergency-screen" id="emergencyScreen"> هذا البلوك (بعد الـ instruction-box مثلاً)
+<div id="drillBadge" style="display:none; margin:10px auto 0; width:fit-content;
+     background:rgba(34,197,94,.25); border:2px solid rgba(34,197,94,.65);
+     padding:6px 14px; border-radius:999px; font-weight:900;">
+  🎯 تمرين / DRILL
+</div>
+
+<div id="guideBox" style="display:none; margin-top:10px; border-radius:14px;
+     padding:12px; background:linear-gradient(135deg,#fef3c7,#fde68a);
+     border:3px solid #f59e0b; color:#111827;">
+  <div style="font-weight:900; color:#b91c1c; margin-bottom:10px; font-size:1.2rem;">
+    <i class="fas fa-list-check"></i> ماذا تفعل الآن؟
+  </div>
+  <div style="display:grid; grid-template-columns:1fr; gap:10px;" id="guideInner">
+    <!-- سيتم ملؤه -->
+  </div>
+</div>
+
+B2) أضف في JS (فوق checkActiveCommand) كاش السيناريوهات + تحميلها مرة
+let scenarioGuidesCache = null;
+let scenarioProfilesCache = null;
+
+function mapReportToScenarioKey(reportType){
+  const t = String(reportType || '');
+  if (t.includes('حريق')) return 'fire';
+  if (t.includes('كهرباء')) return 'power';
+  if (t.includes('مياه') || t.includes('تسرب')) return 'water';
+  if (t.includes('إغماء') || t.includes('إصابة')) return 'injury';
+  if (t.includes('عدوى')) return 'outbreak';
+  return '';
+}
+
+async function loadScenarioCache(){
+  try{
+    const [g,p] = await Promise.all([
+      jsonp('getScenarioGuides', {}),
+      jsonp('getScenarioProfiles', {})
+    ]);
+    if (g && g.ok) scenarioGuidesCache = g.scenarios || {};
+    if (p && p.ok) scenarioProfilesCache = p.profiles || {};
+  }catch(e){
+    console.warn('Scenario cache load failed:', e);
+  }
+}
+
+function renderScenarioGuide(scenarioKey){
+  const box = document.getElementById('guideBox');
+  const inner = document.getElementById('guideInner');
+  if (!box || !inner) return;
+
+  const g = scenarioGuidesCache && scenarioGuidesCache[scenarioKey];
+  if (!g){
+    box.style.display = 'none';
+    inner.innerHTML = '';
+    return;
+  }
+
+  const buildList = (arr, color) => (arr || []).map(s =>
+    `<div style="display:flex; gap:10px; align-items:flex-start; background:#fff;
+         border-radius:10px; padding:10px; border-right:5px solid ${color};
+         box-shadow:0 2px 6px rgba(0,0,0,.08);">
+       <div style="min-width:28px; height:28px; border-radius:999px; background:${color};
+            color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900;">
+         ${s.stepNo || ''}
+       </div>
+       <div style="font-size:1.05rem; line-height:1.4;">${s.text || ''}</div>
+     </div>`
+  ).join('');
+
+  const doHtml = buildList(g.DO, '#16a34a');
+  const dontHtml = buildList(g.DONT, '#b91c1c');
+
+  inner.innerHTML = `
+    <div style="background:rgba(255,255,255,.7); border-radius:12px; padding:10px;">
+      <div style="font-weight:900; color:#166534; margin-bottom:8px;">
+        <i class="fas fa-check-circle"></i> افعل
+      </div>
+      ${doHtml || '<div style="opacity:.7">-</div>'}
+    </div>
+    <div style="background:rgba(255,255,255,.7); border-radius:12px; padding:10px;">
+      <div style="font-weight:900; color:#b91c1c; margin-bottom:8px;">
+        <i class="fas fa-ban"></i> لا تفعل
+      </div>
+      ${dontHtml || '<div style="opacity:.7">-</div>'}
+    </div>
+  `;
+  box.style.display = 'block';
+}
+
+B3) داخل startMonitoring() (بعد بدء المراقبة) أضف:
+await loadScenarioCache();
+
+B4) استبدل activateEmergency(command) عندك بهذه النسخة (توقف “إخلاء دائم”)
+function activateEmergency(command) {
+  currentCommand = command;
+  commandStartTime = new Date(command.timestamp || Date.now());
+
+  document.getElementById('safeScreen').classList.add('hidden');
+  document.getElementById('emergencyScreen').classList.add('active');
+
+  const scenarioKey = String(command.scenarioKey || '').trim() || mapReportToScenarioKey(command.reportType);
+  const profile = (scenarioProfilesCache && scenarioProfilesCache[scenarioKey]) ? scenarioProfilesCache[scenarioKey] : null;
+
+  // ✅ responseType = نوع الأمر الإداري (ليس السيناريو)
+  let resp = String(command.responseType || '').toLowerCase().trim();
+  const knownScenario = ['fire','power','water','injury','outbreak'];
+  if (knownScenario.includes(resp) && profile) resp = String(profile.defaultResponseType || '').toLowerCase();
+
+  if (!resp && profile) resp = String(profile.defaultResponseType || '').toLowerCase();
+
+  // ✅ لون الخلفية حسب السيناريو (وليس الإخلاء)
+  const bodyClass =
+    (profile && profile.bodyClass) ? profile.bodyClass :
+    (scenarioKey === 'fire') ? 'fire' :
+    (scenarioKey === 'power') ? 'power' :
+    (scenarioKey === 'water') ? 'water' :
+    (scenarioKey === 'injury') ? 'injury' :
+    (scenarioKey === 'outbreak') ? 'infection' : 'other';
+
+  document.body.className = bodyClass;
+
+  // ✅ عنوان الأمر حسب responseType
+  let title = 'تنبيه طوارئ';
+  let instructionTitle = 'التوجيهات:';
+  let iconHtml = '<i class="fas fa-exclamation-triangle"></i>';
+
+  if (resp === 'full_evacuation') {
+    title = 'أمر إخلاء';
+    instructionTitle = 'إخلاء فوري - اتجه إلى:';
+    iconHtml = '<i class="fas fa-running"></i>';
+  } else if (resp === 'send_team') {
+    title = 'أمر توجيه';
+    instructionTitle = 'التوجيه: توجه فوراً إلى:';
+    iconHtml = '<i class="fas fa-users"></i>';
+  } else if (resp === 'isolation_evacuation') {
+    title = 'أمر عزل';
+    instructionTitle = 'عزل المنطقة فوراً - الموقع:';
+    iconHtml = '<i class="fas fa-shield-virus"></i>';
+  } else {
+    // fallback icon حسب السيناريو
+    if (scenarioKey === 'fire') iconHtml = '<i class="fas fa-fire"></i>';
+    else if (scenarioKey === 'power') iconHtml = '<i class="fas fa-bolt"></i>';
+    else if (scenarioKey === 'water') iconHtml = '<i class="fas fa-water"></i>';
+    else if (scenarioKey === 'injury') iconHtml = '<i class="fas fa-user-injured"></i>';
+    else if (scenarioKey === 'outbreak') iconHtml = '<i class="fas fa-virus"></i>';
+  }
+
+  document.getElementById('emergencyTitle').textContent = title;
+  document.getElementById('instructionTitle').textContent = instructionTitle;
+  document.getElementById('emergencyIcon').innerHTML = iconHtml;
+
+  // ✅ نوع الحدث يظهر من الشيت إذا موجود
+  document.getElementById('emergencyType').textContent = command.reportType || (profile ? profile.scenarioLabel : 'طوارئ');
+  document.getElementById('emergencyLocation').textContent = command.location || '-';
+
+  // Muster
+  if (command.muster || command.musterPoint) {
+    document.getElementById('musterSection').style.display = 'block';
+    document.getElementById('musterPoint').textContent = command.muster || command.musterPoint;
+  } else {
+    document.getElementById('musterSection').style.display = 'none';
+    document.getElementById('musterPoint').textContent = '-';
+  }
+
+  // ✅ تمرين؟
+  const isDrill = String(command.mode || '').toLowerCase().trim() === 'drill';
+  const badge = document.getElementById('drillBadge');
+  if (badge) badge.style.display = isDrill ? 'block' : 'none';
+
+  // ✅ عرض تعليمات السيناريو من الشيت
+  renderScenarioGuide(scenarioKey);
+
+  startSiren();
+  startTimer();
+}
+
+
+كذا صارت الشاشة: إخلاء فقط إذا responseType = full_evacuation، وباقي الحالات توجيه/عزل/تنبيه حسب الأمر.

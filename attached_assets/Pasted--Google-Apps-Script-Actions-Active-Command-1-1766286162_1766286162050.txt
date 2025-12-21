@@ -1,0 +1,1306 @@
+أولًا (مهم جدًا): عدّل Google Apps Script لأن عندك تعارض أسماء Actions + دوال Active Command مكررة
+1-A) داخل doGet(e) أضف 3 Alias Actions (عشان الواجهة ما تتعطل لو نادت أسماء قديمة)
+
+ابحث داخل doGet(e) عن مكان أكشنات التدريب/البلاغات، ثم أضف هذا قبل return output_({ ok:false... }):
+
+// Aliases (compatibility)
+if (action === 'saveTrainingSession') {
+  return output_(logTrainingSession(p));
+}
+if (action === 'getDrillLog') {
+  return output_(getTrainingSessions(p));
+}
+if (action === 'updateEmergencyReportStatus') {
+  return output_(updateEmergencyReportStatus(p)); // alias
+}
+
+
+هذا يحل مشكلة “سجل التدريب غير مربوط” لأن صفحتك كانت تنادي getDrillLog و saveTrainingSession وهي غير موجودة.
+
+1-B) احذف بلوك Active Command القديم واستبدله ببلوك واحد صحيح (لأنه الآن عندك نسختين بنفس الاسم)
+
+ابحث في السكربت عن هذا العنوان:
+
+// Active Command Functions for Emergency Display Screen
+
+
+ثم امسح كامل البلوك من عند هذا السطر إلى قبل الدالة اللي بعدها (غالبًا قبل function getEocDrills(params)).
+
+ثم الصق بدل البلوك المحذوف هذا البلوك (نسخة واحدة نظيفة):
+
+function setActiveCommand(params) {
+  try {
+    ensureEocReady_();
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_ACTIVE_CMD) || ss.insertSheet(SHEET_ACTIVE_CMD);
+
+    // تأكيد الهيدر (بدون تخريب بيانات أخرى)
+    sh.getRange(1, 1, 1, HEADERS_ACTIVE.length).setValues([HEADERS_ACTIVE]);
+
+    // امسح الصفوف القديمة (اترك الهيدر)
+    if (sh.getLastRow() > 1) {
+      sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+    }
+
+    const now = new Date();
+    const ts = String(params.timestamp || now.toISOString());
+
+    const mode =
+      String(params.mode || '').trim() ||
+      ((String(params.isDrill || '').toLowerCase() === 'true') ? 'drill' : 'real');
+
+    const scenarioKey = String(params.scenarioKey || '').trim();
+    const scenarioLabel = String(params.scenarioLabel || '').trim();
+
+    // اكتب صف واحد فقط نشط
+    sh.getRange(2, 1, 1, HEADERS_ACTIVE.length).setValues([[
+      'true',
+      String(params.responseType || '').trim(),
+      String(params.reportType || '').trim(),
+      String(params.location || '').trim(),
+      String(params.muster || '').trim(),
+      ts,
+      mode,
+      scenarioKey,
+      scenarioLabel,
+      String(params.sessionId || '').trim(),
+      String(params.trainer || '').trim()
+    ]]);
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function getActiveCommand() {
+  try {
+    ensureEocReady_();
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sh || sh.getLastRow() < 2) return { ok: true, command: null };
+
+    const row = sh.getRange(2, 1, 1, HEADERS_ACTIVE.length).getValues()[0];
+    const flag = String(row[0] || '').toLowerCase().trim();
+    if (flag !== 'true' && flag !== 'yes' && flag !== '1') return { ok: true, command: null };
+
+    return {
+      ok: true,
+      command: {
+        active: true,
+        responseType: row[1] || '',
+        reportType: row[2] || '',
+        location: row[3] || '',
+        muster: row[4] || '',
+        timestamp: row[5] || '',
+        mode: row[6] || 'real',
+        scenarioKey: row[7] || '',
+        scenarioLabel: row[8] || '',
+        sessionId: row[9] || '',
+        trainer: row[10] || ''
+      }
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function clearActiveCommand() {
+  try {
+    ensureEocReady_();
+
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_ACTIVE_CMD);
+    if (!sh || sh.getLastRow() < 2) return { ok: true };
+
+    sh.getRange(2, 1).setValue('false');
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+
+كذا صار عندك Active Command “واحد فقط” + فيه حقول mode/scenarioKey/scenarioLabel — مهم جدًا عشان شاشة الطوارئ تعرف هل هو تمرين ولا حادث حقيقي.
+
+2) الآن تعديل eoc-command.html (بشكل واضح: امسح/بدّل)
+2-A) خريطة المبنى + نقاط التجمع: خلّها تُقرأ من الشيت (بدون تعديل يدوي)
+
+داخل eoc-command.html في قسم المبنى:
+
+(1) امسح بلوك الخريطة الثابتة
+
+ابحث عن:
+
+<div class="building-view">
+    ... (كل الأدوار static) ...
+</div>
+
+
+امسحه بالكامل واستبدله بهذا:
+
+<div class="building-view" id="buildingView"></div>
+
+(2) امسح بلوك muster الثابت
+
+ابحث عن:
+
+<div class="muster-points">
+   ... A / B ...
+</div>
+
+
+امسحه بالكامل واستبدله بهذا:
+
+<div class="muster-points" id="musterPoints"></div>
+
+
+بعد هذا، أي إضافة/حذف دور/قسم/نقطة تجمع = فقط من الشيت EOC_MAP و EOC_MUSTER.
+
+2-B) داخل مودال “سجل البلاغات” صحّح خيار الحالة
+
+في reportsStatusFilter عندك خيار “تم الحل” بينما عندك في الشيت أنت تستخدم “مغلق”.
+بدّل هذا:
+
+<option value="تم الحل">تم الحل</option>
+
+
+إلى:
+
+<option value="مغلق">مغلق</option>
+
+
+(وإذا تبغى الاثنين، خلهما الاثنين — لكن لا تتركه “تم الحل” وحده)
+
+3) أهم خطوة: امسح كل سكربت الصفحة واستبدله بسكربت واحد نظيف (يحل 90% من المشاكل مرة واحدة)
+3-A) في eoc-command.html
+
+امسح كل شيء داخل <script> ... </script> في آخر الصفحة
+ثم الصق هذا السكربت بدلًا عنه بالكامل:
+
+<script>
+/* ===========================
+   EOC COMMAND - CLEAN SCRIPT
+   - reads Building Map + Muster + Scenario Guides + Roster from Sheets
+   - Training log + Reports log work
+   - Sends Active Command without forcing "evacuation" for every event
+=========================== */
+
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbztSmY_O_ITwKYXVNzs2wH8Wsid05XEZ5bEG6KJf4453dlFE8JHG_zRmuJbOksa6UgogQ/exec';
+const SA_TZ = 'Asia/Riyadh';
+
+function eocJsonp(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    params.action = action;
+    params.callback = cb;
+
+    const s = document.createElement("script");
+    s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
+
+    function cleanup() {
+      try { delete window[cb]; } catch(e) {}
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }
+    document.body.appendChild(s);
+  });
+}
+// keep backward compatibility with your old code
+window.__eocJsonp = eocJsonp;
+
+function saISO(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: SA_TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(d);
+}
+function saTimeHM(d = new Date()) {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: SA_TZ, hour:'2-digit', minute:'2-digit', hour12:false }).format(d);
+}
+function faClass(icon) {
+  const x = String(icon || '').trim();
+  if (!x) return 'fa-circle-info';
+  if (x.includes('fa-')) return x; // e.g. fa-bolt
+  return 'fa-circle-info';
+}
+function esc(s){ return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+
+const UI_TO_SCENARIO_KEY = {
+  fire: 'fire',
+  power: 'power',
+  water: 'water',
+  medical: 'injury',
+  injury: 'injury',
+  outbreak: 'outbreak',
+  infection: 'outbreak'
+};
+
+const STATE = {
+  building: null,         // {floors, muster}
+  scenarioGuides: {},     // key -> {label, DO[], DONT[]}
+  roster: [],             // [{name, department, role}]
+  currentScenarioKey: null,
+  currentReport: null,
+
+  alertedIds: new Set(JSON.parse(localStorage.getItem('eoc_alerted_ids') || '[]')),
+
+  training: {
+    scenarioKey: null,
+    trainees: new Set(),
+    startedAt: null,
+    seconds: 0,
+    timer: null
+  },
+
+  caches: {
+    trainingSessions: [],
+    reports: []
+  }
+};
+
+function persistAlerted() {
+  localStorage.setItem('eoc_alerted_ids', JSON.stringify(Array.from(STATE.alertedIds)));
+}
+
+/* ===========================
+   RENDER: Building + Muster
+=========================== */
+async function loadBuildingAndGuides() {
+  const [cfg, scen, roster] = await Promise.all([
+    eocJsonp('getBuildingConfig', {}),
+    eocJsonp('getScenarioGuides', {}),
+    eocJsonp('getTrainingRoster', {})
+  ]);
+
+  if (cfg && cfg.ok) STATE.building = cfg;
+  if (scen && scen.ok) STATE.scenarioGuides = scen.scenarios || {};
+  if (roster && roster.ok) STATE.roster = roster.roster || [];
+}
+
+function renderBuilding() {
+  const wrap = document.getElementById('buildingView');
+  if (!wrap || !STATE.building) return;
+
+  const floors = Array.isArray(STATE.building.floors) ? STATE.building.floors : [];
+  wrap.innerHTML = floors.map(f => {
+    const fKey = esc(f.floorKey ?? '');
+    const fName = esc(f.floorName ?? '');
+    const statusId = `floor${fKey}-status`;
+
+    const depts = (f.departments || []).map(d => {
+      const id = esc(d.id);
+      const name = esc(d.name);
+      const ic = faClass(d.icon);
+      return `
+        <div class="dept-card" data-dept="${id}" onclick="selectDept('${id}', event)">
+          <i class="fas ${ic}"></i>
+          ${name}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="floor" data-floor="${fKey}" onclick="selectFloor('${fKey}', event)">
+        <div class="floor-header">
+          <div class="floor-name">
+            <div class="floor-icon"><i class="fas fa-layer-group"></i></div>
+            <span>${fName}</span>
+          </div>
+          <span class="floor-status safe" id="${statusId}">آمن</span>
+        </div>
+        <div class="departments-grid">${depts}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMuster() {
+  const wrap = document.getElementById('musterPoints');
+  if (!wrap || !STATE.building) return;
+
+  const muster = Array.isArray(STATE.building.muster) ? STATE.building.muster : [];
+  wrap.innerHTML = muster.map(m => `
+    <div class="muster-card" id="muster${esc(m.key)}" onclick="toggleMusterPoint('${esc(m.key)}')">
+      <i class="fas fa-map-marker-alt"></i>
+      <h4>${esc(m.name)}</h4>
+      <p>${esc(m.desc)}</p>
+    </div>
+  `).join('');
+}
+
+window.selectFloor = function selectFloor(floorKey, ev) {
+  document.querySelectorAll('.floor').forEach(f => f.classList.remove('active'));
+  const el = document.querySelector(`.floor[data-floor="${floorKey}"]`);
+  if (el) el.classList.add('active');
+};
+
+window.selectDept = function selectDept(deptId, ev) {
+  if (ev) ev.stopPropagation();
+  document.querySelectorAll('.dept-card').forEach(d => d.classList.remove('selected'));
+  const el = document.querySelector(`.dept-card[data-dept="${deptId}"]`);
+  if (el) el.classList.add('selected');
+};
+
+window.toggleMusterPoint = function toggleMusterPoint(pointKey) {
+  const card = document.getElementById('muster' + pointKey);
+  if (card) card.classList.toggle('selected');
+};
+
+/* ===========================
+   Scenario Guide Panel
+=========================== */
+window.showScenario = function showScenario(uiKey) {
+  const scenarioKey = UI_TO_SCENARIO_KEY[uiKey] || uiKey;
+  STATE.currentScenarioKey = scenarioKey;
+
+  const s = STATE.scenarioGuides[scenarioKey];
+  if (!s) {
+    showToast('لا توجد تعليمات لهذا السيناريو في الشيت', 'error');
+    return;
+  }
+
+  // title
+  const titleEl = document.getElementById('responseTitle');
+  const stepsEl = document.getElementById('responseSteps');
+  const panel = document.getElementById('responsePanel');
+  if (!titleEl || !stepsEl || !panel) return;
+
+  titleEl.innerHTML = `<i class="fas fa-list-check" style="color: var(--secondary)"></i><span>${esc(s.label || scenarioKey)}</span>`;
+
+  const doSteps = (s.DO || []).map((x, i) => `
+    <div class="step-item">
+      <div class="step-number">${i + 1}</div>
+      <div class="step-content">
+        <h4><i class="fas ${faClass(x.icon)}"></i> نفّذ</h4>
+        <p>${esc(x.text)}</p>
+      </div>
+    </div>
+  `).join('');
+
+  const dontSteps = (s.DONT || []).map((x, i) => `
+    <div class="step-item" style="border-right-color:#DC143C;background:rgba(220,20,60,0.08)">
+      <div class="step-number" style="background:#DC143C;color:#fff">!</div>
+      <div class="step-content">
+        <h4 style="color:#DC143C"><i class="fas ${faClass(x.icon)}"></i> لا تفعل</h4>
+        <p>${esc(x.text)}</p>
+      </div>
+    </div>
+  `).join('');
+
+  stepsEl.innerHTML = doSteps + (dontSteps ? `<div style="height:10px"></div>${dontSteps}` : '');
+  panel.classList.add('active');
+};
+
+window.closeResponse = function closeResponse() {
+  const panel = document.getElementById('responsePanel');
+  if (panel) panel.classList.remove('active');
+};
+
+/* ===========================
+   Emergency Activation (NOT always evacuation)
+=========================== */
+window.openEvacuationPanel = function openEvacuationPanel() {
+  const m = document.getElementById('evacuationModal');
+  if (m) m.classList.add('active');
+};
+window.closeEvacuationPanel = function closeEvacuationPanel() {
+  const m = document.getElementById('evacuationModal');
+  if (m) m.classList.remove('active');
+};
+
+// button in guide panel
+window.activateEmergency = async function activateEmergency() {
+  if (!STATE.currentScenarioKey) {
+    showToast('اختر سيناريو أولاً من دليل السيناريوهات', 'info');
+    return;
+  }
+  await quickActivate(STATE.currentScenarioKey);
+};
+
+function scenarioLabel(key) {
+  return (STATE.scenarioGuides[key] && STATE.scenarioGuides[key].label) ? STATE.scenarioGuides[key].label : key;
+}
+
+// One-click activate (Fire/Power/Water/Injury/Outbreak/Drill)
+window.quickActivate = quickActivate;
+async function quickActivate(uiType) {
+  const type = UI_TO_SCENARIO_KEY[uiType] || uiType;        // map medical/infection -> injury/outbreak
+  const isDrill = (uiType === 'drill');
+
+  const scenKey = isDrill ? (STATE.currentScenarioKey || 'fire') : type; // drill uses current scenario if selected
+  const scenLabel = scenarioLabel(scenKey);
+
+  const msg = isDrill
+    ? `هل تريد تفعيل تمرين: ${scenLabel} ؟\nسيظهر على شاشات الطوارئ كـ "تمرين".`
+    : `هل تريد تفعيل تنبيه حادث: ${scenLabel} ؟\n⚠️ سيتم إشعار جميع الموظفين (بدون أمر إخلاء تلقائي).`;
+
+  if (!confirm(msg)) return;
+
+  closeEvacuationPanel();
+
+  const payload = {
+    responseType: 'alert',           // مهم: ليس full_evacuation إلا إذا اخترته يدويًا من بلاغ حقيقي
+    reportType: scenLabel,
+    location: 'المبنى بالكامل',
+    muster: '',                      // لا نظهر نقطة تجمع إلا إذا كان إخلاء فعلي
+    mode: isDrill ? 'drill' : 'real',
+    scenarioKey: scenKey,
+    scenarioLabel: scenLabel,
+    trainer: '',
+    sessionId: ''
+  };
+
+  try {
+    const res = await eocJsonp('setActiveCommand', payload);
+    if (!res || !res.ok) throw new Error(res?.error || 'setActiveCommand failed');
+
+    setStatusBanner(isDrill ? '🎯 تمرين جاري' : '🚨 تنبيه طوارئ', true);
+
+    // عرض شاشة الأمر داخل صفحة الـ EOC (اختياري) – يعطي "انبهار"
+    showCommandScreen({
+      type: isDrill ? 'drill' : 'alert',
+      reportType: scenLabel,
+      location: payload.location,
+      muster: payload.muster || '',
+      mode: payload.mode
+    });
+
+    showToast(isDrill ? 'تم إرسال التمرين للشاشات' : 'تم إرسال التنبيه للشاشات', 'success');
+  } catch (e) {
+    console.error(e);
+    setStatusBanner('الوضع طبيعي', false);
+    showToast('فشل إرسال الأمر للشاشات (راجع WebApp)', 'error');
+  }
+}
+
+function setStatusBanner(text, alertMode) {
+  const el = document.getElementById('systemStatus');
+  if (!el) return;
+  if (alertMode) {
+    el.className = 'status-badge status-alert';
+    el.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>${esc(text)}</span>`;
+  } else {
+    el.className = 'status-badge status-normal';
+    el.innerHTML = `<i class="fas fa-check-circle"></i><span>${esc(text)}</span>`;
+  }
+}
+
+/* ===========================
+   Command Screen (local view)
+=========================== */
+let commandTimerStart = null;
+let commandTimerInterval = null;
+
+function showCommandScreen(commandData) {
+  const screen = document.getElementById('commandDisplayScreen');
+  if (!screen) return;
+
+  const titleEl = document.getElementById('commandTitle');
+  const reportTypeEl = document.getElementById('commandReportType');
+  const locEl = document.getElementById('commandLocation');
+  const musterSection = document.getElementById('commandMusterSection');
+  const musterEl = document.getElementById('commandMuster');
+
+  if (titleEl) {
+    const title = (commandData.mode === 'drill') ? '🎯 تمرين' : 'أمر/تنبيه';
+    titleEl.innerHTML = `<i class="fas fa-bullhorn"></i> ${title}`;
+  }
+  if (reportTypeEl) reportTypeEl.textContent = commandData.reportType || '-';
+  if (locEl) locEl.textContent = commandData.location || '-';
+
+  if (commandData.muster && musterSection && musterEl) {
+    musterSection.style.display = 'block';
+    musterEl.textContent = commandData.muster;
+  } else if (musterSection) {
+    musterSection.style.display = 'none';
+  }
+
+  if (commandTimerInterval) clearInterval(commandTimerInterval);
+  commandTimerStart = Date.now();
+  commandTimerInterval = setInterval(() => {
+    const el = document.getElementById('commandTimer');
+    if (!el) return;
+    const sec = Math.floor((Date.now() - commandTimerStart) / 1000);
+    const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+    const ss = String(sec % 60).padStart(2, '0');
+    el.textContent = `${mm}:${ss}`;
+  }, 1000);
+
+  screen.classList.add('active');
+}
+
+window.endCommand = async function endCommand() {
+  if (!confirm('هل تريد إنهاء الأمر؟')) return;
+  try {
+    await eocJsonp('clearActiveCommand', {});
+  } catch(e) {}
+
+  if (commandTimerInterval) clearInterval(commandTimerInterval);
+  commandTimerInterval = null;
+
+  const screen = document.getElementById('commandDisplayScreen');
+  if (screen) screen.classList.remove('active');
+
+  setStatusBanner('الوضع طبيعي', false);
+  showToast('تم إنهاء الأمر', 'success');
+};
+
+/* ===========================
+   Training Modal (Roster from sheet)
+=========================== */
+window.openTrainingModal = function openTrainingModal() {
+  const modal = document.getElementById('trainingModal');
+  if (!modal) return;
+
+  STATE.training.trainees.clear();
+  STATE.training.scenarioKey = null;
+
+  // start timer
+  STATE.training.startedAt = new Date();
+  STATE.training.seconds = 0;
+  if (STATE.training.timer) clearInterval(STATE.training.timer);
+  STATE.training.timer = setInterval(() => {
+    STATE.training.seconds++;
+    updateTrainingTimerUI();
+  }, 1000);
+  updateTrainingTimerUI();
+
+  renderRosterGrid();
+  resetTrainingUI();
+
+  modal.classList.add('active');
+};
+
+window.closeTrainingModal = function closeTrainingModal() {
+  const modal = document.getElementById('trainingModal');
+  if (modal) modal.classList.remove('active');
+
+  if (STATE.training.timer) clearInterval(STATE.training.timer);
+  STATE.training.timer = null;
+};
+
+function updateTrainingTimerUI() {
+  const el = document.getElementById('sessionTimerDisplay');
+  if (!el) return;
+  const s = STATE.training.seconds;
+  const h = String(Math.floor(s / 3600)).padStart(2, '0');
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  el.textContent = `${h}:${m}:${sec}`;
+}
+
+function resetTrainingUI() {
+  document.querySelectorAll('.scenario-select-btn').forEach(b => b.classList.remove('active'));
+  const box = document.getElementById('trainingInstructionsBox');
+  if (box) box.classList.remove('active');
+  const cnt = document.getElementById('traineesCount');
+  if (cnt) cnt.textContent = '0';
+  const btn = document.getElementById('saveTrainingBtn');
+  if (btn) btn.disabled = true;
+  const trainer = document.getElementById('trainerNameInput');
+  if (trainer) trainer.value = '';
+}
+
+function renderRosterGrid() {
+  const grid = document.getElementById('traineesGrid');
+  if (!grid) return;
+
+  const roster = STATE.roster || [];
+  if (!roster.length) {
+    grid.innerHTML = `<div style="opacity:.8;text-align:center;padding:15px">لا يوجد متدربون في Training_Roster</div>`;
+    return;
+  }
+
+  grid.innerHTML = roster.map(p => {
+    const name = esc(p.name);
+    const dept = esc(p.department);
+    const selected = STATE.training.trainees.has(p.name) ? 'selected' : '';
+    return `
+      <div class="trainee-card ${selected}" data-name="${name}">
+        <div class="check-box">${selected ? '<i class="fas fa-check"></i>' : ''}</div>
+        <div class="trainee-info">
+          <div class="trainee-name">${name}</div>
+          <div class="trainee-dept">${dept}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  grid.onclick = (e) => {
+    const card = e.target.closest('.trainee-card');
+    if (!card) return;
+    const name = card.getAttribute('data-name');
+    if (!name) return;
+
+    if (STATE.training.trainees.has(name)) STATE.training.trainees.delete(name);
+    else STATE.training.trainees.add(name);
+
+    renderRosterGrid();
+
+    const cnt = document.getElementById('traineesCount');
+    if (cnt) cnt.textContent = String(STATE.training.trainees.size);
+
+    updateSaveTrainingState();
+  };
+}
+
+window.selectTrainingScenario = function selectTrainingScenario(uiKey) {
+  const k = UI_TO_SCENARIO_KEY[uiKey] || uiKey;
+  STATE.training.scenarioKey = k;
+
+  document.querySelectorAll('.scenario-select-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.scenario-select-btn.${uiKey}`);
+  if (btn) btn.classList.add('active');
+
+  const guide = STATE.scenarioGuides[k];
+  if (!guide) {
+    showToast('هذا السيناريو غير موجود في EOC_SCENARIOS', 'error');
+    return;
+  }
+
+  const box = document.getElementById('trainingInstructionsBox');
+  const title = document.getElementById('trainingInstrTitle');
+  const content = document.getElementById('trainingInstrContent');
+  if (!box || !title || !content) return;
+
+  title.textContent = `تعليمات التدريب: ${guide.label || k}`;
+
+  const doHtml = (guide.DO || []).map((x, i) => `
+    <div class="instr-step">
+      <span class="step-num">${i+1}</span>
+      <span class="step-icon"><i class="fas ${faClass(x.icon)}"></i></span>
+      <span class="step-text">${esc(x.text)}</span>
+    </div>
+  `).join('');
+
+  const dontHtml = (guide.DONT || []).map((x, i) => `
+    <div class="instr-step danger-step">
+      <span class="step-num">!</span>
+      <span class="step-icon"><i class="fas ${faClass(x.icon)}"></i></span>
+      <span class="step-text"><strong>تنبيه:</strong> ${esc(x.text)}</span>
+    </div>
+  `).join('');
+
+  content.innerHTML = doHtml + dontHtml;
+  box.classList.add('active');
+
+  updateSaveTrainingState();
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const trainer = document.getElementById('trainerNameInput');
+  if (trainer) trainer.addEventListener('input', updateSaveTrainingState);
+});
+
+function updateSaveTrainingState() {
+  const trainer = (document.getElementById('trainerNameInput')?.value || '').trim();
+  const canSave = !!STATE.training.scenarioKey && STATE.training.trainees.size > 0 && !!trainer;
+  const btn = document.getElementById('saveTrainingBtn');
+  if (btn) btn.disabled = !canSave;
+}
+
+window.saveTrainingSession = async function saveTrainingSession() {
+  const trainer = (document.getElementById('trainerNameInput')?.value || '').trim();
+  if (!STATE.training.scenarioKey || STATE.training.trainees.size === 0 || !trainer) {
+    showToast('أكمل: السيناريو + المدرب + الحضور', 'error');
+    return;
+  }
+
+  const now = new Date();
+  const start = STATE.training.startedAt || now;
+
+  const startTime = saTimeHM(start);
+  const endTime = saTimeHM(now);
+  const durationMin = Math.max(1, Math.round(STATE.training.seconds / 60));
+
+  const key = STATE.training.scenarioKey;
+  const label = scenarioLabel(key);
+  const attendees = Array.from(STATE.training.trainees).join('، ');
+
+  try {
+    const res = await eocJsonp('logTrainingSession', {
+      startTime,
+      endTime,
+      durationMin,
+      scenarioKey: key,
+      scenarioLabel: label,
+      trainer,
+      attendees,
+      notes: ''
+    });
+
+    if (!res || !res.ok) throw new Error(res?.error || 'logTrainingSession failed');
+
+    showToast('تم حفظ جلسة التدريب في الشيت', 'success');
+    closeTrainingModal();
+    await refreshTrainingPreview();
+  } catch (e) {
+    console.error(e);
+    showToast('فشل حفظ التدريب (راجع WebApp)', 'error');
+  }
+};
+
+/* ===========================
+   Training Log Modal
+=========================== */
+window.openTrainingLogModal = async function openTrainingLogModal() {
+  const modal = document.getElementById('trainingLogModal');
+  if (modal) modal.classList.add('active');
+  await loadTrainingSessions();
+  renderTrainingLog(STATE.caches.trainingSessions);
+  ensureQuickPeriodUI('training');
+};
+window.closeTrainingLogModal = function closeTrainingLogModal() {
+  const modal = document.getElementById('trainingLogModal');
+  if (modal) modal.classList.remove('active');
+};
+
+async function loadTrainingSessions() {
+  try {
+    const res = await eocJsonp('getTrainingSessions', { limit: 200 });
+    STATE.caches.trainingSessions = (res && res.ok && res.sessions) ? res.sessions : [];
+  } catch (e) {
+    console.error(e);
+    STATE.caches.trainingSessions = [];
+  }
+}
+
+function renderTrainingLog(list) {
+  const body = document.getElementById('trainingLogBody');
+  if (!body) return;
+
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:25px;opacity:.8">لا توجد جلسات تدريب</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = list.map((s, i) => {
+    const attendees = String(s.attendees || '').trim();
+    const count = attendees ? attendees.split('،').map(x=>x.trim()).filter(Boolean).length : 0;
+    const duration = s.durationMin ? `${s.durationMin} دقيقة` : '-';
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(s.date)}</td>
+        <td>${esc(s.startTime || '')}</td>
+        <td><span class="scenario-tag ${getScenarioClass(s.scenarioLabel || s.scenarioKey)}">${esc(s.scenarioLabel || s.scenarioKey)}</span></td>
+        <td>${esc(s.trainer || '')}</td>
+        <td>${count}</td>
+        <td>${duration}</td>
+        <td><button class="view-btn" onclick="showTrainingDetails(${i})"><i class="fas fa-eye"></i></button></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.filterTrainingLog = function filterTrainingLog() {
+  const from = document.getElementById('trainingLogFromDate')?.value || '';
+  const to = document.getElementById('trainingLogToDate')?.value || '';
+
+  let list = [...STATE.caches.trainingSessions];
+  if (from) list = list.filter(x => String(x.date || '') >= from);
+  if (to) list = list.filter(x => String(x.date || '') <= to);
+
+  renderTrainingLog(list);
+};
+
+window.showTrainingDetails = function showTrainingDetails(index) {
+  const s = STATE.caches.trainingSessions[index];
+  if (!s) return;
+
+  const modal = document.getElementById('trainingDetailsModal');
+  const content = document.getElementById('trainingDetailsContent');
+  if (!modal || !content) return;
+
+  content.innerHTML = `
+    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+      <h3 style="color: var(--secondary); margin-bottom: 10px;"><i class="fas fa-calendar"></i> بيانات الجلسة</h3>
+      <p><strong>التاريخ:</strong> ${esc(s.date)}</p>
+      <p><strong>البداية:</strong> ${esc(s.startTime)}</p>
+      <p><strong>النهاية:</strong> ${esc(s.endTime)}</p>
+      <p><strong>المدة:</strong> ${esc(String(s.durationMin || ''))} دقيقة</p>
+      <p><strong>السيناريو:</strong> ${esc(s.scenarioLabel || s.scenarioKey)}</p>
+      <p><strong>المدرب:</strong> ${esc(s.trainer)}</p>
+    </div>
+    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px;">
+      <h3 style="color: var(--secondary); margin-bottom: 10px;"><i class="fas fa-users"></i> الحضور</h3>
+      <p>${esc(s.attendees || '')}</p>
+    </div>
+  `;
+
+  modal.classList.add('active');
+};
+
+/* ===========================
+   Reports Log Modal
+=========================== */
+window.openReportsLogModal = async function openReportsLogModal() {
+  const modal = document.getElementById('reportsLogModal');
+  if (modal) modal.classList.add('active');
+  await loadReportsFull();
+  renderReportsLog(STATE.caches.reports);
+  ensureQuickPeriodUI('reports');
+};
+window.closeReportsLogModal = function closeReportsLogModal() {
+  const modal = document.getElementById('reportsLogModal');
+  if (modal) modal.classList.remove('active');
+};
+
+async function loadReportsFull() {
+  try {
+    const res = await eocJsonp('getEmergencyReports', { limit: 200 });
+    STATE.caches.reports = (res && res.ok && res.reports) ? res.reports : [];
+  } catch (e) {
+    console.error(e);
+    STATE.caches.reports = [];
+  }
+}
+
+function renderReportsLog(list) {
+  const body = document.getElementById('reportsLogBody');
+  if (!body) return;
+
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:25px;opacity:.8">لا توجد بلاغات</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = list.map(r => {
+    const status = String(r.status || '');
+    const statusClass = (status === 'جديد') ? 'new' : (status === 'قيد المعالجة') ? 'pending' : 'resolved';
+    return `
+      <tr>
+        <td>${esc(r.id)}</td>
+        <td>${esc(r.date)}</td>
+        <td>${esc(r.time)}</td>
+        <td><span class="scenario-tag ${getScenarioClass(r.type)}">${esc(r.type)}</span></td>
+        <td>${esc(r.location)}</td>
+        <td><span class="status-tag ${statusClass}">${esc(status)}</span></td>
+        <td>
+          ${(status !== 'مغلق')
+            ? `<button class="view-btn" onclick="updateStatus('${esc(r.id)}', '${status === 'جديد' ? 'قيد المعالجة' : 'مغلق'}')">${status === 'جديد' ? 'معالجة' : 'إغلاق'}</button>`
+            : `<span style="color:var(--success)"><i class="fas fa-check"></i></span>`
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.filterReportsLog = function filterReportsLog() {
+  const from = document.getElementById('reportsLogFromDate')?.value || '';
+  const to = document.getElementById('reportsLogToDate')?.value || '';
+  const status = document.getElementById('reportsStatusFilter')?.value || '';
+
+  let list = [...STATE.caches.reports];
+  if (from) list = list.filter(x => String(x.date || '') >= from);
+  if (to) list = list.filter(x => String(x.date || '') <= to);
+  if (status) list = list.filter(x => String(x.status || '') === status);
+
+  renderReportsLog(list);
+};
+
+/* ===========================
+   Side panels: incoming reports + training preview
+=========================== */
+async function refreshReportsPreview() {
+  const container = document.getElementById('reportsLog');
+  if (!container) return;
+
+  try {
+    const res = await eocJsonp('getEmergencyReports', { limit: 20 });
+    const reports = (res && res.ok && res.reports) ? res.reports : [];
+
+    // detect new
+    const newOnes = reports.filter(r => r.status === 'جديد' && !STATE.alertedIds.has(r.id));
+    if (newOnes.length) {
+      STATE.alertedIds.add(newOnes[0].id);
+      persistAlerted();
+      showNewReportAlert(newOnes[0]);
+    }
+
+    container.innerHTML = reports.slice(0, 10).map(r => {
+      const statusClass = r.status === 'جديد' ? 'new' : r.status === 'قيد المعالجة' ? 'pending' : 'resolved';
+      return `
+        <div class="report-item ${statusClass}">
+          <div class="report-header">
+            <span class="report-type"><i class="${getReportTypeIcon(r.type)}"></i> ${esc(r.type)}</span>
+            <span class="report-status ${statusClass}">${esc(r.status)}</span>
+          </div>
+          <div class="report-location"><i class="fas fa-map-marker-alt"></i> ${esc(r.location)}</div>
+          <div class="report-time"><i class="fas fa-clock"></i> ${esc(r.date)} - ${esc(r.time)}</div>
+          ${r.notes ? `<div class="report-notes"><i class="fas fa-sticky-note"></i> ${esc(r.notes)}</div>` : ''}
+          <div class="report-actions">${getActionButtons(r)}</div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = `<div class="error-state"><i class="fas fa-wifi" style="color: var(--danger);"></i><p>تعذر الاتصال بخادم البلاغات</p></div>`;
+  }
+}
+
+async function refreshTrainingPreview() {
+  const container = document.getElementById('drillLog');
+  if (!container) return;
+
+  try {
+    const res = await eocJsonp('getTrainingSessions', { limit: 10 });
+    const sessions = (res && res.ok && res.sessions) ? res.sessions : [];
+
+    if (!sessions.length) {
+      container.innerHTML = `<div class="no-reports"><i class="fas fa-check-circle"></i><p>لا توجد تدريبات</p></div>`;
+      return;
+    }
+
+    container.innerHTML = sessions.map(s => `
+      <div class="drill-item">
+        <div class="drill-info">
+          <i class="fas fa-clipboard-check" style="color: var(--secondary)"></i>
+          <span>${esc(s.scenarioLabel || s.scenarioKey || 'تمرين')}</span>
+        </div>
+        <span class="drill-date">${esc(s.date)} ${esc(s.startTime)}</span>
+        <span class="drill-result success">${esc(s.trainer || '')}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = `<div class="error-state"><i class="fas fa-exclamation-triangle" style="color: var(--warning);"></i><p>تعذر تحميل سجل التدريب</p></div>`;
+  }
+}
+
+/* ===========================
+   New Report Alert + Update Status
+=========================== */
+function showNewReportAlert(report) {
+  STATE.currentReport = report;
+  showToast(`بلاغ جديد: ${report.type} - ${report.location}`, 'info');
+  openResponseModal(report);
+  highlightDeptByLocation(report.location);
+}
+
+function highlightDeptByLocation(locationText) {
+  document.querySelectorAll('.dept-card').forEach(c => c.classList.remove('emergency-highlight'));
+  if (!locationText) return;
+
+  document.querySelectorAll('.dept-card').forEach(card => {
+    const label = card.textContent.trim();
+    if (label && String(locationText).includes(label)) card.classList.add('emergency-highlight');
+  });
+}
+
+function openResponseModal(report) {
+  const modal = document.getElementById('responseModal');
+  if (!modal) return;
+
+  document.getElementById('reportTypeDisplay').textContent = report.type || '-';
+  document.getElementById('reportLocationDisplay').textContent = report.location || '-';
+  document.getElementById('reportTimeDisplay').textContent = `${report.date || ''} - ${report.time || ''}`;
+  document.getElementById('reportNotesDisplay').textContent = report.notes || 'لا توجد ملاحظات';
+
+  // reset UI
+  document.querySelectorAll('.response-type-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('responseTarget').style.display = 'none';
+  document.getElementById('issueCommandBtn').disabled = true;
+
+  modal.classList.add('active');
+}
+window.closeResponseModal = function closeResponseModal() {
+  const modal = document.getElementById('responseModal');
+  if (modal) modal.classList.remove('active');
+};
+
+// response modal selections
+let selectedLocations = [];
+let selectedMuster = '';
+
+window.selectResponseType = function selectResponseType(type) {
+  document.querySelectorAll('.response-type-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`.response-type-btn[data-response="${type}"]`)?.classList.add('selected');
+
+  selectedLocations = [];
+  selectedMuster = '';
+
+  // build location options (dynamic floors)
+  const grid = document.getElementById('locationButtonsGrid');
+  const targetDiv = document.getElementById('responseTarget');
+  const musterDiv = document.getElementById('responseMusterDiv');
+  const input = document.getElementById('responseTargetLocation');
+
+  const floors = (STATE.building?.floors || []).map(f => ({ id: `floor_${f.floorKey}`, label: f.floorName }));
+
+  let options = [
+    { id:'report_location', label:'موقع البلاغ', icon:'fa-location-dot' },
+    { id:'building', label:'المبنى بالكامل', icon:'fa-building' }
+  ].concat(floors.map(f => ({ id:f.id, label:f.label, icon:'fa-layer-group' })));
+
+  if (grid) {
+    grid.innerHTML = options.map(o => `
+      <button type="button" class="location-btn" data-location="${esc(o.id)}" onclick="toggleLocation('${esc(o.id)}')">
+        <i class="fas ${esc(o.icon)}"></i> ${esc(o.label)}
+      </button>
+    `).join('');
+  }
+
+  if (input) {
+    input.style.display = 'block';
+    input.value = '';
+    input.placeholder = 'اكتب موقع إضافي (اختياري)...';
+  }
+
+  if (musterDiv) {
+    musterDiv.style.display = (type === 'full_evacuation' || type === 'isolation_evacuation') ? 'block' : 'none';
+    document.querySelectorAll('.muster-btn').forEach(b => b.classList.remove('selected'));
+  }
+
+  if (targetDiv) targetDiv.style.display = 'block';
+  updateIssueButtonState();
+};
+
+window.toggleLocation = function toggleLocation(id) {
+  const btn = document.querySelector(`.location-btn[data-location="${id}"]`);
+  if (!btn) return;
+
+  if (selectedLocations.includes(id)) {
+    selectedLocations = selectedLocations.filter(x => x !== id);
+    btn.classList.remove('selected');
+  } else {
+    selectedLocations.push(id);
+    btn.classList.add('selected');
+  }
+  updateIssueButtonState();
+};
+
+window.toggleMuster = function toggleMuster(m) {
+  document.querySelectorAll('.muster-btn').forEach(b => b.classList.remove('selected'));
+  if (selectedMuster === m) selectedMuster = '';
+  else {
+    selectedMuster = m;
+    document.querySelector(`.muster-btn[data-muster="${m}"]`)?.classList.add('selected');
+  }
+  updateIssueButtonState();
+};
+
+window.updateIssueButtonState = function updateIssueButtonState() {
+  const typeBtn = document.querySelector('.response-type-btn.selected');
+  const input = document.getElementById('responseTargetLocation');
+  const musterDiv = document.getElementById('responseMusterDiv');
+  const issueBtn = document.getElementById('issueCommandBtn');
+
+  if (!issueBtn) return;
+  if (!typeBtn) { issueBtn.disabled = true; return; }
+
+  const hasLoc = selectedLocations.length > 0 || (input && input.value.trim());
+  const needsMuster = musterDiv && musterDiv.style.display !== 'none';
+  const hasMuster = !needsMuster || !!selectedMuster;
+
+  issueBtn.disabled = !(hasLoc && hasMuster);
+};
+
+function scenarioKeyFromReportType(rt) {
+  const t = String(rt || '');
+  if (t.includes('حريق')) return 'fire';
+  if (t.includes('كهرباء')) return 'power';
+  if (t.includes('مياه') || t.includes('تسرب')) return 'water';
+  if (t.includes('إغماء') || t.includes('إصابة')) return 'injury';
+  if (t.includes('عدوى')) return 'outbreak';
+  return '';
+}
+
+window.issueCommand = async function issueCommand() {
+  const typeBtn = document.querySelector('.response-type-btn.selected');
+  if (!typeBtn || !STATE.currentReport) return;
+
+  const responseType = typeBtn.getAttribute('data-response');
+  const input = document.getElementById('responseTargetLocation')?.value.trim() || '';
+
+  const floorLabel = (id) => {
+    if (id === 'report_location') return STATE.currentReport.location || 'موقع البلاغ';
+    if (id === 'building') return 'المبنى بالكامل';
+    if (id.startsWith('floor_')) {
+      const fk = id.replace('floor_', '');
+      const f = (STATE.building?.floors || []).find(x => String(x.floorKey) === fk);
+      return f ? f.floorName : fk;
+    }
+    return id;
+  };
+
+  const parts = selectedLocations.map(floorLabel);
+  if (input) parts.push(input);
+
+  const reportType = STATE.currentReport.type || '';
+  const scenKey = scenarioKeyFromReportType(reportType);
+  const scenLabel = scenarioLabel(scenKey) || reportType;
+
+  const payload = {
+    responseType,
+    reportType,
+    location: parts.join(' + ') || (STATE.currentReport.location || ''),
+    muster: (selectedMuster === 'A') ? 'نقطة تجمع A - الموقف الأمامي' :
+            (selectedMuster === 'B') ? 'نقطة تجمع B - الساحة الخلفية' : '',
+    mode: 'real',
+    scenarioKey: scenKey,
+    scenarioLabel: scenLabel
+  };
+
+  try {
+    await eocJsonp('setActiveCommand', payload);
+    await eocJsonp('updateEmergencyStatus', {
+      reportId: STATE.currentReport.id,
+      status: 'قيد المعالجة',
+      responder: 'EOC',
+      actionNotes: `أُصدر أمر: ${responseType}`
+    });
+    closeResponseModal();
+    showCommandScreen({ reportType, location: payload.location, muster: payload.muster, mode: 'real' });
+    showToast('تم إرسال الأمر للشاشات وتحديث حالة البلاغ', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('فشل إصدار الأمر', 'error');
+  }
+};
+
+window.updateStatus = async function updateStatus(reportId, newStatus) {
+  const responder = prompt('اسم المستجيب:');
+  if (!responder) return;
+  const actionNotes = prompt('ملاحظات الإجراء (اختياري):') || '';
+
+  try {
+    const res = await eocJsonp('updateEmergencyStatus', { reportId, status: newStatus, responder, actionNotes });
+    if (!res || !res.ok) throw new Error(res?.error || 'update failed');
+    showToast('تم تحديث الحالة بنجاح', 'success');
+    await refreshReportsPreview();
+  } catch (e) {
+    console.error(e);
+    showToast('فشل تحديث الحالة', 'error');
+  }
+};
+
+/* ===========================
+   UI helpers
+=========================== */
+function getReportTypeIcon(type) {
+  const t = String(type || '');
+  if (t.includes('حريق')) return 'fas fa-fire';
+  if (t.includes('كهرباء')) return 'fas fa-bolt';
+  if (t.includes('مياه') || t.includes('تسرب')) return 'fas fa-water';
+  if (t.includes('إغماء') || t.includes('إصابة')) return 'fas fa-user-injured';
+  if (t.includes('عدوى')) return 'fas fa-virus';
+  return 'fas fa-exclamation-triangle';
+}
+function getActionButtons(report) {
+  if (report.status === 'جديد') {
+    return `<button class="action-btn respond" onclick="updateStatus('${esc(report.id)}','قيد المعالجة')"><i class="fas fa-user-check"></i> استجابة</button>`;
+  }
+  if (report.status === 'قيد المعالجة') {
+    return `<button class="action-btn resolve" onclick="updateStatus('${esc(report.id)}','مغلق')"><i class="fas fa-check-circle"></i> إغلاق</button>`;
+  }
+  return `<span class="resolved-badge"><i class="fas fa-check"></i> تم الإغلاق</span>`;
+}
+function getScenarioClass(scenario) {
+  const s = String(scenario || '').toLowerCase();
+  if (s.includes('حريق') || s.includes('fire')) return 'fire';
+  if (s.includes('كهرباء') || s.includes('power')) return 'power';
+  if (s.includes('مياه') || s.includes('water')) return 'water';
+  if (s.includes('إغماء') || s.includes('إصابة') || s.includes('injury') || s.includes('medical')) return 'medical';
+  if (s.includes('عدوى') || s.includes('outbreak') || s.includes('infection')) return 'infection';
+  return '';
+}
+
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i> ${esc(message)}`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+/* ===========================
+   Quick period selects (injected)
+=========================== */
+function ensureQuickPeriodUI(kind) {
+  const modalId = (kind === 'training') ? 'trainingLogModal' : 'reportsLogModal';
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+
+  const filters = modal.querySelector('.log-filters');
+  if (!filters) return;
+
+  const selId = (kind === 'training') ? 'trainingQuickPeriod' : 'reportsQuickPeriod';
+  if (document.getElementById(selId)) return;
+
+  const sel = document.createElement('select');
+  sel.id = selId;
+  sel.innerHTML = `
+    <option value="">فلترة سريعة</option>
+    <option value="today">اليوم</option>
+    <option value="7">آخر 7 أيام</option>
+    <option value="14">آخر 14 يوم</option>
+    <option value="30">آخر 30 يوم</option>
+    <option value="60">آخر 60 يوم</option>
+    <option value="all">كل السجلات</option>
+  `;
+  sel.onchange = () => applyQuickPeriod(kind, sel.value);
+  filters.insertBefore(sel, filters.firstChild);
+}
+
+function applyQuickPeriod(kind, v) {
+  const fromId = (kind === 'training') ? 'trainingLogFromDate' : 'reportsLogFromDate';
+  const toId = (kind === 'training') ? 'trainingLogToDate' : 'reportsLogToDate';
+
+  const fromEl = document.getElementById(fromId);
+  const toEl = document.getElementById(toId);
+  if (!fromEl || !toEl) return;
+
+  if (!v) return;
+
+  if (v === 'all') {
+    fromEl.value = '';
+    toEl.value = '';
+  } else if (v === 'today') {
+    const t = saISO();
+    fromEl.value = t;
+    toEl.value = t;
+  } else {
+    const days = Number(v);
+    const now = new Date();
+    const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    fromEl.value = saISO(from);
+    toEl.value = saISO();
+  }
+
+  if (kind === 'training') filterTrainingLog();
+  else filterReportsLog();
+}
+
+/* ===========================
+   INIT
+=========================== */
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await loadBuildingAndGuides();
+    renderBuilding();
+    renderMuster();
+
+    await refreshReportsPreview();
+    await refreshTrainingPreview();
+
+    setInterval(refreshReportsPreview, 5000);
+  } catch (e) {
+    console.error(e);
+    showToast('تعذر تحميل بيانات EOC من الشيت', 'error');
+  }
+});
+</script>
+
+4) لماذا “سجل التدريب” كان ما يشتغل عندك؟
+
+السببين الأساسيين:
+
+أنت كنت تنادي Action غير موجود: getDrillLog و saveTrainingSession → لذلك يرجع Unknown action أو يفشل.
+
+عندك تكرار دوال/patch blocks داخل الصفحة وداخل Apps Script (نفس اسم الدالة مرتين) → آخر نسخة تطغى على الأولى وتخرب الـ logic.
+
+الخطوات أعلاه تقفل هذي المشاكل.
