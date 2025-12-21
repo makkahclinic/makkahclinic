@@ -689,11 +689,27 @@
         if (startDate && d < startDate) continue;
         if (endDate && d > endDate) continue;
 
+        // Format time values properly
+        let startTime = r[2];
+        let endTime = r[3];
+        
+        if (startTime instanceof Date) {
+          startTime = Utilities.formatDate(startTime, 'Asia/Riyadh', 'hh:mm a');
+        } else {
+          startTime = String(startTime || '');
+        }
+        
+        if (endTime instanceof Date) {
+          endTime = Utilities.formatDate(endTime, 'Asia/Riyadh', 'hh:mm a');
+        } else {
+          endTime = String(endTime || '');
+        }
+        
         sessions.push({
           sessionId: String(r[0] || ''),
           date: d,
-          startTime: String(r[2] || ''),
-          endTime: String(r[3] || ''),
+          startTime: startTime,
+          endTime: endTime,
           durationMin: Number(r[4] || 0),
           scenarioKey: String(r[5] || ''),
           scenarioLabel: String(r[6] || ''),
