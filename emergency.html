@@ -877,6 +877,41 @@
         }
 
         // ========== Text-to-Speech للأوامر الصوتية ==========
+        let bestArabicVoice = null;
+        
+        function findBestArabicVoice() {
+            const voices = speechSynthesis.getVoices();
+            // ترتيب الأفضلية: Google Arabic > Microsoft Arabic > أي صوت عربي
+            const priorities = [
+                v => v.name.includes('Google') && v.lang.startsWith('ar'),
+                v => v.name.includes('Microsoft') && v.lang.startsWith('ar'),
+                v => v.name.includes('Majed') || v.name.includes('ماجد'),
+                v => v.name.includes('Hoda') || v.name.includes('هدى'),
+                v => v.name.includes('Naayf') || v.name.includes('نايف'),
+                v => v.lang === 'ar-SA',
+                v => v.lang === 'ar-XA',
+                v => v.lang.startsWith('ar')
+            ];
+            
+            for (const check of priorities) {
+                const found = voices.find(check);
+                if (found) {
+                    console.log('Selected Arabic voice:', found.name, found.lang);
+                    return found;
+                }
+            }
+            return null;
+        }
+        
+        // تحميل الأصوات عند الجاهزية
+        if ('speechSynthesis' in window) {
+            speechSynthesis.onvoiceschanged = () => {
+                bestArabicVoice = findBestArabicVoice();
+            };
+            // محاولة فورية
+            bestArabicVoice = findBestArabicVoice();
+        }
+        
         function speakCommand(text, repeat = 2) {
             if (!('speechSynthesis' in window)) {
                 console.warn('TTS not supported');
@@ -893,19 +928,27 @@
                 
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ar-SA';
-                utterance.rate = 0.9;
-                utterance.pitch = 1;
+                utterance.rate = 0.85; // أبطأ قليلاً للوضوح
+                utterance.pitch = 1.1; // أعلى قليلاً
                 utterance.volume = 1;
                 
-                // اختيار صوت عربي إن وجد
-                const voices = speechSynthesis.getVoices();
-                const arabicVoice = voices.find(v => v.lang.startsWith('ar'));
-                if (arabicVoice) utterance.voice = arabicVoice;
+                // استخدام أفضل صوت عربي
+                if (bestArabicVoice) {
+                    utterance.voice = bestArabicVoice;
+                } else {
+                    // محاولة البحث مجدداً
+                    bestArabicVoice = findBestArabicVoice();
+                    if (bestArabicVoice) utterance.voice = bestArabicVoice;
+                }
                 
                 utterance.onend = () => {
                     if (count < repeat) {
-                        setTimeout(speak, 1500);
+                        setTimeout(speak, 2000); // فاصل أطول
                     }
+                };
+                
+                utterance.onerror = (e) => {
+                    console.error('Speech error:', e);
                 };
                 
                 speechSynthesis.speak(utterance);
@@ -913,7 +956,10 @@
             
             // تأخير بسيط للتأكد من تحميل الأصوات
             if (speechSynthesis.getVoices().length === 0) {
-                speechSynthesis.onvoiceschanged = () => speak();
+                speechSynthesis.onvoiceschanged = () => {
+                    bestArabicVoice = findBestArabicVoice();
+                    speak();
+                };
             } else {
                 speak();
             }
