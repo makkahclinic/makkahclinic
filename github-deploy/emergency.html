@@ -876,6 +876,55 @@
             } catch(e) {}
         }
 
+        // ========== Text-to-Speech للأوامر الصوتية ==========
+        function speakCommand(text, repeat = 2) {
+            if (!('speechSynthesis' in window)) {
+                console.warn('TTS not supported');
+                return;
+            }
+            
+            // إيقاف أي نطق سابق
+            speechSynthesis.cancel();
+            
+            let count = 0;
+            function speak() {
+                if (count >= repeat) return;
+                count++;
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ar-SA';
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+                
+                // اختيار صوت عربي إن وجد
+                const voices = speechSynthesis.getVoices();
+                const arabicVoice = voices.find(v => v.lang.startsWith('ar'));
+                if (arabicVoice) utterance.voice = arabicVoice;
+                
+                utterance.onend = () => {
+                    if (count < repeat) {
+                        setTimeout(speak, 1500);
+                    }
+                };
+                
+                speechSynthesis.speak(utterance);
+            }
+            
+            // تأخير بسيط للتأكد من تحميل الأصوات
+            if (speechSynthesis.getVoices().length === 0) {
+                speechSynthesis.onvoiceschanged = () => speak();
+            } else {
+                speak();
+            }
+        }
+
+        function stopSpeaking() {
+            if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+            }
+        }
+
         function isTrue(v){
           const s = String(v).toLowerCase().trim();
           return v === true || s === 'true' || s === 'yes' || s === '1';
@@ -1223,9 +1272,16 @@
                 stepsContainer.style.display = 'none';
             }
 
-            // تشغيل الصوت فقط إذا لم يكن تمرين
+            // تشغيل الصوت حسب نوع الأمر
             if (!isDrill) {
-                startSiren();
+                if (resp.includes('send_team') || resp.includes('توجيه')) {
+                    // أمر توجيه: نطق صوتي بدلاً من صفارة
+                    const spokenText = 'تنبيه، توجهوا إلى ' + loc;
+                    speakCommand(spokenText, 3);
+                } else {
+                    // إخلاء أو عزل: صفارة إنذار
+                    startSiren();
+                }
             }
             startTimer();
         }
@@ -1236,6 +1292,7 @@
             document.getElementById('emergencyScreen').classList.remove('active');
             document.body.className = 'safe';
             stopSiren();
+            stopSpeaking();
             hideSoundGate();
             document.getElementById('musterSection').style.display = 'none';
             document.getElementById('musterPoint').textContent = '-';
