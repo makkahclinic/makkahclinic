@@ -760,7 +760,7 @@
             </div>
             
             <div class="muster-point" id="musterSection" style="display: none;">
-                <h3><i class="fas fa-map-marker-alt"></i> نقطة التجمع:</h3>
+                <h3><i class="fas fa-location-arrow"></i> التوجه إلى:</h3>
                 <div class="point-name" id="musterPoint">-</div>
             </div>
             
@@ -1137,21 +1137,26 @@
                 drillBadge.style.display = 'none';
             }
 
+            // الموقع ونقطة التجمع
+            const loc = command.location || '-';
+            const muster = command.muster || command.musterPoint || '';
+
             // اللون حسب نوع الأمر (responseType) أولاً
             if (resp.includes('full_evacuation') || resp.includes('إخلاء') || resp.includes('اخلاء')) {
                 bodyClass = 'fire'; // أحمر للإخلاء
                 document.getElementById('emergencyTitle').textContent = 'أمر إخلاء';
-                document.getElementById('instructionTitle').textContent = 'إخلاء فوري - اتجه إلى:';
+                // عرض: "إخلاء فوري - الموقع"
+                document.getElementById('instructionTitle').textContent = 'إخلاء فوري - ' + loc;
                 iconHtml = '<i class="fas fa-running"></i>';
             } else if (resp.includes('send_team') || resp.includes('توجيه') || resp.includes('توجه')) {
                 bodyClass = 'injury'; // برتقالي للتوجيه
                 document.getElementById('emergencyTitle').textContent = 'أمر توجيه';
-                document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+                document.getElementById('instructionTitle').textContent = 'توجيه فريق - ' + loc;
                 iconHtml = '<i class="fas fa-user-shield"></i>';
             } else if (resp.includes('isolation_evacuation') || resp.includes('عزل')) {
                 bodyClass = 'infection'; // بنفسجي للعزل
                 document.getElementById('emergencyTitle').textContent = 'أمر عزل';
-                document.getElementById('instructionTitle').textContent = 'عزل المنطقة فورًا - الموقع:';
+                document.getElementById('instructionTitle').textContent = 'عزل فوري - ' + loc;
                 iconHtml = '<i class="fas fa-virus"></i>';
             } else {
                 // إذا لم يكن هناك responseType، نستخدم reportType للون
@@ -1172,17 +1177,20 @@
                     iconHtml = '<i class="fas fa-water"></i>';
                 }
                 document.getElementById('emergencyTitle').textContent = 'تنبيه طوارئ';
-                document.getElementById('instructionTitle').textContent = 'التوجيهات:';
+                document.getElementById('instructionTitle').textContent = 'التوجيهات - ' + loc;
             }
 
             document.body.className = bodyClass;
             document.getElementById('emergencyIcon').innerHTML = iconHtml;
             document.getElementById('emergencyType').textContent = command.reportType || 'طوارئ';
-            document.getElementById('emergencyLocation').textContent = command.location || '-';
+            
+            // إخفاء الموقع المنفصل (أصبح مدموج مع العنوان)
+            document.getElementById('emergencyLocation').style.display = 'none';
 
-            if (command.muster || command.musterPoint) {
+            // عرض نقطة التجمع كـ "التوجه إلى:"
+            if (muster) {
                 document.getElementById('musterSection').style.display = 'block';
-                document.getElementById('musterPoint').textContent = command.muster || command.musterPoint;
+                document.getElementById('musterPoint').textContent = muster;
             } else {
                 document.getElementById('musterSection').style.display = 'none';
                 document.getElementById('musterPoint').textContent = '-';
