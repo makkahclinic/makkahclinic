@@ -166,6 +166,34 @@
             margin-top: 3px;
         }
         
+        .connection-indicator {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-indicator.connected {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border: 1px solid #22c55e;
+        }
+        
+        .connection-indicator.polling {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+            border: 1px solid #eab308;
+        }
+        
+        .connection-indicator i {
+            font-size: 0.7rem;
+        }
+        
         .emergency-screen {
             display: none;
         }
@@ -747,6 +775,10 @@
             
             <div class="current-time" id="currentTime">--:--</div>
             <div class="date-display" id="currentDate">--</div>
+            <div class="connection-indicator polling" id="connectionIndicator" title="حالة الاتصال">
+                <i class="fas fa-wifi"></i>
+                <span class="status-text">جارٍ الاتصال...</span>
+            </div>
         </div>
         
         <div class="emergency-screen" id="emergencyScreen">
@@ -1152,6 +1184,109 @@
         document.addEventListener('keydown', unlockAudioOnInteraction);
 
         let monitoringStarted = false;
+        let eventSource = null;
+        let sseConnected = false;
+        let sseReconnectAttempts = 0;
+        let pollingInterval = null;
+        const MAX_SSE_RECONNECT = 5;
+
+        function connectSSE() {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+
+          const sseUrl = '/api/emergency-stream';
+          console.log('🔌 Connecting to SSE...');
+          
+          eventSource = new EventSource(sseUrl);
+          
+          eventSource.onopen = () => {
+            console.log('✅ SSE Connected - استجابة فورية!');
+            sseConnected = true;
+            sseReconnectAttempts = 0;
+            updateConnectionStatus(true);
+            if (pollingInterval) {
+              clearInterval(pollingInterval);
+              pollingInterval = null;
+            }
+          };
+
+          eventSource.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              if (data.connected) {
+                console.log('🟢 SSE Ready');
+                return;
+              }
+              
+              if (data.error) {
+                console.warn('SSE Error:', data.error);
+                return;
+              }
+
+              if (data.command) {
+                const cmd = data.command;
+                if (cmd && isTrue(cmd.active)) {
+                  if (!currentCommand || currentCommand.timestamp !== cmd.timestamp) {
+                    activateEmergency(cmd);
+                  }
+                }
+              } else if (data.cleared) {
+                if (currentCommand) {
+                  console.log('🔴 Emergency cleared via SSE');
+                  deactivateEmergency();
+                }
+              }
+            } catch (e) {
+              console.error('SSE parse error:', e);
+            }
+          };
+
+          eventSource.onerror = (e) => {
+            console.warn('⚠️ SSE Error - attempting reconnect');
+            sseConnected = false;
+            updateConnectionStatus(false);
+            
+            if (eventSource) {
+              eventSource.close();
+              eventSource = null;
+            }
+            
+            sseReconnectAttempts++;
+            if (sseReconnectAttempts < MAX_SSE_RECONNECT) {
+              setTimeout(connectSSE, 3000);
+            } else {
+              console.log('📡 Falling back to polling mode');
+              startPollingFallback();
+            }
+          };
+        }
+
+        function startPollingFallback() {
+          if (pollingInterval) return;
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          console.log('📡 Using polling (3 seconds)');
+          updateConnectionStatus(false);
+          checkActiveCommand();
+          pollingInterval = setInterval(checkActiveCommand, 3000);
+        }
+
+        function updateConnectionStatus(connected) {
+          const indicator = document.getElementById('connectionIndicator');
+          if (indicator) {
+            indicator.className = connected ? 'connection-indicator connected' : 'connection-indicator polling';
+            indicator.title = connected ? 'SSE - استجابة فورية' : 'Polling - كل 3 ثواني';
+            const statusText = indicator.querySelector('.status-text');
+            if (statusText) {
+              statusText.textContent = connected ? '⚡ SSE - فوري' : '📡 Polling - 3 ث';
+            }
+          }
+        }
 
         function startMonitoring() {
           if (monitoringStarted) return;
@@ -1167,9 +1302,20 @@
           const startScreen = document.getElementById('startScreen');
           if (startScreen) startScreen.classList.add('hidden');
           
-          // بدء المراقبة
-          checkActiveCommand();
-          setInterval(checkActiveCommand, 5000);
+          // محاولة الاتصال بـ SSE أولاً
+          if (typeof EventSource !== 'undefined') {
+            connectSSE();
+            // fallback بعد 5 ثواني إذا لم يتصل SSE
+            setTimeout(() => {
+              if (!sseConnected) {
+                console.log('SSE timeout - using polling');
+                startPollingFallback();
+              }
+            }, 5000);
+          } else {
+            // المتصفح لا يدعم SSE
+            startPollingFallback();
+          }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
