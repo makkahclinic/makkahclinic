@@ -876,6 +876,121 @@
             } catch(e) {}
         }
 
+        // ========== صوت نبضات القلب (للتوجيه) ==========
+        let heartbeatInterval = null;
+        let heartbeatPlaying = false;
+        
+        function startHeartbeat() {
+            try {
+                initAudioContext();
+                if (heartbeatPlaying) return;
+                heartbeatPlaying = true;
+                
+                function playBeat() {
+                    if (!heartbeatPlaying) return;
+                    
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    
+                    osc.type = 'sine';
+                    osc.frequency.value = 80;
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    
+                    const now = audioCtx.currentTime;
+                    
+                    // نبضة أولى (قوية)
+                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.linearRampToValueAtTime(0.8, now + 0.05);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.15);
+                    
+                    // نبضة ثانية (أخف)
+                    gain.gain.linearRampToValueAtTime(0.5, now + 0.25);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.35);
+                    
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                }
+                
+                playBeat();
+                heartbeatInterval = setInterval(playBeat, 800);
+                
+            } catch(e) {
+                console.error('Heartbeat error:', e);
+                showSoundGate();
+            }
+        }
+        
+        function stopHeartbeat() {
+            heartbeatPlaying = false;
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        // ========== صوت تنبيه العزل (للعدوى) ==========
+        let isolationInterval = null;
+        let isolationPlaying = false;
+        
+        function startIsolationAlert() {
+            try {
+                initAudioContext();
+                if (isolationPlaying) return;
+                isolationPlaying = true;
+                
+                function playAlert() {
+                    if (!isolationPlaying) return;
+                    
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    
+                    osc.type = 'triangle';
+                    osc.frequency.value = 520;
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    
+                    const now = audioCtx.currentTime;
+                    
+                    // 3 beeps سريعة
+                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.linearRampToValueAtTime(0.6, now + 0.05);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.12);
+                    
+                    gain.gain.linearRampToValueAtTime(0.6, now + 0.18);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.25);
+                    
+                    gain.gain.linearRampToValueAtTime(0.6, now + 0.31);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.38);
+                    
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                }
+                
+                playAlert();
+                isolationInterval = setInterval(playAlert, 1200);
+                
+            } catch(e) {
+                console.error('Isolation alert error:', e);
+                showSoundGate();
+            }
+        }
+        
+        function stopIsolationAlert() {
+            isolationPlaying = false;
+            if (isolationInterval) {
+                clearInterval(isolationInterval);
+                isolationInterval = null;
+            }
+        }
+
+        // ========== إيقاف جميع الأصوات ==========
+        function stopAllSounds() {
+            stopSiren();
+            stopHeartbeat();
+            stopIsolationAlert();
+        }
+
         // ========== Text-to-Speech للأوامر الصوتية ==========
         let bestArabicVoice = null;
         
@@ -1320,12 +1435,17 @@
 
             // تشغيل الصوت حسب نوع الأمر
             if (!isDrill) {
+                // إيقاف أي صوت سابق أولاً
+                stopAllSounds();
+                
                 if (resp.includes('send_team') || resp.includes('توجيه')) {
-                    // أمر توجيه: نطق صوتي بدلاً من صفارة
-                    const spokenText = 'تنبيه، توجهوا إلى ' + loc;
-                    speakCommand(spokenText, 3);
+                    // أمر توجيه: نبضات قلب 💓
+                    startHeartbeat();
+                } else if (resp.includes('isolation') || resp.includes('عزل') || rt.includes('عدوى')) {
+                    // عزل/عدوى: صوت تنبيه متقطع 🔊
+                    startIsolationAlert();
                 } else {
-                    // إخلاء أو عزل: صفارة إنذار
+                    // إخلاء/حريق: صفارة إنذار 🚨
                     startSiren();
                 }
             }
@@ -1337,7 +1457,7 @@
             document.getElementById('safeScreen').classList.remove('hidden');
             document.getElementById('emergencyScreen').classList.remove('active');
             document.body.className = 'safe';
-            stopSiren();
+            stopAllSounds();
             stopSpeaking();
             hideSoundGate();
             document.getElementById('musterSection').style.display = 'none';
