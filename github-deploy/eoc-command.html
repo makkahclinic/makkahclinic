@@ -501,6 +501,37 @@
     .btn.success{background:linear-gradient(135deg,var(--success),#059669);color:#fff}
     .btn.warn{background:linear-gradient(135deg,var(--warning),#d97706);color:#111827}
 
+    /* System Test Buttons */
+    .system-test-btn{
+      background:rgba(255,255,255,.06);
+      border:2px solid rgba(255,255,255,.15);
+      border-radius:12px;
+      padding:12px 10px;
+      cursor:pointer;
+      text-align:center;
+      color:#fff;
+      font-family:'Tajawal',sans-serif;
+      font-weight:700;
+      transition:.2s;
+    }
+    .system-test-btn:hover{border-color:var(--secondary);transform:translateY(-2px)}
+    .system-test-btn i{font-size:1.3rem;display:block;margin-bottom:6px;color:var(--secondary)}
+    .system-test-btn span{display:block;font-size:.85rem}
+    .system-test-btn .test-status{
+      margin-top:6px;
+      padding:4px 8px;
+      border-radius:6px;
+      font-size:.75rem;
+      font-weight:900;
+      background:rgba(148,163,184,.2);
+      color:#94a3b8;
+    }
+    .system-test-btn .test-status.pass{background:rgba(16,185,129,.2);color:#10b981}
+    .system-test-btn .test-status.fail{background:rgba(220,38,38,.2);color:#ef4444}
+    .system-test-btn .test-status.testing{background:rgba(59,130,246,.2);color:#3b82f6}
+    .system-test-btn.pass{border-color:rgba(16,185,129,.5)}
+    .system-test-btn.fail{border-color:rgba(220,38,38,.5)}
+
     /* Logs */
     .filters{
       display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px
@@ -676,18 +707,42 @@
         </div>
       </div>
 
-      <!-- DEBUG: Test Button - يمكن حذفه بعد حل المشكلة -->
-      <div style="margin:10px 0;padding:10px;background:rgba(220,20,60,.15);border:2px dashed #dc143c;border-radius:12px;text-align:center">
-        <div style="color:#dc143c;font-weight:900;margin-bottom:8px"><i class="fas fa-bug"></i> تشخيص المشكلة</div>
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button onclick="testAppsScript()" style="background:#dc143c;color:#fff;padding:10px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:900;font-family:Tajawal">
-            <i class="fas fa-flask"></i> اختبار الحفظ
+      <!-- نظام اختبار سلامة النظام -->
+      <div class="panel-card" style="background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(59,130,246,.1));border:2px solid rgba(16,185,129,.3)">
+        <div class="section-title" style="color:#10b981"><i class="fas fa-shield-check"></i> اختبار سلامة النظام</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+          <button id="testServerBtn" onclick="runSystemTest('server')" class="system-test-btn">
+            <i class="fas fa-server"></i>
+            <span>الاتصال بالسيرفر</span>
+            <div class="test-status" id="testServerStatus">—</div>
           </button>
-          <button onclick="testGetSessions()" style="background:#059669;color:#fff;padding:10px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:900;font-family:Tajawal">
-            <i class="fas fa-download"></i> اختبار السحب
+          <button id="testAlertBtn" onclick="runSystemTest('alert')" class="system-test-btn">
+            <i class="fas fa-bell"></i>
+            <span>نظام الإنذار</span>
+            <div class="test-status" id="testAlertStatus">—</div>
+          </button>
+          <button id="testSaveBtn" onclick="runSystemTest('save')" class="system-test-btn">
+            <i class="fas fa-save"></i>
+            <span>حفظ البيانات</span>
+            <div class="test-status" id="testSaveStatus">—</div>
+          </button>
+          <button id="testLoadBtn" onclick="runSystemTest('load')" class="system-test-btn">
+            <i class="fas fa-download"></i>
+            <span>سحب البيانات</span>
+            <div class="test-status" id="testLoadStatus">—</div>
           </button>
         </div>
-        <div style="color:#999;font-size:.8rem;margin-top:6px">اضغط "اختبار السحب" لفحص لماذا السجل فارغ</div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="runAllSystemTests()" class="btn success" style="flex:1">
+            <i class="fas fa-play-circle"></i> اختبار شامل
+          </button>
+          <button onclick="openSystemTestLog()" class="btn secondary" style="flex:1">
+            <i class="fas fa-history"></i> سجل الاختبارات
+          </button>
+        </div>
+        <div id="lastTestResult" style="margin-top:8px;font-size:.8rem;color:var(--muted);text-align:center">
+          آخر اختبار: لم يتم بعد
+        </div>
       </div>
 
       <div class="panel-card activate-emergency-card">
@@ -2847,88 +2902,206 @@
     document.addEventListener('DOMContentLoaded', init);
 
     /******************************************************
-     * DEBUG: Test Apps Script directly
+     * نظام اختبار سلامة النظام
      ******************************************************/
-    async function testGetSessions(){
-      console.log('=== TESTING getTrainingSessions ===');
-      const btn = event?.target?.closest('button');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    const systemTestLog = JSON.parse(localStorage.getItem('eoc_system_tests') || '[]');
+    
+    function updateTestStatus(testId, status, message) {
+      const statusEl = document.getElementById(`test${testId}Status`);
+      const btnEl = document.getElementById(`test${testId}Btn`);
+      if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = 'test-status ' + status;
       }
-      
-      try {
-        const res = await jsonp('getTrainingSessions', { limit: '50' });
-        console.log('getTrainingSessions Response:', res);
-        
-        if (!res) {
-          showBigError('لم يتم استلام رد من Apps Script!\n\nتأكد من:\n1. نشر Apps Script جديد\n2. الرابط صحيح');
-          return;
+      if (btnEl) {
+        btnEl.classList.remove('pass', 'fail');
+        if (status === 'pass' || status === 'fail') {
+          btnEl.classList.add(status);
         }
-        
-        if (!res.ok) {
-          showBigError('خطأ من Apps Script:\n\n' + (res.error || 'Unknown error'));
-          return;
-        }
-        
-        const sessions = res.sessions || [];
-        const debugInfo = res.debug || '';
-        console.log('Debug info:', debugInfo);
-        
-        if (sessions.length === 0) {
-          showBigError('Apps Script أرجع مصفوفة فارغة!\n\nDebug: ' + debugInfo + '\n\n⚠️ تأكد من نشر Code.gs الجديد!');
-        } else {
-          showBigSuccess('تم سحب ' + sessions.length + ' جلسة بنجاح! ✅\n\n' + debugInfo + '\n\nأول جلسة:\n' + sessions[0].scenarioLabel + ' - ' + sessions[0].date);
-          // تحديث السجل
-          APP.caches.trainingSessions = sessions;
-          renderMiniTraining();
-        }
-      } catch(e) {
-        console.error('Test Error:', e);
-        showBigError('فشل الاختبار:\n\n' + e.message);
-      } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-download"></i> اختبار السحب';
-        }
-      }
-    }
-
-    async function testAppsScript(){
-      console.log('=== TESTING APPS SCRIPT ===');
-      console.log('Web App URL:', WEB_APP_URL);
-      
-      const testPayload = {
-        startTime: '10:00',
-        endTime: '10:05',
-        durationMin: '5',
-        scenarioKey: 'fire',
-        scenarioLabel: 'حريق (اختبار)',
-        trainer: 'TEST_USER',
-        attendees: 'Test Person 1',
-        notes: 'هذا اختبار - يمكن حذفه',
-        startIso: new Date().toISOString(),
-        endIso: new Date().toISOString()
-      };
-      
-      console.log('Test Payload:', testPayload);
-      
-      try {
-        const res = await jsonp('logTrainingSession', testPayload);
-        console.log('Test Response:', res);
-        if (res && res.ok) {
-          alert('نجح الاختبار! sessionId = ' + res.sessionId + '\n\nتحقق من شيت Training_Log');
-        } else {
-          alert('فشل الاختبار!\n\nالخطأ: ' + (res?.error || JSON.stringify(res)) + '\n\nتأكد من نشر Apps Script جديد!');
-        }
-      } catch(e) {
-        console.error('Test Error:', e);
-        alert('فشل الاختبار!\n\n' + e.message + '\n\nتأكد من:\n1. نشر Apps Script (Deploy → New version)\n2. رابط Web App صحيح');
       }
     }
     
-    // Add test button to console
-    console.log('%c اختبار Apps Script: اكتب testAppsScript() في Console ', 'background: #1e3a5f; color: #c9a962; font-size: 14px; padding: 5px;');
+    async function runSystemTest(type) {
+      const testNames = {
+        server: 'Server',
+        alert: 'Alert',
+        save: 'Save',
+        load: 'Load'
+      };
+      const testId = testNames[type];
+      updateTestStatus(testId, 'testing', 'جاري الاختبار...');
+      
+      let passed = false;
+      let details = '';
+      const startTime = Date.now();
+      
+      try {
+        switch(type) {
+          case 'server':
+            const pingRes = await jsonp('ping', {});
+            passed = pingRes && pingRes.ok;
+            details = passed ? 'الاتصال بالسيرفر ناجح' : 'فشل الاتصال';
+            break;
+            
+          case 'alert':
+            try {
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              if (ctx.state === 'suspended') await ctx.resume();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              gain.gain.value = 0.3;
+              osc.frequency.value = 440;
+              osc.start();
+              setTimeout(() => { osc.stop(); ctx.close(); }, 500);
+              passed = true;
+              details = 'نظام الصوت يعمل';
+            } catch(e) {
+              passed = false;
+              details = 'فشل نظام الصوت: ' + e.message;
+            }
+            break;
+            
+          case 'save':
+            const saveRes = await jsonp('systemTest', { testType: 'save', testData: 'test_' + Date.now() });
+            passed = saveRes && saveRes.ok;
+            details = passed ? 'الحفظ يعمل' : (saveRes?.error || 'فشل الحفظ');
+            break;
+            
+          case 'load':
+            const loadRes = await jsonp('getTrainingSessions', { limit: '1' });
+            passed = loadRes && loadRes.ok;
+            details = passed ? 'السحب يعمل (' + (loadRes.sessions?.length || 0) + ' سجل)' : 'فشل السحب';
+            break;
+        }
+      } catch(e) {
+        passed = false;
+        details = 'خطأ: ' + e.message;
+      }
+      
+      const duration = Date.now() - startTime;
+      updateTestStatus(testId, passed ? 'pass' : 'fail', passed ? '✓ نجح' : '✗ فشل');
+      
+      // حفظ النتيجة
+      const testResult = {
+        type,
+        passed,
+        details,
+        duration,
+        timestamp: new Date().toISOString()
+      };
+      systemTestLog.unshift(testResult);
+      if (systemTestLog.length > 100) systemTestLog.pop();
+      localStorage.setItem('eoc_system_tests', JSON.stringify(systemTestLog));
+      
+      // تحديث آخر اختبار
+      updateLastTestResult();
+      
+      toast(details, passed ? 'success' : 'error');
+      return { passed, details };
+    }
+    
+    async function runAllSystemTests() {
+      toast('جاري تشغيل الاختبار الشامل...', 'info');
+      const results = [];
+      
+      for (const type of ['server', 'alert', 'save', 'load']) {
+        const result = await runSystemTest(type);
+        results.push(result);
+        await new Promise(r => setTimeout(r, 300));
+      }
+      
+      const passed = results.filter(r => r.passed).length;
+      const total = results.length;
+      
+      if (passed === total) {
+        toast('✅ جميع الاختبارات نجحت! (' + passed + '/' + total + ')', 'success');
+      } else {
+        toast('⚠️ بعض الاختبارات فشلت (' + passed + '/' + total + ')', 'warn');
+      }
+    }
+    
+    function updateLastTestResult() {
+      const el = document.getElementById('lastTestResult');
+      if (!el || systemTestLog.length === 0) return;
+      
+      const last = systemTestLog[0];
+      const date = new Date(last.timestamp);
+      const timeStr = date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+      const dateStr = date.toLocaleDateString('ar-SA');
+      el.innerHTML = `آخر اختبار: ${dateStr} ${timeStr} - <span style="color:${last.passed ? 'var(--success)' : 'var(--danger)}">${last.passed ? 'نجح' : 'فشل'}</span>`;
+    }
+    
+    function openSystemTestLog() {
+      let html = '<div style="max-height:400px;overflow:auto">';
+      
+      if (systemTestLog.length === 0) {
+        html += '<div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-clipboard-check" style="font-size:3rem;margin-bottom:10px"></i><br>لا توجد اختبارات سابقة</div>';
+      } else {
+        html += '<table style="width:100%"><thead><tr><th>التاريخ</th><th>النوع</th><th>النتيجة</th><th>التفاصيل</th><th>المدة</th></tr></thead><tbody>';
+        
+        const typeLabels = { server: 'السيرفر', alert: 'الإنذار', save: 'الحفظ', load: 'السحب' };
+        
+        systemTestLog.slice(0, 50).forEach(t => {
+          const date = new Date(t.timestamp);
+          const timeStr = date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+          const dateStr = date.toLocaleDateString('ar-SA');
+          html += `<tr>
+            <td>${dateStr} ${timeStr}</td>
+            <td>${typeLabels[t.type] || t.type}</td>
+            <td style="color:${t.passed ? 'var(--success)' : 'var(--danger)'}"><i class="fas ${t.passed ? 'fa-check-circle' : 'fa-times-circle'}"></i> ${t.passed ? 'نجح' : 'فشل'}</td>
+            <td style="font-size:.85rem">${escapeHtml(t.details)}</td>
+            <td>${t.duration}ms</td>
+          </tr>`;
+        });
+        
+        html += '</tbody></table>';
+      }
+      
+      html += '</div>';
+      html += '<div style="margin-top:12px;display:flex;gap:10px">';
+      html += '<button class="btn secondary" style="flex:1" onclick="clearSystemTestLog()"><i class="fas fa-trash"></i> مسح السجل</button>';
+      html += '<button class="btn success" style="flex:1" onclick="closeSystemTestLogModal()"><i class="fas fa-check"></i> إغلاق</button>';
+      html += '</div>';
+      
+      showBigModal('سجل اختبارات السلامة', html);
+    }
+    
+    function clearSystemTestLog() {
+      if (confirm('هل تريد مسح سجل الاختبارات؟')) {
+        systemTestLog.length = 0;
+        localStorage.setItem('eoc_system_tests', '[]');
+        toast('تم مسح السجل', 'info');
+        openSystemTestLog();
+      }
+    }
+    
+    function closeSystemTestLogModal() {
+      const modal = document.querySelector('.big-modal-overlay');
+      if (modal) modal.remove();
+    }
+    
+    function showBigModal(title, content) {
+      const overlay = document.createElement('div');
+      overlay.className = 'big-modal-overlay';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+      overlay.innerHTML = `
+        <div style="background:var(--bg1);border:2px solid var(--secondary);border-radius:18px;max-width:800px;width:100%;max-height:90vh;overflow:auto;padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h2 style="color:var(--secondary);font-weight:900"><i class="fas fa-shield-check"></i> ${title}</h2>
+            <button onclick="closeSystemTestLogModal()" style="background:none;border:none;color:#fff;font-size:1.5rem;cursor:pointer"><i class="fas fa-times"></i></button>
+          </div>
+          ${content}
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // تحديث آخر اختبار عند التحميل
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(updateLastTestResult, 1000);
+    });
 
     /******************************************************
      * Notes:
