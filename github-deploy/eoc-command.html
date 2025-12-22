@@ -198,6 +198,7 @@
     .scenario-icon.water i{color:#0ea5e9}
     .scenario-icon.injury i{color:#10b981}
     .scenario-icon.outbreak i{color:#8b5cf6}
+    .scenario-icon.bls i{color:#ec4899}
 
     /* Guide panel */
     .guide-wrap{display:none}
@@ -903,12 +904,13 @@
         <div>
           <div class="section-title"><i class="fas fa-list-check"></i> اختر سيناريو التدريب</div>
 
-          <div class="scenario-icons" style="grid-template-columns:repeat(5,1fr)" id="trainScenarioIcons">
+          <div class="scenario-icons" style="grid-template-columns:repeat(6,1fr)" id="trainScenarioIcons">
             <div class="scenario-icon fire" data-s="fire" onclick="selectTrainingScenario('fire')"><i class="fas fa-fire"></i><span id="t_fire">حريق</span></div>
             <div class="scenario-icon power" data-s="power" onclick="selectTrainingScenario('power')"><i class="fas fa-bolt"></i><span id="t_power">انقطاع كهرباء</span></div>
             <div class="scenario-icon water" data-s="water" onclick="selectTrainingScenario('water')"><i class="fas fa-tint"></i><span id="t_water">تسرب مياه</span></div>
             <div class="scenario-icon injury" data-s="injury" onclick="selectTrainingScenario('injury')"><i class="fas fa-heartbeat"></i><span id="t_injury">إغماء/إصابة</span></div>
             <div class="scenario-icon outbreak" data-s="outbreak" onclick="selectTrainingScenario('outbreak')"><i class="fas fa-virus"></i><span id="t_outbreak">تفشي عدوى</span></div>
+            <div class="scenario-icon bls" data-s="bls" onclick="selectTrainingScenario('bls')"><i class="fas fa-heart-pulse"></i><span id="t_bls">إنعاش قلبي</span></div>
           </div>
 
           <div id="trainingGuide" style="margin-top:14px;display:none">
@@ -925,6 +927,21 @@
             </div>
           </div>
 
+          <div id="metronomeContainer" style="display:none;margin-top:12px;background:linear-gradient(135deg,#ec4899,#db2777);border-radius:14px;padding:14px;text-align:center">
+            <div style="font-weight:900;font-size:1.1rem;margin-bottom:10px">
+              <i class="fas fa-heart-pulse"></i> تدريب ضغطات الصدر
+            </div>
+            <div style="font-size:.9rem;margin-bottom:12px;opacity:.9">
+              اضغط على الصدر مع كل نبضة صوتية (110/دقيقة)
+            </div>
+            <button id="metronomeBtn" class="btn" style="background:rgba(0,0,0,.3);border:2px solid rgba(255,255,255,.3);width:100%" onclick="toggleMetronome()">
+              <i class="fas fa-drum"></i> تشغيل إيقاع الضغطات
+            </button>
+            <div style="font-size:.8rem;margin-top:8px;opacity:.7">
+              <i class="fas fa-info-circle"></i> كل 30 ضغطة ستسمع صوت مختلف (للتذكير بالنفسين)
+            </div>
+          </div>
+          
           <div style="margin-top:12px;color:var(--muted);font-weight:800;line-height:1.6">
             <i class="fas fa-bullhorn"></i>
             عند اختيار السيناريو يمكنك إرسال التمرين للشاشات (Training Mode) — بدون أن يؤثر على البلاغات الحقيقية.
@@ -1115,6 +1132,7 @@
       water:   { icon:'fa-tint',          fa:'fas', color:'water' },
       injury:  { icon:'fa-heartbeat',     fa:'fas', color:'injury' },
       outbreak:{ icon:'fa-virus',         fa:'fas', color:'outbreak' },
+      bls:     { icon:'fa-heart-pulse',   fa:'fas', color:'bls' },
     };
 
     const TYPE_LABELS_FALLBACK = {
@@ -1123,6 +1141,7 @@
       water: 'تسرب مياه',
       injury: 'إغماء/إصابة',
       outbreak: 'تفشي عدوى',
+      bls: 'إنعاش قلبي (BLS)',
       drill: 'تمرين'
     };
 
@@ -1432,7 +1451,7 @@
         if (sg && sg.ok && sg.scenarios){
           APP.scenarios = sg.scenarios;
           // update labels in UI
-          ['fire','power','water','injury','outbreak'].forEach(k=>{
+          ['fire','power','water','injury','outbreak','bls'].forEach(k=>{
             const lbl = scenarioLabel(k);
             const a = document.getElementById('lbl_'+k);
             const b = document.getElementById('btn_'+k);
@@ -1441,6 +1460,33 @@
             if (b) b.textContent = lbl;
             if (t) t.textContent = lbl;
           });
+        }
+        
+        // إضافة BLS كـ fallback إذا لم يكن موجوداً
+        if (!APP.scenarios.bls) {
+          APP.scenarios.bls = {
+            key: 'bls',
+            label: 'إنعاش قلبي رئوي (BLS)',
+            DO: [
+              { stepNo: '1', icon: 'fa-shield', text: 'تأكد من سلامة المكان قبل الاقتراب' },
+              { stepNo: '2', icon: 'fa-hand', text: 'اربت على كتف المصاب واسأل: هل أنت بخير؟' },
+              { stepNo: '3', icon: 'fa-phone', text: 'اطلب المساعدة: اتصل 997 أو أرسل شخص لإحضار AED' },
+              { stepNo: '4', icon: 'fa-lungs', text: 'افتح مجرى الهواء: ارفع الذقن وأمل الرأس للخلف' },
+              { stepNo: '5', icon: 'fa-eye', text: 'انظر واسمع وتحسس التنفس لمدة 10 ثواني' },
+              { stepNo: '6', icon: 'fa-hands', text: 'ابدأ ضغطات الصدر: 30 ضغطة بعمق 5-6 سم' },
+              { stepNo: '7', icon: 'fa-wind', text: 'أعط نفسين إنقاذ (إذا مدرب)' },
+              { stepNo: '8', icon: 'fa-repeat', text: 'كرر دورة 30:2 حتى وصول AED أو الإسعاف' },
+              { stepNo: '9', icon: 'fa-bolt', text: 'استخدم AED فور وصوله واتبع التعليمات الصوتية' },
+              { stepNo: '10', icon: 'fa-clock', text: 'لا تتوقف حتى يستعيد المصاب وعيه أو يصل الإسعاف' }
+            ],
+            DONT: [
+              { stepNo: '1', icon: 'fa-running', text: 'لا تترك المصاب وحده أبداً' },
+              { stepNo: '2', icon: 'fa-hourglass', text: 'لا تضيع الوقت في فحوصات غير ضرورية' },
+              { stepNo: '3', icon: 'fa-hand-paper', text: 'لا تضغط على البطن أو الأضلاع' },
+              { stepNo: '4', icon: 'fa-pause', text: 'لا تتوقف عن الضغطات لأكثر من 10 ثواني' },
+              { stepNo: '5', icon: 'fa-water', text: 'لا تعطِ الماء أو الطعام للمصاب' }
+            ]
+          };
         }
 
         if (ro && ro.ok){
@@ -2241,7 +2287,106 @@
       `).join('') : `<div style="opacity:.85;font-weight:900">لا توجد خطوات (DON'T).</div>`;
 
       document.getElementById('trainingGuide').style.display = 'block';
+      
+      // إضافة زر Metronome لتدريب BLS
+      const metronomeContainer = document.getElementById('metronomeContainer');
+      if (metronomeContainer) {
+        if (key === 'bls') {
+          metronomeContainer.style.display = 'block';
+        } else {
+          metronomeContainer.style.display = 'none';
+          stopMetronome();
+        }
+      }
+      
       updateTrainingSaveState();
+    }
+
+    // ========== صوت Metronome للتدريب على ضغطات الصدر ==========
+    let metronomeAudioCtx = null;
+    let metronomeInterval = null;
+    let metronomePlaying = false;
+    
+    function startMetronome() {
+      if (metronomePlaying) return;
+      
+      try {
+        if (!metronomeAudioCtx) {
+          metronomeAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (metronomeAudioCtx.state === 'suspended') {
+          metronomeAudioCtx.resume();
+        }
+        
+        metronomePlaying = true;
+        const btn = document.getElementById('metronomeBtn');
+        if (btn) {
+          btn.innerHTML = '<i class="fas fa-stop"></i> إيقاف الإيقاع';
+          btn.classList.add('active');
+        }
+        
+        let beatCount = 0;
+        
+        function playBeat() {
+          if (!metronomePlaying) return;
+          
+          beatCount++;
+          const osc = metronomeAudioCtx.createOscillator();
+          const gain = metronomeAudioCtx.createGain();
+          
+          // كل 30 ضغطة نعطي صوت مختلف (للتذكير بالنفسين)
+          if (beatCount % 30 === 0) {
+            osc.type = 'sine';
+            osc.frequency.value = 880; // صوت عالي للتذكير
+            gain.gain.value = 0.5;
+          } else {
+            osc.type = 'square';
+            osc.frequency.value = 440;
+            gain.gain.value = 0.3;
+          }
+          
+          osc.connect(gain);
+          gain.connect(metronomeAudioCtx.destination);
+          
+          const now = metronomeAudioCtx.currentTime;
+          gain.gain.setValueAtTime(gain.gain.value, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+          
+          osc.start(now);
+          osc.stop(now + 0.1);
+        }
+        
+        playBeat();
+        // 110 نبضة/دقيقة = 545ms بين كل نبضة (معدل ضغطات الصدر المثالي)
+        metronomeInterval = setInterval(playBeat, 545);
+        
+        toast('🎵 Metronome: 110 نبضة/دقيقة - اضغط مع الإيقاع!', 'info');
+        
+      } catch(e) {
+        console.error('Metronome error:', e);
+        toast('تعذر تشغيل صوت الإيقاع', 'warn');
+      }
+    }
+    
+    function stopMetronome() {
+      metronomePlaying = false;
+      if (metronomeInterval) {
+        clearInterval(metronomeInterval);
+        metronomeInterval = null;
+      }
+      const btn = document.getElementById('metronomeBtn');
+      if (btn) {
+        btn.innerHTML = '<i class="fas fa-drum"></i> تشغيل إيقاع الضغطات';
+        btn.classList.remove('active');
+      }
+    }
+    
+    function toggleMetronome() {
+      if (metronomePlaying) {
+        stopMetronome();
+      } else {
+        startMetronome();
+      }
     }
 
     function updateTrainingSaveState(){
