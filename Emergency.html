@@ -378,20 +378,42 @@
         .step-num-mini {
             background: #fbbf24;
             color: #000;
-            width: 22px;
-            height: 22px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.8rem;
+            font-size: 1rem;
             font-weight: 700;
             flex-shrink: 0;
         }
         
         .step-text-mini {
-            font-size: 0.9rem;
-            line-height: 1.4;
+            font-size: 1.2rem;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .step-text-mini {
+                font-size: 1.1rem;
+            }
+            .step-num-mini {
+                width: 26px;
+                height: 26px;
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            .step-text-mini {
+                font-size: 1.4rem;
+            }
+            .step-num-mini {
+                width: 32px;
+                height: 32px;
+                font-size: 1.1rem;
+            }
         }
 
         .emergency-logo {
@@ -889,31 +911,41 @@
                 function playBeat() {
                     if (!heartbeatPlaying) return;
                     
-                    const osc = audioCtx.createOscillator();
+                    // نبضة قوية باستخدام oscillators متعددة
+                    const osc1 = audioCtx.createOscillator();
+                    const osc2 = audioCtx.createOscillator();
                     const gain = audioCtx.createGain();
                     
-                    osc.type = 'sine';
-                    osc.frequency.value = 80;
-                    osc.connect(gain);
+                    osc1.type = 'sine';
+                    osc1.frequency.value = 60; // bass عميق
+                    osc2.type = 'sine';
+                    osc2.frequency.value = 120; // طبقة ثانية
+                    
+                    osc1.connect(gain);
+                    osc2.connect(gain);
                     gain.connect(audioCtx.destination);
                     
                     const now = audioCtx.currentTime;
                     
-                    // نبضة أولى (قوية)
+                    // دوم-دوم أول (قوي جداً)
                     gain.gain.setValueAtTime(0, now);
-                    gain.gain.linearRampToValueAtTime(0.8, now + 0.05);
-                    gain.gain.linearRampToValueAtTime(0, now + 0.15);
+                    gain.gain.linearRampToValueAtTime(1.0, now + 0.03);
+                    gain.gain.linearRampToValueAtTime(0.3, now + 0.1);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.18);
                     
-                    // نبضة ثانية (أخف)
-                    gain.gain.linearRampToValueAtTime(0.5, now + 0.25);
-                    gain.gain.linearRampToValueAtTime(0, now + 0.35);
+                    // دوم-دوم ثاني (قوي)
+                    gain.gain.linearRampToValueAtTime(0.9, now + 0.25);
+                    gain.gain.linearRampToValueAtTime(0.2, now + 0.32);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.4);
                     
-                    osc.start(now);
-                    osc.stop(now + 0.4);
+                    osc1.start(now);
+                    osc2.start(now);
+                    osc1.stop(now + 0.45);
+                    osc2.stop(now + 0.45);
                 }
                 
                 playBeat();
-                heartbeatInterval = setInterval(playBeat, 800);
+                heartbeatInterval = setInterval(playBeat, 700);
                 
             } catch(e) {
                 console.error('Heartbeat error:', e);
