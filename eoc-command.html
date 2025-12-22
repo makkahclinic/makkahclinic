@@ -849,7 +849,12 @@
     <!-- RIGHT: BUILDING -->
     <div class="panel-card building-section">
       <div class="section-title"><i class="fas fa-building"></i> خريطة المبنى</div>
-      <div class="building-view" id="buildingView"></div>
+      <div class="building-view" id="buildingView">
+        <div style="text-align:center;padding:30px;color:var(--muted)">
+          <i class="fas fa-spinner fa-spin" style="font-size:2rem;margin-bottom:10px"></i><br>
+          جاري تحميل بيانات المبنى...
+        </div>
+      </div>
 
       <div class="muster-points" id="musterPoints"></div>
 
@@ -1496,7 +1501,7 @@
     /******************************************************
      * JSONP helper (Apps Script ContentService JSONP)
      ******************************************************/
-    function jsonp(action, params = {}) {
+    function jsonp(action, params = {}, timeoutMs = 15000) {
       return new Promise((resolve, reject) => {
         const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
         params.action = action;
@@ -1505,13 +1510,23 @@
         const s = document.createElement("script");
         s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
 
-        window[cb] = (data) => { cleanup(); resolve(data); };
-        s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
-
+        let timeoutId = null;
+        
         function cleanup() {
+          if (timeoutId) clearTimeout(timeoutId);
           try { delete window[cb]; } catch(e) {}
           if (s.parentNode) s.parentNode.removeChild(s);
         }
+
+        window[cb] = (data) => { cleanup(); resolve(data); };
+        s.onerror = () => { cleanup(); reject(new Error("jsonp script error: " + action)); };
+        
+        // Timeout
+        timeoutId = setTimeout(() => {
+          cleanup();
+          reject(new Error("jsonp timeout: " + action));
+        }, timeoutMs);
+        
         document.body.appendChild(s);
       });
     }
@@ -1758,11 +1773,13 @@
      ******************************************************/
     async function loadCoreData(){
       try{
+        console.log('loadCoreData: جاري تحميل البيانات...');
         const [b, sg, ro] = await Promise.all([
           jsonp('getBuildingConfig', {}),
           jsonp('getScenarioGuides', {}),
           jsonp('getTrainingRoster', {}),
         ]);
+        console.log('loadCoreData: البيانات وصلت', { building: b, scenarios: sg, roster: ro });
 
         if (b && b.ok){
           APP.building.floors = Array.isArray(b.floors) ? b.floors : [];
@@ -1823,8 +1840,8 @@
         showScenarioGuide('fire');
 
       } catch(e){
-        console.error(e);
-        toast('تعذر تحميل بيانات الإكسل. سيتم عرض واجهة أساسية.', 'warn');
+        console.error('loadCoreData ERROR:', e);
+        toast('⚠️ تعذر الاتصال بالسيرفر: ' + e.message, 'error');
         // fallback minimal render
         renderBuildingFallback();
         renderMusterFallback();
