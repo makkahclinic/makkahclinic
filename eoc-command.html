@@ -1537,7 +1537,11 @@
     function toast(message, type='info') {
       const t = document.createElement('div');
       t.className = 'toast ' + (type || '');
-      t.innerHTML = `<i class="fas ${type==='success'?'fa-check-circle':type==='error'?'fa-triangle-exclamation':type==='warn'?'fa-circle-exclamation':'fa-circle-info'}"></i> ${escapeHtml(message)}`;
+      let icon = 'fa-circle-info';
+      if (type === 'success') icon = 'fa-check-circle';
+      else if (type === 'error') icon = 'fa-triangle-exclamation';
+      else if (type === 'warn') icon = 'fa-circle-exclamation';
+      t.innerHTML = '<i class="fas ' + icon + '"></i> ' + escapeHtml(message);
       document.body.appendChild(t);
       setTimeout(()=>t.remove(), 3200);
     }
@@ -1938,21 +1942,24 @@
       host.innerHTML = APP.roster.map((p, idx)=>{
         const id = 'r_' + idx;
         const selected = APP.train.selectedRoster.has(id);
-        return `
-          <div class="mini-item" style="cursor:pointer;border-color:${selected?'rgba(16,185,129,.55)':'rgba(255,255,255,.1)'};background:${selected?'rgba(16,185,129,.12)':'rgba(255,255,255,.05)'}" onclick="toggleRoster('${id}')">
-            <div class="mini-row">
-              <div style="display:flex;align-items:center;gap:10px">
-                <span style="width:22px;height:22px;border-radius:6px;border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;background:${selected?'rgba(16,185,129,.9)':'transparent'}">
-                  ${selected?'<i class="fas fa-check" style="font-size:.8rem"></i>':''}
-                </span>
-                <div>
-                  <div style="font-weight:1000">${escapeHtml(p.name || '')}</div>
-                  <div style="opacity:.75;font-weight:800;font-size:.85rem">${escapeHtml(p.department || '')}${p.role?(' • '+escapeHtml(p.role)):""}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
+        const borderColor = selected ? 'rgba(16,185,129,.55)' : 'rgba(255,255,255,.1)';
+        const bgColor = selected ? 'rgba(16,185,129,.12)' : 'rgba(255,255,255,.05)';
+        const checkBg = selected ? 'rgba(16,185,129,.9)' : 'transparent';
+        const checkIcon = selected ? '<i class="fas fa-check" style="font-size:.8rem"></i>' : '';
+        const roleText = p.role ? (' • ' + escapeHtml(p.role)) : '';
+        return '<div class="mini-item" style="cursor:pointer;border-color:' + borderColor + ';background:' + bgColor + '" onclick="toggleRoster(\'' + id + '\')">' +
+          '<div class="mini-row">' +
+            '<div style="display:flex;align-items:center;gap:10px">' +
+              '<span style="width:22px;height:22px;border-radius:6px;border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;background:' + checkBg + '">' +
+                checkIcon +
+              '</span>' +
+              '<div>' +
+                '<div style="font-weight:1000">' + escapeHtml(p.name || '') + '</div>' +
+                '<div style="opacity:.75;font-weight:800;font-size:.85rem">' + escapeHtml(p.department || '') + roleText + '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
       }).join('');
 
       updateRosterCount();
