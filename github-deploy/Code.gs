@@ -307,6 +307,27 @@
       return output_(result);
     }
     
+    // System health check endpoints
+    if (action === 'ping') {
+      return output_({ ok: true, message: 'pong', timestamp: new Date().toISOString() });
+    }
+    
+    if (action === 'systemTest') {
+      const testType = p.testType || 'basic';
+      const testData = p.testData || '';
+      try {
+        if (testType === 'save') {
+          // Test writing to sheet
+          const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+          const sheet = ss.getSheetByName('Training_Log');
+          return output_({ ok: true, testType: 'save', canWrite: !!sheet, timestamp: new Date().toISOString() });
+        }
+        return output_({ ok: true, testType: testType, timestamp: new Date().toISOString() });
+      } catch(e) {
+        return output_({ ok: false, testType: testType, error: e.message });
+      }
+    }
+    
     return output_({ ok: false, error: 'Unknown action: ' + (action || '') });
   }
   
