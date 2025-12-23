@@ -1220,6 +1220,18 @@
     </div>
   </div>
 
+  <!-- Audio Enable Overlay -->
+  <div id="audioEnableOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:none;align-items:center;justify-content:center;flex-direction:column">
+    <div style="text-align:center;max-width:400px;padding:30px">
+      <div style="font-size:5rem;margin-bottom:20px;animation:pulse 1s infinite">🔔</div>
+      <h2 style="color:#fff;font-size:1.8rem;margin-bottom:15px">⚠️ بلاغ طوارئ!</h2>
+      <p style="color:#fbbf24;font-size:1.2rem;margin-bottom:25px">اضغط لتفعيل الإنذار الصوتي</p>
+      <button onclick="enableAudioAndContinue()" style="background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;border:none;padding:18px 40px;font-size:1.3rem;font-weight:900;border-radius:12px;cursor:pointer;animation:pulse 1s infinite;box-shadow:0 0 30px rgba(220,38,38,.6)">
+        <i class="fas fa-volume-up"></i> تفعيل الإنذار
+      </button>
+    </div>
+  </div>
+
   <!-- Response Modal (issue command) -->
   <div class="modal" id="responseModal">
     <div class="modal-card" style="max-width:900px">
@@ -2359,12 +2371,45 @@
           } catch(e) { console.warn('Failed to log manual emergency:', e); }
         }
 
+        // ====== إغلاق البلاغ في Google Sheets ======
+        // إذا كان هناك بلاغ مفتوح، نغلقه أولاً
+        if (CEM_CMD && CEM_CMD.reportId) {
+          try {
+            await jsonp('updateEmergencyReportStatus', {
+              reportId: CEM_CMD.reportId,
+              status: 'مغلق',
+              responder: who,
+              actionNotes: reason || 'تم الإغلاق'
+            });
+          } catch(e) { console.warn('Failed to close report:', e); }
+        }
+        
+        // إغلاق جميع البلاغات المفتوحة من الـ cache
+        const openReports = (APP.caches.reports || []).filter(r => {
+          const st = String(r.status || '').trim();
+          return st === 'جديد' || st === 'قيد المعالجة' || st.includes('جديد') || st.includes('المعالجة');
+        });
+        for (const rep of openReports) {
+          try {
+            await jsonp('updateEmergencyReportStatus', {
+              reportId: rep.id,
+              status: 'مغلق',
+              responder: who,
+              actionNotes: reason || 'تم الإغلاق'
+            });
+          } catch(e) { console.warn('Failed to close report:', rep.id, e); }
+        }
+        
         const res = await jsonp('closeActiveCommand', {
           closedBy: who,
           closeReason: reason
         });
 
         if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+        // مسح الـ cache للبلاغات
+        APP.caches.reports = [];
+        ACTIVE_CMD_CACHE = null;
 
         // منع تشغيل الصوت مؤقتاً
         alarmSuppressed = true;
@@ -2973,13 +3018,66 @@
 
       document.getElementById('responseModal').classList.add('active');
       
-      // ====== تشغيل صوت الإنذار دائماً عند فتح modal الاستجابة ======
-      // إزالة أي منع سابق وتشغيل الصوت غصباً
+      // ====== تشغيل صوت الإنذار ======
       alarmSuppressed = false;
-      if (!alarmPlaying) {
+      
+      // محاولة تشغيل الصوت - إذا فشل بسبب Autoplay Policy، نعرض overlay
+      tryPlayAlarmOrShowOverlay();
+    }
+    
+    // متغير لتتبع حالة تفعيل الصوت
+    let audioEnabled = localStorage.getItem('eoc_audio_enabled') === 'true';
+    
+    function tryPlayAlarmOrShowOverlay(){
+      if (alarmPlaying) return; // الصوت يعمل بالفعل
+      
+      if (audioEnabled) {
+        // المستخدم سبق وفعّل الصوت - حاول تشغيله
         playAlarmSound();
         alarmPlaying = true;
+        return;
       }
+      
+      // محاولة تشغيل صوت قصير للتحقق من إمكانية التشغيل
+      try {
+        const testCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (testCtx.state === 'suspended') {
+          // المتصفح يمنع الصوت - عرض overlay
+          testCtx.close();
+          showAudioEnableOverlay();
+        } else {
+          // الصوت يعمل
+          testCtx.close();
+          playAlarmSound();
+          alarmPlaying = true;
+          audioEnabled = true;
+          localStorage.setItem('eoc_audio_enabled', 'true');
+        }
+      } catch(e) {
+        // فشل - عرض overlay
+        showAudioEnableOverlay();
+      }
+    }
+    
+    function showAudioEnableOverlay(){
+      const overlay = document.getElementById('audioEnableOverlay');
+      if (overlay) {
+        overlay.style.display = 'flex';
+      }
+    }
+    
+    function enableAudioAndContinue(){
+      // إخفاء overlay
+      const overlay = document.getElementById('audioEnableOverlay');
+      if (overlay) overlay.style.display = 'none';
+      
+      // تفعيل الصوت
+      audioEnabled = true;
+      localStorage.setItem('eoc_audio_enabled', 'true');
+      
+      // تشغيل الإنذار
+      playAlarmSound();
+      alarmPlaying = true;
     }
 
     function closeResponseModal(){
