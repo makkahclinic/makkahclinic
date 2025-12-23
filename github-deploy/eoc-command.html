@@ -75,26 +75,12 @@
     }
     .status-badge:hover{filter:brightness(1.06)}
     .status-badge.alert{
-      border-color:var(--danger);
-      color:#fff;
-      background:linear-gradient(135deg, #dc2626, #b91c1c);
-      animation:alertPulse 1s infinite;
-      font-weight:700;
-      font-size:1rem;
-      padding:10px 20px;
-      box-shadow: 0 4px 15px rgba(220,20,60,.4);
+      border-color:rgba(220,20,60,.6);
+      color:var(--danger);
+      background:rgba(220,20,60,.14);
+      animation:pulse 1.5s infinite;
     }
-    .status-badge.alert:hover{
-      filter:brightness(1.15);
-      transform:scale(1.05);
-    }
-    .status-badge.alert span{
-      font-weight:700;
-    }
-    @keyframes alertPulse{
-      0%,100%{opacity:1;box-shadow:0 4px 15px rgba(220,20,60,.4)}
-      50%{opacity:.85;box-shadow:0 4px 25px rgba(220,20,60,.7)}
-    }
+    .status-badge.alert:hover{filter:brightness(1.10)}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 
     .main-container{
@@ -2359,44 +2345,20 @@
 
     async function onStatusBadgeClick(){
       try {
-        // أولاً: تحقق من وجود أمر نشط
         const ac = await jsonp('getActiveCommand', {});
         const cmd = (ac && ac.ok) ? ac.command : null;
 
-        if (cmd && (cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
-          const isTraining =
-            String(cmd.mode || '').toLowerCase() === 'training' ||
-            String(cmd.reportType || '').includes('تمرين') ||
-            String(cmd.reportType || '').includes('🎯');
-
-          openCloseEmergencyModal(cmd, isTraining);
+        if (!cmd || !(cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
+          toast('لا توجد حالة طوارئ نشطة حالياً', 'info');
           return;
         }
 
-        // ثانياً: تحقق من وجود بلاغات مفتوحة
-        const reportsRes = await jsonp('getEmergencyReports', { limit: '20' });
-        if (reportsRes && reportsRes.ok && Array.isArray(reportsRes.reports)) {
-          const openReports = reportsRes.reports.filter(r => 
-            r.status === 'جديد' || r.status === 'قيد المعالجة'
-          );
-          
-          if (openReports.length > 0) {
-            // فتح البلاغ الأول المفتوح
-            const report = openReports[0];
-            openResponseForReport({
-              id: String(report.id || ''),
-              date: String(report.date || ''),
-              time: String(report.time || ''),
-              type: String(report.type || ''),
-              location: String(report.location || ''),
-              notes: String(report.notes || ''),
-              status: String(report.status || 'جديد')
-            });
-            return;
-          }
-        }
+        const isTraining =
+          String(cmd.mode || '').toLowerCase() === 'training' ||
+          String(cmd.reportType || '').includes('تمرين') ||
+          String(cmd.reportType || '').includes('🎯');
 
-        toast('لا توجد حالة طوارئ نشطة حالياً', 'info');
+        openCloseEmergencyModal(cmd, isTraining);
       } catch (e) {
         console.error(e);
         toast('فشل جلب حالة الطوارئ', 'error');
