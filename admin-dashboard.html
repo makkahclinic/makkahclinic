@@ -1409,43 +1409,49 @@
         let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
         
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
-        // ====== نظام صوت الإنذار المستمر ======
-        let adminAlarmCtx = null;
-        let adminAlarmOsc = null;
-        let adminAlarmGain = null;
-        let adminAlarmInterval = null;
-        let adminAlarmPlaying = false;
+        // ====== نظام صوت الإنذار - يتكرر كل 3 دقائق ======
+        let alarmRepeatInterval = null;
         
-        function playAdminAlarm() {
-            if (adminAlarmPlaying) return;
+        function playAlertSound() {
+            // صوت تنبيهي قوي (3 بيبات سريعة)
             try {
-                stopAdminAlarm();
-                adminAlarmCtx = new (window.AudioContext || window.webkitAudioContext)();
-                adminAlarmGain = adminAlarmCtx.createGain();
-                adminAlarmGain.connect(adminAlarmCtx.destination);
-                adminAlarmGain.gain.value = 0.9; // صوت قوي
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const gain = ctx.createGain();
+                gain.connect(ctx.destination);
+                gain.gain.value = 0.8;
                 
-                let isHigh = true;
-                function beep() {
-                    if (adminAlarmOsc) try { adminAlarmOsc.stop(); } catch(e){}
-                    adminAlarmOsc = adminAlarmCtx.createOscillator();
-                    adminAlarmOsc.type = 'square';
-                    adminAlarmOsc.frequency.value = isHigh ? 880 : 440; // تردد عالي ومنخفض بالتناوب
-                    adminAlarmOsc.connect(adminAlarmGain);
-                    adminAlarmOsc.start();
-                    isHigh = !isHigh;
+                let beepCount = 0;
+                function singleBeep() {
+                    if (beepCount >= 6) { // 3 بيبات (عالي+منخفض)
+                        ctx.close();
+                        return;
+                    }
+                    const osc = ctx.createOscillator();
+                    osc.type = 'square';
+                    osc.frequency.value = (beepCount % 2 === 0) ? 880 : 440;
+                    osc.connect(gain);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.15);
+                    beepCount++;
+                    setTimeout(singleBeep, 200);
                 }
-                beep();
-                adminAlarmInterval = setInterval(beep, 400); // سريع ومزعج
-                adminAlarmPlaying = true;
-            } catch(e) { console.warn('Alarm error:', e); }
+                singleBeep();
+            } catch(e) { console.warn('Alert sound error:', e); }
         }
         
-        function stopAdminAlarm() {
-            if (adminAlarmInterval) { clearInterval(adminAlarmInterval); adminAlarmInterval = null; }
-            if (adminAlarmOsc) try { adminAlarmOsc.stop(); } catch(e){} adminAlarmOsc = null;
-            if (adminAlarmCtx) try { adminAlarmCtx.close(); } catch(e){} adminAlarmCtx = null;
-            adminAlarmPlaying = false;
+        function startAlarmRepeat() {
+            // شغل الصوت فوراً
+            playAlertSound();
+            // كرر كل 3 دقائق (180000ms)
+            if (alarmRepeatInterval) clearInterval(alarmRepeatInterval);
+            alarmRepeatInterval = setInterval(playAlertSound, 180000);
+        }
+        
+        function stopAlarmRepeat() {
+            if (alarmRepeatInterval) {
+                clearInterval(alarmRepeatInterval);
+                alarmRepeatInterval = null;
+            }
         }
         
         window.showEmergencyPopup = function(type, message, details) {
@@ -1458,14 +1464,14 @@
             
             popup.classList.add('show');
             
-            // تشغيل صوت الإنذار المستمر القوي
-            playAdminAlarm();
+            // تشغيل صوت التنبيه (يتكرر كل 3 دقائق)
+            startAlarmRepeat();
         };
         
         window.closeEmergencyPopup = function() {
             document.getElementById('emergencyPopup').classList.remove('show');
-            // إيقاف صوت الإنذار
-            stopAdminAlarm();
+            // إيقاف تكرار التنبيه
+            stopAlarmRepeat();
         };
         
         // دوال نافذة روابط الطوارئ QR
