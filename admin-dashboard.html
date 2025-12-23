@@ -83,6 +83,33 @@
             border-right-color: var(--gold);
         }
         .nav-item i { width: 22px; text-align: center; }
+        /* قائمة الطوارئ الذكية */
+        .eoc-nav-item { justify-content: flex-start; position: relative; }
+        .eoc-nav-item .eoc-chevron { margin-right: auto; transition: transform 0.3s; font-size: 0.7rem; }
+        .eoc-nav-item.open .eoc-chevron { transform: rotate(180deg); }
+        .eoc-submenu { 
+            display: none; 
+            background: rgba(0,0,0,0.25); 
+            padding: 8px; 
+            border-right: 3px solid var(--gold);
+        }
+        .eoc-submenu.open { display: block; }
+        .eoc-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            margin: 6px 0;
+            background: rgba(255,255,255,0.08);
+            border-radius: 8px;
+            text-decoration: none;
+            color: white;
+            transition: all 0.2s;
+        }
+        .eoc-link:hover { background: rgba(255,255,255,0.15); transform: translateX(-3px); }
+        .eoc-link img { width: 45px; height: 45px; border-radius: 6px; background: white; }
+        .eoc-link strong { display: block; font-size: 0.85rem; margin-bottom: 2px; }
+        .eoc-link small { color: rgba(255,255,255,0.6); font-size: 0.7rem; }
         .nav-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.8rem 0; }
         .main-content {
             margin-right: var(--sidebar-width);
@@ -176,6 +203,16 @@
         .kpi-icon.calibration { background: linear-gradient(135deg, #fa709a, #fee140); }
         .kpi-icon.maintenance { background: linear-gradient(135deg, #667eea, #764ba2); }
         .kpi-icon.needlestick { background: linear-gradient(135deg, #a8edea, #fed6e3); color: #333; }
+        .kpi-icon.eoc { background: linear-gradient(135deg, #10b981, #059669); transition: all 0.3s; }
+        .eoc-smart-card.active-emergency { border: 2px solid #dc2626 !important; }
+        .eoc-smart-card.active-emergency .kpi-icon.eoc { 
+            background: linear-gradient(135deg, #dc2626, #991b1b) !important;
+            animation: eocPulse 1s infinite;
+        }
+        @keyframes eocPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+            50% { transform: scale(1.08); box-shadow: 0 0 20px 5px rgba(220, 38, 38, 0.4); }
+        }
         .kpi-info h3 { font-size: 1.6rem; color: var(--primary); line-height: 1; font-weight: 700; }
         .kpi-info p { font-size: 0.8rem; color: #555; margin-top: 4px; font-weight: 500; }
         .kpi-info .sub { font-size: 0.75rem; color: #999; display: block; margin-top: 2px; }
@@ -290,8 +327,13 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
+            transition: opacity 0.3s;
         }
-        .loading-overlay.hidden { display: none; }
+        .loading-overlay.hidden { 
+            display: none !important; 
+            opacity: 0;
+            pointer-events: none;
+        }
         .loading-spinner {
             width: 50px;
             height: 50px;
@@ -419,6 +461,43 @@
                 <i class="fas fa-shield-alt"></i>
                 <span>تسجيل خطر</span>
             </a>
+            <a class="nav-item" href="emergency-plan.html" target="_blank">
+                <i class="fas fa-first-aid"></i>
+                <span>خطة الطوارئ</span>
+            </a>
+            <a class="nav-item" href="eoc-command.html" target="_blank">
+                <i class="fas fa-shield-alt"></i>
+                <span>مركز القيادة EOC</span>
+            </a>
+            <!-- قائمة الطوارئ الذكية -->
+            <div class="nav-item eoc-nav-item" onclick="toggleEocSubmenu()" id="eocNavItem">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>روابط الطوارئ</span>
+                <i class="fas fa-chevron-down eoc-chevron" id="eocChevron"></i>
+            </div>
+            <div class="eoc-submenu" id="eocSubmenu">
+                <a class="eoc-link" href="emergency-report.html" target="_blank">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=https://m2020m.org/emergency-report.html" alt="QR">
+                    <div>
+                        <strong><i class="fas fa-exclamation-triangle" style="color:#dc2626"></i> إبلاغ طوارئ</strong>
+                        <small>نموذج البلاغ السريع</small>
+                    </div>
+                </a>
+                <a class="eoc-link" href="Emergency.html" target="_blank">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=https://m2020m.org/Emergency.html" alt="QR">
+                    <div>
+                        <strong><i class="fas fa-tv" style="color:#3b82f6"></i> شاشة العرض</strong>
+                        <small>للشاشات الكبيرة</small>
+                    </div>
+                </a>
+                <a class="eoc-link" href="emergency-poster.html" target="_blank">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=https://m2020m.org/emergency-poster.html" alt="QR">
+                    <div>
+                        <strong><i class="fas fa-image" style="color:#c9a962"></i> البوستر</strong>
+                        <small>للطباعة والتعليق</small>
+                    </div>
+                </a>
+            </div>
             <div class="nav-divider"></div>
             <a class="nav-item admin-only" data-section="users">
                 <i class="fas fa-users-cog"></i>
@@ -464,6 +543,15 @@
         <section class="content-section active" id="section-dashboard">
             <!-- مؤشرات رئيسية -->
             <div class="kpi-grid">
+                <!-- أيقونة الطوارئ الذكية -->
+                <a href="eoc-command.html" target="_blank" class="kpi-card system-card eoc-smart-card" id="eocSmartCard" data-system="eoc">
+                    <div class="kpi-icon eoc" id="eocSmartIcon"><i class="fas fa-triangle-exclamation"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-eoc-count">-</h3>
+                        <p id="kpi-eoc-label">حالة طوارئ</p>
+                        <span class="sub" id="kpi-eoc-status">جاري الفحص...</span>
+                    </div>
+                </a>
                 <a href="complaint_mentoring.html" target="_blank" class="kpi-card system-card" data-system="complaints">
                     <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
                     <div class="kpi-info">
@@ -732,7 +820,8 @@
             rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec",
             needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec",
             calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec",
-            maintenance: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec"
+            maintenance: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec",
+            eoc: "https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec"
         };
         
         // دالة حساب إحصائيات المعايرة (نفس منطق calibration.html)
@@ -1044,11 +1133,93 @@
                 // تحديث التنبيهات - إرسال كل البيانات
                 updateAlerts(complaintsRes, incidentsRes, risksRes, roundsRes, calStats);
 
+                // جلب حالة الطوارئ وتحديث الأيقونة الذكية
+                updateEocSmartCard();
+
             } catch (e) {
                 console.error('Dashboard load error:', e);
             } finally {
                 refreshBtn.classList.remove('loading');
             }
+        }
+
+        // دالة تحديث أيقونة الطوارئ الذكية
+        async function updateEocSmartCard() {
+            const card = document.getElementById('eocSmartCard');
+            const countEl = document.getElementById('kpi-eoc-count');
+            const labelEl = document.getElementById('kpi-eoc-label');
+            const statusEl = document.getElementById('kpi-eoc-status');
+            
+            try {
+                // جلب الحالة النشطة والإحصائيات
+                const [activeRes, reportsRes] = await Promise.all([
+                    fetchJsonp(APIs.eoc + '?action=getActiveCommand&callback=_'),
+                    fetchJsonp(APIs.eoc + '?action=getEmergencyReports&limit=100&callback=_')
+                ]);
+                
+                // التحقق من وجود حالة طوارئ نشطة
+                const isActive = activeRes.ok && activeRes.active === true;
+                
+                // حساب الإحصائيات
+                let totalReports = 0;
+                let openReports = 0;
+                let thisMonthReports = 0;
+                
+                if (reportsRes.ok && Array.isArray(reportsRes.reports)) {
+                    const reports = reportsRes.reports;
+                    totalReports = reports.length;
+                    openReports = reports.filter(r => r.status !== 'مغلق').length;
+                    
+                    const now = new Date();
+                    const thisMonth = now.getMonth();
+                    const thisYear = now.getFullYear();
+                    thisMonthReports = reports.filter(r => {
+                        const d = new Date(r.date);
+                        return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+                    }).length;
+                }
+                
+                // تحديث الواجهة
+                if (isActive) {
+                    card.classList.add('active-emergency');
+                    countEl.textContent = '⚠️';
+                    labelEl.textContent = 'طوارئ نشطة!';
+                    statusEl.textContent = activeRes.responseType || 'حالة جارية';
+                    statusEl.style.color = '#dc2626';
+                    statusEl.style.fontWeight = '700';
+                } else {
+                    card.classList.remove('active-emergency');
+                    countEl.textContent = totalReports;
+                    labelEl.textContent = 'حالة طوارئ';
+                    if (openReports > 0) {
+                        statusEl.textContent = openReports + ' مفتوحة';
+                        statusEl.style.color = '#f59e0b';
+                    } else if (thisMonthReports > 0) {
+                        statusEl.textContent = thisMonthReports + ' هذا الشهر';
+                        statusEl.style.color = '#10b981';
+                    } else {
+                        statusEl.textContent = 'الوضع طبيعي ✓';
+                        statusEl.style.color = '#10b981';
+                    }
+                    statusEl.style.fontWeight = '600';
+                }
+            } catch (e) {
+                console.error('EOC Smart Card error:', e);
+                countEl.textContent = '-';
+                statusEl.textContent = 'خطأ في الاتصال';
+                statusEl.style.color = '#999';
+            }
+        }
+
+        // تحديث أيقونة الطوارئ كل 30 ثانية
+        setInterval(updateEocSmartCard, 30000);
+
+        // دالة فتح/إغلاق قائمة روابط الطوارئ
+        function toggleEocSubmenu() {
+            const navItem = document.getElementById('eocNavItem');
+            const submenu = document.getElementById('eocSubmenu');
+            navItem.classList.toggle('open');
+            submenu.classList.toggle('open');
         }
 
         function updateAlerts(complaints, incidents, risks, rounds, calibration) {
@@ -1182,6 +1353,7 @@
 
             document.body.classList.add('authenticated');
             loadingOverlay.classList.add('hidden');
+            loadingOverlay.style.display = 'none';
             loadDashboardData();
             
             // التحديث التلقائي كل 3 دقائق (180000 ملي ثانية)
