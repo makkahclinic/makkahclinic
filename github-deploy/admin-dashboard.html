@@ -1508,7 +1508,10 @@
             window.open('eoc-command.html', '_blank');
         };
         
-        // فحص البلاغات الجديدة كل 15 ثانية
+        // فحص البلاغات الجديدة
+        let isFirstCheck = true; // لتجاهل البلاغات القديمة عند أول تحميل
+        let acknowledgedReports = JSON.parse(localStorage.getItem('acknowledgedReports') || '[]');
+        
         async function checkNewEmergencies() {
             try {
                 const [activeRes, reportsRes] = await Promise.all([
@@ -1516,45 +1519,78 @@
                     fetchJsonp(APIs.eoc + '?action=getEmergencyReports&limit=10&callback=_')
                 ]);
                 
-                // التحقق من أمر طوارئ جديد (من eoc-command.html)
+                // التحقق من أمر طوارئ نشط (من eoc-command.html)
                 if (activeRes.ok && activeRes.status === 'active' && activeRes.command?.sessionId) {
                     const currentSession = activeRes.command.sessionId;
+                    // عرض التنبيه فقط إذا كانت جلسة جديدة (غير معترف بها)
                     if (currentSession !== lastKnownActiveSession) {
                         lastKnownActiveSession = currentSession;
                         localStorage.setItem('lastKnownActiveSession', currentSession);
-                        showEmergencyPopup('command', 'تم تفعيل حالة طوارئ!', {
-                            type: activeRes.command.responseType || activeRes.command.type || 'طوارئ',
-                            location: activeRes.command.floor || 'المبنى كاملاً',
-                            time: new Date().toLocaleTimeString('ar-SA')
-                        });
+                        // تنبيه فقط إذا لم يكن أول تحميل
+                        if (!isFirstCheck) {
+                            showEmergencyPopup('command', 'تم تفعيل حالة طوارئ!', {
+                                type: activeRes.command.responseType || activeRes.command.type || 'طوارئ',
+                                location: activeRes.command.floor || 'المبنى كاملاً',
+                                time: new Date().toLocaleTimeString('ar-SA')
+                            });
+                        }
                     }
                 }
                 
-                // التحقق من بلاغ جديد (من emergency-report.html)
+                // التحقق من بلاغات جديدة (من emergency-report.html)
                 if (reportsRes.ok && Array.isArray(reportsRes.reports) && reportsRes.reports.length > 0) {
-                    const latestReport = reportsRes.reports[0];
-                    const reportKey = latestReport.id || latestReport.date + latestReport.type;
+                    // البحث عن بلاغات مفتوحة لم يتم الاعتراف بها
+                    const openReports = reportsRes.reports.filter(r => r.status !== 'مغلق');
                     
-                    if (reportKey !== lastKnownReportId && latestReport.status !== 'مغلق') {
-                        lastKnownReportId = reportKey;
-                        localStorage.setItem('lastKnownReportId', reportKey);
-                        showEmergencyPopup('report', 'بلاغ طوارئ جديد!', {
-                            type: latestReport.type || 'بلاغ',
-                            location: latestReport.location || latestReport.floor || '-',
-                            time: latestReport.time || new Date().toLocaleTimeString('ar-SA')
-                        });
+                    for (const report of openReports) {
+                        const reportKey = report.id || (report.date + report.type);
+                        
+                        // تجاهل إذا تم الاعتراف به سابقاً
+                        if (acknowledgedReports.includes(reportKey)) continue;
+                        if (reportKey === lastKnownReportId) continue;
+                        
+                        // في أول تحميل: سجل البلاغات الموجودة بدون تنبيه
+                        if (isFirstCheck) {
+                            lastKnownReportId = reportKey;
+                            localStorage.setItem('lastKnownReportId', reportKey);
+                        } else {
+                            // بلاغ جديد فعلاً - اعرض التنبيه
+                            lastKnownReportId = reportKey;
+                            localStorage.setItem('lastKnownReportId', reportKey);
+                            showEmergencyPopup('report', 'بلاغ طوارئ جديد!', {
+                                type: report.type || 'بلاغ',
+                                location: report.location || report.floor || '-',
+                                time: report.time || new Date().toLocaleTimeString('ar-SA')
+                            });
+                            break; // تنبيه واحد فقط في كل مرة
+                        }
                     }
                 }
+                
+                isFirstCheck = false;
             } catch (e) {
                 console.log('Check emergencies error:', e);
             }
         }
         
-        // بدء الفحص الدوري بعد 2 ثانية من التحميل (كل 5 ثواني)
+        // عند إغلاق التنبيه = الاعتراف بالبلاغ
+        const originalClosePopup = window.closeEmergencyPopup;
+        window.closeEmergencyPopup = function() {
+            // إضافة البلاغ الحالي للمعترف بها
+            if (lastKnownReportId && !acknowledgedReports.includes(lastKnownReportId)) {
+                acknowledgedReports.push(lastKnownReportId);
+                // الاحتفاظ بآخر 50 بلاغ فقط
+                if (acknowledgedReports.length > 50) acknowledgedReports = acknowledgedReports.slice(-50);
+                localStorage.setItem('acknowledgedReports', JSON.stringify(acknowledgedReports));
+            }
+            originalClosePopup();
+        };
+        
+        // بدء الفحص الدوري بعد ثانية (كل 5 ثواني)
         setTimeout(() => {
             checkNewEmergencies();
             setInterval(checkNewEmergencies, 5000);
-        }, 2000);
+        }, 1000);
 
         // دالة فتح/إغلاق قائمة روابط الطوارئ
         function toggleEocSubmenu() {
