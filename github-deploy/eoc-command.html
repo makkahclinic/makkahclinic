@@ -685,8 +685,9 @@
       
       @page{margin:1cm;size:A4 landscape}
       
-      /* طباعة سجل الفحوصات */
-      .big-modal-overlay{
+      /* إخفاء modal الفحص عند طباعة السجل */
+      body.printing-history #readinessModal{display:none !important}
+      body.printing-history .big-modal-overlay{
         position:static !important;
         display:block !important;
         background:#fff !important;
@@ -694,7 +695,7 @@
         height:auto !important;
         overflow:visible !important;
       }
-      .big-modal-overlay > div{
+      body.printing-history .big-modal-overlay > div{
         background:#fff !important;
         border:none !important;
         max-width:100% !important;
@@ -702,16 +703,17 @@
         overflow:visible !important;
         padding:20px !important;
       }
-      .big-modal-overlay h2{color:#1e3a5f !important}
-      .big-modal-overlay h4{color:#1e3a5f !important;font-weight:700 !important}
-      .big-modal-overlay table{width:100% !important;border-collapse:collapse !important}
-      .big-modal-overlay th{background:#1e3a5f !important;color:#fff !important;padding:8px !important;font-size:9pt !important}
-      .big-modal-overlay td{border:1px solid #ddd !important;padding:6px !important;color:#000 !important;font-size:9pt !important}
-      .big-modal-overlay button{display:none !important}
-      .big-modal-overlay [style*="max-height"]{max-height:none !important;overflow:visible !important}
-      .big-modal-overlay [style*="overflow:auto"]{overflow:visible !important}
-      .big-modal-overlay span[style*="color:#10b981"]{color:#10b981 !important;-webkit-print-color-adjust:exact !important}
-      .big-modal-overlay span[style*="color:#dc2626"]{color:#dc2626 !important;-webkit-print-color-adjust:exact !important}
+      body.printing-history .big-modal-overlay h2{color:#1e3a5f !important}
+      body.printing-history .big-modal-overlay h4{color:#1e3a5f !important;font-weight:700 !important}
+      body.printing-history .big-modal-overlay table{width:100% !important;border-collapse:collapse !important}
+      body.printing-history .big-modal-overlay th{background:#1e3a5f !important;color:#fff !important;padding:8px !important;font-size:9pt !important}
+      body.printing-history .big-modal-overlay td{border:1px solid #ddd !important;padding:6px !important;color:#000 !important;font-size:9pt !important}
+      body.printing-history .big-modal-overlay button{display:none !important}
+      body.printing-history .big-modal-overlay [style*="max-height"]{max-height:none !important;overflow:visible !important}
+      body.printing-history .big-modal-overlay [style*="overflow:auto"]{overflow:visible !important}
+      
+      /* إخفاء السجل عند طباعة الفحص */
+      body:not(.printing-history) .big-modal-overlay{display:none !important}
     }
   </style>
 </head>
@@ -4038,7 +4040,10 @@
           }
           
           html += '</div>';
-          html += '<div style="margin-top:12px"><button class="btn secondary" style="width:100%" onclick="closeReadinessHistoryModal()"><i class="fas fa-times"></i> إغلاق</button></div>';
+          html += `<div style="margin-top:12px;display:flex;gap:10px">
+            <button class="btn success" style="flex:1" onclick="printReadinessHistory()"><i class="fas fa-print"></i> طباعة السجل</button>
+            <button class="btn secondary" style="flex:1" onclick="closeReadinessHistoryModal()"><i class="fas fa-times"></i> إغلاق</button>
+          </div>`;
           
           showBigModal('سجل فحوصات الجاهزية', html);
           document.getElementById('readinessStatus').innerHTML = '';
@@ -4051,8 +4056,19 @@
     }
     
     function closeReadinessHistoryModal() {
+      document.body.classList.remove('printing-history');
       const modal = document.querySelector('.big-modal-overlay');
       if (modal) modal.remove();
+    }
+
+    function printReadinessHistory() {
+      document.body.classList.add('printing-history');
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => {
+          document.body.classList.remove('printing-history');
+        }, 500);
+      }, 100);
     }
 
     function printReadinessChecklist() {
