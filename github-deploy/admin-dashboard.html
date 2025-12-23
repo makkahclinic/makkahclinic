@@ -1337,9 +1337,11 @@
                 ]);
                 
                 // التحقق من وجود حالة طوارئ نشطة (مثل Emergency.html)
+                // الـ API يُرجع: { ok: true, command: { status: 'active', sessionId: '...' } }
+                const cmd = activeRes.command || {};
                 const isActive = activeRes.ok && 
-                    (activeRes.status === 'active' || activeRes.active === true) && 
-                    activeRes.command && activeRes.command.sessionId;
+                    (cmd.status === 'active' || activeRes.status === 'active') && 
+                    cmd.sessionId;
                 
                 // حساب الإحصائيات
                 let totalReports = 0;
@@ -1399,8 +1401,8 @@
             }
         }
 
-        // تحديث أيقونة الطوارئ كل 30 ثانية
-        setInterval(updateEocSmartCard, 30000);
+        // تحديث أيقونة الطوارئ كل 5 ثواني (مع التنبيهات)
+        setInterval(updateEocSmartCard, 5000);
 
         // نظام التنبيهات المنبثقة للطوارئ
         let lastKnownReportId = localStorage.getItem('lastKnownReportId') || '';
@@ -1486,11 +1488,11 @@
             }
         }
         
-        // بدء الفحص الدوري بعد 5 ثواني من التحميل
+        // بدء الفحص الدوري بعد 2 ثانية من التحميل (كل 5 ثواني)
         setTimeout(() => {
             checkNewEmergencies();
-            setInterval(checkNewEmergencies, 15000);
-        }, 5000);
+            setInterval(checkNewEmergencies, 5000);
+        }, 2000);
 
         // دالة فتح/إغلاق قائمة روابط الطوارئ
         function toggleEocSubmenu() {
