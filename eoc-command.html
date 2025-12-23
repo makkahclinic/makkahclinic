@@ -85,7 +85,7 @@
 
     .main-container{
       display:grid;
-      grid-template-columns: 410px 1fr;
+      grid-template-columns: 530px 1fr;
       gap:18px;
       padding:18px;
       max-width:1700px;
@@ -1506,6 +1506,9 @@
           <div style="display:flex;gap:8px">
             <button class="btn success" onclick="saveReadinessData()" style="padding:10px 20px">
               <i class="fas fa-save"></i> حفظ
+            </button>
+            <button class="btn info" onclick="showReadinessHistory()" style="padding:10px 20px;background:linear-gradient(135deg,#3b82f6,#1d4ed8)">
+              <i class="fas fa-history"></i> السجل
             </button>
             <button class="btn secondary" onclick="printReadinessChecklist()" style="padding:10px 20px">
               <i class="fas fa-print"></i> طباعة
@@ -3751,23 +3754,43 @@
     /******************************************************
      * قائمة فحص جاهزية الطوارئ
      ******************************************************/
-    const READINESS_DEPARTMENTS = [
-      { id: 'reception', name: 'الاستقبال' },
-      { id: 'batiniya1', name: 'الباطنية 1' },
-      { id: 'batiniya2', name: 'الباطنية 2' },
-      { id: 'batiniya3', name: 'الباطنية 3' },
-      { id: 'dental', name: 'الأسنان' },
-      { id: 'emergency', name: 'الطوارئ' },
-      { id: 'general', name: 'الطب العام' },
-      { id: 'lab', name: 'المختبر' },
-      { id: 'pharmacy', name: 'الصيدلية' },
-      { id: 'nursery', name: 'النساء والولادة' },
-      { id: 'mens', name: 'استقبال رجال' },
-      { id: 'admin', name: 'الإدارة' },
-    ];
-
-    const READINESS_ITEMS = ['exits', 'lights', 'extinguishers', 'firstaid', 'alarm'];
+    let READINESS_DEPARTMENTS = [];
     let readinessData = {};
+    let readinessHistory = [];
+    let readinessViewMode = 'edit'; // 'edit' or 'history'
+
+    async function loadDepartmentsFromServer() {
+      try {
+        const url = WEB_APP_URL + '?action=getReadinessDepartments&callback=?';
+        const res = await fetch(url);
+        const text = await res.text();
+        const json = JSON.parse(text.replace(/^\?\(/, '').replace(/\);$/, ''));
+        
+        if (json.ok && json.departments && json.departments.length > 0) {
+          READINESS_DEPARTMENTS = json.departments;
+          return true;
+        }
+      } catch (err) {
+        console.log('Fallback to default departments:', err);
+      }
+      
+      // Fallback
+      READINESS_DEPARTMENTS = [
+        { id: 'reception', name: 'الاستقبال', floor: 'الأول' },
+        { id: 'batiniya1', name: 'الباطنية 1', floor: 'الثاني' },
+        { id: 'batiniya2', name: 'الباطنية 2', floor: 'الثاني' },
+        { id: 'batiniya3', name: 'الباطنية 3', floor: 'الثاني' },
+        { id: 'dental', name: 'الأسنان', floor: 'الثاني' },
+        { id: 'emergency', name: 'الطوارئ', floor: 'الأول' },
+        { id: 'general', name: 'الطب العام', floor: 'الأول' },
+        { id: 'lab', name: 'المختبر', floor: 'الأول' },
+        { id: 'pharmacy', name: 'الصيدلية', floor: 'الأول' },
+        { id: 'nursery', name: 'النساء والولادة', floor: 'الأول' },
+        { id: 'mens', name: 'استقبال رجال', floor: 'الأول' },
+        { id: 'admin', name: 'الإدارة', floor: 'الثاني' }
+      ];
+      return false;
+    }
 
     function loadReadinessData() {
       const saved = localStorage.getItem('eoc_readiness_data');
@@ -3777,6 +3800,7 @@
         readinessData = {};
         READINESS_DEPARTMENTS.forEach(dept => {
           readinessData[dept.id] = {
+            deptName: dept.name,
             exits: '', lights: '', extinguishers: '', firstaid: '', alarm: '',
             lastCheck: '', responsible: '', notes: ''
           };
@@ -3788,11 +3812,16 @@
       localStorage.setItem('eoc_readiness_data', JSON.stringify(readinessData));
     }
 
-    function openReadinessModal() {
-      loadReadinessData();
+    async function openReadinessModal() {
       document.getElementById('readinessModal').classList.add('active');
       document.getElementById('readinessDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('readinessStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> تحميل الأقسام...';
+      
+      await loadDepartmentsFromServer();
+      loadReadinessData();
+      readinessViewMode = 'edit';
       renderReadinessTable();
+      document.getElementById('readinessStatus').innerHTML = '';
     }
 
     function closeReadinessModal() {
@@ -3854,7 +3883,7 @@
 
     function setReadinessCheck(deptId, field, value) {
       if (!readinessData[deptId]) {
-        readinessData[deptId] = {};
+        readinessData[deptId] = { deptName: READINESS_DEPARTMENTS.find(d => d.id === deptId)?.name || deptId };
       }
       readinessData[deptId][field] = value;
       saveReadinessToStorage();
@@ -3863,34 +3892,139 @@
 
     function updateReadiness(deptId, field, value) {
       if (!readinessData[deptId]) {
-        readinessData[deptId] = {};
+        readinessData[deptId] = { deptName: READINESS_DEPARTMENTS.find(d => d.id === deptId)?.name || deptId };
       }
       readinessData[deptId][field] = value;
       saveReadinessToStorage();
     }
 
-    function saveReadinessData() {
+    async function saveReadinessData() {
       saveReadinessToStorage();
+      document.getElementById('readinessStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
       
-      // حفظ إلى Google Sheets
       const checkDate = document.getElementById('readinessDate').value;
-      const payload = {
-        action: 'saveReadinessCheck',
-        date: checkDate,
-        data: readinessData
-      };
+      const dataToSave = {};
       
-      fetch(WEB_APP_URL + '?callback=?', {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).then(() => {
-        toast('تم حفظ البيانات بنجاح', 'success');
-        document.getElementById('readinessStatus').innerHTML = '<i class="fas fa-check-circle" style="color:var(--success)"></i> تم الحفظ - ' + new Date().toLocaleTimeString('ar-SA');
-      }).catch(() => {
-        toast('تم الحفظ محليًا فقط', 'warning');
+      READINESS_DEPARTMENTS.forEach(dept => {
+        const d = readinessData[dept.id] || {};
+        dataToSave[dept.id] = {
+          deptName: dept.name,
+          exits: d.exits || '',
+          lights: d.lights || '',
+          extinguishers: d.extinguishers || '',
+          firstaid: d.firstaid || '',
+          alarm: d.alarm || '',
+          lastCheck: d.lastCheck || '',
+          responsible: d.responsible || '',
+          notes: d.notes || ''
+        };
       });
+      
+      try {
+        const url = WEB_APP_URL + '?action=saveReadinessCheck&checkDate=' + encodeURIComponent(checkDate) + '&data=' + encodeURIComponent(JSON.stringify(dataToSave));
+        const res = await fetch(url);
+        const text = await res.text();
+        const json = JSON.parse(text.replace(/^\?\(/, '').replace(/\);$/, ''));
+        
+        if (json.ok) {
+          toast('تم حفظ البيانات في السجل المركزي', 'success');
+          document.getElementById('readinessStatus').innerHTML = '<i class="fas fa-check-circle" style="color:var(--success)"></i> تم الحفظ - ' + new Date().toLocaleTimeString('ar-SA');
+          
+          // مسح البيانات المحلية بعد الحفظ
+          readinessData = {};
+          READINESS_DEPARTMENTS.forEach(dept => {
+            readinessData[dept.id] = { deptName: dept.name, exits: '', lights: '', extinguishers: '', firstaid: '', alarm: '', lastCheck: '', responsible: '', notes: '' };
+          });
+          saveReadinessToStorage();
+        } else {
+          throw new Error(json.error || 'فشل الحفظ');
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        toast('فشل الحفظ: ' + err.message, 'error');
+        document.getElementById('readinessStatus').innerHTML = '<i class="fas fa-times-circle" style="color:var(--danger)"></i> فشل الحفظ';
+      }
+    }
+
+    async function showReadinessHistory() {
+      document.getElementById('readinessStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> تحميل السجل...';
+      
+      try {
+        const url = WEB_APP_URL + '?action=getReadinessHistory&limit=100';
+        const res = await fetch(url);
+        const text = await res.text();
+        const json = JSON.parse(text.replace(/^\?\(/, '').replace(/\);$/, ''));
+        
+        if (json.ok) {
+          readinessHistory = json.history || [];
+          const dates = json.dates || [];
+          
+          let html = '<div style="max-height:500px;overflow:auto">';
+          
+          if (dates.length === 0) {
+            html += '<div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-clipboard-check" style="font-size:3rem;margin-bottom:10px"></i><br>لا توجد فحوصات سابقة</div>';
+          } else {
+            dates.forEach(date => {
+              const records = readinessHistory.filter(r => r.checkDate === date);
+              const okCount = records.filter(r => r.exits === 'ok' && r.lights === 'ok' && r.extinguishers === 'ok').length;
+              const failCount = records.filter(r => r.exits === 'fail' || r.lights === 'fail' || r.extinguishers === 'fail').length;
+              
+              html += `
+                <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,.1)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <h4 style="color:var(--secondary);font-weight:900"><i class="fas fa-calendar"></i> ${date}</h4>
+                    <div style="display:flex;gap:10px">
+                      <span style="color:var(--success)"><i class="fas fa-check-circle"></i> ${okCount} جاهز</span>
+                      <span style="color:var(--danger)"><i class="fas fa-times-circle"></i> ${failCount} يحتاج إصلاح</span>
+                    </div>
+                  </div>
+                  <table style="width:100%;font-size:.85rem">
+                    <tr style="background:rgba(255,255,255,.1)">
+                      <th style="padding:8px;text-align:right">القسم</th>
+                      <th style="padding:8px;text-align:center">مخارج</th>
+                      <th style="padding:8px;text-align:center">إنارة</th>
+                      <th style="padding:8px;text-align:center">طفايات</th>
+                      <th style="padding:8px;text-align:center">إسعافات</th>
+                      <th style="padding:8px;text-align:center">إنذار</th>
+                      <th style="padding:8px;text-align:right">المسؤول</th>
+                    </tr>
+              `;
+              
+              records.forEach(r => {
+                const statusIcon = (val) => val === 'ok' ? '<span style="color:#10b981">✓</span>' : val === 'fail' ? '<span style="color:#dc2626">✗</span>' : '—';
+                html += `
+                  <tr style="border-bottom:1px solid rgba(255,255,255,.05)">
+                    <td style="padding:6px;font-weight:700">${r.departmentName}</td>
+                    <td style="padding:6px;text-align:center">${statusIcon(r.exits)}</td>
+                    <td style="padding:6px;text-align:center">${statusIcon(r.lights)}</td>
+                    <td style="padding:6px;text-align:center">${statusIcon(r.extinguishers)}</td>
+                    <td style="padding:6px;text-align:center">${statusIcon(r.firstaid)}</td>
+                    <td style="padding:6px;text-align:center">${statusIcon(r.alarm)}</td>
+                    <td style="padding:6px">${r.responsible || '—'}</td>
+                  </tr>
+                `;
+              });
+              
+              html += '</table></div>';
+            });
+          }
+          
+          html += '</div>';
+          html += '<div style="margin-top:12px"><button class="btn secondary" style="width:100%" onclick="closeReadinessHistoryModal()"><i class="fas fa-times"></i> إغلاق</button></div>';
+          
+          showBigModal('سجل فحوصات الجاهزية', html);
+          document.getElementById('readinessStatus').innerHTML = '';
+        }
+      } catch (err) {
+        console.error('History error:', err);
+        toast('فشل تحميل السجل', 'error');
+        document.getElementById('readinessStatus').innerHTML = '';
+      }
+    }
+    
+    function closeReadinessHistoryModal() {
+      const modal = document.querySelector('.big-modal-overlay');
+      if (modal) modal.remove();
     }
 
     function printReadinessChecklist() {
