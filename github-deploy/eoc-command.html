@@ -2273,11 +2273,17 @@
         // إذا كانت حالة طوارئ يدوية (بدون بلاغ إلكتروني)، نسجلها في سجل البلاغات
         if (CEM_CMD && !CEM_CMD.reportId && CEM_CMD.reportType) {
           try {
+            const manualId = 'MAN-' + Date.now();
+            // إضافة للقائمة المُنبهة لمنع فتح شاشة الاستجابة
+            APP.alerted.add(manualId);
+            localStorage.setItem('eoc_alerted_reports', JSON.stringify(Array.from(APP.alerted)));
+            
             await jsonp('submitEmergencyReport', {
-              reportId: 'MAN-' + Date.now(),
+              reportId: manualId,
               disasterType: (CEM_CMD.reportType || '').replace('🎯 تمرين: ', '') + ' (يدوي)',
               location: CEM_CMD.location || 'غير محدد',
-              notes: 'تم التفعيل يدوياً من مركز القيادة. أُغلق بواسطة: ' + who + (reason ? ' | السبب: ' + reason : '')
+              notes: 'تفعيل يدوي. أُغلق بواسطة: ' + who + (reason ? ' | السبب: ' + reason : ''),
+              status: 'مغلق'
             });
           } catch(e) { console.warn('Failed to log manual emergency:', e); }
         }
@@ -3131,11 +3137,17 @@
         // تسجيل البلاغ اليدوي إذا لم يكن له reportId إلكتروني
         if (!st.reportId || String(st.reportId).startsWith('MANUAL-')) {
           try {
+            const manualId = 'MAN-' + Date.now();
+            // إضافة للقائمة المُنبهة لمنع فتح شاشة الاستجابة
+            APP.alerted.add(manualId);
+            localStorage.setItem('eoc_alerted_reports', JSON.stringify(Array.from(APP.alerted)));
+            
             await jsonp('submitEmergencyReport', {
-              reportId: 'MAN-' + Date.now(),
+              reportId: manualId,
               disasterType: (st.responseType || 'طوارئ') + ' (يدوي)',
               location: st.location || 'غير محدد',
-              notes: 'تفعيل يدوي. أُغلق بواسطة: ' + who + ' | السبب: ' + reason
+              notes: 'تفعيل يدوي. أُغلق بواسطة: ' + who + ' | السبب: ' + reason,
+              status: 'مغلق'
             });
           } catch(e) { console.warn('Failed to log manual emergency:', e); }
         }
@@ -4028,13 +4040,18 @@
       body.innerHTML = list.map(r=>{
         const st = String(r.status||'جديد');
         const pill = statusPillClass(st);
+        const isOpen = st !== 'مغلق';
+        const rowStyle = isOpen ? 'cursor:pointer;transition:background 0.2s' : '';
+        const rowHover = isOpen ? 'onmouseover="this.style.background=\'rgba(201,169,98,0.15)\'" onmouseout="this.style.background=\'\'"' : '';
+        const rowClick = isOpen ? `onclick="openReportEditModal('${escapeHtml(r.id)}')"` : '';
+        
         const action =
-          st === 'جديد' ? `<button class="view-btn" onclick="updateReportFlow('${escapeHtml(r.id)}','قيد المعالجة')">استجابة</button>` :
-          st === 'قيد المعالجة' ? `<button class="view-btn" onclick="updateReportFlow('${escapeHtml(r.id)}','مغلق')">إغلاق</button>` :
+          st === 'جديد' ? `<button class="view-btn" onclick="event.stopPropagation();updateReportFlow('${escapeHtml(r.id)}','قيد المعالجة')">استجابة</button>` :
+          st === 'قيد المعالجة' ? `<button class="view-btn" onclick="event.stopPropagation();updateReportFlow('${escapeHtml(r.id)}','مغلق')">إغلاق</button>` :
           `<span style="color:var(--success);font-weight:1000"><i class="fas fa-check"></i></span>`;
 
         return `
-          <tr>
+          <tr style="${rowStyle}" ${rowHover} ${rowClick} title="${isOpen ? 'انقر للتعديل' : ''}">
             <td>${escapeHtml(r.id||'')}</td>
             <td>${escapeHtml(r.date||'')}</td>
             <td>${escapeHtml(r.time||'')}</td>
@@ -4045,6 +4062,16 @@
           </tr>
         `;
       }).join('');
+    }
+
+    // دالة تعديل البلاغ المفتوح
+    function openReportEditModal(reportId) {
+      const report = (APP.caches.reports || []).find(r => String(r.id) === String(reportId));
+      if (!report) return toast('لم يتم العثور على البلاغ', 'error');
+      
+      const st = String(report.status || 'جديد');
+      const nextStatus = st === 'جديد' ? 'قيد المعالجة' : 'مغلق';
+      updateReportFlow(reportId, nextStatus);
     }
 
     // Input Modal state

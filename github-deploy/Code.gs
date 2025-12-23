@@ -946,6 +946,8 @@
       const timeStr = Utilities.formatDate(now, 'Asia/Riyadh', 'HH:mm:ss');
 
       // حماية من Formula Injection
+      // إذا تم تمرير status (مثل "مغلق") نستخدمها، وإلا "جديد"
+      const initialStatus = String(params.status || 'جديد').trim();
       sheet.appendRow(safeCellArray_([
         reportId,
         dateStr,
@@ -953,7 +955,7 @@
         String(params.disasterType || '').trim(),
         String(params.location || '').trim(),
         String(params.notes || '').trim(),
-        'جديد',
+        initialStatus,
         '',
         ''
       ]));
