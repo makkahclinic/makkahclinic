@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -912,37 +913,6 @@
         let selectedFloor = null;
         let roomCodes = [];
 
-        // Security: Input sanitization
-        function sanitizeInput(str) {
-            if (!str) return '';
-            return String(str)
-                .replace(/[<>]/g, '')
-                .replace(/javascript:/gi, '')
-                .replace(/on\w+=/gi, '')
-                .trim()
-                .slice(0, 500);
-        }
-        
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str || '';
-            return div.innerHTML;
-        }
-
-        // Rate limiting
-        let lastSubmitTime = 0;
-        const SUBMIT_COOLDOWN = 10000; // 10 seconds
-        
-        function canSubmit() {
-            const now = Date.now();
-            if (now - lastSubmitTime < SUBMIT_COOLDOWN) {
-                const remaining = Math.ceil((SUBMIT_COOLDOWN - (now - lastSubmitTime)) / 1000);
-                alert('الرجاء الانتظار ' + remaining + ' ثواني قبل إرسال بلاغ جديد');
-                return false;
-            }
-            return true;
-        }
-
         function jsonp(action, params = {}) {
             return new Promise((resolve, reject) => {
                 const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -951,24 +921,14 @@
 
                 const s = document.createElement("script");
                 s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
-                
-                let timeoutId = null;
 
                 window[cb] = (data) => { cleanup(); resolve(data); };
                 s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
 
                 function cleanup() {
-                    if (timeoutId) clearTimeout(timeoutId);
                     try { delete window[cb]; } catch(e) {}
                     if (s.parentNode) s.parentNode.removeChild(s);
                 }
-                
-                // Timeout protection
-                timeoutId = setTimeout(() => {
-                    cleanup();
-                    reject(new Error("Request timeout"));
-                }, 30000);
-                
                 document.body.appendChild(s);
             });
         }
@@ -1086,38 +1046,27 @@
 
         function searchRooms(query) {
             const container = document.getElementById('roomSuggestions');
-            const sanitizedQuery = sanitizeInput(query);
-            if (!sanitizedQuery) { container.classList.remove('show'); checkFormValid(); return; }
+            if (!query) { container.classList.remove('show'); checkFormValid(); return; }
 
             const filtered = roomCodes.filter(r =>
-                r.code.toLowerCase().includes(sanitizedQuery.toLowerCase()) ||
-                (r.name || '').includes(sanitizedQuery)
+                r.code.toLowerCase().includes(query.toLowerCase()) ||
+                (r.name || '').includes(query)
             ).slice(0, 6);
 
             if (!filtered.length) { container.classList.remove('show'); checkFormValid(); return; }
 
-            // Build DOM safely without innerHTML XSS
-            container.innerHTML = '';
-            filtered.forEach((r, idx) => {
-                const div = document.createElement('div');
-                div.className = 'room-suggestion';
-                div.dataset.code = r.code;
-                div.dataset.name = r.name || '';
-                div.innerHTML = '<strong>' + escapeHtml(r.code) + '</strong> - ' + escapeHtml(r.name || '');
-                div.onclick = function() {
-                    selectRoomCode(this.dataset.code, this.dataset.name);
-                };
-                container.appendChild(div);
-            });
+            container.innerHTML = filtered.map(r => 
+                '<div class="room-suggestion" onclick="selectRoomCode(\'' + r.code + '\', \'' + r.name + '\')">' +
+                '<strong>' + r.code + '</strong> - ' + r.name +
+                '</div>'
+            ).join('');
             container.classList.add('show');
 
             checkFormValid();
         }
 
         function selectRoomCode(code, name) {
-            const safeCode = sanitizeInput(code);
-            const safeName = sanitizeInput(name);
-            document.getElementById('roomCode').value = safeCode + ' - ' + safeName;
+            document.getElementById('roomCode').value = code + ' - ' + name;
             document.getElementById('roomSuggestions').classList.remove('show');
             checkFormValid();
         }
@@ -1150,51 +1099,37 @@
         async function submitReport() {
             const loc = buildSelectedLocation();
             if (!selectedDisaster || !loc) return;
-            
-            // Rate limiting check
-            if (!canSubmit()) return;
 
             const loading = document.getElementById('loading');
-            const submitBtn = document.getElementById('submitBtn');
-            
-            // Disable button to prevent double-submit
-            submitBtn.disabled = true;
             loading.classList.add('show');
 
-            // Sanitize all inputs
-            const safeLocation = sanitizeInput(loc);
-            const safeNotes = sanitizeInput(document.getElementById('notes').value);
-            const safeDisaster = sanitizeInput(selectedDisaster);
-            
+            const notes = document.getElementById('notes').value;
             const now = new Date();
             const reportId = 'EMR-' + now.getTime();
 
             try {
                 const data = await jsonp('submitEmergencyReport', {
                     reportId: reportId,
-                    disasterType: safeDisaster,
-                    location: safeLocation,
-                    notes: safeNotes,
+                    disasterType: selectedDisaster,
+                    location: loc,
+                    notes: notes,
                     date: now.toLocaleDateString('ar-SA'),
                     time: now.toLocaleTimeString('ar-SA')
                 });
 
                 loading.classList.remove('show');
-                lastSubmitTime = Date.now(); // Update rate limit timer
 
                 if (data && data.ok) {
                     document.getElementById('reportForm').style.display = 'none';
                     document.getElementById('successScreen').classList.add('show');
-                    document.getElementById('reportNumber').textContent = escapeHtml(reportId);
-                    showEmergencyInstructions(safeDisaster);
+                    document.getElementById('reportNumber').textContent = reportId;
+                    showEmergencyInstructions(selectedDisaster);
                 } else {
-                    submitBtn.disabled = false;
                     alert('تعذر تسجيل البلاغ. اتصل 911 فورًا إذا الحالة خطيرة.');
                 }
 
             } catch (e) {
                 loading.classList.remove('show');
-                submitBtn.disabled = false;
                 alert('فشل الاتصال بالنظام. اتصل 911 فورًا إذا الحالة خطيرة.');
             }
         }

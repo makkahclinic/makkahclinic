@@ -58,101 +58,9 @@
             .submit-btn { padding: 16px; font-size: 1.1rem; }
         }
 
-        .page-layout {
-            display: flex;
-            gap: 20px;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
         .container {
-            flex: 1;
             max-width: 600px;
-        }
-
-        .staff-sidebar {
-            width: 220px;
-            flex-shrink: 0;
-        }
-
-        .staff-card {
-            background: rgba(255,255,255,0.1);
-            border-radius: 15px;
-            padding: 15px;
-            backdrop-filter: blur(10px);
-            position: sticky;
-            top: 20px;
-        }
-
-        .staff-card-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--secondary);
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
-        }
-
-        .staff-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .staff-item {
-            background: rgba(255,255,255,0.08);
-            border-radius: 10px;
-            padding: 12px;
-            transition: all 0.3s;
-        }
-
-        .staff-item:hover {
-            background: rgba(255,255,255,0.15);
-        }
-
-        .staff-name {
-            font-weight: 700;
-            font-size: 0.95rem;
-            margin-bottom: 6px;
-        }
-
-        .staff-phone {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .staff-phone a {
-            color: var(--success);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.9rem;
-            direction: ltr;
-        }
-
-        .staff-phone a:hover {
-            text-decoration: underline;
-        }
-
-        .staff-phone i {
-            color: var(--success);
-            font-size: 0.85rem;
-        }
-
-        @media (max-width: 768px) {
-            .page-layout {
-                flex-direction: column;
-            }
-            .staff-sidebar {
-                width: 100%;
-                order: -1;
-            }
-            .staff-card {
-                position: static;
-            }
+            margin: 0 auto;
         }
 
         .header {
@@ -851,15 +759,14 @@
     </style>
 </head>
 <body>
-    <div class="page-layout">
-        <div class="container">
-            <div class="header">
-                <img src="logo-new.png" alt="مجمع مكة الطبي">
-                <h1><i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ سريع</h1>
-                <p>أبلغ عن أي حالة طارئة في ثوانٍ</p>
-            </div>
+    <div class="container">
+        <div class="header">
+            <img src="logo-new.png" alt="مجمع مكة الطبي">
+            <h1><i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ سريع</h1>
+            <p>أبلغ عن أي حالة طارئة في ثوانٍ</p>
+        </div>
 
-            <div id="reportForm">
+        <div id="reportForm">
             <div class="emergency-alert">
                 <i class="fas fa-bell"></i>
                 <h2>في حالة الطوارئ الخطيرة اتصل فوراً على 911</h2>
@@ -988,21 +895,6 @@
                 <i class="fas fa-redo"></i> بلاغ جديد
             </button>
         </div>
-        </div>
-
-        <div class="staff-sidebar">
-            <div class="staff-card">
-                <div class="staff-card-title">
-                    <i class="fas fa-user-tie"></i>
-                    <span>المسؤولون</span>
-                </div>
-                <div class="staff-list" id="staffList">
-                    <div style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.9rem">
-                        <i class="fas fa-spinner fa-spin"></i> تحميل...
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <div class="loading" id="loading">
@@ -1020,6 +912,37 @@
         let selectedFloor = null;
         let roomCodes = [];
 
+        // Security: Input sanitization
+        function sanitizeInput(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/[<>]/g, '')
+                .replace(/javascript:/gi, '')
+                .replace(/on\w+=/gi, '')
+                .trim()
+                .slice(0, 500);
+        }
+        
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        // Rate limiting
+        let lastSubmitTime = 0;
+        const SUBMIT_COOLDOWN = 10000; // 10 seconds
+        
+        function canSubmit() {
+            const now = Date.now();
+            if (now - lastSubmitTime < SUBMIT_COOLDOWN) {
+                const remaining = Math.ceil((SUBMIT_COOLDOWN - (now - lastSubmitTime)) / 1000);
+                alert('الرجاء الانتظار ' + remaining + ' ثواني قبل إرسال بلاغ جديد');
+                return false;
+            }
+            return true;
+        }
+
         function jsonp(action, params = {}) {
             return new Promise((resolve, reject) => {
                 const cb = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -1028,14 +951,24 @@
 
                 const s = document.createElement("script");
                 s.src = WEB_APP_URL + "?" + new URLSearchParams(params).toString();
+                
+                let timeoutId = null;
 
                 window[cb] = (data) => { cleanup(); resolve(data); };
                 s.onerror = () => { cleanup(); reject(new Error("jsonp failed")); };
 
                 function cleanup() {
+                    if (timeoutId) clearTimeout(timeoutId);
                     try { delete window[cb]; } catch(e) {}
                     if (s.parentNode) s.parentNode.removeChild(s);
                 }
+                
+                // Timeout protection
+                timeoutId = setTimeout(() => {
+                    cleanup();
+                    reject(new Error("Request timeout"));
+                }, 30000);
+                
                 document.body.appendChild(s);
             });
         }
@@ -1153,27 +1086,38 @@
 
         function searchRooms(query) {
             const container = document.getElementById('roomSuggestions');
-            if (!query) { container.classList.remove('show'); checkFormValid(); return; }
+            const sanitizedQuery = sanitizeInput(query);
+            if (!sanitizedQuery) { container.classList.remove('show'); checkFormValid(); return; }
 
             const filtered = roomCodes.filter(r =>
-                r.code.toLowerCase().includes(query.toLowerCase()) ||
-                (r.name || '').includes(query)
+                r.code.toLowerCase().includes(sanitizedQuery.toLowerCase()) ||
+                (r.name || '').includes(sanitizedQuery)
             ).slice(0, 6);
 
             if (!filtered.length) { container.classList.remove('show'); checkFormValid(); return; }
 
-            container.innerHTML = filtered.map(r => 
-                '<div class="room-suggestion" onclick="selectRoomCode(\'' + r.code + '\', \'' + r.name + '\')">' +
-                '<strong>' + r.code + '</strong> - ' + r.name +
-                '</div>'
-            ).join('');
+            // Build DOM safely without innerHTML XSS
+            container.innerHTML = '';
+            filtered.forEach((r, idx) => {
+                const div = document.createElement('div');
+                div.className = 'room-suggestion';
+                div.dataset.code = r.code;
+                div.dataset.name = r.name || '';
+                div.innerHTML = '<strong>' + escapeHtml(r.code) + '</strong> - ' + escapeHtml(r.name || '');
+                div.onclick = function() {
+                    selectRoomCode(this.dataset.code, this.dataset.name);
+                };
+                container.appendChild(div);
+            });
             container.classList.add('show');
 
             checkFormValid();
         }
 
         function selectRoomCode(code, name) {
-            document.getElementById('roomCode').value = code + ' - ' + name;
+            const safeCode = sanitizeInput(code);
+            const safeName = sanitizeInput(name);
+            document.getElementById('roomCode').value = safeCode + ' - ' + safeName;
             document.getElementById('roomSuggestions').classList.remove('show');
             checkFormValid();
         }
@@ -1206,37 +1150,51 @@
         async function submitReport() {
             const loc = buildSelectedLocation();
             if (!selectedDisaster || !loc) return;
+            
+            // Rate limiting check
+            if (!canSubmit()) return;
 
             const loading = document.getElementById('loading');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Disable button to prevent double-submit
+            submitBtn.disabled = true;
             loading.classList.add('show');
 
-            const notes = document.getElementById('notes').value;
+            // Sanitize all inputs
+            const safeLocation = sanitizeInput(loc);
+            const safeNotes = sanitizeInput(document.getElementById('notes').value);
+            const safeDisaster = sanitizeInput(selectedDisaster);
+            
             const now = new Date();
             const reportId = 'EMR-' + now.getTime();
 
             try {
                 const data = await jsonp('submitEmergencyReport', {
                     reportId: reportId,
-                    disasterType: selectedDisaster,
-                    location: loc,
-                    notes: notes,
+                    disasterType: safeDisaster,
+                    location: safeLocation,
+                    notes: safeNotes,
                     date: now.toLocaleDateString('ar-SA'),
                     time: now.toLocaleTimeString('ar-SA')
                 });
 
                 loading.classList.remove('show');
+                lastSubmitTime = Date.now(); // Update rate limit timer
 
                 if (data && data.ok) {
                     document.getElementById('reportForm').style.display = 'none';
                     document.getElementById('successScreen').classList.add('show');
-                    document.getElementById('reportNumber').textContent = reportId;
-                    showEmergencyInstructions(selectedDisaster);
+                    document.getElementById('reportNumber').textContent = escapeHtml(reportId);
+                    showEmergencyInstructions(safeDisaster);
                 } else {
+                    submitBtn.disabled = false;
                     alert('تعذر تسجيل البلاغ. اتصل 911 فورًا إذا الحالة خطيرة.');
                 }
 
             } catch (e) {
                 loading.classList.remove('show');
+                submitBtn.disabled = false;
                 alert('فشل الاتصال بالنظام. اتصل 911 فورًا إذا الحالة خطيرة.');
             }
         }
@@ -1377,30 +1335,6 @@
         });
 
         loadRoomCodes();
-        loadStaff();
-        
-        window.scrollTo(0, 0);
-
-        function loadStaff() {
-            jsonp('getEmergencyStaff').then(res => {
-                const list = document.getElementById('staffList');
-                if (res.ok && res.staff && res.staff.length > 0) {
-                    list.innerHTML = res.staff.map(s => `
-                        <div class="staff-item">
-                            <div class="staff-name">${s.name}</div>
-                            <div class="staff-phone">
-                                <i class="fas fa-phone-alt"></i>
-                                <a href="tel:${s.phone}">${s.phone}</a>
-                            </div>
-                        </div>
-                    `).join('');
-                } else {
-                    list.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.85rem">لا يوجد مسؤولون</div>';
-                }
-            }).catch(() => {
-                document.getElementById('staffList').innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.85rem">خطأ في التحميل</div>';
-            });
-        }
     </script>
 </body>
 </html>
