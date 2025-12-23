@@ -1421,35 +1421,56 @@
         let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
         
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
-        // ====== نظام صوت الإنذار - يتكرر كل 3 دقائق ======
+        // ====== نظام صوت الإنذار القوي - Web Audio API ======
         let alarmRepeatInterval = null;
+        let audioCtx = null;
         let audioEnabled = localStorage.getItem('admin_audio_enabled') === 'true';
-        
-        // صوت إنذار قوي
-        const emergencyAlarmAudio = new Audio('https://www.soundjay.com/misc/sounds/fail-buzzer-01.mp3');
-        emergencyAlarmAudio.volume = 1.0;
         
         // إخفاء overlay إذا كان الصوت مفعل سابقاً
         if (audioEnabled) {
             document.getElementById('audioEnableOverlay').style.display = 'none';
+            // إنشاء AudioContext مباشرة
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
         
         // دالة تفعيل الصوت (تُستدعى من الزر)
         window.enableAudioAlerts = function() {
-            // تشغيل صوت تجريبي للتأكد
-            emergencyAlarmAudio.play().then(() => {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // تشغيل صوت تجريبي فوري
+                playAlertSound();
                 audioEnabled = true;
                 localStorage.setItem('admin_audio_enabled', 'true');
                 document.getElementById('audioEnableOverlay').style.display = 'none';
-            }).catch(e => {
-                alert('فشل تفعيل الصوت. حاول مرة أخرى.');
-            });
+            } catch(e) {
+                alert('فشل تفعيل الصوت: ' + e.message);
+            }
         };
         
         function playAlertSound() {
-            if (!audioEnabled) return;
-            emergencyAlarmAudio.currentTime = 0;
-            emergencyAlarmAudio.play().catch(e => console.log('Sound error:', e));
+            if (!audioEnabled || !audioCtx) return;
+            try {
+                // إعادة تفعيل AudioContext إذا كان معلقاً
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                // صوت إنذار قوي (5 بيبات سريعة)
+                let beepCount = 0;
+                function beep() {
+                    if (beepCount >= 10) return;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    gain.gain.value = 0.9;
+                    osc.type = 'square';
+                    osc.frequency.value = (beepCount % 2 === 0) ? 880 : 440;
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.12);
+                    beepCount++;
+                    setTimeout(beep, 150);
+                }
+                beep();
+            } catch(e) { console.log('Sound error:', e); }
         }
         
         function startAlarmRepeat() {
