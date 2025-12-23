@@ -246,9 +246,18 @@
       font-size:.8rem;
       line-height:1.2;
     }
-    .qr-pink-card--danger .meta .name i{color:var(--danger);}
-    .qr-pink-card--info   .meta .name i{color:var(--info);}
-    .qr-pink-card--gold   .meta .name i{color:var(--secondary);}
+    .qr-pink-card--danger{background:rgba(220,20,60,.5)!important;}
+    .qr-pink-card--danger .meta .name{color:#fff!important;}
+    .qr-pink-card--danger .meta .desc{color:rgba(255,255,255,.8)!important;}
+    .qr-pink-card--danger .meta .name i{color:#fff;}
+    .qr-pink-card--info{background:rgba(16,185,129,.5)!important;}
+    .qr-pink-card--info .meta .name{color:#fff!important;}
+    .qr-pink-card--info .meta .desc{color:rgba(255,255,255,.8)!important;}
+    .qr-pink-card--info .meta .name i{color:#fff;}
+    .qr-pink-card--gold{background:rgba(16,185,129,.5)!important;}
+    .qr-pink-card--gold .meta .name{color:#fff!important;}
+    .qr-pink-card--gold .meta .desc{color:rgba(255,255,255,.8)!important;}
+    .qr-pink-card--gold .meta .name i{color:#fff;}
     @media print{
       .qr-pink-card .qr{ width:25mm; height:25mm; }
     }
@@ -464,14 +473,18 @@
     .building-section{order:2}
     .building-view{display:flex;flex-direction:column;gap:12px}
     .floor{
-      background:rgba(255,255,255,.04);
-      border:2px solid rgba(255,255,255,.1);
+      border:2px solid rgba(255,255,255,.15);
       border-radius:16px;
       padding:14px;
       transition:.2s;cursor:pointer;
     }
+    /* تدرج ألوان عودية للأدوار */
+    .floor:nth-child(1){ background:linear-gradient(135deg, rgba(139,90,43,.35), rgba(101,67,33,.25)); border-color:rgba(139,90,43,.5); }
+    .floor:nth-child(2){ background:linear-gradient(135deg, rgba(160,110,60,.3), rgba(120,85,50,.2)); border-color:rgba(160,110,60,.45); }
+    .floor:nth-child(3){ background:linear-gradient(135deg, rgba(180,130,80,.25), rgba(140,105,70,.15)); border-color:rgba(180,130,80,.4); }
+    .floor:nth-child(4){ background:linear-gradient(135deg, rgba(200,150,100,.2), rgba(160,125,90,.1)); border-color:rgba(200,150,100,.35); }
     .floor:hover{border-color:var(--secondary);transform:translateX(-3px)}
-    .floor.active{border-color:var(--secondary);background:rgba(201,169,98,.1)}
+    .floor.active{border-color:var(--secondary);box-shadow:0 0 15px rgba(201,169,98,.3)}
     .floor-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
     .floor-name{display:flex;align-items:center;gap:10px;font-weight:900}
     .floor-icon{
@@ -963,10 +976,6 @@
     </div>
 
     <div class="header-status">
-      <a href="emergency-report.html" class="report-emergency-btn">
-        <i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ
-      </a>
-
       <button type="button" class="status-badge" id="systemStatus" onclick="onStatusBadgeClick()">
         <i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>
       </button>
@@ -2273,11 +2282,17 @@
         // إذا كانت حالة طوارئ يدوية (بدون بلاغ إلكتروني)، نسجلها في سجل البلاغات
         if (CEM_CMD && !CEM_CMD.reportId && CEM_CMD.reportType) {
           try {
+            const manualId = 'MAN-' + Date.now();
+            // إضافة للقائمة المُنبهة لمنع فتح شاشة الاستجابة
+            APP.alerted.add(manualId);
+            localStorage.setItem('eoc_alerted_reports', JSON.stringify(Array.from(APP.alerted)));
+            
             await jsonp('submitEmergencyReport', {
-              reportId: 'MAN-' + Date.now(),
+              reportId: manualId,
               disasterType: (CEM_CMD.reportType || '').replace('🎯 تمرين: ', '') + ' (يدوي)',
               location: CEM_CMD.location || 'غير محدد',
-              notes: 'تم التفعيل يدوياً من مركز القيادة. أُغلق بواسطة: ' + who + (reason ? ' | السبب: ' + reason : '')
+              notes: 'تفعيل يدوي. أُغلق بواسطة: ' + who + (reason ? ' | السبب: ' + reason : ''),
+              status: 'مغلق'
             });
           } catch(e) { console.warn('Failed to log manual emergency:', e); }
         }
@@ -3131,11 +3146,17 @@
         // تسجيل البلاغ اليدوي إذا لم يكن له reportId إلكتروني
         if (!st.reportId || String(st.reportId).startsWith('MANUAL-')) {
           try {
+            const manualId = 'MAN-' + Date.now();
+            // إضافة للقائمة المُنبهة لمنع فتح شاشة الاستجابة
+            APP.alerted.add(manualId);
+            localStorage.setItem('eoc_alerted_reports', JSON.stringify(Array.from(APP.alerted)));
+            
             await jsonp('submitEmergencyReport', {
-              reportId: 'MAN-' + Date.now(),
+              reportId: manualId,
               disasterType: (st.responseType || 'طوارئ') + ' (يدوي)',
               location: st.location || 'غير محدد',
-              notes: 'تفعيل يدوي. أُغلق بواسطة: ' + who + ' | السبب: ' + reason
+              notes: 'تفعيل يدوي. أُغلق بواسطة: ' + who + ' | السبب: ' + reason,
+              status: 'مغلق'
             });
           } catch(e) { console.warn('Failed to log manual emergency:', e); }
         }
@@ -4028,13 +4049,18 @@
       body.innerHTML = list.map(r=>{
         const st = String(r.status||'جديد');
         const pill = statusPillClass(st);
+        const isOpen = st !== 'مغلق';
+        const rowStyle = isOpen ? 'cursor:pointer;transition:background 0.2s' : '';
+        const rowHover = isOpen ? 'onmouseover="this.style.background=\'rgba(201,169,98,0.15)\'" onmouseout="this.style.background=\'\'"' : '';
+        const rowClick = isOpen ? `onclick="openReportEditModal('${escapeHtml(r.id)}')"` : '';
+        
         const action =
-          st === 'جديد' ? `<button class="view-btn" onclick="updateReportFlow('${escapeHtml(r.id)}','قيد المعالجة')">استجابة</button>` :
-          st === 'قيد المعالجة' ? `<button class="view-btn" onclick="updateReportFlow('${escapeHtml(r.id)}','مغلق')">إغلاق</button>` :
+          st === 'جديد' ? `<button class="view-btn" onclick="event.stopPropagation();updateReportFlow('${escapeHtml(r.id)}','قيد المعالجة')">استجابة</button>` :
+          st === 'قيد المعالجة' ? `<button class="view-btn" onclick="event.stopPropagation();updateReportFlow('${escapeHtml(r.id)}','مغلق')">إغلاق</button>` :
           `<span style="color:var(--success);font-weight:1000"><i class="fas fa-check"></i></span>`;
 
         return `
-          <tr>
+          <tr style="${rowStyle}" ${rowHover} ${rowClick} title="${isOpen ? 'انقر للتعديل' : ''}">
             <td>${escapeHtml(r.id||'')}</td>
             <td>${escapeHtml(r.date||'')}</td>
             <td>${escapeHtml(r.time||'')}</td>
@@ -4045,6 +4071,16 @@
           </tr>
         `;
       }).join('');
+    }
+
+    // دالة تعديل البلاغ المفتوح
+    function openReportEditModal(reportId) {
+      const report = (APP.caches.reports || []).find(r => String(r.id) === String(reportId));
+      if (!report) return toast('لم يتم العثور على البلاغ', 'error');
+      
+      const st = String(report.status || 'جديد');
+      const nextStatus = st === 'جديد' ? 'قيد المعالجة' : 'مغلق';
+      updateReportFlow(reportId, nextStatus);
     }
 
     // Input Modal state
