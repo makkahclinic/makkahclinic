@@ -2261,18 +2261,24 @@
         
         // التحقق من وجود بلاغات مفتوحة (جديد أو قيد المعالجة)
         if (reportsRes && reportsRes.ok && Array.isArray(reportsRes.reports)) {
-          const openReports = reportsRes.reports.filter(r => 
-            r.status === 'جديد' || r.status === 'قيد المعالجة'
-          );
+          // حفظ البلاغات في الـ cache
+          APP.caches.reports = reportsRes.reports;
+          
+          const openReports = reportsRes.reports.filter(r => {
+            const status = String(r.status || '').trim();
+            return status === 'جديد' || status === 'قيد المعالجة' ||
+                   status.includes('جديد') || status.includes('المعالجة');
+          });
           
           if (openReports.length > 0) {
             ACTIVE_CMD_CACHE = { 
               active: true, 
               fromReport: true, 
               reportType: openReports[0].type,
-              count: openReports.length 
+              count: openReports.length,
+              openReports: openReports
             };
-            setStatusAlert(true, 'بلاغ مفتوح (' + openReports.length + ')');
+            setStatusAlert(true, '🚨 بلاغ مفتوح (' + openReports.length + ')');
             return;
           }
         }
@@ -2359,29 +2365,17 @@
 
     async function onStatusBadgeClick(){
       try {
-        // أولاً: تحقق من وجود أمر نشط
-        const ac = await jsonp('getActiveCommand', {});
-        const cmd = (ac && ac.ok) ? ac.command : null;
-
-        if (cmd && (cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
-          const isTraining =
-            String(cmd.mode || '').toLowerCase() === 'training' ||
-            String(cmd.reportType || '').includes('تمرين') ||
-            String(cmd.reportType || '').includes('🎯');
-
-          openCloseEmergencyModal(cmd, isTraining);
-          return;
-        }
-
-        // ثانياً: تحقق من وجود بلاغات مفتوحة
-        const reportsRes = await jsonp('getEmergencyReports', { limit: '20' });
-        if (reportsRes && reportsRes.ok && Array.isArray(reportsRes.reports)) {
-          const openReports = reportsRes.reports.filter(r => 
-            r.status === 'جديد' || r.status === 'قيد المعالجة'
-          );
+        // أولاً: تحقق من الـ cache - إذا كان بلاغ مفتوح
+        if (ACTIVE_CMD_CACHE && ACTIVE_CMD_CACHE.fromReport) {
+          // استخدم البيانات المحفوظة في APP.caches.reports
+          const cachedReports = APP.caches.reports || [];
+          const openReports = cachedReports.filter(r => {
+            const status = String(r.status || '').trim();
+            return status === 'جديد' || status === 'قيد المعالجة' || 
+                   status.includes('جديد') || status.includes('المعالجة');
+          });
           
           if (openReports.length > 0) {
-            // فتح البلاغ الأول المفتوح
             const report = openReports[0];
             openResponseForReport({
               id: String(report.id || ''),
@@ -2394,6 +2388,39 @@
             });
             return;
           }
+        }
+        
+        // ثانياً: تحقق من وجود أمر نشط (ليس من بلاغ)
+        if (ACTIVE_CMD_CACHE && !ACTIVE_CMD_CACHE.fromReport) {
+          const cmd = ACTIVE_CMD_CACHE;
+          const isTraining =
+            String(cmd.mode || '').toLowerCase() === 'training' ||
+            String(cmd.reportType || '').includes('تمرين') ||
+            String(cmd.reportType || '').includes('🎯');
+
+          openCloseEmergencyModal(cmd, isTraining);
+          return;
+        }
+        
+        // ثالثاً: إذا لم يكن هناك cache، أعد الجلب
+        const cachedReports = APP.caches.reports || [];
+        const openReports = cachedReports.filter(r => {
+          const status = String(r.status || '').trim();
+          return status === 'جديد' || status === 'قيد المعالجة';
+        });
+        
+        if (openReports.length > 0) {
+          const report = openReports[0];
+          openResponseForReport({
+            id: String(report.id || ''),
+            date: String(report.date || ''),
+            time: String(report.time || ''),
+            type: String(report.type || ''),
+            location: String(report.location || ''),
+            notes: String(report.notes || ''),
+            status: String(report.status || 'جديد')
+          });
+          return;
         }
 
         toast('لا توجد حالة طوارئ نشطة حالياً', 'info');
