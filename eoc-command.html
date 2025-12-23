@@ -75,12 +75,26 @@
     }
     .status-badge:hover{filter:brightness(1.06)}
     .status-badge.alert{
-      border-color:rgba(220,20,60,.6);
-      color:var(--danger);
-      background:rgba(220,20,60,.14);
-      animation:pulse 1.5s infinite;
+      border-color:var(--danger);
+      color:#fff;
+      background:linear-gradient(135deg, #dc2626, #b91c1c);
+      animation:alertPulse 1s infinite;
+      font-weight:700;
+      font-size:1rem;
+      padding:10px 20px;
+      box-shadow: 0 4px 15px rgba(220,20,60,.4);
     }
-    .status-badge.alert:hover{filter:brightness(1.10)}
+    .status-badge.alert:hover{
+      filter:brightness(1.15);
+      transform:scale(1.05);
+    }
+    .status-badge.alert span{
+      font-weight:700;
+    }
+    @keyframes alertPulse{
+      0%,100%{opacity:1;box-shadow:0 4px 15px rgba(220,20,60,.4)}
+      50%{opacity:.85;box-shadow:0 4px 25px rgba(220,20,60,.7)}
+    }
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 
     .main-container{
@@ -2080,15 +2094,29 @@
         .replace(/'/g,'&#039;');
     }
 
-    function setStatusAlert(on, label){
+    let alarmPlaying = false;
+    
+    function setStatusAlert(on, label, hasOpenReport = false){
       const el = document.getElementById('systemStatus');
       if (!el) return;
       if (on){
         el.classList.add('alert');
         el.innerHTML = `<i class="fas fa-stop-circle"></i><span>${escapeHtml(label || 'إلغاء حالة الطوارئ')}</span>`;
+        
+        // تشغيل صوت الإنذار المستمر عند وجود بلاغ مفتوح
+        if (hasOpenReport && !alarmPlaying) {
+          playAlarmSound();
+          alarmPlaying = true;
+        }
       } else {
         el.classList.remove('alert');
         el.innerHTML = `<i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>`;
+        
+        // إيقاف الصوت عند عدم وجود حالة طوارئ
+        if (alarmPlaying) {
+          stopAlarmSound();
+          alarmPlaying = false;
+        }
       }
     }
 
@@ -2247,18 +2275,25 @@
         
         // التحقق من وجود بلاغات مفتوحة (جديد أو قيد المعالجة)
         if (reportsRes && reportsRes.ok && Array.isArray(reportsRes.reports)) {
-          const openReports = reportsRes.reports.filter(r => 
-            r.status === 'جديد' || r.status === 'قيد المعالجة'
-          );
+          // حفظ البلاغات في الـ cache
+          APP.caches.reports = reportsRes.reports;
+          
+          const openReports = reportsRes.reports.filter(r => {
+            const status = String(r.status || '').trim();
+            return status === 'جديد' || status === 'قيد المعالجة' ||
+                   status.includes('جديد') || status.includes('المعالجة');
+          });
           
           if (openReports.length > 0) {
             ACTIVE_CMD_CACHE = { 
               active: true, 
               fromReport: true, 
               reportType: openReports[0].type,
-              count: openReports.length 
+              count: openReports.length,
+              openReports: openReports
             };
-            setStatusAlert(true, 'بلاغ مفتوح (' + openReports.length + ')');
+            // تفعيل الصوت المستمر عند وجود بلاغ مفتوح
+            setStatusAlert(true, '🚨 بلاغ مفتوح (' + openReports.length + ')', true);
             return;
           }
         }
@@ -2345,20 +2380,65 @@
 
     async function onStatusBadgeClick(){
       try {
-        const ac = await jsonp('getActiveCommand', {});
-        const cmd = (ac && ac.ok) ? ac.command : null;
+        // أولاً: تحقق من الـ cache - إذا كان بلاغ مفتوح
+        if (ACTIVE_CMD_CACHE && ACTIVE_CMD_CACHE.fromReport) {
+          // استخدم البيانات المحفوظة في APP.caches.reports
+          const cachedReports = APP.caches.reports || [];
+          const openReports = cachedReports.filter(r => {
+            const status = String(r.status || '').trim();
+            return status === 'جديد' || status === 'قيد المعالجة' || 
+                   status.includes('جديد') || status.includes('المعالجة');
+          });
+          
+          if (openReports.length > 0) {
+            const report = openReports[0];
+            openResponseForReport({
+              id: String(report.id || ''),
+              date: String(report.date || ''),
+              time: String(report.time || ''),
+              type: String(report.type || ''),
+              location: String(report.location || ''),
+              notes: String(report.notes || ''),
+              status: String(report.status || 'جديد')
+            });
+            return;
+          }
+        }
+        
+        // ثانياً: تحقق من وجود أمر نشط (ليس من بلاغ)
+        if (ACTIVE_CMD_CACHE && !ACTIVE_CMD_CACHE.fromReport) {
+          const cmd = ACTIVE_CMD_CACHE;
+          const isTraining =
+            String(cmd.mode || '').toLowerCase() === 'training' ||
+            String(cmd.reportType || '').includes('تمرين') ||
+            String(cmd.reportType || '').includes('🎯');
 
-        if (!cmd || !(cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
-          toast('لا توجد حالة طوارئ نشطة حالياً', 'info');
+          openCloseEmergencyModal(cmd, isTraining);
+          return;
+        }
+        
+        // ثالثاً: إذا لم يكن هناك cache، أعد الجلب
+        const cachedReports = APP.caches.reports || [];
+        const openReports = cachedReports.filter(r => {
+          const status = String(r.status || '').trim();
+          return status === 'جديد' || status === 'قيد المعالجة';
+        });
+        
+        if (openReports.length > 0) {
+          const report = openReports[0];
+          openResponseForReport({
+            id: String(report.id || ''),
+            date: String(report.date || ''),
+            time: String(report.time || ''),
+            type: String(report.type || ''),
+            location: String(report.location || ''),
+            notes: String(report.notes || ''),
+            status: String(report.status || 'جديد')
+          });
           return;
         }
 
-        const isTraining =
-          String(cmd.mode || '').toLowerCase() === 'training' ||
-          String(cmd.reportType || '').includes('تمرين') ||
-          String(cmd.reportType || '').includes('🎯');
-
-        openCloseEmergencyModal(cmd, isTraining);
+        toast('لا توجد حالة طوارئ نشطة حالياً', 'info');
       } catch (e) {
         console.error(e);
         toast('فشل جلب حالة الطوارئ', 'error');
@@ -4205,6 +4285,9 @@
 
       // check if emergency is active
       await syncActiveCommandUI();
+      
+      // فتح modal الاستجابة تلقائياً عند وجود بلاغ مفتوح
+      await autoShowOpenReportModal();
 
       // polling every 5 seconds
       setInterval(pollReports, 5000);
@@ -4214,6 +4297,16 @@
 
       // sync active command every 5 seconds
       setInterval(syncActiveCommandUI, 5000);
+    }
+    
+    // دالة لفتح modal الاستجابة تلقائياً عند وجود بلاغ مفتوح
+    async function autoShowOpenReportModal(){
+      // التحقق من وجود بلاغات مفتوحة في الـ cache
+      if (ACTIVE_CMD_CACHE && ACTIVE_CMD_CACHE.fromReport && ACTIVE_CMD_CACHE.openReports && ACTIVE_CMD_CACHE.openReports.length > 0) {
+        const firstReport = ACTIVE_CMD_CACHE.openReports[0];
+        // فتح modal الاستجابة للبلاغ الأول
+        openResponseForReport(firstReport);
+      }
     }
 
     document.addEventListener('DOMContentLoaded', init);
