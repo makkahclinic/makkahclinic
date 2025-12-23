@@ -483,9 +483,34 @@
       cursor:pointer;
       display:flex;align-items:center;justify-content:center;gap:10px;
       box-shadow:0 10px 28px rgba(220,20,60,.25);
-      transition:.2s;
+      transition:.15s;
     }
     .activate-evacuation-btn:hover{transform:scale(1.01);box-shadow:0 14px 34px rgba(220,20,60,.32)}
+    .activate-evacuation-btn:active{transform:scale(0.97);box-shadow:0 4px 12px rgba(220,20,60,.35)}
+
+    /* Button Loading State */
+    .btn-loading{
+      opacity:.8;
+      pointer-events:none;
+      position:relative;
+    }
+    .btn-loading::after{
+      content:'';
+      position:absolute;
+      inset:0;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);
+      animation:shimmer 1.2s infinite;
+    }
+    @keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+    /* Button Press Effects */
+    button:active:not(:disabled),
+    .btn:active:not(:disabled),
+    .main-activate-btn:active,
+    .issue-btn:active:not(:disabled){
+      transform:scale(0.96) !important;
+      filter:brightness(0.92);
+    }
 
     /* mini lists */
     .mini-list{max-height:260px;overflow:auto}
@@ -1968,6 +1993,77 @@
     }
 
     /******************************************************
+     * Quick Feedback Sounds & Effects
+     ******************************************************/
+    function playClickSound(){
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 800;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+        setTimeout(() => ctx.close(), 200);
+      } catch(e){}
+    }
+
+    function playSuccessSound(){
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+        osc.frequency.setValueAtTime(523, ctx.currentTime);
+        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+        setTimeout(() => ctx.close(), 500);
+      } catch(e){}
+    }
+
+    function playErrorSound(){
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'square';
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        osc.frequency.setValueAtTime(200, ctx.currentTime);
+        osc.frequency.setValueAtTime(150, ctx.currentTime + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+        setTimeout(() => ctx.close(), 400);
+      } catch(e){}
+    }
+
+    function setBtnLoading(btn, loading, originalHTML){
+      if (!btn) return;
+      if (loading){
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري...';
+        btn.disabled = true;
+        btn.classList.add('btn-loading');
+      } else {
+        btn.innerHTML = originalHTML || btn.dataset.originalHtml || btn.innerHTML;
+        btn.disabled = false;
+        btn.classList.remove('btn-loading');
+      }
+    }
+
+    /******************************************************
      * Active Command Sync & Status Badge Click
      ******************************************************/
     let ACTIVE_CMD_CACHE = null;
@@ -2680,6 +2776,14 @@
       const report = APP.currentReport;
       if (!report) return;
 
+      const btn = document.getElementById('issueBtn');
+      const originalHTML = btn ? btn.innerHTML : '';
+      
+      // INSTANT FEEDBACK - صوت + تأثير بصري فوري
+      playClickSound();
+      setBtnLoading(btn, true);
+      toast('جاري إرسال الأمر...', 'info');
+
       const custom = document.getElementById('customLocation').value.trim();
       const locParts = Array.from(APP.selectedLocations).map(resolveLocationLabel);
       if (custom) locParts.push(custom);
@@ -2715,14 +2819,21 @@
         // إيقاف الصوت بعد التعامل مع البلاغ
         stopAlarmSound();
         
+        // SUCCESS FEEDBACK
+        playSuccessSound();
+        setBtnLoading(btn, false, originalHTML);
+        
         closeResponseModal();
         openCommandScreen(cmd, report);
-        toast('تم إرسال الأمر للشاشات بنجاح', 'success');
+        toast('✅ تم إرسال الأمر للشاشات بنجاح!', 'success');
         setStatusAlert(true, report.isDrill ? '🎯 تمرين جاري' : 'حالة طوارئ!');
 
       } catch(e){
         console.error(e);
-        toast('فشل إرسال الأمر للشاشات: ' + (e.message || ''), 'error');
+        // ERROR FEEDBACK
+        playErrorSound();
+        setBtnLoading(btn, false, originalHTML);
+        toast('❌ فشل إرسال الأمر: ' + (e.message || ''), 'error');
       }
     }
 
@@ -2768,6 +2879,10 @@
     }
 
     async function endCommand(clearRemote){
+      // INSTANT FEEDBACK
+      playClickSound();
+      toast('جاري إنهاء الأمر...', 'info');
+      
       // close modal
       document.getElementById('commandScreen').classList.remove('active');
 
@@ -2792,12 +2907,15 @@
         // إيقاف الصوت عند إنهاء الأمر
         stopAlarmSound();
         
+        // SUCCESS FEEDBACK
+        playSuccessSound();
         setStatusAlert(false);
-        toast('تم إنهاء الأمر ومسحه من الشاشات', 'success');
+        toast('✅ تم إنهاء الأمر ومسحه من الشاشات', 'success');
         await refreshLists();
       } catch(e){
         console.error(e);
-        toast('تعذر مسح الأمر من الشاشات', 'error');
+        playErrorSound();
+        toast('❌ تعذر مسح الأمر من الشاشات', 'error');
       }
     }
 
