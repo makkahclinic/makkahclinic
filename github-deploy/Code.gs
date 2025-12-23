@@ -23,6 +23,7 @@
     'getRoomCodes',
     'getActiveCommand',
     'getEmergencyReports',
+    'submitEmergencyReport',
     'getTrainingLog',
     'getEmergencyStatus'
   ]);
