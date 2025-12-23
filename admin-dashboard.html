@@ -1409,9 +1409,47 @@
         let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
         
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
+        // ====== نظام صوت الإنذار المستمر ======
+        let adminAlarmCtx = null;
+        let adminAlarmOsc = null;
+        let adminAlarmGain = null;
+        let adminAlarmInterval = null;
+        let adminAlarmPlaying = false;
+        
+        function playAdminAlarm() {
+            if (adminAlarmPlaying) return;
+            try {
+                stopAdminAlarm();
+                adminAlarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+                adminAlarmGain = adminAlarmCtx.createGain();
+                adminAlarmGain.connect(adminAlarmCtx.destination);
+                adminAlarmGain.gain.value = 0.9; // صوت قوي
+                
+                let isHigh = true;
+                function beep() {
+                    if (adminAlarmOsc) try { adminAlarmOsc.stop(); } catch(e){}
+                    adminAlarmOsc = adminAlarmCtx.createOscillator();
+                    adminAlarmOsc.type = 'square';
+                    adminAlarmOsc.frequency.value = isHigh ? 880 : 440; // تردد عالي ومنخفض بالتناوب
+                    adminAlarmOsc.connect(adminAlarmGain);
+                    adminAlarmOsc.start();
+                    isHigh = !isHigh;
+                }
+                beep();
+                adminAlarmInterval = setInterval(beep, 400); // سريع ومزعج
+                adminAlarmPlaying = true;
+            } catch(e) { console.warn('Alarm error:', e); }
+        }
+        
+        function stopAdminAlarm() {
+            if (adminAlarmInterval) { clearInterval(adminAlarmInterval); adminAlarmInterval = null; }
+            if (adminAlarmOsc) try { adminAlarmOsc.stop(); } catch(e){} adminAlarmOsc = null;
+            if (adminAlarmCtx) try { adminAlarmCtx.close(); } catch(e){} adminAlarmCtx = null;
+            adminAlarmPlaying = false;
+        }
+        
         window.showEmergencyPopup = function(type, message, details) {
             const popup = document.getElementById('emergencyPopup');
-            const sound = document.getElementById('emergencySound');
             
             document.getElementById('emergencyPopupMessage').textContent = message;
             document.getElementById('popupType').textContent = details.type || '-';
@@ -1420,12 +1458,14 @@
             
             popup.classList.add('show');
             
-            // تشغيل صوت التنبيه
-            try { sound.play(); } catch(e) { console.log('Sound blocked'); }
+            // تشغيل صوت الإنذار المستمر القوي
+            playAdminAlarm();
         };
         
         window.closeEmergencyPopup = function() {
             document.getElementById('emergencyPopup').classList.remove('show');
+            // إيقاف صوت الإنذار
+            stopAdminAlarm();
         };
         
         // دوال نافذة روابط الطوارئ QR
