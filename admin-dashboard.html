@@ -405,9 +405,112 @@
         }
         .refresh-btn:hover { background: #f0f0f0; }
         .refresh-btn.loading i { animation: spin 1s linear infinite; }
+        
+        /* تنبيه الطوارئ المنبثق */
+        .emergency-popup-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s;
+        }
+        .emergency-popup-overlay.show { display: flex; }
+        .emergency-popup {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            color: white;
+            box-shadow: 0 20px 60px rgba(220,38,38,0.5);
+            animation: popupBounce 0.5s ease-out;
+        }
+        @keyframes popupBounce {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .emergency-popup-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: pulse 1s infinite;
+        }
+        .emergency-popup h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .emergency-popup p {
+            font-size: 1rem;
+            opacity: 0.9;
+            margin-bottom: 1.5rem;
+        }
+        .emergency-popup-details {
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: right;
+        }
+        .emergency-popup-details div {
+            margin: 0.3rem 0;
+            font-size: 0.9rem;
+        }
+        .emergency-popup-btn {
+            display: inline-block;
+            background: white;
+            color: #dc2626;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 5px;
+        }
+        .emergency-popup-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+        .emergency-popup-btn.secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+        .emergency-popup-sound {
+            position: absolute;
+        }
     </style>
 </head>
 <body>
+    <!-- تنبيه الطوارئ المنبثق -->
+    <div class="emergency-popup-overlay" id="emergencyPopup">
+        <div class="emergency-popup">
+            <div class="emergency-popup-icon">🚨</div>
+            <h2>تنبيه طوارئ!</h2>
+            <p id="emergencyPopupMessage">تم استلام بلاغ طوارئ جديد</p>
+            <div class="emergency-popup-details" id="emergencyPopupDetails">
+                <div><strong>النوع:</strong> <span id="popupType">-</span></div>
+                <div><strong>الموقع:</strong> <span id="popupLocation">-</span></div>
+                <div><strong>الوقت:</strong> <span id="popupTime">-</span></div>
+            </div>
+            <button class="emergency-popup-btn" onclick="openEocCommand()">
+                <i class="fas fa-external-link-alt"></i> ادخل الآن
+            </button>
+            <button class="emergency-popup-btn secondary" onclick="closeEmergencyPopup()">
+                لاحقاً
+            </button>
+        </div>
+        <audio id="emergencySound" preload="auto">
+            <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+        </audio>
+    </div>
+
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner"></div>
         <p>جاري تحميل مركز القيادة...</p>
@@ -1222,6 +1325,82 @@
 
         // تحديث أيقونة الطوارئ كل 30 ثانية
         setInterval(updateEocSmartCard, 30000);
+
+        // نظام التنبيهات المنبثقة للطوارئ
+        let lastKnownReportId = localStorage.getItem('lastKnownReportId') || '';
+        let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
+        
+        function showEmergencyPopup(type, message, details) {
+            const popup = document.getElementById('emergencyPopup');
+            const sound = document.getElementById('emergencySound');
+            
+            document.getElementById('emergencyPopupMessage').textContent = message;
+            document.getElementById('popupType').textContent = details.type || '-';
+            document.getElementById('popupLocation').textContent = details.location || '-';
+            document.getElementById('popupTime').textContent = details.time || new Date().toLocaleTimeString('ar-SA');
+            
+            popup.classList.add('show');
+            
+            // تشغيل صوت التنبيه
+            try { sound.play(); } catch(e) { console.log('Sound blocked'); }
+        }
+        
+        function closeEmergencyPopup() {
+            document.getElementById('emergencyPopup').classList.remove('show');
+        }
+        
+        function openEocCommand() {
+            closeEmergencyPopup();
+            window.open('eoc-command.html', '_blank');
+        }
+        
+        // فحص البلاغات الجديدة كل 15 ثانية
+        async function checkNewEmergencies() {
+            try {
+                const [activeRes, reportsRes] = await Promise.all([
+                    fetchJsonp(APIs.eoc + '?action=getActiveCommand&callback=_'),
+                    fetchJsonp(APIs.eoc + '?action=getEmergencyReports&limit=10&callback=_')
+                ]);
+                
+                // التحقق من أمر طوارئ جديد (من eoc-command.html)
+                if (activeRes.ok && activeRes.status === 'active' && activeRes.command?.sessionId) {
+                    const currentSession = activeRes.command.sessionId;
+                    if (currentSession !== lastKnownActiveSession) {
+                        lastKnownActiveSession = currentSession;
+                        localStorage.setItem('lastKnownActiveSession', currentSession);
+                        showEmergencyPopup('command', 'تم تفعيل حالة طوارئ!', {
+                            type: activeRes.command.responseType || activeRes.command.type || 'طوارئ',
+                            location: activeRes.command.floor || 'المبنى كاملاً',
+                            time: new Date().toLocaleTimeString('ar-SA')
+                        });
+                    }
+                }
+                
+                // التحقق من بلاغ جديد (من emergency-report.html)
+                if (reportsRes.ok && Array.isArray(reportsRes.reports) && reportsRes.reports.length > 0) {
+                    const latestReport = reportsRes.reports[0];
+                    const reportKey = latestReport.id || latestReport.date + latestReport.type;
+                    
+                    if (reportKey !== lastKnownReportId && latestReport.status !== 'مغلق') {
+                        lastKnownReportId = reportKey;
+                        localStorage.setItem('lastKnownReportId', reportKey);
+                        showEmergencyPopup('report', 'بلاغ طوارئ جديد!', {
+                            type: latestReport.type || 'بلاغ',
+                            location: latestReport.location || latestReport.floor || '-',
+                            time: latestReport.time || new Date().toLocaleTimeString('ar-SA')
+                        });
+                    }
+                }
+            } catch (e) {
+                console.log('Check emergencies error:', e);
+            }
+        }
+        
+        // بدء الفحص الدوري بعد 5 ثواني من التحميل
+        setTimeout(() => {
+            checkNewEmergencies();
+            setInterval(checkNewEmergencies, 15000);
+        }, 5000);
 
         // دالة فتح/إغلاق قائمة روابط الطوارئ
         function toggleEocSubmenu() {
