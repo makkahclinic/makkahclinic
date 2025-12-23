@@ -2094,15 +2094,29 @@
         .replace(/'/g,'&#039;');
     }
 
-    function setStatusAlert(on, label){
+    let alarmPlaying = false;
+    
+    function setStatusAlert(on, label, hasOpenReport = false){
       const el = document.getElementById('systemStatus');
       if (!el) return;
       if (on){
         el.classList.add('alert');
         el.innerHTML = `<i class="fas fa-stop-circle"></i><span>${escapeHtml(label || 'إلغاء حالة الطوارئ')}</span>`;
+        
+        // تشغيل صوت الإنذار المستمر عند وجود بلاغ مفتوح
+        if (hasOpenReport && !alarmPlaying) {
+          playAlarmSound();
+          alarmPlaying = true;
+        }
       } else {
         el.classList.remove('alert');
         el.innerHTML = `<i class="fas fa-check-circle"></i><span>الوضع طبيعي</span>`;
+        
+        // إيقاف الصوت عند عدم وجود حالة طوارئ
+        if (alarmPlaying) {
+          stopAlarmSound();
+          alarmPlaying = false;
+        }
       }
     }
 
@@ -2278,7 +2292,8 @@
               count: openReports.length,
               openReports: openReports
             };
-            setStatusAlert(true, '🚨 بلاغ مفتوح (' + openReports.length + ')');
+            // تفعيل الصوت المستمر عند وجود بلاغ مفتوح
+            setStatusAlert(true, '🚨 بلاغ مفتوح (' + openReports.length + ')', true);
             return;
           }
         }
