@@ -1330,7 +1330,31 @@
         <div style="font-family:monospace;font-size:2.4rem;font-weight:1000" id="cmdTimer">00:00</div>
 
         <div class="modal-actions" style="margin-top:16px">
-          <button class="btn success" onclick="endCommand(true)"><i class="fas fa-check-circle"></i> إنهاء الأمر (Clear)</button>
+          <button class="btn success" onclick="openEndCommandModal()"><i class="fas fa-check-circle"></i> إنهاء الأمر (Clear)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- End Command Modal (Unified Close) -->
+  <div class="modal" id="endCommandModal">
+    <div class="modal-card" style="max-width:450px">
+      <div class="modal-header">
+        <h2><i class="fas fa-clipboard-check"></i> إنهاء الحالة</h2>
+        <button class="close-modal" onclick="closeEndCommandModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div style="padding:20px">
+        <div style="margin-bottom:16px">
+          <label style="font-weight:900;color:var(--secondary);display:block;margin-bottom:8px"><i class="fas fa-user"></i> اسم الشخص المُنهي</label>
+          <input type="text" id="endCmdName" class="cem-input" placeholder="مثال: أحمد محمد" autocomplete="off">
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-weight:900;color:var(--secondary);display:block;margin-bottom:8px"><i class="fas fa-comment-dots"></i> سبب الإغلاق</label>
+          <textarea id="endCmdReason" class="cem-input" rows="3" placeholder="مثال: تم إخماد الحريق بنجاح / إنذار كاذب / انتهى التمرين"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn secondary" onclick="closeEndCommandModal()"><i class="fas fa-times"></i> إلغاء</button>
+          <button class="btn success" onclick="confirmEndCommand()"><i class="fas fa-check-circle"></i> تأكيد الإنهاء</button>
         </div>
       </div>
     </div>
@@ -3052,7 +3076,35 @@
       document.getElementById('commandScreen').classList.add('active');
     }
 
-    async function endCommand(clearRemote){
+    // ============ UNIFIED END COMMAND MODAL ============
+    function openEndCommandModal(){
+      playClickSound();
+      document.getElementById('endCommandModal').classList.add('active');
+      document.getElementById('endCmdName').value = '';
+      document.getElementById('endCmdReason').value = '';
+      document.getElementById('endCmdName').focus();
+    }
+    function closeEndCommandModal(){
+      document.getElementById('endCommandModal').classList.remove('active');
+    }
+    async function confirmEndCommand(){
+      const who = (document.getElementById('endCmdName').value || '').trim();
+      const reason = (document.getElementById('endCmdReason').value || '').trim();
+      if (!who) {
+        toast('الرجاء إدخال اسمك', 'warning');
+        document.getElementById('endCmdName').focus();
+        return;
+      }
+      if (!reason) {
+        toast('الرجاء إدخال سبب الإغلاق', 'warning');
+        document.getElementById('endCmdReason').focus();
+        return;
+      }
+      closeEndCommandModal();
+      await endCommand(true, who, reason);
+    }
+
+    async function endCommand(clearRemote, closedBy, closeReason){
       // INSTANT FEEDBACK
       playClickSound();
       toast('جاري إنهاء الأمر...', 'info');
@@ -3068,14 +3120,29 @@
 
       if (!clearRemote) return;
 
+      const st = window.__CMD_STATE__ || {};
+      const who = closedBy || 'EOC';
+      const reason = closeReason || 'تم إنهاء الأمر';
+
       try{
         const res = await jsonp('clearActiveCommand', {});
         if (!res || !res.ok) throw new Error(res?.error || 'clearActiveCommand failed');
 
-        // if there was a real report, close it
-        const st = window.__CMD_STATE__ || {};
+        // تسجيل البلاغ اليدوي إذا لم يكن له reportId إلكتروني
+        if (!st.reportId || String(st.reportId).startsWith('MANUAL-')) {
+          try {
+            await jsonp('submitEmergencyReport', {
+              reportId: 'MAN-' + Date.now(),
+              disasterType: (st.responseType || 'طوارئ') + ' (يدوي)',
+              location: st.location || 'غير محدد',
+              notes: 'تفعيل يدوي. أُغلق بواسطة: ' + who + ' | السبب: ' + reason
+            });
+          } catch(e) { console.warn('Failed to log manual emergency:', e); }
+        }
+
+        // إغلاق البلاغ الإلكتروني إذا كان موجوداً
         if (st.reportId && !String(st.reportId).startsWith('MANUAL-') && !st.isDrill){
-          await safeUpdateReportStatus(st.reportId, 'مغلق', 'EOC', 'تم إنهاء الأمر');
+          await safeUpdateReportStatus(st.reportId, 'مغلق', who, reason);
         }
 
         // إيقاف الصوت عند إنهاء الأمر
