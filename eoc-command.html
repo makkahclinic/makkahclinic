@@ -713,7 +713,7 @@
   <div class="main-container">
     <!-- LEFT: CONTROL -->
     <div class="control-panel">
-      <div class="quick-actions">
+      <div class="quick-actions" style="grid-template-columns:repeat(4,1fr)">
         <div class="quick-action training" onclick="openTrainingModal()">
           <div class="qa-ico"><i class="fas fa-chalkboard-teacher"></i></div>
           <div class="qa-title">جلسة تدريب عملي</div>
@@ -728,6 +728,11 @@
           <div class="qa-ico"><i class="fas fa-exclamation-triangle"></i></div>
           <div class="qa-title">سجل البلاغات</div>
           <div class="qa-sub">الحقيقي + فلترة</div>
+        </div>
+        <div class="quick-action readiness-check" onclick="openReadinessModal()" style="border-color:rgba(16,185,129,.4)">
+          <div class="qa-ico" style="background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 8px 22px rgba(16,185,129,.35)"><i class="fas fa-clipboard-check"></i></div>
+          <div class="qa-title">فحص الجاهزية</div>
+          <div class="qa-sub">قائمة فحص الأقسام</div>
         </div>
       </div>
 
@@ -1473,6 +1478,74 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Readiness Checklist Modal -->
+  <div class="modal" id="readinessModal">
+    <div class="modal-card" style="max-width:1100px;width:95%">
+      <div class="print-header">
+        <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع">
+        <h1>مجمع مكة الطبي بالزاهر</h1>
+        <h2>قائمة فحص جاهزية الطوارئ</h2>
+        <div class="clinic-info">مكة المكرمة - المملكة العربية السعودية</div>
+      </div>
+      
+      <div class="modal-header" style="background:linear-gradient(135deg,#10b981,#059669)">
+        <h2 style="color:#fff"><i class="fas fa-clipboard-check"></i> قائمة فحص جاهزية الطوارئ</h2>
+        <button class="close-modal" onclick="closeReadinessModal()"><i class="fas fa-times"></i></button>
+      </div>
+      
+      <div style="padding:20px;max-height:70vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <label style="font-weight:700">تاريخ الفحص:</label>
+            <input type="date" id="readinessDate" style="padding:8px 14px;border-radius:10px;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:1rem">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn success" onclick="saveReadinessData()" style="padding:10px 20px">
+              <i class="fas fa-save"></i> حفظ
+            </button>
+            <button class="btn secondary" onclick="printReadinessChecklist()" style="padding:10px 20px">
+              <i class="fas fa-print"></i> طباعة
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrap" style="overflow-x:auto">
+          <table id="readinessTable" style="width:100%;border-collapse:collapse;min-width:900px">
+            <thead>
+              <tr style="background:linear-gradient(135deg,#1e3a5f,#2d5a8a);color:#fff">
+                <th style="padding:14px 10px;text-align:right;font-weight:800;width:120px">القسم</th>
+                <th style="padding:14px 8px;text-align:center;font-weight:800;width:80px">مخارج<br>/لوحات</th>
+                <th style="padding:14px 8px;text-align:center;font-weight:800;width:80px">إنارة<br>طوارئ</th>
+                <th style="padding:14px 8px;text-align:center;font-weight:800;width:80px">طفايات<br>(صالحة)</th>
+                <th style="padding:14px 8px;text-align:center;font-weight:800;width:80px">حقيبة<br>إسعافات</th>
+                <th style="padding:14px 8px;text-align:center;font-weight:800;width:80px">إنذار<br>/أجراس</th>
+                <th style="padding:14px 8px;text-align:center;font-weight:800;width:100px">آخر تفقد</th>
+                <th style="padding:14px 8px;text-align:right;font-weight:800;width:100px">المسؤول</th>
+                <th style="padding:14px 8px;text-align:right;font-weight:800;width:140px">ملاحظات</th>
+              </tr>
+            </thead>
+            <tbody id="readinessBody">
+              <!-- الصفوف تُملأ بالجافاسكريبت -->
+            </tbody>
+          </table>
+        </div>
+        
+        <div id="readinessStatus" style="margin-top:16px;text-align:center;font-weight:700;color:var(--muted)"></div>
+      </div>
+      
+      <div class="print-footer">
+        <div>تاريخ الطباعة: <span id="printDateReadiness"></span></div>
+        <div style="margin-top:5px">مجمع مكة الطبي بالزاهر - نظام إدارة الطوارئ EOC</div>
+        <div style="margin-top:8px;font-size:.75rem">توقيع مسؤول السلامة: _________________ | التاريخ: _________________</div>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeReadinessModal()"><i class="fas fa-times"></i> إغلاق</button>
+        <button class="btn success" onclick="saveReadinessData()"><i class="fas fa-save"></i> حفظ البيانات</button>
       </div>
     </div>
   </div>
@@ -3674,6 +3747,156 @@
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(updateLastTestResult, 1000);
     });
+
+    /******************************************************
+     * قائمة فحص جاهزية الطوارئ
+     ******************************************************/
+    const READINESS_DEPARTMENTS = [
+      { id: 'reception', name: 'الاستقبال' },
+      { id: 'batiniya1', name: 'الباطنية 1' },
+      { id: 'batiniya2', name: 'الباطنية 2' },
+      { id: 'batiniya3', name: 'الباطنية 3' },
+      { id: 'dental', name: 'الأسنان' },
+      { id: 'emergency', name: 'الطوارئ' },
+      { id: 'general', name: 'الطب العام' },
+      { id: 'lab', name: 'المختبر' },
+      { id: 'pharmacy', name: 'الصيدلية' },
+      { id: 'nursery', name: 'النساء والولادة' },
+      { id: 'mens', name: 'استقبال رجال' },
+      { id: 'admin', name: 'الإدارة' },
+    ];
+
+    const READINESS_ITEMS = ['exits', 'lights', 'extinguishers', 'firstaid', 'alarm'];
+    let readinessData = {};
+
+    function loadReadinessData() {
+      const saved = localStorage.getItem('eoc_readiness_data');
+      if (saved) {
+        readinessData = JSON.parse(saved);
+      } else {
+        readinessData = {};
+        READINESS_DEPARTMENTS.forEach(dept => {
+          readinessData[dept.id] = {
+            exits: '', lights: '', extinguishers: '', firstaid: '', alarm: '',
+            lastCheck: '', responsible: '', notes: ''
+          };
+        });
+      }
+    }
+
+    function saveReadinessToStorage() {
+      localStorage.setItem('eoc_readiness_data', JSON.stringify(readinessData));
+    }
+
+    function openReadinessModal() {
+      loadReadinessData();
+      document.getElementById('readinessModal').classList.add('active');
+      document.getElementById('readinessDate').value = new Date().toISOString().split('T')[0];
+      renderReadinessTable();
+    }
+
+    function closeReadinessModal() {
+      document.getElementById('readinessModal').classList.remove('active');
+    }
+
+    function renderReadinessTable() {
+      const tbody = document.getElementById('readinessBody');
+      tbody.innerHTML = '';
+
+      READINESS_DEPARTMENTS.forEach(dept => {
+        const data = readinessData[dept.id] || {};
+        const tr = document.createElement('tr');
+        tr.style.cssText = 'border-bottom:1px solid rgba(255,255,255,.1)';
+        
+        tr.innerHTML = `
+          <td style="padding:12px 10px;font-weight:800;background:rgba(255,255,255,.05)">${dept.name}</td>
+          <td style="padding:8px;text-align:center">${createCheckCell(dept.id, 'exits', data.exits)}</td>
+          <td style="padding:8px;text-align:center">${createCheckCell(dept.id, 'lights', data.lights)}</td>
+          <td style="padding:8px;text-align:center">${createCheckCell(dept.id, 'extinguishers', data.extinguishers)}</td>
+          <td style="padding:8px;text-align:center">${createCheckCell(dept.id, 'firstaid', data.firstaid)}</td>
+          <td style="padding:8px;text-align:center">${createCheckCell(dept.id, 'alarm', data.alarm)}</td>
+          <td style="padding:8px;text-align:center">
+            <input type="date" value="${data.lastCheck || ''}" onchange="updateReadiness('${dept.id}','lastCheck',this.value)" 
+              style="width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:.85rem">
+          </td>
+          <td style="padding:8px">
+            <input type="text" value="${data.responsible || ''}" onchange="updateReadiness('${dept.id}','responsible',this.value)" placeholder="الاسم"
+              style="width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:.85rem">
+          </td>
+          <td style="padding:8px">
+            <input type="text" value="${data.notes || ''}" onchange="updateReadiness('${dept.id}','notes',this.value)" placeholder="ملاحظات"
+              style="width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:.85rem">
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function createCheckCell(deptId, field, value) {
+      const checked = value === 'ok';
+      const failed = value === 'fail';
+      const na = value === 'na';
+      
+      return `
+        <div style="display:flex;justify-content:center;gap:4px">
+          <button onclick="setReadinessCheck('${deptId}','${field}','ok')" 
+            style="width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;font-size:.9rem;
+            background:${checked ? '#10b981' : 'rgba(16,185,129,.2)'};color:${checked ? '#fff' : 'rgba(255,255,255,.5)'}">✓</button>
+          <button onclick="setReadinessCheck('${deptId}','${field}','fail')" 
+            style="width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;font-size:.9rem;
+            background:${failed ? '#dc2626' : 'rgba(220,38,38,.2)'};color:${failed ? '#fff' : 'rgba(255,255,255,.5)'}">✗</button>
+          <button onclick="setReadinessCheck('${deptId}','${field}','na')" 
+            style="width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;font-size:.75rem;
+            background:${na ? '#6b7280' : 'rgba(107,114,128,.2)'};color:${na ? '#fff' : 'rgba(255,255,255,.5)'}">—</button>
+        </div>
+      `;
+    }
+
+    function setReadinessCheck(deptId, field, value) {
+      if (!readinessData[deptId]) {
+        readinessData[deptId] = {};
+      }
+      readinessData[deptId][field] = value;
+      saveReadinessToStorage();
+      renderReadinessTable();
+    }
+
+    function updateReadiness(deptId, field, value) {
+      if (!readinessData[deptId]) {
+        readinessData[deptId] = {};
+      }
+      readinessData[deptId][field] = value;
+      saveReadinessToStorage();
+    }
+
+    function saveReadinessData() {
+      saveReadinessToStorage();
+      
+      // حفظ إلى Google Sheets
+      const checkDate = document.getElementById('readinessDate').value;
+      const payload = {
+        action: 'saveReadinessCheck',
+        date: checkDate,
+        data: readinessData
+      };
+      
+      fetch(WEB_APP_URL + '?callback=?', {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(() => {
+        toast('تم حفظ البيانات بنجاح', 'success');
+        document.getElementById('readinessStatus').innerHTML = '<i class="fas fa-check-circle" style="color:var(--success)"></i> تم الحفظ - ' + new Date().toLocaleTimeString('ar-SA');
+      }).catch(() => {
+        toast('تم الحفظ محليًا فقط', 'warning');
+      });
+    }
+
+    function printReadinessChecklist() {
+      document.getElementById('printDateReadiness').textContent = new Date().toLocaleDateString('ar-SA') + ' ' + new Date().toLocaleTimeString('ar-SA');
+      window.print();
+    }
 
     /******************************************************
      * Notes:
