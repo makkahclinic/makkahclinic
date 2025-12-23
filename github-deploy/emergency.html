@@ -63,6 +63,133 @@
             100% { filter: brightness(0.8); }
         }
         
+        /* ========== تأثير أضواء الطوارئ الوامضة ========== */
+        .emergency-lights {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+        }
+        
+        .emergency-lights.active {
+            display: block;
+        }
+        
+        .light-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 8px;
+            display: flex;
+        }
+        
+        .light-bar.bottom {
+            top: auto;
+            bottom: 0;
+        }
+        
+        .light-left, .light-right {
+            flex: 1;
+            animation: flashLight 0.15s ease-in-out infinite alternate;
+        }
+        
+        .light-left {
+            background: #ff0000;
+            box-shadow: 0 0 60px 30px rgba(255, 0, 0, 0.8);
+        }
+        
+        .light-right {
+            background: #0066ff;
+            box-shadow: 0 0 60px 30px rgba(0, 102, 255, 0.8);
+            animation-delay: 0.15s;
+        }
+        
+        .side-light {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+        }
+        
+        .side-light.left {
+            left: 0;
+            background: linear-gradient(to bottom, #ff0000 50%, #0066ff 50%);
+            animation: sideFlash 0.3s ease-in-out infinite;
+        }
+        
+        .side-light.right {
+            right: 0;
+            background: linear-gradient(to bottom, #0066ff 50%, #ff0000 50%);
+            animation: sideFlash 0.3s ease-in-out infinite;
+            animation-delay: 0.15s;
+        }
+        
+        @keyframes flashLight {
+            0% { opacity: 1; }
+            100% { opacity: 0.3; }
+        }
+        
+        @keyframes sideFlash {
+            0%, 100% { 
+                background: linear-gradient(to bottom, #ff0000 50%, #0066ff 50%);
+                box-shadow: 0 0 40px 20px rgba(255, 0, 0, 0.5);
+            }
+            50% { 
+                background: linear-gradient(to bottom, #0066ff 50%, #ff0000 50%);
+                box-shadow: 0 0 40px 20px rgba(0, 102, 255, 0.5);
+            }
+        }
+        
+        /* Corner strobes */
+        .corner-strobe {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            animation: strobeFlash 0.2s ease-in-out infinite;
+        }
+        
+        .corner-strobe.top-left {
+            top: 10px;
+            left: 10px;
+            background: radial-gradient(circle, #ff0000, transparent);
+            box-shadow: 0 0 80px 40px rgba(255, 0, 0, 0.9);
+        }
+        
+        .corner-strobe.top-right {
+            top: 10px;
+            right: 10px;
+            background: radial-gradient(circle, #0066ff, transparent);
+            box-shadow: 0 0 80px 40px rgba(0, 102, 255, 0.9);
+            animation-delay: 0.1s;
+        }
+        
+        .corner-strobe.bottom-left {
+            bottom: 10px;
+            left: 10px;
+            background: radial-gradient(circle, #0066ff, transparent);
+            box-shadow: 0 0 80px 40px rgba(0, 102, 255, 0.9);
+            animation-delay: 0.15s;
+        }
+        
+        .corner-strobe.bottom-right {
+            bottom: 10px;
+            right: 10px;
+            background: radial-gradient(circle, #ff0000, transparent);
+            box-shadow: 0 0 80px 40px rgba(255, 0, 0, 0.9);
+            animation-delay: 0.05s;
+        }
+        
+        @keyframes strobeFlash {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.2; transform: scale(0.8); }
+        }
+        
         .container {
             text-align: center;
             padding: 5px;
@@ -699,6 +826,23 @@
     </style>
 </head>
 <body class="safe">
+    <!-- تأثير أضواء الطوارئ الوامضة -->
+    <div id="emergencyLights" class="emergency-lights">
+        <div class="light-bar top">
+            <div class="light-left"></div>
+            <div class="light-right"></div>
+        </div>
+        <div class="light-bar bottom">
+            <div class="light-left"></div>
+            <div class="light-right"></div>
+        </div>
+        <div class="side-light left"></div>
+        <div class="side-light right"></div>
+        <div class="corner-strobe top-left"></div>
+        <div class="corner-strobe top-right"></div>
+        <div class="corner-strobe bottom-left"></div>
+        <div class="corner-strobe bottom-right"></div>
+    </div>
     <!-- شاشة البداية -->
     <div class="start-screen" id="startScreen">
       <div class="start-logo">
@@ -1505,6 +1649,9 @@
 
             document.getElementById('safeScreen').classList.add('hidden');
             document.getElementById('emergencyScreen').classList.add('active');
+            
+            // تفعيل أضواء الطوارئ الوامضة 🚨
+            document.getElementById('emergencyLights').classList.add('active');
 
             const resp = String(command.responseType || '').toLowerCase().trim();
             const rt = String(command.reportType || '');
@@ -1632,6 +1779,9 @@
             currentCommand = null;
             document.getElementById('safeScreen').classList.remove('hidden');
             document.getElementById('emergencyScreen').classList.remove('active');
+            
+            // إيقاف أضواء الطوارئ الوامضة
+            document.getElementById('emergencyLights').classList.remove('active');
             document.body.className = 'safe';
             stopAllSounds();
             stopSpeaking();
