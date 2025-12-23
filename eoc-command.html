@@ -4276,18 +4276,18 @@
       buildRangeButtons('trainRangeBtns', (p)=>{ setRangeInputs('trainFrom','trainTo', p.days); applyTrainingFilter(); });
       buildRangeButtons('repRangeBtns', (p)=>{ setRangeInputs('repFrom','repTo', p.days); applyReportsFilter(); });
 
-      // core sheet data
-      await loadCoreData();
+      // ====== أولوية قصوى: فحص الطوارئ فوراً ======
+      // هذا يحمّل أولاً لأنه الأهم
+      syncActiveCommandUI().then(() => {
+        autoShowOpenReportModal();
+      });
 
-      // initial lists
-      await refreshMiniTraining();
-      await pollReports();
-
-      // check if emergency is active
-      await syncActiveCommandUI();
-      
-      // فتح modal الاستجابة تلقائياً عند وجود بلاغ مفتوح
-      await autoShowOpenReportModal();
+      // ====== تحميل الباقي بالتوازي ======
+      Promise.allSettled([
+        loadCoreData(),
+        refreshMiniTraining(),
+        pollReports()
+      ]);
 
       // polling every 5 seconds
       setInterval(pollReports, 5000);
