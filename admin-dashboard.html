@@ -1411,32 +1411,29 @@
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
         // ====== نظام صوت الإنذار - يتكرر كل 3 دقائق ======
         let alarmRepeatInterval = null;
+        let audioUnlocked = false;
+        
+        // صوت إنذار خارجي قوي
+        const emergencyAlarmAudio = new Audio('https://www.soundjay.com/misc/sounds/fail-buzzer-01.mp3');
+        emergencyAlarmAudio.volume = 1.0;
+        
+        // فتح الصوت عند أول تفاعل مع الصفحة
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            emergencyAlarmAudio.play().then(() => {
+                emergencyAlarmAudio.pause();
+                emergencyAlarmAudio.currentTime = 0;
+                audioUnlocked = true;
+            }).catch(() => {});
+        }
+        document.addEventListener('click', unlockAudio, { once: false });
+        document.addEventListener('touchstart', unlockAudio, { once: false });
+        document.addEventListener('keydown', unlockAudio, { once: false });
         
         function playAlertSound() {
-            // صوت تنبيهي قوي (3 بيبات سريعة)
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const gain = ctx.createGain();
-                gain.connect(ctx.destination);
-                gain.gain.value = 0.8;
-                
-                let beepCount = 0;
-                function singleBeep() {
-                    if (beepCount >= 6) { // 3 بيبات (عالي+منخفض)
-                        ctx.close();
-                        return;
-                    }
-                    const osc = ctx.createOscillator();
-                    osc.type = 'square';
-                    osc.frequency.value = (beepCount % 2 === 0) ? 880 : 440;
-                    osc.connect(gain);
-                    osc.start();
-                    osc.stop(ctx.currentTime + 0.15);
-                    beepCount++;
-                    setTimeout(singleBeep, 200);
-                }
-                singleBeep();
-            } catch(e) { console.warn('Alert sound error:', e); }
+            // تشغيل صوت الإنذار
+            emergencyAlarmAudio.currentTime = 0;
+            emergencyAlarmAudio.play().catch(e => console.log('Sound blocked:', e));
         }
         
         function startAlarmRepeat() {
@@ -1452,6 +1449,8 @@
                 clearInterval(alarmRepeatInterval);
                 alarmRepeatInterval = null;
             }
+            emergencyAlarmAudio.pause();
+            emergencyAlarmAudio.currentTime = 0;
         }
         
         window.showEmergencyPopup = function(type, message, details) {
