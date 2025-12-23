@@ -592,6 +592,18 @@
         </div>
     </div>
 
+    <!-- overlay تفعيل الصوت -->
+    <div id="audioEnableOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;">
+        <div style="background:linear-gradient(135deg,#1e3a5f,#2c5282);padding:3rem;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <div style="font-size:4rem;margin-bottom:1rem;">🔔</div>
+            <h2 style="color:#fff;font-size:1.8rem;margin-bottom:1rem;">تفعيل التنبيه الصوتي</h2>
+            <p style="color:#cbd5e0;margin-bottom:2rem;line-height:1.8;">اضغط على الزر لتفعيل صوت الإنذار<br>عند وصول بلاغات الطوارئ</p>
+            <button onclick="enableAudioAlerts()" style="background:linear-gradient(135deg,#c9a962,#d4af37);color:#1e3a5f;border:none;padding:1rem 3rem;font-size:1.3rem;font-weight:bold;border-radius:12px;cursor:pointer;font-family:inherit;">
+                ✓ تفعيل الإنذار الصوتي
+            </button>
+        </div>
+    </div>
+
     <!-- تنبيه الطوارئ المنبثق -->
     <div class="emergency-popup-overlay" id="emergencyPopup">
         <div class="emergency-popup">
@@ -1411,29 +1423,33 @@
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
         // ====== نظام صوت الإنذار - يتكرر كل 3 دقائق ======
         let alarmRepeatInterval = null;
-        let audioUnlocked = false;
+        let audioEnabled = localStorage.getItem('admin_audio_enabled') === 'true';
         
-        // صوت إنذار خارجي قوي
+        // صوت إنذار قوي
         const emergencyAlarmAudio = new Audio('https://www.soundjay.com/misc/sounds/fail-buzzer-01.mp3');
         emergencyAlarmAudio.volume = 1.0;
         
-        // فتح الصوت عند أول تفاعل مع الصفحة
-        function unlockAudio() {
-            if (audioUnlocked) return;
-            emergencyAlarmAudio.play().then(() => {
-                emergencyAlarmAudio.pause();
-                emergencyAlarmAudio.currentTime = 0;
-                audioUnlocked = true;
-            }).catch(() => {});
+        // إخفاء overlay إذا كان الصوت مفعل سابقاً
+        if (audioEnabled) {
+            document.getElementById('audioEnableOverlay').style.display = 'none';
         }
-        document.addEventListener('click', unlockAudio, { once: false });
-        document.addEventListener('touchstart', unlockAudio, { once: false });
-        document.addEventListener('keydown', unlockAudio, { once: false });
+        
+        // دالة تفعيل الصوت (تُستدعى من الزر)
+        window.enableAudioAlerts = function() {
+            // تشغيل صوت تجريبي للتأكد
+            emergencyAlarmAudio.play().then(() => {
+                audioEnabled = true;
+                localStorage.setItem('admin_audio_enabled', 'true');
+                document.getElementById('audioEnableOverlay').style.display = 'none';
+            }).catch(e => {
+                alert('فشل تفعيل الصوت. حاول مرة أخرى.');
+            });
+        };
         
         function playAlertSound() {
-            // تشغيل صوت الإنذار
+            if (!audioEnabled) return;
             emergencyAlarmAudio.currentTime = 0;
-            emergencyAlarmAudio.play().catch(e => console.log('Sound blocked:', e));
+            emergencyAlarmAudio.play().catch(e => console.log('Sound error:', e));
         }
         
         function startAlarmRepeat() {
