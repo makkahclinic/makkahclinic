@@ -1455,9 +1455,9 @@
         function startAlarmRepeat() {
             // شغل الصوت فوراً
             playAlertSound();
-            // كرر كل 3 دقائق (180000ms)
+            // كرر كل دقيقة (60000ms)
             if (alarmRepeatInterval) clearInterval(alarmRepeatInterval);
-            alarmRepeatInterval = setInterval(playAlertSound, 180000);
+            alarmRepeatInterval = setInterval(playAlertSound, 60000);
         }
         
         function stopAlarmRepeat() {
@@ -1508,7 +1508,10 @@
             window.open('eoc-command.html', '_blank');
         };
         
-        // فحص البلاغات الجديدة كل 15 ثانية
+        // فحص البلاغات المفتوحة
+        // القاعدة: أي بلاغ مفتوح = تنبيه (حتى لو قديم)
+        let currentAlertedReport = null; // البلاغ المعروض حالياً
+        
         async function checkNewEmergencies() {
             try {
                 const [activeRes, reportsRes] = await Promise.all([
@@ -1516,33 +1519,43 @@
                     fetchJsonp(APIs.eoc + '?action=getEmergencyReports&limit=10&callback=_')
                 ]);
                 
-                // التحقق من أمر طوارئ جديد (من eoc-command.html)
+                // التحقق من أمر طوارئ نشط
                 if (activeRes.ok && activeRes.status === 'active' && activeRes.command?.sessionId) {
                     const currentSession = activeRes.command.sessionId;
                     if (currentSession !== lastKnownActiveSession) {
                         lastKnownActiveSession = currentSession;
                         localStorage.setItem('lastKnownActiveSession', currentSession);
-                        showEmergencyPopup('command', 'تم تفعيل حالة طوارئ!', {
+                        showEmergencyPopup('command', 'حالة طوارئ نشطة!', {
                             type: activeRes.command.responseType || activeRes.command.type || 'طوارئ',
                             location: activeRes.command.floor || 'المبنى كاملاً',
                             time: new Date().toLocaleTimeString('ar-SA')
                         });
+                        return; // لا تتحقق من البلاغات إذا كان هناك أمر طوارئ
                     }
                 }
                 
-                // التحقق من بلاغ جديد (من emergency-report.html)
+                // التحقق من بلاغات مفتوحة
                 if (reportsRes.ok && Array.isArray(reportsRes.reports) && reportsRes.reports.length > 0) {
-                    const latestReport = reportsRes.reports[0];
-                    const reportKey = latestReport.id || latestReport.date + latestReport.type;
+                    // البحث عن أول بلاغ مفتوح
+                    const openReport = reportsRes.reports.find(r => r.status !== 'مغلق');
                     
-                    if (reportKey !== lastKnownReportId && latestReport.status !== 'مغلق') {
-                        lastKnownReportId = reportKey;
-                        localStorage.setItem('lastKnownReportId', reportKey);
-                        showEmergencyPopup('report', 'بلاغ طوارئ جديد!', {
-                            type: latestReport.type || 'بلاغ',
-                            location: latestReport.location || latestReport.floor || '-',
-                            time: latestReport.time || new Date().toLocaleTimeString('ar-SA')
-                        });
+                    if (openReport) {
+                        const reportKey = openReport.id || (openReport.date + openReport.type);
+                        
+                        // إذا لم يكن هناك تنبيه معروض لهذا البلاغ
+                        if (reportKey !== currentAlertedReport) {
+                            currentAlertedReport = reportKey;
+                            lastKnownReportId = reportKey;
+                            localStorage.setItem('lastKnownReportId', reportKey);
+                            showEmergencyPopup('report', 'بلاغ طوارئ مفتوح!', {
+                                type: openReport.type || 'بلاغ',
+                                location: openReport.location || openReport.floor || '-',
+                                time: openReport.time || new Date().toLocaleTimeString('ar-SA')
+                            });
+                        }
+                    } else {
+                        // لا توجد بلاغات مفتوحة - أغلق التنبيه إذا كان معروضاً
+                        currentAlertedReport = null;
                     }
                 }
             } catch (e) {
@@ -1550,11 +1563,11 @@
             }
         }
         
-        // بدء الفحص الدوري بعد 2 ثانية من التحميل (كل 5 ثواني)
+        // بدء الفحص الدوري (كل 5 ثواني)
         setTimeout(() => {
             checkNewEmergencies();
             setInterval(checkNewEmergencies, 5000);
-        }, 2000);
+        }, 1000);
 
         // دالة فتح/إغلاق قائمة روابط الطوارئ
         function toggleEocSubmenu() {
