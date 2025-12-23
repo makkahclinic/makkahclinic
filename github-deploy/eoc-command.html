@@ -3761,17 +3761,19 @@
 
     async function loadDepartmentsFromServer() {
       try {
-        const url = WEB_APP_URL + '?action=getReadinessDepartments&callback=?';
+        const url = WEB_APP_URL + '?action=getReadinessDepartments';
         const res = await fetch(url);
-        const text = await res.text();
-        const json = JSON.parse(text.replace(/^\?\(/, '').replace(/\);$/, ''));
+        const json = await res.json();
+        
+        console.log('Departments API response:', json);
         
         if (json.ok && json.departments && json.departments.length > 0) {
           READINESS_DEPARTMENTS = json.departments;
+          console.log('Loaded ' + json.departments.length + ' departments from server');
           return true;
         }
       } catch (err) {
-        console.log('Fallback to default departments:', err);
+        console.error('Failed to load departments:', err);
       }
       
       // Fallback
@@ -3923,8 +3925,7 @@
       try {
         const url = WEB_APP_URL + '?action=saveReadinessCheck&checkDate=' + encodeURIComponent(checkDate) + '&data=' + encodeURIComponent(JSON.stringify(dataToSave));
         const res = await fetch(url);
-        const text = await res.text();
-        const json = JSON.parse(text.replace(/^\?\(/, '').replace(/\);$/, ''));
+        const json = await res.json();
         
         if (json.ok) {
           toast('تم حفظ البيانات في السجل المركزي', 'success');
@@ -3952,8 +3953,7 @@
       try {
         const url = WEB_APP_URL + '?action=getReadinessHistory&limit=100';
         const res = await fetch(url);
-        const text = await res.text();
-        const json = JSON.parse(text.replace(/^\?\(/, '').replace(/\);$/, ''));
+        const json = await res.json();
         
         if (json.ok) {
           readinessHistory = json.history || [];
