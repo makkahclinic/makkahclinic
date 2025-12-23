@@ -9,12 +9,105 @@
    */
   
   const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
+
+  // ======== دوال الأمان ========
+  
+  /**
+   * تنظيف المدخلات من الأكواد الخبيثة (XSS)
+   */
+  function sanitizeInput(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+=/gi, '')
+      .trim();
+  }
+  
+  /**
+   * تنظيف كائن payload كامل
+   */
+  function sanitizePayload(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const clean = {};
+    for (const key in obj) {
+      if (typeof obj[key] === 'string') {
+        clean[key] = sanitizeInput(obj[key]);
+      } else if (Array.isArray(obj[key])) {
+        clean[key] = obj[key].map(item => 
+          typeof item === 'string' ? sanitizeInput(item) : 
+          typeof item === 'object' ? sanitizePayload(item) : item
+        );
+      } else if (typeof obj[key] === 'object') {
+        clean[key] = sanitizePayload(obj[key]);
+      } else {
+        clean[key] = obj[key];
+      }
+    }
+    return clean;
+  }
+  
+  /**
+   * التحقق من صحة رقم
+   */
+  function validateNumber(val, min, max, defaultVal) {
+    const num = parseInt(val, 10);
+    if (isNaN(num)) return defaultVal;
+    if (min !== undefined && num < min) return min;
+    if (max !== undefined && num > max) return max;
+    return num;
+  }
+  
+  /**
+   * Rate Limiting - الحد من الطلبات المتكررة
+   * @param {string} identifier - معرف الطلب (IP أو action)
+   * @param {number} limit - الحد الأقصى للطلبات
+   * @param {number} windowSec - نافذة الوقت بالثواني
+   * @returns {boolean} - true إذا مسموح، false إذا محظور
+   */
+  function checkRateLimit(identifier, limit, windowSec) {
+    const cache = CacheService.getScriptCache();
+    const key = 'rl_' + identifier;
+    const now = Math.floor(Date.now() / 1000);
+    
+    let data = cache.get(key);
+    if (!data) {
+      cache.put(key, JSON.stringify({ count: 1, start: now }), windowSec);
+      return true;
+    }
+    
+    const parsed = JSON.parse(data);
+    if (now - parsed.start > windowSec) {
+      cache.put(key, JSON.stringify({ count: 1, start: now }), windowSec);
+      return true;
+    }
+    
+    if (parsed.count >= limit) {
+      return false;
+    }
+    
+    parsed.count++;
+    cache.put(key, JSON.stringify(parsed), windowSec - (now - parsed.start));
+    return true;
+  }
   
   function doPost(e) {
     try {
       const body = JSON.parse(e.postData.contents);
-      const action = body.action;
-      const payload = body.payload || {};
+      const action = sanitizeInput(body.action);
+      const payload = sanitizePayload(body.payload || {});
+      
+      // Rate limiting: 60 طلب في الدقيقة لكل action
+      if (!checkRateLimit(action, 60, 60)) {
+        return ContentService.createTextOutput(JSON.stringify({
+          ok: false,
+          error: 'تم تجاوز الحد الأقصى للطلبات. حاول مرة أخرى بعد دقيقة.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
       
       let result;
       
@@ -58,9 +151,7 @@
         case 'resolveViolation':
           result = resolveViolation(payload);
           break;
-        case 'debug':
-          result = debugInfo();
-          break;
+        // debug action DISABLED for security
         // Committee Meeting APIs
         case 'getMeetingData':
           result = getMeetingData(payload.committee);
@@ -172,8 +263,20 @@
     ensureEocReady_();
     
     const p = e && e.parameter ? e.parameter : {};
-    const action = p.action;
-    const callback = p.callback;
+    const action = sanitizeInput(p.action);
+    const callback = sanitizeInput(p.callback);
+    
+    // Rate limiting: 100 طلب في الدقيقة
+    if (action && !checkRateLimit('get_' + action, 100, 60)) {
+      const errorObj = { ok: false, error: 'Rate limit exceeded' };
+      const json = JSON.stringify(errorObj);
+      if (callback) {
+        return ContentService.createTextOutput(callback + '(' + json + ');')
+          .setMimeType(ContentService.MimeType.JAVASCRIPT);
+      }
+      return ContentService.createTextOutput(json)
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     
     function output_(obj) {
       const json = JSON.stringify(obj);
@@ -247,10 +350,8 @@
       return output_(updateEmergencyReportStatus(p));
     }
     
-    if (action === 'debug') {
-      const result = debugInfo();
-      return output_({ ok: true, ...result });
-    }
+    // debug action DISABLED for security
+    // if (action === 'debug') { ... }
     
     if (action === 'submitEmergencyReport') {
       const result = submitEmergencyReport(p);

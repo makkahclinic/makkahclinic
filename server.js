@@ -73,15 +73,8 @@ app.get('/download/:filename', (req, res) => {
   }
 });
 
-// Debug endpoint to see raw sheet data
-app.get('/api/debug/sheet/:name', async (req, res) => {
-  try {
-    const data = await getSheetData(req.params.name);
-    res.json({ ok: true, headers: data[0], sampleRows: data.slice(1, 5), totalRows: data.length - 1 });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
+// Debug endpoint DISABLED for security
+// app.get('/api/debug/sheet/:name', ...);
 
 // Create Round_Schedule sheet with all timing data
 app.post('/api/rounds/create-schedule', async (req, res) => {
