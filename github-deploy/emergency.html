@@ -1880,5 +1880,194 @@
 
         // المراقبة تبدأ فقط بعد الضغط على زر "ابدأ المراقبة"
     </script>
+<!-- أزرار التحكم بالصوت (للتجربة فقط - تختفي في الإنتاج) -->
+<div id="soundControls" style="position:fixed;z-index:10000;bottom:20px;right:20px;display:none;gap:10px;align-items:center;background:rgba(0,0,0,0.8);padding:15px;border-radius:15px;">
+  <button id="policeBtn"
+    style="padding:12px 14px;font-weight:800;border-radius:12px;border:0;cursor:pointer;background:#1e3a5f;color:#fff;">
+    🚓 Police OFF
+  </button>
+
+  <button id="alarmBtn"
+    style="padding:12px 14px;font-weight:800;border-radius:12px;border:0;cursor:pointer;background:#DC143C;color:#fff;">
+    🏥 Alarm OFF
+  </button>
+
+  <input id="sirenVolume" type="range" min="0" max="1" step="0.01" value="0.25"
+    style="width:120px;">
+</div>
+
+<script>
+(() => {
+  let audioCtx=null, master=null, comp=null;
+  let osc1=null, osc2=null, lfo=null, lfoGain=null, gainNode=null;
+  let timer=null;
+
+  const lightsEl = document.getElementById("emergencyLights");
+  const policeBtn = document.getElementById("policeBtn");
+  const alarmBtn  = document.getElementById("alarmBtn");
+  const volEl     = document.getElementById("sirenVolume");
+  const soundControls = document.getElementById("soundControls");
+
+  const state = { mode: null };
+
+  // إظهار أزرار الصوت فقط في وضع التحكم
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('mode') === 'control' || urlParams.get('sound') === 'test') {
+    soundControls.style.display = 'flex';
+  }
+
+  function ensureAudio(){
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    master = audioCtx.createGain();
+    master.gain.value = Number(volEl?.value ?? 0.25);
+
+    comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.knee.value = 18;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.15;
+
+    master.connect(comp);
+    comp.connect(audioCtx.destination);
+  }
+
+  function stopAll(){
+    if (timer){ clearInterval(timer); timer=null; }
+
+    [osc1, osc2, lfo].forEach(n=>{
+      try { n && n.stop(); } catch(e){}
+      try { n && n.disconnect(); } catch(e){}
+    });
+    osc1=osc2=lfo=null;
+
+    try { lfoGain && lfoGain.disconnect(); } catch(e){}
+    try { gainNode && gainNode.disconnect(); } catch(e){}
+    lfoGain=null; gainNode=null;
+
+    state.mode=null;
+    if (policeBtn) policeBtn.textContent = "🚓 Police OFF";
+    if (alarmBtn)  alarmBtn.textContent  = "🏥 Alarm OFF";
+  }
+
+  function setVolume(v){
+    if (!master) return;
+    master.gain.setTargetAtTime(Number(v), audioCtx.currentTime, 0.03);
+  }
+
+  // صفارة الشرطة
+  function startPolice(){
+    ensureAudio();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+
+    stopAll();
+    state.mode="police";
+    if (lightsEl) lightsEl.classList.add("active");
+    if (policeBtn) policeBtn.textContent = "🚓 Police ON";
+
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0.65;
+
+    osc1 = audioCtx.createOscillator();
+    osc2 = audioCtx.createOscillator();
+    osc1.type="sawtooth";
+    osc2.type="square";
+    osc1.detune.value=-10;
+    osc2.detune.value=+7;
+
+    lfo = audioCtx.createOscillator();
+    lfo.type="sine";
+    lfo.frequency.value = 10.5;
+
+    lfoGain = audioCtx.createGain();
+    lfoGain.gain.value = 0.16;
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(gainNode.gain);
+
+    osc1.connect(gainNode);
+    osc2.connect(gainNode);
+    gainNode.connect(master);
+
+    const now = audioCtx.currentTime;
+    osc1.start(now);
+    osc2.start(now);
+    lfo.start(now);
+
+    let phase=0;
+    timer = setInterval(()=>{
+      const t = audioCtx.currentTime;
+      const presets = [
+        {a: 820, b: 640},
+        {a: 1050, b: 820},
+        {a: 680, b: 520},
+        {a: 1120, b: 900},
+      ];
+      const p = presets[phase % presets.length];
+
+      osc1.frequency.cancelScheduledValues(t);
+      osc2.frequency.cancelScheduledValues(t);
+      osc1.frequency.setTargetAtTime(p.a, t, 0.05);
+      osc2.frequency.setTargetAtTime(p.b, t, 0.05);
+
+      phase++;
+    }, 140);
+  }
+
+  // إنذار المستشفى
+  function startAlarm(){
+    ensureAudio();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+
+    stopAll();
+    state.mode="alarm";
+    if (lightsEl) lightsEl.classList.add("active");
+    if (alarmBtn)  alarmBtn.textContent  = "🏥 Alarm ON";
+
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0.0;
+    gainNode.connect(master);
+
+    osc1 = audioCtx.createOscillator();
+    osc1.type="square";
+    osc1.frequency.value = 880;
+    osc1.connect(gainNode);
+
+    const now = audioCtx.currentTime;
+    osc1.start(now);
+
+    let step=0;
+    timer = setInterval(()=>{
+      const t = audioCtx.currentTime;
+      const on = (step===0 || step===1);
+      gainNode.gain.cancelScheduledValues(t);
+      gainNode.gain.setTargetAtTime(on ? 0.55 : 0.0, t, 0.01);
+      osc1.frequency.setTargetAtTime(on ? 930 : 820, t, 0.02);
+      step = (step+1) % 5;
+    }, 220);
+  }
+
+  policeBtn?.addEventListener("click", ()=>{
+    if (state.mode === "police") stopAll();
+    else startPolice();
+  });
+
+  alarmBtn?.addEventListener("click", ()=>{
+    if (state.mode === "alarm") stopAll();
+    else startAlarm();
+  });
+
+  volEl?.addEventListener("input", e => setVolume(e.target.value));
+
+  // API للنظام
+  window.EOC = window.EOC || {};
+  window.EOC.playPolice = startPolice;
+  window.EOC.playAlarm  = startAlarm;
+  window.EOC.stopSound  = stopAll;
+
+})();
+</script>
 </body>
 </html>
