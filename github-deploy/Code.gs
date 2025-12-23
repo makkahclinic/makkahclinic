@@ -307,6 +307,22 @@
       return output_(result);
     }
     
+    // Readiness Checklist APIs
+    if (action === 'getReadinessDepartments') {
+      const result = getReadinessDepartments();
+      return output_(result);
+    }
+    
+    if (action === 'saveReadinessCheck') {
+      const result = saveReadinessCheck(p);
+      return output_(result);
+    }
+    
+    if (action === 'getReadinessHistory') {
+      const result = getReadinessHistory(p);
+      return output_(result);
+    }
+    
     // System health check endpoints
     if (action === 'ping') {
       return output_({ ok: true, message: 'pong', timestamp: new Date().toISOString() });
@@ -3428,5 +3444,179 @@
       .sort((a, b) => new Date(b.date) - new Date(a.date));
     
     return { history };
+  }
+  
+  /******************************************************
+   * قائمة فحص جاهزية الطوارئ - Readiness Checklist
+   ******************************************************/
+  
+  function ensureReadinessSheets_() {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    
+    // EOC_DEPARTMENTS sheet
+    let deptSheet = ss.getSheetByName('EOC_DEPARTMENTS');
+    if (!deptSheet) {
+      deptSheet = ss.insertSheet('EOC_DEPARTMENTS');
+      deptSheet.appendRow(['ID', 'Name', 'Floor', 'Active']);
+      // Default departments
+      const defaultDepts = [
+        ['reception', 'الاستقبال', 'الأول', 'TRUE'],
+        ['batiniya1', 'الباطنية 1', 'الثاني', 'TRUE'],
+        ['batiniya2', 'الباطنية 2', 'الثاني', 'TRUE'],
+        ['batiniya3', 'الباطنية 3', 'الثاني', 'TRUE'],
+        ['dental', 'الأسنان', 'الثاني', 'TRUE'],
+        ['emergency', 'الطوارئ', 'الأول', 'TRUE'],
+        ['general', 'الطب العام', 'الأول', 'TRUE'],
+        ['lab', 'المختبر', 'الأول', 'TRUE'],
+        ['pharmacy', 'الصيدلية', 'الأول', 'TRUE'],
+        ['nursery', 'النساء والولادة', 'الأول', 'TRUE'],
+        ['mens', 'استقبال رجال', 'الأول', 'TRUE'],
+        ['admin', 'الإدارة', 'الثاني', 'TRUE']
+      ];
+      defaultDepts.forEach(row => deptSheet.appendRow(row));
+    }
+    
+    // EOC_READINESS sheet
+    let readinessSheet = ss.getSheetByName('EOC_READINESS');
+    if (!readinessSheet) {
+      readinessSheet = ss.insertSheet('EOC_READINESS');
+      readinessSheet.appendRow([
+        'ID', 'Check_Date', 'Department_ID', 'Department_Name',
+        'Exits', 'Lights', 'Extinguishers', 'FirstAid', 'Alarm',
+        'Last_Check', 'Responsible', 'Notes', 'Created_At', 'Created_By'
+      ]);
+    }
+    
+    return { deptSheet, readinessSheet };
+  }
+  
+  function getReadinessDepartments() {
+    try {
+      const { deptSheet } = ensureReadinessSheets_();
+      const data = deptSheet.getDataRange().getValues();
+      
+      if (data.length <= 1) {
+        return { ok: true, departments: [] };
+      }
+      
+      const headers = data[0];
+      const departments = [];
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const active = String(row[3]).toUpperCase() === 'TRUE';
+        if (active) {
+          departments.push({
+            id: row[0],
+            name: row[1],
+            floor: row[2]
+          });
+        }
+      }
+      
+      return { ok: true, departments };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function saveReadinessCheck(params) {
+    try {
+      const { readinessSheet } = ensureReadinessSheets_();
+      const checkDate = params.checkDate || new Date().toISOString().split('T')[0];
+      const createdAt = new Date().toISOString();
+      const createdBy = params.createdBy || 'النظام';
+      const data = params.data ? JSON.parse(params.data) : {};
+      
+      // حفظ صف لكل قسم
+      let savedCount = 0;
+      for (const [deptId, checks] of Object.entries(data)) {
+        const id = `RC-${Date.now()}-${savedCount}`;
+        readinessSheet.appendRow([
+          id,
+          checkDate,
+          deptId,
+          checks.deptName || deptId,
+          checks.exits || '',
+          checks.lights || '',
+          checks.extinguishers || '',
+          checks.firstaid || '',
+          checks.alarm || '',
+          checks.lastCheck || '',
+          checks.responsible || '',
+          checks.notes || '',
+          createdAt,
+          createdBy
+        ]);
+        savedCount++;
+      }
+      
+      return { ok: true, message: 'تم حفظ ' + savedCount + ' سجل بنجاح', savedCount };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function getReadinessHistory(params) {
+    try {
+      const { readinessSheet } = ensureReadinessSheets_();
+      const data = readinessSheet.getDataRange().getValues();
+      
+      if (data.length <= 1) {
+        return { ok: true, history: [], dates: [] };
+      }
+      
+      const headers = data[0];
+      const records = [];
+      const datesSet = new Set();
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const checkDate = row[1];
+        datesSet.add(checkDate);
+        
+        records.push({
+          id: row[0],
+          checkDate: checkDate,
+          departmentId: row[2],
+          departmentName: row[3],
+          exits: row[4],
+          lights: row[5],
+          extinguishers: row[6],
+          firstaid: row[7],
+          alarm: row[8],
+          lastCheck: row[9],
+          responsible: row[10],
+          notes: row[11],
+          createdAt: row[12]
+        });
+      }
+      
+      // ترتيب حسب التاريخ (الأحدث أولاً)
+      records.sort((a, b) => new Date(b.checkDate) - new Date(a.checkDate));
+      
+      // تجميع حسب التاريخ
+      const groupedByDate = {};
+      records.forEach(rec => {
+        if (!groupedByDate[rec.checkDate]) {
+          groupedByDate[rec.checkDate] = [];
+        }
+        groupedByDate[rec.checkDate].push(rec);
+      });
+      
+      const dates = Array.from(datesSet).sort((a, b) => new Date(b) - new Date(a));
+      
+      // إرجاع آخر 50 سجل فقط
+      const limit = params.limit ? parseInt(params.limit) : 50;
+      
+      return { 
+        ok: true, 
+        history: records.slice(0, limit),
+        groupedByDate,
+        dates: dates.slice(0, 30)
+      };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   }
   
