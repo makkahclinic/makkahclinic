@@ -10,6 +10,53 @@
   
   const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
 
+  // ======== دوال الأمان المتقدمة ========
+  
+  /**
+   * قائمة Actions العامة (لا تحتاج Token)
+   */
+  const PUBLIC_ACTIONS = new Set([
+    'ping',
+    'getBuildingConfig',
+    'getScenarioGuides',
+    'getScenarioProfiles',
+    'getRoomCodes',
+    'getActiveCommand',
+    'getEmergencyReports',
+    'getTrainingLog',
+    'getEmergencyStatus'
+  ]);
+
+  /**
+   * التحقق من Token للـ Actions الحساسة
+   * ملاحظة: لتفعيل هذه الميزة، أضف API_TOKEN في Script Properties
+   */
+  function requireToken_(p) {
+    const expected = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
+    if (!expected) return; // إذا لم يتم تعيين token، تخطى التحقق
+    const got = String((p && (p.token || p.t)) || '').trim();
+    if (got !== expected) throw new Error('Unauthorized');
+  }
+
+  /**
+   * حماية من Formula Injection (Spreadsheet Injection)
+   * يمنع الأكواد الخبيثة التي تبدأ بـ = + - @
+   */
+  function safeCell_(v) {
+    const s = String(v ?? '');
+    if (/^[=+\-@]/.test(s.trim())) {
+      return "'" + s;
+    }
+    return s;
+  }
+
+  /**
+   * تنظيف صف كامل قبل الإدراج
+   */
+  function safeCellArray_(arr) {
+    return arr.map(v => safeCell_(v));
+  }
+
   // ======== دوال الأمان ========
   
   /**
@@ -897,7 +944,8 @@
       const dateStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
       const timeStr = Utilities.formatDate(now, 'Asia/Riyadh', 'HH:mm:ss');
 
-      sheet.appendRow([
+      // حماية من Formula Injection
+      sheet.appendRow(safeCellArray_([
         reportId,
         dateStr,
         timeStr,
@@ -907,7 +955,7 @@
         'جديد',
         '',
         ''
-      ]);
+      ]));
 
       lock.releaseLock();
       return { ok: true, reportId };

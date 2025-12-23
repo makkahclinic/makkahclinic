@@ -9,12 +9,152 @@
    */
   
   const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
+
+  // ======== دوال الأمان المتقدمة ========
+  
+  /**
+   * قائمة Actions العامة (لا تحتاج Token)
+   */
+  const PUBLIC_ACTIONS = new Set([
+    'ping',
+    'getBuildingConfig',
+    'getScenarioGuides',
+    'getScenarioProfiles',
+    'getRoomCodes',
+    'getActiveCommand',
+    'getEmergencyReports',
+    'getTrainingLog',
+    'getEmergencyStatus'
+  ]);
+
+  /**
+   * التحقق من Token للـ Actions الحساسة
+   * ملاحظة: لتفعيل هذه الميزة، أضف API_TOKEN في Script Properties
+   */
+  function requireToken_(p) {
+    const expected = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
+    if (!expected) return; // إذا لم يتم تعيين token، تخطى التحقق
+    const got = String((p && (p.token || p.t)) || '').trim();
+    if (got !== expected) throw new Error('Unauthorized');
+  }
+
+  /**
+   * حماية من Formula Injection (Spreadsheet Injection)
+   * يمنع الأكواد الخبيثة التي تبدأ بـ = + - @
+   */
+  function safeCell_(v) {
+    const s = String(v ?? '');
+    if (/^[=+\-@]/.test(s.trim())) {
+      return "'" + s;
+    }
+    return s;
+  }
+
+  /**
+   * تنظيف صف كامل قبل الإدراج
+   */
+  function safeCellArray_(arr) {
+    return arr.map(v => safeCell_(v));
+  }
+
+  // ======== دوال الأمان ========
+  
+  /**
+   * تنظيف المدخلات من الأكواد الخبيثة (XSS)
+   */
+  function sanitizeInput(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+=/gi, '')
+      .trim();
+  }
+  
+  /**
+   * تنظيف كائن payload كامل
+   */
+  function sanitizePayload(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const clean = {};
+    for (const key in obj) {
+      if (typeof obj[key] === 'string') {
+        clean[key] = sanitizeInput(obj[key]);
+      } else if (Array.isArray(obj[key])) {
+        clean[key] = obj[key].map(item => 
+          typeof item === 'string' ? sanitizeInput(item) : 
+          typeof item === 'object' ? sanitizePayload(item) : item
+        );
+      } else if (typeof obj[key] === 'object') {
+        clean[key] = sanitizePayload(obj[key]);
+      } else {
+        clean[key] = obj[key];
+      }
+    }
+    return clean;
+  }
+  
+  /**
+   * التحقق من صحة رقم
+   */
+  function validateNumber(val, min, max, defaultVal) {
+    const num = parseInt(val, 10);
+    if (isNaN(num)) return defaultVal;
+    if (min !== undefined && num < min) return min;
+    if (max !== undefined && num > max) return max;
+    return num;
+  }
+  
+  /**
+   * Rate Limiting - الحد من الطلبات المتكررة
+   * @param {string} identifier - معرف الطلب (IP أو action)
+   * @param {number} limit - الحد الأقصى للطلبات
+   * @param {number} windowSec - نافذة الوقت بالثواني
+   * @returns {boolean} - true إذا مسموح، false إذا محظور
+   */
+  function checkRateLimit(identifier, limit, windowSec) {
+    const cache = CacheService.getScriptCache();
+    const key = 'rl_' + identifier;
+    const now = Math.floor(Date.now() / 1000);
+    
+    let data = cache.get(key);
+    if (!data) {
+      cache.put(key, JSON.stringify({ count: 1, start: now }), windowSec);
+      return true;
+    }
+    
+    const parsed = JSON.parse(data);
+    if (now - parsed.start > windowSec) {
+      cache.put(key, JSON.stringify({ count: 1, start: now }), windowSec);
+      return true;
+    }
+    
+    if (parsed.count >= limit) {
+      return false;
+    }
+    
+    parsed.count++;
+    cache.put(key, JSON.stringify(parsed), windowSec - (now - parsed.start));
+    return true;
+  }
   
   function doPost(e) {
     try {
       const body = JSON.parse(e.postData.contents);
-      const action = body.action;
-      const payload = body.payload || {};
+      const action = sanitizeInput(body.action);
+      const payload = sanitizePayload(body.payload || {});
+      
+      // Rate limiting: 60 طلب في الدقيقة لكل action
+      if (!checkRateLimit(action, 60, 60)) {
+        return ContentService.createTextOutput(JSON.stringify({
+          ok: false,
+          error: 'تم تجاوز الحد الأقصى للطلبات. حاول مرة أخرى بعد دقيقة.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
       
       let result;
       
@@ -58,9 +198,7 @@
         case 'resolveViolation':
           result = resolveViolation(payload);
           break;
-        case 'debug':
-          result = debugInfo();
-          break;
+        // debug action DISABLED for security
         // Committee Meeting APIs
         case 'getMeetingData':
           result = getMeetingData(payload.committee);
@@ -168,89 +306,679 @@
   }
   
   function doGet(e) {
-    const action = e && e.parameter && e.parameter.action;
+    // تجهيز الشيتات تلقائياً
+    ensureEocReady_();
     
-    if (action === 'debug') {
-      const result = debugInfo();
-      return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
+    const p = e && e.parameter ? e.parameter : {};
+    const action = sanitizeInput(p.action);
+    const callback = sanitizeInput(p.callback);
+    
+    // Rate limiting: 100 طلب في الدقيقة
+    if (action && !checkRateLimit('get_' + action, 100, 60)) {
+      const errorObj = { ok: false, error: 'Rate limit exceeded' };
+      const json = JSON.stringify(errorObj);
+      if (callback) {
+        return ContentService.createTextOutput(callback + '(' + json + ');')
+          .setMimeType(ContentService.MimeType.JAVASCRIPT);
+      }
+      return ContentService.createTextOutput(json)
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    if (action === 'submitEmergencyReport') {
-      const result = submitEmergencyReport(e.parameter);
-      return ContentService.createTextOutput(JSON.stringify(result))
+    function output_(obj) {
+      const json = JSON.stringify(obj);
+      if (callback) {
+        const safe = String(callback).replace(/[^\w$.]/g, '');
+        return ContentService.createTextOutput(safe + '(' + json + ');')
+          .setMimeType(ContentService.MimeType.JAVASCRIPT);
+      }
+      return ContentService.createTextOutput(json)
         .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // EOC Config APIs
+    if (action === 'getBuildingConfig') {
+      return output_(getBuildingConfig());
+    }
+    
+    if (action === 'getScenarioGuides') {
+      return output_(getScenarioGuides());
+    }
+    
+    if (action === 'getScenarioProfiles') {
+      return output_(getScenarioProfiles());
+    }
+    
+    if (action === 'getTrainingRoster') {
+      return output_(getTrainingRoster());
+    }
+    
+    if (action === 'logTrainingSession') {
+      return output_(logTrainingSession(p));
+    }
+    
+    if (action === 'saveTrainingSession') {
+      return output_(logTrainingSession(p));
+    }
+    
+    if (action === 'getTrainingSessions') {
+      const out = getTrainingSessions(p);
+      
+      // لو فيه خطأ حقيقي، رجّعه كما هو
+      if (!out || out.ok === false) return output_(out);
+      
+      const sessions = Array.isArray(out.sessions) ? out.sessions : [];
+      const drills = sessions.map(s => ({
+        date: s.date || '',
+        type: s.scenarioLabel || s.scenarioKey || '',
+        result: 'ناجح',
+        trainer: s.trainer || ''
+      }));
+      
+      return output_({ ok: true, sessions, drills, debug: out.debug || '' });
+    }
+    
+    // Aliases (compatibility) - يرجع sessions + drills للتوافق
+    if (action === 'getDrillLog') {
+      const out = getTrainingSessions(p);
+      if (!out || out.ok === false) return output_(out);
+      
+      const sessions = Array.isArray(out.sessions) ? out.sessions : [];
+      const drills = sessions.map(s => ({
+        date: s.date || '',
+        type: s.scenarioLabel || s.scenarioKey || '',
+        result: 'ناجح',
+        trainer: s.trainer || ''
+      }));
+      return output_({ ok: true, sessions, drills, debug: out.debug || '' });
+    }
+    
+    if (action === 'updateEmergencyReportStatus') {
+      return output_(updateEmergencyReportStatus(p));
+    }
+    
+    // debug action DISABLED for security
+    // if (action === 'debug') { ... }
+    
+    if (action === 'submitEmergencyReport') {
+      const result = submitEmergencyReport(p);
+      return output_(result);
     }
     
     if (action === 'getEmergencyReports') {
-      const result = getEmergencyReports();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      const result = getEmergencyReports(p);
+      return output_(result);
     }
     
     if (action === 'updateEmergencyStatus') {
-      const result = updateEmergencyReportStatus(e.parameter);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      const result = updateEmergencyReportStatus(p);
+      return output_(result);
     }
     
     if (action === 'getEmergencyAnalytics') {
       const result = getEmergencyAnalytics();
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      return output_(result);
     }
     
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
-      .setMimeType(ContentService.MimeType.JSON);
+    if (action === 'getEmergencyStaff') {
+      const result = getEmergencyStaff();
+      return output_(result);
+    }
+    
+    if (action === 'setActiveCommand') {
+      const result = setActiveCommand(p);
+      return output_(result);
+    }
+    
+    if (action === 'getActiveCommand') {
+      const result = getActiveCommand();
+      return output_(result);
+    }
+    
+    if (action === 'getRoomCodes') {
+      const result = getRoomCodes();
+      return output_(result);
+    }
+    
+    if (action === 'clearActiveCommand') {
+      const result = clearActiveCommand();
+      return output_(result);
+    }
+
+    if (action === 'closeActiveCommand') {
+      const result = closeActiveCommand(p);
+      return output_(result);
+    }
+    
+    if (action === 'getEocDrills') {
+      const result = getEocDrills(p);
+      return output_(result);
+    }
+    
+    // Readiness Checklist APIs
+    if (action === 'getReadinessDepartments') {
+      const result = getReadinessDepartments();
+      return output_(result);
+    }
+    
+    if (action === 'saveReadinessCheck') {
+      const result = saveReadinessCheck(p);
+      return output_(result);
+    }
+    
+    if (action === 'getReadinessHistory') {
+      const result = getReadinessHistory(p);
+      return output_(result);
+    }
+    
+    // System health check endpoints
+    if (action === 'ping') {
+      return output_({ ok: true, message: 'pong', timestamp: new Date().toISOString() });
+    }
+    
+    if (action === 'systemTest') {
+      const testType = p.testType || 'basic';
+      const testData = p.testData || '';
+      try {
+        if (testType === 'save') {
+          // Test writing to sheet
+          const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+          const sheet = ss.getSheetByName('Training_Log');
+          return output_({ ok: true, testType: 'save', canWrite: !!sheet, timestamp: new Date().toISOString() });
+        }
+        return output_({ ok: true, testType: testType, timestamp: new Date().toISOString() });
+      } catch(e) {
+        return output_({ ok: false, testType: testType, error: e.message });
+      }
+    }
+    
+    return output_({ ok: false, error: 'Unknown action: ' + (action || '') });
   }
   
   // Emergency Report Functions
   // الشيت الرئيسي للطوارئ والإخلاء
   const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
-  
-  function submitEmergencyReport(params) {
+
+  /******************** EOC BOOTSTRAP ********************/
+  const EOC_BOOTSTRAP_VERSION = 2;
+
+  // أسماء الشيتات
+  const SHEET_MAP = 'EOC_MAP';
+  const SHEET_MUSTER = 'EOC_MUSTER';
+  const SHEET_SCENARIOS = 'EOC_SCENARIOS';
+  const SHEET_ROSTER = 'Training_Roster';
+  const SHEET_TRAINING_LOG = 'Training_Log';
+  const SHEET_ACTIVE_CMD = 'أوامر_نشطة';
+  const SHEET_PROFILE = 'EOC_PROFILE';
+
+  // هيدرز
+  const HEADERS_MAP = ['floor_order','floor_key','floor_name','dept_id','dept_name','dept_icon','active'];
+  const HEADERS_MUSTER = ['key','name','description','active'];
+  const HEADERS_SCEN = ['scenario_key','scenario_label','bucket','step_no','icon','text','active'];
+  const HEADERS_ROSTER = ['name','department','role','active'];
+  const HEADERS_TRAINING = ['session_id','date','start_time','end_time','duration_min','scenario_key','scenario_label','trainer','attendees','notes'];
+  const HEADERS_ACTIVE = ['active','responseType','reportType','location','muster','timestamp','mode','scenarioKey','scenarioLabel','sessionId','trainer'];
+  const HEADERS_PROFILE = ['scenario_key','scenario_label','icon','color','default_responseType','body_class','active'];
+
+  function ensureEocReady_() {
+    const props = PropertiesService.getScriptProperties();
+    const v = Number(props.getProperty('EOC_BOOTSTRAP_VERSION') || '0');
+    if (v === EOC_BOOTSTRAP_VERSION) return;
+
+    setupEocWorkbook_();
+    props.setProperty('EOC_BOOTSTRAP_VERSION', String(EOC_BOOTSTRAP_VERSION));
+  }
+
+  function setupEocWorkbook_() {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+
+    const shMap = ensureSheet_(ss, SHEET_MAP, HEADERS_MAP);
+    const shMuster = ensureSheet_(ss, SHEET_MUSTER, HEADERS_MUSTER);
+    const shScen = ensureSheet_(ss, SHEET_SCENARIOS, HEADERS_SCEN);
+    const shProfile = ensureSheet_(ss, SHEET_PROFILE, HEADERS_PROFILE);
+    ensureSheet_(ss, SHEET_ROSTER, HEADERS_ROSTER);
+    ensureSheet_(ss, SHEET_TRAINING_LOG, HEADERS_TRAINING);
+    ensureSheet_(ss, SHEET_ACTIVE_CMD, HEADERS_ACTIVE);
+
+    if (shMap.getLastRow() === 1) seedMap_(shMap);
+    if (shMuster.getLastRow() === 1) {
+      shMuster.appendRow(['A','نقطة تجمع A','الموقف الأمامي','نعم']);
+      shMuster.appendRow(['B','نقطة تجمع B','الساحة الخلفية','نعم']);
+    }
+    if (shScen.getLastRow() === 1) seedScenarios_(shScen);
+    if (shProfile.getLastRow() === 1) seedProfiles_(shProfile);
+  }
+
+  function seedProfiles_(sh) {
+    const rows = [
+      ['fire','حريق','fa-fire','#ef4444','full_evacuation','fire','نعم'],
+      ['power','انقطاع كهرباء','fa-bolt','#f59e0b','send_team','power','نعم'],
+      ['water','تسرب مياه','fa-tint','#0ea5e9','send_team','water','نعم'],
+      ['injury','إغماء/إصابة','fa-heartbeat','#dc2626','send_team','injury','نعم'],
+      ['outbreak','تفشي عدوى','fa-virus','#8b5cf6','isolation_evacuation','infection','نعم'],
+    ];
+    sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+  }
+
+  function ensureSheet_(ss, name, headers) {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return sh;
+  }
+
+  function seedMap_(sh) {
+    const rows = [
+      [2,'2','الدور الثاني','dental','الأسنان','fa-tooth','نعم'],
+      [2,'2','الدور الثاني','internal2','الباطنية 2','fa-stethoscope','نعم'],
+      [2,'2','الدور الثاني','internal3','الباطنية 3','fa-stethoscope','نعم'],
+      [1,'1','الدور الأول','reception','الاستقبال','fa-concierge-bell','نعم'],
+      [1,'1','الدور الأول','internal1','الباطنية','fa-stethoscope','نعم'],
+      [1,'1','الدور الأول','ortho','العظام','fa-bone','نعم'],
+      [1,'1','الدور الأول','emergency','الطوارئ','fa-ambulance','نعم'],
+      [1,'1','الدور الأول','general','الطب العام','fa-user-md','نعم'],
+      [1,'1','الدور الأول','dressing','الضماد','fa-band-aid','نعم'],
+      [1,'1','الدور الأول','obgyn','النساء والولادة','fa-baby','نعم'],
+      [1,'1','الدور الأول','menreception','استقبال رجال','fa-male','نعم'],
+      [1,'1','الدور الأول','womenreception','استقبال نساء','fa-female','نعم'],
+      [0,'0','الدور الأرضي','lab','المختبر','fa-flask','نعم'],
+      [0,'0','الدور الأرضي','admin','مكاتب إدارية','fa-building','نعم'],
+      [0,'0','الدور الأرضي','physio','العلاج الطبيعي','fa-walking','نعم'],
+      [0,'0','الدور الأرضي','xray','الأشعة','fa-x-ray','نعم'],
+      [0,'0','الدور الأرضي','ultrasound','الألتراساوند','fa-wave-square','نعم'],
+    ];
+    sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+  }
+
+  function seedScenarios_(sh) {
+    const rows = [
+      ['fire','حريق','DO',1,'fa-bolt','أبعد الأشخاص من الخطر فورًا.','نعم'],
+      ['fire','حريق','DO',2,'fa-bell','فعّل الإنذار واتبع مسار الإخلاء.','نعم'],
+      ['fire','حريق','DO',3,'fa-door-closed','أغلق الأبواب لاحتواء الدخان.','نعم'],
+      ['fire','حريق','DONT',1,'fa-elevator','لا تستخدم المصاعد.','نعم'],
+      ['fire','حريق','DONT',2,'fa-hand','لا تفتح بابًا ساخنًا.','نعم'],
+      ['power','انقطاع كهرباء','DO',1,'fa-battery-full','ثبّت الأجهزة الحرجة على UPS/بطاريات.','نعم'],
+      ['power','انقطاع كهرباء','DO',2,'fa-tools','بلّغ الصيانة وEOC لتأكيد تشغيل المولد.','نعم'],
+      ['power','انقطاع كهرباء','DONT',1,'fa-plug','لا تشغّل أحمال إضافية بدون توجيه.','نعم'],
+      ['water','تسرب مياه','DO',1,'fa-triangle-exclamation','أبعد الناس عن منطقة التسرب.','نعم'],
+      ['water','تسرب مياه','DO',2,'fa-bolt','افصل الكهرباء عن المنطقة إن لزم.','نعم'],
+      ['water','تسرب مياه','DONT',1,'fa-plug-circle-xmark','لا تلمس مقابس/أسلاك قرب الماء.','نعم'],
+      ['injury','إغماء/إصابة','DO',1,'fa-user-check','أمّن المكان وافحص الاستجابة والتنفس.','نعم'],
+      ['injury','إغماء/إصابة','DO',2,'fa-phone','اطلب المساعدة وأحضر AED إن توفر.','نعم'],
+      ['injury','إغماء/إصابة','DONT',1,'fa-arrows-up-down-left-right','لا تحرك المصاب مع اشتباه العمود الفقري.','نعم'],
+      ['outbreak','تفشي عدوى','DO',1,'fa-lock','عزل فوري للحالة/المنطقة وتقييد الدخول.','نعم'],
+      ['outbreak','تفشي عدوى','DO',2,'fa-mask-face','استخدم معدات الوقاية المناسبة.','نعم'],
+      ['outbreak','تفشي عدوى','DONT',1,'fa-people-group','لا تسمح بتجمعات داخل منطقة العزل.','نعم'],
+    ];
+    sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+  }
+  /******************** END BOOTSTRAP ********************/
+
+  /******************** EOC CONFIG APIs ********************/
+  function getBuildingConfig() {
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
-      let sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      // Create sheet if not exists
-      if (!sheet) {
-        sheet = ss.insertSheet('بلاغات_الطوارئ');
-        sheet.appendRow(['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الكارثة', 'الموقع', 'ملاحظات', 'الحالة']);
+      const mapSh = ss.getSheetByName(SHEET_MAP);
+      const mustSh = ss.getSheetByName(SHEET_MUSTER);
+      const map = mapSh ? mapSh.getDataRange().getValues() : [];
+      const mus = mustSh ? mustSh.getDataRange().getValues() : [];
+
+      const floorsByKey = {};
+      for (let i=1; i<map.length; i++){
+        const r = map[i];
+        const active = String(r[6]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        const floorOrder = Number(r[0]);
+        const floorKey = String(r[1]||'').trim();
+        const floorName = String(r[2]||'').trim();
+        const deptId = String(r[3]||'').trim();
+        const deptName = String(r[4]||'').trim();
+        const deptIcon = String(r[5]||'').trim();
+        const k = floorKey || String(floorOrder);
+        if (!floorsByKey[k]) floorsByKey[k] = { floorOrder, floorKey: k, floorName, departments: [] };
+        floorsByKey[k].departments.push({ id: deptId, name: deptName, icon: deptIcon });
       }
-      
-      sheet.appendRow([
-        params.reportId || 'EMR-' + Date.now(),
-        params.date || new Date().toLocaleDateString('ar-SA'),
-        params.time || new Date().toLocaleTimeString('ar-SA'),
-        params.disasterType,
-        params.location,
-        params.notes || '',
-        'جديد'
-      ]);
-      
-      return { ok: true, reportId: params.reportId };
+      const floors = Object.values(floorsByKey).sort((a,b)=>b.floorOrder-a.floorOrder);
+
+      const muster = [];
+      for (let i=1; i<mus.length; i++){
+        const r = mus[i];
+        const active = String(r[3]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        muster.push({ key: String(r[0]||'').trim(), name: String(r[1]||'').trim(), desc: String(r[2]||'').trim() });
+      }
+      return { ok:true, floors, muster };
+    } catch(err){ return { ok:false, error: err.message }; }
+  }
+
+  function getScenarioGuides() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName(SHEET_SCENARIOS);
+      const data = sh ? sh.getDataRange().getValues() : [];
+      const out = {};
+      for (let i=1; i<data.length; i++){
+        const r = data[i];
+        const active = String(r[6]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        const key = String(r[0]||'').trim();
+        const label = String(r[1]||'').trim();
+        const bucket = String(r[2]||'').trim();
+        const stepNo = Number(r[3]||0);
+        const icon = String(r[4]||'').trim();
+        const text = String(r[5]||'').trim();
+        if (!out[key]) out[key] = { key, label, DO: [], DONT: [] };
+        out[key].label = label;
+        out[key][bucket] = out[key][bucket] || [];
+        out[key][bucket].push({ stepNo, icon, text });
+      }
+      Object.values(out).forEach(s=>{
+        if (s.DO) s.DO.sort((a,b)=>a.stepNo-b.stepNo);
+        if (s.DONT) s.DONT.sort((a,b)=>a.stepNo-b.stepNo);
+      });
+      return { ok:true, scenarios: out };
+    } catch(err){ return { ok:false, error: err.message }; }
+  }
+
+  function getEmergencyStaff() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName('Staff');
+      if (!sh) return { ok: true, staff: [] };
+
+      const data = sh.getDataRange().getValues();
+      const staff = [];
+      for (let i = 1; i < data.length; i++) {
+        const name = String(data[i][0] || '').trim();
+        const phone = String(data[i][1] || '').trim();
+        if (name && phone) {
+          staff.push({ name, phone });
+        }
+      }
+      return { ok: true, staff };
+    } catch (err) {
+      return { ok: false, error: err.message, staff: [] };
+    }
+  }
+
+  function getScenarioProfiles() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName(SHEET_PROFILE);
+      if (!sh) return { ok: true, profiles: {} };
+
+      const data = sh.getDataRange().getValues();
+      const profiles = {};
+      for (let i = 1; i < data.length; i++) {
+        const r = data[i];
+        const active = String(r[6] || '').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+
+        const key = String(r[0] || '').trim();
+        if (!key) continue;
+
+        profiles[key] = {
+          scenarioKey: key,
+          scenarioLabel: String(r[1] || '').trim(),
+          icon: String(r[2] || '').trim(),
+          color: String(r[3] || '').trim(),
+          defaultResponseType: String(r[4] || '').trim(),
+          bodyClass: String(r[5] || '').trim(),
+        };
+      }
+      return { ok: true, profiles };
     } catch (err) {
       return { ok: false, error: err.message };
     }
   }
+
+  function getTrainingRoster() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      let sh = ss.getSheetByName(SHEET_ROSTER);
+
+      // إذا لم يوجد أو فارغ، حاول الاستيراد من Staff
+      if (!sh || sh.getLastRow() <= 1) {
+        importRosterFromStaff_(ss);
+        sh = ss.getSheetByName(SHEET_ROSTER);
+      }
+
+      if (!sh) return { ok: true, roster: [] };
+      const data = sh.getDataRange().getValues();
+      const roster = [];
+      for (let i=1; i<data.length; i++){
+        const r = data[i];
+        const active = String(r[3]||'').trim();
+        if (active && active !== 'نعم' && active.toLowerCase() !== 'yes' && active !== 'true' && active !== '1') continue;
+        roster.push({ name: String(r[0]||'').trim(), department: String(r[1]||'').trim(), role: String(r[2]||'').trim() });
+      }
+      return { ok: true, roster };
+    } catch(err){ return { ok: false, error: err.message }; }
+  }
+
+  /** استيراد قائمة المتدربين من شيت Staff إذا كان Training_Roster فارغاً */
+  function importRosterFromStaff_(ss) {
+    try {
+      const staffSh = ss.getSheetByName('Staff');
+      if (!staffSh || staffSh.getLastRow() <= 1) return;
+
+      let rosterSh = ss.getSheetByName(SHEET_ROSTER);
+      if (!rosterSh) {
+        rosterSh = ss.insertSheet(SHEET_ROSTER);
+        rosterSh.getRange(1,1,1,4).setValues([['الاسم', 'القسم', 'الدور', 'نشط']]);
+      }
+
+      // اقرأ Staff (A=اسم، B=رقم/قسم)
+      const staffData = staffSh.getDataRange().getValues();
+      const rows = [];
+      for (let i = 1; i < staffData.length; i++) {
+        const name = String(staffData[i][0] || '').trim();
+        const dept = String(staffData[i][1] || '').trim();
+        if (name) {
+          rows.push([name, dept, '', 'نعم']);
+        }
+      }
+
+      if (rows.length > 0) {
+        rosterSh.getRange(2, 1, rows.length, 4).setValues(rows);
+      }
+    } catch (e) {
+      Logger.log('importRosterFromStaff_ error: ' + e.message);
+    }
+  }
+
+  function durationToMinutes_(v) {
+    if (v === null || v === undefined || v === '') return 0;
+    const n = Number(v);
+    if (!isNaN(n) && n >= 0) return Math.round(n);
+    const m = String(v).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) return 0;
+    const hh = Number(m[1] || 0);
+    const mm = Number(m[2] || 0);
+    const ss = Number(m[3] || 0);
+    return Math.max(0, Math.round((hh * 3600 + mm * 60 + ss) / 60));
+  }
+
+  function logTrainingSession(params) {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      let sh = ss.getSheetByName(SHEET_TRAINING_LOG);
+      if (!sh) {
+        sh = ss.insertSheet(SHEET_TRAINING_LOG);
+        sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
+      }
+
+      // تأكد من وجود الهيدرز
+      const lastRow = sh.getLastRow();
+      if (lastRow === 0 || lastRow === 1) {
+        sh.getRange(1,1,1,HEADERS_TRAINING.length).setValues([HEADERS_TRAINING]);
+      }
+
+      const tz = 'Asia/Riyadh';
+      const now = new Date();
+
+      const sessionId = String(params.session_id || params.sessionId || ('TRN-' + now.getTime()));
+      const startIso = String(params.startIso || '');
+      const endIso = String(params.endIso || '');
+
+      const startDate = startIso ? new Date(startIso) : now;
+      const endDate = endIso ? new Date(endIso) : now;
+
+      const dateStr = Utilities.formatDate(startDate, tz, 'yyyy-MM-dd');
+      const startTime = String(params.start_time || params.startTime || Utilities.formatDate(startDate, tz, 'HH:mm'));
+      const endTime = String(params.end_time || params.endTime || Utilities.formatDate(endDate, tz, 'HH:mm'));
+
+      let durationMin = durationToMinutes_(params.duration_min || params.durationMin || params.duration);
+      if (!durationMin && startIso && endIso) {
+        durationMin = Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
+      }
+
+      sh.appendRow([
+        sessionId,
+        dateStr,
+        startTime,
+        endTime,
+        durationMin,
+        String(params.scenarioKey || ''),
+        String(params.scenarioLabel || ''),
+        String(params.trainer || ''),
+        String(params.attendees || ''),
+        String(params.notes || '')
+      ]);
+
+      SpreadsheetApp.flush();
+      return { ok: true, sessionId };
+    } catch(err) {
+      return { ok: false, error: err.message };
+    } finally {
+      try { lock.releaseLock(); } catch(e) {}
+    }
+  }
+
+  function getTrainingSessions(params) {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sh = ss.getSheetByName(SHEET_TRAINING_LOG);
+      if (!sh) return { ok: true, sessions: [], debug: 'Sheet not found' };
+
+      const lastRow = sh.getLastRow();
+      if (lastRow <= 1) return { ok: true, sessions: [], debug: 'No data rows (lastRow=' + lastRow + ')' };
+
+      const data = sh.getRange(2, 1, lastRow - 1, 10).getValues();
+      const sessions = [];
+
+      const limit = Math.min(Number(params.limit) || 50, 300);
+      const startDate = String(params.startDate || '').trim();
+      const endDate = String(params.endDate || '').trim();
+
+      for (let i = data.length - 1; i >= 0 && sessions.length < limit; i--) {
+        const r = data[i];
+        if (!r[0]) continue;
+        
+        let dateVal = r[1];
+        let d = '';
+        if (dateVal instanceof Date) {
+          d = Utilities.formatDate(dateVal, 'Asia/Riyadh', 'yyyy-MM-dd');
+        } else {
+          d = String(dateVal || '').trim();
+        }
+
+        if (startDate && d < startDate) continue;
+        if (endDate && d > endDate) continue;
+
+        // Format time values properly
+        let startTime = r[2];
+        let endTime = r[3];
+        
+        if (startTime instanceof Date) {
+          startTime = Utilities.formatDate(startTime, 'Asia/Riyadh', 'hh:mm a');
+        } else {
+          startTime = String(startTime || '');
+        }
+        
+        if (endTime instanceof Date) {
+          endTime = Utilities.formatDate(endTime, 'Asia/Riyadh', 'hh:mm a');
+        } else {
+          endTime = String(endTime || '');
+        }
+        
+        sessions.push({
+          sessionId: String(r[0] || ''),
+          date: d,
+          startTime: startTime,
+          endTime: endTime,
+          durationMin: Number(r[4] || 0),
+          scenarioKey: String(r[5] || ''),
+          scenarioLabel: String(r[6] || ''),
+          trainer: String(r[7] || ''),
+          attendees: String(r[8] || ''),
+          notes: String(r[9] || '')
+        });
+      }
+
+      return { ok: true, sessions, debug: 'Found ' + data.length + ' rows, returned ' + sessions.length + ' sessions' };
+    } catch(err){ return { ok: false, error: err.message, sessions: [] }; }
+  }
+  /******************** END EOC CONFIG APIs ********************/
   
-  function getEmergencyReports() {
+  function submitEmergencyReport(params) {
+    try {
+      const lock = LockService.getScriptLock();
+      lock.tryLock(10000);
+
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      let sheet = ss.getSheetByName('بلاغات_الطوارئ');
+
+      if (!sheet) {
+        sheet = ss.insertSheet('بلاغات_الطوارئ');
+        sheet.appendRow(['رقم البلاغ', 'التاريخ', 'الوقت', 'نوع الكارثة', 'الموقع', 'ملاحظات', 'الحالة', 'المستجيب', 'إجراءات']);
+      }
+
+      const now = new Date();
+      const reportId = String(params.reportId || ('EMR-' + now.getTime()));
+
+      // تخزين ثابت يسهل الفرز والتحليل
+      const dateStr = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM-dd');
+      const timeStr = Utilities.formatDate(now, 'Asia/Riyadh', 'HH:mm:ss');
+
+      // حماية من Formula Injection
+      sheet.appendRow(safeCellArray_([
+        reportId,
+        dateStr,
+        timeStr,
+        String(params.disasterType || '').trim(),
+        String(params.location || '').trim(),
+        String(params.notes || '').trim(),
+        'جديد',
+        '',
+        ''
+      ]));
+
+      lock.releaseLock();
+      return { ok: true, reportId };
+
+    } catch (err) {
+      try { LockService.getScriptLock().releaseLock(); } catch(e) {}
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function getEmergencyReports(params) {
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       const sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      if (!sheet) {
-        return { ok: true, reports: [] };
-      }
-      
+      if (!sheet) return { ok: true, reports: [] };
+
       const data = sheet.getDataRange().getValues();
-      if (data.length < 2) {
-        return { ok: true, reports: [] };
-      }
-      
+      if (data.length < 2) return { ok: true, reports: [] };
+
+      const limit = Math.min(parseInt((params && params.limit) || '20', 10) || 20, 200);
+
       const reports = [];
-      for (let i = data.length - 1; i >= 1; i--) {
+      for (let i = data.length - 1; i >= 1 && reports.length < limit; i--) {
         reports.push({
           id: data[i][0],
           date: data[i][1],
@@ -261,8 +989,8 @@
           status: data[i][6] || 'جديد'
         });
       }
-      
-      return { ok: true, reports: reports.slice(0, 20) };
+      return { ok: true, reports };
+
     } catch (err) {
       return { ok: false, error: err.message, reports: [] };
     }
@@ -272,41 +1000,28 @@
     try {
       const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
       const sheet = ss.getSheetByName('بلاغات_الطوارئ');
-      
-      if (!sheet) {
-        return { ok: false, error: 'Sheet not found' };
-      }
-      
+      if (!sheet) return { ok: false, error: 'Sheet not found' };
+
       const data = sheet.getDataRange().getValues();
       let rowIndex = -1;
-      
+
       for (let i = 1; i < data.length; i++) {
-        if (data[i][0] === params.reportId) {
+        if (String(data[i][0]) === String(params.reportId)) {
           rowIndex = i + 1;
           break;
         }
       }
-      
-      if (rowIndex === -1) {
-        return { ok: false, error: 'Report not found' };
-      }
-      
-      sheet.getRange(rowIndex, 7).setValue(params.status);
-      
-      if (params.responder) {
-        if (sheet.getLastColumn() < 8) {
-          sheet.getRange(1, 8).setValue('المستجيب');
-        }
-        sheet.getRange(rowIndex, 8).setValue(params.responder);
-      }
-      
-      if (params.actionNotes) {
-        if (sheet.getLastColumn() < 9) {
-          sheet.getRange(1, 9).setValue('إجراءات');
-        }
-        sheet.getRange(rowIndex, 9).setValue(params.actionNotes);
-      }
-      
+      if (rowIndex === -1) return { ok: false, error: 'Report not found' };
+
+      sheet.getRange(rowIndex, 7).setValue(String(params.status || '').trim());
+
+      // responder = col 8, actionNotes = col 9
+      if (sheet.getLastColumn() < 8) sheet.getRange(1, 8).setValue('المستجيب');
+      if (sheet.getLastColumn() < 9) sheet.getRange(1, 9).setValue('إجراءات');
+
+      if (params.responder) sheet.getRange(rowIndex, 8).setValue(String(params.responder).trim());
+      if (params.actionNotes) sheet.getRange(rowIndex, 9).setValue(String(params.actionNotes).trim());
+
       return { ok: true, message: 'Status updated successfully' };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -374,6 +1089,222 @@
       return { ok: true, analytics: analytics };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  }
+  
+  // Active Command Functions for Emergency Display Screen
+  function isTrueFlag_(v) {
+    const s = String(v).toLowerCase().trim();
+    return v === true || s === 'true' || s === 'yes' || s === '1';
+  }
+
+  function setActiveCommand(params) {
+    ensureEocReady_();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      let sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) sheet = ss.insertSheet(SHEET_ACTIVE_CMD);
+
+      sheet.getRange(1, 1, 1, HEADERS_ACTIVE.length).setValues([HEADERS_ACTIVE]);
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) sheet.deleteRows(2, lastRow - 1);
+
+      sheet.appendRow([
+        true,
+        params.responseType || '',
+        params.reportType || '',
+        params.location || '',
+        params.muster || '',
+        new Date().toISOString(),
+        params.mode || 'real',
+        params.scenarioKey || '',
+        params.scenarioLabel || '',
+        params.sessionId || '',
+        params.trainer || ''
+      ]);
+
+      SpreadsheetApp.flush();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  function getActiveCommand() {
+    ensureEocReady_();
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) return { ok: true, command: null };
+
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) return { ok: true, command: null };
+
+      const row = data[1];
+      if (!isTrueFlag_(row[0])) return { ok: true, command: null };
+
+      return {
+        ok: true,
+        command: {
+          active: true,
+          responseType: row[1] || '',
+          reportType: row[2] || '',
+          location: row[3] || '',
+          muster: row[4] || '',
+          timestamp: row[5] || '',
+          mode: row[6] || 'real',
+          scenarioKey: row[7] || '',
+          scenarioLabel: row[8] || '',
+          sessionId: row[9] || '',
+          trainer: row[10] || ''
+        }
+      };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function clearActiveCommand() {
+    ensureEocReady_();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) return { ok: true };
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return { ok: true };
+
+      sheet.getRange(2, 1).setValue(false);
+      SpreadsheetApp.flush();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /** إغلاق رسمي للأمر النشط مع تسجيل من أغلق ولماذا */
+  function closeActiveCommand(params) {
+    ensureEocReady_();
+    const closedBy = String(params.closedBy || '').trim();
+    if (!closedBy) return { ok: false, error: 'closedBy is required' };
+
+    const closeReason = String(params.closeReason || '').trim();
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(SHEET_ACTIVE_CMD);
+      if (!sheet) return { ok: false, error: 'No active command sheet' };
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return { ok: false, error: 'No active command' };
+
+      const data = sheet.getDataRange().getValues();
+      const row = data[1];
+      if (!isTrueFlag_(row[0])) return { ok: false, error: 'No active command' };
+
+      // Set active to false
+      sheet.getRange(2, 1).setValue(false);
+
+      // Log closure to Training_Log if it was a training, or to emergency reports log
+      const mode = String(row[6] || 'real').toLowerCase();
+      const endTs = new Date().toISOString();
+
+      // Try to log in EOC_COMMAND_LOG if exists
+      let logSh = ss.getSheetByName('EOC_COMMAND_LOG');
+      if (!logSh) {
+        logSh = ss.insertSheet('EOC_COMMAND_LOG');
+        logSh.getRange(1,1,1,8).setValues([['timestamp', 'action', 'mode', 'responseType', 'location', 'closedBy', 'closeReason', 'notes']]);
+      }
+
+      logSh.appendRow([
+        endTs,
+        'close',
+        mode,
+        String(row[1] || ''),
+        String(row[3] || ''),
+        closedBy,
+        closeReason,
+        mode === 'training' ? 'إيقاف تمرين' : 'إلغاء طوارئ'
+      ]);
+
+      SpreadsheetApp.flush();
+      return { ok: true, closedAt: endTs };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  
+  function getEocDrills(params) {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('EOC_DRILLS');
+      
+      if (!sheet) {
+        return { ok: true, drills: [] };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        return { ok: true, drills: [] };
+      }
+      
+      const limit = Math.min(parseInt(params.limit || '10', 10), 100);
+      const drills = [];
+      
+      for (let i = data.length - 1; i >= 1 && drills.length < limit; i--) {
+        drills.push({
+          date: data[i][0] || '',
+          type: data[i][1] || '',
+          result: data[i][2] || 'ناجح'
+        });
+      }
+      
+      return { ok: true, drills: drills };
+    } catch (err) {
+      return { ok: false, error: err.message, drills: [] };
+    }
+  }
+  
+  function getRoomCodes() {
+    try {
+      const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('Rooms');
+      
+      if (!sheet) {
+        return { ok: true, rooms: [] };
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        return { ok: true, rooms: [] };
+      }
+      
+      const rooms = [];
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0]) {
+          rooms.push({
+            code: String(data[i][0]),
+            name: String(data[i][1] || '')
+          });
+        }
+      }
+      
+      return { ok: true, rooms: rooms };
+    } catch (err) {
+      return { ok: false, error: err.message, rooms: [] };
     }
   }
   
@@ -2662,5 +3593,179 @@
       .sort((a, b) => new Date(b.date) - new Date(a.date));
     
     return { history };
+  }
+  
+  /******************************************************
+   * قائمة فحص جاهزية الطوارئ - Readiness Checklist
+   ******************************************************/
+  
+  function ensureReadinessSheets_() {
+    const ss = SpreadsheetApp.openById(EOC_SPREADSHEET_ID);
+    
+    // EOC_DEPARTMENTS sheet
+    let deptSheet = ss.getSheetByName('EOC_DEPARTMENTS');
+    if (!deptSheet) {
+      deptSheet = ss.insertSheet('EOC_DEPARTMENTS');
+      deptSheet.appendRow(['ID', 'Name', 'Floor', 'Active']);
+      // Default departments
+      const defaultDepts = [
+        ['reception', 'الاستقبال', 'الأول', 'TRUE'],
+        ['batiniya1', 'الباطنية 1', 'الثاني', 'TRUE'],
+        ['batiniya2', 'الباطنية 2', 'الثاني', 'TRUE'],
+        ['batiniya3', 'الباطنية 3', 'الثاني', 'TRUE'],
+        ['dental', 'الأسنان', 'الثاني', 'TRUE'],
+        ['emergency', 'الطوارئ', 'الأول', 'TRUE'],
+        ['general', 'الطب العام', 'الأول', 'TRUE'],
+        ['lab', 'المختبر', 'الأول', 'TRUE'],
+        ['pharmacy', 'الصيدلية', 'الأول', 'TRUE'],
+        ['nursery', 'النساء والولادة', 'الأول', 'TRUE'],
+        ['mens', 'استقبال رجال', 'الأول', 'TRUE'],
+        ['admin', 'الإدارة', 'الثاني', 'TRUE']
+      ];
+      defaultDepts.forEach(row => deptSheet.appendRow(row));
+    }
+    
+    // EOC_READINESS sheet
+    let readinessSheet = ss.getSheetByName('EOC_READINESS');
+    if (!readinessSheet) {
+      readinessSheet = ss.insertSheet('EOC_READINESS');
+      readinessSheet.appendRow([
+        'ID', 'Check_Date', 'Department_ID', 'Department_Name',
+        'Exits', 'Lights', 'Extinguishers', 'FirstAid', 'Alarm',
+        'Last_Check', 'Responsible', 'Notes', 'Created_At', 'Created_By'
+      ]);
+    }
+    
+    return { deptSheet, readinessSheet };
+  }
+  
+  function getReadinessDepartments() {
+    try {
+      const { deptSheet } = ensureReadinessSheets_();
+      const data = deptSheet.getDataRange().getValues();
+      
+      if (data.length <= 1) {
+        return { ok: true, departments: [] };
+      }
+      
+      const headers = data[0];
+      const departments = [];
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const active = String(row[3]).toUpperCase() === 'TRUE';
+        if (active) {
+          departments.push({
+            id: row[0],
+            name: row[1],
+            floor: row[2]
+          });
+        }
+      }
+      
+      return { ok: true, departments };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function saveReadinessCheck(params) {
+    try {
+      const { readinessSheet } = ensureReadinessSheets_();
+      const checkDate = params.checkDate || new Date().toISOString().split('T')[0];
+      const createdAt = new Date().toISOString();
+      const createdBy = params.createdBy || 'النظام';
+      const data = params.data ? JSON.parse(params.data) : {};
+      
+      // حفظ صف لكل قسم
+      let savedCount = 0;
+      for (const [deptId, checks] of Object.entries(data)) {
+        const id = `RC-${Date.now()}-${savedCount}`;
+        readinessSheet.appendRow([
+          id,
+          checkDate,
+          deptId,
+          checks.deptName || deptId,
+          checks.exits || '',
+          checks.lights || '',
+          checks.extinguishers || '',
+          checks.firstaid || '',
+          checks.alarm || '',
+          checks.lastCheck || '',
+          checks.responsible || '',
+          checks.notes || '',
+          createdAt,
+          createdBy
+        ]);
+        savedCount++;
+      }
+      
+      return { ok: true, message: 'تم حفظ ' + savedCount + ' سجل بنجاح', savedCount };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+  
+  function getReadinessHistory(params) {
+    try {
+      const { readinessSheet } = ensureReadinessSheets_();
+      const data = readinessSheet.getDataRange().getValues();
+      
+      if (data.length <= 1) {
+        return { ok: true, history: [], dates: [] };
+      }
+      
+      const headers = data[0];
+      const records = [];
+      const datesSet = new Set();
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const checkDate = row[1];
+        datesSet.add(checkDate);
+        
+        records.push({
+          id: row[0],
+          checkDate: checkDate,
+          departmentId: row[2],
+          departmentName: row[3],
+          exits: row[4],
+          lights: row[5],
+          extinguishers: row[6],
+          firstaid: row[7],
+          alarm: row[8],
+          lastCheck: row[9],
+          responsible: row[10],
+          notes: row[11],
+          createdAt: row[12]
+        });
+      }
+      
+      // ترتيب حسب التاريخ (الأحدث أولاً)
+      records.sort((a, b) => new Date(b.checkDate) - new Date(a.checkDate));
+      
+      // تجميع حسب التاريخ
+      const groupedByDate = {};
+      records.forEach(rec => {
+        if (!groupedByDate[rec.checkDate]) {
+          groupedByDate[rec.checkDate] = [];
+        }
+        groupedByDate[rec.checkDate].push(rec);
+      });
+      
+      const dates = Array.from(datesSet).sort((a, b) => new Date(b) - new Date(a));
+      
+      // إرجاع آخر 50 سجل فقط
+      const limit = params.limit ? parseInt(params.limit) : 50;
+      
+      return { 
+        ok: true, 
+        history: records.slice(0, limit),
+        groupedByDate,
+        dates: dates.slice(0, 30)
+      };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   }
   
