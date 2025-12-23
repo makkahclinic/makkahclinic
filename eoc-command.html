@@ -2095,6 +2095,7 @@
     }
 
     let alarmPlaying = false;
+    let alarmSuppressed = false; // منع تشغيل الصوت مؤقتاً بعد الإنهاء
     
     function setStatusAlert(on, label, hasOpenReport = false){
       const el = document.getElementById('systemStatus');
@@ -2104,7 +2105,8 @@
         el.innerHTML = `<i class="fas fa-stop-circle"></i><span>${escapeHtml(label || 'إلغاء حالة الطوارئ')}</span>`;
         
         // تشغيل صوت الإنذار المستمر عند وجود بلاغ مفتوح
-        if (hasOpenReport && !alarmPlaying) {
+        // لا تشغّل الصوت إذا كان مُمنعاً مؤقتاً (بعد الإنهاء)
+        if (hasOpenReport && !alarmPlaying && !alarmSuppressed) {
           playAlarmSound();
           alarmPlaying = true;
         }
@@ -2364,11 +2366,18 @@
 
         if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
 
+        // منع تشغيل الصوت مؤقتاً
+        alarmSuppressed = true;
         stopAlarmSound();
+        alarmPlaying = false;
+        
         closeCloseEmergencyModal();
         toast(CEM_IS_TRAINING ? 'تم إيقاف التمرين' : 'تم إنهاء حالة الطوارئ', 'success');
         await syncActiveCommandUI();
         await refreshLists();
+        
+        // إعادة تفعيل الصوت بعد 3 ثواني (للبلاغات الجديدة فقط)
+        setTimeout(() => { alarmSuppressed = false; }, 3000);
       } catch (e) {
         console.error(e);
         toast('فشل الإنهاء — تأكد من إضافة closeActiveCommand في Apps Script', 'error');
