@@ -485,9 +485,113 @@
         .emergency-popup-sound {
             position: absolute;
         }
+        
+        /* نافذة روابط الطوارئ QR */
+        .qr-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 9998;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .qr-modal-overlay.show { display: flex; }
+        .qr-modal {
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f1f33 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 800px;
+            width: 95%;
+            position: relative;
+            border: 2px solid rgba(201,169,98,0.3);
+        }
+        .qr-modal h2 { color: white !important; }
+        .qr-modal-close {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .qr-modal-close:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+        .qr-cards-container {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .qr-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-decoration: none;
+            color: white;
+            transition: all 0.3s;
+            min-width: 180px;
+        }
+        .qr-card:hover { transform: translateY(-5px); }
+        .qr-card.qr-red { background: rgba(220,38,38,0.5); border: 2px solid rgba(220,38,38,0.8); }
+        .qr-card.qr-green { background: rgba(16,185,129,0.5); border: 2px solid rgba(16,185,129,0.8); }
+        .qr-card img {
+            width: 150px;
+            height: 150px;
+            border-radius: 10px;
+            background: white;
+            padding: 8px;
+            margin-bottom: 1rem;
+        }
+        .qr-label {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+        }
+        .qr-card small { opacity: 0.8; font-size: 0.85rem; }
     </style>
 </head>
 <body>
+    <!-- نافذة روابط الطوارئ QR -->
+    <div class="qr-modal-overlay" id="qrCodesModal">
+        <div class="qr-modal">
+            <button class="qr-modal-close" onclick="closeQrCodesModal()">&times;</button>
+            <h2 style="text-align:center; color:#1e3a5f; margin-bottom:1.5rem;">
+                <i class="fas fa-qrcode"></i> روابط الطوارئ
+            </h2>
+            <div class="qr-cards-container">
+                <a href="emergency-report.html" target="_blank" class="qr-card qr-red">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/emergency-report.html" alt="QR">
+                    <div class="qr-label">
+                        <i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ
+                    </div>
+                    <small>نموذج البلاغ</small>
+                </a>
+                <a href="Emergency.html" target="_blank" class="qr-card qr-green">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/Emergency.html" alt="QR">
+                    <div class="qr-label">
+                        <i class="fas fa-tv"></i> الشاشات
+                    </div>
+                    <small>عرض التنبيه</small>
+                </a>
+                <a href="emergency-poster.html" target="_blank" class="qr-card qr-green">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/emergency-poster.html" alt="QR">
+                    <div class="qr-label">
+                        <i class="fas fa-image"></i> البوستر
+                    </div>
+                    <small>للطباعة</small>
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- تنبيه الطوارئ المنبثق -->
     <div class="emergency-popup-overlay" id="emergencyPopup">
         <div class="emergency-popup">
@@ -564,42 +668,14 @@
                 <i class="fas fa-shield-alt"></i>
                 <span>تسجيل خطر</span>
             </a>
-            <a class="nav-item" href="emergency-plan.html" target="_blank">
-                <i class="fas fa-first-aid"></i>
-                <span>خطة الطوارئ</span>
-            </a>
             <a class="nav-item" href="eoc-command.html" target="_blank">
                 <i class="fas fa-shield-alt"></i>
                 <span>مركز القيادة EOC</span>
             </a>
-            <!-- قائمة الطوارئ الذكية -->
-            <div class="nav-item eoc-nav-item" onclick="toggleEocSubmenu()" id="eocNavItem">
-                <i class="fas fa-triangle-exclamation"></i>
+            <!-- روابط الطوارئ - تفتح modal بالـ QR codes -->
+            <div class="nav-item" onclick="openQrCodesModal()" style="cursor:pointer;">
+                <i class="fas fa-qrcode"></i>
                 <span>روابط الطوارئ</span>
-                <i class="fas fa-chevron-down eoc-chevron" id="eocChevron"></i>
-            </div>
-            <div class="eoc-submenu" id="eocSubmenu">
-                <a class="eoc-link" href="emergency-report.html" target="_blank">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=https://m2020m.org/emergency-report.html" alt="QR">
-                    <div>
-                        <strong><i class="fas fa-exclamation-triangle" style="color:#dc2626"></i> إبلاغ طوارئ</strong>
-                        <small>نموذج البلاغ السريع</small>
-                    </div>
-                </a>
-                <a class="eoc-link" href="Emergency.html" target="_blank">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=https://m2020m.org/Emergency.html" alt="QR">
-                    <div>
-                        <strong><i class="fas fa-tv" style="color:#3b82f6"></i> شاشة العرض</strong>
-                        <small>للشاشات الكبيرة</small>
-                    </div>
-                </a>
-                <a class="eoc-link" href="emergency-poster.html" target="_blank">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=https://m2020m.org/emergency-poster.html" alt="QR">
-                    <div>
-                        <strong><i class="fas fa-image" style="color:#c9a962"></i> البوستر</strong>
-                        <small>للطباعة والتعليق</small>
-                    </div>
-                </a>
             </div>
             <div class="nav-divider"></div>
             <a class="nav-item admin-only" data-section="users">
@@ -1348,6 +1424,20 @@
         function closeEmergencyPopup() {
             document.getElementById('emergencyPopup').classList.remove('show');
         }
+        
+        // دوال نافذة روابط الطوارئ QR
+        function openQrCodesModal() {
+            document.getElementById('qrCodesModal').classList.add('show');
+        }
+        
+        function closeQrCodesModal() {
+            document.getElementById('qrCodesModal').classList.remove('show');
+        }
+        
+        // إغلاق النافذة بالضغط خارجها
+        document.getElementById('qrCodesModal').addEventListener('click', function(e) {
+            if (e.target === this) closeQrCodesModal();
+        });
         
         function openEocCommand() {
             closeEmergencyPopup();
