@@ -1421,16 +1421,19 @@
         let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
         
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
-        // ====== نظام صوت الإنذار القوي - Web Audio API ======
+        // ====== نظام صوت سيرين الطوارئ الاحترافي - Web Audio API ======
         let alarmRepeatInterval = null;
         let audioCtx = null;
-        let audioEnabled = localStorage.getItem('admin_audio_enabled') === 'true';
+        let audioEnabled = localStorage.getItem('admin_audio_enabled') === '1';
+        let sirenPlaying = false;
+        let sirenOscillators = [];
         
         // إخفاء overlay إذا كان الصوت مفعل سابقاً
         if (audioEnabled) {
             document.getElementById('audioEnableOverlay').style.display = 'none';
-            // إنشاء AudioContext مباشرة
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            } catch(e) { console.log('AudioContext init error:', e); }
         }
         
         // دالة تفعيل الصوت (تُستدعى من الزر)
@@ -1438,47 +1441,94 @@
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 // تشغيل صوت تجريبي فوري
-                playAlertSound();
+                playEmergencySiren();
                 audioEnabled = true;
-                localStorage.setItem('admin_audio_enabled', 'true');
+                localStorage.setItem('admin_audio_enabled', '1');
                 document.getElementById('audioEnableOverlay').style.display = 'none';
             } catch(e) {
                 alert('فشل تفعيل الصوت: ' + e.message);
             }
         };
         
-        function playAlertSound() {
-            if (!audioEnabled || !audioCtx) return;
+        // صوت سيرين إسعاف احترافي (Hi-Lo Siren)
+        function playEmergencySiren() {
+            if (!audioEnabled || !audioCtx) {
+                console.log('Audio not enabled or no context');
+                return;
+            }
             try {
                 // إعادة تفعيل AudioContext إذا كان معلقاً
-                if (audioCtx.state === 'suspended') audioCtx.resume();
-                
-                // صوت إنذار قوي (5 بيبات سريعة)
-                let beepCount = 0;
-                function beep() {
-                    if (beepCount >= 10) return;
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    gain.gain.value = 0.9;
-                    osc.type = 'square';
-                    osc.frequency.value = (beepCount % 2 === 0) ? 880 : 440;
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 0.12);
-                    beepCount++;
-                    setTimeout(beep, 150);
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
                 }
-                beep();
-            } catch(e) { console.log('Sound error:', e); }
+                
+                // إيقاف أي سيرين سابق
+                stopSiren();
+                
+                const now = audioCtx.currentTime;
+                const duration = 2.5; // مدة السيرين 2.5 ثانية
+                
+                // إنشاء 3 دورات سيرين (Hi-Lo)
+                for (let cycle = 0; cycle < 3; cycle++) {
+                    const cycleStart = now + (cycle * duration);
+                    
+                    // Oscillator للنغمة العالية (Hi)
+                    const oscHi = audioCtx.createOscillator();
+                    const gainHi = audioCtx.createGain();
+                    oscHi.type = 'sawtooth';
+                    oscHi.frequency.setValueAtTime(800, cycleStart);
+                    oscHi.frequency.linearRampToValueAtTime(1000, cycleStart + 0.6);
+                    oscHi.frequency.linearRampToValueAtTime(800, cycleStart + 1.2);
+                    gainHi.gain.setValueAtTime(0, cycleStart);
+                    gainHi.gain.linearRampToValueAtTime(0.5, cycleStart + 0.1);
+                    gainHi.gain.setValueAtTime(0.5, cycleStart + 1.1);
+                    gainHi.gain.linearRampToValueAtTime(0, cycleStart + 1.25);
+                    oscHi.connect(gainHi);
+                    gainHi.connect(audioCtx.destination);
+                    oscHi.start(cycleStart);
+                    oscHi.stop(cycleStart + 1.25);
+                    sirenOscillators.push(oscHi);
+                    
+                    // Oscillator للنغمة المنخفضة (Lo)
+                    const oscLo = audioCtx.createOscillator();
+                    const gainLo = audioCtx.createGain();
+                    oscLo.type = 'sawtooth';
+                    oscLo.frequency.setValueAtTime(600, cycleStart + 1.25);
+                    oscLo.frequency.linearRampToValueAtTime(700, cycleStart + 1.85);
+                    oscLo.frequency.linearRampToValueAtTime(600, cycleStart + 2.45);
+                    gainLo.gain.setValueAtTime(0, cycleStart + 1.25);
+                    gainLo.gain.linearRampToValueAtTime(0.5, cycleStart + 1.35);
+                    gainLo.gain.setValueAtTime(0.5, cycleStart + 2.35);
+                    gainLo.gain.linearRampToValueAtTime(0, cycleStart + 2.5);
+                    oscLo.connect(gainLo);
+                    gainLo.connect(audioCtx.destination);
+                    oscLo.start(cycleStart + 1.25);
+                    oscLo.stop(cycleStart + 2.5);
+                    sirenOscillators.push(oscLo);
+                }
+                
+                sirenPlaying = true;
+                console.log('Emergency siren playing!');
+                
+            } catch(e) { 
+                console.error('Siren error:', e); 
+            }
+        }
+        
+        function stopSiren() {
+            sirenOscillators.forEach(osc => {
+                try { osc.stop(); } catch(e) {}
+            });
+            sirenOscillators = [];
+            sirenPlaying = false;
         }
         
         function startAlarmRepeat() {
-            // شغل الصوت فوراً
-            playAlertSound();
+            // شغل السيرين فوراً
+            playEmergencySiren();
             // كرر كل دقيقة (60000ms)
             if (alarmRepeatInterval) clearInterval(alarmRepeatInterval);
-            alarmRepeatInterval = setInterval(playAlertSound, 60000);
+            alarmRepeatInterval = setInterval(playEmergencySiren, 60000);
         }
         
         function stopAlarmRepeat() {
@@ -1486,8 +1536,7 @@
                 clearInterval(alarmRepeatInterval);
                 alarmRepeatInterval = null;
             }
-            emergencyAlarmAudio.pause();
-            emergencyAlarmAudio.currentTime = 0;
+            stopSiren();
         }
         
         window.showEmergencyPopup = function(type, message, details) {
