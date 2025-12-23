@@ -252,6 +252,28 @@
       .qr-pink-card .qr{ width:25mm; height:25mm; }
     }
 
+    /* Close Emergency Modal Inputs */
+    .cem-input{
+      width:100%;
+      padding:12px 14px;
+      border:2px solid rgba(201,169,98,.3);
+      border-radius:10px;
+      background:rgba(30,58,95,.4);
+      color:#fff;
+      font-weight:700;
+      font-size:1rem;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .cem-input::placeholder{
+      color:rgba(255,255,255,.4);
+      font-weight:600;
+    }
+    .cem-input:focus{
+      outline:none;
+      border-color:var(--secondary);
+      box-shadow:0 0 0 3px rgba(201,169,98,.25);
+    }
+
     /* QR Strip */
     .qr-strip{
       background:linear-gradient(135deg,rgba(201,169,98,.12),rgba(30,58,95,.95));
@@ -1225,6 +1247,62 @@
     </div>
   </div>
 
+  <!-- Close/End Emergency Modal -->
+  <div class="modal" id="closeEmergencyModal">
+    <div class="modal-card" style="max-width:440px">
+      <div class="modal-header" style="background:linear-gradient(135deg,rgba(16,185,129,.2),rgba(6,78,59,.3))">
+        <h2 style="color:#10b981"><i class="fas fa-check-circle"></i> <span id="cemTitle">إنهاء حالة الطوارئ</span></h2>
+        <button class="close-modal" onclick="closeCloseEmergencyModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div style="padding:16px">
+        <div style="margin-bottom:14px">
+          <label style="font-weight:900;color:var(--secondary);display:block;margin-bottom:6px">
+            <i class="fas fa-user"></i> اسم من يقوم بالإنهاء <span style="color:var(--danger)">*</span>
+          </label>
+          <input type="text" id="cemWho" class="cem-input" placeholder="أدخل الاسم..." autocomplete="off">
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-weight:900;color:var(--secondary);display:block;margin-bottom:6px">
+            <i class="fas fa-comment-alt"></i> سبب الإغلاق <span style="color:var(--muted);font-weight:600">(اختياري)</span>
+          </label>
+          <input type="text" id="cemReason" class="cem-input" placeholder="مثال: تم حل المشكلة..." autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-actions" style="padding:0 16px 16px">
+        <button class="btn secondary" onclick="closeCloseEmergencyModal()"><i class="fas fa-times"></i> إلغاء</button>
+        <button class="btn success" id="cemConfirmBtn" onclick="confirmCloseEmergency()"><i class="fas fa-check"></i> تأكيد الإنهاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input Modal (for responder/notes) -->
+  <div class="modal" id="inputModal">
+    <div class="modal-card" style="max-width:420px">
+      <div class="modal-header" style="background:linear-gradient(135deg,rgba(59,130,246,.2),rgba(30,58,95,.3))">
+        <h2 style="color:#3b82f6"><i class="fas fa-edit" id="imIcon"></i> <span id="imTitle">إدخال بيانات</span></h2>
+        <button class="close-modal" onclick="closeInputModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div style="padding:16px">
+        <div style="margin-bottom:14px">
+          <label style="font-weight:900;color:var(--secondary);display:block;margin-bottom:6px" id="imLabel1">
+            <i class="fas fa-user"></i> الحقل الأول <span style="color:var(--danger)">*</span>
+          </label>
+          <input type="text" id="imInput1" class="cem-input" placeholder="..." autocomplete="off">
+        </div>
+        <div style="margin-bottom:14px" id="imField2Wrap">
+          <label style="font-weight:900;color:var(--secondary);display:block;margin-bottom:6px" id="imLabel2">
+            <i class="fas fa-comment-alt"></i> الحقل الثاني
+          </label>
+          <input type="text" id="imInput2" class="cem-input" placeholder="..." autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-actions" style="padding:0 16px 16px">
+        <button class="btn secondary" onclick="closeInputModal()"><i class="fas fa-times"></i> إلغاء</button>
+        <button class="btn primary" id="imConfirmBtn" onclick="confirmInputModal()"><i class="fas fa-check"></i> تأكيد</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Command Display Screen (local display) -->
   <div class="modal" id="commandScreen">
     <div class="modal-card" style="max-width:900px;border-color:rgba(220,20,60,.8)">
@@ -2135,6 +2213,72 @@
       }
     }
 
+    // Close Emergency Modal state
+    let CEM_CMD = null;
+    let CEM_IS_TRAINING = false;
+
+    function openCloseEmergencyModal(cmd, isTraining) {
+      CEM_CMD = cmd;
+      CEM_IS_TRAINING = isTraining;
+      document.getElementById('cemTitle').textContent = isTraining ? 'إيقاف التمرين' : 'إنهاء حالة الطوارئ';
+      document.getElementById('cemWho').value = '';
+      document.getElementById('cemReason').value = '';
+      document.getElementById('closeEmergencyModal').classList.add('active');
+      setTimeout(() => document.getElementById('cemWho').focus(), 100);
+    }
+
+    function closeCloseEmergencyModal() {
+      document.getElementById('closeEmergencyModal').classList.remove('active');
+      CEM_CMD = null;
+    }
+
+    async function confirmCloseEmergency() {
+      const who = document.getElementById('cemWho').value.trim();
+      if (!who) {
+        toast('يرجى إدخال الاسم', 'warning');
+        document.getElementById('cemWho').focus();
+        return;
+      }
+      const reason = document.getElementById('cemReason').value.trim();
+
+      const btn = document.getElementById('cemConfirmBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإنهاء...';
+
+      try {
+        // إذا كانت حالة طوارئ يدوية (بدون بلاغ إلكتروني)، نسجلها في سجل البلاغات
+        if (CEM_CMD && !CEM_CMD.reportId && CEM_CMD.reportType) {
+          try {
+            await jsonp('submitEmergencyReport', {
+              reportId: 'MAN-' + Date.now(),
+              disasterType: (CEM_CMD.reportType || '').replace('🎯 تمرين: ', '') + ' (يدوي)',
+              location: CEM_CMD.location || 'غير محدد',
+              notes: 'تم التفعيل يدوياً من مركز القيادة. أُغلق بواسطة: ' + who + (reason ? ' | السبب: ' + reason : '')
+            });
+          } catch(e) { console.warn('Failed to log manual emergency:', e); }
+        }
+
+        const res = await jsonp('closeActiveCommand', {
+          closedBy: who,
+          closeReason: reason
+        });
+
+        if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+        stopAlarmSound();
+        closeCloseEmergencyModal();
+        toast(CEM_IS_TRAINING ? 'تم إيقاف التمرين' : 'تم إنهاء حالة الطوارئ', 'success');
+        await syncActiveCommandUI();
+        await refreshLists();
+      } catch (e) {
+        console.error(e);
+        toast('فشل الإنهاء — تأكد من إضافة closeActiveCommand في Apps Script', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> تأكيد الإنهاء';
+      }
+    }
+
     async function onStatusBadgeClick(){
       try {
         const ac = await jsonp('getActiveCommand', {});
@@ -2150,24 +2294,10 @@
           String(cmd.reportType || '').includes('تمرين') ||
           String(cmd.reportType || '').includes('🎯');
 
-        const who = prompt(isTraining ? 'اسم من يريد إيقاف التمرين:' : 'اسم من يريد إلغاء حالة الطوارئ:');
-        if (!who) return;
-        const reason = prompt('سبب الإغلاق (اختياري):') || '';
-
-        const res = await jsonp('closeActiveCommand', {
-          closedBy: who,
-          closeReason: reason
-        });
-
-        if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
-
-        stopAlarmSound();
-        toast(isTraining ? 'تم إيقاف التمرين' : 'تم إلغاء حالة الطوارئ', 'success');
-        await syncActiveCommandUI();
-        await refreshLists();
+        openCloseEmergencyModal(cmd, isTraining);
       } catch (e) {
         console.error(e);
-        toast('فشل الإلغاء — تأكد من إضافة closeActiveCommand في Apps Script', 'error');
+        toast('فشل جلب حالة الطوارئ', 'error');
       }
     }
 
@@ -3850,19 +3980,65 @@
       }).join('');
     }
 
-    async function updateReportFlow(id, newStatus){
-      const responder = prompt('اسم المستجيب:');
-      if (!responder) return;
-      const actionNotes = prompt('ملاحظات الإجراء (اختياري):') || '';
-      try{
-        await safeUpdateReportStatus(id, newStatus, responder, actionNotes);
-        toast('تم تحديث الحالة', 'success');
-        await refreshLists();
-        await loadReportsLog();
-      } catch(e){
-        console.error(e);
-        toast('فشل تحديث الحالة', 'error');
+    // Input Modal state
+    let IM_CALLBACK = null;
+
+    function openInputModal(config, callback) {
+      IM_CALLBACK = callback;
+      document.getElementById('imTitle').textContent = config.title || 'إدخال بيانات';
+      document.getElementById('imLabel1').innerHTML = config.label1 || '<i class="fas fa-user"></i> الحقل الأول';
+      document.getElementById('imInput1').placeholder = config.placeholder1 || '...';
+      document.getElementById('imInput1').value = '';
+      
+      if (config.label2) {
+        document.getElementById('imField2Wrap').style.display = 'block';
+        document.getElementById('imLabel2').innerHTML = config.label2;
+        document.getElementById('imInput2').placeholder = config.placeholder2 || '...';
+        document.getElementById('imInput2').value = '';
+      } else {
+        document.getElementById('imField2Wrap').style.display = 'none';
       }
+      
+      document.getElementById('inputModal').classList.add('active');
+      setTimeout(() => document.getElementById('imInput1').focus(), 100);
+    }
+
+    function closeInputModal() {
+      document.getElementById('inputModal').classList.remove('active');
+      IM_CALLBACK = null;
+    }
+
+    function confirmInputModal() {
+      const v1 = document.getElementById('imInput1').value.trim();
+      if (!v1) {
+        toast('يرجى إدخال البيانات المطلوبة', 'warning');
+        document.getElementById('imInput1').focus();
+        return;
+      }
+      const v2 = document.getElementById('imInput2').value.trim();
+      closeInputModal();
+      if (IM_CALLBACK) IM_CALLBACK(v1, v2);
+    }
+
+    async function updateReportFlow(id, newStatus){
+      const isClosing = newStatus === 'مغلق';
+      openInputModal({
+        title: isClosing ? 'إغلاق البلاغ' : 'الاستجابة للبلاغ',
+        label1: '<i class="fas fa-user"></i> اسم المستجيب <span style="color:var(--danger)">*</span>',
+        placeholder1: 'أدخل اسمك...',
+        label2: '<i class="fas fa-comment-alt"></i> ملاحظات الإجراء <span style="color:var(--muted);font-weight:600">(اختياري)</span>',
+        placeholder2: 'مثال: تم إرسال فريق...'
+      }, async (responder, actionNotes) => {
+        try{
+          await safeUpdateReportStatus(id, newStatus, responder, actionNotes || '');
+          toast('تم تحديث الحالة', 'success');
+          await refreshLists();
+          await loadReportsLog();
+        } catch(e){
+          console.error(e);
+          toast('فشل تحديث الحالة', 'error');
+        }
+      });
     }
 
     function applyReportsFilter(){
