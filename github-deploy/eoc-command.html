@@ -2371,12 +2371,45 @@
           } catch(e) { console.warn('Failed to log manual emergency:', e); }
         }
 
+        // ====== إغلاق البلاغ في Google Sheets ======
+        // إذا كان هناك بلاغ مفتوح، نغلقه أولاً
+        if (CEM_CMD && CEM_CMD.reportId) {
+          try {
+            await jsonp('updateEmergencyReportStatus', {
+              reportId: CEM_CMD.reportId,
+              status: 'مغلق',
+              responder: who,
+              actionNotes: reason || 'تم الإغلاق'
+            });
+          } catch(e) { console.warn('Failed to close report:', e); }
+        }
+        
+        // إغلاق جميع البلاغات المفتوحة من الـ cache
+        const openReports = (APP.caches.reports || []).filter(r => {
+          const st = String(r.status || '').trim();
+          return st === 'جديد' || st === 'قيد المعالجة' || st.includes('جديد') || st.includes('المعالجة');
+        });
+        for (const rep of openReports) {
+          try {
+            await jsonp('updateEmergencyReportStatus', {
+              reportId: rep.id,
+              status: 'مغلق',
+              responder: who,
+              actionNotes: reason || 'تم الإغلاق'
+            });
+          } catch(e) { console.warn('Failed to close report:', rep.id, e); }
+        }
+        
         const res = await jsonp('closeActiveCommand', {
           closedBy: who,
           closeReason: reason
         });
 
         if (!res || !res.ok) throw new Error(res?.error || 'closeActiveCommand failed');
+
+        // مسح الـ cache للبلاغات
+        APP.caches.reports = [];
+        ACTIVE_CMD_CACHE = null;
 
         // منع تشغيل الصوت مؤقتاً
         alarmSuppressed = true;
