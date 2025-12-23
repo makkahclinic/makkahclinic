@@ -73,6 +73,11 @@ app.get('/download/:filename', (req, res) => {
   }
 });
 
+// Serve github-deploy HTML files
+app.get('/emergency-poster.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'github-deploy', 'emergency-poster.html'));
+});
+
 // Debug endpoint DISABLED for security
 // app.get('/api/debug/sheet/:name', ...);
 
