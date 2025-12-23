@@ -2225,9 +2225,14 @@
 
     async function syncActiveCommandUI() {
       try {
-        const ac = await jsonp('getActiveCommand', {});
+        const [ac, reportsRes] = await Promise.all([
+          jsonp('getActiveCommand', {}),
+          jsonp('getEmergencyReports', { limit: '20' })
+        ]);
+        
         const cmd = (ac && ac.ok) ? ac.command : null;
 
+        // التحقق من وجود أمر نشط
         if (cmd && (cmd.active === true || String(cmd.active).toLowerCase() === 'true' || String(cmd.active) === '1')) {
           ACTIVE_CMD_CACHE = cmd;
 
@@ -2237,10 +2242,30 @@
             String(cmd.reportType || '').includes('🎯');
 
           setStatusAlert(true, isTraining ? 'إيقاف التمرين' : 'إلغاء حالة الطوارئ');
-        } else {
-          ACTIVE_CMD_CACHE = null;
-          setStatusAlert(false);
+          return;
         }
+        
+        // التحقق من وجود بلاغات مفتوحة (جديد أو قيد المعالجة)
+        if (reportsRes && reportsRes.ok && Array.isArray(reportsRes.reports)) {
+          const openReports = reportsRes.reports.filter(r => 
+            r.status === 'جديد' || r.status === 'قيد المعالجة'
+          );
+          
+          if (openReports.length > 0) {
+            ACTIVE_CMD_CACHE = { 
+              active: true, 
+              fromReport: true, 
+              reportType: openReports[0].type,
+              count: openReports.length 
+            };
+            setStatusAlert(true, 'بلاغ مفتوح (' + openReports.length + ')');
+            return;
+          }
+        }
+        
+        // لا يوجد أمر نشط ولا بلاغات مفتوحة
+        ACTIVE_CMD_CACHE = null;
+        setStatusAlert(false);
       } catch (e) {
         console.error('syncActiveCommandUI:', e);
       }
