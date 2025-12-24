@@ -1527,13 +1527,29 @@
             if (overlay) overlay.style.display = 'flex';
         }
         
+        // صوت تأكيد قصير (beep واحد فقط)
+        function playConfirmBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 800;
+                gain.gain.value = 0.5;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.2); // 0.2 ثانية فقط
+                setTimeout(() => ctx.close(), 300);
+            } catch(e) { console.log('Beep error:', e); }
+        }
+        
         // تُستدعى من زر تفعيل الصوت
         window.enableAudioAlerts = function() {
             document.getElementById('audioEnableOverlay').style.display = 'none';
             audioEnabled = true;
             localStorage.setItem('admin_audio_enabled', 'true');
-            playAlarmSound();
-            alarmPlaying = true;
+            // beep قصير للتأكيد فقط - لا تُشغّل الإنذار المستمر!
+            playConfirmBeep();
         };
         
         // دوال التوافق
