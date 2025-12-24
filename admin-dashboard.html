@@ -1558,10 +1558,18 @@
             startAlarmRepeat();
         };
         
+        // متغير لكبت الصوت مؤقتاً بعد إغلاق البلاغ
+        let soundSuppressed = false;
+        let soundSuppressedUntil = 0;
+        
         window.closeEmergencyPopup = function() {
             document.getElementById('emergencyPopup').classList.remove('show');
             // إيقاف تكرار التنبيه
             stopAlarmRepeat();
+            // كبت الصوت لمدة 30 ثانية لمنع التنبيه المتكرر
+            soundSuppressed = true;
+            soundSuppressedUntil = Date.now() + 30000;
+            setTimeout(() => { soundSuppressed = false; }, 30000);
         };
         
         // دوال نافذة روابط الطوارئ QR
@@ -1619,6 +1627,11 @@
                         
                         // إذا لم يكن هناك تنبيه معروض لهذا البلاغ
                         if (reportKey !== currentAlertedReport) {
+                            // التحقق من كبت الصوت
+                            if (soundSuppressed && Date.now() < soundSuppressedUntil) {
+                                console.log('Sound suppressed, skipping alert');
+                                return;
+                            }
                             currentAlertedReport = reportKey;
                             lastKnownReportId = reportKey;
                             localStorage.setItem('lastKnownReportId', reportKey);
@@ -1631,6 +1644,7 @@
                     } else {
                         // لا توجد بلاغات مفتوحة - أغلق التنبيه إذا كان معروضاً
                         currentAlertedReport = null;
+                        soundSuppressed = false; // إعادة تفعيل الصوت عند عدم وجود بلاغات
                     }
                 }
             } catch (e) {
