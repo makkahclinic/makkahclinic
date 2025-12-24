@@ -1436,25 +1436,52 @@
         let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
         
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
-        // ====== نظام صوت الطوارئ - نسخة من eoc-command.html (يعمل 100%) ======
+        // ====== نظام صوت الطوارئ - AudioContext واحد يبقى مُفعّل ======
         let audioEnabled = localStorage.getItem('admin_audio_enabled') === '1';
-        let alarmAudioCtx = null;
+        let alarmAudioCtx = null;  // يُنشأ مرة واحدة ولا يُغلق
         let alarmOscillator = null;
         let alarmGain = null;
         let alarmInterval = null;
         let alarmPlaying = false;
         
-        // إخفاء overlay إذا كان الصوت مفعل سابقاً
+        // إنشاء AudioContext عند تحميل الصفحة إذا كان الصوت مفعل سابقاً
         if (audioEnabled) {
             document.getElementById('audioEnableOverlay').style.display = 'none';
+            try {
+                alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('AudioContext created on load, state:', alarmAudioCtx.state);
+            } catch(e) { console.log('AudioContext init error:', e); }
         }
+        
+        // محاولة resume عند أي نقرة (مطلوب لسياسة المتصفح)
+        document.addEventListener('click', function() {
+            if (alarmAudioCtx && alarmAudioCtx.state === 'suspended') {
+                alarmAudioCtx.resume().then(() => {
+                    console.log('AudioContext resumed via click! State:', alarmAudioCtx.state);
+                });
+            }
+        }, { capture: true });
+        
+        // محاولة resume عند العودة للصفحة
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && alarmAudioCtx && alarmAudioCtx.state === 'suspended') {
+                alarmAudioCtx.resume();
+            }
+        });
         
         // دالة تفعيل الصوت (تُستدعى من الزر)
         window.enableAudioAlerts = function() {
             try {
-                // اختبار الصوت فوراً
-                playAlarmSound();
-                setTimeout(() => stopAlarmSound(), 1500);
+                // إنشاء AudioContext إذا لم يكن موجوداً
+                if (!alarmAudioCtx) {
+                    alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                // resume فوراً (هذه نقرة من المستخدم)
+                alarmAudioCtx.resume().then(() => {
+                    console.log('AudioContext ready! State:', alarmAudioCtx.state);
+                    // تشغيل صوت اختبار قصير
+                    playTestBeep();
+                });
                 
                 audioEnabled = true;
                 localStorage.setItem('admin_audio_enabled', '1');
@@ -1465,20 +1492,50 @@
             }
         };
         
-        // تشغيل صوت الإنذار (نفس الكود من eoc-command.html)
+        // صوت اختبار قصير (لا يُغلق AudioContext)
+        function playTestBeep() {
+            if (!alarmAudioCtx) return;
+            try {
+                const osc = alarmAudioCtx.createOscillator();
+                const gain = alarmAudioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(alarmAudioCtx.destination);
+                osc.frequency.value = 800;
+                gain.gain.value = 0.5;
+                osc.start();
+                osc.stop(alarmAudioCtx.currentTime + 0.3);
+                console.log('Test beep played!');
+            } catch(e) { console.log('Test beep error:', e); }
+        }
+        
+        // تشغيل صوت الإنذار (يستخدم AudioContext الموجود)
         function playAlarmSound() {
             try {
-                console.log('playAlarmSound called!');
-                // إيقاف أي صوت سابق
-                stopAlarmSound();
+                console.log('playAlarmSound called! audioCtx:', !!alarmAudioCtx, 'state:', alarmAudioCtx?.state);
                 
-                alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // إيقاف أي صوت سابق (بدون إغلاق AudioContext)
+                if (alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; }
+                if (alarmOscillator) { try { alarmOscillator.stop(); } catch(e) {} alarmOscillator = null; }
+                
+                // إنشاء AudioContext إذا لم يكن موجوداً
+                if (!alarmAudioCtx) {
+                    alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    console.log('Created new AudioContext');
+                }
+                
+                // محاولة resume
+                if (alarmAudioCtx.state === 'suspended') {
+                    alarmAudioCtx.resume();
+                    console.log('Resumed AudioContext');
+                }
+                
                 alarmGain = alarmAudioCtx.createGain();
                 alarmGain.connect(alarmAudioCtx.destination);
                 alarmGain.gain.value = 0.8;
                 
                 let isHigh = true;
                 function beep() {
+                    if (!alarmAudioCtx) return;
                     if (alarmOscillator) {
                         try { alarmOscillator.stop(); } catch(e) {}
                     }
@@ -1488,7 +1545,7 @@
                     alarmOscillator.connect(alarmGain);
                     alarmOscillator.start();
                     isHigh = !isHigh;
-                    console.log('Beep! freq:', alarmOscillator.frequency.value);
+                    console.log('Beep! freq:', alarmOscillator.frequency.value, 'ctx state:', alarmAudioCtx.state);
                 }
                 
                 beep();
@@ -1500,7 +1557,7 @@
             }
         }
         
-        // إيقاف صوت الإنذار
+        // إيقاف صوت الإنذار (بدون إغلاق AudioContext!)
         function stopAlarmSound() {
             console.log('stopAlarmSound called');
             if (alarmInterval) {
@@ -1511,10 +1568,7 @@
                 try { alarmOscillator.stop(); } catch(e) {}
                 alarmOscillator = null;
             }
-            if (alarmAudioCtx) {
-                try { alarmAudioCtx.close(); } catch(e) {}
-                alarmAudioCtx = null;
-            }
+            // لا نُغلق AudioContext! نبقيه مُفعّل
             alarmPlaying = false;
         }
         
