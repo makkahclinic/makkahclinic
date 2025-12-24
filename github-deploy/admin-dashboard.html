@@ -1440,95 +1440,88 @@
         window.enableAudioAlerts = function() {
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                // تشغيل صوت تجريبي فوري
-                playEmergencySiren();
                 audioEnabled = true;
                 localStorage.setItem('admin_audio_enabled', '1');
                 document.getElementById('audioEnableOverlay').style.display = 'none';
+                // تشغيل صوت تجريبي (3 دورات فقط)
+                sirenPlaying = true;
+                playTestSiren();
             } catch(e) {
                 alert('فشل تفعيل الصوت: ' + e.message);
             }
         };
         
-        // صوت سيرين إسعاف احترافي (Hi-Lo Siren)
-        function playEmergencySiren() {
-            if (!audioEnabled || !audioCtx) {
-                console.log('Audio not enabled or no context');
-                return;
-            }
+        // صوت سيرين إسعاف متواصل (Hi-Lo Continuous Siren)
+        let sirenLoopInterval = null;
+        
+        function playSirenCycle() {
+            if (!audioEnabled || !audioCtx || !sirenPlaying) return;
             try {
-                // إعادة تفعيل AudioContext إذا كان معلقاً
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-                
-                // إيقاف أي سيرين سابق
-                stopSiren();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
                 
                 const now = audioCtx.currentTime;
-                const duration = 2.5; // مدة السيرين 2.5 ثانية
                 
-                // إنشاء 3 دورات سيرين (Hi-Lo)
-                for (let cycle = 0; cycle < 3; cycle++) {
-                    const cycleStart = now + (cycle * duration);
-                    
-                    // Oscillator للنغمة العالية (Hi)
-                    const oscHi = audioCtx.createOscillator();
-                    const gainHi = audioCtx.createGain();
-                    oscHi.type = 'sawtooth';
-                    oscHi.frequency.setValueAtTime(800, cycleStart);
-                    oscHi.frequency.linearRampToValueAtTime(1000, cycleStart + 0.6);
-                    oscHi.frequency.linearRampToValueAtTime(800, cycleStart + 1.2);
-                    gainHi.gain.setValueAtTime(0, cycleStart);
-                    gainHi.gain.linearRampToValueAtTime(0.5, cycleStart + 0.1);
-                    gainHi.gain.setValueAtTime(0.5, cycleStart + 1.1);
-                    gainHi.gain.linearRampToValueAtTime(0, cycleStart + 1.25);
-                    oscHi.connect(gainHi);
-                    gainHi.connect(audioCtx.destination);
-                    oscHi.start(cycleStart);
-                    oscHi.stop(cycleStart + 1.25);
-                    sirenOscillators.push(oscHi);
-                    
-                    // Oscillator للنغمة المنخفضة (Lo)
-                    const oscLo = audioCtx.createOscillator();
-                    const gainLo = audioCtx.createGain();
-                    oscLo.type = 'sawtooth';
-                    oscLo.frequency.setValueAtTime(600, cycleStart + 1.25);
-                    oscLo.frequency.linearRampToValueAtTime(700, cycleStart + 1.85);
-                    oscLo.frequency.linearRampToValueAtTime(600, cycleStart + 2.45);
-                    gainLo.gain.setValueAtTime(0, cycleStart + 1.25);
-                    gainLo.gain.linearRampToValueAtTime(0.5, cycleStart + 1.35);
-                    gainLo.gain.setValueAtTime(0.5, cycleStart + 2.35);
-                    gainLo.gain.linearRampToValueAtTime(0, cycleStart + 2.5);
-                    oscLo.connect(gainLo);
-                    gainLo.connect(audioCtx.destination);
-                    oscLo.start(cycleStart + 1.25);
-                    oscLo.stop(cycleStart + 2.5);
-                    sirenOscillators.push(oscLo);
-                }
+                // نغمة عالية (Hi) - 0.5 ثانية
+                const oscHi = audioCtx.createOscillator();
+                const gainHi = audioCtx.createGain();
+                oscHi.type = 'sawtooth';
+                oscHi.frequency.setValueAtTime(800, now);
+                oscHi.frequency.linearRampToValueAtTime(1000, now + 0.25);
+                oscHi.frequency.linearRampToValueAtTime(800, now + 0.5);
+                gainHi.gain.setValueAtTime(0.6, now);
+                oscHi.connect(gainHi);
+                gainHi.connect(audioCtx.destination);
+                oscHi.start(now);
+                oscHi.stop(now + 0.5);
                 
-                sirenPlaying = true;
-                console.log('Emergency siren playing!');
+                // نغمة منخفضة (Lo) - 0.5 ثانية
+                const oscLo = audioCtx.createOscillator();
+                const gainLo = audioCtx.createGain();
+                oscLo.type = 'sawtooth';
+                oscLo.frequency.setValueAtTime(600, now + 0.5);
+                oscLo.frequency.linearRampToValueAtTime(700, now + 0.75);
+                oscLo.frequency.linearRampToValueAtTime(600, now + 1.0);
+                gainLo.gain.setValueAtTime(0.6, now + 0.5);
+                oscLo.connect(gainLo);
+                gainLo.connect(audioCtx.destination);
+                oscLo.start(now + 0.5);
+                oscLo.stop(now + 1.0);
                 
-            } catch(e) { 
-                console.error('Siren error:', e); 
+            } catch(e) { console.error('Siren cycle error:', e); }
+        }
+        
+        function startContinuousSiren() {
+            if (!audioEnabled || !audioCtx) {
+                console.log('Audio not enabled');
+                return;
             }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            sirenPlaying = true;
+            // شغل فوراً
+            playSirenCycle();
+            // كرر كل ثانية (دورة Hi-Lo كاملة)
+            if (sirenLoopInterval) clearInterval(sirenLoopInterval);
+            sirenLoopInterval = setInterval(playSirenCycle, 1000);
+            console.log('Continuous siren started!');
         }
         
         function stopSiren() {
+            sirenPlaying = false;
+            if (sirenLoopInterval) {
+                clearInterval(sirenLoopInterval);
+                sirenLoopInterval = null;
+            }
             sirenOscillators.forEach(osc => {
                 try { osc.stop(); } catch(e) {}
             });
             sirenOscillators = [];
-            sirenPlaying = false;
+            console.log('Siren stopped');
         }
         
         function startAlarmRepeat() {
-            // شغل السيرين فوراً
-            playEmergencySiren();
-            // كرر كل دقيقة (60000ms)
-            if (alarmRepeatInterval) clearInterval(alarmRepeatInterval);
-            alarmRepeatInterval = setInterval(playEmergencySiren, 60000);
+            // شغل السيرين المتواصل فوراً
+            startContinuousSiren();
         }
         
         function stopAlarmRepeat() {
@@ -1537,6 +1530,18 @@
                 alarmRepeatInterval = null;
             }
             stopSiren();
+        }
+        
+        // للاختبار عند تفعيل الصوت (3 دورات فقط)
+        function playTestSiren() {
+            if (!audioEnabled || !audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            let count = 0;
+            const testInterval = setInterval(() => {
+                if (count >= 3) { clearInterval(testInterval); return; }
+                playSirenCycle();
+                count++;
+            }, 1000);
         }
         
         window.showEmergencyPopup = function(type, message, details) {
