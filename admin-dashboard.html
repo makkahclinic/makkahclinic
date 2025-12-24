@@ -1574,7 +1574,7 @@
             }, 1000);
         }
         
-        window.showEmergencyPopup = function(type, message, details) {
+        window.showEmergencyPopup = function(type, message, details, playSound = true) {
             const popup = document.getElementById('emergencyPopup');
             
             document.getElementById('emergencyPopupMessage').textContent = message;
@@ -1584,8 +1584,10 @@
             
             popup.classList.add('show');
             
-            // تشغيل صوت التنبيه (يتكرر كل 3 دقائق)
-            startAlarmRepeat();
+            // تشغيل صوت التنبيه إذا مسموح
+            if (playSound) {
+                startAlarmRepeat();
+            }
         };
         
         // متغير لكبت الصوت مؤقتاً بعد إغلاق البلاغ
@@ -1633,7 +1635,7 @@
                 ]);
                 
                 // التحقق من أمر طوارئ نشط
-                if (activeRes.ok && activeRes.status === 'active' && activeRes.command?.sessionId) {
+                if (activeRes.ok && activeRes.command?.active && activeRes.command?.sessionId) {
                     const currentSession = activeRes.command.sessionId;
                     if (currentSession !== lastKnownActiveSession) {
                         lastKnownActiveSession = currentSession;
@@ -1657,11 +1659,8 @@
                         
                         // إذا لم يكن هناك تنبيه معروض لهذا البلاغ
                         if (reportKey !== currentAlertedReport) {
-                            // التحقق من كبت الصوت
-                            if (soundSuppressed && Date.now() < soundSuppressedUntil) {
-                                console.log('Sound suppressed, skipping alert');
-                                return;
-                            }
+                            // التحقق من كبت الصوت - لا نمنع ظهور التنبيه، فقط نكتم الصوت
+                            const shouldPlaySound = !(soundSuppressed && Date.now() < soundSuppressedUntil);
                             currentAlertedReport = reportKey;
                             lastKnownReportId = reportKey;
                             localStorage.setItem('lastKnownReportId', reportKey);
@@ -1669,7 +1668,7 @@
                                 type: openReport.type || 'بلاغ',
                                 location: openReport.location || openReport.floor || '-',
                                 time: openReport.time || new Date().toLocaleTimeString('ar-SA')
-                            });
+                            }, shouldPlaySound);
                         }
                     } else {
                         // لا توجد بلاغات مفتوحة - أغلق التنبيه إذا كان معروضاً
