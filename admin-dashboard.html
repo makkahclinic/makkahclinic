@@ -1436,10 +1436,40 @@
             } catch(e) { console.log('AudioContext init error:', e); }
         }
         
+        // دالة resume للـ AudioContext - تُستدعى عند أي تفاعل
+        async function resumeAudioContext() {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                try {
+                    await audioCtx.resume();
+                    console.log('AudioContext resumed! State:', audioCtx.state);
+                } catch(e) {
+                    console.log('Failed to resume AudioContext:', e);
+                }
+            }
+        }
+        
+        // عند عودة المستخدم للصفحة، حاول تشغيل AudioContext
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && audioEnabled) {
+                resumeAudioContext();
+            }
+        });
+        
+        // عند أي نقرة على الصفحة، حاول تشغيل AudioContext
+        document.addEventListener('click', () => {
+            if (audioEnabled) {
+                resumeAudioContext();
+            }
+        }, { once: false });
+        
         // دالة تفعيل الصوت (تُستدعى من الزر)
-        window.enableAudioAlerts = function() {
+        window.enableAudioAlerts = async function() {
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // مهم جداً: resume فوراً بعد الإنشاء
+                await audioCtx.resume();
+                console.log('AudioContext created and resumed! State:', audioCtx.state);
+                
                 audioEnabled = true;
                 localStorage.setItem('admin_audio_enabled', '1');
                 document.getElementById('audioEnableOverlay').style.display = 'none';
