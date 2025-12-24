@@ -1436,40 +1436,22 @@
         let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
         
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
-        // ====== نظام صوت الطوارئ - نسخة من eoc-command.html (يعمل 100%) ======
-        let audioEnabled = localStorage.getItem('admin_audio_enabled') === '1';
+        // ====== نظام صوت الطوارئ - نفس الكود من eoc-command.html بالضبط ======
+        let audioEnabled = localStorage.getItem('admin_audio_enabled') === 'true';
         let alarmAudioCtx = null;
         let alarmOscillator = null;
         let alarmGain = null;
         let alarmInterval = null;
         let alarmPlaying = false;
         
-        // إخفاء overlay إذا كان الصوت مفعل سابقاً
+        // إخفاء overlay إذا سبق تفعيل الصوت
         if (audioEnabled) {
             document.getElementById('audioEnableOverlay').style.display = 'none';
         }
         
-        // دالة تفعيل الصوت (تُستدعى من الزر)
-        window.enableAudioAlerts = function() {
-            try {
-                // اختبار الصوت فوراً
-                playAlarmSound();
-                setTimeout(() => stopAlarmSound(), 1500);
-                
-                audioEnabled = true;
-                localStorage.setItem('admin_audio_enabled', '1');
-                document.getElementById('audioEnableOverlay').style.display = 'none';
-                console.log('Audio enabled successfully!');
-            } catch(e) {
-                alert('فشل تفعيل الصوت: ' + e.message);
-            }
-        };
-        
-        // تشغيل صوت الإنذار (نفس الكود من eoc-command.html)
+        // ====== دوال الصوت - نسخة طبق الأصل من eoc-command ======
         function playAlarmSound() {
             try {
-                console.log('playAlarmSound called!');
-                // إيقاف أي صوت سابق
                 stopAlarmSound();
                 
                 alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1488,21 +1470,16 @@
                     alarmOscillator.connect(alarmGain);
                     alarmOscillator.start();
                     isHigh = !isHigh;
-                    console.log('Beep! freq:', alarmOscillator.frequency.value);
                 }
                 
                 beep();
                 alarmInterval = setInterval(beep, 500);
-                alarmPlaying = true;
-                console.log('Alarm started!');
             } catch(e) {
                 console.warn('Could not play alarm:', e);
             }
         }
         
-        // إيقاف صوت الإنذار
         function stopAlarmSound() {
-            console.log('stopAlarmSound called');
             if (alarmInterval) {
                 clearInterval(alarmInterval);
                 alarmInterval = null;
@@ -1515,19 +1492,59 @@
                 try { alarmAudioCtx.close(); } catch(e) {}
                 alarmAudioCtx = null;
             }
-            alarmPlaying = false;
         }
+        
+        // ====== منطق التفعيل - نسخة من eoc-command ======
+        function tryPlayAlarmOrShowOverlay() {
+            if (alarmPlaying) return; // الصوت يعمل بالفعل
+            
+            if (audioEnabled) {
+                playAlarmSound();
+                alarmPlaying = true;
+                return;
+            }
+            
+            // محاولة تشغيل صوت للتحقق
+            try {
+                const testCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (testCtx.state === 'suspended') {
+                    testCtx.close();
+                    showAudioEnableOverlay();
+                } else {
+                    testCtx.close();
+                    playAlarmSound();
+                    alarmPlaying = true;
+                    audioEnabled = true;
+                    localStorage.setItem('admin_audio_enabled', 'true');
+                }
+            } catch(e) {
+                showAudioEnableOverlay();
+            }
+        }
+        
+        function showAudioEnableOverlay() {
+            const overlay = document.getElementById('audioEnableOverlay');
+            if (overlay) overlay.style.display = 'flex';
+        }
+        
+        // تُستدعى من زر تفعيل الصوت
+        window.enableAudioAlerts = function() {
+            document.getElementById('audioEnableOverlay').style.display = 'none';
+            audioEnabled = true;
+            localStorage.setItem('admin_audio_enabled', 'true');
+            playAlarmSound();
+            alarmPlaying = true;
+        };
         
         // دوال التوافق
         function startAlarmRepeat() {
-            if (audioEnabled) {
-                playAlarmSound();
-            } else {
-                console.log('Audio not enabled, skipping alarm');
-            }
+            tryPlayAlarmOrShowOverlay();
         }
-        function stopAlarmRepeat() { stopAlarmSound(); }
-        function stopSiren() { stopAlarmSound(); }
+        function stopAlarmRepeat() {
+            stopAlarmSound();
+            alarmPlaying = false;
+        }
+        function stopSiren() { stopAlarmRepeat(); }
         
         window.showEmergencyPopup = function(type, message, details, playSound = true) {
             const popup = document.getElementById('emergencyPopup');
