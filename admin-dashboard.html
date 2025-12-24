@@ -630,9 +630,6 @@
                 <div><strong>الموقع:</strong> <span id="popupLocation">-</span></div>
                 <div><strong>الوقت:</strong> <span id="popupTime">-</span></div>
             </div>
-            <button class="emergency-popup-btn siren-btn" id="playSirenBtn" onclick="manualPlaySiren()">
-                <i class="fas fa-volume-up"></i> تشغيل السيرين
-            </button>
             <button class="emergency-popup-btn" onclick="openEocCommand()">
                 <i class="fas fa-external-link-alt"></i> ادخل الآن
             </button>
@@ -1544,28 +1541,44 @@
         }
         
         function startContinuousSiren() {
-            console.log('startContinuousSiren called! audioEnabled:', audioEnabled, 'audioCtx:', !!audioCtx);
-            if (!audioEnabled || !audioCtx) {
-                console.log('Audio not enabled or no audioCtx - audioEnabled:', audioEnabled, 'audioCtx state:', audioCtx?.state);
+            console.log('startContinuousSiren called! audioEnabled:', audioEnabled);
+            if (!audioEnabled) {
+                console.log('Audio not enabled');
                 return;
             }
-            if (audioCtx.state === 'suspended') {
-                console.log('AudioContext suspended, trying to resume...');
-                audioCtx.resume().then(() => console.log('Resumed! State:', audioCtx.state));
-            }
             
+            // استخدام ملف صوتي حقيقي بدلاً من Web Audio API
             sirenPlaying = true;
-            // شغل فوراً
-            playSirenCycle();
-            // كرر كل ثانية (دورة Hi-Lo كاملة)
-            if (sirenLoopInterval) clearInterval(sirenLoopInterval);
-            sirenLoopInterval = setInterval(playSirenCycle, 1000);
+            const audio = document.getElementById('emergencySound');
+            if (audio) {
+                audio.volume = 1.0;
+                audio.loop = true;
+                audio.play().then(() => {
+                    console.log('Audio file siren playing!');
+                }).catch(e => {
+                    console.log('Audio file failed, trying Web Audio API...', e);
+                    // fallback to Web Audio API
+                    if (audioCtx && audioCtx.state === 'suspended') {
+                        audioCtx.resume();
+                    }
+                    playSirenCycle();
+                    if (sirenLoopInterval) clearInterval(sirenLoopInterval);
+                    sirenLoopInterval = setInterval(playSirenCycle, 1000);
+                });
+            }
             console.log('Continuous siren started!');
         }
         
         function stopSiren() {
-            console.log('stopSiren called! Stack:', new Error().stack);
+            console.log('stopSiren called!');
             sirenPlaying = false;
+            // إيقاف الـ audio element
+            const audio = document.getElementById('emergencySound');
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+            // إيقاف Web Audio API
             if (sirenLoopInterval) {
                 clearInterval(sirenLoopInterval);
                 sirenLoopInterval = null;
