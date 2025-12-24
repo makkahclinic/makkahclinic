@@ -3010,6 +3010,7 @@
       document.getElementById('locationGrid').innerHTML = '';
       document.getElementById('musterGrid').innerHTML = '';
       document.getElementById('customLocation').value = '';
+      APP.selectedMusters = new Set();
 
       document.getElementById('issueBtn').disabled = true;
 
@@ -3155,19 +3156,35 @@
         {key:'B',name:'نقطة تجمع B',desc:'الساحة الخلفية'},
       ];
 
-      host.innerHTML = ms.map(m=>`
-        <button type="button" class="muster-btn" data-m="${escapeHtml(m.key)}" onclick="selectMuster('${escapeHtml(m.key)}')">
-          <i class="fas fa-map-marker-alt"></i> ${escapeHtml(m.name)}
-        </button>
-      `).join('');
+      host.innerHTML = `
+        <div style="color:var(--muted);font-size:.85rem;margin-bottom:8px"><i class="fas fa-info-circle"></i> يمكن اختيار أكثر من نقطة تجمع</div>
+        ${ms.map(m=>`
+          <button type="button" class="muster-btn" data-m="${escapeHtml(m.key)}" onclick="toggleMuster('${escapeHtml(m.key)}')">
+            <i class="fas fa-map-marker-alt"></i> ${escapeHtml(m.name)}
+          </button>
+        `).join('')}
+      `;
     }
 
-    function selectMuster(key){
-      APP.selectedMuster = String(key);
-      document.querySelectorAll('.muster-btn').forEach(b=>b.classList.remove('selected'));
-      const btn = document.querySelector(`.muster-btn[data-m="${CSS.escape(APP.selectedMuster)}"]`);
-      if (btn) btn.classList.add('selected');
+    // تهيئة مجموعة نقاط التجمع المختارة
+    if (!APP.selectedMusters) APP.selectedMusters = new Set();
+
+    function toggleMuster(key){
+      const k = String(key);
+      const btn = document.querySelector(`.muster-btn[data-m="${CSS.escape(k)}"]`);
+      if (APP.selectedMusters.has(k)){
+        APP.selectedMusters.delete(k);
+        if (btn) btn.classList.remove('selected');
+      } else {
+        APP.selectedMusters.add(k);
+        if (btn) btn.classList.add('selected');
+      }
       updateIssueButtonState();
+    }
+    
+    // للتوافق مع الكود القديم
+    function selectMuster(key){
+      toggleMuster(key);
     }
 
     function updateIssueButtonState(){
@@ -3183,7 +3200,7 @@
       const hasLocation = APP.selectedLocations.size > 0 || !!custom;
 
       const needsMuster = (APP.responseType === 'full_evacuation' || APP.responseType === 'isolation_evacuation');
-      const hasMuster = !needsMuster || !!APP.selectedMuster;
+      const hasMuster = !needsMuster || APP.selectedMusters.size > 0;
 
       issue.disabled = !(hasLocation && hasMuster);
     }
@@ -3222,7 +3239,8 @@
       if (custom) locParts.push(custom);
 
       const location = locParts.join(' + ');
-      const muster = APP.selectedMuster ? resolveMusterLabel(APP.selectedMuster) : '';
+      const musterParts = Array.from(APP.selectedMusters).map(resolveMusterLabel);
+      const muster = musterParts.join(' + ');
 
       // determine scenarioKey for reports
       const scenarioKey = report.scenarioKey || scenarioKeyFromReportType(report.type) || 'fire';
