@@ -1,0 +1,2503 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مركز القيادة - مجمع مكة الطبي</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #1e3a5f;
+            --primary-dark: #152a45;
+            --gold: #c9a962;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --info: #17a2b8;
+            --bg-light: #f8f9fa;
+            --sidebar-width: 260px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: var(--bg-light);
+            min-height: 100vh;
+            display: flex;
+        }
+        .sidebar, .main-content { visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+        body.authenticated .sidebar, body.authenticated .main-content { visibility: visible; opacity: 1; }
+        .sidebar {
+            width: var(--sidebar-width);
+            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+            min-height: 100vh;
+            position: fixed;
+            right: 0;
+            top: 0;
+            z-index: 100;
+            transition: transform 0.3s;
+        }
+        .sidebar-header {
+            padding: 1.2rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-header img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            padding: 5px;
+        }
+        .sidebar-header h3 {
+            color: white;
+            margin-top: 0.6rem;
+            font-size: 0.95rem;
+        }
+        .sidebar-header .role-badge {
+            display: inline-block;
+            background: var(--gold);
+            color: var(--primary-dark);
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            margin-top: 0.4rem;
+            font-weight: 700;
+        }
+        .nav-menu { padding: 0.8rem 0; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-right: 4px solid transparent;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .nav-item:hover, .nav-item.active {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-right-color: var(--gold);
+        }
+        .nav-item i { width: 22px; text-align: center; }
+        /* قائمة الطوارئ الذكية */
+        .eoc-nav-item { justify-content: flex-start; position: relative; }
+        .eoc-nav-item .eoc-chevron { margin-right: auto; transition: transform 0.3s; font-size: 0.7rem; }
+        .eoc-nav-item.open .eoc-chevron { transform: rotate(180deg); }
+        .eoc-submenu { 
+            display: none; 
+            background: rgba(0,0,0,0.25); 
+            padding: 8px; 
+            border-right: 3px solid var(--gold);
+        }
+        .eoc-submenu.open { display: block; }
+        .eoc-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            margin: 6px 0;
+            background: rgba(255,255,255,0.08);
+            border-radius: 8px;
+            text-decoration: none;
+            color: white;
+            transition: all 0.2s;
+        }
+        .eoc-link:hover { background: rgba(255,255,255,0.15); transform: translateX(-3px); }
+        .eoc-link img { width: 45px; height: 45px; border-radius: 6px; background: white; }
+        .eoc-link strong { display: block; font-size: 0.85rem; margin-bottom: 2px; }
+        .eoc-link small { color: rgba(255,255,255,0.6); font-size: 0.7rem; }
+        .nav-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.8rem 0; }
+        .main-content {
+            margin-right: var(--sidebar-width);
+            flex: 1;
+            padding: 1.2rem;
+            min-height: 100vh;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 1.2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 1.2rem;
+        }
+        .welcome-text h2 { color: var(--primary); font-size: 1.2rem; }
+        .welcome-text p { color: #666; font-size: 0.85rem; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+
+        /* مؤشرات رئيسية */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.2rem;
+        }
+        .kpi-card {
+            background: white;
+            border-radius: 14px;
+            padding: 1.2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid rgba(0,0,0,0.04);
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--gold);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .kpi-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+        .kpi-card:hover::before { opacity: 1; }
+        .kpi-icon {
+            width: 55px;
+            height: 55px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .kpi-icon.complaints { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .kpi-icon.incidents { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .kpi-icon.risks { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .kpi-icon.rounds { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+        .kpi-icon.calibration { background: linear-gradient(135deg, #fa709a, #fee140); }
+        .kpi-icon.maintenance { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .kpi-icon.needlestick { background: linear-gradient(135deg, #a8edea, #fed6e3); color: #333; }
+        .kpi-icon.eoc { background: linear-gradient(135deg, #10b981, #059669); transition: all 0.3s; }
+        .eoc-smart-card.active-emergency { border: 2px solid #dc2626 !important; }
+        .eoc-smart-card.active-emergency .kpi-icon.eoc { 
+            background: linear-gradient(135deg, #dc2626, #991b1b) !important;
+            animation: eocPulse 1s infinite;
+        }
+        @keyframes eocPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+            50% { transform: scale(1.08); box-shadow: 0 0 20px 5px rgba(220, 38, 38, 0.4); }
+        }
+        .kpi-info h3 { font-size: 1.6rem; color: var(--primary); line-height: 1; font-weight: 700; }
+        .kpi-info p { font-size: 0.8rem; color: #555; margin-top: 4px; font-weight: 500; }
+        .kpi-info .sub { font-size: 0.75rem; color: #999; display: block; margin-top: 2px; }
+        .kpi-info .sub.danger { color: #DC143C !important; font-weight: 700; }
+
+        /* قسم التنبيهات */
+        .alerts-section {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid #eee;
+        }
+        .section-header h3 { font-size: 1rem; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        .alert-item:last-child { margin-bottom: 0; }
+        .alert-item.danger { background: #fff5f5; border-right: 4px solid var(--danger); }
+        .alert-item.warning { background: #fffbeb; border-right: 4px solid var(--warning); }
+        .alert-item.info { background: #f0f9ff; border-right: 4px solid var(--info); }
+        .alert-item i { font-size: 1.1rem; }
+        .alert-item.danger i { color: var(--danger); }
+        .alert-item.warning i { color: var(--warning); }
+        .alert-item.info i { color: var(--info); }
+        .alert-item .alert-text { flex: 1; }
+        .alert-item .alert-count { font-weight: 700; font-size: 1.1rem; }
+        .no-alerts { text-align: center; padding: 1.5rem; color: #999; font-size: 0.9rem; }
+
+        /* جدول الإحصائيات */
+        .stats-grid-detailed {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.2rem;
+        }
+        .stats-box {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .stats-box h4 {
+            font-size: 0.9rem;
+            color: var(--primary);
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+        }
+        .stats-row:last-child { border-bottom: none; }
+        .stats-row .label { color: #666; }
+        .stats-row .value { font-weight: 700; color: var(--primary); }
+        .stats-row .value.danger { color: var(--danger); }
+        .stats-row .value.warning { color: var(--warning); }
+        .stats-row .value.success { color: var(--success); }
+
+        /* روابط سريعة */
+        .quick-links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.8rem;
+        }
+        .quick-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 1rem;
+            background: white;
+            border-radius: 10px;
+            text-decoration: none;
+            color: var(--primary);
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+        .quick-link:hover { background: var(--primary); color: white; transform: translateY(-2px); }
+        .quick-link i { font-size: 1.5rem; }
+
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s;
+        }
+        .loading-overlay.hidden { 
+            display: none !important; 
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #eee;
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .admin-only { display: none; }
+        body.is-admin .admin-only { display: block; }
+
+        .users-section .user-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.8rem;
+            border-bottom: 1px solid #eee;
+        }
+        .user-card:last-child { border-bottom: none; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+        .user-details h4 { color: var(--primary); font-size: 0.9rem; }
+        .user-details p { color: #666; font-size: 0.75rem; }
+        select.role-select {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 992px) {
+            .sidebar { transform: translateX(100%); }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-right: 0; }
+            .menu-toggle { display: block !important; }
+        }
+        .menu-toggle {
+            display: none;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .refresh-btn:hover { background: #f0f0f0; }
+        .refresh-btn.loading i { animation: spin 1s linear infinite; }
+        
+        /* تنبيه الطوارئ المنبثق */
+        .emergency-popup-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s;
+        }
+        .emergency-popup-overlay.show { display: flex; }
+        .emergency-popup {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            color: white;
+            box-shadow: 0 20px 60px rgba(220,38,38,0.5);
+            animation: popupBounce 0.5s ease-out;
+        }
+        @keyframes popupBounce {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .emergency-popup-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: pulse 1s infinite;
+        }
+        .emergency-popup h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .emergency-popup p {
+            font-size: 1rem;
+            opacity: 0.9;
+            margin-bottom: 1.5rem;
+        }
+        .emergency-popup-details {
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: right;
+        }
+        .emergency-popup-details div {
+            margin: 0.3rem 0;
+            font-size: 0.9rem;
+        }
+        .emergency-popup-btn {
+            display: inline-block;
+            background: white;
+            color: #dc2626;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 5px;
+        }
+        .emergency-popup-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+        .emergency-popup-btn.secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+        .emergency-popup-sound {
+            position: absolute;
+        }
+        
+        /* نافذة روابط الطوارئ QR */
+        .qr-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 9998;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .qr-modal-overlay.show { display: flex; }
+        .qr-modal {
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f1f33 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 800px;
+            width: 95%;
+            position: relative;
+            border: 2px solid rgba(201,169,98,0.3);
+        }
+        .qr-modal h2 { color: white !important; }
+        .qr-modal-close {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .qr-modal-close:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+        .qr-cards-container {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .qr-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-decoration: none;
+            color: white;
+            transition: all 0.3s;
+            min-width: 180px;
+        }
+        .qr-card:hover { transform: translateY(-5px); }
+        .qr-card.qr-red { background: rgba(220,38,38,0.5); border: 2px solid rgba(220,38,38,0.8); }
+        .qr-card.qr-green { background: rgba(16,185,129,0.5); border: 2px solid rgba(16,185,129,0.8); }
+        .qr-card img {
+            width: 150px;
+            height: 150px;
+            border-radius: 10px;
+            background: white;
+            padding: 8px;
+            margin-bottom: 1rem;
+        }
+        .qr-label {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+        }
+        .qr-card small { opacity: 0.8; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <!-- نافذة روابط الطوارئ QR -->
+    <div class="qr-modal-overlay" id="qrCodesModal">
+        <div class="qr-modal">
+            <button class="qr-modal-close" onclick="closeQrCodesModal()">&times;</button>
+            <h2 style="text-align:center; color:#1e3a5f; margin-bottom:1.5rem;">
+                <i class="fas fa-qrcode"></i> روابط الطوارئ
+            </h2>
+            <div class="qr-cards-container">
+                <a href="emergency-report.html" target="_blank" class="qr-card qr-red">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/emergency-report.html" alt="QR">
+                    <div class="qr-label">
+                        <i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ
+                    </div>
+                    <small>نموذج البلاغ</small>
+                </a>
+                <a href="Emergency.html" target="_blank" class="qr-card qr-green">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/Emergency.html" alt="QR">
+                    <div class="qr-label">
+                        <i class="fas fa-tv"></i> الشاشات
+                    </div>
+                    <small>عرض التنبيه</small>
+                </a>
+                <a href="emergency-poster.html" target="_blank" class="qr-card qr-green">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/emergency-poster.html" alt="QR">
+                    <div class="qr-label">
+                        <i class="fas fa-image"></i> البوستر
+                    </div>
+                    <small>للطباعة</small>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- overlay تفعيل الصوت -->
+    <div id="audioEnableOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;">
+        <div style="background:linear-gradient(135deg,#1e3a5f,#2c5282);padding:3rem;border-radius:20px;text-align:center;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <div style="font-size:4rem;margin-bottom:1rem;">🔔</div>
+            <h2 style="color:#fff;font-size:1.8rem;margin-bottom:1rem;">تفعيل التنبيه الصوتي</h2>
+            <p style="color:#cbd5e0;margin-bottom:2rem;line-height:1.8;">اضغط على الزر لتفعيل صوت الإنذار<br>عند وصول بلاغات الطوارئ</p>
+            <button onclick="enableAudioAlerts()" style="background:linear-gradient(135deg,#c9a962,#d4af37);color:#1e3a5f;border:none;padding:1rem 3rem;font-size:1.3rem;font-weight:bold;border-radius:12px;cursor:pointer;font-family:inherit;">
+                ✓ تفعيل الإنذار الصوتي
+            </button>
+        </div>
+    </div>
+
+    <!-- تنبيه الطوارئ المنبثق -->
+    <div class="emergency-popup-overlay" id="emergencyPopup">
+        <div class="emergency-popup">
+            <div class="emergency-popup-icon">🚨</div>
+            <h2>تنبيه طوارئ!</h2>
+            <p id="emergencyPopupMessage">تم استلام بلاغ طوارئ جديد</p>
+            <div class="emergency-popup-details" id="emergencyPopupDetails">
+                <div><strong>النوع:</strong> <span id="popupType">-</span></div>
+                <div><strong>الموقع:</strong> <span id="popupLocation">-</span></div>
+                <div><strong>الوقت:</strong> <span id="popupTime">-</span></div>
+            </div>
+            <button class="emergency-popup-btn" onclick="openEocCommand()">
+                <i class="fas fa-external-link-alt"></i> ادخل الآن
+            </button>
+            <button class="emergency-popup-btn secondary" onclick="closeEmergencyPopup()">
+                <i class="fas fa-times"></i> إلغاء
+            </button>
+        </div>
+        <audio id="emergencySound" preload="auto">
+            <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+        </audio>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p>جاري تحميل مركز القيادة...</p>
+    </div>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <img src="logo-transparent.png" alt="Logo" onerror="this.style.display='none'">
+            <h3 id="staffName">الموظف</h3>
+            <span class="role-badge" id="roleBadge">موظف</span>
+        </div>
+        <nav class="nav-menu">
+            <a class="nav-item active" data-section="dashboard">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>المركز الرقمي</span>
+            </a>
+            <a class="nav-item system-link" data-system="cbahi" href="cbahi-portal.html" target="_blank">
+                <i class="fas fa-award"></i>
+                <span>بوابة سباهي</span>
+            </a>
+            <div class="nav-divider"></div>
+            
+            <!-- قسم التبليغات -->
+            <div class="nav-dropdown">
+                <a class="nav-item dropdown-toggle" onclick="toggleDropdown(this)">
+                    <i class="fas fa-bullhorn"></i>
+                    <span>التبليغات</span>
+                    <i class="fas fa-chevron-down dropdown-arrow"></i>
+                </a>
+                <div class="dropdown-menu" style="display:none; padding-right:20px;">
+                    <a class="nav-item system-link" data-system="needlestick" href="ipc/incidents/report-needlestick.html" target="_blank">
+                        <i class="fas fa-syringe"></i>
+                        <span>تبليغ وخز إبري</span>
+                    </a>
+                    <a class="nav-item system-link" data-system="incidents" href="incident-report.html" target="_blank">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>تبليغ حادثة</span>
+                    </a>
+                    <a class="nav-item system-link" data-system="complaints" href="report.html" target="_blank">
+                        <i class="fas fa-comment-dots"></i>
+                        <span>تبليغ شكوى</span>
+                    </a>
+                </div>
+            </div>
+            
+            <a class="nav-item system-link" data-system="training" href="#">
+                <i class="fas fa-graduation-cap"></i>
+                <span>التدريب</span>
+            </a>
+            <a class="nav-item system-link" data-system="risks" href="risk-register.html" target="_blank">
+                <i class="fas fa-shield-alt"></i>
+                <span>تسجيل خطر</span>
+            </a>
+            <a class="nav-item" href="eoc-command.html" target="_blank">
+                <i class="fas fa-shield-alt"></i>
+                <span>مركز القيادة EOC</span>
+            </a>
+            <!-- روابط الطوارئ - تفتح modal بالـ QR codes -->
+            <div class="nav-item" onclick="openQrCodesModal()" style="cursor:pointer;">
+                <i class="fas fa-qrcode"></i>
+                <span>روابط الطوارئ</span>
+            </div>
+            <div class="nav-divider"></div>
+            <a class="nav-item admin-only" data-section="users">
+                <i class="fas fa-users-cog"></i>
+                <span>إدارة المستخدمين</span>
+            </a>
+            <a class="nav-item admin-only" data-section="requests">
+                <i class="fas fa-user-clock"></i>
+                <span>طلبات العضوية</span>
+                <span class="badge-count" id="requestsBadge" style="display:none; background:#ef4444; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-right:auto;"></span>
+            </a>
+            <a class="nav-item admin-only" data-section="permissions">
+                <i class="fas fa-user-shield"></i>
+                <span>إدارة الصلاحيات</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-item" id="logoutBtn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>تسجيل الخروج</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="welcome-text">
+                <h2>مركز القيادة والسيطرة</h2>
+                <p id="dateDisplay"></p>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="refresh-btn" id="refreshBtn" title="تحديث البيانات">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <a href="index.html" class="btn btn-outline">
+                    <i class="fas fa-external-link-alt"></i>
+                    الموقع
+                </a>
+            </div>
+        </div>
+
+        <section class="content-section active" id="section-dashboard">
+            <!-- مؤشرات رئيسية -->
+            <div class="kpi-grid">
+                <!-- أيقونة الطوارئ الذكية -->
+                <a href="eoc-command.html" target="_blank" class="kpi-card system-card eoc-smart-card" id="eocSmartCard" data-system="eoc">
+                    <div class="kpi-icon eoc" id="eocSmartIcon"><i class="fas fa-triangle-exclamation"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-eoc-count">-</h3>
+                        <p id="kpi-eoc-label">حالة طوارئ</p>
+                        <span class="sub" id="kpi-eoc-status">جاري الفحص...</span>
+                    </div>
+                </a>
+                <a href="complaint_mentoring.html" target="_blank" class="kpi-card system-card" data-system="complaints">
+                    <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-complaints-open">-</h3>
+                        <p>شكوى مفتوحة</p>
+                        <span class="sub" id="kpi-complaints-escalated"></span>
+                    </div>
+                </a>
+                <a href="incident-report-analysis.html" target="_blank" class="kpi-card system-card" data-system="incidents">
+                    <div class="kpi-icon incidents"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-incidents-open">-</h3>
+                        <p>حادثة مفتوحة</p>
+                        <span class="sub" id="kpi-incidents-escalated"></span>
+                    </div>
+                </a>
+                <a href="risk-register.html" target="_blank" class="kpi-card system-card" data-system="risks">
+                    <div class="kpi-icon risks"><i class="fas fa-shield-alt"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-risks-active">-</h3>
+                        <p>خطر نشط</p>
+                        <span class="sub" id="kpi-risks-high"></span>
+                    </div>
+                </a>
+                <a href="Round.html" target="_blank" class="kpi-card system-card" data-system="rounds">
+                    <div class="kpi-icon rounds"><i class="fas fa-clipboard-check"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-rounds-today">-</h3>
+                        <p>جولة اليوم</p>
+                        <span class="sub" id="kpi-rounds-delayed"></span>
+                    </div>
+                </a>
+                <a href="calibration.html" target="_blank" class="kpi-card system-card" data-system="calibration">
+                    <div class="kpi-icon calibration"><i class="fas fa-cogs"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-calibration-compliance">-</h3>
+                        <p>نسبة المعايرة</p>
+                        <span class="sub" id="kpi-calibration-overdue"></span>
+                    </div>
+                </a>
+                <a href="maintenance.html" target="_blank" class="kpi-card system-card" data-system="maintenance">
+                    <div class="kpi-icon maintenance"><i class="fas fa-wrench"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-maintenance-total">-</h3>
+                        <p>أجهزة بدون صيانة</p>
+                        <span class="sub" id="kpi-maintenance-completed" style="color:#28a745"></span>
+                        <span class="sub" id="kpi-maintenance-overdue"></span>
+                    </div>
+                </a>
+                <a href="pages/needleـstickـanalysis.html" target="_blank" class="kpi-card system-card" data-system="needlestick">
+                    <div class="kpi-icon needlestick"><i class="fas fa-syringe"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-needlestick">-</h3>
+                        <p>حالة وخز إبري</p>
+                        <span class="sub" id="kpi-needlestick-month"></span>
+                    </div>
+                </a>
+            </div>
+
+            <!-- قسم التنبيهات العاجلة -->
+            <div class="alerts-section">
+                <div class="section-header">
+                    <h3><i class="fas fa-bell"></i> التنبيهات والتصعيدات</h3>
+                </div>
+                <div id="alertsContainer">
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success); margin-bottom: 10px;"></i>
+                        <p>جاري تحميل التنبيهات...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- إحصائيات تفصيلية -->
+            <div class="stats-grid-detailed">
+                <div class="stats-box">
+                    <h4><i class="fas fa-comment-dots"></i> الشكاوى</h4>
+                    <div class="stats-row">
+                        <span class="label">جديدة</span>
+                        <span class="value" id="stat-complaints-new">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">قيد المعالجة</span>
+                        <span class="value warning" id="stat-complaints-progress">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مصعّدة</span>
+                        <span class="value danger" id="stat-complaints-escalated">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مغلقة</span>
+                        <span class="value success" id="stat-complaints-closed">-</span>
+                    </div>
+                </div>
+                <div class="stats-box">
+                    <h4><i class="fas fa-exclamation-triangle"></i> الحوادث</h4>
+                    <div class="stats-row">
+                        <span class="label">جديدة</span>
+                        <span class="value" id="stat-incidents-new">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">قيد التحقيق</span>
+                        <span class="value warning" id="stat-incidents-progress">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مصعّدة</span>
+                        <span class="value danger" id="stat-incidents-escalated">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مغلقة</span>
+                        <span class="value success" id="stat-incidents-closed">-</span>
+                    </div>
+                </div>
+                <div class="stats-box">
+                    <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
+                    <div class="stats-row">
+                        <span class="label">خطر عالي</span>
+                        <span class="value danger" id="stat-risks-high">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">خطر متوسط</span>
+                        <span class="value warning" id="stat-risks-medium">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">خطر منخفض</span>
+                        <span class="value" id="stat-risks-low">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span class="label">مُعالجة</span>
+                        <span class="value success" id="stat-risks-resolved">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- روابط سريعة -->
+            <div class="stats-box">
+                <h4><i class="fas fa-rocket"></i> الوصول السريع</h4>
+                <div class="quick-links-grid">
+                    <a href="report.html" class="quick-link" target="_blank">
+                        <i class="fas fa-comment-alt"></i>
+                        <span>رفع شكوى</span>
+                    </a>
+                    <a href="incident-report.html" class="quick-link" target="_blank">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>بلاغ حادثة</span>
+                    </a>
+                    <a href="risk-register.html?action=new" class="quick-link" target="_blank">
+                        <i class="fas fa-shield-virus"></i>
+                        <span>تسجيل خطر</span>
+                    </a>
+                    <a href="ipc/incidents/report-needlestick.html" class="quick-link" target="_blank">
+                        <i class="fas fa-syringe"></i>
+                        <span>بلاغ وخز</span>
+                    </a>
+                    <a href="mega.html" class="quick-link" target="_blank">
+                        <i class="fas fa-th-large"></i>
+                        <span>المركز الرقمي</span>
+                    </a>
+                    <a href="cbahi-portal.html" class="quick-link" target="_blank">
+                        <i class="fas fa-award"></i>
+                        <span>بوابة سباهي</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-section" id="section-users">
+            <div class="stats-box users-section">
+                <h4><i class="fas fa-crown"></i> مركز القيادة والسيطرة - إدارة المستخدمين</h4>
+                <p style="color:#666; margin-bottom:15px; font-size:0.9rem;">تحكم كامل في جميع المستخدمين - عرض، تعليق، حذف، إعادة كلمة المرور</p>
+                
+                <div id="usersStats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius:12px;">
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #10b981;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#10b981;" id="usersActiveCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">نشط</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #f59e0b;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="usersSuspendedCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">معلق</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #1e3a5f;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="usersTotalCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <input type="text" id="usersSearchInput" placeholder="🔍 بحث بالاسم أو البريد..." style="flex:1; min-width:200px; padding:10px 15px; border:1px solid #ddd; border-radius:8px; font-family:inherit;">
+                    <button onclick="loadUsers()" style="padding:10px 20px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer; font-family:inherit;">
+                        <i class="fas fa-sync-alt"></i> تحديث
+                    </button>
+                </div>
+                
+                <div id="usersContainer">
+                    <div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-section" id="section-requests">
+            <div class="stats-box">
+                <h4><i class="fas fa-user-clock"></i> طلبات العضوية الإدارية</h4>
+                <div id="requestsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-section" id="section-permissions">
+            <div class="stats-box">
+                <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات - تحكم كامل</h4>
+                <p style="color:#666; margin-bottom:15px; font-size:0.9rem;">تعيين اللجان والأنظمة المسموحة لكل موظف</p>
+                
+                <div id="permissionsStats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius:12px;">
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #10b981;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#10b981;" id="statsActive">0</div>
+                        <div style="font-size:0.8rem; color:#666;">فعال</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #f59e0b;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="statsSuspended">0</div>
+                        <div style="font-size:0.8rem; color:#666;">معلق</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid:#1e3a5f;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="statsTotal">0</div>
+                        <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
+                    </div>
+                </div>
+                
+                <div id="permissionsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <div id="toastNotification" style="position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#10b981; color:white; padding:15px 30px; border-radius:10px; box-shadow:0 4px 15px rgba(0,0,0,0.2); display:none; z-index:9999; font-weight:600;">
+        <i class="fas fa-check-circle" style="margin-left:8px;"></i>
+        <span id="toastMessage">تم الحفظ بنجاح</span>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
+            authDomain: "insurance-check-6cec9.firebaseapp.com",
+            projectId: "insurance-check-6cec9",
+            storageBucket: "insurance-check-6cec9.appspot.com",
+            messagingSenderId: "992769471393",
+            appId: "1:992769471393:web:c8a9400210a0e7901011e0"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        let currentUserRole = null;
+
+        // API URLs
+        const APIs = {
+            complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
+            incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
+            risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
+            rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec",
+            needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec",
+            calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec",
+            maintenance: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec",
+            eoc: "https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec"
+        };
+        
+        // دالة حساب إحصائيات المعايرة (نفس منطق calibration.html)
+        function calculateCalibrationStats(data) {
+            if (!data || data.status !== 'success' || !data.data) {
+                return { compliance: 0, overdue: 0, pass: 0, fail: 0, total: 0, upcoming: 0 };
+            }
+            
+            const assetsMap = data.data.assetsMap || {};
+            const records = data.data.records || [];
+            
+            // حساب إجمالي المهام من قائمة الأجهزة
+            let totalTasks = 0;
+            Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
+            
+            // حساب المطابق والمتأخر
+            let pass = 0, fail = 0, overdue = 0, upcoming = 0;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // حد الـ 30 يوم للقادم
+            const upcomingThreshold = new Date(today);
+            upcomingThreshold.setDate(upcomingThreshold.getDate() + 30);
+            
+            // تجميع أحدث سجل لكل جهاز (الحقول بحروف كبيرة من الـ API)
+            const latestRecords = {};
+            records.forEach(r => {
+                const assetID = r.AssetID || r.assetID || r.asset_id;
+                const recordDate = r.TestDate || r.Timestamp || r.date;
+                if (!assetID) return;
+                if (!latestRecords[assetID] || new Date(recordDate) > new Date(latestRecords[assetID].recordDate)) {
+                    latestRecords[assetID] = { ...r, recordDate };
+                }
+            });
+            
+            Object.values(latestRecords).forEach(r => {
+                // حساب Pass/Fail (Result بحرف كبير)
+                const result = r.Result || r.result;
+                if (result === 'Pass') pass++;
+                else if (result === 'Fail') fail++;
+                
+                // حساب Overdue و Upcoming (NextDue بحرف كبير)
+                const nd = r.NextDue || r.nextDue || r.next_due;
+                if (nd) {
+                    const nextDue = new Date(nd);
+                    if (nextDue < today) {
+                        overdue++;
+                    } else if (nextDue <= upcomingThreshold) {
+                        upcoming++;
+                    }
+                }
+            });
+            
+            // حساب نسبة الامتثال = (المطابق / إجمالي المهام) * 100
+            const compliance = totalTasks > 0 ? Math.round((pass / totalTasks) * 100) : 0;
+            
+            console.log(`Calibration: Pass=${pass}, Fail=${fail}, Overdue=${overdue}, Total=${totalTasks}, Compliance=${compliance}%`);
+            
+            return { compliance, overdue, pass, fail, total: totalTasks, upcoming };
+        }
+
+        // التاريخ الهجري
+        const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).format(new Date());
+        document.getElementById('dateDisplay').textContent = hijriDate;
+
+        async function getUserRole(uid) {
+            try {
+                const docRef = doc(db, "staff_roles", uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    return docSnap.data(); // نرجع كل البيانات
+                }
+                return null;
+            } catch (e) {
+                console.error('Role check error:', e);
+                return null;
+            }
+        }
+        
+        let userAllowedSystems = [];
+        
+        function applySystemsFilter(role, allowedSystems) {
+            // القائمة الجانبية ثابتة للجميع - لا يتم إخفاء أي روابط
+            console.log('Sidebar is fixed for all users - no filtering applied');
+            // لا نخفي أي روابط من السايد بار
+        }
+
+        async function apiCall(url, action, payload = {}) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action, payload }),
+                    redirect: 'follow'
+                });
+                const text = await response.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Parse error:', text.substring(0, 200));
+                    return { ok: false, error: 'Invalid response' };
+                }
+            } catch (e) {
+                console.error(`API Error (${action}):`, e);
+                return { ok: false, error: e.message };
+            }
+        }
+
+        async function fetchJsonp(url) {
+            const r = await fetch(url, { redirect: 'follow' });
+            const text = await r.text();
+            const m = text.match(/^[a-zA-Z_$][\w$]*\s*\((.*)\)\s*;?\s*$/s);
+            if (m && m[1]) return JSON.parse(m[1]);
+            return JSON.parse(text);
+        }
+
+        async function loadDashboardData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.classList.add('loading');
+            
+            console.log('Loading dashboard data...');
+
+            try {
+                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
+                    apiCall(APIs.complaints, 'getComplaintStats', {}),
+                    apiCall(APIs.incidents, 'getIncidentStats', {}),
+                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
+                    apiCall(APIs.rounds, 'getMetrics', {}),
+                    fetchJsonp(APIs.needlestick + '?action=data').catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
+                    fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
+                    apiCall(APIs.maintenance, 'getKPIs', {})
+                ]);
+
+                console.log('Complaints:', complaintsRes);
+                console.log('Incidents:', incidentsRes);
+                console.log('Risks:', risksRes);
+                console.log('Rounds:', roundsRes);
+                console.log('Calibration:', calibrationRes);
+                console.log('Maintenance:', maintenanceRes);
+
+                // الشكاوى - البيانات ترجع مباشرة وليس في stats
+                if (complaintsRes.ok) {
+                    const s = complaintsRes;
+                    const openComplaints = (s.new || 0) + (s.in_progress || 0);
+                    document.getElementById('kpi-complaints-open').textContent = openComplaints;
+                    const escEl = document.getElementById('kpi-complaints-escalated');
+                    if (s.escalated > 0) {
+                        escEl.textContent = `${s.escalated} مصعّدة`;
+                        escEl.classList.add('danger');
+                    } else {
+                        escEl.textContent = '';
+                        escEl.classList.remove('danger');
+                    }
+                    document.getElementById('stat-complaints-new').textContent = s.new || 0;
+                    document.getElementById('stat-complaints-progress').textContent = s.in_progress || 0;
+                    document.getElementById('stat-complaints-escalated').textContent = s.escalated || 0;
+                    document.getElementById('stat-complaints-closed').textContent = s.closed || 0;
+                } else {
+                    console.warn('Complaints API failed:', complaintsRes);
+                }
+
+                // الحوادث - البيانات ترجع مباشرة مع byStatus للتصعيدات
+                if (incidentsRes.ok) {
+                    const s = incidentsRes;
+                    const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
+                    const escalatedCount = s.byStatus?.escalated?.count || s.escalated || 0;
+                    
+                    document.getElementById('kpi-incidents-open').textContent = openIncidents;
+                    const incEscEl = document.getElementById('kpi-incidents-escalated');
+                    if (escalatedCount > 0) {
+                        incEscEl.textContent = `${escalatedCount} مصعّدة`;
+                        incEscEl.classList.add('danger');
+                    } else {
+                        incEscEl.textContent = '';
+                        incEscEl.classList.remove('danger');
+                    }
+                    document.getElementById('stat-incidents-new').textContent = s.new || s.open || 0;
+                    document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
+                    document.getElementById('stat-incidents-escalated').textContent = escalatedCount;
+                    document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
+                } else {
+                    console.warn('Incidents API failed:', incidentsRes);
+                }
+
+                // سجل المخاطر - يستخدم ok وليس success
+                if (risksRes.ok) {
+                    const r = risksRes;
+                    // ext = خارجي، total = الإجمالي، high/med/low = المستويات
+                    const activeRisks = r.total || (r.high || 0) + (r.med || 0) + (r.low || 0);
+                    document.getElementById('kpi-risks-active').textContent = activeRisks;
+                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : (r.ext ? `${r.ext} خارجي` : '');
+                    document.getElementById('stat-risks-high').textContent = r.high || 0;
+                    document.getElementById('stat-risks-medium').textContent = r.med || r.medium || 0;
+                    document.getElementById('stat-risks-low').textContent = r.low || 0;
+                    document.getElementById('stat-risks-resolved').textContent = r.resolved || r.closed || 0;
+                } else {
+                    console.warn('Risks API failed:', risksRes);
+                }
+
+                // الجولات - البيانات ترجع مباشرة
+                if (roundsRes.ok) {
+                    const rd = roundsRes;
+                    // عرض المكتملة في البطاقة الرئيسية
+                    document.getElementById('kpi-rounds-today').textContent = rd.completed || 0;
+                    // عرض المتأخرة بوضوح
+                    if (rd.delayed > 0) {
+                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
+                        document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
+                    } else if (rd.violations > 0) {
+                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.violations} مخالفة`;
+                        document.getElementById('kpi-rounds-delayed').style.color = '#f0ad4e';
+                    } else {
+                        document.getElementById('kpi-rounds-delayed').textContent = '';
+                    }
+                } else {
+                    console.warn('Rounds API failed:', roundsRes);
+                }
+
+                // الوخز الإبري - البيانات ترجع كـ array في rows أو data
+                console.log('Needlestick:', needlestickRes);
+                const needleData = needlestickRes.rows || needlestickRes.data;
+                if ((needlestickRes.success || needlestickRes.status === 'success') && Array.isArray(needleData)) {
+                    const records = needleData;
+                    const total = records.length;
+                    const now = new Date();
+                    const thisMonth = records.filter(r => {
+                        const d = new Date(r.date || r.timestamp);
+                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    }).length;
+                    document.getElementById('kpi-needlestick').textContent = total;
+                    document.getElementById('kpi-needlestick-month').textContent = thisMonth > 0 ? `${thisMonth} هذا الشهر` : '';
+                } else if (needlestickRes.total !== undefined) {
+                    document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
+                    document.getElementById('kpi-needlestick-month').textContent = needlestickRes.thisMonth ? `${needlestickRes.thisMonth} هذا الشهر` : '';
+                } else {
+                    document.getElementById('kpi-needlestick').textContent = '-';
+                    console.warn('Needlestick API failed:', needlestickRes);
+                }
+
+                // المعايرة/الصيانة - حساب الإحصائيات من البيانات
+                const calStats = calculateCalibrationStats(calibrationRes);
+                console.log('Calibration Stats:', calStats);
+                
+                if (calStats.total > 0) {
+                    // نسبة الامتثال كرقم رئيسي مع علامة %
+                    const compEl = document.getElementById('kpi-calibration-compliance');
+                    compEl.textContent = calStats.compliance + '%';
+                    
+                    // تلوين النسبة حسب القيمة
+                    if (calStats.compliance >= 80) {
+                        compEl.style.color = '#28a745'; // أخضر
+                    } else if (calStats.compliance >= 70) {
+                        compEl.style.color = '#ff9800'; // برتقالي
+                    } else {
+                        compEl.style.color = '#DC143C'; // أحمر
+                    }
+                    
+                    // التفاصيل: عدد المتأخرات بالأحمر
+                    const overdueEl = document.getElementById('kpi-calibration-overdue');
+                    if (calStats.overdue > 0) {
+                        overdueEl.textContent = `${calStats.overdue} جهاز متأخر`;
+                        overdueEl.classList.add('danger');
+                    } else {
+                        overdueEl.textContent = `${calStats.total} جهاز مُصان`;
+                        overdueEl.classList.remove('danger');
+                        overdueEl.style.color = '#28a745';
+                    }
+                } else {
+                    document.getElementById('kpi-calibration-compliance').textContent = '--';
+                    document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
+                }
+
+                // الصيانة - عرض إحصائيات الصيانة (نفس بيانات صفحة الصيانة)
+                console.log('Processing Maintenance:', maintenanceRes);
+                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.notServiced !== undefined || maintenanceRes.totalDevices !== undefined)) {
+                    const m = maintenanceRes.data || maintenanceRes;
+                    // عرض عدد الأجهزة غير المصانة (مثل صفحة الصيانة)
+                    const notServiced = m.notServiced ?? m.notServicedDevices ?? 0;
+                    const completed = m.completed ?? m.servicedDevices ?? 0;
+                    const overdue = m.overdue ?? m.overdueDevices ?? 0;
+                    
+                    document.getElementById('kpi-maintenance-total').textContent = notServiced;
+                    
+                    const completedEl = document.getElementById('kpi-maintenance-completed');
+                    const overdueEl = document.getElementById('kpi-maintenance-overdue');
+                    
+                    completedEl.textContent = `مكتملة ${completed}`;
+                    completedEl.style.color = '#28a745';
+                    
+                    if (overdue > 0) {
+                        overdueEl.textContent = `متأخرة ${overdue}`;
+                        overdueEl.style.color = '#DC143C';
+                        overdueEl.classList.add('danger');
+                    } else {
+                        overdueEl.textContent = '';
+                        overdueEl.classList.remove('danger');
+                    }
+                } else {
+                    document.getElementById('kpi-maintenance-total').textContent = '--';
+                    document.getElementById('kpi-maintenance-completed').textContent = '';
+                    document.getElementById('kpi-maintenance-overdue').textContent = 'لا توجد بيانات';
+                }
+
+                // تحديث التنبيهات - إرسال كل البيانات
+                updateAlerts(complaintsRes, incidentsRes, risksRes, roundsRes, calStats);
+
+                // جلب حالة الطوارئ وتحديث الأيقونة الذكية
+                updateEocSmartCard();
+
+            } catch (e) {
+                console.error('Dashboard load error:', e);
+            } finally {
+                refreshBtn.classList.remove('loading');
+            }
+        }
+
+        // دالة تحديث أيقونة الطوارئ الذكية
+        async function updateEocSmartCard() {
+            const card = document.getElementById('eocSmartCard');
+            const countEl = document.getElementById('kpi-eoc-count');
+            const labelEl = document.getElementById('kpi-eoc-label');
+            const statusEl = document.getElementById('kpi-eoc-status');
+            
+            try {
+                // جلب الحالة النشطة والإحصائيات
+                const [activeRes, reportsRes] = await Promise.all([
+                    fetchJsonp(APIs.eoc + '?action=getActiveCommand&callback=_'),
+                    fetchJsonp(APIs.eoc + '?action=getEmergencyReports&limit=100&callback=_')
+                ]);
+                
+                // التحقق من وجود حالة طوارئ نشطة (مثل Emergency.html)
+                // الـ API يُرجع: { ok: true, command: { status: 'active', sessionId: '...' } }
+                const cmd = activeRes.command || {};
+                const isActive = activeRes.ok && 
+                    (cmd.status === 'active' || activeRes.status === 'active') && 
+                    cmd.sessionId;
+                
+                // حساب الإحصائيات
+                let totalReports = 0;
+                let openReports = 0;
+                let thisMonthReports = 0;
+                
+                if (reportsRes.ok && Array.isArray(reportsRes.reports)) {
+                    const reports = reportsRes.reports;
+                    totalReports = reports.length;
+                    openReports = reports.filter(r => r.status !== 'مغلق').length;
+                    
+                    const now = new Date();
+                    const thisMonth = now.getMonth();
+                    const thisYear = now.getFullYear();
+                    thisMonthReports = reports.filter(r => {
+                        const d = new Date(r.date);
+                        return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+                    }).length;
+                }
+                
+                // تحديث الواجهة - تنبض إذا كان هناك أمر نشط أو بلاغات مفتوحة
+                const shouldAlert = isActive || openReports > 0;
+                
+                if (shouldAlert) {
+                    card.classList.add('active-emergency');
+                    if (isActive) {
+                        countEl.textContent = '⚠️';
+                        labelEl.textContent = 'طوارئ نشطة!';
+                        // عرض نوع الاستجابة من الأمر
+                        const cmd = activeRes.command || {};
+                        statusEl.textContent = cmd.responseType || cmd.type || 'حالة جارية';
+                    } else {
+                        countEl.textContent = openReports;
+                        labelEl.textContent = 'بلاغ مفتوح!';
+                        statusEl.textContent = 'يحتاج متابعة';
+                    }
+                    statusEl.style.color = '#dc2626';
+                    statusEl.style.fontWeight = '700';
+                } else {
+                    card.classList.remove('active-emergency');
+                    countEl.textContent = totalReports;
+                    labelEl.textContent = 'حالة طوارئ';
+                    if (thisMonthReports > 0) {
+                        statusEl.textContent = thisMonthReports + ' هذا الشهر';
+                        statusEl.style.color = '#10b981';
+                    } else {
+                        statusEl.textContent = 'الوضع طبيعي ✓';
+                        statusEl.style.color = '#10b981';
+                    }
+                    statusEl.style.fontWeight = '600';
+                }
+            } catch (e) {
+                console.error('EOC Smart Card error:', e);
+                countEl.textContent = '-';
+                statusEl.textContent = 'خطأ في الاتصال';
+                statusEl.style.color = '#999';
+            }
+        }
+
+        // تحديث أيقونة الطوارئ كل 5 ثواني (مع التنبيهات)
+        setInterval(updateEocSmartCard, 5000);
+
+        // نظام التنبيهات المنبثقة للطوارئ
+        let lastKnownReportId = localStorage.getItem('lastKnownReportId') || '';
+        let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
+        
+        // دوال التنبيه المنبثق - متاحة globally للـ onclick
+        // ====== نظام صوت سيرين الطوارئ الاحترافي - Web Audio API ======
+        let alarmRepeatInterval = null;
+        let audioCtx = null;
+        let audioEnabled = localStorage.getItem('admin_audio_enabled') === '1';
+        let sirenPlaying = false;
+        let sirenOscillators = [];
+        
+        // إخفاء overlay إذا كان الصوت مفعل سابقاً
+        if (audioEnabled) {
+            document.getElementById('audioEnableOverlay').style.display = 'none';
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            } catch(e) { console.log('AudioContext init error:', e); }
+        }
+        
+        // دالة resume للـ AudioContext - تُستدعى عند أي تفاعل
+        async function resumeAudioContext() {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                try {
+                    await audioCtx.resume();
+                    console.log('AudioContext resumed! State:', audioCtx.state);
+                } catch(e) {
+                    console.log('Failed to resume AudioContext:', e);
+                }
+            }
+        }
+        
+        // عند عودة المستخدم للصفحة، حاول تشغيل AudioContext
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && audioEnabled) {
+                resumeAudioContext();
+            }
+        });
+        
+        // عند أي نقرة على الصفحة، حاول تشغيل AudioContext
+        document.addEventListener('click', () => {
+            if (audioEnabled) {
+                resumeAudioContext();
+            }
+        }, { once: false });
+        
+        // دالة تفعيل الصوت (تُستدعى من الزر)
+        window.enableAudioAlerts = async function() {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // مهم جداً: resume فوراً بعد الإنشاء
+                await audioCtx.resume();
+                console.log('AudioContext created and resumed! State:', audioCtx.state);
+                
+                audioEnabled = true;
+                localStorage.setItem('admin_audio_enabled', '1');
+                document.getElementById('audioEnableOverlay').style.display = 'none';
+                // تشغيل صوت تجريبي (3 دورات فقط)
+                sirenPlaying = true;
+                playTestSiren();
+            } catch(e) {
+                alert('فشل تفعيل الصوت: ' + e.message);
+            }
+        };
+        
+        // صوت سيرين إسعاف متواصل (Hi-Lo Continuous Siren)
+        let sirenLoopInterval = null;
+        
+        function playSirenCycle() {
+            if (!audioEnabled || !audioCtx || !sirenPlaying) return;
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                const now = audioCtx.currentTime;
+                
+                // نغمة عالية (Hi) - 0.5 ثانية
+                const oscHi = audioCtx.createOscillator();
+                const gainHi = audioCtx.createGain();
+                oscHi.type = 'sawtooth';
+                oscHi.frequency.setValueAtTime(800, now);
+                oscHi.frequency.linearRampToValueAtTime(1000, now + 0.25);
+                oscHi.frequency.linearRampToValueAtTime(800, now + 0.5);
+                gainHi.gain.setValueAtTime(0.6, now);
+                oscHi.connect(gainHi);
+                gainHi.connect(audioCtx.destination);
+                oscHi.start(now);
+                oscHi.stop(now + 0.5);
+                
+                // نغمة منخفضة (Lo) - 0.5 ثانية
+                const oscLo = audioCtx.createOscillator();
+                const gainLo = audioCtx.createGain();
+                oscLo.type = 'sawtooth';
+                oscLo.frequency.setValueAtTime(600, now + 0.5);
+                oscLo.frequency.linearRampToValueAtTime(700, now + 0.75);
+                oscLo.frequency.linearRampToValueAtTime(600, now + 1.0);
+                gainLo.gain.setValueAtTime(0.6, now + 0.5);
+                oscLo.connect(gainLo);
+                gainLo.connect(audioCtx.destination);
+                oscLo.start(now + 0.5);
+                oscLo.stop(now + 1.0);
+                
+            } catch(e) { console.error('Siren cycle error:', e); }
+        }
+        
+        function startContinuousSiren() {
+            if (!audioEnabled || !audioCtx) {
+                console.log('Audio not enabled');
+                return;
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            sirenPlaying = true;
+            // شغل فوراً
+            playSirenCycle();
+            // كرر كل ثانية (دورة Hi-Lo كاملة)
+            if (sirenLoopInterval) clearInterval(sirenLoopInterval);
+            sirenLoopInterval = setInterval(playSirenCycle, 1000);
+            console.log('Continuous siren started!');
+        }
+        
+        function stopSiren() {
+            sirenPlaying = false;
+            if (sirenLoopInterval) {
+                clearInterval(sirenLoopInterval);
+                sirenLoopInterval = null;
+            }
+            sirenOscillators.forEach(osc => {
+                try { osc.stop(); } catch(e) {}
+            });
+            sirenOscillators = [];
+            console.log('Siren stopped');
+        }
+        
+        function startAlarmRepeat() {
+            // شغل السيرين المتواصل فوراً
+            startContinuousSiren();
+        }
+        
+        function stopAlarmRepeat() {
+            if (alarmRepeatInterval) {
+                clearInterval(alarmRepeatInterval);
+                alarmRepeatInterval = null;
+            }
+            stopSiren();
+        }
+        
+        // للاختبار عند تفعيل الصوت (3 دورات فقط)
+        function playTestSiren() {
+            if (!audioEnabled || !audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            let count = 0;
+            const testInterval = setInterval(() => {
+                if (count >= 3) { clearInterval(testInterval); return; }
+                playSirenCycle();
+                count++;
+            }, 1000);
+        }
+        
+        window.showEmergencyPopup = function(type, message, details, playSound = true) {
+            const popup = document.getElementById('emergencyPopup');
+            
+            document.getElementById('emergencyPopupMessage').textContent = message;
+            document.getElementById('popupType').textContent = details.type || '-';
+            document.getElementById('popupLocation').textContent = details.location || '-';
+            document.getElementById('popupTime').textContent = details.time || new Date().toLocaleTimeString('ar-SA');
+            
+            popup.classList.add('show');
+            
+            // تشغيل صوت التنبيه إذا مسموح
+            if (playSound) {
+                startAlarmRepeat();
+            }
+        };
+        
+        // متغير لكبت الصوت مؤقتاً بعد إغلاق البلاغ
+        let soundSuppressed = false;
+        let soundSuppressedUntil = 0;
+        
+        window.closeEmergencyPopup = function() {
+            document.getElementById('emergencyPopup').classList.remove('show');
+            // إيقاف تكرار التنبيه
+            stopAlarmRepeat();
+            // كبت الصوت لمدة 30 ثانية لمنع التنبيه المتكرر
+            soundSuppressed = true;
+            soundSuppressedUntil = Date.now() + 30000;
+            setTimeout(() => { soundSuppressed = false; }, 30000);
+        };
+        
+        // دوال نافذة روابط الطوارئ QR
+        window.openQrCodesModal = function() {
+            document.getElementById('qrCodesModal').classList.add('show');
+        };
+        
+        window.closeQrCodesModal = function() {
+            document.getElementById('qrCodesModal').classList.remove('show');
+        };
+        
+        // إغلاق النافذة بالضغط خارجها
+        document.getElementById('qrCodesModal').addEventListener('click', function(e) {
+            if (e.target === this) window.closeQrCodesModal();
+        });
+        
+        window.openEocCommand = function() {
+            window.closeEmergencyPopup();
+            window.open('eoc-command.html', '_blank');
+        };
+        
+        // فحص البلاغات المفتوحة
+        // القاعدة: أي بلاغ مفتوح = تنبيه (حتى لو قديم)
+        let currentAlertedReport = null; // البلاغ المعروض حالياً
+        
+        async function checkNewEmergencies() {
+            try {
+                const [activeRes, reportsRes] = await Promise.all([
+                    fetchJsonp(APIs.eoc + '?action=getActiveCommand&callback=_'),
+                    fetchJsonp(APIs.eoc + '?action=getEmergencyReports&limit=10&callback=_')
+                ]);
+                
+                // التحقق من أمر طوارئ نشط
+                if (activeRes.ok && activeRes.command?.active && activeRes.command?.sessionId) {
+                    const currentSession = activeRes.command.sessionId;
+                    if (currentSession !== lastKnownActiveSession) {
+                        lastKnownActiveSession = currentSession;
+                        localStorage.setItem('lastKnownActiveSession', currentSession);
+                        showEmergencyPopup('command', 'حالة طوارئ نشطة!', {
+                            type: activeRes.command.responseType || activeRes.command.type || 'طوارئ',
+                            location: activeRes.command.floor || 'المبنى كاملاً',
+                            time: new Date().toLocaleTimeString('ar-SA')
+                        });
+                        return; // لا تتحقق من البلاغات إذا كان هناك أمر طوارئ
+                    }
+                }
+                
+                // التحقق من بلاغات مفتوحة
+                if (reportsRes.ok && Array.isArray(reportsRes.reports) && reportsRes.reports.length > 0) {
+                    // البحث عن أول بلاغ مفتوح
+                    const openReport = reportsRes.reports.find(r => r.status !== 'مغلق');
+                    
+                    if (openReport) {
+                        const reportKey = openReport.id || (openReport.date + openReport.type);
+                        
+                        // إذا لم يكن هناك تنبيه معروض لهذا البلاغ
+                        if (reportKey !== currentAlertedReport) {
+                            // التحقق من كبت الصوت - لا نمنع ظهور التنبيه، فقط نكتم الصوت
+                            const shouldPlaySound = !(soundSuppressed && Date.now() < soundSuppressedUntil);
+                            currentAlertedReport = reportKey;
+                            lastKnownReportId = reportKey;
+                            localStorage.setItem('lastKnownReportId', reportKey);
+                            showEmergencyPopup('report', 'بلاغ طوارئ مفتوح!', {
+                                type: openReport.type || 'بلاغ',
+                                location: openReport.location || openReport.floor || '-',
+                                time: openReport.time || new Date().toLocaleTimeString('ar-SA')
+                            }, shouldPlaySound);
+                        }
+                    } else {
+                        // لا توجد بلاغات مفتوحة - أغلق التنبيه إذا كان معروضاً
+                        currentAlertedReport = null;
+                        soundSuppressed = false; // إعادة تفعيل الصوت عند عدم وجود بلاغات
+                    }
+                }
+            } catch (e) {
+                console.log('Check emergencies error:', e);
+            }
+        }
+        
+        // بدء الفحص الدوري (كل 5 ثواني)
+        setTimeout(() => {
+            checkNewEmergencies();
+            setInterval(checkNewEmergencies, 5000);
+        }, 1000);
+
+        // دالة فتح/إغلاق قائمة روابط الطوارئ
+        function toggleEocSubmenu() {
+            const navItem = document.getElementById('eocNavItem');
+            const submenu = document.getElementById('eocSubmenu');
+            navItem.classList.toggle('open');
+            submenu.classList.toggle('open');
+        }
+
+        function updateAlerts(complaints, incidents, risks, rounds, calibration) {
+            const container = document.getElementById('alertsContainer');
+            const alerts = [];
+
+            // تنبيهات الشكاوى المصعّدة
+            if (complaints.ok && complaints.escalated > 0) {
+                alerts.push({
+                    type: 'danger',
+                    icon: 'fa-comment-dots',
+                    text: 'شكاوى مصعّدة تحتاج اهتمام فوري',
+                    count: complaints.escalated,
+                    link: 'complaint_mentoring.html'
+                });
+            }
+
+            // تنبيهات الحوادث المصعّدة - قراءة من byStatus.escalated.count
+            const incidentEscalated = incidents.byStatus?.escalated?.count || incidents.escalated || 0;
+            if (incidents.ok && incidentEscalated > 0) {
+                alerts.push({
+                    type: 'danger',
+                    icon: 'fa-exclamation-triangle',
+                    text: 'حوادث مصعّدة تحتاج متابعة',
+                    count: incidentEscalated,
+                    link: 'incident-report-analysis.html'
+                });
+            }
+
+            // تنبيهات المخاطر العالية
+            const risksHigh = risks.high || risks.data?.high || 0;
+            if (risksHigh > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-shield-alt',
+                    text: 'مخاطر عالية في السجل',
+                    count: risksHigh,
+                    link: 'risk-register.html'
+                });
+            }
+
+            // تنبيهات الجولات المتأخرة
+            if (rounds && rounds.ok && rounds.delayed > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-clipboard-check',
+                    text: 'جولات متأخرة تحتاج متابعة',
+                    count: rounds.delayed,
+                    link: 'Round.html'
+                });
+            }
+
+            // تنبيهات المعايرة المتأخرة
+            if (calibration && calibration.overdue > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-tools',
+                    text: 'أجهزة تجاوزت موعد المعايرة',
+                    count: calibration.overdue,
+                    link: 'calibration.html'
+                });
+            }
+
+            // شكاوى جديدة
+            if (complaints.ok && complaints.new > 0) {
+                alerts.push({
+                    type: 'info',
+                    icon: 'fa-inbox',
+                    text: 'شكاوى جديدة بانتظار المعالجة',
+                    count: complaints.new,
+                    link: 'complaint_mentoring.html'
+                });
+            }
+
+            if (alerts.length === 0) {
+                container.innerHTML = `
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success); margin-bottom: 10px; display: block;"></i>
+                        <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = alerts.map(a => `
+                    <a href="${a.link}" target="_blank" class="alert-item ${a.type}" style="text-decoration: none;">
+                        <i class="fas ${a.icon}"></i>
+                        <span class="alert-text">${a.text}</span>
+                        <span class="alert-count">${a.count}</span>
+                    </a>
+                `).join('');
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = 'admin-login.html';
+                return;
+            }
+
+            console.log('User UID:', user.uid);
+            console.log('User Email:', user.email);
+            
+            const roleData = await getUserRole(user.uid);
+            console.log('Role data found:', roleData);
+            
+            if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+                console.log('Role rejected! Signing out...');
+                alert('لم يتم العثور على صلاحيات. الدور: ' + (roleData ? roleData.role : 'غير موجود'));
+                await signOut(auth);
+                window.location.href = 'admin-login.html';
+                return;
+            }
+
+            currentUserRole = roleData.role;
+            userAllowedSystems = roleData.allowedSystems || [];
+            
+            const roleLabels = { 
+                admin: 'مدير النظام', 
+                chair: 'رئيس لجنة',
+                member: 'عضو',
+                staff: 'موظف جودة', 
+                viewer: 'مشاهد' 
+            };
+            
+            document.getElementById('staffName').textContent = user.email.split('@')[0];
+            document.getElementById('roleBadge').textContent = roleLabels[roleData.role] || roleData.role;
+            
+            if (roleData.role === 'admin') document.body.classList.add('is-admin');
+            
+            // تطبيق فلتر الأنظمة المسموحة
+            applySystemsFilter(roleData.role, roleData.allowedSystems);
+
+            document.body.classList.add('authenticated');
+            loadingOverlay.classList.add('hidden');
+            loadingOverlay.style.display = 'none';
+            loadDashboardData();
+            
+            // التحديث التلقائي كل 3 دقائق (180000 ملي ثانية)
+            setInterval(() => {
+                console.log('تحديث تلقائي للبيانات...');
+                loadDashboardData();
+            }, 180000);
+        });
+
+        document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+            item.addEventListener('click', () => {
+                const section = item.dataset.section;
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+                document.getElementById('section-' + section).classList.add('active');
+                if (window.innerWidth < 992) document.getElementById('sidebar').classList.remove('open');
+            });
+        });
+
+        document.getElementById('menuToggle').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', loadDashboardData);
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await signOut(auth);
+            localStorage.clear();
+            window.location.href = 'admin-login.html';
+        });
+        
+        // دالة القائمة المنسدلة
+        window.toggleDropdown = function(element) {
+            const dropdown = element.nextElementSibling;
+            const arrow = element.querySelector('.dropdown-arrow');
+            if (dropdown.style.display === 'none') {
+                dropdown.style.display = 'block';
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                dropdown.style.display = 'none';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        };
+
+        let allUsersData = [];
+        
+        async function loadUsers() {
+            if (currentUserRole !== 'admin') {
+                document.getElementById('usersContainer').innerHTML = '<div class="no-alerts" style="color:#dc3545;"><i class="fas fa-lock"></i> صلاحية المدير فقط</div>';
+                return;
+            }
+            
+            const container = document.getElementById('usersContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري تحميل المستخدمين...</div>';
+            
+            try {
+                console.log('جاري تحميل المستخدمين من staff_roles...');
+                const rolesSnap = await getDocs(collection(db, "staff_roles"));
+                
+                allUsersData = [];
+                rolesSnap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    allUsersData.push({ 
+                        uid: docSnap.id, 
+                        email: data.email || 'غير محدد',
+                        fullName: data.fullName || '',
+                        role: data.role || 'viewer',
+                        status: data.status || 'active',
+                        committee: data.committee || '',
+                        allowedSystems: data.allowedSystems || [],
+                        createdAt: data.createdAt || '',
+                        updatedAt: data.updatedAt || ''
+                    });
+                });
+                
+                console.log('تم تحميل', allUsersData.length, 'مستخدم');
+                
+                const activeCount = allUsersData.filter(u => u.status === 'active').length;
+                const suspendedCount = allUsersData.filter(u => u.status === 'suspended').length;
+                
+                document.getElementById('usersActiveCount').textContent = activeCount;
+                document.getElementById('usersSuspendedCount').textContent = suspendedCount;
+                document.getElementById('usersTotalCount').textContent = allUsersData.length;
+                
+                renderUsers(allUsersData);
+                
+            } catch (e) {
+                console.error('خطأ في تحميل المستخدمين:', e);
+                container.innerHTML = `
+                    <div class="no-alerts" style="color:#dc3545;">
+                        <i class="fas fa-exclamation-triangle"></i> تعذر تحميل المستخدمين
+                        <br><small style="color:#666;">${e.message}</small>
+                        <br><button onclick="loadUsers()" style="margin-top:10px; padding:8px 20px; background:var(--primary); color:white; border:none; border-radius:6px; cursor:pointer;">
+                            <i class="fas fa-redo"></i> إعادة المحاولة
+                        </button>
+                    </div>`;
+            }
+        }
+        window.loadUsers = loadUsers;
+        
+        function renderUsers(users) {
+            const container = document.getElementById('usersContainer');
+            const searchTerm = document.getElementById('usersSearchInput')?.value?.toLowerCase() || '';
+            
+            const filtered = users.filter(u => 
+                u.email.toLowerCase().includes(searchTerm) || 
+                u.fullName.toLowerCase().includes(searchTerm)
+            );
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="no-alerts"><i class="fas fa-users-slash"></i> لا يوجد مستخدمين</div>';
+                return;
+            }
+            
+            const roleLabels = { admin: 'مدير النظام', chair: 'رئيس لجنة', member: 'عضو', viewer: 'مشاهد' };
+            const roleColors = { admin: '#dc3545', chair: '#1e3a5f', member: '#17a2b8', viewer: '#6c757d' };
+            
+            container.innerHTML = filtered.map(u => {
+                const isActive = u.status === 'active';
+                const statusColor = isActive ? '#10b981' : '#f59e0b';
+                const statusLabel = isActive ? 'نشط' : 'معلق';
+                const systemsCount = u.allowedSystems?.length || 0;
+                
+                return `
+                <div class="user-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${statusColor}; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px;">
+                        <div style="flex:1; min-width:250px;">
+                            <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                                <div style="width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, var(--primary), var(--gold)); display:flex; align-items:center; justify-content:center; color:white; font-size:1.3rem; font-weight:bold;">
+                                    ${(u.fullName || u.email).charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <h4 style="color:var(--primary); margin:0; font-size:1.1rem;">${u.fullName || 'بدون اسم'}</h4>
+                                    <p style="margin:0; color:#666; font-size:0.85rem;">${u.email}</p>
+                                </div>
+                            </div>
+                            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
+                                <span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:${roleColors[u.role]}20; color:${roleColors[u.role]}; font-weight:600;">
+                                    ${roleLabels[u.role] || u.role}
+                                </span>
+                                <span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:${statusColor}20; color:${statusColor}; font-weight:600;">
+                                    ${statusLabel}
+                                </span>
+                                ${u.committee ? `<span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:#e0e7ff; color:#4f46e5;">لجنة: ${u.committee}</span>` : ''}
+                                <span style="padding:4px 12px; border-radius:20px; font-size:0.75rem; background:#f3f4f6; color:#374151;">${systemsCount} أنظمة</span>
+                            </div>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:8px; min-width:150px;">
+                            <button onclick="toggleUserStatus('${u.uid}', '${u.status}')" style="padding:8px 12px; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.8rem; background:${isActive ? '#fef3c7' : '#d1fae5'}; color:${isActive ? '#92400e' : '#065f46'};">
+                                <i class="fas fa-${isActive ? 'pause' : 'play'}"></i> ${isActive ? 'تعليق' : 'تفعيل'}
+                            </button>
+                            <button onclick="sendPasswordReset('${u.email}')" style="padding:8px 12px; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.8rem; background:#dbeafe; color:#1e40af;">
+                                <i class="fas fa-key"></i> إعادة كلمة المرور
+                            </button>
+                            <button onclick="deleteUser('${u.uid}', '${u.email}')" style="padding:8px 12px; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.8rem; background:#fee2e2; color:#991b1b;">
+                                <i class="fas fa-trash"></i> حذف
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        
+        document.getElementById('usersSearchInput')?.addEventListener('input', () => renderUsers(allUsersData));
+        
+        window.toggleUserStatus = async function(uid, currentStatus) {
+            const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+            const action = newStatus === 'suspended' ? 'تعليق' : 'تفعيل';
+            
+            if (!confirm(`هل تريد ${action} هذا المستخدم؟`)) return;
+            
+            try {
+                await updateDoc(doc(db, "staff_roles", uid), {
+                    status: newStatus,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+                showToast(`تم ${action} المستخدم بنجاح`);
+                loadUsers();
+            } catch (e) {
+                console.error('خطأ:', e);
+                alert('فشل في ' + action + ' المستخدم');
+            }
+        };
+        
+        window.sendPasswordReset = async function(email) {
+            if (!confirm(`سيتم إرسال رابط إعادة تعيين كلمة المرور إلى:\n${email}`)) return;
+            
+            try {
+                const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+                await sendPasswordResetEmail(auth, email);
+                showToast('تم إرسال رابط إعادة كلمة المرور');
+            } catch (e) {
+                console.error('خطأ:', e);
+                alert('فشل إرسال رابط إعادة كلمة المرور: ' + e.message);
+            }
+        };
+        
+        window.deleteUser = async function(uid, email) {
+            if (uid === auth.currentUser.uid) {
+                alert('لا يمكنك حذف حسابك الحالي!');
+                return;
+            }
+            
+            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً من:\n• Firebase Auth (الحساب)\n• Firestore staff_roles (الصلاحيات)\n• Firestore membershipRequests (الطلبات)\n\n${email}\n\nهل أنت متأكد؟`)) return;
+            if (!confirm('تأكيد نهائي: هذا الإجراء لا يمكن التراجع عنه!')) return;
+            
+            try {
+                // 1. Delete from Firebase Auth via server API
+                const apiResponse = await fetch(`/api/admin/user/${encodeURIComponent(email)}`, {
+                    method: 'DELETE'
+                });
+                const apiResult = await apiResponse.json();
+                console.log('Server delete result:', apiResult);
+                
+                // 2. Delete from Firestore staff_roles
+                await deleteDoc(doc(db, "staff_roles", uid));
+                
+                // 3. Delete from membershipRequests (find by email)
+                const requestsSnap = await getDocs(collection(db, "membershipRequests"));
+                for (const docSnap of requestsSnap.docs) {
+                    if (docSnap.data().email === email) {
+                        await deleteDoc(doc(db, "membershipRequests", docSnap.id));
+                        console.log('Deleted from membershipRequests:', docSnap.id);
+                    }
+                }
+                
+                if (apiResult.authDeleted) {
+                    showToast('تم حذف المستخدم بالكامل من كل الأنظمة');
+                } else {
+                    showToast('تم الحذف من Firestore (الحساب قد يكون محذوف مسبقاً من Auth)', '#f59e0b');
+                }
+                loadUsers();
+            } catch (e) {
+                console.error('خطأ:', e);
+                alert('فشل في حذف المستخدم: ' + e.message);
+            }
+        };
+
+        document.querySelector('[data-section="users"]')?.addEventListener('click', loadUsers);
+
+        // ===== طلبات العضوية =====
+        async function loadMembershipRequests() {
+            if (currentUserRole !== 'admin') return;
+            const container = document.getElementById('requestsContainer');
+            
+            try {
+                const requestsSnap = await getDocs(collection(db, "membershipRequests"));
+                const requests = [];
+                requestsSnap.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+                
+                // ترتيب: المعلقة أولاً، ثم الأحدث
+                requests.sort((a, b) => {
+                    if (a.status === 'pending' && b.status !== 'pending') return -1;
+                    if (a.status !== 'pending' && b.status === 'pending') return 1;
+                    return (b.requestedAt?.toDate?.() || 0) - (a.requestedAt?.toDate?.() || 0);
+                });
+                
+                // تحديث العداد
+                const pendingCount = requests.filter(r => r.status === 'pending').length;
+                const badge = document.getElementById('requestsBadge');
+                if (pendingCount > 0) {
+                    badge.textContent = pendingCount;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+                
+                if (requests.length === 0) {
+                    container.innerHTML = `<div class="no-alerts"><p>لا توجد طلبات عضوية</p></div>`;
+                    return;
+                }
+                
+                container.innerHTML = requests.map(r => {
+                    const statusColors = { pending: '#f59e0b', approved: '#10b981', rejected: '#ef4444' };
+                    const statusLabels = { pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' };
+                    const date = r.requestedAt?.toDate?.() ? r.requestedAt.toDate().toLocaleDateString('ar-SA') : '-';
+                    
+                    return `
+                        <div class="request-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${statusColors[r.status]}; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px;">
+                                <div style="flex:1; min-width:200px;">
+                                    <h4 style="color:var(--primary); margin-bottom:8px; font-size:1.1rem;">
+                                        <i class="fas fa-user" style="margin-left:8px; color:var(--gold);"></i>
+                                        ${r.fullName || 'غير محدد'}
+                                    </h4>
+                                    <p style="margin:5px 0; color:#666; font-size:0.9rem;">
+                                        <i class="fas fa-envelope" style="margin-left:5px; width:16px;"></i> ${r.email}
+                                    </p>
+                                    <p style="margin:5px 0; color:#666; font-size:0.9rem;">
+                                        <i class="fas fa-phone" style="margin-left:5px; width:16px;"></i> ${r.phone || '-'}
+                                    </p>
+                                    <p style="margin:5px 0; color:#666; font-size:0.9rem;">
+                                        <i class="fas fa-building" style="margin-left:5px; width:16px;"></i> ${r.department} - ${r.jobTitle}
+                                    </p>
+                                    ${r.reason ? `<p style="margin:10px 0 5px; color:#555; font-size:0.85rem; background:#f8f9fa; padding:8px; border-radius:6px;"><strong>السبب:</strong> ${r.reason}</p>` : ''}
+                                </div>
+                                <div style="text-align:center;">
+                                    <span style="display:inline-block; padding:5px 15px; border-radius:20px; font-size:0.8rem; font-weight:600; background:${statusColors[r.status]}20; color:${statusColors[r.status]};">
+                                        ${statusLabels[r.status]}
+                                    </span>
+                                    <p style="color:#999; font-size:0.75rem; margin-top:8px;">
+                                        <i class="fas fa-calendar"></i> ${date}
+                                    </p>
+                                </div>
+                            </div>
+                            ${r.status === 'pending' ? `
+                                <div style="margin-top:15px; padding-top:15px; border-top:1px solid #eee; display:flex; gap:10px; flex-wrap:wrap;">
+                                    <button onclick="approveRequest('${r.id}', '${r.uid}', '${r.email}')" style="flex:1; min-width:120px; padding:10px 20px; background:#10b981; color:white; border:none; border-radius:8px; cursor:pointer; font-family:inherit; font-weight:600;">
+                                        <i class="fas fa-check"></i> قبول
+                                    </button>
+                                    <button onclick="rejectRequest('${r.id}')" style="flex:1; min-width:120px; padding:10px 20px; background:#ef4444; color:white; border:none; border-radius:8px; cursor:pointer; font-family:inherit; font-weight:600;">
+                                        <i class="fas fa-times"></i> رفض
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (e) {
+                console.error('Error loading requests:', e);
+                container.innerHTML = `<div class="no-alerts"><p>تعذر تحميل الطلبات</p></div>`;
+            }
+        }
+        
+        // دوال الموافقة والرفض
+        window.approveRequest = async function(requestId, uid, email) {
+            // اختيار الدور
+            const roleChoice = prompt(`اختر الدور للمستخدم ${email}:\n\n1 = عضو (member)\n2 = رئيس لجنة (chair)\n3 = مشاهد (viewer)\n4 = موظف (staff)\n\nأدخل الرقم:`);
+            
+            if (!roleChoice) return;
+            
+            const roleMap = { '1': 'member', '2': 'chair', '3': 'viewer', '4': 'staff' };
+            const selectedRole = roleMap[roleChoice];
+            
+            if (!selectedRole) {
+                alert('اختيار غير صحيح. أدخل رقم من 1-4');
+                return;
+            }
+            
+            if (!confirm(`هل تريد قبول ${email} كـ "${selectedRole}"؟`)) return;
+            
+            try {
+                // تحديث حالة الطلب
+                await updateDoc(doc(db, "membershipRequests", requestId), {
+                    status: 'approved',
+                    reviewedAt: new Date(),
+                    reviewedBy: auth.currentUser.email,
+                    assignedRole: selectedRole
+                });
+                
+                // إضافة صلاحية للمستخدم - باستخدام الـ UID الصحيح
+                await setDoc(doc(db, "staff_roles", uid), {
+                    role: selectedRole,
+                    email: email,
+                    status: 'active',
+                    approvedAt: new Date().toISOString(),
+                    approvedBy: auth.currentUser.email
+                });
+                
+                alert(`تم قبول الطلب بنجاح! الدور: ${selectedRole}\nيمكن للمستخدم الآن الدخول.`);
+                loadMembershipRequests();
+            } catch (e) {
+                console.error('Error approving:', e);
+                alert('حدث خطأ أثناء القبول');
+            }
+        };
+        
+        window.rejectRequest = async function(requestId) {
+            const reason = prompt('سبب الرفض (اختياري):');
+            if (reason === null) return; // ألغى المستخدم
+            
+            try {
+                await updateDoc(doc(db, "membershipRequests", requestId), {
+                    status: 'rejected',
+                    reviewedAt: new Date(),
+                    reviewedBy: auth.currentUser.email,
+                    rejectionReason: reason || ''
+                });
+                
+                alert('تم رفض الطلب');
+                loadMembershipRequests();
+            } catch (e) {
+                console.error('Error rejecting:', e);
+                alert('حدث خطأ أثناء الرفض');
+            }
+        };
+
+        document.querySelector('[data-section="requests"]')?.addEventListener('click', loadMembershipRequests);
+        
+        // تحميل عدد الطلبات المعلقة عند فتح الصفحة
+        setTimeout(async () => {
+            if (currentUserRole === 'admin') {
+                try {
+                    const snap = await getDocs(collection(db, "membershipRequests"));
+                    const pending = [];
+                    snap.forEach(d => { if (d.data().status === 'pending') pending.push(d); });
+                    const badge = document.getElementById('requestsBadge');
+                    if (pending.length > 0) {
+                        badge.textContent = pending.length;
+                        badge.style.display = 'inline';
+                    }
+                } catch(e) {}
+            }
+        }, 2000);
+
+        // ===== إدارة الصلاحيات الكاملة =====
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toastNotification');
+            const toastMsg = document.getElementById('toastMessage');
+            toastMsg.textContent = message;
+            toast.style.background = isError ? '#ef4444' : '#10b981';
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+        
+        const COMMITTEES = [
+            { id: 'RM', name: 'لجنة إدارة المخاطر' },
+            { id: 'FMS', name: 'لجنة السلامة والمرافق' },
+            { id: 'PSC', name: 'لجنة سلامة المرضى' },
+            { id: 'IPC', name: 'لجنة مكافحة العدوى' },
+            { id: 'QI', name: 'لجنة الجودة والتحسين' },
+            { id: 'EOC', name: 'لجنة الطوارئ والكوارث' },
+            { id: 'OTHER', name: 'أخرى' }
+        ];
+        
+        const SYSTEMS = [
+            { id: 'complaints', name: 'نظام الشكاوى', icon: 'comment-dots' },
+            { id: 'incidents', name: 'نظام الحوادث', icon: 'exclamation-triangle' },
+            { id: 'risks', name: 'سجل المخاطر', icon: 'shield-alt' },
+            { id: 'rounds', name: 'نظام الجولات', icon: 'clipboard-check' },
+            { id: 'calibration', name: 'المعايرة', icon: 'tools' },
+            { id: 'maintenance', name: 'الصيانة', icon: 'wrench' },
+            { id: 'needlestick', name: 'التعرض الوخزي', icon: 'syringe' },
+            { id: 'cbahi', name: 'بوابة سباهي', icon: 'award' },
+            { id: 'dashboard', name: 'لوحة التحكم', icon: 'tachometer-alt' }
+        ];
+        
+        const ROLES = [
+            { id: 'admin', name: 'مدير عام', color: '#dc3545' },
+            { id: 'chair', name: 'رئيس لجنة', color: '#c9a962' },
+            { id: 'member', name: 'عضو', color: '#17a2b8' },
+            { id: 'viewer', name: 'مشاهد فقط', color: '#6c757d' }
+        ];
+        
+        async function loadPermissions() {
+            if (currentUserRole !== 'admin') return;
+            const container = document.getElementById('permissionsContainer');
+            
+            // إظهار حالة التحميل
+            container.innerHTML = `<div style="text-align:center; padding:40px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:var(--gold);"></i><p style="margin-top:15px;">جاري تحميل البيانات...</p></div>`;
+            
+            try {
+                console.log('Loading permissions from Firestore...');
+                const rolesSnap = await getDocs(collection(db, "staff_roles"));
+                const users = [];
+                rolesSnap.forEach(docSnap => users.push({ uid: docSnap.id, ...docSnap.data() }));
+                console.log('Loaded users:', users.length, users);
+                
+                // حساب الإحصائيات
+                const activeCount = users.filter(u => u.status !== 'suspended').length;
+                const suspendedCount = users.filter(u => u.status === 'suspended').length;
+                
+                const statsActiveEl = document.getElementById('statsActive');
+                const statsSuspendedEl = document.getElementById('statsSuspended');
+                const statsTotalEl = document.getElementById('statsTotal');
+                
+                if (statsActiveEl) statsActiveEl.textContent = activeCount;
+                if (statsSuspendedEl) statsSuspendedEl.textContent = suspendedCount;
+                if (statsTotalEl) statsTotalEl.textContent = users.length;
+                
+                if (users.length === 0) {
+                    container.innerHTML = `<div class="no-alerts"><p>لا يوجد موظفين مسجلين</p></div>`;
+                    return;
+                }
+                
+                container.innerHTML = users.map(u => {
+                    const currentRole = ROLES.find(r => r.id === u.role) || ROLES[3];
+                    const allowedSystems = u.allowedSystems || [];
+                    const committee = u.committee || '';
+                    const isSuspended = u.status === 'suspended';
+                    const statusColor = isSuspended ? '#f59e0b' : '#10b981';
+                    const statusText = isSuspended ? 'معلق' : 'فعال';
+                    const statusBg = isSuspended ? '#fef3c7' : '#d1fae5';
+                    
+                    return `
+                        <div class="permission-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${isSuspended ? '#f59e0b' : currentRole.color}; box-shadow:0 2px 8px rgba(0,0,0,0.08); ${isSuspended ? 'opacity:0.7;' : ''}">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:15px; margin-bottom:15px;">
+                                <div>
+                                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:5px;">
+                                        <h4 style="color:var(--primary); margin:0;">
+                                            <i class="fas fa-user" style="margin-left:8px; color:var(--gold);"></i>
+                                            ${u.fullName || u.email || u.uid}
+                                        </h4>
+                                        <span style="background:${statusBg}; color:${statusColor}; padding:3px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;">
+                                            <i class="fas fa-${isSuspended ? 'pause-circle' : 'check-circle'}"></i> ${statusText}
+                                        </span>
+                                    </div>
+                                    <p style="color:#666; font-size:0.85rem;">${u.email || ''}</p>
+                                    <p style="color:#999; font-size:0.8rem;">${u.department || ''} - ${u.jobTitle || ''}</p>
+                                </div>
+                                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                    <button onclick="toggleUserStatus('${u.uid}', ${isSuspended})" style="background:${isSuspended ? '#d1fae5' : '#fef3c7'}; color:${isSuspended ? '#10b981' : '#f59e0b'}; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
+                                        <i class="fas fa-${isSuspended ? 'play-circle' : 'pause-circle'}"></i> ${isSuspended ? 'تفعيل' : 'تعليق'}
+                                    </button>
+                                    <button onclick="deleteUserFromPermissions('${u.uid}', '${u.email || ''}')" style="background:#fee2e2; color:#dc3545; border:none; padding:8px 15px; border-radius:8px; cursor:pointer; font-family:inherit;">
+                                        <i class="fas fa-trash"></i> حذف
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;">
+                                <div>
+                                    <label style="font-weight:600; color:var(--primary); display:block; margin-bottom:8px;">
+                                        <i class="fas fa-user-tag"></i> الدور
+                                    </label>
+                                    <select onchange="updateUserField('${u.uid}', 'role', this.value)" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-family:inherit;">
+                                        ${ROLES.map(r => `<option value="${r.id}" ${u.role === r.id ? 'selected' : ''}>${r.name}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="font-weight:600; color:var(--primary); display:block; margin-bottom:8px;">
+                                        <i class="fas fa-users"></i> اللجنة
+                                    </label>
+                                    <select onchange="updateUserField('${u.uid}', 'committee', this.value)" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-family:inherit;">
+                                        <option value="">-- بدون لجنة --</option>
+                                        ${COMMITTEES.map(c => `<option value="${c.id}" ${committee === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label style="font-weight:600; color:var(--primary); display:block; margin-bottom:10px;">
+                                    <i class="fas fa-th-large"></i> الأنظمة المسموحة (اختر ما تريد)
+                                </label>
+                                <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                                    ${SYSTEMS.map(s => `
+                                        <label style="display:flex; align-items:center; gap:6px; background:${allowedSystems.includes(s.id) ? '#d1fae5' : '#f3f4f6'}; padding:8px 12px; border-radius:8px; cursor:pointer; transition:all 0.2s;">
+                                            <input type="checkbox" ${allowedSystems.includes(s.id) ? 'checked' : ''} onchange="toggleSystem('${u.uid}', '${s.id}', this.checked)" style="cursor:pointer;">
+                                            <i class="fas fa-${s.icon}" style="color:${allowedSystems.includes(s.id) ? '#10b981' : '#9ca3af'};"></i>
+                                            <span style="font-size:0.85rem;">${s.name}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (e) {
+                console.error('Error loading permissions:', e);
+                container.innerHTML = `
+                    <div class="no-alerts" style="text-align:center; padding:30px;">
+                        <i class="fas fa-exclamation-triangle fa-2x" style="color:#f59e0b; margin-bottom:15px;"></i>
+                        <p style="margin-bottom:10px;">تعذر تحميل الصلاحيات</p>
+                        <p style="font-size:0.85rem; color:#888;">${e.message || 'خطأ في الاتصال بقاعدة البيانات'}</p>
+                        <button onclick="loadPermissions()" style="margin-top:15px; padding:10px 25px; background:var(--gold); color:#fff; border:none; border-radius:8px; cursor:pointer; font-family:inherit;">
+                            <i class="fas fa-sync"></i> إعادة المحاولة
+                        </button>
+                    </div>`;
+            }
+        }
+        window.loadPermissions = loadPermissions;
+        
+        window.updateUserField = async function(uid, field, value) {
+            if (currentUserRole !== 'admin') {
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
+                return;
+            }
+            try {
+                await updateDoc(doc(db, "staff_roles", uid), {
+                    [field]: value,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+                showToast('تم الحفظ بنجاح');
+            } catch (e) {
+                console.error('Error updating:', e);
+                showToast('حدث خطأ أثناء التحديث', true);
+            }
+        };
+        
+        window.toggleUserStatus = async function(uid, currentlySuspended) {
+            if (currentUserRole !== 'admin') {
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
+                return;
+            }
+            const newStatus = currentlySuspended ? 'active' : 'suspended';
+            const message = currentlySuspended ? 'تفعيل' : 'تعليق';
+            
+            if (!confirm(`هل تريد ${message} هذا العضو؟`)) return;
+            
+            try {
+                await updateDoc(doc(db, "staff_roles", uid), {
+                    status: newStatus,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+                showToast(currentlySuspended ? 'تم تفعيل العضو' : 'تم تعليق العضو');
+                loadPermissions();
+            } catch (e) {
+                console.error('Error toggling status:', e);
+                showToast('حدث خطأ', true);
+            }
+        };
+        
+        window.toggleSystem = async function(uid, systemId, checked) {
+            if (currentUserRole !== 'admin') {
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
+                return;
+            }
+            try {
+                const docRef = doc(db, "staff_roles", uid);
+                const docSnap = await getDoc(docRef);
+                let allowedSystems = docSnap.exists() ? (docSnap.data().allowedSystems || []) : [];
+                
+                if (checked && !allowedSystems.includes(systemId)) {
+                    allowedSystems.push(systemId);
+                } else if (!checked) {
+                    allowedSystems = allowedSystems.filter(s => s !== systemId);
+                }
+                
+                await updateDoc(docRef, {
+                    allowedSystems: allowedSystems,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
+                showToast('تم الحفظ');
+            } catch (e) {
+                console.error('Error toggling system:', e);
+                showToast('حدث خطأ', true);
+            }
+        };
+        
+        window.deleteUserFromPermissions = async function(uid, email) {
+            if (currentUserRole !== 'admin') {
+                showToast('ليس لديك صلاحية لهذا الإجراء', true);
+                return;
+            }
+            if (!confirm(`⚠️ سيتم حذف المستخدم نهائياً من:\n• Firebase Auth\n• staff_roles\n• membershipRequests\n\n${email}`)) return;
+            if (!confirm('تأكيد نهائي: لا يمكن التراجع!')) return;
+            
+            try {
+                // 1. حذف من Firebase Auth عبر السيرفر
+                if (email) {
+                    await fetch(`/api/admin/user/${encodeURIComponent(email)}`, { method: 'DELETE' });
+                }
+                // 2. حذف من Firestore staff_roles
+                await deleteDoc(doc(db, "staff_roles", uid));
+                
+                // 3. حذف من membershipRequests
+                if (email) {
+                    const requestsSnap = await getDocs(collection(db, "membershipRequests"));
+                    for (const docSnap of requestsSnap.docs) {
+                        if (docSnap.data().email === email) {
+                            await deleteDoc(doc(db, "membershipRequests", docSnap.id));
+                        }
+                    }
+                }
+                
+                showToast('تم حذف المستخدم بالكامل من كل الأنظمة');
+                loadPermissions();
+            } catch (e) {
+                console.error('Error deleting:', e);
+                showToast('حدث خطأ أثناء الحذف', true);
+            }
+        };
+        
+        document.querySelector('[data-section="permissions"]')?.addEventListener('click', loadPermissions);
+    </script>
+</body>
+</html>
