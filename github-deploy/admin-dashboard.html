@@ -1436,184 +1436,98 @@
         let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || '';
         
         // دوال التنبيه المنبثق - متاحة globally للـ onclick
-        // ====== نظام صوت سيرين الطوارئ الاحترافي - Web Audio API ======
-        let alarmRepeatInterval = null;
-        let audioCtx = null;
+        // ====== نظام صوت الطوارئ - نسخة من eoc-command.html (يعمل 100%) ======
         let audioEnabled = localStorage.getItem('admin_audio_enabled') === '1';
-        let sirenPlaying = false;
-        let sirenOscillators = [];
+        let alarmAudioCtx = null;
+        let alarmOscillator = null;
+        let alarmGain = null;
+        let alarmInterval = null;
+        let alarmPlaying = false;
         
         // إخفاء overlay إذا كان الصوت مفعل سابقاً
         if (audioEnabled) {
             document.getElementById('audioEnableOverlay').style.display = 'none';
-            try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            } catch(e) { console.log('AudioContext init error:', e); }
         }
-        
-        // دالة resume للـ AudioContext - تُستدعى عند أي تفاعل
-        async function resumeAudioContext() {
-            if (audioCtx && audioCtx.state === 'suspended') {
-                try {
-                    await audioCtx.resume();
-                    console.log('AudioContext resumed! State:', audioCtx.state);
-                } catch(e) {
-                    console.log('Failed to resume AudioContext:', e);
-                }
-            }
-        }
-        
-        // عند عودة المستخدم للصفحة، حاول تشغيل AudioContext
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && audioEnabled) {
-                resumeAudioContext();
-            }
-        });
-        
-        // عند أي نقرة على الصفحة، حاول تشغيل AudioContext
-        document.addEventListener('click', () => {
-            if (audioEnabled) {
-                resumeAudioContext();
-            }
-        }, { once: false });
         
         // دالة تفعيل الصوت (تُستدعى من الزر)
-        window.enableAudioAlerts = async function() {
+        window.enableAudioAlerts = function() {
             try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                // مهم جداً: resume فوراً بعد الإنشاء
-                await audioCtx.resume();
-                console.log('AudioContext created and resumed! State:', audioCtx.state);
+                // اختبار الصوت فوراً
+                playAlarmSound();
+                setTimeout(() => stopAlarmSound(), 1500);
                 
                 audioEnabled = true;
                 localStorage.setItem('admin_audio_enabled', '1');
                 document.getElementById('audioEnableOverlay').style.display = 'none';
-                // تشغيل صوت تجريبي (3 دورات فقط)
-                sirenPlaying = true;
-                playTestSiren();
+                console.log('Audio enabled successfully!');
             } catch(e) {
                 alert('فشل تفعيل الصوت: ' + e.message);
             }
         };
         
-        // صوت سيرين إسعاف متواصل (Hi-Lo Continuous Siren)
-        let sirenLoopInterval = null;
-        
-        function playSirenCycle() {
-            console.log('playSirenCycle - audioEnabled:', audioEnabled, 'sirenPlaying:', sirenPlaying, 'audioCtx state:', audioCtx?.state);
-            if (!audioEnabled || !audioCtx || !sirenPlaying) {
-                console.log('playSirenCycle BLOCKED');
-                return;
-            }
+        // تشغيل صوت الإنذار (نفس الكود من eoc-command.html)
+        function playAlarmSound() {
             try {
-                if (audioCtx.state === 'suspended') audioCtx.resume();
+                console.log('playAlarmSound called!');
+                // إيقاف أي صوت سابق
+                stopAlarmSound();
                 
-                const now = audioCtx.currentTime;
-                console.log('Playing oscillators at time:', now);
+                alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                alarmGain = alarmAudioCtx.createGain();
+                alarmGain.connect(alarmAudioCtx.destination);
+                alarmGain.gain.value = 0.8;
                 
-                // نغمة عالية (Hi) - 0.5 ثانية
-                const oscHi = audioCtx.createOscillator();
-                const gainHi = audioCtx.createGain();
-                oscHi.type = 'sawtooth';
-                oscHi.frequency.setValueAtTime(800, now);
-                oscHi.frequency.linearRampToValueAtTime(1000, now + 0.25);
-                oscHi.frequency.linearRampToValueAtTime(800, now + 0.5);
-                gainHi.gain.setValueAtTime(0.6, now);
-                oscHi.connect(gainHi);
-                gainHi.connect(audioCtx.destination);
-                oscHi.start(now);
-                oscHi.stop(now + 0.5);
-                
-                // نغمة منخفضة (Lo) - 0.5 ثانية
-                const oscLo = audioCtx.createOscillator();
-                const gainLo = audioCtx.createGain();
-                oscLo.type = 'sawtooth';
-                oscLo.frequency.setValueAtTime(600, now + 0.5);
-                oscLo.frequency.linearRampToValueAtTime(700, now + 0.75);
-                oscLo.frequency.linearRampToValueAtTime(600, now + 1.0);
-                gainLo.gain.setValueAtTime(0.6, now + 0.5);
-                oscLo.connect(gainLo);
-                gainLo.connect(audioCtx.destination);
-                oscLo.start(now + 0.5);
-                oscLo.stop(now + 1.0);
-                
-            } catch(e) { console.error('Siren cycle error:', e); }
-        }
-        
-        function startContinuousSiren() {
-            console.log('startContinuousSiren called! audioEnabled:', audioEnabled);
-            if (!audioEnabled) {
-                console.log('Audio not enabled');
-                return;
-            }
-            
-            // استخدام ملف صوتي حقيقي بدلاً من Web Audio API
-            sirenPlaying = true;
-            const audio = document.getElementById('emergencySound');
-            if (audio) {
-                audio.volume = 1.0;
-                audio.loop = true;
-                audio.play().then(() => {
-                    console.log('Audio file siren playing!');
-                }).catch(e => {
-                    console.log('Audio file failed, trying Web Audio API...', e);
-                    // fallback to Web Audio API
-                    if (audioCtx && audioCtx.state === 'suspended') {
-                        audioCtx.resume();
+                let isHigh = true;
+                function beep() {
+                    if (alarmOscillator) {
+                        try { alarmOscillator.stop(); } catch(e) {}
                     }
-                    playSirenCycle();
-                    if (sirenLoopInterval) clearInterval(sirenLoopInterval);
-                    sirenLoopInterval = setInterval(playSirenCycle, 1000);
-                });
+                    alarmOscillator = alarmAudioCtx.createOscillator();
+                    alarmOscillator.type = 'square';
+                    alarmOscillator.frequency.value = isHigh ? 880 : 440;
+                    alarmOscillator.connect(alarmGain);
+                    alarmOscillator.start();
+                    isHigh = !isHigh;
+                    console.log('Beep! freq:', alarmOscillator.frequency.value);
+                }
+                
+                beep();
+                alarmInterval = setInterval(beep, 500);
+                alarmPlaying = true;
+                console.log('Alarm started!');
+            } catch(e) {
+                console.warn('Could not play alarm:', e);
             }
-            console.log('Continuous siren started!');
         }
         
-        function stopSiren() {
-            console.log('stopSiren called!');
-            sirenPlaying = false;
-            // إيقاف الـ audio element
-            const audio = document.getElementById('emergencySound');
-            if (audio) {
-                audio.pause();
-                audio.currentTime = 0;
+        // إيقاف صوت الإنذار
+        function stopAlarmSound() {
+            console.log('stopAlarmSound called');
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
             }
-            // إيقاف Web Audio API
-            if (sirenLoopInterval) {
-                clearInterval(sirenLoopInterval);
-                sirenLoopInterval = null;
+            if (alarmOscillator) {
+                try { alarmOscillator.stop(); } catch(e) {}
+                alarmOscillator = null;
             }
-            sirenOscillators.forEach(osc => {
-                try { osc.stop(); } catch(e) {}
-            });
-            sirenOscillators = [];
-            console.log('Siren stopped');
+            if (alarmAudioCtx) {
+                try { alarmAudioCtx.close(); } catch(e) {}
+                alarmAudioCtx = null;
+            }
+            alarmPlaying = false;
         }
         
+        // دوال التوافق
         function startAlarmRepeat() {
-            // شغل السيرين المتواصل فوراً
-            startContinuousSiren();
-        }
-        
-        function stopAlarmRepeat() {
-            if (alarmRepeatInterval) {
-                clearInterval(alarmRepeatInterval);
-                alarmRepeatInterval = null;
+            if (audioEnabled) {
+                playAlarmSound();
+            } else {
+                console.log('Audio not enabled, skipping alarm');
             }
-            stopSiren();
         }
-        
-        // للاختبار عند تفعيل الصوت (3 دورات فقط)
-        function playTestSiren() {
-            if (!audioEnabled || !audioCtx) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            let count = 0;
-            const testInterval = setInterval(() => {
-                if (count >= 3) { clearInterval(testInterval); return; }
-                playSirenCycle();
-                count++;
-            }, 1000);
-        }
+        function stopAlarmRepeat() { stopAlarmSound(); }
+        function stopSiren() { stopAlarmSound(); }
         
         window.showEmergencyPopup = function(type, message, details, playSound = true) {
             const popup = document.getElementById('emergencyPopup');
@@ -1637,46 +1551,12 @@
         
         window.closeEmergencyPopup = function() {
             document.getElementById('emergencyPopup').classList.remove('show');
-            // إيقاف تكرار التنبيه
-            stopAlarmRepeat();
-            // إيقاف صوت الـ audio element
-            const audio = document.getElementById('emergencySound');
-            if (audio) { audio.pause(); audio.currentTime = 0; }
-            document.getElementById('playSirenBtn').classList.remove('playing');
-            document.getElementById('playSirenBtn').innerHTML = '<i class="fas fa-volume-up"></i> تشغيل السيرين';
+            // إيقاف صوت الإنذار
+            stopAlarmSound();
             // كبت الصوت لمدة 30 ثانية لمنع التنبيه المتكرر
             soundSuppressed = true;
             soundSuppressedUntil = Date.now() + 30000;
             setTimeout(() => { soundSuppressed = false; }, 30000);
-        };
-        
-        // تشغيل السيرين يدوياً (بعد نقرة المستخدم)
-        let manualSirenPlaying = false;
-        window.manualPlaySiren = function() {
-            const btn = document.getElementById('playSirenBtn');
-            const audio = document.getElementById('emergencySound');
-            
-            if (manualSirenPlaying) {
-                // إيقاف الصوت
-                audio.pause();
-                audio.currentTime = 0;
-                manualSirenPlaying = false;
-                btn.classList.remove('playing');
-                btn.innerHTML = '<i class="fas fa-volume-up"></i> تشغيل السيرين';
-                console.log('Manual siren stopped');
-            } else {
-                // تشغيل الصوت
-                audio.volume = 1.0;
-                audio.play().then(() => {
-                    manualSirenPlaying = true;
-                    btn.classList.add('playing');
-                    btn.innerHTML = '<i class="fas fa-volume-mute"></i> إيقاف السيرين';
-                    console.log('Manual siren playing!');
-                }).catch(e => {
-                    console.error('Audio play failed:', e);
-                    alert('فشل تشغيل الصوت. تأكد من أن صوت المتصفح غير مكتوم.');
-                });
-            }
         };
         
         // دوال نافذة روابط الطوارئ QR
