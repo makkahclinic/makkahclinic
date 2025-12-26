@@ -3327,35 +3327,59 @@
   // ==================== إحصائيات لوحة المالك ====================
   function getOwnerDashboardStats(params) {
     try {
+      // التحقق من الصلاحيات باستخدام Firebase Token - فقط owner أو admin
+      if (!params) {
+        return { success: false, error: 'البيانات مطلوبة' };
+      }
+      
+      // التحقق من الهوية عبر Firebase
+      try {
+        validateStaffAuth_(params, ['owner', 'admin']);
+      } catch (authError) {
+        return { success: false, error: authError.message || 'غير مصرح لك بالوصول لهذه البيانات' };
+      }
+      
       const now = getSaudiDate();
       const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
       
-      // جلب حالة الطوارئ
+      // جلب حالة الطوارئ من EOC_SPREADSHEET_ID
       let emergency = { active: false };
       try {
-        const eocSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('EOC_Status');
+        const eocSheet = SpreadsheetApp.openById(EOC_SPREADSHEET_ID).getSheetByName('EOC_Status');
         if (eocSheet) {
-          const eocData = eocSheet.getRange(2, 1, 1, 3).getValues()[0];
-          if (eocData[0] && String(eocData[0]).toLowerCase() === 'active') {
+          const eocData = sheetToObjects(eocSheet);
+          const activeEmergency = eocData.find(e => 
+            String(e.Status || e.الحالة || '').toLowerCase() === 'active' ||
+            String(e.Status || e.الحالة || '') === 'نشط'
+          );
+          if (activeEmergency) {
             emergency = {
               active: true,
-              type: eocData[1] || 'حالة طوارئ',
-              message: eocData[2] || 'تنبيه طوارئ نشط!'
+              type: activeEmergency.Type || activeEmergency.النوع || 'حالة طوارئ',
+              message: activeEmergency.Message || activeEmergency.الرسالة || 'تنبيه طوارئ نشط!'
             };
           }
         }
       } catch(e) {}
       
-      // جلب إحصائيات الشكاوى
+      // جلب إحصائيات الشكاوى - دعم الأعمدة العربية والإنجليزية
       let complaints = { open: 0, new: 0, inProgress: 0, escalated: 0, closed: 0 };
       try {
         const compSheet = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID).getSheetByName('بيانات الشكاوى');
         if (compSheet) {
           const compData = sheetToObjects(compSheet);
-          complaints.new = compData.filter(c => c.Status === 'new' || c.الحالة === 'جديدة').length;
-          complaints.inProgress = compData.filter(c => c.Status === 'in_progress' || c.الحالة === 'قيد المعالجة').length;
-          complaints.escalated = compData.filter(c => c.Status === 'escalated' || c.الحالة === 'مصعدة').length;
-          complaints.closed = compData.filter(c => c.Status === 'closed' || c.الحالة === 'مغلقة').length;
+          compData.forEach(c => {
+            const status = String(c.Status || c.الحالة || c['حالة الشكوى'] || '').toLowerCase();
+            if (status === 'new' || status === 'جديدة' || status === 'جديد' || status === '') {
+              complaints.new++;
+            } else if (status === 'in_progress' || status === 'قيد المعالجة' || status === 'جاري') {
+              complaints.inProgress++;
+            } else if (status === 'escalated' || status === 'مصعدة' || status === 'مصعد') {
+              complaints.escalated++;
+            } else if (status === 'closed' || status === 'مغلقة' || status === 'مغلق') {
+              complaints.closed++;
+            }
+          });
           complaints.open = complaints.new + complaints.inProgress + complaints.escalated;
         }
       } catch(e) {}
@@ -3366,10 +3390,18 @@
         const incSheet = getIncidentsSheet('Incidents_Log');
         if (incSheet) {
           const incData = sheetToObjects(incSheet);
-          incidents.new = incData.filter(i => i.Status === 'new').length;
-          incidents.investigation = incData.filter(i => i.Status === 'under_investigation').length;
-          incidents.escalated = incData.filter(i => i.Status === 'escalated').length;
-          incidents.closed = incData.filter(i => i.Status === 'closed').length;
+          incData.forEach(i => {
+            const status = String(i.Status || '').toLowerCase();
+            if (status === 'new' || status === '') {
+              incidents.new++;
+            } else if (status === 'under_investigation') {
+              incidents.investigation++;
+            } else if (status === 'escalated') {
+              incidents.escalated++;
+            } else if (status === 'closed') {
+              incidents.closed++;
+            }
+          });
           incidents.open = incidents.new + incidents.investigation + incidents.escalated;
         }
       } catch(e) {}
@@ -3380,23 +3412,39 @@
         const riskSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('Risks_Register');
         if (riskSheet) {
           const riskData = sheetToObjects(riskSheet);
-          risks.high = riskData.filter(r => r.Risk_Level === 'high' || r.Risk_Level === 'عالي').length;
-          risks.medium = riskData.filter(r => r.Risk_Level === 'medium' || r.Risk_Level === 'متوسط').length;
-          risks.low = riskData.filter(r => r.Risk_Level === 'low' || r.Risk_Level === 'منخفض').length;
-          risks.resolved = riskData.filter(r => r.Status === 'resolved' || r.Status === 'معالج').length;
+          riskData.forEach(r => {
+            const level = String(r.Risk_Level || r.مستوى_الخطر || '').toLowerCase();
+            const status = String(r.Status || r.الحالة || '').toLowerCase();
+            if (status === 'resolved' || status === 'معالج') {
+              risks.resolved++;
+            } else {
+              if (level === 'high' || level === 'عالي') risks.high++;
+              else if (level === 'medium' || level === 'متوسط') risks.medium++;
+              else if (level === 'low' || level === 'منخفض') risks.low++;
+            }
+          });
           risks.active = risks.high + risks.medium + risks.low;
         }
       } catch(e) {}
       
-      // جلب إحصائيات الجولات - تستخدم نفس spreadsheet الحوادث
+      // جلب إحصائيات الجولات - محاولة من عدة مصادر
       let rounds = { today: 0, compliance: 100 };
       try {
-        const roundSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('Rounds');
+        // محاولة من INCIDENTS spreadsheet أولاً
+        let roundSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('Rounds');
+        if (!roundSheet) {
+          // محاولة من EOC spreadsheet
+          roundSheet = SpreadsheetApp.openById(EOC_SPREADSHEET_ID).getSheetByName('Rounds');
+        }
         if (roundSheet) {
           const roundData = sheetToObjects(roundSheet);
-          rounds.today = roundData.filter(r => String(r.Date || r.التاريخ).includes(today)).length;
-          const completed = roundData.filter(r => r.Status === 'completed' || r.الحالة === 'مكتملة').length;
-          rounds.compliance = roundData.length > 0 ? Math.round((completed / roundData.length) * 100) : 100;
+          rounds.today = roundData.filter(r => String(r.Date || r.التاريخ || '').includes(today)).length;
+          const total = roundData.length;
+          const completed = roundData.filter(r => {
+            const status = String(r.Status || r.الحالة || '').toLowerCase();
+            return status === 'completed' || status === 'مكتملة' || status === 'مكتمل';
+          }).length;
+          rounds.compliance = total > 0 ? Math.round((completed / total) * 100) : 100;
         }
       } catch(e) {}
       
