@@ -575,6 +575,9 @@
         case 'getIncidentStats':
           result = getIncidentStats(payload);
           break;
+        case 'getOwnerDashboardStats':
+          result = getOwnerDashboardStats(payload);
+          break;
         case 'addIncidentFollowup':
           result = addIncidentFollowup(payload);
           break;
@@ -3319,6 +3322,118 @@
       byStatus,
       monthlyStats
     };
+  }
+
+  // ==================== إحصائيات لوحة المالك ====================
+  function getOwnerDashboardStats(params) {
+    try {
+      const now = getSaudiDate();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      
+      // جلب حالة الطوارئ
+      let emergency = { active: false };
+      try {
+        const eocSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('EOC_Status');
+        if (eocSheet) {
+          const eocData = eocSheet.getRange(2, 1, 1, 3).getValues()[0];
+          if (eocData[0] && String(eocData[0]).toLowerCase() === 'active') {
+            emergency = {
+              active: true,
+              type: eocData[1] || 'حالة طوارئ',
+              message: eocData[2] || 'تنبيه طوارئ نشط!'
+            };
+          }
+        }
+      } catch(e) {}
+      
+      // جلب إحصائيات الشكاوى
+      let complaints = { open: 0, new: 0, inProgress: 0, escalated: 0, closed: 0 };
+      try {
+        const compSheet = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID).getSheetByName('بيانات الشكاوى');
+        if (compSheet) {
+          const compData = sheetToObjects(compSheet);
+          complaints.new = compData.filter(c => c.Status === 'new' || c.الحالة === 'جديدة').length;
+          complaints.inProgress = compData.filter(c => c.Status === 'in_progress' || c.الحالة === 'قيد المعالجة').length;
+          complaints.escalated = compData.filter(c => c.Status === 'escalated' || c.الحالة === 'مصعدة').length;
+          complaints.closed = compData.filter(c => c.Status === 'closed' || c.الحالة === 'مغلقة').length;
+          complaints.open = complaints.new + complaints.inProgress + complaints.escalated;
+        }
+      } catch(e) {}
+      
+      // جلب إحصائيات الحوادث
+      let incidents = { open: 0, new: 0, investigation: 0, escalated: 0, closed: 0 };
+      try {
+        const incSheet = getIncidentsSheet('Incidents_Log');
+        if (incSheet) {
+          const incData = sheetToObjects(incSheet);
+          incidents.new = incData.filter(i => i.Status === 'new').length;
+          incidents.investigation = incData.filter(i => i.Status === 'under_investigation').length;
+          incidents.escalated = incData.filter(i => i.Status === 'escalated').length;
+          incidents.closed = incData.filter(i => i.Status === 'closed').length;
+          incidents.open = incidents.new + incidents.investigation + incidents.escalated;
+        }
+      } catch(e) {}
+      
+      // جلب إحصائيات المخاطر
+      let risks = { active: 0, high: 0, medium: 0, low: 0, resolved: 0 };
+      try {
+        const riskSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('Risks_Register');
+        if (riskSheet) {
+          const riskData = sheetToObjects(riskSheet);
+          risks.high = riskData.filter(r => r.Risk_Level === 'high' || r.Risk_Level === 'عالي').length;
+          risks.medium = riskData.filter(r => r.Risk_Level === 'medium' || r.Risk_Level === 'متوسط').length;
+          risks.low = riskData.filter(r => r.Risk_Level === 'low' || r.Risk_Level === 'منخفض').length;
+          risks.resolved = riskData.filter(r => r.Status === 'resolved' || r.Status === 'معالج').length;
+          risks.active = risks.high + risks.medium + risks.low;
+        }
+      } catch(e) {}
+      
+      // جلب إحصائيات الجولات - تستخدم نفس spreadsheet الحوادث
+      let rounds = { today: 0, compliance: 100 };
+      try {
+        const roundSheet = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID).getSheetByName('Rounds');
+        if (roundSheet) {
+          const roundData = sheetToObjects(roundSheet);
+          rounds.today = roundData.filter(r => String(r.Date || r.التاريخ).includes(today)).length;
+          const completed = roundData.filter(r => r.Status === 'completed' || r.الحالة === 'مكتملة').length;
+          rounds.compliance = roundData.length > 0 ? Math.round((completed / roundData.length) * 100) : 100;
+        }
+      } catch(e) {}
+      
+      // بناء قائمة التنبيهات
+      let alerts = [];
+      if (emergency.active) {
+        alerts.push({ type: 'danger', message: emergency.message, count: null });
+      }
+      if (complaints.escalated > 0) {
+        alerts.push({ type: 'danger', message: 'شكاوى مصعدة تحتاج متابعة', count: complaints.escalated });
+      }
+      if (incidents.escalated > 0) {
+        alerts.push({ type: 'danger', message: 'حوادث مصعدة تحتاج تدخل', count: incidents.escalated });
+      }
+      if (risks.high > 0) {
+        alerts.push({ type: 'warning', message: 'مخاطر عالية المستوى', count: risks.high });
+      }
+      if (complaints.new > 5) {
+        alerts.push({ type: 'warning', message: 'شكاوى جديدة تنتظر المعالجة', count: complaints.new });
+      }
+      if (incidents.new > 3) {
+        alerts.push({ type: 'warning', message: 'حوادث جديدة تنتظر التحقيق', count: incidents.new });
+      }
+      
+      return {
+        success: true,
+        emergency,
+        complaints,
+        incidents,
+        risks,
+        rounds,
+        alerts,
+        lastUpdate: now.toISOString()
+      };
+    } catch(e) {
+      return { success: false, error: e.message };
+    }
   }
 
   // ==================== نظام المتابعين والتعيين ====================
