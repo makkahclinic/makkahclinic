@@ -905,6 +905,86 @@ function doPost(e) {
       }
     }
     
+    // ✅ Complaints API (GET/JSONP) - مع التحقق من الصلاحيات
+    if (action === 'getComplaints') {
+      try {
+        const payload = {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken,
+          limit: p.limit || 50,
+          status: p.status
+        };
+        validateStaffAuth_(payload, ['owner', 'admin']);
+        const result = getComplaints(payload);
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    // ✅ Incidents API (GET/JSONP) - مع التحقق من الصلاحيات
+    if (action === 'getIncidents') {
+      try {
+        const payload = {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken,
+          limit: p.limit || 50,
+          status: p.status
+        };
+        validateStaffAuth_(payload, ['owner', 'admin']);
+        const result = getIncidents(payload);
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    // ✅ Rounds API (GET/JSONP) - مع التحقق من الصلاحيات
+    if (action === 'getRounds' || action === 'getRoundsLog') {
+      try {
+        const payload = {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken
+        };
+        validateStaffAuth_(payload, ['owner', 'admin']);
+        const result = getRoundsLog(p.limit || 50);
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    // ✅ Risks API (GET/JSONP) - مع التحقق من الصلاحيات
+    if (action === 'getRisks') {
+      try {
+        const payload = {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken
+        };
+        validateStaffAuth_(payload, ['owner', 'admin']);
+        const ss = SpreadsheetApp.openById(INCIDENTS_SPREADSHEET_ID);
+        const riskSheet = ss.getSheetByName('Risks_Register');
+        if (!riskSheet) {
+          return output_({ success: true, risks: [] });
+        }
+        const data = sheetToObjects(riskSheet);
+        const risks = data.map(r => ({
+          ID: r.ID || r.الرقم || '',
+          Description: r.Description || r.الوصف || r.Risk || r.الخطر || '',
+          Department: r.Department || r.القسم || '',
+          Level: r.Level || r.المستوى || r.Severity || r.الشدة || 'medium',
+          Status: r.Status || r.الحالة || 'active'
+        }));
+        return output_({ success: true, risks: risks });
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
     return output_({ ok: false, error: 'Unknown action: ' + (action || '') });
   }
   
