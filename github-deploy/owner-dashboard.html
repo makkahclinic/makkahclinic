@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم الرئيسية</title>
+    <title>مركز القيادة والسيطرة - المالك</title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <style>
         :root {
             --primary: #1e3a5f;
@@ -16,14 +17,380 @@
             --success: #10b981;
             --danger: #dc3545;
             --warning: #f59e0b;
-            --bg: #f8fafc;
+            --info: #17a2b8;
+            --bg-light: #f8f9fa;
+            --sidebar-width: 260px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Tajawal', sans-serif;
-            background: var(--bg);
+            background: var(--bg-light);
+            min-height: 100vh;
+            display: flex;
+        }
+        .sidebar, .main-content { visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+        body.authenticated .sidebar, body.authenticated .main-content { visibility: visible; opacity: 1; }
+        
+        .sidebar {
+            width: var(--sidebar-width);
+            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+            min-height: 100vh;
+            position: fixed;
+            right: 0;
+            top: 0;
+            z-index: 100;
+            transition: transform 0.3s;
+            overflow-y: auto;
+        }
+        .sidebar-header {
+            padding: 1.2rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-header img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            padding: 5px;
+        }
+        .sidebar-header h3 {
+            color: white;
+            margin-top: 0.6rem;
+            font-size: 0.95rem;
+        }
+        .sidebar-header .role-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: var(--primary-dark);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            margin-top: 0.4rem;
+            font-weight: 700;
+        }
+        .nav-menu { padding: 0.8rem 0; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-right: 4px solid transparent;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .nav-item:hover, .nav-item.active {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-right-color: var(--gold);
+        }
+        .nav-item i { width: 22px; text-align: center; }
+        .nav-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.8rem 0; }
+        
+        .main-content {
+            margin-right: var(--sidebar-width);
+            flex: 1;
+            padding: 1.2rem;
             min-height: 100vh;
         }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 1.2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 1.2rem;
+        }
+        .welcome-text h2 { color: var(--primary); font-size: 1.2rem; }
+        .welcome-text p { color: #666; font-size: 0.85rem; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.2rem;
+        }
+        .kpi-card {
+            background: white;
+            border-radius: 14px;
+            padding: 1.2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid rgba(0,0,0,0.04);
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--gold);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .kpi-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+        .kpi-card:hover::before { opacity: 1; }
+        .kpi-icon {
+            width: 55px;
+            height: 55px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .kpi-icon.eoc { background: linear-gradient(135deg, #10b981, #059669); }
+        .kpi-icon.eoc.active { background: linear-gradient(135deg, #dc2626, #991b1b); animation: pulse 1s infinite; }
+        .kpi-icon.complaints { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .kpi-icon.incidents { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .kpi-icon.risks { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .kpi-icon.rounds { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+        .kpi-icon.calibration { background: linear-gradient(135deg, #fa709a, #fee140); }
+        .kpi-icon.maintenance { background: linear-gradient(135deg, #667eea, #764ba2); }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .kpi-info h3 { font-size: 1.6rem; color: var(--primary); line-height: 1; font-weight: 700; }
+        .kpi-info p { font-size: 0.8rem; color: #555; margin-top: 4px; font-weight: 500; }
+        .kpi-info .sub { font-size: 0.75rem; color: #999; display: block; margin-top: 2px; }
+        .kpi-info .sub.danger { color: var(--danger) !important; font-weight: 700; }
+        
+        .alerts-section {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid #eee;
+        }
+        .section-header h3 { font-size: 1rem; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        .alert-item.danger { background: #fff5f5; border-right: 4px solid var(--danger); }
+        .alert-item.warning { background: #fffbeb; border-right: 4px solid var(--warning); }
+        .alert-item.info { background: #f0f9ff; border-right: 4px solid var(--info); }
+        .no-alerts { text-align: center; padding: 1.5rem; color: #999; font-size: 0.9rem; }
+        
+        .stats-grid-detailed {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.2rem;
+        }
+        .stats-box {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .stats-box h4 {
+            font-size: 0.9rem;
+            color: var(--primary);
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+        }
+        .stats-row:last-child { border-bottom: none; }
+        .stats-row .label { color: #666; }
+        .stats-row .value { font-weight: 700; color: var(--primary); }
+        .stats-row .value.danger { color: var(--danger); }
+        .stats-row .value.warning { color: var(--warning); }
+        .stats-row .value.success { color: var(--success); }
+        
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+        
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .refresh-btn:hover { background: #f0f0f0; }
+        .refresh-btn.loading i { animation: spin 1s linear infinite; }
+        
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .users-table th {
+            background: var(--bg-light);
+            padding: 12px;
+            text-align: right;
+            font-weight: 600;
+            color: var(--primary);
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .users-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .users-table tr:hover { background: #f8fafc; }
+        .role-badge-small {
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .role-owner { background: #fef3c7; color: #92400e; }
+        .role-admin { background: #dbeafe; color: #1e40af; }
+        .role-staff { background: #e5e7eb; color: #374151; }
+        
+        .action-btns { display: flex; gap: 5px; }
+        .action-btns button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        .data-table th {
+            background: var(--primary);
+            color: white;
+            padding: 12px;
+            text-align: right;
+            font-weight: 600;
+        }
+        .data-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .data-table tr:hover { background: #f1f5f9; }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .status-new { background: #dbeafe; color: #1e40af; }
+        .status-progress { background: #fef3c7; color: #92400e; }
+        .status-escalated { background: #fee2e2; color: #991b1b; }
+        .status-closed { background: #d1fae5; color: #065f46; }
+        .status-high { background: #fee2e2; color: #991b1b; }
+        .status-medium { background: #fef3c7; color: #92400e; }
+        .status-low { background: #d1fae5; color: #065f46; }
+        
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .filter-bar input, .filter-bar select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: inherit;
+        }
+        .filter-bar input { flex: 1; min-width: 200px; }
+        
+        @media (max-width: 992px) {
+            .sidebar { transform: translateX(100%); }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-right: 0; padding: 1rem; }
+            .menu-toggle { display: block !important; }
+        }
+        .menu-toggle {
+            display: none;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
         .access-denied {
             display: flex;
             flex-direction: column;
@@ -37,757 +404,406 @@
         }
         .access-denied i { font-size: 80px; margin-bottom: 20px; color: var(--danger); }
         .access-denied h1 { font-size: 2rem; margin-bottom: 10px; }
-        .access-denied p { opacity: 0.8; margin-bottom: 20px; }
-        .access-denied .btn {
+        .access-denied .btn-back {
             background: var(--gold);
             color: var(--primary);
             padding: 12px 30px;
             border-radius: 8px;
             text-decoration: none;
             font-weight: 700;
+            margin-top: 20px;
         }
-        .loading-screen {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: var(--bg);
-        }
-        .loading-screen i { font-size: 50px; color: var(--primary); margin-bottom: 20px; }
-        .dashboard { display: none; }
-        .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-            padding: 20px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        .header-title { display: flex; align-items: center; gap: 15px; }
-        .header-title img { width: 50px; height: 50px; border-radius: 50%; background: white; padding: 5px; }
-        .header-title h1 { font-size: 1.5rem; }
-        .header-title span { font-size: 0.9rem; opacity: 0.8; }
-        .user-info { display: flex; align-items: center; gap: 15px; }
-        .user-info .badge {
-            background: var(--gold);
-            color: var(--primary);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-weight: 700;
-            font-size: 0.85rem;
-        }
-        .btn-logout {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            transition: all 0.3s;
-        }
-        .btn-logout:hover { background: var(--danger); }
-        .main-content { padding: 30px; max-width: 1400px; margin: 0 auto; }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            text-align: center;
-            border-top: 4px solid var(--primary);
-        }
-        .stat-card i { font-size: 2.5rem; color: var(--gold); margin-bottom: 10px; }
-        .stat-card h3 { font-size: 2rem; color: var(--primary); }
-        .stat-card p { color: #666; font-size: 0.9rem; }
-        .section-title {
-            font-size: 1.5rem;
-            color: var(--primary);
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 3px solid var(--gold);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
-        .card-header {
-            background: var(--primary);
-            color: white;
-            padding: 15px 25px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .card-body { padding: 25px; }
-        .add-user-form {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: var(--primary);
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 1rem;
-            transition: all 0.3s;
-        }
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
-            border-color: var(--gold);
-            box-shadow: 0 0 0 3px rgba(201, 169, 98, 0.2);
-        }
-        .btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-weight: 600;
-            transition: all 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-dark); }
-        .btn-success { background: var(--success); color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-warning { background: var(--warning); color: white; }
-        .btn-sm { padding: 8px 15px; font-size: 0.85rem; }
-        .users-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .users-table th {
-            background: var(--bg);
-            padding: 15px;
-            text-align: right;
-            font-weight: 600;
-            color: var(--primary);
-            border-bottom: 2px solid #e2e8f0;
-        }
-        .users-table td {
-            padding: 15px;
-            border-bottom: 1px solid #e2e8f0;
-            vertical-align: middle;
-        }
-        .users-table tr:hover { background: #f8fafc; }
-        .role-badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        .role-owner { background: #fef3c7; color: #92400e; }
-        .role-admin { background: #dbeafe; color: #1e40af; }
-        .role-doctor { background: #d1fae5; color: #065f46; }
-        .role-pharmacist { background: #ede9fe; color: #5b21b6; }
-        .role-staff { background: #e5e7eb; color: #374151; }
-        .role-patient { background: #fce7f3; color: #9d174d; }
-        .action-btns { display: flex; gap: 8px; }
-        .empty-state {
-            text-align: center;
-            padding: 50px;
-            color: #666;
-        }
-        .empty-state i { font-size: 4rem; color: #ddd; margin-bottom: 15px; }
-        .alert {
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #10b981; }
-        .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #dc3545; }
-        .quick-links {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-        }
-        .quick-link {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            text-align: center;
-            text-decoration: none;
-            color: var(--primary);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            transition: all 0.3s;
-            border: 2px solid transparent;
-        }
-        .quick-link:hover {
-            transform: translateY(-5px);
-            border-color: var(--gold);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        .quick-link i { font-size: 2rem; color: var(--gold); margin-bottom: 10px; display: block; }
         
-        /* شريط تنبيه الطوارئ */
-        .emergency-banner {
-            display: none;
-            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--success);
             color: white;
             padding: 15px 30px;
-            text-align: center;
-            animation: emergencyPulse 2s infinite;
-        }
-        .emergency-banner.active { display: block; }
-        .emergency-banner i { margin-left: 10px; animation: shake 0.5s infinite; }
-        @keyframes emergencyPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.8; }
-        }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-3px); }
-            75% { transform: translateX(3px); }
-        }
-        
-        /* بطاقات المراقبة KPI */
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .kpi-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            color: inherit;
-            border: 2px solid transparent;
-        }
-        .kpi-card:hover { 
-            transform: translateY(-5px); 
-            border-color: var(--gold);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        .kpi-card.emergency { border: 2px solid #dc2626; animation: cardPulse 1.5s infinite; }
-        @keyframes cardPulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
-            50% { box-shadow: 0 0 20px 5px rgba(220, 38, 38, 0.2); }
-        }
-        .kpi-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            color: white;
-        }
-        .kpi-icon.eoc { background: linear-gradient(135deg, #10b981, #059669); }
-        .kpi-icon.eoc.active { background: linear-gradient(135deg, #dc2626, #991b1b); animation: iconPulse 1s infinite; }
-        .kpi-icon.complaints { background: linear-gradient(135deg, #667eea, #764ba2); }
-        .kpi-icon.incidents { background: linear-gradient(135deg, #f093fb, #f5576c); }
-        .kpi-icon.risks { background: linear-gradient(135deg, #4facfe, #00f2fe); }
-        .kpi-icon.rounds { background: linear-gradient(135deg, #43e97b, #38f9d7); }
-        @keyframes iconPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-        .kpi-info h3 { font-size: 1.8rem; color: var(--primary); line-height: 1; font-weight: 700; }
-        .kpi-info p { font-size: 0.9rem; color: #666; margin-top: 5px; }
-        .kpi-info .sub { font-size: 0.8rem; color: #999; display: block; margin-top: 3px; }
-        .kpi-info .sub.danger { color: #dc2626; font-weight: 700; }
-        
-        /* قسم التنبيهات */
-        .alerts-section {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-        }
-        .alerts-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--gold);
-        }
-        .alerts-header h3 { font-size: 1.2rem; color: var(--primary); display: flex; align-items: center; gap: 10px; }
-        .alert-item {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 12px 15px;
             border-radius: 10px;
-            margin-bottom: 10px;
-            font-size: 0.95rem;
-        }
-        .alert-item:last-child { margin-bottom: 0; }
-        .alert-item.danger { background: #fef2f2; border-right: 4px solid #dc2626; }
-        .alert-item.warning { background: #fffbeb; border-right: 4px solid #f59e0b; }
-        .alert-item.info { background: #f0f9ff; border-right: 4px solid #3b82f6; }
-        .alert-item.success { background: #f0fdf4; border-right: 4px solid #10b981; }
-        .alert-item i { font-size: 1.3rem; }
-        .alert-item.danger i { color: #dc2626; }
-        .alert-item.warning i { color: #f59e0b; }
-        .alert-item.info i { color: #3b82f6; }
-        .alert-item.success i { color: #10b981; }
-        .alert-item .alert-text { flex: 1; }
-        .alert-item .alert-count { font-weight: 700; font-size: 1.2rem; color: var(--primary); }
-        .no-alerts { text-align: center; padding: 30px; color: #999; }
-        .no-alerts i { font-size: 3rem; color: #10b981; margin-bottom: 10px; display: block; }
-        
-        /* إحصائيات تفصيلية */
-        .stats-detail-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stats-box {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-        }
-        .stats-box h4 {
-            font-size: 1rem;
-            color: var(--primary);
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-        .stats-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #f5f5f5;
-            font-size: 0.9rem;
-        }
-        .stats-row:last-child { border-bottom: none; }
-        .stats-row .label { color: #666; }
-        .stats-row .value { font-weight: 700; color: var(--primary); }
-        .stats-row .value.danger { color: #dc2626; }
-        .stats-row .value.warning { color: #f59e0b; }
-        .stats-row .value.success { color: #10b981; }
-        
-        /* أزرار الطوارئ السريعة */
-        .emergency-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        .emergency-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            padding: 25px 20px;
-            border-radius: 15px;
-            text-decoration: none;
-            color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 9999;
             font-weight: 600;
-            transition: all 0.3s;
-            text-align: center;
         }
-        .emergency-btn:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .emergency-btn i { font-size: 2.5rem; }
-        .emergency-btn.eoc-btn { background: linear-gradient(135deg, #1e3a5f, #152a45); }
-        .emergency-btn.report-btn { background: linear-gradient(135deg, #dc2626, #991b1b); }
-        .emergency-btn.rounds-btn { background: linear-gradient(135deg, #10b981, #059669); }
-        .emergency-btn.training-btn { background: linear-gradient(135deg, #f59e0b, #d97706); }
-        
-        /* تبويبات */
-        .tabs-container {
-            margin-bottom: 20px;
-        }
-        .tabs {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .tab-btn {
-            padding: 12px 25px;
-            border: none;
-            background: white;
-            border-radius: 10px;
-            cursor: pointer;
-            font-family: inherit;
-            font-weight: 600;
-            color: #666;
-            transition: all 0.3s;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .tab-btn:hover { background: #f0f0f0; }
-        .tab-btn.active { background: var(--primary); color: white; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
-        @media (max-width: 768px) {
-            .header { flex-direction: column; gap: 15px; text-align: center; }
-            .add-user-form { grid-template-columns: 1fr; }
-            .action-btns { flex-direction: column; }
+        .toast.error { background: var(--danger); }
+        .toast.show { display: block; animation: slideUp 0.3s ease; }
+        @keyframes slideUp {
+            from { transform: translate(-50%, 100px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
         }
     </style>
 </head>
 <body>
-    <div id="loading" class="loading-screen">
-        <i class="fas fa-spinner fa-spin"></i>
-        <p>جاري التحقق من الصلاحيات...</p>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p style="margin-top: 15px; color: var(--primary);">جاري تحميل مركز القيادة...</p>
     </div>
-
-    <div id="access-denied" class="access-denied" style="display: none;">
-        <i class="fas fa-shield-alt"></i>
+    
+    <div class="access-denied" id="accessDenied" style="display: none;">
+        <i class="fas fa-lock"></i>
         <h1>الوصول مرفوض</h1>
-        <p>هذه الصفحة مخصصة للمالك فقط</p>
-        <a href="portal.html" class="btn">العودة للبوابة</a>
+        <p>عذراً، هذه الصفحة مخصصة للمالك فقط</p>
+        <a href="portal.html" class="btn-back"><i class="fas fa-arrow-right"></i> العودة للبوابة</a>
     </div>
 
-    <div id="dashboard" class="dashboard">
-        <!-- شريط تنبيه الطوارئ -->
-        <div id="emergency-banner" class="emergency-banner">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span id="emergency-text">تنبيه طوارئ نشط!</span>
-            <a href="eoc-command.html" style="color: white; margin-right: 20px; text-decoration: underline;">الذهاب لمركز القيادة</a>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <img src="logo-transparent.png" alt="Logo" onerror="this.src='https://via.placeholder.com/60?text=M'">
+            <h3 id="ownerName">المالك</h3>
+            <span class="role-badge"><i class="fas fa-crown"></i> المالك</span>
         </div>
-        
-        <header class="header">
-            <div class="header-title">
-                <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="Logo">
-                <div>
-                    <h1>مركز القيادة والسيطرة</h1>
-                    <span>مجمع مكة الطبي بالزاهر</span>
-                </div>
+        <nav class="nav-menu">
+            <a class="nav-item active" data-section="dashboard">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>مركز القيادة</span>
+            </a>
+            <a class="nav-item" data-section="eoc">
+                <i class="fas fa-broadcast-tower"></i>
+                <span>مركز EOC</span>
+            </a>
+            <a class="nav-item" href="cbahi-portal.html" target="_blank">
+                <i class="fas fa-award"></i>
+                <span>بوابة سباهي</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-item" data-section="complaints">
+                <i class="fas fa-comment-dots"></i>
+                <span>الشكاوى</span>
+            </a>
+            <a class="nav-item" data-section="incidents">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>الحوادث</span>
+            </a>
+            <a class="nav-item" data-section="risks">
+                <i class="fas fa-shield-alt"></i>
+                <span>سجل المخاطر</span>
+            </a>
+            <a class="nav-item" data-section="rounds">
+                <i class="fas fa-clipboard-check"></i>
+                <span>جولات السلامة</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-item" data-section="users">
+                <i class="fas fa-users-cog"></i>
+                <span>إدارة المستخدمين</span>
+            </a>
+            <a class="nav-item" data-section="permissions">
+                <i class="fas fa-user-shield"></i>
+                <span>إدارة الصلاحيات</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-item" id="logoutBtn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>تسجيل الخروج</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="welcome-text">
+                <h2>مركز القيادة والسيطرة</h2>
+                <p id="dateDisplay">مجمع مكة الطبي بالزاهر</p>
             </div>
-            <div class="user-info">
-                <span class="badge"><i class="fas fa-crown"></i> المالك</span>
-                <span id="user-email"></span>
-                <button class="btn-logout" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i> خروج
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="refresh-btn" id="refreshBtn" title="تحديث البيانات" onclick="loadAllData()">
+                    <i class="fas fa-sync-alt"></i>
                 </button>
-            </div>
-        </header>
-
-        <main class="main-content">
-            <div id="alert" class="alert"></div>
-            
-            <!-- أزرار الطوارئ السريعة -->
-            <div class="emergency-actions">
-                <a href="eoc-command.html" class="emergency-btn eoc-btn">
-                    <i class="fas fa-broadcast-tower"></i>
-                    مركز القيادة EOC
-                </a>
-                <a href="emergency-report.html" class="emergency-btn report-btn">
-                    <i class="fas fa-exclamation-circle"></i>
-                    إبلاغ طوارئ
-                </a>
-                <a href="Round.html" class="emergency-btn rounds-btn">
-                    <i class="fas fa-clipboard-check"></i>
-                    جولات السلامة
-                </a>
-                <a href="cbahi-portal.html" class="emergency-btn training-btn">
-                    <i class="fas fa-award"></i>
-                    بوابة سباهي
+                <a href="index.html" class="btn btn-outline">
+                    <i class="fas fa-external-link-alt"></i>
+                    الموقع
                 </a>
             </div>
+        </div>
 
-            <!-- بطاقات المراقبة الرئيسية -->
+        <!-- قسم لوحة القيادة الرئيسية -->
+        <section class="content-section active" id="section-dashboard">
             <div class="kpi-grid">
-                <a href="eoc-command.html" class="kpi-card" id="eoc-card">
-                    <div class="kpi-icon eoc" id="eoc-icon">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
+                <div class="kpi-card" onclick="switchSection('eoc')">
+                    <div class="kpi-icon eoc" id="eocIcon"><i class="fas fa-broadcast-tower"></i></div>
                     <div class="kpi-info">
-                        <h3 id="eoc-status">طبيعي</h3>
+                        <h3 id="kpi-eoc">طبيعي</h3>
                         <p>حالة الطوارئ</p>
-                        <span class="sub" id="eoc-sub">الوضع طبيعي ✓</span>
+                        <span class="sub" id="kpi-eoc-status">الوضع طبيعي ✓</span>
                     </div>
-                </a>
-                <a href="complaint_analysis.html" class="kpi-card">
-                    <div class="kpi-icon complaints">
-                        <i class="fas fa-comment-dots"></i>
-                    </div>
+                </div>
+                <div class="kpi-card" onclick="switchSection('complaints')">
+                    <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
                     <div class="kpi-info">
-                        <h3 id="complaints-count">0</h3>
+                        <h3 id="kpi-complaints">0</h3>
                         <p>شكوى مفتوحة</p>
-                        <span class="sub" id="complaints-sub">قيد المعالجة</span>
+                        <span class="sub" id="kpi-complaints-sub">قيد المعالجة</span>
                     </div>
-                </a>
-                <a href="admin-dashboard.html" class="kpi-card">
-                    <div class="kpi-icon incidents">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
+                </div>
+                <div class="kpi-card" onclick="switchSection('incidents')">
+                    <div class="kpi-icon incidents"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="kpi-info">
-                        <h3 id="incidents-count">0</h3>
+                        <h3 id="kpi-incidents">0</h3>
                         <p>حادثة مفتوحة</p>
-                        <span class="sub" id="incidents-sub">تحتاج متابعة</span>
+                        <span class="sub" id="kpi-incidents-sub">تحتاج متابعة</span>
                     </div>
-                </a>
-                <a href="admin-dashboard.html" class="kpi-card">
-                    <div class="kpi-icon risks">
-                        <i class="fas fa-radiation"></i>
-                    </div>
+                </div>
+                <div class="kpi-card" onclick="switchSection('risks')">
+                    <div class="kpi-icon risks"><i class="fas fa-shield-alt"></i></div>
                     <div class="kpi-info">
-                        <h3 id="risks-count">0</h3>
+                        <h3 id="kpi-risks">0</h3>
                         <p>خطر نشط</p>
-                        <span class="sub" id="risks-sub">يحتاج تقييم</span>
+                        <span class="sub danger" id="kpi-risks-sub">يحتاج تقييم</span>
                     </div>
-                </a>
-                <a href="Round.html" class="kpi-card">
-                    <div class="kpi-icon rounds">
-                        <i class="fas fa-walking"></i>
-                    </div>
+                </div>
+                <div class="kpi-card" onclick="switchSection('rounds')">
+                    <div class="kpi-icon rounds"><i class="fas fa-clipboard-check"></i></div>
                     <div class="kpi-info">
-                        <h3 id="rounds-count">0</h3>
+                        <h3 id="kpi-rounds">0</h3>
                         <p>جولة اليوم</p>
-                        <span class="sub" id="rounds-sub">نسبة الالتزام</span>
+                        <span class="sub" id="kpi-rounds-sub">مكتملة</span>
                     </div>
-                </a>
+                </div>
             </div>
 
-            <!-- قسم التنبيهات والتصعيدات -->
             <div class="alerts-section">
-                <div class="alerts-header">
+                <div class="section-header">
                     <h3><i class="fas fa-bell"></i> التنبيهات والتصعيدات</h3>
-                    <button class="btn btn-sm btn-primary" onclick="loadMonitoringData()">
-                        <i class="fas fa-sync"></i> تحديث
-                    </button>
+                    <button class="refresh-btn" onclick="loadAlerts()"><i class="fas fa-sync-alt"></i> تحديث</button>
                 </div>
-                <div id="alerts-list">
+                <div id="alertsContainer">
                     <div class="no-alerts">
-                        <i class="fas fa-check-circle"></i>
+                        <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
                         <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
                     </div>
                 </div>
             </div>
 
-            <!-- إحصائيات تفصيلية -->
-            <div class="stats-detail-grid">
+            <div class="stats-grid-detailed">
                 <div class="stats-box">
                     <h4><i class="fas fa-comment-dots"></i> الشكاوى</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
-                        <span class="value danger" id="complaints-new">0</span>
+                        <span class="value" id="stat-complaints-new">0</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">قيد المعالجة</span>
-                        <span class="value warning" id="complaints-progress">0</span>
+                        <span class="value warning" id="stat-complaints-progress">0</span>
                     </div>
                     <div class="stats-row">
-                        <span class="label">مصعدة</span>
-                        <span class="value danger" id="complaints-escalated">0</span>
+                        <span class="label">مصعّدة</span>
+                        <span class="value danger" id="stat-complaints-escalated">0</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">مغلقة</span>
-                        <span class="value success" id="complaints-closed">0</span>
+                        <span class="value success" id="stat-complaints-closed">0</span>
                     </div>
                 </div>
                 <div class="stats-box">
                     <h4><i class="fas fa-exclamation-triangle"></i> الحوادث</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
-                        <span class="value danger" id="incidents-new">0</span>
+                        <span class="value" id="stat-incidents-new">0</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">قيد التحقيق</span>
-                        <span class="value warning" id="incidents-investigation">0</span>
+                        <span class="value warning" id="stat-incidents-progress">0</span>
                     </div>
                     <div class="stats-row">
-                        <span class="label">مصعدة</span>
-                        <span class="value danger" id="incidents-escalated">0</span>
+                        <span class="label">مصعّدة</span>
+                        <span class="value danger" id="stat-incidents-escalated">0</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">مغلقة</span>
-                        <span class="value success" id="incidents-closed">0</span>
+                        <span class="value success" id="stat-incidents-closed">0</span>
                     </div>
                 </div>
                 <div class="stats-box">
-                    <h4><i class="fas fa-radiation"></i> سجل المخاطر</h4>
+                    <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
                     <div class="stats-row">
                         <span class="label">خطر عالي</span>
-                        <span class="value danger" id="risks-high">0</span>
+                        <span class="value danger" id="stat-risks-high">0</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">خطر متوسط</span>
-                        <span class="value warning" id="risks-medium">0</span>
+                        <span class="value warning" id="stat-risks-medium">0</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">خطر منخفض</span>
-                        <span class="value" id="risks-low">0</span>
+                        <span class="value" id="stat-risks-low">0</span>
                     </div>
                     <div class="stats-row">
-                        <span class="label">معالجة</span>
-                        <span class="value success" id="risks-resolved">0</span>
+                        <span class="label">مُعالجة</span>
+                        <span class="value success" id="stat-risks-resolved">0</span>
                     </div>
                 </div>
             </div>
+        </section>
 
-            <!-- تبويبات -->
-            <div class="tabs-container">
-                <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab(event,'users')">
-                        <i class="fas fa-users-cog"></i> إدارة المستخدمين
-                    </button>
-                    <button class="tab-btn" onclick="switchTab(event,'links')">
-                        <i class="fas fa-link"></i> روابط سريعة
-                    </button>
+        <!-- قسم مركز EOC -->
+        <section class="content-section" id="section-eoc">
+            <div class="stats-box">
+                <h4><i class="fas fa-broadcast-tower"></i> مركز القيادة EOC - التحكم في الطوارئ</h4>
+                <div id="eocStatusCard" style="padding: 20px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 10px; color: white; text-align: center; margin-bottom: 20px;">
+                    <i class="fas fa-check-circle" style="font-size: 3rem; margin-bottom: 10px;"></i>
+                    <h3 style="font-size: 1.5rem;">الوضع طبيعي</h3>
+                    <p>لا توجد حالات طوارئ نشطة</p>
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+                    <a href="eoc-command.html" target="_blank" class="btn btn-primary"><i class="fas fa-external-link-alt"></i> فتح EOC كامل</a>
+                    <a href="emergency-report.html" target="_blank" class="btn btn-danger"><i class="fas fa-exclamation-circle"></i> إبلاغ طوارئ</a>
+                    <a href="Emergency.html" target="_blank" class="btn btn-outline"><i class="fas fa-tv"></i> شاشة العرض</a>
+                </div>
+                <h4 style="margin-top: 20px;"><i class="fas fa-history"></i> آخر البلاغات</h4>
+                <div id="eocReportsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
                 </div>
             </div>
+        </section>
 
-            <!-- تبويب إدارة المستخدمين -->
-            <div id="tab-users" class="tab-content active">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <i class="fas fa-users"></i>
-                        <h3 id="total-users">0</h3>
-                        <p>إجمالي المستخدمين</p>
-                    </div>
-                    <div class="stat-card">
-                        <i class="fas fa-user-md"></i>
-                        <h3 id="total-doctors">0</h3>
-                        <p>الأطباء</p>
-                    </div>
-                    <div class="stat-card">
-                        <i class="fas fa-user-shield"></i>
-                        <h3 id="total-admins">0</h3>
-                        <p>المديرين</p>
-                    </div>
-                    <div class="stat-card">
-                        <i class="fas fa-user-nurse"></i>
-                        <h3 id="total-staff">0</h3>
-                        <p>الموظفين</p>
-                    </div>
+        <!-- قسم الشكاوى -->
+        <section class="content-section" id="section-complaints">
+            <div class="stats-box">
+                <h4><i class="fas fa-comment-dots"></i> إدارة الشكاوى</h4>
+                <div class="filter-bar">
+                    <input type="text" id="complaintsSearch" placeholder="🔍 بحث في الشكاوى...">
+                    <select id="complaintsFilter">
+                        <option value="">جميع الحالات</option>
+                        <option value="new">جديدة</option>
+                        <option value="in_progress">قيد المعالجة</option>
+                        <option value="escalated">مصعّدة</option>
+                        <option value="closed">مغلقة</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="loadComplaints()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <a href="complaint_analysis.html" target="_blank" class="btn btn-outline"><i class="fas fa-chart-bar"></i> التحليل</a>
                 </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h2><i class="fas fa-user-plus"></i> إضافة مستخدم جديد</h2>
-                </div>
-                <div class="card-body">
-                    <div class="add-user-form">
-                        <div class="form-group">
-                            <label>البريد الإلكتروني *</label>
-                            <input type="email" id="new-email" placeholder="example@email.com">
-                        </div>
-                        <div class="form-group">
-                            <label>الاسم *</label>
-                            <input type="text" id="new-name" placeholder="الاسم الكامل">
-                        </div>
-                        <div class="form-group">
-                            <label>الدور *</label>
-                            <select id="new-role">
-                                <option value="">اختر الدور...</option>
-                                <option value="admin">مدير</option>
-                                <option value="doctor">طبيب</option>
-                                <option value="pharmacist">صيدلي</option>
-                                <option value="staff">موظف</option>
-                                <option value="patient">مريض</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>القسم</label>
-                            <input type="text" id="new-department" placeholder="مثال: الباطنية">
-                        </div>
-                    </div>
-                    <button class="btn btn-success" onclick="addUser()">
-                        <i class="fas fa-plus"></i> إضافة المستخدم
-                    </button>
+                <div id="complaintsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
                 </div>
             </div>
+        </section>
 
-            <div class="card">
-                <div class="card-header">
-                    <h2><i class="fas fa-users-cog"></i> إدارة المستخدمين</h2>
-                    <button class="btn btn-sm" style="background: rgba(255,255,255,0.2); color: white;" onclick="loadUsers()">
-                        <i class="fas fa-sync"></i> تحديث
-                    </button>
+        <!-- قسم الحوادث -->
+        <section class="content-section" id="section-incidents">
+            <div class="stats-box">
+                <h4><i class="fas fa-exclamation-triangle"></i> إدارة الحوادث</h4>
+                <div class="filter-bar">
+                    <input type="text" id="incidentsSearch" placeholder="🔍 بحث في الحوادث...">
+                    <select id="incidentsFilter">
+                        <option value="">جميع الحالات</option>
+                        <option value="new">جديدة</option>
+                        <option value="under_investigation">قيد التحقيق</option>
+                        <option value="escalated">مصعّدة</option>
+                        <option value="closed">مغلقة</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="loadIncidents()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <a href="incident-report-analysis.html" target="_blank" class="btn btn-outline"><i class="fas fa-chart-bar"></i> التحليل</a>
                 </div>
-                <div class="card-body">
-                    <div id="users-list">
-                        <div class="empty-state">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>جاري تحميل المستخدمين...</p>
-                        </div>
+                <div id="incidentsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- قسم المخاطر -->
+        <section class="content-section" id="section-risks">
+            <div class="stats-box">
+                <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
+                <div class="filter-bar">
+                    <input type="text" id="risksSearch" placeholder="🔍 بحث في المخاطر...">
+                    <select id="risksFilter">
+                        <option value="">جميع المستويات</option>
+                        <option value="high">خطر عالي</option>
+                        <option value="medium">خطر متوسط</option>
+                        <option value="low">خطر منخفض</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="loadRisks()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <a href="risk-register.html" target="_blank" class="btn btn-outline"><i class="fas fa-plus"></i> تسجيل خطر</a>
+                </div>
+                <div id="risksContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- قسم الجولات -->
+        <section class="content-section" id="section-rounds">
+            <div class="stats-box">
+                <h4><i class="fas fa-clipboard-check"></i> جولات السلامة</h4>
+                <div class="filter-bar">
+                    <input type="date" id="roundsDate">
+                    <button class="btn btn-primary" onclick="loadRounds()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <a href="Round.html" target="_blank" class="btn btn-outline"><i class="fas fa-external-link-alt"></i> نظام الجولات</a>
+                </div>
+                <div id="roundsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- قسم إدارة المستخدمين -->
+        <section class="content-section" id="section-users">
+            <div class="stats-box">
+                <h4><i class="fas fa-users-cog"></i> إدارة المستخدمين - تحكم كامل</h4>
+                <div id="usersStats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius:12px;">
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #10b981;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#10b981;" id="usersActiveCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">نشط</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #f59e0b;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="usersSuspendedCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">معلق</div>
+                    </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #1e3a5f;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="usersTotalCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
                     </div>
                 </div>
-            </div>
-
-            </div>
-
-            <!-- تبويب الروابط السريعة -->
-            <div id="tab-links" class="tab-content">
-                <h2 class="section-title"><i class="fas fa-link"></i> روابط سريعة</h2>
-                <div class="quick-links">
-                    <a href="portal.html" class="quick-link">
-                        <i class="fas fa-home"></i>
-                        البوابة الرئيسية
-                    </a>
-                    <a href="admin-dashboard.html" class="quick-link">
-                        <i class="fas fa-tachometer-alt"></i>
-                        لوحة الإدارة
-                    </a>
-                    <a href="cbahi-portal.html" class="quick-link">
-                        <i class="fas fa-award"></i>
-                        بوابة سباهي
-                    </a>
-                    <a href="Round.html" class="quick-link">
-                        <i class="fas fa-clipboard-check"></i>
-                        نظام الجولات
-                    </a>
-                    <a href="eoc-command.html" class="quick-link">
-                        <i class="fas fa-broadcast-tower"></i>
-                        مركز القيادة
-                    </a>
-                    <a href="calibration.html" class="quick-link">
-                        <i class="fas fa-tools"></i>
-                        سجل المعايرة
-                    </a>
-                    <a href="complaint_analysis.html" class="quick-link">
-                        <i class="fas fa-chart-pie"></i>
-                        تحليل الشكاوى
-                    </a>
-                    <a href="emergency-report.html" class="quick-link">
-                        <i class="fas fa-exclamation-circle"></i>
-                        إبلاغ طوارئ
-                    </a>
+                <div class="filter-bar">
+                    <input type="text" id="usersSearch" placeholder="🔍 بحث بالاسم أو البريد...">
+                    <select id="usersRoleFilter">
+                        <option value="">جميع الأدوار</option>
+                        <option value="owner">مالك</option>
+                        <option value="admin">مدير</option>
+                        <option value="staff">موظف</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                </div>
+                <div id="usersContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
                 </div>
             </div>
-        </main>
+        </section>
+
+        <!-- قسم إدارة الصلاحيات -->
+        <section class="content-section" id="section-permissions">
+            <div class="stats-box">
+                <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات</h4>
+                <p style="color:#666; margin-bottom:15px;">تعيين الأدوار والصلاحيات للموظفين</p>
+                <div id="permissionsContainer">
+                    <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="toast" id="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMessage">تم الحفظ بنجاح</span>
     </div>
 
     <script>
         const OWNER_EMAIL = 'husseinbabsail@gmail.com';
         const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
+        
+        const APIs = {
+            main: API_URL,
+            complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBBF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
+            incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
+            risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
+            rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec"
+        };
         
         const firebaseConfig = {
             apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
@@ -797,396 +813,549 @@
             messagingSenderId: "992769471393",
             appId: "1:992769471393:web:c8a9400210a0e7901011e0"
         };
+        
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
+        const auth = firebase.auth();
+        const db = firebase.firestore();
         
         let currentUser = null;
         let idToken = null;
-
-        firebase.auth().onAuthStateChanged(async (user) => {
+        
+        const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).format(new Date());
+        document.getElementById('dateDisplay').textContent = hijriDate;
+        
+        function jsonpCall(url, callback) {
+            const callbackName = 'jsonp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            const script = document.createElement('script');
+            
+            window[callbackName] = function(data) {
+                delete window[callbackName];
+                document.body.removeChild(script);
+                callback(null, data);
+            };
+            
+            script.onerror = function() {
+                delete window[callbackName];
+                document.body.removeChild(script);
+                callback(new Error('JSONP request failed'), null);
+            };
+            
+            const separator = url.includes('?') ? '&' : '?';
+            script.src = url + separator + 'callback=' + callbackName;
+            document.body.appendChild(script);
+        }
+        
+        function apiCall(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                let url = API_URL + '?action=' + action;
+                for (const key in params) {
+                    url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+                }
+                if (idToken) {
+                    url += '&idToken=' + encodeURIComponent(idToken);
+                }
+                
+                jsonpCall(url, (err, data) => {
+                    if (err) reject(err);
+                    else resolve(data);
+                });
+            });
+        }
+        
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.toggle('error', isError);
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        function switchSection(sectionName) {
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            const section = document.getElementById('section-' + sectionName);
+            if (section) {
+                section.classList.add('active');
+                const navItem = document.querySelector(`.nav-item[data-section="${sectionName}"]`);
+                if (navItem) navItem.classList.add('active');
+                
+                if (sectionName === 'complaints') loadComplaints();
+                else if (sectionName === 'incidents') loadIncidents();
+                else if (sectionName === 'risks') loadRisks();
+                else if (sectionName === 'rounds') loadRounds();
+                else if (sectionName === 'users') loadUsers();
+                else if (sectionName === 'permissions') loadPermissions();
+                else if (sectionName === 'eoc') loadEocData();
+            }
+        }
+        
+        document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = item.dataset.section;
+                if (section) switchSection(section);
+            });
+        });
+        
+        document.getElementById('menuToggle').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+        
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            auth.signOut().then(() => {
+                window.location.href = 'portal.html';
+            });
+        });
+        
+        async function loadAllData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.classList.add('loading');
+            
+            try {
+                await Promise.all([
+                    loadDashboardStats(),
+                    loadAlerts()
+                ]);
+            } catch (e) {
+                console.error('Error loading data:', e);
+            } finally {
+                refreshBtn.classList.remove('loading');
+            }
+        }
+        
+        async function loadDashboardStats() {
+            try {
+                const data = await apiCall('getOwnerDashboardStats');
+                console.log('Dashboard stats:', data);
+                
+                if (data.success) {
+                    const stats = data.stats || data;
+                    
+                    if (stats.emergency && stats.emergency.active) {
+                        document.getElementById('kpi-eoc').textContent = 'طوارئ!';
+                        document.getElementById('kpi-eoc-status').textContent = stats.emergency.type || 'حالة نشطة';
+                        document.getElementById('kpi-eoc-status').classList.add('danger');
+                        document.getElementById('eocIcon').classList.add('active');
+                    }
+                    
+                    if (stats.complaints) {
+                        document.getElementById('kpi-complaints').textContent = stats.complaints.open || 0;
+                        document.getElementById('stat-complaints-new').textContent = stats.complaints.new || 0;
+                        document.getElementById('stat-complaints-progress').textContent = stats.complaints.inProgress || 0;
+                        document.getElementById('stat-complaints-escalated').textContent = stats.complaints.escalated || 0;
+                        document.getElementById('stat-complaints-closed').textContent = stats.complaints.closed || 0;
+                        if (stats.complaints.escalated > 0) {
+                            document.getElementById('kpi-complaints-sub').textContent = stats.complaints.escalated + ' مصعّدة';
+                            document.getElementById('kpi-complaints-sub').classList.add('danger');
+                        }
+                    }
+                    
+                    if (stats.incidents) {
+                        document.getElementById('kpi-incidents').textContent = stats.incidents.open || 0;
+                        document.getElementById('stat-incidents-new').textContent = stats.incidents.new || 0;
+                        document.getElementById('stat-incidents-progress').textContent = stats.incidents.investigation || 0;
+                        document.getElementById('stat-incidents-escalated').textContent = stats.incidents.escalated || 0;
+                        document.getElementById('stat-incidents-closed').textContent = stats.incidents.closed || 0;
+                    }
+                    
+                    if (stats.risks) {
+                        document.getElementById('kpi-risks').textContent = stats.risks.active || 0;
+                        document.getElementById('stat-risks-high').textContent = stats.risks.high || 0;
+                        document.getElementById('stat-risks-medium').textContent = stats.risks.medium || 0;
+                        document.getElementById('stat-risks-low').textContent = stats.risks.low || 0;
+                        document.getElementById('stat-risks-resolved').textContent = stats.risks.resolved || 0;
+                        if (stats.risks.high > 0) {
+                            document.getElementById('kpi-risks-sub').textContent = stats.risks.high + ' خطر عالي';
+                        }
+                    }
+                    
+                    if (stats.rounds) {
+                        document.getElementById('kpi-rounds').textContent = stats.rounds.today || 0;
+                        document.getElementById('kpi-rounds-sub').textContent = (stats.rounds.delayed || 0) + ' متأخرة';
+                    }
+                    
+                    if (stats.users) {
+                        document.getElementById('usersActiveCount').textContent = stats.users.active || 0;
+                        document.getElementById('usersSuspendedCount').textContent = stats.users.suspended || 0;
+                        document.getElementById('usersTotalCount').textContent = stats.users.total || 0;
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading dashboard stats:', e);
+            }
+        }
+        
+        function loadAlerts() {
+            const container = document.getElementById('alertsContainer');
+            apiCall('getOwnerDashboardStats').then(data => {
+                if (data.success) {
+                    const alerts = [];
+                    const stats = data.stats || data;
+                    
+                    if (stats.complaints && stats.complaints.escalated > 0) {
+                        alerts.push({ type: 'danger', icon: 'fas fa-comment-dots', text: `${stats.complaints.escalated} شكوى مصعّدة تحتاج مراجعة`, count: stats.complaints.escalated });
+                    }
+                    if (stats.incidents && stats.incidents.escalated > 0) {
+                        alerts.push({ type: 'danger', icon: 'fas fa-exclamation-triangle', text: `${stats.incidents.escalated} حادثة مصعّدة تحتاج تدخل`, count: stats.incidents.escalated });
+                    }
+                    if (stats.risks && stats.risks.high > 0) {
+                        alerts.push({ type: 'warning', icon: 'fas fa-shield-alt', text: `${stats.risks.high} مخاطر عالية المستوى`, count: stats.risks.high });
+                    }
+                    if (stats.rounds && stats.rounds.delayed > 0) {
+                        alerts.push({ type: 'warning', icon: 'fas fa-clipboard-check', text: `${stats.rounds.delayed} جولات متأخرة`, count: stats.rounds.delayed });
+                    }
+                    
+                    if (alerts.length > 0) {
+                        container.innerHTML = alerts.map(a => `
+                            <div class="alert-item ${a.type}">
+                                <i class="${a.icon}"></i>
+                                <span class="alert-text">${a.text}</span>
+                                <span class="alert-count">${a.count}</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        container.innerHTML = `
+                            <div class="no-alerts">
+                                <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
+                                <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
+                            </div>
+                        `;
+                    }
+                }
+            }).catch(e => {
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل التنبيهات</div>';
+            });
+        }
+        
+        function loadEocData() {
+            const container = document.getElementById('eocReportsContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            
+            apiCall('getEmergencyReports').then(data => {
+                if (data.success && data.reports && data.reports.length > 0) {
+                    const statusCard = document.getElementById('eocStatusCard');
+                    const activeReport = data.reports.find(r => r.Status === 'active' || r.Status === 'نشط');
+                    
+                    if (activeReport) {
+                        statusCard.style.background = 'linear-gradient(135deg, #dc2626, #991b1b)';
+                        statusCard.innerHTML = `
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 10px; animation: pulse 1s infinite;"></i>
+                            <h3 style="font-size: 1.5rem;">حالة طوارئ نشطة!</h3>
+                            <p>${activeReport.Type || activeReport.النوع || 'طوارئ'} - ${activeReport.Location || activeReport.الموقع || ''}</p>
+                        `;
+                    }
+                    
+                    let html = '<table class="data-table"><thead><tr>';
+                    html += '<th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.reports.slice(0, 10).forEach(r => {
+                        const status = r.Status || r.الحالة || 'جديد';
+                        const statusClass = status === 'active' || status === 'نشط' ? 'status-escalated' : 'status-closed';
+                        html += `<tr>
+                            <td>${r.Timestamp || r.التاريخ || '-'}</td>
+                            <td>${r.Type || r.النوع || '-'}</td>
+                            <td>${r.Location || r.الموقع || '-'}</td>
+                            <td><span class="status-badge ${statusClass}">${status}</span></td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-alerts">لا توجد بلاغات طوارئ سابقة</div>';
+                }
+            }).catch(e => {
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل البيانات</div>';
+            });
+        }
+        
+        function loadComplaints() {
+            const container = document.getElementById('complaintsContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            
+            apiCall('getComplaints').then(data => {
+                if (data.success && data.complaints && data.complaints.length > 0) {
+                    let html = '<table class="data-table"><thead><tr>';
+                    html += '<th>الرقم</th><th>التاريخ</th><th>الشاكي</th><th>القسم</th><th>الحالة</th><th>إجراء</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.complaints.forEach(c => {
+                        const status = c.Status || c.الحالة || 'جديد';
+                        let statusClass = 'status-new';
+                        if (status.includes('progress') || status.includes('معالجة')) statusClass = 'status-progress';
+                        else if (status.includes('escalat') || status.includes('مصعد')) statusClass = 'status-escalated';
+                        else if (status.includes('closed') || status.includes('مغلق')) statusClass = 'status-closed';
+                        
+                        html += `<tr>
+                            <td>${c.ID || c.الرقم || '-'}</td>
+                            <td>${c.Date || c.التاريخ || '-'}</td>
+                            <td>${c.Name || c.الاسم || '-'}</td>
+                            <td>${c.Department || c.القسم || '-'}</td>
+                            <td><span class="status-badge ${statusClass}">${status}</span></td>
+                            <td>
+                                <button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="viewComplaint('${c.ID || c.الرقم}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-alerts">لا توجد شكاوى</div>';
+                }
+            }).catch(e => {
+                console.error('Error loading complaints:', e);
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الشكاوى</div>';
+            });
+        }
+        
+        function loadIncidents() {
+            const container = document.getElementById('incidentsContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            
+            apiCall('getIncidents').then(data => {
+                if (data.success && data.incidents && data.incidents.length > 0) {
+                    let html = '<table class="data-table"><thead><tr>';
+                    html += '<th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.incidents.forEach(i => {
+                        const status = i.Status || i.الحالة || 'جديد';
+                        let statusClass = 'status-new';
+                        if (status.includes('investigation') || status.includes('تحقيق')) statusClass = 'status-progress';
+                        else if (status.includes('escalat') || status.includes('مصعد')) statusClass = 'status-escalated';
+                        else if (status.includes('closed') || status.includes('مغلق')) statusClass = 'status-closed';
+                        
+                        html += `<tr>
+                            <td>${i.ID || i.الرقم || '-'}</td>
+                            <td>${i.Date || i.التاريخ || '-'}</td>
+                            <td>${i.Type || i.النوع || '-'}</td>
+                            <td>${i.Location || i.الموقع || '-'}</td>
+                            <td><span class="status-badge ${statusClass}">${status}</span></td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-alerts">لا توجد حوادث</div>';
+                }
+            }).catch(e => {
+                console.error('Error loading incidents:', e);
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الحوادث</div>';
+            });
+        }
+        
+        function loadRisks() {
+            const container = document.getElementById('risksContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            
+            apiCall('getRisks').then(data => {
+                if (data.success && data.risks && data.risks.length > 0) {
+                    let html = '<table class="data-table"><thead><tr>';
+                    html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.risks.forEach(r => {
+                        const level = r.Level || r.المستوى || 'medium';
+                        let levelClass = 'status-medium';
+                        if (level.includes('high') || level.includes('عالي')) levelClass = 'status-high';
+                        else if (level.includes('low') || level.includes('منخفض')) levelClass = 'status-low';
+                        
+                        html += `<tr>
+                            <td>${r.Description || r.الوصف || '-'}</td>
+                            <td>${r.Department || r.القسم || '-'}</td>
+                            <td><span class="status-badge ${levelClass}">${level}</span></td>
+                            <td>${r.Status || r.الحالة || '-'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-alerts">لا توجد مخاطر مسجلة</div>';
+                }
+            }).catch(e => {
+                console.error('Error loading risks:', e);
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المخاطر</div>';
+            });
+        }
+        
+        function loadRounds() {
+            const container = document.getElementById('roundsContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            
+            apiCall('getRounds').then(data => {
+                if (data.success && data.rounds && data.rounds.length > 0) {
+                    let html = '<table class="data-table"><thead><tr>';
+                    html += '<th>التاريخ</th><th>المسؤول</th><th>القسم</th><th>الحالة</th><th>الملاحظات</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.rounds.forEach(r => {
+                        const status = r.Status || r.الحالة || 'مكتمل';
+                        let statusClass = status.includes('delayed') || status.includes('متأخر') ? 'status-escalated' : 'status-closed';
+                        
+                        html += `<tr>
+                            <td>${r.Date || r.التاريخ || '-'}</td>
+                            <td>${r.Inspector || r.المسؤول || '-'}</td>
+                            <td>${r.Department || r.القسم || '-'}</td>
+                            <td><span class="status-badge ${statusClass}">${status}</span></td>
+                            <td>${r.Notes || r.الملاحظات || '-'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-alerts">لا توجد جولات مسجلة</div>';
+                }
+            }).catch(e => {
+                console.error('Error loading rounds:', e);
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الجولات</div>';
+            });
+        }
+        
+        function loadUsers() {
+            const container = document.getElementById('usersContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            
+            apiCall('getStaffList').then(data => {
+                if (data.success && data.staff && data.staff.length > 0) {
+                    let active = 0, suspended = 0;
+                    data.staff.forEach(u => {
+                        if (u.Status === 'suspended' || u.Status === 'معلق') suspended++;
+                        else active++;
+                    });
+                    
+                    document.getElementById('usersActiveCount').textContent = active;
+                    document.getElementById('usersSuspendedCount').textContent = suspended;
+                    document.getElementById('usersTotalCount').textContent = data.staff.length;
+                    
+                    let html = '<table class="users-table"><thead><tr>';
+                    html += '<th>الاسم</th><th>البريد</th><th>الدور</th><th>الحالة</th><th>إجراءات</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    data.staff.forEach(u => {
+                        const role = u.Role || u.الدور || 'staff';
+                        let roleClass = 'role-staff';
+                        let roleText = 'موظف';
+                        if (role === 'owner' || role === 'مالك') { roleClass = 'role-owner'; roleText = 'مالك'; }
+                        else if (role === 'admin' || role === 'مدير') { roleClass = 'role-admin'; roleText = 'مدير'; }
+                        
+                        const status = u.Status || 'active';
+                        const statusText = status === 'suspended' || status === 'معلق' ? 'معلق' : 'نشط';
+                        const statusColor = status === 'suspended' || status === 'معلق' ? '#f59e0b' : '#10b981';
+                        
+                        html += `<tr>
+                            <td>${u.Name || u.الاسم || '-'}</td>
+                            <td>${u.Email || u.البريد || '-'}</td>
+                            <td><span class="role-badge-small ${roleClass}">${roleText}</span></td>
+                            <td style="color:${statusColor}; font-weight:600;">${statusText}</td>
+                            <td class="action-btns">
+                                <button onclick="toggleUserStatus('${u.Email || u.البريد}')" style="background:#f59e0b; color:white;" title="${status === 'suspended' ? 'تفعيل' : 'تعليق'}">
+                                    <i class="fas fa-${status === 'suspended' ? 'check' : 'pause'}"></i>
+                                </button>
+                                <button onclick="changeUserRole('${u.Email || u.البريد}')" style="background:#3b82f6; color:white;" title="تغيير الدور">
+                                    <i class="fas fa-user-tag"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-alerts">لا يوجد مستخدمين</div>';
+                }
+            }).catch(e => {
+                console.error('Error loading users:', e);
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المستخدمين</div>';
+            });
+        }
+        
+        function loadPermissions() {
+            const container = document.getElementById('permissionsContainer');
+            container.innerHTML = '<div class="no-alerts">نفس بيانات إدارة المستخدمين - استخدم تغيير الدور</div>';
+        }
+        
+        function toggleUserStatus(email) {
+            if (confirm('هل تريد تغيير حالة هذا المستخدم؟')) {
+                apiCall('toggleUserStatus', { email: email }).then(data => {
+                    if (data.success) {
+                        showToast('تم تغيير الحالة بنجاح');
+                        loadUsers();
+                    } else {
+                        showToast('فشل تغيير الحالة', true);
+                    }
+                }).catch(e => showToast('خطأ في الاتصال', true));
+            }
+        }
+        
+        function changeUserRole(email) {
+            const newRole = prompt('أدخل الدور الجديد (owner, admin, staff):');
+            if (newRole && ['owner', 'admin', 'staff'].includes(newRole.toLowerCase())) {
+                apiCall('changeUserRole', { email: email, role: newRole.toLowerCase() }).then(data => {
+                    if (data.success) {
+                        showToast('تم تغيير الدور بنجاح');
+                        loadUsers();
+                    } else {
+                        showToast('فشل تغيير الدور', true);
+                    }
+                }).catch(e => showToast('خطأ في الاتصال', true));
+            }
+        }
+        
+        function viewComplaint(id) {
+            window.open('complaint_analysis.html?id=' + id, '_blank');
+        }
+        
+        auth.onAuthStateChanged(async (user) => {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const accessDenied = document.getElementById('accessDenied');
+            
             if (user) {
                 currentUser = user;
-                idToken = await user.getIdToken();
                 
-                if (user.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
-                    showDashboard();
-                } else {
-                    showAccessDenied();
+                try {
+                    idToken = await user.getIdToken();
+                    
+                    if (user.email === OWNER_EMAIL) {
+                        document.getElementById('ownerName').textContent = user.displayName || user.email.split('@')[0];
+                        document.body.classList.add('authenticated');
+                        loadingOverlay.style.display = 'none';
+                        loadAllData();
+                    } else {
+                        const roleDoc = await db.collection('staff_roles').doc(user.uid).get();
+                        if (roleDoc.exists && roleDoc.data().role === 'owner') {
+                            document.getElementById('ownerName').textContent = user.displayName || roleDoc.data().name || user.email.split('@')[0];
+                            document.body.classList.add('authenticated');
+                            loadingOverlay.style.display = 'none';
+                            loadAllData();
+                        } else {
+                            loadingOverlay.style.display = 'none';
+                            accessDenied.style.display = 'flex';
+                        }
+                    }
+                } catch (e) {
+                    console.error('Auth error:', e);
+                    loadingOverlay.style.display = 'none';
+                    accessDenied.style.display = 'flex';
                 }
             } else {
                 window.location.href = 'admin-login.html?redirect=owner-dashboard.html';
             }
         });
-
-        function showDashboard() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('access-denied').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'block';
-            document.getElementById('user-email').textContent = currentUser.email;
-            loadUsers();
-            loadMonitoringData();
-        }
-
-        function switchTab(ev, tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            ev.currentTarget.classList.add('active');
-            document.getElementById('tab-' + tabName).classList.add('active');
-        }
-
-        async function loadMonitoringData() {
-            try {
-                const data = await apiCall('getOwnerDashboardStats');
-                
-                if (data.success) {
-                    updateMonitoringUI(data);
-                } else {
-                    updateMonitoringUIWithDefaults();
-                }
-            } catch (error) {
-                console.error('Error loading monitoring data:', error);
-                updateMonitoringUIWithDefaults();
-            }
-        }
-
-        function updateMonitoringUI(data) {
-            if (data.emergency && data.emergency.active) {
-                document.getElementById('emergency-banner').classList.add('active');
-                document.getElementById('emergency-text').textContent = data.emergency.message || 'تنبيه طوارئ نشط!';
-                document.getElementById('eoc-card').classList.add('emergency');
-                document.getElementById('eoc-icon').classList.add('active');
-                document.getElementById('eoc-status').textContent = 'طوارئ';
-                document.getElementById('eoc-sub').textContent = data.emergency.type || 'حالة طوارئ نشطة';
-                document.getElementById('eoc-sub').classList.add('danger');
-            } else {
-                document.getElementById('emergency-banner').classList.remove('active');
-                document.getElementById('eoc-card').classList.remove('emergency');
-                document.getElementById('eoc-icon').classList.remove('active');
-                document.getElementById('eoc-status').textContent = 'طبيعي';
-                document.getElementById('eoc-sub').textContent = 'الوضع طبيعي ✓';
-                document.getElementById('eoc-sub').classList.remove('danger');
-            }
-
-            if (data.complaints) {
-                document.getElementById('complaints-count').textContent = data.complaints.open || 0;
-                document.getElementById('complaints-new').textContent = data.complaints.new || 0;
-                document.getElementById('complaints-progress').textContent = data.complaints.inProgress || 0;
-                document.getElementById('complaints-escalated').textContent = data.complaints.escalated || 0;
-                document.getElementById('complaints-closed').textContent = data.complaints.closed || 0;
-            }
-
-            if (data.incidents) {
-                document.getElementById('incidents-count').textContent = data.incidents.open || 0;
-                document.getElementById('incidents-new').textContent = data.incidents.new || 0;
-                document.getElementById('incidents-investigation').textContent = data.incidents.investigation || 0;
-                document.getElementById('incidents-escalated').textContent = data.incidents.escalated || 0;
-                document.getElementById('incidents-closed').textContent = data.incidents.closed || 0;
-            }
-
-            if (data.risks) {
-                document.getElementById('risks-count').textContent = data.risks.active || 0;
-                document.getElementById('risks-high').textContent = data.risks.high || 0;
-                document.getElementById('risks-medium').textContent = data.risks.medium || 0;
-                document.getElementById('risks-low').textContent = data.risks.low || 0;
-                document.getElementById('risks-resolved').textContent = data.risks.resolved || 0;
-            }
-
-            if (data.rounds) {
-                document.getElementById('rounds-count').textContent = data.rounds.today || 0;
-                document.getElementById('rounds-sub').textContent = (data.rounds.compliance || 0) + '% التزام';
-            }
-
-            updateAlertsList(data.alerts || []);
-        }
-
-        function updateMonitoringUIWithDefaults() {
-            document.getElementById('emergency-banner').classList.remove('active');
-            document.getElementById('eoc-card').classList.remove('emergency');
-            document.getElementById('eoc-icon').classList.remove('active');
-            document.getElementById('eoc-status').textContent = 'طبيعي';
-            document.getElementById('eoc-sub').textContent = 'الوضع طبيعي ✓';
-        }
-
-        function updateAlertsList(alerts) {
-            const alertsList = document.getElementById('alerts-list');
-            
-            if (!alerts || alerts.length === 0) {
-                alertsList.innerHTML = `
-                    <div class="no-alerts">
-                        <i class="fas fa-check-circle"></i>
-                        <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const typeIcons = {
-                danger: 'exclamation-circle',
-                warning: 'exclamation-triangle',
-                info: 'info-circle',
-                success: 'check-circle'
-            };
-
-            let html = '';
-            alerts.forEach(alert => {
-                const type = alert.type || 'info';
-                const icon = typeIcons[type] || 'bell';
-                html += `
-                    <div class="alert-item ${type}">
-                        <i class="fas fa-${icon}"></i>
-                        <span class="alert-text">${alert.message}</span>
-                        ${alert.count ? `<span class="alert-count">${alert.count}</span>` : ''}
-                    </div>
-                `;
-            });
-            alertsList.innerHTML = html;
-        }
-
-        function showAccessDenied() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'none';
-            document.getElementById('access-denied').style.display = 'flex';
-        }
-
-        function showAlert(message, type) {
-            const alert = document.getElementById('alert');
-            alert.className = `alert alert-${type}`;
-            alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
-            alert.style.display = 'block';
-            setTimeout(() => { alert.style.display = 'none'; }, 5000);
-        }
-
-        // استخدام JSONP لتجنب مشاكل CORS مع Google Apps Script
-        function apiCall(action, params = {}) {
-            return new Promise((resolve, reject) => {
-                const callbackName = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-                
-                // تسجيل الـ callback في window
-                window[callbackName] = (data) => {
-                    delete window[callbackName];
-                    if (script.parentNode) script.remove();
-                    resolve(data);
-                };
-                
-                // بناء الـ query string
-                const payloadData = {
-                    ...params,
-                    staffEmail: currentUser?.email || null,
-                    staffId: currentUser?.uid || null,
-                    idToken: idToken
-                };
-                
-                const query = new URLSearchParams({
-                    action: action,
-                    callback: callbackName,
-                    payload: JSON.stringify(payloadData)
-                });
-                
-                // إنشاء script tag
-                const script = document.createElement('script');
-                script.src = `${API_URL}?${query.toString()}`;
-                script.onerror = () => {
-                    delete window[callbackName];
-                    script.remove();
-                    reject(new Error('فشل الاتصال بالخادم'));
-                };
-                
-                // Timeout بعد 30 ثانية
-                setTimeout(() => {
-                    if (window[callbackName]) {
-                        delete window[callbackName];
-                        if (script.parentNode) script.remove();
-                        reject(new Error('انتهت مهلة الطلب'));
-                    }
-                }, 30000);
-                
-                document.body.appendChild(script);
-            });
-        }
-
-        async function loadUsers() {
-            try {
-                const data = await apiCall('getStaffList');
-                
-                if (data.success && data.staff) {
-                    renderUsers(data.staff);
-                    updateStats(data.staff);
-                } else {
-                    document.getElementById('users-list').innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-users"></i>
-                            <p>لا يوجد مستخدمين حالياً</p>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Error loading users:', error);
-                document.getElementById('users-list').innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p>حدث خطأ في تحميل البيانات</p>
-                    </div>
-                `;
-            }
-        }
-
-        function renderUsers(users) {
-            if (!users || users.length === 0) {
-                document.getElementById('users-list').innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-users"></i>
-                        <p>لا يوجد مستخدمين حالياً</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const roleLabels = {
-                owner: 'المالك',
-                admin: 'مدير',
-                doctor: 'طبيب',
-                pharmacist: 'صيدلي',
-                staff: 'موظف',
-                patient: 'مريض'
-            };
-
-            let html = `
-                <table class="users-table">
-                    <thead>
-                        <tr>
-                            <th>البريد الإلكتروني</th>
-                            <th>الاسم</th>
-                            <th>الدور</th>
-                            <th>القسم</th>
-                            <th>تاريخ الإضافة</th>
-                            <th>الإجراءات</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            users.forEach(user => {
-                const isOwner = user.email.toLowerCase() === OWNER_EMAIL.toLowerCase();
-                html += `
-                    <tr>
-                        <td>${user.email}</td>
-                        <td>${user.name || '-'}</td>
-                        <td><span class="role-badge role-${user.role}">${roleLabels[user.role] || user.role}</span></td>
-                        <td>${user.department || '-'}</td>
-                        <td>${user.createdAt || '-'}</td>
-                        <td class="action-btns">
-                            ${!isOwner ? `
-                                <button class="btn btn-warning btn-sm" onclick="editUser('${user.email}', '${user.role}')">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteUser('${user.email}')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            ` : '<span style="color: #999; font-size: 0.85rem;">المالك</span>'}
-                        </td>
-                    </tr>
-                `;
-            });
-
-            html += '</tbody></table>';
-            document.getElementById('users-list').innerHTML = html;
-        }
-
-        function updateStats(users) {
-            const stats = { total: users.length, doctors: 0, admins: 0, staff: 0 };
-            users.forEach(user => {
-                if (user.role === 'doctor') stats.doctors++;
-                else if (user.role === 'admin' || user.role === 'owner') stats.admins++;
-                else if (user.role === 'staff' || user.role === 'pharmacist') stats.staff++;
-            });
-            document.getElementById('total-users').textContent = stats.total;
-            document.getElementById('total-doctors').textContent = stats.doctors;
-            document.getElementById('total-admins').textContent = stats.admins;
-            document.getElementById('total-staff').textContent = stats.staff;
-        }
-
-        async function addUser() {
-            const email = document.getElementById('new-email').value.trim();
-            const name = document.getElementById('new-name').value.trim();
-            const role = document.getElementById('new-role').value;
-            const department = document.getElementById('new-department').value.trim();
-
-            if (!email || !name || !role) {
-                showAlert('يرجى ملء جميع الحقول المطلوبة', 'error');
-                return;
-            }
-
-            try {
-                const data = await apiCall('setStaffRole', {
-                    targetEmail: email,
-                    targetRole: role,
-                    targetName: name,
-                    targetDepartment: department
-                });
-                
-                if (data.success || data.ok) {
-                    showAlert('تم إضافة المستخدم بنجاح', 'success');
-                    document.getElementById('new-email').value = '';
-                    document.getElementById('new-name').value = '';
-                    document.getElementById('new-role').value = '';
-                    document.getElementById('new-department').value = '';
-                    loadUsers();
-                } else {
-                    showAlert(data.error || 'حدث خطأ', 'error');
-                }
-            } catch (error) {
-                showAlert('حدث خطأ في الاتصال', 'error');
-            }
-        }
-
-        async function editUser(email, currentRole) {
-            const newRole = prompt('اختر الدور الجديد:\nadmin - مدير\ndoctor - طبيب\npharmacist - صيدلي\nstaff - موظف\npatient - مريض', currentRole);
-            
-            if (!newRole || newRole === currentRole) return;
-
-            try {
-                const data = await apiCall('setStaffRole', {
-                    targetEmail: email,
-                    targetRole: newRole
-                });
-                
-                if (data.success || data.ok) {
-                    showAlert('تم تحديث الدور بنجاح', 'success');
-                    loadUsers();
-                } else {
-                    showAlert(data.error || 'حدث خطأ', 'error');
-                }
-            } catch (error) {
-                showAlert('حدث خطأ في الاتصال', 'error');
-            }
-        }
-
-        async function deleteUser(email) {
-            if (!confirm(`هل أنت متأكد من حذف المستخدم: ${email}؟`)) return;
-
-            try {
-                const data = await apiCall('revokeStaffRole', {
-                    targetEmail: email
-                });
-                
-                if (data.success || data.ok) {
-                    showAlert('تم حذف المستخدم بنجاح', 'success');
-                    loadUsers();
-                } else {
-                    showAlert(data.error || 'حدث خطأ', 'error');
-                }
-            } catch (error) {
-                showAlert('حدث خطأ في الاتصال', 'error');
-            }
-        }
-
-        function logout() {
-            firebase.auth().signOut().then(() => {
-                window.location.href = 'portal.html';
-            });
-        }
     </script>
 </body>
 </html>
