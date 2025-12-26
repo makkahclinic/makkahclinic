@@ -1,0 +1,174 @@
+🔴 التشخيص المؤكد (من الـ Console)
+
+من الصورة يظهر الخطأ التالي حرفيًا:
+
+Access to fetch at
+https://script.google.com/macros/s/AKfycb...
+from origin 'https://www.m2020m.org'
+has been blocked by CORS policy:
+No 'Access-Control-Allow-Origin' header is present
+
+
+ثم:
+
+TypeError: Failed to fetch
+    at apiCall
+    at loadMonitoringData
+    at loadUsers
+
+هذا يعني:
+
+المتصفح رفض الطلب قبل ما يوصل أصلًا للـ Apps Script
+
+لا يوجد أي خطأ في JavaScript منطقياً
+
+apiCall() لم يُنفّذ فعليًا
+
+لذلك:
+
+لا مستخدمين
+
+لا إحصائيات
+
+لا Monitoring
+
+كل القيم = 0
+
+❌ ليه يصير هذا مع Google Apps Script؟
+
+Google Apps Script لا يسمح بإضافة CORS headers مخصّصة عند استخدام:
+
+fetch(url, { method: 'POST' })
+
+
+حتى لو:
+
+Web App = Anyone
+
+Deployment صحيح
+
+JSON صحيح
+
+المتصفح يمنع الطلب من الأساس
+وهذا مو Bug منك، هذا قيد رسمي من Google.
+
+📌 Google نفسها توصي بعدم استخدام fetch المباشر من المتصفح مع Apps Script Web Apps
+
+✅ الحلول الصحيحة (اختر واحد)
+🟢 الحل 1 (الأفضل والأثبت): JSONP عبر <script> (بدون CORS نهائيًا)
+
+هذا الحل:
+
+لا يستخدم fetch
+
+لا POST
+
+لا CORS
+
+يعمل 100% مع Apps Script
+
+أنت مستخدمه أصلًا في أجزاء ثانية من مشروعك
+
+1️⃣ غيّر الاستدعاء من POST إلى GET + callback
+في الواجهة (بدل apiCall):
+function apiCall(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const cb = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+
+    window[cb] = (data) => {
+      delete window[cb];
+      script.remove();
+      resolve(data);
+    };
+
+    const query = new URLSearchParams({
+      action,
+      callback: cb,
+      payload: JSON.stringify({
+        ...params,
+        staffEmail: currentUser.email,
+        staffId: currentUser.uid,
+        idToken: idToken
+      })
+    });
+
+    const script = document.createElement('script');
+    script.src = `${API_URL}?${query.toString()}`;
+    script.onerror = () => reject('JSONP failed');
+    document.body.appendChild(script);
+  });
+}
+
+2️⃣ في Google Apps Script (إجباري)
+function doGet(e) {
+  const action = e.parameter.action;
+  const callback = e.parameter.callback;
+  const payload = JSON.parse(e.parameter.payload || '{}');
+
+  let result;
+  if (action === 'getStaffList') {
+    result = getStaffList(payload);
+  } else if (action === 'getOwnerDashboardStats') {
+    result = getOwnerDashboardStats(payload);
+  } else {
+    result = { success: false, error: 'Unknown action' };
+  }
+
+  return ContentService
+    .createTextOutput(
+      `${callback}(${JSON.stringify(result)})`
+    )
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
+
+
+📌 بهذا الشكل:
+
+لا CORS
+
+لا Redirect
+
+لا fetch
+
+المتصفح يسمح بالتحميل لأنه <script>
+
+🟡 الحل 2 (حل هندسي أنظف – لو حاب)
+وسيط (Proxy)
+
+API صغير (Node / Cloudflare Worker / Firebase Function)
+
+هو يتصل بـ Apps Script
+
+المتصفح يتصل بالـ Proxy (CORS مضبوط)
+
+Apps Script يبقى داخلي
+
+لكن هذا أثقل وغير ضروري حالياً.
+
+❗ ملاحظات مهمة إضافية (لكن ليست سبب المشكلة)
+1) Firebase ✔️
+
+Firebase Auth يعمل (واضح من الإيميل الظاهر)
+
+2) OWNER_EMAIL ✔️
+
+التحقق صحيح، والمالك دخل الصفحة فعلًا
+
+3) switchTab(event) ❌ (مشكلة ثانوية)
+
+عندك:
+
+onclick="switchTab('users')"
+
+
+لكن تستخدم event.target
+هذا قد يكسر التبويبات فقط — لا علاقة له بالسحب
+
+🧠 الخلاصة النهائية
+العنصر	الحالة
+Firebase Auth	✅ يعمل
+Owner check	✅ يعمل
+UI	✅ يعمل
+apiCall	❌ محجوب
+السبب	❌ CORS من Google
+الحل الصحيح	✅ JSONP

@@ -1,0 +1,131 @@
+1) أهم سببين يخلو “السحب” يفشل عندك
+(A) ردّ Apps Script مو JSON (أو يرجّع HTML / Redirect)
+
+أنت في apiCall() تسوي:
+
+return await response.json();
+
+
+لو الـ Web App رجّع:
+
+صفحة HTML (مثلاً “Authorization required” أو “Script deployed wrong”)
+
+أو Redirect/خطأ 302/405
+
+أو Error غير JSON
+
+راح يصير استثناء ويطيح loadUsers() و loadMonitoringData() في الـ catch ويبان لك “حدث خطأ في تحميل البيانات”.
+
+مهم: Google نفسها تذكر أن مخرجات Web App قد تُخدم من URL مختلف لأسباب أمنية، وهذا يسبب لخبطة Redirect أحيانًا. 
+Google for Developers
+
+(B) Apps Script ما يدعم POST بالشكل اللي ترسله (doPost / parsing)
+
+أنت ترسل JSON داخل body لكن بهيدر Content-Type: text/plain.
+إذا سكربت Apps Script عندك كاتب parsing على أساس application/json أو يعتمد على e.parameter بدل e.postData.contents، راح ما يشوف البيانات أو يفشل parsing. (الأساس: doPost(e) وقراءة e.postData.contents). 
+Google for Developers
++1
+
+2) في الكود نفسه: أخطاء/ملاحظات قد تكسر الواجهة أو تمنع التحديث (لكن ليست سبب “عدم السحب” غالبًا)
+(1) switchTab() يستخدم event بدون تمريره
+
+أنت تعتمد على event.target:
+
+event.target.classList.add('active');
+
+
+أحيانًا event ما يكون متاح (حسب المتصفح/الوضع)، فيصير Error ويوقف JS في الصفحة.
+التصحيح: مرّر الحدث صراحة.
+
+<button class="tab-btn active" onclick="switchTab(event,'users')">...</button>
+
+function switchTab(ev, tabName){
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  ev.currentTarget.classList.add('active');
+  document.getElementById('tab-' + tabName).classList.add('active');
+}
+
+(2) firebase.initializeApp(firebaseConfig); لازم يتنفذ مرة واحدة فقط
+
+إذا عندك صفحات كثيرة وكل صفحة تنفذ initializeApp بدون فحص، قد يطلع خطأ “already exists” في صفحات أخرى. الأفضل:
+
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+3) أهم “تصحيح عملي” يخليك تعرف بالضبط ليش ما يسحب
+
+بدّل apiCall() عشان:
+
+يطبع Status
+
+يقرأ text() أولاً
+
+ثم يحاول يحول JSON
+
+ويظهر لك أول جزء من الرد لو كان HTML
+
+async function apiCall(action, params = {}) {
+  const payload = {
+    action,
+    payload: {
+      ...params,
+      idToken,
+      staffEmail: currentUser?.email || null,
+      staffId: currentUser?.uid || null
+    }
+  };
+
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+    redirect: 'follow'
+  });
+
+  const raw = await res.text(); // مهم
+  let data;
+  try { data = JSON.parse(raw); }
+  catch {
+    throw new Error(`API رد غير JSON (status=${res.status}). أول 200 حرف:\n${raw.slice(0,200)}`);
+  }
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${JSON.stringify(data).slice(0,200)}`);
+  }
+  return data;
+}
+
+
+بعدها افتح DevTools → Console وشوف الرسالة. غالبًا بتطلع لك واحد من التالي:
+
+“Authorization required / Sign in”
+
+“Script function not found / Unknown action”
+
+“Method Not Allowed 405”
+
+أو error داخلي من Apps Script
+
+4) حل قوي جدًا (إذا كانت المشكلة CORS/Redirect مع Apps Script): استخدم JSONP بدل fetch
+
+عندك في نفس الريبو أسلوب شغال مع Google Apps Script باستخدام JSONP (إضافة <script> مع callback) وهذا يتجنب مشاكل CORS/redirect بالكامل. مثال واضح في ملف البلاغ عندك: يستخدم callback ويحقن <script src="WEB_APP_URL?..."> ثم يستقبل الرد داخل window[cb]. 
+
+Update report-needlestick
+
+الفكرة: بدل POST، تخلي Apps Script يدعم doGet ويرجع callback(<json>).
+
+إذا تبغى أمشيك على نفس النمط في getStaffList و getOwnerDashboardStats (ويصير السحب ثابت 100%)، أعطيك نسخة جاهزة لـ:
+
+JS front-end (استبدال apiCall)
+
+قالب doGet/doPost في Apps Script مطابق للأكشنات عندك
+
+5) سبب شائع جدًا خارج الكود: إعدادات نشر Apps Script
+
+تأكد في نشر الـ Web App:
+
+“Who has access”: Anyone (أو Anyone with link)
+
+وجرّب فتح API_URL في المتصفح وشوف يطلع JSON ولا صفحة
+
+(لو طلع صفحة/تسجيل دخول → هذا يفسّر ليش response.json() يفشل.)
