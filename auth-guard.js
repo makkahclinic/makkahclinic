@@ -84,18 +84,46 @@ const AuthGuard = {
         }
     },
 
+    // API URL for backend
+    apiUrl: 'https://script.google.com/macros/s/AKfycbyg5x9xmqy0jm2I-UqBqOmPU8GlQxHX8m55uuzw7PbIZHN4K5knBaNI_WT1LLflH0Qa/exec',
+
     /**
-     * تحميل دور المستخدم من Firestore
+     * تحميل دور المستخدم من Backend (Google Sheets via Apps Script)
+     * يستخدم API getUserRole بدلاً من Firestore
      */
     async loadUserRole(uid) {
         try {
-            const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-            const userDoc = await getDoc(doc(this.db, 'users', uid));
+            const email = this.currentUser?.email;
+            if (!email) {
+                this.userRole = 'viewer';
+                return;
+            }
+
+            // المالك يحصل على دور owner تلقائياً
+            if (email === 'husseinbabsail@gmail.com') {
+                this.userRole = 'owner';
+                this.userName = 'المالك';
+                return;
+            }
+
+            // جلب الدور من Backend
+            const idToken = await this.currentUser.getIdToken();
+            const response = await fetch(this.apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'getUserRole',
+                    payload: { email, idToken }
+                })
+            });
+
+            const result = await response.json();
             
-            if (userDoc.exists()) {
-                const data = userDoc.data();
-                this.userRole = data.role || 'viewer';
+            if (result.success) {
+                this.userRole = result.role || 'viewer';
+                this.userName = result.name || '';
             } else {
+                console.error('Error from API:', result.error);
                 this.userRole = 'viewer';
             }
         } catch (error) {

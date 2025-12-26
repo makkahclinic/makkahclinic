@@ -255,6 +255,61 @@
   }
 
   /**
+   * جلب دور المستخدم (API عام للـ frontend)
+   * يتحقق من Firebase Token ويرجع الدور من جدول Staff_Roles
+   */
+  function getUserRole(payload) {
+    const { email, idToken } = payload;
+    
+    if (!email) {
+      return { success: false, error: 'البريد الإلكتروني مطلوب' };
+    }
+    
+    // المالك يحصل على دور owner تلقائياً
+    const ownerEmail = "husseinbabsail@gmail.com";
+    if (email === ownerEmail) {
+      return { success: true, role: 'owner', name: 'المالك' };
+    }
+    
+    // التحقق من Firebase Token إذا كان موجوداً
+    if (idToken) {
+      const verified = verifyFirebaseIdToken_(idToken);
+      if (!verified) {
+        return { success: false, error: 'التوكن غير صالح' };
+      }
+      if (verified.email !== email) {
+        return { success: false, error: 'البريد غير متطابق' };
+      }
+    }
+    
+    // جلب الدور من الجدول
+    const role = getStaffRole_(email);
+    
+    if (!role) {
+      // مستخدم جديد - دور افتراضي patient/viewer
+      return { success: true, role: 'patient', name: '' };
+    }
+    
+    // جلب الاسم من الجدول
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheet = ss.getSheetByName("Staff_Roles");
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][0] === email) {
+            return { success: true, role: data[i][1], name: data[i][2] || '' };
+          }
+        }
+      }
+    } catch (e) {
+      console.log('Error getting name:', e);
+    }
+    
+    return { success: true, role: role, name: '' };
+  }
+
+  /**
    * التحقق من صحة Firebase ID Token باستخدام Google Identity Toolkit API
    */
   function verifyFirebaseIdToken_(idToken) {
@@ -391,6 +446,15 @@
       let result;
       
       switch (action) {
+        case 'getUserRole':
+          result = getUserRole(payload);
+          break;
+        case 'setStaffRole':
+          result = setStaffRole(payload);
+          break;
+        case 'getStaffList':
+          result = getStaffList(payload);
+          break;
         case 'getHomeData':
           result = getHomeData();
           break;

@@ -1,299 +1,47 @@
 # مجمع مكة الطبي بالزاهر - دليل المشروع الشامل
 
-## نظرة عامة
-موقع مجمع مكة الطبي بالزاهر (m2020m.org) - نظام متكامل يشمل الموقع الرئيسي + بوابة سباهي + نظام الجولات
+## Overview
+The Makkah Medical Complex Al-Zaher (m2020m.org) project is an integrated system comprising a main website, a CBAHI portal, and a rounds management system. Its purpose is to digitize and streamline various medical and administrative processes within the complex, enhancing efficiency, patient care, and compliance with healthcare standards. The project aims to provide a comprehensive digital platform for patients, medical staff, and administrators.
 
----
+## User Preferences
+I prefer clear and concise communication. When making changes, prioritize iterative development and ask for confirmation before implementing major architectural shifts. Ensure all explanations are detailed, especially for new features or complex logic. Do not make changes to files within the `github-deploy/` directory unless specifically instructed, as these are for deployment.
 
-## هيكل النشر (Deployment Structure)
+## System Architecture
 
-| المكون | مكان النشر | الرابط |
-|--------|-----------|--------|
-| HTML Files | GitHub Pages | https://m2020m.org |
-| Code.gs | Google Apps Script | Web App URL |
-| Data | Google Sheets | متعدد |
-| Documents | Google Drive | متعدد |
+### UI/UX Decisions
+- **Color Scheme**: Dark Blue (`#1e3a5f`) for backgrounds and headers, Gold (`#c9a962`) for highlights and secondary buttons, Crimson (`#DC1433`) for alerts and the logo, and White (`#ffffff`) for text on dark backgrounds.
+- **Typography**: Tajawal is the primary font for Arabic text.
+- **Design Patterns**: Emphasis on a unified smart portal (`portal.html`) with role-based access, and interactive dashboards for different user types (doctor, patient, admin).
+- **Branding**: Utilizes a transparent logo (`logo-transparent.png`) and a hexagonal logo (`logo-new.png`), with a specific hero background image (`hero-bg.png`).
 
----
+### Technical Implementations
+- **Frontend**: Primarily HTML files hosted on GitHub Pages, enhanced with JavaScript for interactivity and dynamic content.
+- **Backend**: Google Apps Script (`Code.gs`) serves as the primary backend for handling data interactions with Google Sheets, implementing business logic, and managing user authentication and authorization. An Express server (`server.js`) is used for local development within Replit.
+- **Authentication/Authorization**: A unified authentication guard (`auth-guard.js`) enforces access control. Role-based access is implemented using Google Sheets to store user roles (owner, admin, staff, patient). Firebase integration is used for Email/Google Auth and secure token verification for both staff and patients.
+- **Dynamic Content**: Data is fetched and updated via APIs exposed through Google Apps Script.
+- **Security**: Role-based access control (RBAC) is implemented at the code level, checking permissions for each function call. Firebase ID Token verification secures patient and staff authentication.
 
-## الملفات الرئيسية
+### Feature Specifications
+- **Main Website**: Includes core pages like `index.html`, `patient.html`, `pharmacy.html`, `login.html`, `signup.html`, and `insurance-check.html`.
+- **Smart Portal (`portal.html`)**: A unified entry point with 6 distinct portals for different roles (patient, doctor, pharmacist, insurance, staff, owner).
+- **Doctor & Patient Dashboards**: Dedicated login and dashboard pages for doctors (`doctor-login.html`, `doctor-dashboard.html`) and patients (`patient-login.html`, `patient-dashboard.html`) offering role-specific functionalities.
+- **Admin & Staff Management**: Separate login (`admin-login.html`) and dashboard (`admin-dashboard.html`) for administrators, including a comprehensive permission management system to assign committees, roles, and system access.
+- **CBAHI Portal (`cbahi-portal.html`)**: A large electronic portal covering various quality and safety standards (Leadership, Risk Management, FMS, Patient Safety, IPC, QI, EOC, Complaints, Training).
+- **Rounds Management System (`Round.html`)**: Manages safety rounds with features for daily tasks, delayed rounds tracking, violation reporting and resolution, historical log, and a performance dashboard with metrics.
+- **Emergency Management**:
+    - **Emergency Report System (`emergency-report.html`)**: Quick reporting for critical situations with disaster type and location selection, integrated with emergency contact numbers.
+    - **EOC Command Center (`eoc-command.html`)**: An interactive command and control center for managing emergencies, including a building map, emergency scenarios, and real-time incident reports.
+    - **Emergency Training System**: Integrated within the EOC command center, providing practical training scenarios for various emergencies, tracking participants, and session logs.
+- **IPC Incident Reporting**: Specific forms for infection prevention and control incidents, e.g., `report-needlestick.html`.
+- **Calibration Log (`calibration.html`)**: System for tracking equipment calibration.
+- **Complaint Management**: Includes a complaint submission form (`report.html`) and a system for analysis and follow-up (`complaint_analysis.html`).
+- **Digital Quality Center (`mega.html`)**: A centralized hub for quality-related documentation and processes.
 
-### الموقع الرئيسي
-| الملف | الوصف | الحالة |
-|-------|-------|--------|
-| `index.html` | الصفحة الرئيسية للمجمع | ✅ مكتمل |
-| `portal.html` | البوابة الذكية (طبيب/مريض/صيدلي) | ✅ مكتمل |
-| `doctor-mohammed.html` | صفحة قسم الباطنية | ✅ يحتاج تنقل |
-| `patient.html` | خدمات المرضى | ✅ مكتمل |
-| `pharmacy.html` | الصيدلية | ✅ مكتمل |
-| `login.html` | تسجيل الدخول | ✅ مكتمل |
-| `signup.html` | إنشاء حساب | ✅ مكتمل |
-| `admin-login.html` | بوابة دخول الموظفين | ✅ جديد |
-| `admin-dashboard.html` | لوحة تحكم الإدارة | ✅ جديد |
-| `insurance-check.html` | فحص التأمين | ✅ مكتمل |
+## External Dependencies
 
-### نظام سباهي (CBAHI)
-| الملف | الوصف | الحالة |
-|-------|-------|--------|
-| `cbahi-portal.html` | بوابة سباهي الإلكترونية (4114 سطر) | ✅ مكتمل |
-| `Round.html` | نظام جولات السلامة (2071 سطر) | ✅ مكتمل |
-| `calibration.html` | سجل معايرة الأجهزة (CAL) | ✅ مكتمل |
-| `report.html` | نموذج رفع شكوى | ✅ مكتمل |
-| `complaint_analysis.html` | نظام تحليل ومتابعة الشكاوى | ✅ مكتمل |
-| `mega.html` | المركز الرقمي للجودة | ✅ مكتمل |
-| `emergency-plan.html` | خطة الطوارئ والكوارث EOC | ✅ مكتمل |
-| `eoc-command.html` | مركز القيادة والتحكم التفاعلي | ✅ مكتمل |
-| `emergency-report.html` | نموذج الإبلاغ السريع عن الطوارئ | ✅ جديد |
-
-### مكافحة العدوى (IPC)
-| الملف | الوصف | الحالة |
-|-------|-------|--------|
-| `ipc/incidents/report-needlestick.html` | بلاغ تعرض وخزي/دموي | ✅ مكتمل |
-
-### Backend
-| الملف | الوصف | الحالة |
-|-------|-------|--------|
-| `github-deploy/Code.gs` | Google Apps Script Backend | ✅ مكتمل |
-| `server.js` | Express Server (Replit فقط) | ✅ مكتمل |
-| `sheets-service.js` | خدمة Google Sheets | ✅ مكتمل |
-
-### الأصول (Assets)
-| الملف | الوصف |
-|-------|-------|
-| `logo-transparent.png` | الشعار الشفاف الجديد |
-| `logo-new.png` | الشعار السداسي |
-| `hero-bg.png` | صورة البطل (طبيب العيون) |
-
----
-
-## أقسام بوابة سباهي (cbahi-portal.html)
-
-| القسم | الرمز | المعيار |
-|-------|-------|---------|
-| الصفحة الرئيسية | `#home` | - |
-| الدليل الإداري | `#manuals` | LD |
-| القيادة والحوكمة | `#leadership` | LD |
-| اللجان الرسمية | `#committees` | LD |
-| إدارة المخاطر | `#rm` | RM |
-| السلامة والمرافق | `#fms` | FMS |
-| سلامة المرضى | `#psc` | PSC |
-| مكافحة العدوى | `#ipc` | IPC |
-| الجودة والتحسين | `#qi` | QI |
-| الطوارئ والكوارث | `#eoc` | EOC |
-| بلاغات/شكاوى | `#complaints` | RM |
-| سجل التدريب | `#training` | LD |
-
----
-
-## نظام الجولات (Round.html)
-
-### التبويبات
-1. **اليوم**: بطاقات الموظفين + جدول السجل
-2. **المتأخرة**: الجولات المتأخرة مع وقت التأخير
-3. **المخالفات**: تتبع المخالفات + الحل
-4. **السجل**: البحث التاريخي بالتاريخ والموظف
-5. **Dashboard**: رسوم بيانية وإحصائيات
-
-### APIs (Code.gs)
-| Action | الوظيفة |
-|--------|---------|
-| `getHomeData` | بيانات اليوم + الموظفين |
-| `getRoundsLog` | سجل الجولات |
-| `logRound` | تسجيل جولة جديدة |
-| `getMasterTasks` | المهام الرئيسية (15 جولة) |
-| `getStaffSummary` | ملخص الموظفين |
-| `getDelayed` | الجولات المتأخرة |
-| `getViolations` | المخالفات + التكرار |
-| `getHistory` | السجل التاريخي |
-| `getMetrics` | إحصائيات Dashboard |
-| `getChecklist` | بنود الفحص (R01-R15) |
-| `verifyPasscode` | التحقق من رمز الموظف |
-| `resolveViolation` | إغلاق مخالفة |
-
-### APIs الشكاوى (Code.gs)
-| Action | الوظيفة |
-|--------|---------|
-| `submitComplaint` | إرسال شكوى جديدة |
-| `getComplaintStaff` | قائمة موظفي الشكاوى |
-| `verifyComplaintPasscode` | التحقق من رمز الموظف |
-| `getComplaintStats` | إحصائيات الشكاوى |
-| `getComplaints` | قائمة الشكاوى |
-| `getComplaintDetails` | تفاصيل شكوى |
-| `updateComplaint` | تحديث شكوى |
-| `getComplaintHistory` | سجل متابعة الشكوى |
-
----
-
-## Google Sheets
-
-| الشيت | الوظيفة | Spreadsheet ID |
-|-------|---------|----------------|
-| `MASTER_TASKS` | جدول المهام الـ 15 | `1JB-I7_r6MiafNFk...` |
-| `Rounds_Log` | سجل الجولات | نفس الـ ID |
-| `Round_Schedule` | مواعيد الجولات | نفس الـ ID |
-| `Staff_Passcodes` | رموز الموظفين | نفس الـ ID |
-| `R01_` - `R15_` | بنود فحص كل جولة | نفس الـ ID |
-
-### Spreadsheet IDs
-```
-نظام الجولات: 1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc
-السجل الإلكتروني: 1cGxMCYqGfPH2UiE-nsCoytIRjIPSDYxutnq04XF5YGs
-سجل الشكاوى: 1zVzjvVBh8F7Gvut0kX8fTq2GyKrYo3fBop8jUBEsV3Q
-التعرض الوخزي: 11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw
-معايرة الأجهزة: 1HPQIlhnvynNKctQLgINtVc3OK8Ey4RX52dYdmlIT9F8
-```
-
----
-
-## الهوية البصرية
-
-### الألوان الرسمية
-| اللون | الكود | الاستخدام |
-|-------|-------|----------|
-| أزرق داكن | `#1e3a5f` | الخلفيات والعناوين |
-| ذهبي | `#c9a962` | التمييز والأزرار الثانوية |
-| قرمزي | `#DC143C` | التنبيهات والشعار |
-| أبيض | `#ffffff` | النصوص على الخلفيات الداكنة |
-
-### الخط
-- **Tajawal** - الخط الرئيسي للعربية
-
----
-
-## مجلد github-deploy (للنشر)
-
-الملفات التي ترفع على GitHub:
-```
-github-deploy/
-├── Round.html      (نسخة للنشر)
-├── Code.gs         (يُنسخ إلى Apps Script)
-```
-
----
-
-## المهام المعلقة
-
-### عاجل
-- [ ] إضافة Header موحد لكل الصفحات (تنقل)
-- [ ] توحيد الألوان في كل الصفحات
-
-### مهم
-- [ ] لوحة إدارة بصلاحيات
-- [ ] نظام تسجيل دخول للإدارة
-
-### تحسينات
-- [ ] تقارير PDF
-- [ ] إشعارات Push
-
----
-
-## ملاحظات التشغيل
-
-### Replit
-- المنفذ: 5000
-- السيرفر: Express static
-
-### GitHub Pages
-- الريبو: https://github.com/makkahclinic/makkahclinic
-- الفرع: main
-- المجلد: root
-- الدومين: m2020m.org
-
-### ملفات للنشر على GitHub
-```
-index.html
-portal.html
-doctor-mohammed.html
-patient.html
-pharmacy.html
-login.html
-signup.html
-insurance-check.html
-cbahi-portal.html
-Round.html
-calibration.html
-report.html
-project-index.html
-eoc-command.html
-emergency-report.html
-ipc/incidents/report-needlestick.html
-logo-transparent.png
-logo-new.png
-hero-bg.png
-```
-
-### Google Apps Script
-- نوع النشر: Web App
-- التنفيذ: As me
-- الوصول: Anyone
-
----
-
-## التحديثات الأخيرة
-
-### 2025-12-26
-- **بوابة المريض الذكية (جديد)**:
-  - صفحة تسجيل دخول المريض (patient-login.html) - Email + Google Auth
-  - لوحة تحكم المريض (patient-dashboard.html) - حجز مواعيد، رفع أعراض، نتائج فحوصات
-  - APIs جديدة في Code.gs: registerPatient, bookAppointment, getPatientAppointments, analyzeSymptoms
-  - نظام أمان مع Firebase ID Token verification عبر Identity Toolkit API
-  - دالة validatePatientAuth_ للتحقق من هوية المريض
-
-### 2025-12-20
-- **نظام التدريب العملي على الطوارئ (جديد - مدمج في eoc-command.html)**:
-  - 3 أيقونات Quick Actions: جلسة تدريب عملي، سجل التدريب، سجل البلاغات
-  - 5 سيناريوهات تدريب: حريق، انقطاع كهرباء، تسرب مياه، إغماء/إصابة، تفشي عدوى
-  - تصميم التعليمات بخلفية صفراء متدرجة (#fef3c7 to #fde68a) ونص أحمر (#dc2626)
-  - رموز تعبيرية emoji بحجم 1.5rem في كل خطوة
-  - خطوات خطيرة (danger-step) بتصميم مميز مع animation
-  - قائمة 12 متدرب مع إمكانية الاختيار المتعدد
-  - مدخل اسم المدرب ومؤقت الجلسة (ساعات:دقائق:ثواني)
-  - modal سجل التدريب مع فلترة بالتاريخ وخاصية الطباعة
-  - modal سجل البلاغات الحقيقية مع فلترة زمنية وحسب الحالة
-  - modal تفاصيل جلسة التدريب مع طباعة
-
-### 2025-12-19
-- **نظام الإبلاغ السريع عن الطوارئ (جديد)**:
-  - صفحة إبلاغ سريعة (emergency-report.html) بتصميم بسيط للحالات الحرجة
-  - اختيار نوع الكارثة: حريق، انقطاع كهرباء، إغماء/إصابة، تفشي عدوى، تسرب مياه، أخرى
-  - اختيار سريع للموقع: أزرار الأدوار + قائمة أكواد الغرف من Google Sheets
-  - APIs جديدة: GET /api/eoc/room-codes, POST /api/eoc/report, GET /api/eoc/reports
-  - عرض أرقام الطوارئ (911، 997، 998، 937) بعد الإبلاغ
-  - لوحة البلاغات الواردة في مركز القيادة مع تحديث تلقائي كل 30 ثانية
-  - زر "إبلاغ طوارئ" في header مركز القيادة
-- **مركز القيادة والتحكم EOC**:
-  - صفحة تفاعلية لإدارة الطوارئ (eoc-command.html)
-  - خريطة المبنى التفاعلية (3 أدوار مع جميع الأقسام)
-  - سيناريوهات الطوارئ: حريق (RACE/PASS)، انقطاع كهرباء، تفشي عدوى، إخلاء شامل
-  - أرقام الطوارئ السعودية (911، 997، 998، 937)
-  - نقاط التجمع وحالة الأدوار (آمن/إخلاء)
-  - API لجلب سجل التمارين من Google Sheets
-  - رابط في لوحة التحكم الإدارية
-
-### 2025-12-18
-- **نظام إدارة الصلاحيات الكاملة (جديد)**:
-  - قسم "إدارة الصلاحيات" في لوحة التحكم
-  - تعيين اللجان: RM, FMS, PSC, IPC, QI, EOC, أخرى
-  - تعيين الأدوار: مدير عام، رئيس لجنة، عضو، مشاهد
-  - اختيار الأنظمة المسموحة (9 أنظمة) بـ checkboxes
-  - حماية أمنية على مستوى الكود (فحص الصلاحيات في كل دالة)
-- إضافة نظام دخول منفصل للموظفين (admin-login.html)
-- إنشاء لوحة تحكم إدارية متكاملة (admin-dashboard.html)
-- نظام أدوار Firebase (admin/staff/viewer)
-- حماية الصفحات الإدارية بالتحقق من الصلاحيات
-- إدارة المستخدمين للمديرين فقط
-
-### 2025-12-12
-- تحديث الشعار إلى الشفاف (logo-transparent.png)
-- إضافة صورة البطل (hero-bg.png)
-- تحليل شامل للمشروع
-
-### 2025-12-11
-- إصلاحات نظام الجولات (Round.html)
-- إضافة نظام المعالجة للمخالفات
-- تحسين عرض البيانات
-
----
-
-## للتواصل
-مجمع مكة الطبي بالزاهر - مكة المكرمة
+- **Google Apps Script**: Used for backend logic and API endpoints.
+- **Google Sheets**: Serves as the primary database for all application data, including user roles, schedules, logs, tasks, and configuration.
+- **Google Drive**: Used for storing documents and potentially other assets.
+- **GitHub Pages**: Hosts the static HTML/CSS/JS frontend files.
+- **Firebase**: Utilized for user authentication (Email/Google Auth) and secure token verification (via Identity Toolkit API) for both staff and patient logins.
+- **Express.js**: Used in the Replit environment for local server setup and serving static files.

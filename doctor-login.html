@@ -243,17 +243,30 @@
             msg.style.display = 'block';
         }
 
+        const apiUrl = 'https://script.google.com/macros/s/AKfycbyg5x9xmqy0jm2I-UqBqOmPU8GlQxHX8m55uuzw7PbIZHN4K5knBaNI_WT1LLflH0Qa/exec';
+
         async function checkDoctorRole(user) {
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    const role = userDoc.data().role;
+                if (user.email === 'husseinbabsail@gmail.com') {
+                    return true;
+                }
+
+                const idToken = await user.getIdToken();
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getUserRole',
+                        payload: { email: user.email, idToken }
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    const role = result.role;
                     if (['doctor', 'admin', 'owner'].includes(role)) {
                         return true;
                     }
-                }
-                if (user.email === 'husseinbabsail@gmail.com') {
-                    return true;
                 }
                 return false;
             } catch (e) {
