@@ -270,12 +270,22 @@
             btnText.textContent = loading ? 'جاري التحقق...' : 'دخول';
         }
 
+        // التحقق من redirect parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectTo = urlParams.get('redirect') || 'admin-dashboard.html';
+        const OWNER_EMAIL = 'husseinbabsail@gmail.com';
+        
         onAuthStateChanged(auth, async (user) => {
             if (user) {
+                // المالك يتوجه للوحته مباشرة
+                if (user.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+                    window.location.href = redirectTo;
+                    return;
+                }
                 const roleData = await getUserRole(user.uid);
                 if (roleData && roleData.role && ['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                     if (roleData.status !== 'suspended') {
-                        window.location.href = 'admin-dashboard.html';
+                        window.location.href = redirectTo;
                     }
                 }
             }
@@ -313,6 +323,18 @@
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
+                // المالك له صلاحيات كاملة دائماً
+                if (email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+                    showMessage('تم التحقق! جاري التوجيه...', 'success');
+                    localStorage.setItem('staffRole', 'owner');
+                    localStorage.setItem('staffEmail', email);
+                    localStorage.setItem('staffUid', user.uid);
+                    setTimeout(() => {
+                        window.location.href = 'owner-dashboard.html';
+                    }, 800);
+                    return;
+                }
+                
                 // تحقق من الصلاحيات أولاً - الموظفين المقبولين لا يحتاجون تأكيد البريد
                 const roleData = await getUserRole(user.uid);
                 
@@ -338,7 +360,12 @@
                 localStorage.setItem('staffUid', user.uid);
                 
                 setTimeout(() => {
-                    window.location.href = 'admin-dashboard.html';
+                    // المالك يتوجه للوحته
+                    if (email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
+                        window.location.href = 'owner-dashboard.html';
+                    } else {
+                        window.location.href = redirectTo;
+                    }
                 }, 800);
 
             } catch (error) {
