@@ -106,6 +106,155 @@
   }
   
   /**
+   * التحقق من صلاحيات الموظف
+   * الأدوار المتاحة: owner, admin, staff, doctor, pharmacist, insurance, viewer
+   */
+  function validateStaffAuth_(payload, requiredRoles) {
+    if (!payload.staffId || !payload.staffEmail || !payload.idToken) {
+      throw new Error('غير مصرح - يجب تسجيل الدخول');
+    }
+    
+    // التحقق من Firebase ID Token
+    const verified = verifyFirebaseIdToken_(payload.idToken);
+    if (!verified) {
+      throw new Error('غير مصرح - التوكن غير صالح');
+    }
+    
+    // التأكد من تطابق البيانات
+    if (verified.localId !== payload.staffId || verified.email !== payload.staffEmail) {
+      throw new Error('غير مصرح - بيانات غير متطابقة');
+    }
+    
+    // جلب دور الموظف من Firestore (يجب تخزينه هناك)
+    // حالياً نستخدم جدول Staff_Roles في Sheets
+    const staffRole = getStaffRole_(payload.staffEmail);
+    
+    if (!staffRole) {
+      throw new Error('غير مصرح - لم يتم العثور على صلاحياتك');
+    }
+    
+    // التحقق من أن الدور مسموح
+    if (requiredRoles && requiredRoles.length > 0) {
+      if (!requiredRoles.includes(staffRole)) {
+        throw new Error('غير مصرح - ليس لديك صلاحية لهذا الإجراء');
+      }
+    }
+    
+    return { verified: true, role: staffRole };
+  }
+  
+  /**
+   * جلب دور الموظف من جدول الصلاحيات
+   */
+  function getStaffRole_(email) {
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      let sheet = ss.getSheetByName("Staff_Roles");
+      
+      // إنشاء الجدول إذا لم يكن موجوداً
+      if (!sheet) {
+        sheet = ss.insertSheet("Staff_Roles");
+        sheet.appendRow(["Email", "Role", "Name", "Department", "CreatedAt"]);
+        // إضافة المالك الافتراضي
+        sheet.appendRow(["husseinbabsail@gmail.com", "owner", "المالك", "الإدارة", new Date().toISOString()]);
+      }
+      
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0] === email) {
+          return data[i][1]; // الدور
+        }
+      }
+      return null;
+    } catch (e) {
+      console.log('Error getting staff role:', e.message);
+      return null;
+    }
+  }
+  
+  /**
+   * إضافة أو تحديث دور موظف (للمالك والإداريين فقط)
+   */
+  function setStaffRole(payload) {
+    // التحقق من صلاحية المنفذ
+    const auth = validateStaffAuth_(payload, ['owner', 'admin']);
+    
+    const { targetEmail, targetRole, targetName, targetDepartment } = payload;
+    
+    if (!targetEmail || !targetRole) {
+      throw new Error('البريد الإلكتروني والدور مطلوبان');
+    }
+    
+    // التحقق من صحة الدور
+    const validRoles = ['owner', 'admin', 'staff', 'doctor', 'pharmacist', 'insurance', 'viewer'];
+    if (!validRoles.includes(targetRole)) {
+      throw new Error('دور غير صالح');
+    }
+    
+    // فقط المالك يمكنه تعيين مالك آخر أو مدير
+    if (['owner', 'admin'].includes(targetRole) && auth.role !== 'owner') {
+      throw new Error('فقط المالك يمكنه تعيين مدراء');
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Staff_Roles");
+    const data = sheet.getDataRange().getValues();
+    
+    // البحث عن الموظف وتحديثه أو إضافته
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === targetEmail) {
+        sheet.getRange(i + 1, 2).setValue(targetRole);
+        if (targetName) sheet.getRange(i + 1, 3).setValue(targetName);
+        if (targetDepartment) sheet.getRange(i + 1, 4).setValue(targetDepartment);
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      sheet.appendRow([
+        targetEmail,
+        targetRole,
+        targetName || '',
+        targetDepartment || '',
+        new Date().toISOString()
+      ]);
+    }
+    
+    return { success: true, message: 'تم تحديث الصلاحيات بنجاح' };
+  }
+  
+  /**
+   * جلب قائمة الموظفين وأدوارهم (للمالك والإداريين فقط)
+   */
+  function getStaffList(payload) {
+    validateStaffAuth_(payload, ['owner', 'admin']);
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Staff_Roles");
+    
+    if (!sheet) {
+      return { success: true, staff: [] };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const staff = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      staff.push({
+        email: data[i][0],
+        role: data[i][1],
+        name: data[i][2],
+        department: data[i][3],
+        createdAt: data[i][4]
+      });
+    }
+    
+    return { success: true, staff };
+  }
+
+  /**
    * التحقق من صحة Firebase ID Token باستخدام Google Identity Toolkit API
    */
   function verifyFirebaseIdToken_(idToken) {
