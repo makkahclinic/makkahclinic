@@ -468,66 +468,6 @@
     return true;
   }
   
-  /**
- * دعم JSONP لتجنب مشاكل CORS
- * يستقبل الطلبات عبر GET ويرجع JavaScript callback
- */
-function doGet(e) {
-  try {
-    const action = e.parameter.action || '';
-    const callback = e.parameter.callback || 'callback';
-    const payload = e.parameter.payload ? JSON.parse(e.parameter.payload) : {};
-    
-    let result;
-    
-    switch(action) {
-      case 'ping':
-        result = { success: true, message: 'pong', timestamp: new Date().toISOString() };
-        break;
-      case 'getUserRole':
-        result = getUserRole(payload);
-        break;
-      case 'getStaffList':
-        result = getStaffList(payload);
-        break;
-      case 'getOwnerDashboardStats':
-        result = getOwnerDashboardStats(payload);
-        break;
-      case 'getBuildingConfig':
-        result = getBuildingConfig();
-        break;
-      case 'getScenarioGuides':
-        result = getScenarioGuides();
-        break;
-      case 'getActiveCommand':
-        result = getActiveCommand();
-        break;
-      case 'getEmergencyReports':
-        result = getEmergencyReports();
-        break;
-      case 'getEmergencyStatus':
-        result = getEmergencyStatus();
-        break;
-      case 'getTrainingLog':
-        result = getTrainingLog();
-        break;
-      default:
-        result = { success: false, error: 'Unknown action: ' + action };
-    }
-    
-    // إرجاع JSONP response
-    return ContentService
-      .createTextOutput(callback + '(' + JSON.stringify(result) + ')')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-      
-  } catch (err) {
-    const callback = (e.parameter && e.parameter.callback) || 'callback';
-    return ContentService
-      .createTextOutput(callback + '(' + JSON.stringify({ success: false, error: err.message }) + ')')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-}
-
 function doPost(e) {
     try {
       const body = JSON.parse(e.postData.contents);
@@ -930,6 +870,35 @@ function doPost(e) {
     if (action === 'getUserRole') {
       try {
         const result = getUserRole({ email: p.email });
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    // ✅ Owner Dashboard APIs (GET/JSONP) - مع دعم Firebase Token
+    if (action === 'getStaffList') {
+      try {
+        const payload = p.payload ? JSON.parse(p.payload) : {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken
+        };
+        const result = getStaffList(payload);
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
+      }
+    }
+    
+    if (action === 'getOwnerDashboardStats') {
+      try {
+        const payload = p.payload ? JSON.parse(p.payload) : {
+          staffEmail: p.staffEmail,
+          staffId: p.staffId,
+          idToken: p.idToken
+        };
+        const result = getOwnerDashboardStats(payload);
         return output_(result);
       } catch(e) {
         return output_({ success: false, error: e.message });
