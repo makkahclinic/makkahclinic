@@ -468,7 +468,67 @@
     return true;
   }
   
-  function doPost(e) {
+  /**
+ * دعم JSONP لتجنب مشاكل CORS
+ * يستقبل الطلبات عبر GET ويرجع JavaScript callback
+ */
+function doGet(e) {
+  try {
+    const action = e.parameter.action || '';
+    const callback = e.parameter.callback || 'callback';
+    const payload = e.parameter.payload ? JSON.parse(e.parameter.payload) : {};
+    
+    let result;
+    
+    switch(action) {
+      case 'ping':
+        result = { success: true, message: 'pong', timestamp: new Date().toISOString() };
+        break;
+      case 'getUserRole':
+        result = getUserRole(payload);
+        break;
+      case 'getStaffList':
+        result = getStaffList(payload);
+        break;
+      case 'getOwnerDashboardStats':
+        result = getOwnerDashboardStats(payload);
+        break;
+      case 'getBuildingConfig':
+        result = getBuildingConfig();
+        break;
+      case 'getScenarioGuides':
+        result = getScenarioGuides();
+        break;
+      case 'getActiveCommand':
+        result = getActiveCommand();
+        break;
+      case 'getEmergencyReports':
+        result = getEmergencyReports();
+        break;
+      case 'getEmergencyStatus':
+        result = getEmergencyStatus();
+        break;
+      case 'getTrainingLog':
+        result = getTrainingLog();
+        break;
+      default:
+        result = { success: false, error: 'Unknown action: ' + action };
+    }
+    
+    // إرجاع JSONP response
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(result) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+      
+  } catch (err) {
+    const callback = (e.parameter && e.parameter.callback) || 'callback';
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify({ success: false, error: err.message }) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+}
+
+function doPost(e) {
     try {
       const body = JSON.parse(e.postData.contents);
       const action = sanitizeInput(body.action);

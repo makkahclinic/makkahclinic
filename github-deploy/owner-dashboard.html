@@ -958,38 +958,52 @@
             setTimeout(() => { alert.style.display = 'none'; }, 5000);
         }
 
-        async function apiCall(action, params = {}) {
-            const payload = {
-                action: action,
-                payload: {
+        // استخدام JSONP لتجنب مشاكل CORS مع Google Apps Script
+        function apiCall(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+                
+                // تسجيل الـ callback في window
+                window[callbackName] = (data) => {
+                    delete window[callbackName];
+                    if (script.parentNode) script.remove();
+                    resolve(data);
+                };
+                
+                // بناء الـ query string
+                const payloadData = {
                     ...params,
-                    idToken: idToken,
                     staffEmail: currentUser?.email || null,
-                    staffId: currentUser?.uid || null
-                }
-            };
-            
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload),
-                redirect: 'follow'
+                    staffId: currentUser?.uid || null,
+                    idToken: idToken
+                };
+                
+                const query = new URLSearchParams({
+                    action: action,
+                    callback: callbackName,
+                    payload: JSON.stringify(payloadData)
+                });
+                
+                // إنشاء script tag
+                const script = document.createElement('script');
+                script.src = `${API_URL}?${query.toString()}`;
+                script.onerror = () => {
+                    delete window[callbackName];
+                    script.remove();
+                    reject(new Error('فشل الاتصال بالخادم'));
+                };
+                
+                // Timeout بعد 30 ثانية
+                setTimeout(() => {
+                    if (window[callbackName]) {
+                        delete window[callbackName];
+                        if (script.parentNode) script.remove();
+                        reject(new Error('انتهت مهلة الطلب'));
+                    }
+                }, 30000);
+                
+                document.body.appendChild(script);
             });
-            
-            const rawText = await response.text();
-            let data;
-            try {
-                data = JSON.parse(rawText);
-            } catch (e) {
-                console.error(`API response not JSON (status=${response.status}). First 300 chars:`, rawText.slice(0, 300));
-                throw new Error(`API رد غير JSON (status=${response.status}). قد يكون هناك مشكلة في نشر السكربت.`);
-            }
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${JSON.stringify(data).slice(0, 200)}`);
-            }
-            
-            return data;
         }
 
         async function loadUsers() {
