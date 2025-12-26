@@ -3391,10 +3391,11 @@ function doPost(e) {
         }
       } catch(e) {}
       
-      // جلب إحصائيات الشكاوى - دعم الأعمدة العربية والإنجليزية
+      // جلب إحصائيات الشكاوى - دعم الأعمدة العربية والإنجليزية + اسم الشيت
       let complaints = { open: 0, new: 0, inProgress: 0, escalated: 0, closed: 0 };
       try {
-        const compSheet = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID).getSheetByName('بيانات الشكاوى');
+        const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+        const compSheet = ss.getSheetByName('Complaints_Log') || ss.getSheetByName('بيانات الشكاوى');
         if (compSheet) {
           const compData = sheetToObjects(compSheet);
           compData.forEach(c => {
@@ -3407,6 +3408,8 @@ function doPost(e) {
               complaints.escalated++;
             } else if (status === 'closed' || status === 'مغلقة' || status === 'مغلق') {
               complaints.closed++;
+            } else {
+              complaints.new++;
             }
           });
           complaints.open = complaints.new + complaints.inProgress + complaints.escalated;

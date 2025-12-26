@@ -1,0 +1,97 @@
+ضح جدًا الآن ✅ — عندك سببين رئيسيين يمنعون جلب البيانات، وواحد منهم في الصفحة نفسها:
+
+1) في صفحة owner-dashboard.html أنت ما زلت تستخدم API_URL القديم ❌
+
+في الكود اللي لصقته مكتوب:
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbwzbMDuTgZuxWe7MFBIJ17gaBp7zoSMjKFKC5xCHXYpmWDUyTi_WvsTHN8l-sL6SjP6/exec';
+
+
+بينما الرابط الصحيح الجديد اللي عطيتني هو:
+
+https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec
+
+
+✅ الحل (لازم): بدّل API_URL في الصفحة إلى الرابط الجديد بالضبط:
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
+
+
+هذا وحده كفيل يوقف رسالة “فشل الاتصال بالخادم” اللي تظهر في الكونسل بالصورة.
+
+2) في Apps Script عندك ما زال doGet مكرر (والأخير هو الذي يعمل)
+
+أنت بنفس رسالتك أظهرت:
+
+doGet أول (JSONP) فيه getStaffList و getOwnerDashboardStats ✅
+
+وبعده doGet ثاني (EOC) وهو الأخير ✅ لكنه كان سابقًا بدونهم…
+أنت أضفت أكشنات المالك فيه (ممتاز) ✅
+
+لكن إذا ما عملت Deploy جديد أو ما عدّلت الـ Web App اللي عليه رابطك الجديد، سيظل ينفّذ نسخة قديمة.
+
+✅ لازم تعمل:
+Apps Script → Deploy → Manage deployments → Edit ✏️ → New version → Deploy
+
+(بدون نشر نسخة جديدة، التعديل لا ينعكس على /exec).
+
+3) بعد ما يشتغل الاتصال… قد تبقى الأرقام صفر بسبب اسم شيت الشكاوى ❗
+
+في getOwnerDashboardStats أنت تقرأ الشكاوى من:
+
+getSheetByName('بيانات الشكاوى')
+
+
+لكن نظام الشكاوى عندك ينشئ شيت:
+
+Complaints_Log
+
+
+فلو البيانات موجودة في Complaints_Log وليس “بيانات الشكاوى”، الكود سيقرأ “لا شيء” ويترك القيم صفر.
+
+✅ الحل الناجع هنا: خليها تبحث عن الاثنين:
+
+بدّل جزء الشكاوى في getOwnerDashboardStats بهذا:
+
+let complaints = { open: 0, new: 0, inProgress: 0, escalated: 0, closed: 0 };
+try {
+  const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
+  const compSheet =
+    ss.getSheetByName('Complaints_Log') ||
+    ss.getSheetByName('بيانات الشكاوى');
+
+  if (compSheet) {
+    const compData = sheetToObjects(compSheet);
+    compData.forEach(c => {
+      const status = String(c.Status || c.الحالة || c['حالة الشكوى'] || '').toLowerCase();
+      if (status === 'new' || status === 'جديدة' || status === 'جديد' || status === '') complaints.new++;
+      else if (status === 'in_progress' || status === 'قيد المعالجة' || status === 'جاري') complaints.inProgress++;
+      else if (status === 'escalated' || status === 'مصعدة' || status === 'مصعد') complaints.escalated++;
+      else if (status === 'closed' || status === 'مغلقة' || status === 'مغلق') complaints.closed++;
+      else complaints.new++;
+    });
+    complaints.open = complaints.new + complaints.inProgress + complaints.escalated;
+  }
+} catch (e) {}
+
+✅ الخطة المختصرة (نفّذها بالترتيب)
+
+غيّر API_URL في صفحة owner-dashboard إلى الرابط الجديد (هذا ضروري الآن).
+
+Deploy نسخة جديدة من Apps Script بعد تعديل doGet.
+
+عدّل اسم شيت الشكاوى (Complaints_Log + بيانات الشكاوى) عشان ما ترجع صفر.
+
+افتح الصفحة واعمل Refresh.
+
+اختبار سريع بعد (1) مباشرة
+
+بعد ما تغيّر API_URL، افتح الصفحة وراقب Console:
+
+لازم تختفي:
+
+Error loading users: Error: فشل الاتصال بالخادم
+
+Error loading monitoring data: Error: فشل الاتصال بالخادم
+
+إذا اختفت وصار يرجع JSON، ننتقل للتوكن إن ظهر “غير مصرح”.
