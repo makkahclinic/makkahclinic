@@ -655,10 +655,10 @@
             <!-- تبويبات -->
             <div class="tabs-container">
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('users')">
+                    <button class="tab-btn active" onclick="switchTab(event,'users')">
                         <i class="fas fa-users-cog"></i> إدارة المستخدمين
                     </button>
-                    <button class="tab-btn" onclick="switchTab('links')">
+                    <button class="tab-btn" onclick="switchTab(event,'links')">
                         <i class="fas fa-link"></i> روابط سريعة
                     </button>
                 </div>
@@ -787,7 +787,7 @@
 
     <script>
         const OWNER_EMAIL = 'husseinbabsail@gmail.com';
-        const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwzbMDuTgZuxWe7MFBIJ17gaBp7zoSMjKFKC5xCHXYpmWDUyTi_WvsTHN8l-sL6SjP6/exec';
         
         const firebaseConfig = {
             apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
@@ -797,7 +797,9 @@
             messagingSenderId: "992769471393",
             appId: "1:992769471393:web:c8a9400210a0e7901011e0"
         };
-        firebase.initializeApp(firebaseConfig);
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
         
         let currentUser = null;
         let idToken = null;
@@ -826,11 +828,11 @@
             loadMonitoringData();
         }
 
-        function switchTab(tabName) {
+        function switchTab(ev, tabName) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            event.target.classList.add('active');
+            ev.currentTarget.classList.add('active');
             document.getElementById('tab-' + tabName).classList.add('active');
         }
 
@@ -956,22 +958,52 @@
             setTimeout(() => { alert.style.display = 'none'; }, 5000);
         }
 
-        async function apiCall(action, params = {}) {
-            const payload = {
-                action: action,
-                payload: {
+        // استخدام JSONP لتجنب مشاكل CORS مع Google Apps Script
+        function apiCall(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+                
+                // تسجيل الـ callback في window
+                window[callbackName] = (data) => {
+                    delete window[callbackName];
+                    if (script.parentNode) script.remove();
+                    resolve(data);
+                };
+                
+                // بناء الـ query string
+                const payloadData = {
                     ...params,
-                    idToken: idToken,
-                    staffEmail: currentUser.email,
-                    staffId: currentUser.uid
-                }
-            };
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify(payload)
+                    staffEmail: currentUser?.email || null,
+                    staffId: currentUser?.uid || null,
+                    idToken: idToken
+                };
+                
+                const query = new URLSearchParams({
+                    action: action,
+                    callback: callbackName,
+                    payload: JSON.stringify(payloadData)
+                });
+                
+                // إنشاء script tag
+                const script = document.createElement('script');
+                script.src = `${API_URL}?${query.toString()}`;
+                script.onerror = () => {
+                    delete window[callbackName];
+                    script.remove();
+                    reject(new Error('فشل الاتصال بالخادم'));
+                };
+                
+                // Timeout بعد 30 ثانية
+                setTimeout(() => {
+                    if (window[callbackName]) {
+                        delete window[callbackName];
+                        if (script.parentNode) script.remove();
+                        reject(new Error('انتهت مهلة الطلب'));
+                    }
+                }, 30000);
+                
+                document.body.appendChild(script);
             });
-            return await response.json();
         }
 
         async function loadUsers() {
