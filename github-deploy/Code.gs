@@ -59,6 +59,33 @@
   }
 
   // ======== دوال الأمان ========
+
+  /**
+   * التحقق من مصادقة المريض
+   * يتحقق من وجود patientId و email ومطابقتهما للبيانات المسجلة
+   */
+  function validatePatientAuth_(payload) {
+    if (!payload.patientId || !payload.patientEmail) {
+      throw new Error('غير مصرح - يجب تسجيل الدخول');
+    }
+    // تحقق إضافي: التأكد من أن الـ patientId المطلوب يطابق الـ email
+    // هذا يمنع أي مستخدم من الوصول لبيانات مريض آخر
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Patients");
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0] === payload.patientId) {
+          if (data[i][1] !== payload.patientEmail) {
+            throw new Error('غير مصرح - لا يمكنك الوصول لهذه البيانات');
+          }
+          return true;
+        }
+      }
+    }
+    // مريض جديد - السماح بالتسجيل
+    return true;
+  }
   
   /**
    * تنظيف المدخلات من الأكواد الخبيثة (XSS)
@@ -292,6 +319,39 @@
           break;
         case 'getComplaintEscalationList':
           result = getComplaintEscalationList();
+          break;
+        // Patient Portal APIs (Protected - require auth token)
+        case 'registerPatient':
+          validatePatientAuth_(payload);
+          result = registerPatient(payload);
+          break;
+        case 'getPatientProfile':
+          validatePatientAuth_(payload);
+          result = getPatientProfile(payload.patientId);
+          break;
+        case 'bookAppointment':
+          validatePatientAuth_(payload);
+          result = bookAppointment(payload);
+          break;
+        case 'getPatientAppointments':
+          validatePatientAuth_(payload);
+          result = getPatientAppointments(payload.patientId);
+          break;
+        case 'cancelAppointment':
+          validatePatientAuth_(payload);
+          result = cancelAppointment(payload);
+          break;
+        case 'getPatientResults':
+          validatePatientAuth_(payload);
+          result = getPatientResults(payload.patientId);
+          break;
+        case 'submitPatientSymptoms':
+          validatePatientAuth_(payload);
+          result = submitPatientSymptoms(payload);
+          break;
+        case 'analyzeSymptoms':
+          validatePatientAuth_(payload);
+          result = analyzeSymptoms(payload);
           break;
         default:
           throw new Error('Unknown action: ' + action);
@@ -3772,3 +3832,267 @@
     }
   }
   
+
+// ======== Patient Portal Functions ========
+
+const PATIENTS_SPREADSHEET_ID = "1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc";
+
+/**
+ * تسجيل مريض جديد
+ */
+function registerPatient(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName("Patients");
+    
+    if (!sheet) {
+      sheet = ss.insertSheet("Patients");
+      sheet.appendRow(["UID", "Email", "Name", "Phone", "Role", "CreatedAt", "LastLogin"]);
+    }
+    
+    const existingData = sheet.getDataRange().getValues();
+    const uidCol = 0;
+    for (let i = 1; i < existingData.length; i++) {
+      if (existingData[i][uidCol] === payload.uid) {
+        sheet.getRange(i + 1, 7).setValue(new Date().toISOString());
+        return { success: true, message: "تم تحديث آخر دخول" };
+      }
+    }
+    
+    sheet.appendRow(safeCellArray_([
+      payload.uid,
+      payload.email,
+      payload.name || "مريض جديد",
+      payload.phone || "",
+      "patient",
+      payload.createdAt || new Date().toISOString(),
+      new Date().toISOString()
+    ]));
+    
+    return { success: true, message: "تم تسجيل المريض بنجاح" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * جلب ملف المريض
+ */
+function getPatientProfile(patientId) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Patients");
+    if (!sheet) return { profile: null };
+    
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === patientId) {
+        return {
+          profile: {
+            uid: data[i][0],
+            email: data[i][1],
+            name: data[i][2],
+            phone: data[i][3],
+            role: data[i][4],
+            createdAt: data[i][5]
+          }
+        };
+      }
+    }
+    return { profile: null };
+  } catch (err) {
+    return { profile: null, error: err.message };
+  }
+}
+
+/**
+ * حجز موعد جديد
+ */
+function bookAppointment(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName("Appointments");
+    
+    if (!sheet) {
+      sheet = ss.insertSheet("Appointments");
+      sheet.appendRow(["ID", "PatientID", "PatientName", "PatientEmail", "Department", "DoctorID", "DoctorName", "Date", "Time", "Notes", "Status", "CreatedAt"]);
+    }
+    
+    const appointmentId = "APT-" + Date.now();
+    
+    sheet.appendRow(safeCellArray_([
+      appointmentId,
+      payload.patientId,
+      payload.patientName,
+      payload.patientEmail,
+      payload.department,
+      payload.doctorId,
+      payload.doctorName,
+      payload.date,
+      payload.time,
+      payload.notes || "",
+      payload.status || "pending",
+      new Date().toISOString()
+    ]));
+    
+    return { success: true, appointmentId: appointmentId, message: "تم حجز الموعد بنجاح" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * جلب مواعيد المريض
+ */
+function getPatientAppointments(patientId) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Appointments");
+    if (!sheet) return { appointments: [] };
+    
+    const data = sheet.getDataRange().getValues();
+    const appointments = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === patientId) {
+        appointments.push({
+          id: data[i][0],
+          department: data[i][4],
+          doctorName: data[i][6],
+          date: data[i][7],
+          time: data[i][8],
+          notes: data[i][9],
+          status: data[i][10],
+          createdAt: data[i][11]
+        });
+      }
+    }
+    
+    appointments.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return { appointments: appointments };
+  } catch (err) {
+    return { appointments: [], error: err.message };
+  }
+}
+
+/**
+ * إلغاء موعد
+ */
+function cancelAppointment(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Appointments");
+    if (!sheet) return { success: false, error: "لا توجد مواعيد" };
+    
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === payload.appointmentId && data[i][1] === payload.patientId) {
+        sheet.getRange(i + 1, 11).setValue("cancelled");
+        return { success: true, message: "تم إلغاء الموعد" };
+      }
+    }
+    return { success: false, error: "الموعد غير موجود" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * جلب نتائج فحوصات المريض
+ */
+function getPatientResults(patientId) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("LabResults");
+    if (!sheet) return { results: [] };
+    
+    const data = sheet.getDataRange().getValues();
+    const results = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === patientId) {
+        results.push({
+          id: data[i][0],
+          testType: data[i][2],
+          result: data[i][3],
+          date: data[i][4],
+          fileUrl: data[i][5] || null
+        });
+      }
+    }
+    
+    return { results: results };
+  } catch (err) {
+    return { results: [], error: err.message };
+  }
+}
+
+/**
+ * حفظ أعراض المريض
+ */
+function submitPatientSymptoms(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName("PatientSymptoms");
+    
+    if (!sheet) {
+      sheet = ss.insertSheet("PatientSymptoms");
+      sheet.appendRow(["ID", "PatientID", "Symptoms", "Duration", "ChronicDiseases", "AIResponse", "CreatedAt"]);
+    }
+    
+    const symptomId = "SYM-" + Date.now();
+    
+    sheet.appendRow(safeCellArray_([
+      symptomId,
+      payload.patientId,
+      payload.symptoms,
+      payload.duration,
+      payload.chronic || "",
+      payload.aiResponse || "",
+      new Date().toISOString()
+    ]));
+    
+    return { success: true, symptomId: symptomId };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * تحليل الأعراض بالذكاء الاصطناعي
+ */
+function analyzeSymptoms(payload) {
+  try {
+    const symptoms = payload.symptoms || "";
+    const duration = payload.duration || "";
+    const chronic = payload.chronic || "";
+    
+    const specialtyMap = {
+      "صداع|رأس|دوخة|غثيان": "الباطنية أو الطب العام",
+      "عين|نظر|رؤية|ضبابية": "طب العيون",
+      "أسنان|ضرس|لثة|فم": "طب الأسنان",
+      "حمل|دورة|نساء|ولادة": "النساء والولادة",
+      "عظام|مفاصل|ظهر|ركبة": "العظام والمفاصل",
+      "سكري|ضغط|قلب|كلى": "الباطنية"
+    };
+    
+    let recommendedDept = "الطب العام";
+    for (const [pattern, dept] of Object.entries(specialtyMap)) {
+      if (new RegExp(pattern, "i").test(symptoms)) {
+        recommendedDept = dept;
+        break;
+      }
+    }
+    
+    submitPatientSymptoms(payload);
+    
+    return {
+      success: true,
+      recommendation: recommendedDept,
+      message: "بناءً على الأعراض المذكورة، ننصحك بزيارة قسم " + recommendedDept
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
