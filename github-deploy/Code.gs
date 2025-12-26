@@ -61,16 +61,34 @@
   // ======== دوال الأمان ========
 
   /**
-   * التحقق من مصادقة المريض
-   * يتحقق من وجود patientId و email ومطابقتهما للبيانات المسجلة
+   * التحقق من مصادقة المريض باستخدام Firebase ID Token
+   * يتحقق من صحة التوكن ومطابقة الـ UID والـ email
    */
   function validatePatientAuth_(payload) {
+    // تحقق أساسي من وجود البيانات المطلوبة
     if (!payload.patientId || !payload.patientEmail) {
       throw new Error('غير مصرح - يجب تسجيل الدخول');
     }
-    // تحقق إضافي: التأكد من أن الـ patientId المطلوب يطابق الـ email
-    // هذا يمنع أي مستخدم من الوصول لبيانات مريض آخر
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // التحقق من Firebase ID Token إذا كان موجوداً
+    if (payload.idToken) {
+      const verified = verifyFirebaseIdToken_(payload.idToken);
+      if (!verified) {
+        throw new Error('غير مصرح - التوكن غير صالح');
+      }
+      // التأكد من تطابق الـ UID مع الـ patientId
+      if (verified.localId !== payload.patientId) {
+        throw new Error('غير مصرح - لا يمكنك الوصول لهذه البيانات');
+      }
+      // التأكد من تطابق الـ email
+      if (verified.email && verified.email !== payload.patientEmail) {
+        throw new Error('غير مصرح - البريد الإلكتروني غير متطابق');
+      }
+      return true;
+    }
+    
+    // Fallback: تحقق من السجلات (للتوافق مع الإصدارات السابقة)
+    const ss = SpreadsheetApp.openById(PATIENTS_SPREADSHEET_ID);
     const sheet = ss.getSheetByName("Patients");
     if (sheet) {
       const data = sheet.getDataRange().getValues();
@@ -85,6 +103,43 @@
     }
     // مريض جديد - السماح بالتسجيل
     return true;
+  }
+  
+  /**
+   * التحقق من صحة Firebase ID Token باستخدام Google Identity Toolkit API
+   */
+  function verifyFirebaseIdToken_(idToken) {
+    try {
+      const FIREBASE_API_KEY = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY');
+      if (!FIREBASE_API_KEY) {
+        console.log('Firebase API Key not configured - skipping token verification');
+        return null;
+      }
+      
+      const url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY;
+      const response = UrlFetchApp.fetch(url, {
+        method: 'POST',
+        contentType: 'application/json',
+        payload: JSON.stringify({ idToken: idToken }),
+        muteHttpExceptions: true
+      });
+      
+      const result = JSON.parse(response.getContentText());
+      
+      if (result.error) {
+        console.log('Firebase token verification failed:', result.error.message);
+        return null;
+      }
+      
+      if (result.users && result.users.length > 0) {
+        return result.users[0];
+      }
+      
+      return null;
+    } catch (e) {
+      console.log('Error verifying Firebase token:', e.message);
+      return null;
+    }
   }
   
   /**

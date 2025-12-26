@@ -231,6 +231,14 @@ hero-bg.png
 
 ## التحديثات الأخيرة
 
+### 2025-12-26
+- **بوابة المريض الذكية (جديد)**:
+  - صفحة تسجيل دخول المريض (patient-login.html) - Email + Google Auth
+  - لوحة تحكم المريض (patient-dashboard.html) - حجز مواعيد، رفع أعراض، نتائج فحوصات
+  - APIs جديدة في Code.gs: registerPatient, bookAppointment, getPatientAppointments, analyzeSymptoms
+  - نظام أمان مع Firebase ID Token verification عبر Identity Toolkit API
+  - دالة validatePatientAuth_ للتحقق من هوية المريض
+
 ### 2025-12-20
 - **نظام التدريب العملي على الطوارئ (جديد - مدمج في eoc-command.html)**:
   - 3 أيقونات Quick Actions: جلسة تدريب عملي، سجل التدريب، سجل البلاغات
