@@ -255,6 +255,45 @@
   }
 
   /**
+   * حذف/إلغاء صلاحية موظف (للمالك فقط)
+   */
+  function revokeStaffRole(payload) {
+    // التحقق من صلاحية المنفذ - للمالك فقط
+    const auth = validateStaffAuth_(payload, ['owner']);
+    
+    const { targetEmail } = payload;
+    
+    if (!targetEmail) {
+      throw new Error('البريد الإلكتروني مطلوب');
+    }
+    
+    // لا يمكن حذف المالك
+    const ownerEmail = "husseinbabsail@gmail.com";
+    if (targetEmail.toLowerCase() === ownerEmail.toLowerCase()) {
+      throw new Error('لا يمكن حذف المالك');
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("Staff_Roles");
+    
+    if (!sheet) {
+      throw new Error('جدول الموظفين غير موجود');
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    
+    // البحث عن الموظف وحذفه
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0].toLowerCase() === targetEmail.toLowerCase()) {
+        sheet.deleteRow(i + 1);
+        return { success: true, message: 'تم حذف المستخدم بنجاح' };
+      }
+    }
+    
+    throw new Error('المستخدم غير موجود');
+  }
+
+  /**
    * جلب دور المستخدم (API عام للـ frontend)
    * يتحقق من Firebase Token ويرجع الدور من جدول Staff_Roles
    */
@@ -454,6 +493,9 @@
           break;
         case 'getStaffList':
           result = getStaffList(payload);
+          break;
+        case 'revokeStaffRole':
+          result = revokeStaffRole(payload);
           break;
         case 'getHomeData':
           result = getHomeData();
@@ -818,6 +860,16 @@
         return output_({ ok: true, testType: testType, timestamp: new Date().toISOString() });
       } catch(e) {
         return output_({ ok: false, testType: testType, error: e.message });
+      }
+    }
+    
+    // Staff Role APIs - للقراءة فقط عبر GET (بدون idToken لأنه عام)
+    if (action === 'getUserRole') {
+      try {
+        const result = getUserRole({ email: p.email });
+        return output_(result);
+      } catch(e) {
+        return output_({ success: false, error: e.message });
       }
     }
     
