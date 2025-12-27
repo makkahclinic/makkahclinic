@@ -884,6 +884,16 @@
             const user = auth.currentUser;
             const idToken = await getFreshIdToken();
 
+            // للتوافق: نرسل التوكن في URL أيضًا (للسكربتات القديمة)
+            const qs = new URLSearchParams({
+                action,
+                idToken: idToken || "",
+                staffEmail: user?.email || "",
+                staffId: user?.uid || ""
+            });
+
+            const urlWithQs = url + (url.includes("?") ? "&" : "?") + qs.toString();
+
             const body = {
                 action,
                 payload: {
@@ -894,9 +904,9 @@
                 }
             };
 
-            const res = await fetch(url, {
+            const res = await fetch(urlWithQs, {
                 method: "POST",
-                headers: { "Content-Type": "text/plain" },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
                 redirect: "follow"
             });
@@ -1088,7 +1098,7 @@
                 const data = await postToAppsScript(APIs.main, 'getOwnerDashboardStats', {});
                 console.log('Dashboard stats:', data);
                 
-                if (data.success) {
+                if (data.success || data.ok) {
                     const stats = data.stats || data;
                     
                     if (stats.emergency && stats.emergency.active) {
@@ -1148,7 +1158,7 @@
         function loadAlerts() {
             const container = document.getElementById('alertsContainer');
             postToAppsScript(APIs.main, 'getOwnerDashboardStats', {}).then(data => {
-                if (data.success) {
+                if (data.success || data.ok) {
                     const alerts = [];
                     const stats = data.stats || data;
                     
