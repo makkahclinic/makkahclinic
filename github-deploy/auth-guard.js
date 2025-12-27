@@ -84,9 +84,12 @@ const AuthGuard = {
         }
     },
 
+    // API URL for backend (fallback)
+    apiUrl: 'https://script.google.com/macros/s/AKfycbyg5x9xmqy0jm2I-UqBqOmPU8GlQxHX8m55uuzw7PbIZHN4K5knBaNI_WT1LLflH0Qa/exec',
+
     /**
-     * تحميل دور المستخدم من Firestore مباشرة
-     * يقرأ من collection: staff_roles
+     * تحميل دور المستخدم - يبحث في Firestore أولاً ثم Google Sheets
+     * Dual-source: Firestore first, then Google Sheets fallback
      */
     async loadUserRole(uid) {
         try {
@@ -103,45 +106,73 @@ const AuthGuard = {
                 return;
             }
 
-            // جلب الدور من Firestore مباشرة
-            const { doc, getDoc, collection, query, where, getDocs } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-            
-            // البحث في staff_roles عن المستخدم بالـ UID أو الإيميل
-            // أولاً: البحث بالـ UID
-            const userDocRef = doc(this.db, 'staff_roles', uid);
-            const userDoc = await getDoc(userDocRef);
-            
-            if (userDoc.exists()) {
-                const data = userDoc.data();
-                if (data.status === 'active') {
-                    this.userRole = data.role || 'viewer';
-                    this.userName = data.fullName || data.name || '';
-                    this.allowedSystems = data.allowedSystems || [];
-                    console.log('Role loaded from Firestore (by UID):', this.userRole);
+            // ========== المحاولة الأولى: Firestore ==========
+            try {
+                const { doc, getDoc, collection, query, where, getDocs } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+                
+                // البحث بالـ UID
+                const userDocRef = doc(this.db, 'staff_roles', uid);
+                const userDoc = await getDoc(userDocRef);
+                
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    if (data.status === 'active') {
+                        this.userRole = data.role || 'viewer';
+                        this.userName = data.fullName || data.name || '';
+                        this.allowedSystems = data.allowedSystems || [];
+                        console.log('Role loaded from Firestore (by UID):', this.userRole);
+                        return;
+                    }
+                }
+                
+                // البحث بالإيميل
+                const staffRolesRef = collection(this.db, 'staff_roles');
+                const q = query(staffRolesRef, where('email', '==', email));
+                const querySnapshot = await getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                    const data = querySnapshot.docs[0].data();
+                    if (data.status === 'active') {
+                        this.userRole = data.role || 'viewer';
+                        this.userName = data.fullName || data.name || '';
+                        this.allowedSystems = data.allowedSystems || [];
+                        console.log('Role loaded from Firestore (by email):', this.userRole);
+                        return;
+                    }
+                }
+            } catch (firestoreError) {
+                console.warn('Firestore lookup failed, trying Google Sheets:', firestoreError);
+            }
+
+            // ========== Fallback: Google Sheets API ==========
+            console.log('User not in Firestore, checking Google Sheets...');
+            try {
+                const idToken = await this.currentUser.getIdToken();
+                const response = await fetch(this.apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getUserRole',
+                        payload: { email, idToken }
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success && result.role && result.role !== 'viewer') {
+                    this.userRole = result.role;
+                    this.userName = result.name || '';
+                    console.log('Role loaded from Google Sheets:', this.userRole);
                     return;
                 }
+            } catch (sheetsError) {
+                console.warn('Google Sheets lookup also failed:', sheetsError);
             }
             
-            // ثانياً: البحث بالإيميل في كل الوثائق
-            const staffRolesRef = collection(this.db, 'staff_roles');
-            const q = query(staffRolesRef, where('email', '==', email));
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
-                const data = querySnapshot.docs[0].data();
-                if (data.status === 'active') {
-                    this.userRole = data.role || 'viewer';
-                    this.userName = data.fullName || data.name || '';
-                    this.allowedSystems = data.allowedSystems || [];
-                    console.log('Role loaded from Firestore (by email):', this.userRole);
-                    return;
-                }
-            }
-            
-            console.log('User not found in Firestore, defaulting to viewer');
+            console.log('User not found in any source, defaulting to viewer');
             this.userRole = 'viewer';
         } catch (error) {
-            console.error('Error loading user role from Firestore:', error);
+            console.error('Error loading user role:', error);
             this.userRole = 'viewer';
         }
     },
