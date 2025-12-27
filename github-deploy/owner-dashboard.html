@@ -874,46 +874,42 @@
         }).format(new Date());
         document.getElementById('dateDisplay').textContent = hijriDate;
         
-        function jsonpCall(url, callback) {
-            const callbackName = 'jsonp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            const script = document.createElement('script');
-            
-            window[callbackName] = function(data) {
-                delete window[callbackName];
-                document.body.removeChild(script);
-                callback(null, data);
-            };
-            
-            script.onerror = function() {
-                delete window[callbackName];
-                document.body.removeChild(script);
-                callback(new Error('JSONP request failed'), null);
-            };
-            
-            const separator = url.includes('?') ? '&' : '?';
-            script.src = url + separator + 'callback=' + callbackName;
-            document.body.appendChild(script);
+        async function apiCall(url, action, payload = {}) {
+            try {
+                const token = currentUser ? await currentUser.getIdToken() : null;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ 
+                        action, 
+                        payload: {
+                            ...payload,
+                            idToken: token,
+                            staffEmail: currentUser?.email || '',
+                            staffId: currentUser?.uid || ''
+                        }
+                    }),
+                    redirect: 'follow'
+                });
+                const text = await response.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Parse error:', text.substring(0, 200));
+                    return { ok: false, error: 'Invalid response' };
+                }
+            } catch (e) {
+                console.error(`API Error (${action}):`, e);
+                return { ok: false, error: e.message };
+            }
         }
         
-        function apiCall(action, params = {}) {
-            return new Promise((resolve, reject) => {
-                let url = API_URL + '?action=' + action;
-                for (const key in params) {
-                    url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
-                }
-                if (idToken) {
-                    url += '&idToken=' + encodeURIComponent(idToken);
-                }
-                if (currentUser) {
-                    url += '&staffEmail=' + encodeURIComponent(currentUser.email || '');
-                    url += '&staffId=' + encodeURIComponent(currentUser.uid || '');
-                }
-                
-                jsonpCall(url, (err, data) => {
-                    if (err) reject(err);
-                    else resolve(data);
-                });
-            });
+        async function fetchJsonp(url) {
+            const r = await fetch(url, { redirect: 'follow' });
+            const text = await r.text();
+            const m = text.match(/^[a-zA-Z_$][\w$]*\s*\((.*)\)\s*;?\s*$/s);
+            if (m && m[1]) return JSON.parse(m[1]);
+            return JSON.parse(text);
         }
         
         function showToast(message, isError = false) {
@@ -1083,7 +1079,7 @@
         
         async function loadDashboardStats() {
             try {
-                const data = await apiCall('getOwnerDashboardStats');
+                const data = await apiCall(APIs.main, 'getOwnerDashboardStats', {});
                 console.log('Dashboard stats:', data);
                 
                 if (data.success) {
@@ -1145,7 +1141,7 @@
         
         function loadAlerts() {
             const container = document.getElementById('alertsContainer');
-            apiCall('getOwnerDashboardStats').then(data => {
+            apiCall(APIs.main, 'getOwnerDashboardStats', {}).then(data => {
                 if (data.success) {
                     const alerts = [];
                     const stats = data.stats || data;
@@ -1189,7 +1185,7 @@
             const container = document.getElementById('eocReportsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall('getEmergencyReports').then(data => {
+            apiCall(APIs.main, 'getEmergencyReports', {}).then(data => {
                 if (data.success && data.reports && data.reports.length > 0) {
                     const statusCard = document.getElementById('eocStatusCard');
                     const activeReport = data.reports.find(r => r.Status === 'active' || r.Status === 'نشط');
@@ -1232,7 +1228,7 @@
             const container = document.getElementById('complaintsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall('getComplaints').then(data => {
+            apiCall(APIs.complaints, 'getComplaints', {}).then(data => {
                 console.log('Complaints data:', data);
                 if ((data.ok || data.success) && data.complaints && data.complaints.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
@@ -1275,7 +1271,7 @@
             const container = document.getElementById('incidentsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall('getIncidents').then(data => {
+            apiCall(APIs.incidents, 'getIncidents', {}).then(data => {
                 if (data.success && data.incidents && data.incidents.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
@@ -1312,7 +1308,7 @@
             const container = document.getElementById('risksContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall('getRisks').then(data => {
+            apiCall(APIs.risks, 'getRisks', {}).then(data => {
                 if (data.success && data.risks && data.risks.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
@@ -1347,7 +1343,7 @@
             const container = document.getElementById('roundsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall('getRounds').then(data => {
+            apiCall(APIs.rounds, 'getRounds', {}).then(data => {
                 if (data.success && data.rounds && data.rounds.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>التاريخ</th><th>المسؤول</th><th>القسم</th><th>الحالة</th><th>الملاحظات</th>';

@@ -1,0 +1,125 @@
+أنت عندك صفحتين “داشبورد” (موظفين/أدمن) و(مالك).
+سبب إن المالك ما يشوف كل شيء (الشكاوى/الطوارئ/… أحيانًا) مو لأنه “مالك” مو مسموح… السبب غالبًا اختلاف طريقة الاتصال بالـ APIs + اختلاف منطق التحقق بين الصفحتين.
+
+خلّيني أحددها لك بالضبط وبحل مباشر:
+
+السبب رقم 1 (الأكبر): صفحة المالك تستخدم JSONP + GET، بينما صفحة الأدمن تستخدم POST
+صفحة الأدمن (اللي شغالة عندك)
+
+تستدعي Google Apps Script عبر fetch POST (text/plain) مثل:
+
+apiCall(APIs.complaints, 'getComplaintStats', {})
+
+
+وهذا غالبًا مدعوم داخل سكربتاتك.
+
+صفحة المالك
+
+تستخدم jsonpCall() → يعني GET مع callback=... وتضيف idToken في الـ URL.
+
+وهنا المشكلة: كثير من Web Apps في Apps Script ما تدعم JSONP لكل الأكشنز أو ما تتعامل مع idToken من Query String بنفس طريقة POST (وأحيانًا URL يطول/يتقطع/يتعامل معه بشكل مختلف).
+
+Google رسميًا يوضح أن JSONP في Apps Script يعتمد على doGet + ContentService + MIME JAVASCRIPT، وهو نمط لازم يكون السكربت مصمم له من الأساس. 
+Google for Developers
+
+✅ الحل: خلي صفحة المالك تستخدم نفس طريقة صفحة الأدمن: fetch POST لكل APIs بدل JSONP.
+
+السبب رقم 2: صفحة المالك تستدعي وظائف من API_URL “الخطأ” لبعض الأقسام
+
+لاحظ عندك في صفحة المالك:
+
+apiCall('getComplaints') يرسل الطلب إلى API_URL (main) فقط.
+لكن أنت أصلاً معرف APIs.complaints و APIs.incidents … إلخ.
+
+يعني: صفحة المالك أحيانًا تسأل سكربت الطوارئ عن الشكاوى بدل سكربت الشكاوى الحقيقي → فيطلع فاضي أو error.
+
+✅ الحل: استخدم base URL الصحيح لكل نظام:
+
+الشكاوى → APIs.complaints
+
+الحوادث → APIs.incidents
+
+المخاطر → APIs.risks
+
+… إلخ
+
+السبب رقم 3: منطق الدخول في صفحة المالك مختلف (email vs staff_roles)
+
+في صفحة المالك عندك شرطين:
+
+لو البريد OWNER_EMAIL يدخل
+
+أو لو وثيقة staff_roles/{uid} فيها role=owner يدخل
+
+لكن لو Firestore Rules أو الـ doc غير موجود أو فيه status suspended أو role غير مضبوط، الصفحة يمكن تشتغل “جزئيًا” ثم تمنع تحميل أجزاء تعتمد على Firestore.
+
+Firebase يوضح كيف تعمل قواعد Firestore وكيف تطبق على الطلبات، وأي قراءة مرفوضة = Permission Denied. 
+Firebase
++1
+
+✅ الحل الأفضل: خلّي المالك يعتمد على email فقط (أنت أصلاً حاطه) ولا يحتاج staff_roles.
+والأهم: لا تجعل تحميل البيانات يعتمد على قراءة Firestore للمالك.
+
+الحل العملي السريع (أعطيك Patch واضح)
+1) احذف JSONP من صفحة المالك واستبدله بـ POST مثل صفحة الأدمن
+
+استبدل دالتك apiCall() في صفحة المالك بهذا:
+
+async function apiPost(url, action, payload = {}) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({
+      action,
+      payload: {
+        ...payload,
+        idToken: await auth.currentUser.getIdToken(),
+        staffEmail: auth.currentUser.email,
+        staffId: auth.currentUser.uid
+      }
+    })
+  });
+  return await res.json();
+}
+
+
+ثم في loadComplaints() بدل:
+
+apiCall('getComplaints')
+
+
+استخدم:
+
+apiPost(APIs.complaints, 'getComplaints', {})
+
+
+ونفس الشي للحوادث والمخاطر والجولات.
+
+2) وحّد “مصدر البيانات” في صفحة المالك مع صفحة الأدمن
+
+صفحة الأدمن عندها APIs = { complaints, incidents, risks, ... } وتستخدمها صح.
+
+صفحة المالك لازم تستخدم نفس الشي بدل API_URL واحد.
+
+3) عطِ المالك وصول دائم للأنظمة بدون فلترة
+
+في صفحة الأدمن عندك فلتر applySystemsFilter يخفي عناصر حسب allowedSystems، لكن للمالك/الأدمن ما يخفي شيء. هذا ممتاز—خله كما هو، بس تأكد أن role للمالك يُقرأ “owner/admin” في نفس السياق.
+
+نقطة مهمة عن Rules (حتى ما تقفل على نفسك)
+
+قواعد Firestore اللي كتبتها قوية، لكن انتبه من تكرار get()/exists() داخل rules. Firebase يذكر وجود Limits لعدد calls في rules، وتجاوزها يسبب “permission denied”. 
+Firebase
++1
+
+(يعني الأفضل تخزن role/allowedSystems في Doc واحد وتقرأه مرة واحدة داخل rules قدر الإمكان).
+
+الخلاصة: لماذا المالك ما يشوف كل شيء؟
+
+لأن صفحة المالك تستخدم JSONP/GET بينما سكربتاتك غالبًا مبنية لـ POST. 
+Google for Developers
+
+لأن صفحة المالك أحيانًا تستدعي الشكاوى من سكربت غير سكربت الشكاوى (API_URL main).
+
+احتمال Permission Denied جزئي بسبب قواعد Firestore/قراءات غير ضرورية في صفحة المالك. 
+Firebase
++1
