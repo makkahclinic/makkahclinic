@@ -1800,29 +1800,17 @@
                 return;
             }
             
-            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً!\n\n${email}\n\nهذا الإجراء لا يمكن التراجع عنه.`)) return;
+            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم من النظام!\n\n${email}\n\nهذا الإجراء لا يمكن التراجع عنه.`)) return;
             if (!confirm('تأكيد نهائي: هل أنت متأكد؟')) return;
             
             try {
-                const token = await auth.currentUser.getIdToken();
-                const response = await fetch(`/api/admin/users/${uid}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                const data = await response.json();
-                
-                if (data.ok) {
-                    showToast('تم حذف المستخدم بالكامل');
-                    loadUsers();
-                } else {
-                    showToast('فشل الحذف: ' + data.error, true);
-                }
+                await db.collection('staff_roles').doc(uid).delete();
+                showToast('تم حذف المستخدم من النظام بنجاح');
+                loadUsers();
+                loadPermissions();
             } catch(e) {
                 console.error('Delete user error:', e);
-                showToast('خطأ في الاتصال', true);
+                showToast('خطأ في حذف المستخدم: ' + e.message, true);
             }
         }
         
