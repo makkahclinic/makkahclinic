@@ -804,10 +804,25 @@
         <!-- قسم إدارة الصلاحيات -->
         <section class="content-section" id="section-permissions">
             <div class="stats-box">
-                <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات</h4>
-                <p style="color:#666; margin-bottom:15px;">تعيين الأدوار والصلاحيات للموظفين</p>
-                <div id="permissionsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
+                <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات والأنظمة</h4>
+                <p style="color:#666; margin-bottom:15px;">تعيين الأدوار والصلاحيات وتحديد الأنظمة المتاحة لكل موظف</p>
+                
+                <div style="display:grid; grid-template-columns: 300px 1fr; gap:20px; margin-top:20px;">
+                    <!-- قائمة المستخدمين -->
+                    <div style="background:#f8fafc; border-radius:12px; padding:15px; max-height:500px; overflow-y:auto;">
+                        <input type="text" id="permUsersSearch" placeholder="🔍 بحث..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-bottom:10px;">
+                        <div id="permUsersList" style="display:flex; flex-direction:column; gap:8px;">
+                            <div class="no-alerts">جاري التحميل...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- تفاصيل الصلاحيات -->
+                    <div id="permDetailsPanel" style="background:#fff; border:2px solid #e2e8f0; border-radius:12px; padding:20px;">
+                        <div style="text-align:center; color:#999; padding:40px;">
+                            <i class="fas fa-user-cog" style="font-size:3rem; margin-bottom:15px;"></i>
+                            <p>اختر مستخدماً من القائمة لإدارة صلاحياته</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1464,9 +1479,245 @@
             }
         }
         
-        function loadPermissions() {
-            const container = document.getElementById('permissionsContainer');
-            container.innerHTML = '<div class="no-alerts">نفس بيانات إدارة المستخدمين - استخدم تغيير الدور</div>';
+        const SYSTEMS_CONFIG = {
+            'complaints': { name: 'الشكاوى', icon: 'comment-dots', color: '#667eea' },
+            'incidents': { name: 'الحوادث', icon: 'exclamation-triangle', color: '#f5576c' },
+            'risks': { name: 'سجل المخاطر', icon: 'shield-alt', color: '#4facfe' },
+            'rounds': { name: 'الجولات', icon: 'clipboard-check', color: '#43e97b' },
+            'calibration': { name: 'المعايرة', icon: 'tools', color: '#f093fb' },
+            'maintenance': { name: 'الصيانة', icon: 'wrench', color: '#ffecd2' },
+            'needlestick': { name: 'وخز الإبر', icon: 'syringe', color: '#ef4444' },
+            'eoc': { name: 'مركز الطوارئ', icon: 'ambulance', color: '#dc2626' },
+            'cbahi': { name: 'بوابة سباهي', icon: 'award', color: '#1e3a5f' }
+        };
+        
+        let permUsersData = [];
+        let selectedPermUser = null;
+        
+        async function loadPermissions() {
+            const listContainer = document.getElementById('permUsersList');
+            listContainer.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i></div>';
+            
+            try {
+                const snapshot = await db.collection('staff_roles').get();
+                permUsersData = [];
+                snapshot.forEach(doc => {
+                    permUsersData.push({ uid: doc.id, ...doc.data() });
+                });
+                
+                renderPermUsersList();
+                
+                document.getElementById('permUsersSearch').oninput = function() {
+                    renderPermUsersList(this.value);
+                };
+            } catch(e) {
+                console.error('Error loading permissions:', e);
+                listContainer.innerHTML = '<div class="no-alerts">خطأ في التحميل</div>';
+            }
+        }
+        
+        function renderPermUsersList(searchTerm = '') {
+            const listContainer = document.getElementById('permUsersList');
+            const filtered = permUsersData.filter(u => {
+                if (!searchTerm) return true;
+                const s = searchTerm.toLowerCase();
+                return (u.email || '').toLowerCase().includes(s) || 
+                       (u.fullName || u.name || '').toLowerCase().includes(s);
+            });
+            
+            if (filtered.length === 0) {
+                listContainer.innerHTML = '<div class="no-alerts">لا يوجد نتائج</div>';
+                return;
+            }
+            
+            const roleColors = { owner: '#dc2626', admin: '#2563eb', chair: '#7c3aed', member: '#059669', staff: '#6b7280', viewer: '#9ca3af' };
+            
+            listContainer.innerHTML = filtered.map(u => {
+                const role = u.role || 'staff';
+                const isSelected = selectedPermUser?.uid === u.uid;
+                const statusDot = u.status === 'suspended' ? '🟡' : '🟢';
+                return `
+                    <div onclick="selectPermUser('${u.uid}')" 
+                         style="padding:12px; background:${isSelected ? '#e0e7ff' : '#fff'}; border-radius:8px; cursor:pointer; border:2px solid ${isSelected ? '#4f46e5' : '#e2e8f0'}; transition:all 0.2s;">
+                        <div style="font-weight:600; display:flex; align-items:center; gap:6px;">
+                            ${statusDot} ${u.fullName || u.name || 'بدون اسم'}
+                        </div>
+                        <div style="font-size:0.8rem; color:#666; margin-top:4px;">${u.email || ''}</div>
+                        <span style="display:inline-block; margin-top:6px; padding:2px 8px; font-size:0.7rem; background:${roleColors[role] || '#6b7280'}; color:white; border-radius:4px;">${role}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function selectPermUser(uid) {
+            selectedPermUser = permUsersData.find(u => u.uid === uid);
+            renderPermUsersList(document.getElementById('permUsersSearch').value);
+            renderPermDetails();
+        }
+        
+        function renderPermDetails() {
+            const panel = document.getElementById('permDetailsPanel');
+            if (!selectedPermUser) {
+                panel.innerHTML = `<div style="text-align:center; color:#999; padding:40px;">
+                    <i class="fas fa-user-cog" style="font-size:3rem; margin-bottom:15px;"></i>
+                    <p>اختر مستخدماً من القائمة</p>
+                </div>`;
+                return;
+            }
+            
+            const u = selectedPermUser;
+            const role = u.role || 'staff';
+            const status = u.status || 'active';
+            const allowedSystems = u.allowedSystems || [];
+            const isOwner = u.email === OWNER_EMAIL;
+            const isPrivileged = ['owner', 'admin'].includes(role);
+            
+            // Only show owner option if current user IS the owner
+            const roleOptions = [
+                ...(isOwner ? [{ val: 'owner', label: 'مالك - صلاحيات كاملة' }] : []),
+                { val: 'admin', label: 'مدير - إدارة كاملة' },
+                { val: 'chair', label: 'رئيس لجنة' },
+                { val: 'member', label: 'عضو لجنة' },
+                { val: 'staff', label: 'موظف' },
+                { val: 'viewer', label: 'مشاهد فقط' }
+            ];
+            
+            const statusOptions = [
+                { val: 'active', label: 'نشط', color: '#10b981', icon: 'check-circle' },
+                { val: 'suspended', label: 'معلق', color: '#f59e0b', icon: 'pause-circle' },
+                { val: 'pending', label: 'قيد المراجعة', color: '#6b7280', icon: 'clock' }
+            ];
+            
+            let systemsHtml = '';
+            Object.entries(SYSTEMS_CONFIG).forEach(([key, cfg]) => {
+                const isAllowed = isPrivileged || allowedSystems.includes(key);
+                const disabled = isPrivileged ? 'disabled' : '';
+                systemsHtml += `
+                    <label style="display:flex; align-items:center; gap:10px; padding:10px 15px; background:${isAllowed ? '#f0fdf4' : '#fafafa'}; border:2px solid ${isAllowed ? '#22c55e' : '#e5e7eb'}; border-radius:8px; cursor:${isPrivileged ? 'not-allowed' : 'pointer'}; transition:all 0.2s;">
+                        <input type="checkbox" id="sys_${key}" ${isAllowed ? 'checked' : ''} ${disabled} 
+                               onchange="toggleSystem('${key}', this.checked)"
+                               style="width:18px; height:18px; accent-color:#22c55e;">
+                        <i class="fas fa-${cfg.icon}" style="color:${cfg.color}; font-size:1.2rem;"></i>
+                        <span style="font-weight:500;">${cfg.name}</span>
+                    </label>
+                `;
+            });
+            
+            panel.innerHTML = `
+                <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px; padding-bottom:15px; border-bottom:2px solid #e2e8f0;">
+                    <div style="width:60px; height:60px; background:linear-gradient(135deg, #4f46e5, #7c3aed); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.5rem; font-weight:bold;">
+                        ${(u.fullName || u.name || u.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:1.3rem;">${u.fullName || u.name || 'بدون اسم'}</h3>
+                        <p style="margin:5px 0 0; color:#666; font-size:0.9rem;">${u.email || ''}</p>
+                    </div>
+                </div>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
+                    <div>
+                        <label style="font-weight:600; color:#374151; display:block; margin-bottom:8px;">
+                            <i class="fas fa-user-tag"></i> الدور
+                        </label>
+                        <select id="permRoleSelect" onchange="updatePermRole(this.value)" ${isOwner ? 'disabled' : ''}
+                                style="width:100%; padding:12px; border:2px solid #e5e7eb; border-radius:10px; font-family:inherit; font-size:1rem; background:white;">
+                            ${roleOptions.map(r => `<option value="${r.val}" ${role === r.val ? 'selected' : ''}>${r.label}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight:600; color:#374151; display:block; margin-bottom:8px;">
+                            <i class="fas fa-toggle-on"></i> الحالة
+                        </label>
+                        <div style="display:flex; gap:8px;">
+                            ${statusOptions.map(s => `
+                                <button onclick="updatePermStatus('${s.val}')" ${isOwner ? 'disabled' : ''}
+                                        style="flex:1; padding:10px; border:2px solid ${status === s.val ? s.color : '#e5e7eb'}; background:${status === s.val ? s.color + '20' : 'white'}; color:${status === s.val ? s.color : '#6b7280'}; border-radius:8px; cursor:${isOwner ? 'not-allowed' : 'pointer'}; font-family:inherit; font-weight:${status === s.val ? '600' : '400'}; transition:all 0.2s;">
+                                    <i class="fas fa-${s.icon}"></i><br>
+                                    <span style="font-size:0.8rem;">${s.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label style="font-weight:600; color:#374151; display:block; margin-bottom:12px;">
+                        <i class="fas fa-key"></i> الأنظمة المتاحة
+                        ${isPrivileged ? '<span style="font-size:0.8rem; color:#10b981; margin-right:10px;">(المالك/المدير لديه وصول كامل)</span>' : ''}
+                    </label>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:10px;">
+                        ${systemsHtml}
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function updatePermRole(newRole) {
+            if (!selectedPermUser) return;
+            
+            // Prevent assigning owner role to anyone except the canonical owner
+            if (newRole === 'owner' && selectedPermUser.email !== OWNER_EMAIL) {
+                showToast('لا يمكن تعيين دور المالك لغير المالك الأصلي', true);
+                renderPermDetails();
+                return;
+            }
+            
+            // Prevent changing owner's role
+            if (selectedPermUser.email === OWNER_EMAIL) {
+                showToast('لا يمكن تغيير دور المالك', true);
+                renderPermDetails();
+                return;
+            }
+            
+            try {
+                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ role: newRole });
+                selectedPermUser.role = newRole;
+                const idx = permUsersData.findIndex(u => u.uid === selectedPermUser.uid);
+                if (idx !== -1) permUsersData[idx].role = newRole;
+                renderPermUsersList(document.getElementById('permUsersSearch').value);
+                renderPermDetails();
+                showToast('تم تغيير الدور بنجاح');
+            } catch(e) {
+                console.error(e);
+                showToast('فشل تغيير الدور', true);
+            }
+        }
+        
+        async function updatePermStatus(newStatus) {
+            if (!selectedPermUser || selectedPermUser.email === OWNER_EMAIL) return;
+            try {
+                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ status: newStatus });
+                selectedPermUser.status = newStatus;
+                const idx = permUsersData.findIndex(u => u.uid === selectedPermUser.uid);
+                if (idx !== -1) permUsersData[idx].status = newStatus;
+                renderPermUsersList(document.getElementById('permUsersSearch').value);
+                renderPermDetails();
+                showToast('تم تغيير الحالة بنجاح');
+            } catch(e) {
+                console.error(e);
+                showToast('فشل تغيير الحالة', true);
+            }
+        }
+        
+        async function toggleSystem(systemKey, isEnabled) {
+            if (!selectedPermUser || ['owner', 'admin'].includes(selectedPermUser.role)) return;
+            try {
+                let systems = selectedPermUser.allowedSystems || [];
+                if (isEnabled && !systems.includes(systemKey)) {
+                    systems.push(systemKey);
+                } else if (!isEnabled) {
+                    systems = systems.filter(s => s !== systemKey);
+                }
+                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ allowedSystems: systems });
+                selectedPermUser.allowedSystems = systems;
+                const idx = permUsersData.findIndex(u => u.uid === selectedPermUser.uid);
+                if (idx !== -1) permUsersData[idx].allowedSystems = systems;
+                showToast('تم تحديث الصلاحيات');
+            } catch(e) {
+                console.error(e);
+                showToast('فشل تحديث الصلاحيات', true);
+                renderPermDetails();
+            }
         }
         
         async function syncAuthUsers() {
