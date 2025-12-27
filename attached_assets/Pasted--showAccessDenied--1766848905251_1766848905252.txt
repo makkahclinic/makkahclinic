@@ -1,0 +1,120 @@
+تمام — من الكود اللي أرسلته + الصورة، سبب المشكلة واضح: أنت بالفعل تمنع الدخول (showAccessDenied) لكن باقي سكربتات الصفحة تكمل تشتغل وتحاول تعمل innerHTML على عناصر غير موجودة/أو تم استبدالها ⇒ فيطلع الخطأ المتكرر:
+
+Cannot set properties of null (setting 'innerHTML')
+
+وفي نفس الوقت، سبب “غير مصرح” غالبًا أن دور المستخدم يُرجع viewer بسبب عدم تطابق pageType أو عدم تطبيع role أو فشل نداء Apps Script.
+
+أعطيك إصلاحين مباشرين: (1) منع تشغيل كود الصفحة إذا مو Authorized، (2) منع نزول role إلى viewer بسبب mismatch.
+
+1) إصلاح فوري يمنع أخطاء الـ Console (Stop execution when denied)
+✅ أضف Flag عام في AuthGuard
+
+ضع هذا داخل protectPage قبل return true وبعد التحقق:
+
+async protectPage(pageType, redirectUrl = '/admin-login.html') {
+  await this.init();
+
+  // مهم: تطبيع pageType
+  pageType = String(pageType || '').toLowerCase().trim();
+
+  if (!this.currentUser) {
+    window.__PAGE_AUTHORIZED__ = false;
+    window.location.href = redirectUrl;
+    return false;
+  }
+
+  if (!this.canAccess(pageType)) {
+    window.__PAGE_AUTHORIZED__ = false;
+    this.showAccessDenied();
+    return false;
+  }
+
+  // ✅ هنا مصرح
+  window.__PAGE_AUTHORIZED__ = true;
+  return true;
+}
+
+✅ في أعلى كل صفحة محمية (مثل eoc-command.html)
+
+أهم شيء: أي كود UI (loadCoreData / refreshMiniTraining …) لازم ما يبدأ إلا بعد نجاح protectPage:
+
+<script>
+(async () => {
+  const ok = await AuthGuard.protectPage('eoc', '/admin-login.html');
+  if (!ok) return;   // ✅ يمنع تشغيل بقية كود الصفحة
+
+  // ✅ هنا فقط شغّل أي init أو تحميل بيانات أو رندر
+  initEOC(); // مثال: عندك الدالة التي تستدعي loadCoreData/refreshMiniTraining
+})();
+</script>
+
+✅ إذا عندك كود يشتغل تلقائيًا (setInterval / onload)
+
+لفّه بحارس سريع:
+
+if (!window.__PAGE_AUTHORIZED__) return;
+
+
+وأفضل: داخل أي دالة تغيّر DOM:
+
+function safeSetHTML(id, html) {
+  if (!window.__PAGE_AUTHORIZED__) return;
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = html;
+}
+
+
+وهذا وحده سيُنهي innerHTML null نهائيًا.
+
+2) لماذا تظهر “غير مصرح” رغم أنك تتوقع صلاحية؟
+(أ) احتمال كبير: pageType غير مطابق
+
+أنت عرّفت الصلاحيات بـ keys مثل: eoc, cbahi, risk …
+لكن في صفحة اسمها eoc-command.html كثير ناس يمررون eoc-command أو eoc_command بالغلط.
+
+✅ الحل: مرّر فقط 'eoc' كما فوق.
+
+ولو تريد مرونة، اعمل Alias داخل canAccess:
+
+canAccess(pageType) {
+  if (!this.currentUser || !this.userRole) return false;
+
+  const aliases = {
+    "eoc-command": "eoc",
+    "eoc_command": "eoc",
+    "eoccommand": "eoc",
+  };
+
+  pageType = String(pageType || '').toLowerCase().trim();
+  pageType = aliases[pageType] || pageType;
+
+  const allowedRoles = this.pagePermissions[pageType] || [];
+  return allowedRoles.includes(this.userRole);
+}
+
+(ب) احتمال شائع جدًا: role راجع من الـ API بصيغة مختلفة
+
+مثلاً: "Admin" أو "ADMIN " أو "staff\n" … فتفشل includes().
+
+✅ عدّل داخل loadUserRole بعد استلام result.role:
+
+if (result.success) {
+  const rawRole = result.role || 'viewer';
+  this.userRole = String(rawRole).toLowerCase().trim();  // ✅ مهم
+  this.userName = result.name || '';
+} else {
+  this.userRole = 'viewer';
+}
+
+(ج) احتمال: فشل fetch أو response غير OK
+
+أضف فحص HTTP:
+
+const response = await fetch(this.apiUrl, { ... });
+
+if (!response.ok) {
+  console.error('Role API HTTP error:', response.status);
+  this.userRole = 'viewer';
+  return;
+}
