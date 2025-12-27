@@ -832,7 +832,7 @@
 
             <!-- إحصائيات تفصيلية -->
             <div class="stats-grid-detailed">
-                <div class="stats-box">
+                <div class="stats-box" data-system="complaints">
                     <h4><i class="fas fa-comment-dots"></i> الشكاوى</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
@@ -851,7 +851,7 @@
                         <span class="value success" id="stat-complaints-closed">-</span>
                     </div>
                 </div>
-                <div class="stats-box">
+                <div class="stats-box" data-system="incidents">
                     <h4><i class="fas fa-exclamation-triangle"></i> الحوادث</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
@@ -870,7 +870,7 @@
                         <span class="value success" id="stat-incidents-closed">-</span>
                     </div>
                 </div>
-                <div class="stats-box">
+                <div class="stats-box" data-system="risks">
                     <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
                     <div class="stats-row">
                         <span class="label">خطر عالي</span>
@@ -1115,9 +1115,31 @@
         let userAllowedSystems = [];
         
         function applySystemsFilter(role, allowedSystems) {
-            // القائمة الجانبية ثابتة للجميع - لا يتم إخفاء أي روابط
-            console.log('Sidebar is fixed for all users - no filtering applied');
-            // لا نخفي أي روابط من السايد بار
+            const privilegedRoles = ['owner', 'admin'];
+            if (privilegedRoles.includes(role)) {
+                console.log('Privileged role - all systems visible');
+                return;
+            }
+            
+            console.log('Applying systems filter. Allowed:', allowedSystems);
+            
+            document.querySelectorAll('[data-system]').forEach(el => {
+                const systemId = el.dataset.system;
+                if (!allowedSystems.includes(systemId)) {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = '';
+                }
+            });
+            
+            document.querySelectorAll('.stats-box[data-system]').forEach(el => {
+                const systemId = el.dataset.system;
+                if (!allowedSystems.includes(systemId)) {
+                    el.style.display = 'none';
+                }
+            });
+            
+            console.log('Systems filter applied');
         }
 
         async function apiCall(url, action, payload = {}) {
