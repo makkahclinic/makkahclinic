@@ -207,31 +207,46 @@ function validateToken_(token) {
     return { valid: false, error: 'No token provided' };
   }
   
-  // التحقق من قاعدة البيانات فقط - لا توجد tokens ثابتة
+  // التحقق من قاعدة البيانات
   try {
     const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
     let tokensSheet = ss.getSheetByName('Staff_Tokens');
     
     if (!tokensSheet) {
-      // إنشاء الشيت إذا لم يكن موجوداً - بدون توكن افتراضي
-      tokensSheet = ss.insertSheet('Staff_Tokens');
-      tokensSheet.appendRow(['TokenID', 'StaffID', 'StaffName', 'Token', 'RoleID', 'ExpiresAt', 'Active', 'CreatedAt', 'CreatedBy']);
-      // ملاحظة: يجب إضافة التوكنات يدوياً من قبل المسؤول
-      return { valid: false, error: 'No tokens configured - please setup Staff_Tokens sheet' };
+      return { valid: false, error: 'Staff_Tokens sheet not found' };
     }
     
     const data = tokensSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).toLowerCase().trim());
+    
+    // البحث عن أعمدة الشيت ديناميكياً
+    const tokenCol = headers.findIndex(h => h === 'token');
+    const staffIdCol = headers.findIndex(h => h === 'staffid' || h === 'staff_id');
+    const staffNameCol = headers.findIndex(h => h === 'staffname' || h === 'staff_name');
+    const roleCol = headers.findIndex(h => h === 'role' || h === 'roleid');
+    const expiresCol = headers.findIndex(h => h === 'expiresat' || h === 'expires_at' || h === 'expires');
+    const activeCol = headers.findIndex(h => h === 'active');
+    
+    if (tokenCol === -1) {
+      return { valid: false, error: 'Token column not found in Staff_Tokens sheet' };
+    }
+    
     for (let i = 1; i < data.length; i++) {
-      const storedToken = String(data[i][3] || '').trim();
-      const isActive = String(data[i][6]).toUpperCase() === 'TRUE';
+      const storedToken = String(data[i][tokenCol] || '').trim();
+      
+      // التحقق من Active (اختياري - إذا لم يوجد العمود يُعتبر active)
+      const isActive = activeCol === -1 || String(data[i][activeCol]).toUpperCase() !== 'FALSE';
       
       if (storedToken === token && isActive) {
-        const expiresAt = data[i][5];
-        if (expiresAt && new Date(expiresAt) < new Date()) {
-          return { valid: false, error: 'Token expired' };
+        // التحقق من تاريخ الانتهاء
+        if (expiresCol !== -1) {
+          const expiresAt = data[i][expiresCol];
+          if (expiresAt && new Date(expiresAt) < new Date()) {
+            return { valid: false, error: 'Token expired' };
+          }
         }
         
-        const role = String(data[i][4] || 'viewer').toLowerCase();
+        const role = roleCol !== -1 ? String(data[i][roleCol] || 'viewer').toLowerCase() : 'viewer';
         if (!ROLES[role]) {
           return { valid: false, error: 'Invalid role assigned to token' };
         }
@@ -239,8 +254,8 @@ function validateToken_(token) {
         return { 
           valid: true, 
           role: role,
-          staffId: data[i][1],
-          staffName: data[i][2]
+          staffId: staffIdCol !== -1 ? data[i][staffIdCol] : 'unknown',
+          staffName: staffNameCol !== -1 ? data[i][staffNameCol] : 'مستخدم'
         };
       }
     }
