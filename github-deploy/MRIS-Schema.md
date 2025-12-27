@@ -50,7 +50,7 @@
 | `Rooms` | الغرف | RoomID, DeptID, Name, Type, Capacity, Equipment |
 | `Items_Catalog` | كتالوج المواد | ItemID, Name, Category, Unit, MinLevel, MaxLevel, ReorderPoint, CostPerUnit |
 | `Roles_Permissions` | الصلاحيات | RoleID, RoleName, CanRead, CanWrite, CanApprove, CanAdmin |
-| `Staff_Tokens` | توكنات المصادقة | TokenID, StaffID, Token, RoleID, ExpiresAt, Active |
+| `Staff_Tokens` | توكنات المصادقة | StaffID, StaffName, Role, TokenHash, Salt, ExpiresAt, Active, CreatedAt |
 
 ---
 
@@ -132,11 +132,14 @@ Sheets   Indices    Alerts_Log    Decisions   Actions   Evidence
 
 ## 🛡️ قواعد الأمان
 
-1. **Token-based Auth**: كل طلب يحمل Token صالح
-2. **Role-based Access**: الصلاحيات حسب الدور
-3. **Append-only Logs**: السجلات لا تُعدَّل
-4. **Validation**: التحقق من البيانات قبل الكتابة
-5. **Audit Trail**: تسجيل كل تعديل
+1. **Token Hashing**: التوكنات مجزأة بـ SHA-256 مع Salt فريد لكل مستخدم
+2. **Token Expiry & Rotation**: انتهاء صلاحية التوكن + دالة rotateToken_() للتدوير
+3. **LockService**: جميع عمليات الكتابة محمية بـ withLock_() (15 ثانية timeout)
+4. **Role-based Access**: الصلاحيات حسب الدور (admin, quality, hr, viewer, store, fms)
+5. **Append-only Logs**: السجلات لا تُعدَّل ولا تُحذف
+6. **Validation**: التحقق من البيانات والصلاحيات قبل الكتابة
+7. **Audit Trail Protection**: حماية الشيت من التعديل عبر SpreadsheetApp.Protection
+8. **Legacy Token Cutoff**: رفض التوكنات القديمة بعد 2025-02-01
 
 ---
 

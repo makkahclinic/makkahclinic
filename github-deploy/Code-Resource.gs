@@ -233,12 +233,35 @@ function doPost(e) {
 }
 
 // ==================== AUTH FUNCTIONS ====================
+
+function hashToken_(token, salt) {
+  const combined = token + (salt || '');
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, combined);
+  return digest.map(b => ('0' + (b & 0xFF).toString(16)).slice(-2)).join('');
+}
+
+function generateSecureToken_() {
+  const uuid1 = Utilities.getUuid();
+  const uuid2 = Utilities.getUuid();
+  const combined = uuid1.replace(/-/g, '') + uuid2.replace(/-/g, '');
+  const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, combined + Date.now().toString());
+  return hash.map(b => ('0' + (b & 0xFF).toString(16)).slice(-2)).join('');
+}
+
+function generateSalt_() {
+  const uuid = Utilities.getUuid();
+  const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, uuid + Date.now().toString());
+  return hash.slice(0, 16).map(b => ('0' + (b & 0xFF).toString(16)).slice(-2)).join('');
+}
+
+const LEGACY_TOKEN_CUTOFF_DATE = new Date('2025-02-01');
+const REQUIRE_HASHED_TOKENS = true;
+
 function validateToken_(token) {
   if (!token) {
     return { valid: false, error: 'No token provided' };
   }
   
-  // التحقق من قاعدة البيانات
   try {
     const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
     let tokensSheet = ss.getSheetByName('Staff_Tokens');
@@ -250,30 +273,54 @@ function validateToken_(token) {
     const data = tokensSheet.getDataRange().getValues();
     const headers = data[0].map(h => String(h).toLowerCase().trim());
     
-    // البحث عن أعمدة الشيت ديناميكياً
-    const tokenCol = headers.findIndex(h => h === 'token');
+    const tokenCol = headers.findIndex(h => h === 'token' || h === 'tokenhash');
+    const saltCol = headers.findIndex(h => h === 'salt');
     const staffIdCol = headers.findIndex(h => h === 'staffid' || h === 'staff_id');
     const staffNameCol = headers.findIndex(h => h === 'staffname' || h === 'staff_name');
     const roleCol = headers.findIndex(h => h === 'role' || h === 'roleid');
     const expiresCol = headers.findIndex(h => h === 'expiresat' || h === 'expires_at' || h === 'expires');
     const activeCol = headers.findIndex(h => h === 'active');
+    const createdCol = headers.findIndex(h => h === 'createdat' || h === 'created_at');
     
     if (tokenCol === -1) {
       return { valid: false, error: 'Token column not found in Staff_Tokens sheet' };
     }
     
     for (let i = 1; i < data.length; i++) {
-      const storedToken = String(data[i][tokenCol] || '').trim();
+      const storedValue = String(data[i][tokenCol] || '').trim();
+      const salt = saltCol !== -1 ? String(data[i][saltCol] || '') : '';
       
-      // التحقق من Active (اختياري - إذا لم يوجد العمود يُعتبر active)
       const isActive = activeCol === -1 || String(data[i][activeCol]).toUpperCase() !== 'FALSE';
+      if (!isActive) continue;
       
-      if (storedToken === token && isActive) {
-        // التحقق من تاريخ الانتهاء
+      let isMatch = false;
+      let isHashedToken = false;
+      
+      if (salt && storedValue.length === 64) {
+        const tokenHash = hashToken_(token, salt);
+        isMatch = (tokenHash === storedValue);
+        isHashedToken = true;
+      } else {
+        if (REQUIRE_HASHED_TOKENS && new Date() >= LEGACY_TOKEN_CUTOFF_DATE) {
+          continue;
+        }
+        isMatch = (storedValue === token);
+        isHashedToken = false;
+      }
+      
+      if (isMatch) {
         if (expiresCol !== -1) {
           const expiresAt = data[i][expiresCol];
           if (expiresAt && new Date(expiresAt) < new Date()) {
             return { valid: false, error: 'Token expired' };
+          }
+        }
+        
+        if (!isHashedToken && REQUIRE_HASHED_TOKENS) {
+          const createdAt = createdCol !== -1 ? data[i][createdCol] : null;
+          if (createdAt && new Date(createdAt) < LEGACY_TOKEN_CUTOFF_DATE) {
+            console.log('SECURITY WARNING: Legacy plain-text token used for StaffID: ' + 
+              (staffIdCol !== -1 ? data[i][staffIdCol] : 'unknown'));
           }
         }
         
@@ -286,7 +333,9 @@ function validateToken_(token) {
           valid: true, 
           role: role,
           staffId: staffIdCol !== -1 ? data[i][staffIdCol] : 'unknown',
-          staffName: staffNameCol !== -1 ? data[i][staffNameCol] : 'مستخدم'
+          staffName: staffNameCol !== -1 ? data[i][staffNameCol] : 'مستخدم',
+          rowIndex: i + 1,
+          isLegacyToken: !isHashedToken
         };
       }
     }
@@ -296,6 +345,159 @@ function validateToken_(token) {
   } catch (e) {
     return { valid: false, error: 'Auth error: ' + e.message };
   }
+}
+
+function migrateLegacyTokens_() {
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    const tokensSheet = ss.getSheetByName('Staff_Tokens');
+    
+    if (!tokensSheet) {
+      return { success: false, error: 'Staff_Tokens sheet not found' };
+    }
+    
+    const data = tokensSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).toLowerCase().trim());
+    
+    const tokenCol = headers.findIndex(h => h === 'token' || h === 'tokenhash');
+    const saltCol = headers.findIndex(h => h === 'salt');
+    const activeCol = headers.findIndex(h => h === 'active');
+    
+    if (tokenCol === -1) {
+      return { success: false, error: 'Token column not found' };
+    }
+    
+    let migratedCount = 0;
+    let deactivatedCount = 0;
+    
+    for (let i = 1; i < data.length; i++) {
+      const storedValue = String(data[i][tokenCol] || '').trim();
+      const salt = saltCol !== -1 ? String(data[i][saltCol] || '') : '';
+      const isActive = activeCol === -1 || String(data[i][activeCol]).toUpperCase() !== 'FALSE';
+      
+      if (!isActive) continue;
+      
+      const isPlainText = !salt || storedValue.length !== 64;
+      
+      if (isPlainText && storedValue) {
+        if (activeCol !== -1) {
+          tokensSheet.getRange(i + 1, activeCol + 1).setValue('FALSE');
+          deactivatedCount++;
+        }
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: `Migration complete. Deactivated ${deactivatedCount} legacy tokens. Users must request new hashed tokens.`,
+      deactivatedCount: deactivatedCount
+    };
+  });
+}
+
+function ensureSecureTokenSchema_(ss) {
+  let tokensSheet = ss.getSheetByName('Staff_Tokens');
+  const expectedHeaders = ['StaffID', 'StaffName', 'Role', 'TokenHash', 'Salt', 'ExpiresAt', 'Active', 'CreatedAt'];
+  
+  if (!tokensSheet) {
+    tokensSheet = ss.insertSheet('Staff_Tokens');
+    tokensSheet.appendRow(expectedHeaders);
+    tokensSheet.setFrozenRows(1);
+    return { sheet: tokensSheet, migrated: true };
+  }
+  
+  const data = tokensSheet.getDataRange().getValues();
+  const currentHeaders = data[0].map(h => String(h).toLowerCase().trim());
+  
+  const hasNewSchema = currentHeaders.includes('tokenhash') || currentHeaders.includes('salt');
+  
+  if (!hasNewSchema) {
+    const headerRow = tokensSheet.getRange(1, 1, 1, expectedHeaders.length);
+    headerRow.setValues([expectedHeaders]);
+    tokensSheet.setFrozenRows(1);
+    return { sheet: tokensSheet, migrated: true };
+  }
+  
+  return { sheet: tokensSheet, migrated: false };
+}
+
+function createHashedToken_(staffId, staffName, role, expiresInDays) {
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    const { sheet: tokensSheet } = ensureSecureTokenSchema_(ss);
+    
+    const plainToken = generateSecureToken_();
+    const salt = generateSalt_();
+    const tokenHash = hashToken_(plainToken, salt);
+    
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + (expiresInDays || 30));
+    
+    tokensSheet.appendRow([
+      staffId,
+      staffName,
+      role,
+      tokenHash,
+      salt,
+      expiresAt.toISOString(),
+      'TRUE',
+      new Date().toISOString()
+    ]);
+    
+    return { 
+      success: true, 
+      token: plainToken,
+      expiresAt: expiresAt.toISOString(),
+      message: 'Token created successfully. Store this token securely - it cannot be retrieved again.'
+    };
+  });
+}
+
+function rotateToken_(currentToken) {
+  const validation = validateToken_(currentToken);
+  if (!validation.valid) {
+    return { success: false, error: validation.error };
+  }
+  
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    const { sheet: tokensSheet } = ensureSecureTokenSchema_(ss);
+    
+    if (validation.rowIndex) {
+      const data = tokensSheet.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).toLowerCase().trim());
+      const activeCol = headers.findIndex(h => h === 'active');
+      
+      if (activeCol !== -1) {
+        tokensSheet.getRange(validation.rowIndex, activeCol + 1).setValue('FALSE');
+      }
+    }
+    
+    const newToken = generateSecureToken_();
+    const newSalt = generateSalt_();
+    const newHash = hashToken_(newToken, newSalt);
+    
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    
+    tokensSheet.appendRow([
+      validation.staffId,
+      validation.staffName,
+      validation.role,
+      newHash,
+      newSalt,
+      expiresAt.toISOString(),
+      'TRUE',
+      new Date().toISOString()
+    ]);
+    
+    return { 
+      success: true, 
+      token: newToken,
+      expiresAt: expiresAt.toISOString(),
+      message: 'Token rotated successfully.'
+    };
+  });
 }
 
 function hasPermission_(role, sheet, action) {
@@ -1068,10 +1270,15 @@ function logAudit_(auth, action, sheet, rowId, details) {
   try {
     const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
     let auditSheet = ss.getSheetByName('Audit_Trail');
+    let isNew = false;
     
     if (!auditSheet) {
       auditSheet = ss.insertSheet('Audit_Trail');
       auditSheet.appendRow(['AuditID', 'Timestamp', 'UserID', 'UserName', 'Action', 'Sheet', 'RowID', 'Details', 'Reason']);
+      isNew = true;
+    }
+    
+    if (isNew || !isSheetProtected_(auditSheet)) {
       protectAuditSheet_(ss, auditSheet);
     }
     
@@ -1088,6 +1295,15 @@ function logAudit_(auth, action, sheet, rowId, details) {
     ]);
   } catch (e) {
     console.log('Audit log error:', e.message);
+  }
+}
+
+function isSheetProtected_(sheet) {
+  try {
+    const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+    return protections.length > 0;
+  } catch (e) {
+    return false;
   }
 }
 
