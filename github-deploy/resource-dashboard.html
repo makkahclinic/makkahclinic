@@ -931,7 +931,12 @@
     <div class="tooltip" id="tooltip"></div>
 
     <script>
-        const DEPARTMENTS = [
+        // ==================== API CONFIGURATION ====================
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyH9MJiYFP_0WaaL2EcxHawsUPxMZb4-W-gdBvaTdPxKbK6SeCqWd5wjjDNe9MzEfI/exec';
+        let API_TOKEN = localStorage.getItem('mris_token') || '';
+        
+        // بيانات افتراضية (تستخدم إذا فشل الاتصال بالـ API)
+        let DEPARTMENTS = [
             { id: 'reception', name: 'الاستقبال', floor: 1, required: 2, actual: 2 },
             { id: 'batiniya1', name: 'الباطنية 1', floor: 2, required: 3, actual: 3 },
             { id: 'batiniya2', name: 'الباطنية 2', floor: 2, required: 3, actual: 2 },
@@ -946,6 +951,81 @@
             { id: 'admin', name: 'الإدارة', floor: 0, required: 2, actual: 2 },
             { id: 'lab', name: 'المختبر', floor: 0, required: 2, actual: 2 }
         ];
+        
+        // ==================== API FUNCTIONS ====================
+        function apiCall(action, params = {}) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'mrisCallback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
+                window[callbackName] = function(response) {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    if (response.success) {
+                        resolve(response.data);
+                    } else {
+                        reject(new Error(response.error || 'API Error'));
+                    }
+                };
+                
+                const queryParams = new URLSearchParams({
+                    action: action,
+                    token: API_TOKEN,
+                    callback: callbackName,
+                    ...params
+                });
+                
+                const script = document.createElement('script');
+                script.src = API_URL + '?' + queryParams.toString();
+                script.onerror = () => {
+                    delete window[callbackName];
+                    document.body.removeChild(script);
+                    reject(new Error('Network error'));
+                };
+                document.body.appendChild(script);
+                
+                setTimeout(() => {
+                    if (window[callbackName]) {
+                        delete window[callbackName];
+                        if (script.parentNode) document.body.removeChild(script);
+                        reject(new Error('Timeout'));
+                    }
+                }, 15000);
+            });
+        }
+        
+        async function loadLiveData() {
+            if (!API_TOKEN) {
+                console.log('No token - using demo data');
+                return;
+            }
+            
+            try {
+                const heatmapData = await apiCall('getHeatmap');
+                if (heatmapData && heatmapData.length > 0) {
+                    DEPARTMENTS = heatmapData.map(d => ({
+                        id: d.deptId,
+                        name: d.name,
+                        floor: parseInt(d.floor) || 1,
+                        required: d.required,
+                        actual: d.actual
+                    }));
+                    renderHeatmap();
+                    updateKPIs();
+                    console.log('Live data loaded successfully');
+                }
+            } catch (error) {
+                console.warn('Failed to load live data:', error.message);
+            }
+        }
+        
+        function promptForToken() {
+            const token = prompt('أدخل رمز الدخول (Token):');
+            if (token) {
+                API_TOKEN = token;
+                localStorage.setItem('mris_token', token);
+                loadLiveData();
+            }
+        }
         
         let currentMode = 'normal';
         let currentView = 'coverage';
@@ -1096,12 +1176,18 @@ ${dept.name}
             });
         });
         
-        function init() {
+        async function init() {
             updateLiveTime();
             setInterval(updateLiveTime, 1000);
             
             renderHeatmap();
             updateKPIs();
+            
+            // تحميل البيانات الحية من API
+            await loadLiveData();
+            
+            // تحديث البيانات كل 30 ثانية
+            setInterval(loadLiveData, 30000);
             
             setTimeout(() => {
                 document.getElementById('loadingOverlay').classList.add('hidden');
@@ -1111,6 +1197,11 @@ ${dept.name}
         }
         
         init();
+        
+        // إضافة زر تسجيل الدخول في الهيدر
+        document.querySelector('.header-info').insertAdjacentHTML('beforeend', 
+            '<button onclick="promptForToken()" style="background: var(--gold); color: var(--primary); border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600;">🔐 تسجيل الدخول</button>'
+        );
     </script>
 </body>
 </html>
