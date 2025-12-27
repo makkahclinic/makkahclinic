@@ -670,7 +670,7 @@ function getRecommendations_(auth) {
   return { success: true, data: recommendations };
 }
 
-// ==================== WRITE FUNCTIONS ====================
+// ==================== WRITE FUNCTIONS (Protected with LockService) ====================
 function logAlert_(payload, auth) {
   const required = ['type', 'severity', 'deptId', 'message'];
   const validation = validatePayload_(payload, required);
@@ -678,40 +678,42 @@ function logAlert_(payload, auth) {
     return { success: false, error: validation.error };
   }
   
-  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('Alerts_Log');
-  
-  if (!sheet) {
-    sheet = ss.insertSheet('Alerts_Log');
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('Alerts_Log');
+    
+    if (!sheet) {
+      sheet = ss.insertSheet('Alerts_Log');
+      sheet.appendRow([
+        'AlertID', 'Timestamp', 'Type', 'Severity', 'DeptID', 'DeptName',
+        'Metric', 'Value', 'Threshold', 'Message', 'Status', 'ResolvedAt', 'ResolvedBy'
+      ]);
+    }
+    
+    const alertId = 'ALT' + Date.now();
+    const timestamp = new Date().toISOString();
+    
     sheet.appendRow([
-      'AlertID', 'Timestamp', 'Type', 'Severity', 'DeptID', 'DeptName',
-      'Metric', 'Value', 'Threshold', 'Message', 'Status', 'ResolvedAt', 'ResolvedBy'
+      alertId,
+      timestamp,
+      payload.type,
+      payload.severity,
+      payload.deptId,
+      payload.deptName || '',
+      payload.metric || '',
+      payload.value || '',
+      payload.threshold || '',
+      payload.message,
+      'active',
+      '',
+      ''
     ]);
-  }
-  
-  const alertId = 'ALT' + Date.now();
-  const timestamp = new Date().toISOString();
-  
-  sheet.appendRow([
-    alertId,
-    timestamp,
-    payload.type,
-    payload.severity,
-    payload.deptId,
-    payload.deptName || '',
-    payload.metric || '',
-    payload.value || '',
-    payload.threshold || '',
-    payload.message,
-    'active',
-    '',
-    ''
-  ]);
-  
-  // تسجيل في Audit Trail
-  logAudit_(auth, 'CREATE', 'Alerts_Log', alertId, 'New alert: ' + payload.type);
-  
-  return { success: true, alertId: alertId };
+    
+    // تسجيل في Audit Trail
+    logAudit_(auth, 'CREATE', 'Alerts_Log', alertId, 'New alert: ' + payload.type);
+    
+    return { success: true, alertId: alertId };
+  });
 }
 
 function logDecision_(payload, auth) {
@@ -721,64 +723,66 @@ function logDecision_(payload, auth) {
     return { success: false, error: validation.error };
   }
   
-  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('Decisions_Log');
-  
-  if (!sheet) {
-    sheet = ss.insertSheet('Decisions_Log');
-    sheet.appendRow([
-      'DecisionID', 'Timestamp', 'AlertID', 'RecommendationType', 'Description',
-      'Impact', 'Cost', 'Risk', 'ApprovedBy', 'ApprovalDate', 'Status', 'EvidenceID'
-    ]);
-  }
-  
-  const decisionId = 'DEC' + Date.now();
-  const timestamp = new Date().toISOString();
-  
-  // إنشاء Evidence Draft تلقائياً إذا لم يُقدم evidenceId
-  let evidenceId = payload.evidenceId || '';
-  if (!evidenceId) {
-    try {
-      const evidenceResult = linkEvidence_({
-        deptId: payload.deptId || 'ALL',
-        standardRef: payload.standardRef || 'LD4.5',
-        evidenceType: 'Decision',
-        evidenceLink: payload.evidenceLink || '',
-        summary: `قرار: ${payload.description}`,
-        alertId: payload.alertId,
-        decisionId: decisionId
-      }, auth);
-      
-      if (!evidenceResult.success) {
-        return { 
-          success: false, 
-          error: 'فشل إنشاء الدليل: ' + (evidenceResult.error || 'Unknown error')
-        };
-      }
-      evidenceId = evidenceResult.evidenceId;
-    } catch (e) {
-      return { success: false, error: 'خطأ في إنشاء الدليل: ' + e.message };
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('Decisions_Log');
+    
+    if (!sheet) {
+      sheet = ss.insertSheet('Decisions_Log');
+      sheet.appendRow([
+        'DecisionID', 'Timestamp', 'AlertID', 'RecommendationType', 'Description',
+        'Impact', 'Cost', 'Risk', 'ApprovedBy', 'ApprovalDate', 'Status', 'EvidenceID'
+      ]);
     }
-  }
-  
-  sheet.appendRow([
-    decisionId,
-    timestamp,
-    payload.alertId,
-    payload.recommendationType,
-    payload.description,
-    payload.impact || '',
-    payload.cost || '',
-    payload.risk || '',
-    auth.staffName,
-    timestamp,
-    'approved',
-    evidenceId
-  ]);
-  
-  logAudit_(auth, 'CREATE', 'Decisions_Log', decisionId, 'Decision approved with evidence: ' + evidenceId);
-  
-  return { success: true, decisionId: decisionId, evidenceId: evidenceId };
+    
+    const decisionId = 'DEC' + Date.now();
+    const timestamp = new Date().toISOString();
+    
+    // إنشاء Evidence Draft تلقائياً إذا لم يُقدم evidenceId
+    let evidenceId = payload.evidenceId || '';
+    if (!evidenceId) {
+      try {
+        const evidenceResult = linkEvidence_noLock_({
+          deptId: payload.deptId || 'ALL',
+          standardRef: payload.standardRef || 'LD4.5',
+          evidenceType: 'Decision',
+          evidenceLink: payload.evidenceLink || '',
+          summary: `قرار: ${payload.description}`,
+          alertId: payload.alertId,
+          decisionId: decisionId
+        }, auth);
+        
+        if (!evidenceResult.success) {
+          return { 
+            success: false, 
+            error: 'فشل إنشاء الدليل: ' + (evidenceResult.error || 'Unknown error')
+          };
+        }
+        evidenceId = evidenceResult.evidenceId;
+      } catch (e) {
+        return { success: false, error: 'خطأ في إنشاء الدليل: ' + e.message };
+      }
+    }
+    
+    sheet.appendRow([
+      decisionId,
+      timestamp,
+      payload.alertId,
+      payload.recommendationType,
+      payload.description,
+      payload.impact || '',
+      payload.cost || '',
+      payload.risk || '',
+      auth.staffName,
+      timestamp,
+      'approved',
+      evidenceId
+    ]);
+    
+    logAudit_(auth, 'CREATE', 'Decisions_Log', decisionId, 'Decision approved with evidence: ' + evidenceId);
+    
+    return { success: true, decisionId: decisionId, evidenceId: evidenceId };
+  });
 }
 
 function logAction_(payload, auth) {
@@ -788,35 +792,37 @@ function logAction_(payload, auth) {
     return { success: false, error: validation.error };
   }
   
-  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('Actions_Log');
-  
-  if (!sheet) {
-    sheet = ss.insertSheet('Actions_Log');
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('Actions_Log');
+    
+    if (!sheet) {
+      sheet = ss.insertSheet('Actions_Log');
+      sheet.appendRow([
+        'ActionID', 'Timestamp', 'DecisionID', 'ActionType', 'Description',
+        'ExecutedBy', 'ExecutedAt', 'Outcome', 'EvidenceRef'
+      ]);
+    }
+    
+    const actionId = 'ACT' + Date.now();
+    const timestamp = new Date().toISOString();
+    
     sheet.appendRow([
-      'ActionID', 'Timestamp', 'DecisionID', 'ActionType', 'Description',
-      'ExecutedBy', 'ExecutedAt', 'Outcome', 'EvidenceRef'
+      actionId,
+      timestamp,
+      payload.decisionId,
+      payload.actionType,
+      payload.description,
+      auth.staffName,
+      timestamp,
+      payload.outcome || 'pending',
+      payload.evidenceRef || ''
     ]);
-  }
-  
-  const actionId = 'ACT' + Date.now();
-  const timestamp = new Date().toISOString();
-  
-  sheet.appendRow([
-    actionId,
-    timestamp,
-    payload.decisionId,
-    payload.actionType,
-    payload.description,
-    auth.staffName,
-    timestamp,
-    payload.outcome || 'pending',
-    payload.evidenceRef || ''
-  ]);
-  
-  logAudit_(auth, 'CREATE', 'Actions_Log', actionId, 'Action executed');
-  
-  return { success: true, actionId: actionId };
+    
+    logAudit_(auth, 'CREATE', 'Actions_Log', actionId, 'Action executed');
+    
+    return { success: true, actionId: actionId };
+  });
 }
 
 function logConsumption_(payload, auth) {
@@ -831,34 +837,36 @@ function logConsumption_(payload, auth) {
     return { success: false, error: 'Quantity cannot be negative' };
   }
   
-  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('Consumption_Live');
-  
-  if (!sheet) {
-    sheet = ss.insertSheet('Consumption_Live');
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('Consumption_Live');
+    
+    if (!sheet) {
+      sheet = ss.insertSheet('Consumption_Live');
+      sheet.appendRow([
+        'ID', 'Timestamp', 'DeptID', 'ItemID', 'ItemName', 'Quantity', 'Unit', 'ConsumedBy', 'Reason'
+      ]);
+    }
+    
+    const id = 'CON' + Date.now();
+    const timestamp = new Date().toISOString();
+    
     sheet.appendRow([
-      'ID', 'Timestamp', 'DeptID', 'ItemID', 'ItemName', 'Quantity', 'Unit', 'ConsumedBy', 'Reason'
+      id,
+      timestamp,
+      payload.deptId,
+      payload.itemId,
+      payload.itemName || '',
+      payload.quantity,
+      payload.unit || '',
+      auth.staffName,
+      payload.reason || ''
     ]);
-  }
-  
-  const id = 'CON' + Date.now();
-  const timestamp = new Date().toISOString();
-  
-  sheet.appendRow([
-    id,
-    timestamp,
-    payload.deptId,
-    payload.itemId,
-    payload.itemName || '',
-    payload.quantity,
-    payload.unit || '',
-    auth.staffName,
-    payload.reason || ''
-  ]);
-  
-  logAudit_(auth, 'CREATE', 'Consumption_Live', id, 'Consumption logged: ' + payload.quantity);
-  
-  return { success: true, id: id };
+    
+    logAudit_(auth, 'CREATE', 'Consumption_Live', id, 'Consumption logged: ' + payload.quantity);
+    
+    return { success: true, id: id };
+  });
 }
 
 function createProcurement_(payload, auth) {
@@ -876,67 +884,69 @@ function createProcurement_(payload, auth) {
     };
   }
   
-  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('Procurement_Decisions');
-  
-  if (!sheet) {
-    sheet = ss.insertSheet('Procurement_Decisions');
-    sheet.appendRow([
-      'ProcID', 'Date', 'ItemID', 'ItemName', 'Quantity', 'Justification',
-      'AlertRef', 'DecisionID', 'EvidenceID', 'ApprovedBy', 'PRNumber', 'PONumber', 'DeliveryDate', 'Status'
-    ]);
-  }
-  
-  const procId = 'PROC' + Date.now();
-  const date = new Date().toISOString().split('T')[0];
-  
-  // إنشاء Evidence Draft تلقائياً للمشتريات
-  let evidenceId = payload.evidenceId || '';
-  if (!evidenceId) {
-    try {
-      const evidenceResult = linkEvidence_({
-        deptId: payload.deptId || 'ALL',
-        standardRef: 'LD4.5',
-        evidenceType: 'Procurement',
-        evidenceLink: payload.evidenceLink || '',
-        summary: `طلب شراء: ${payload.itemName || payload.itemId} - الكمية: ${payload.quantity}`,
-        alertId: payload.alertRef || '',
-        decisionId: payload.decisionId || '',
-        actionId: procId
-      }, auth);
-      
-      if (!evidenceResult.success) {
-        return { 
-          success: false, 
-          error: 'فشل إنشاء الدليل: ' + (evidenceResult.error || 'Unknown error')
-        };
-      }
-      evidenceId = evidenceResult.evidenceId;
-    } catch (e) {
-      return { success: false, error: 'خطأ في إنشاء الدليل: ' + e.message };
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('Procurement_Decisions');
+    
+    if (!sheet) {
+      sheet = ss.insertSheet('Procurement_Decisions');
+      sheet.appendRow([
+        'ProcID', 'Date', 'ItemID', 'ItemName', 'Quantity', 'Justification',
+        'AlertRef', 'DecisionID', 'EvidenceID', 'ApprovedBy', 'PRNumber', 'PONumber', 'DeliveryDate', 'Status'
+      ]);
     }
-  }
-  
-  sheet.appendRow([
-    procId,
-    date,
-    payload.itemId,
-    payload.itemName || '',
-    payload.quantity,
-    payload.justification,
-    payload.alertRef || '',
-    payload.decisionId || '',
-    evidenceId,
-    auth.staffName,
-    '',
-    '',
-    '',
-    'pending'
-  ]);
-  
-  logAudit_(auth, 'CREATE', 'Procurement_Decisions', procId, 'Procurement with evidence: ' + evidenceId);
-  
-  return { success: true, procId: procId, evidenceId: evidenceId };
+    
+    const procId = 'PROC' + Date.now();
+    const date = new Date().toISOString().split('T')[0];
+    
+    // إنشاء Evidence Draft تلقائياً للمشتريات
+    let evidenceId = payload.evidenceId || '';
+    if (!evidenceId) {
+      try {
+        const evidenceResult = linkEvidence_noLock_({
+          deptId: payload.deptId || 'ALL',
+          standardRef: 'LD4.5',
+          evidenceType: 'Procurement',
+          evidenceLink: payload.evidenceLink || '',
+          summary: `طلب شراء: ${payload.itemName || payload.itemId} - الكمية: ${payload.quantity}`,
+          alertId: payload.alertRef || '',
+          decisionId: payload.decisionId || '',
+          actionId: procId
+        }, auth);
+        
+        if (!evidenceResult.success) {
+          return { 
+            success: false, 
+            error: 'فشل إنشاء الدليل: ' + (evidenceResult.error || 'Unknown error')
+          };
+        }
+        evidenceId = evidenceResult.evidenceId;
+      } catch (e) {
+        return { success: false, error: 'خطأ في إنشاء الدليل: ' + e.message };
+      }
+    }
+    
+    sheet.appendRow([
+      procId,
+      date,
+      payload.itemId,
+      payload.itemName || '',
+      payload.quantity,
+      payload.justification,
+      payload.alertRef || '',
+      payload.decisionId || '',
+      evidenceId,
+      auth.staffName,
+      '',
+      '',
+      '',
+      'pending'
+    ]);
+    
+    logAudit_(auth, 'CREATE', 'Procurement_Decisions', procId, 'Procurement with evidence: ' + evidenceId);
+    
+    return { success: true, procId: procId, evidenceId: evidenceId };
+  });
 }
 
 function updateAssetStatus_(payload, auth) {
@@ -951,61 +961,63 @@ function updateAssetStatus_(payload, auth) {
     return { success: false, error: 'Invalid status value' };
   }
   
-  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-  
-  // استخدام Assets_Status (Append-only للتتبع)
-  let statusSheet = ss.getSheetByName('Assets_Status');
-  if (!statusSheet) {
-    statusSheet = ss.insertSheet('Assets_Status');
-    statusSheet.appendRow([
-      'ID', 'Timestamp', 'AssetID', 'AssetName', 'DeptID', 
-      'OldStatus', 'NewStatus', 'Reason', 'UpdatedBy', 'NextPM', 'Notes'
-    ]);
-  }
-  
-  // جلب البيانات الحالية من Equipment_Assets للمرجع
-  const equipSheet = ss.getSheetByName('Equipment_Assets');
-  let assetName = '';
-  let deptId = '';
-  let oldStatus = '';
-  
-  if (equipSheet) {
-    const data = equipSheet.getDataRange().getValues();
-    const headers = data[0];
-    const statusCol = headers.indexOf('الحالة') !== -1 ? headers.indexOf('الحالة') : headers.indexOf('Status');
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
     
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === payload.assetId || data[i][3] === payload.assetId) {
-        assetName = data[i][1] || '';
-        deptId = data[i][2] || '';
-        oldStatus = statusCol >= 0 ? data[i][statusCol] : '';
-        break;
+    // استخدام Assets_Status (Append-only للتتبع)
+    let statusSheet = ss.getSheetByName('Assets_Status');
+    if (!statusSheet) {
+      statusSheet = ss.insertSheet('Assets_Status');
+      statusSheet.appendRow([
+        'ID', 'Timestamp', 'AssetID', 'AssetName', 'DeptID', 
+        'OldStatus', 'NewStatus', 'Reason', 'UpdatedBy', 'NextPM', 'Notes'
+      ]);
+    }
+    
+    // جلب البيانات الحالية من Equipment_Assets للمرجع
+    const equipSheet = ss.getSheetByName('Equipment_Assets');
+    let assetName = '';
+    let deptId = '';
+    let oldStatus = '';
+    
+    if (equipSheet) {
+      const data = equipSheet.getDataRange().getValues();
+      const headers = data[0];
+      const statusCol = headers.indexOf('الحالة') !== -1 ? headers.indexOf('الحالة') : headers.indexOf('Status');
+      
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][0] === payload.assetId || data[i][3] === payload.assetId) {
+          assetName = data[i][1] || '';
+          deptId = data[i][2] || '';
+          oldStatus = statusCol >= 0 ? data[i][statusCol] : '';
+          break;
+        }
       }
     }
-  }
-  
-  // إضافة سجل جديد في Assets_Status (Append-only)
-  const statusId = 'AST' + Date.now();
-  const timestamp = new Date().toISOString();
-  
-  statusSheet.appendRow([
-    statusId,
-    timestamp,
-    payload.assetId,
-    assetName,
-    deptId,
-    oldStatus,
-    payload.status,
-    payload.reason || '',
-    auth.staffName,
-    payload.nextPM || '',
-    payload.notes || ''
-  ]);
-  
-  logAudit_(auth, 'CREATE', 'Assets_Status', statusId, 
-    `Asset ${payload.assetId}: ${oldStatus} → ${payload.status}`);
-  
-  return { success: true, statusId: statusId, message: 'Asset status logged' };
+    
+    // إضافة سجل جديد في Assets_Status (Append-only)
+    const statusId = 'AST' + Date.now();
+    const timestamp = new Date().toISOString();
+    
+    statusSheet.appendRow([
+      statusId,
+      timestamp,
+      payload.assetId,
+      assetName,
+      deptId,
+      oldStatus,
+      payload.status,
+      payload.reason || '',
+      auth.staffName,
+      payload.nextPM || '',
+      payload.notes || ''
+    ]);
+    
+    logAudit_(auth, 'CREATE', 'Assets_Status', statusId, 
+      `Asset ${payload.assetId}: ${oldStatus} → ${payload.status}`);
+    
+    return { success: true, statusId: statusId, message: 'Asset status logged' };
+  });
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -1205,8 +1217,8 @@ function ensureSheet_(ss, name, headers) {
 
 // ==================== EVIDENCE PIPELINE API ====================
 
-// payload: { deptId, standardRef, evidenceType, evidenceLink, summary, alertId?, decisionId?, actionId?, attachments?[] }
-function linkEvidence_(payload, auth) {
+// نسخة داخلية بدون Lock - للاستخدام داخل دوال أخرى مقفولة
+function linkEvidence_noLock_(payload, auth) {
   // evidenceLink اختياري للـ Decision/Procurement (يُضاف لاحقاً عبر finalizeEvidence)
   const autoCreatedTypes = ['Decision', 'Procurement', 'Action'];
   const isAutoCreated = autoCreatedTypes.includes(payload.evidenceType);
@@ -1243,7 +1255,7 @@ function linkEvidence_(payload, auth) {
     payload.decisionId || '',
     payload.actionId || '',
     payload.evidenceType,
-    payload.evidenceLink,
+    payload.evidenceLink || '',
     payload.standardRef,
     payload.summary,
     auth.staffId,
@@ -1270,6 +1282,12 @@ function linkEvidence_(payload, auth) {
   return { success:true, evidenceId };
 }
 
+// payload: { deptId, standardRef, evidenceType, evidenceLink, summary, alertId?, decisionId?, actionId?, attachments?[] }
+// نسخة خارجية مع Lock - للاستدعاء المباشر من الـ API
+function linkEvidence_(payload, auth) {
+  return withLock_(() => linkEvidence_noLock_(payload, auth));
+}
+
 // payload: { evidenceId, status:'Draft'|'Ready'|'Verified' }
 function finalizeEvidence_(payload, auth) {
   const required = ['evidenceId','status'];
@@ -1292,35 +1310,37 @@ function finalizeEvidence_(payload, auth) {
     return { success:false, error:'Permission denied: verification requires admin/quality' };
   }
 
-  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-  const sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
-  if (!sh) return { success:false, error:'Evidence_Pipeline not found' };
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    const sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+    if (!sh) return { success:false, error:'Evidence_Pipeline not found' };
 
-  const data = sh.getDataRange().getValues();
-  const headers = data[0].map(String);
+    const data = sh.getDataRange().getValues();
+    const headers = data[0].map(String);
 
-  const idxEvidenceID = headers.indexOf('EvidenceID');
-  const idxStatus = headers.indexOf('Status');
-  const idxVerifiedBy = headers.indexOf('VerifiedBy');
-  const idxVerifiedAt = headers.indexOf('VerifiedAt');
+    const idxEvidenceID = headers.indexOf('EvidenceID');
+    const idxStatus = headers.indexOf('Status');
+    const idxVerifiedBy = headers.indexOf('VerifiedBy');
+    const idxVerifiedAt = headers.indexOf('VerifiedAt');
 
-  if (idxEvidenceID < 0 || idxStatus < 0) return { success:false, error:'Evidence headers missing' };
+    if (idxEvidenceID < 0 || idxStatus < 0) return { success:false, error:'Evidence headers missing' };
 
-  let row = -1;
-  for (let i=1; i<data.length; i++) {
-    if (String(data[i][idxEvidenceID]) === String(payload.evidenceId)) { row = i+1; break; }
-  }
-  if (row === -1) return { success:false, error:'EvidenceID not found' };
+    let row = -1;
+    for (let i=1; i<data.length; i++) {
+      if (String(data[i][idxEvidenceID]) === String(payload.evidenceId)) { row = i+1; break; }
+    }
+    if (row === -1) return { success:false, error:'EvidenceID not found' };
 
-  sh.getRange(row, idxStatus+1).setValue(payload.status);
+    sh.getRange(row, idxStatus+1).setValue(payload.status);
 
-  if (payload.status === 'Verified') {
-    if (idxVerifiedBy >= 0) sh.getRange(row, idxVerifiedBy+1).setValue(auth.staffId);
-    if (idxVerifiedAt >= 0) sh.getRange(row, idxVerifiedAt+1).setValue(new Date().toISOString());
-  }
+    if (payload.status === 'Verified') {
+      if (idxVerifiedBy >= 0) sh.getRange(row, idxVerifiedBy+1).setValue(auth.staffId);
+      if (idxVerifiedAt >= 0) sh.getRange(row, idxVerifiedAt+1).setValue(new Date().toISOString());
+    }
 
-  logAudit_(auth, 'UPDATE', SHEET_EVIDENCE_PIPELINE, payload.evidenceId, `Evidence status -> ${payload.status}`);
-  return { success:true, evidenceId: payload.evidenceId, status: payload.status };
+    logAudit_(auth, 'UPDATE', SHEET_EVIDENCE_PIPELINE, payload.evidenceId, `Evidence status -> ${payload.status}`);
+    return { success:true, evidenceId: payload.evidenceId, status: payload.status };
+  });
 }
 
 // payload: { deptId?, standardRef?, status? }
