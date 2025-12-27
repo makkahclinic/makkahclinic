@@ -359,11 +359,14 @@ function getHeatmap_(auth) {
     const required = parseInt(dept.RequiredBase) || 2;
     
     // حساب الموظفين الحاليين - بيانات حقيقية فقط
+    // Normalize Status للمقارنة + Unique StaffID لمنع التكرار
     const currentShifts = shiftsData.filter(s => 
       s.DeptID === deptId && 
-      s.Status === 'active'
+      String(s.Status || '').toLowerCase().trim() === 'active'
     );
-    const actual = currentShifts.length; // لا random - قيمة حقيقية
+    // Unique staff count - لا نحسب نفس الموظف مرتين
+    const uniqueStaff = new Set(currentShifts.map(s => String(s.StaffID || '').trim()).filter(Boolean));
+    const actual = uniqueStaff.size || 0; // لا random - عدد الموظفين الفريدين
     
     const coverage = Math.round((actual / required) * 100);
     
@@ -1187,7 +1190,14 @@ function ensureSheet_(ss, name, headers) {
 
 // payload: { deptId, standardRef, evidenceType, evidenceLink, summary, alertId?, decisionId?, actionId?, attachments?[] }
 function linkEvidence_(payload, auth) {
-  const required = ['deptId','standardRef','evidenceType','evidenceLink','summary'];
+  // evidenceLink اختياري للـ Decision/Procurement (يُضاف لاحقاً عبر finalizeEvidence)
+  const autoCreatedTypes = ['Decision', 'Procurement', 'Action'];
+  const isAutoCreated = autoCreatedTypes.includes(payload.evidenceType);
+  
+  const required = isAutoCreated 
+    ? ['deptId','standardRef','evidenceType','summary']  // evidenceLink اختياري
+    : ['deptId','standardRef','evidenceType','evidenceLink','summary'];
+  
   const v = validatePayload_(payload, required);
   if (!v.valid) return { success:false, error:v.error };
 

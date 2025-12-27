@@ -1010,7 +1010,7 @@
                         actual: d.actual
                     }));
                     renderHeatmap();
-                    updateKPIs();
+                    await updateKPIs();
                     console.log('Live data loaded successfully');
                 }
             } catch (error) {
@@ -1072,7 +1072,7 @@
             document.getElementById('floor2').innerHTML = floors[2].join('');
         }
         
-        function updateKPIs() {
+        async function updateKPIs() {
             let totalRequired = 0;
             let totalActual = 0;
             let understaffed = 0;
@@ -1094,18 +1094,34 @@
             const understaffedCard = document.getElementById('kpi-understaffed');
             understaffedCard.className = 'kpi-card ' + (understaffed === 0 ? 'success' : understaffed <= 2 ? 'warning' : 'danger');
             
-            document.getElementById('stressValue').textContent = '25%';
-            document.getElementById('consumptionValue').textContent = '92%';
-            document.getElementById('riskValue').textContent = 'منخفض';
+            // جلب KPIs و Indices من الـ API
+            let stressIndex = 25, consumptionIntegrity = 92, riskLevel = 'منخفض';
             
-            document.getElementById('stressTrend').textContent = '↓ تحسن';
-            document.getElementById('stressTrend').className = 'kpi-trend up';
+            try {
+                const kpis = await apiCall('getKpis');
+                if (kpis) {
+                    stressIndex = kpis.stressIndex || 25;
+                    consumptionIntegrity = kpis.consumptionIntegrity || 92;
+                    riskLevel = kpis.riskLevel === 'high' ? 'مرتفع' : 
+                               kpis.riskLevel === 'medium' ? 'متوسط' : 'منخفض';
+                }
+            } catch (e) {
+                console.warn('KPIs fallback:', e.message);
+            }
             
-            document.getElementById('consumptionTrend').textContent = '⟷ طبيعي';
-            document.getElementById('consumptionTrend').className = 'kpi-trend stable';
+            document.getElementById('stressValue').textContent = stressIndex + '%';
+            document.getElementById('consumptionValue').textContent = consumptionIntegrity + '%';
+            document.getElementById('riskValue').textContent = riskLevel;
             
-            document.getElementById('riskTrend').textContent = '✓ آمن';
-            document.getElementById('riskTrend').className = 'kpi-trend up';
+            // Trends بناءً على القيم
+            document.getElementById('stressTrend').textContent = stressIndex <= 30 ? '↓ تحسن' : stressIndex <= 50 ? '⟷ متوسط' : '↑ حرج';
+            document.getElementById('stressTrend').className = 'kpi-trend ' + (stressIndex <= 30 ? 'up' : stressIndex <= 50 ? 'stable' : 'down');
+            
+            document.getElementById('consumptionTrend').textContent = consumptionIntegrity >= 80 ? '✓ ممتاز' : consumptionIntegrity >= 60 ? '⟷ طبيعي' : '↓ نقص';
+            document.getElementById('consumptionTrend').className = 'kpi-trend ' + (consumptionIntegrity >= 80 ? 'up' : consumptionIntegrity >= 60 ? 'stable' : 'down');
+            
+            document.getElementById('riskTrend').textContent = riskLevel === 'منخفض' ? '✓ آمن' : riskLevel === 'متوسط' ? '⚠ مراقبة' : '⛔ تدخل';
+            document.getElementById('riskTrend').className = 'kpi-trend ' + (riskLevel === 'منخفض' ? 'up' : riskLevel === 'متوسط' ? 'stable' : 'down');
             
             document.getElementById('understaffedTrend').textContent = understaffed > 0 ? '↑ يحتاج متابعة' : '✓ ممتاز';
             document.getElementById('understaffedTrend').className = 'kpi-trend ' + (understaffed > 0 ? 'down' : 'up');
@@ -1131,14 +1147,13 @@ ${dept.name}
             if (!API_TOKEN) return [];
             
             try {
-                const response = await apiCall('getEvidencePack', {
+                const items = await apiCall('getEvidencePack', {
                     deptId: deptId,
                     standardRef: standardRef,
                     status: ''
                 });
                 
-                if (!response.success) throw new Error(response.error || 'Evidence API error');
-                return response.data || [];
+                return Array.isArray(items) ? items : [];
             } catch (err) {
                 console.error('Failed to load evidence:', err);
                 return [];
@@ -1247,7 +1262,7 @@ ${dept.name}
             setInterval(updateLiveTime, 1000);
             
             renderHeatmap();
-            updateKPIs();
+            await updateKPIs();
             
             // تحميل البيانات الحية من API
             await loadLiveData();
