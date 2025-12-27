@@ -874,36 +874,42 @@
         }).format(new Date());
         document.getElementById('dateDisplay').textContent = hijriDate;
         
-        async function apiCall(url, action, payload = {}) {
-            try {
-                const token = currentUser ? await currentUser.getIdToken() : null;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ 
-                        action, 
-                        payload: {
-                            ...payload,
-                            idToken: token,
-                            staffEmail: currentUser?.email || '',
-                            staffId: currentUser?.uid || ''
-                        }
-                    }),
-                    redirect: 'follow'
-                });
-                const text = await response.text();
-                try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    console.error('Parse error:', text.substring(0, 200));
-                    return { ok: false, error: 'Invalid response' };
+        // ========= POST Calls (موحّد مع admin-dashboard) =========
+        async function getFreshIdToken() {
+            if (!auth.currentUser) return null;
+            return await auth.currentUser.getIdToken(true);
+        }
+
+        async function postToAppsScript(url, action, payload = {}) {
+            const user = auth.currentUser;
+            const idToken = await getFreshIdToken();
+
+            const body = {
+                action,
+                payload: {
+                    ...payload,
+                    idToken,
+                    staffEmail: user?.email || "",
+                    staffId: user?.uid || ""
                 }
+            };
+
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: JSON.stringify(body),
+                redirect: "follow"
+            });
+
+            const text = await res.text();
+            try {
+                return JSON.parse(text);
             } catch (e) {
-                console.error(`API Error (${action}):`, e);
-                return { ok: false, error: e.message };
+                console.error("Invalid JSON response:", text.substring(0, 200));
+                return { ok: false, success: false, error: "Invalid response" };
             }
         }
-        
+
         async function fetchJsonp(url) {
             const r = await fetch(url, { redirect: 'follow' });
             const text = await r.text();
@@ -1079,7 +1085,7 @@
         
         async function loadDashboardStats() {
             try {
-                const data = await apiCall(APIs.main, 'getOwnerDashboardStats', {});
+                const data = await postToAppsScript(APIs.main, 'getOwnerDashboardStats', {});
                 console.log('Dashboard stats:', data);
                 
                 if (data.success) {
@@ -1141,7 +1147,7 @@
         
         function loadAlerts() {
             const container = document.getElementById('alertsContainer');
-            apiCall(APIs.main, 'getOwnerDashboardStats', {}).then(data => {
+            postToAppsScript(APIs.main, 'getOwnerDashboardStats', {}).then(data => {
                 if (data.success) {
                     const alerts = [];
                     const stats = data.stats || data;
@@ -1185,7 +1191,7 @@
             const container = document.getElementById('eocReportsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall(APIs.main, 'getEmergencyReports', {}).then(data => {
+            postToAppsScript(APIs.main, 'getEmergencyReports', {}).then(data => {
                 if (data.success && data.reports && data.reports.length > 0) {
                     const statusCard = document.getElementById('eocStatusCard');
                     const activeReport = data.reports.find(r => r.Status === 'active' || r.Status === 'نشط');
@@ -1228,7 +1234,7 @@
             const container = document.getElementById('complaintsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall(APIs.complaints, 'getComplaints', {}).then(data => {
+            postToAppsScript(APIs.complaints, 'getComplaints', {}).then(data => {
                 console.log('Complaints data:', data);
                 if ((data.ok || data.success) && data.complaints && data.complaints.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
@@ -1271,7 +1277,7 @@
             const container = document.getElementById('incidentsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall(APIs.incidents, 'getIncidents', {}).then(data => {
+            postToAppsScript(APIs.incidents, 'getIncidents', {}).then(data => {
                 if (data.success && data.incidents && data.incidents.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
@@ -1308,7 +1314,7 @@
             const container = document.getElementById('risksContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall(APIs.risks, 'getRisks', {}).then(data => {
+            postToAppsScript(APIs.risks, 'getRisks', {}).then(data => {
                 if (data.success && data.risks && data.risks.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
@@ -1343,7 +1349,7 @@
             const container = document.getElementById('roundsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall(APIs.rounds, 'getRounds', {}).then(data => {
+            postToAppsScript(APIs.rounds, 'getRounds', {}).then(data => {
                 if (data.success && data.rounds && data.rounds.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>التاريخ</th><th>المسؤول</th><th>القسم</th><th>الحالة</th><th>الملاحظات</th>';

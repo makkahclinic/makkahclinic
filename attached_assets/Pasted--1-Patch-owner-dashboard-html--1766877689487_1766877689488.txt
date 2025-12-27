@@ -1,0 +1,231 @@
+✅ 1) استبدال سكربت صفحة المالك (Patch جاهز)
+في owner-dashboard.html
+
+احذف نهائيًا الدوال التالية (إن كانت موجودة):
+
+jsonpCall(...)
+
+apiCall(...) (اللي يبني URL + callback + idToken في querystring)
+
+والصق بدلها هذا البلوك داخل <script> (مكان دوال الاتصال):
+
+// ========= ✅ موحّد: POST Calls (بديل JSONP) =========
+async function getFreshIdToken() {
+  if (!auth.currentUser) return null;
+  // نضمن توكن جديد (مفيد بعد تغيير صلاحيات/claims)
+  return await auth.currentUser.getIdToken(true);
+}
+
+// POST موحّد لكل Apps Script endpoints
+async function postToAppsScript(url, action, payload = {}) {
+  const user = auth.currentUser;
+  const idToken = await getFreshIdToken();
+
+  const body = {
+    action,
+    payload: {
+      ...payload,
+      idToken,
+      staffEmail: user?.email || "",
+      staffId: user?.uid || ""
+    }
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" }, // مثل صفحتك الأدمن
+    body: JSON.stringify(body),
+    redirect: "follow"
+  });
+
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Invalid JSON response:", text.substring(0, 200));
+    return { ok: false, success: false, error: "Invalid response" };
+  }
+}
+
+
+ملاحظة: getIdToken(true) مفيد لو عندك تغييرات صلاحيات/claims لأن التوكن القديم قد لا يحمل آخر تحديث. 
+Firebase
+
+✅ 2) عدّل كل دوال التحميل في صفحة المالك لتستخدم الـ endpoint الصحيح
+بدّل loadDashboardStats() إلى هذا:
+async function loadDashboardStats() {
+  try {
+    // الأفضل: هذا الأكشن موجود في سكربت EOC الرئيسي عندك (APIs.main)
+    const data = await postToAppsScript(APIs.main, "getOwnerDashboardStats", {});
+    console.log("Owner Dashboard Stats:", data);
+
+    const ok = data.success || data.ok;
+    if (!ok) return;
+
+    const stats = data.stats || data;
+
+    // EOC
+    if (stats.emergency && stats.emergency.active) {
+      document.getElementById("kpi-eoc").textContent = "طوارئ!";
+      document.getElementById("kpi-eoc-status").textContent = stats.emergency.type || "حالة نشطة";
+      document.getElementById("kpi-eoc-status").classList.add("danger");
+      document.getElementById("eocIcon").classList.add("active");
+    } else {
+      document.getElementById("kpi-eoc").textContent = "طبيعي";
+      document.getElementById("kpi-eoc-status").textContent = "الوضع طبيعي ✓";
+      document.getElementById("kpi-eoc-status").classList.remove("danger");
+      document.getElementById("eocIcon").classList.remove("active");
+    }
+
+    // Complaints
+    if (stats.complaints) {
+      document.getElementById("kpi-complaints").textContent = stats.complaints.open || 0;
+      document.getElementById("stat-complaints-new").textContent = stats.complaints.new || 0;
+      document.getElementById("stat-complaints-progress").textContent = stats.complaints.inProgress || 0;
+      document.getElementById("stat-complaints-escalated").textContent = stats.complaints.escalated || 0;
+      document.getElementById("stat-complaints-closed").textContent = stats.complaints.closed || 0;
+
+      const sub = document.getElementById("kpi-complaints-sub");
+      if ((stats.complaints.escalated || 0) > 0) {
+        sub.textContent = `${stats.complaints.escalated} مصعّدة`;
+        sub.classList.add("danger");
+      } else {
+        sub.textContent = "قيد المعالجة";
+        sub.classList.remove("danger");
+      }
+    }
+
+    // Incidents
+    if (stats.incidents) {
+      document.getElementById("kpi-incidents").textContent = stats.incidents.open || 0;
+      document.getElementById("stat-incidents-new").textContent = stats.incidents.new || 0;
+      document.getElementById("stat-incidents-progress").textContent = stats.incidents.investigation || 0;
+      document.getElementById("stat-incidents-escalated").textContent = stats.incidents.escalated || 0;
+      document.getElementById("stat-incidents-closed").textContent = stats.incidents.closed || 0;
+    }
+
+    // Risks
+    if (stats.risks) {
+      document.getElementById("kpi-risks").textContent = stats.risks.active || 0;
+      document.getElementById("stat-risks-high").textContent = stats.risks.high || 0;
+      document.getElementById("stat-risks-medium").textContent = stats.risks.medium || 0;
+      document.getElementById("stat-risks-low").textContent = stats.risks.low || 0;
+      document.getElementById("stat-risks-resolved").textContent = stats.risks.resolved || 0;
+
+      const sub = document.getElementById("kpi-risks-sub");
+      sub.textContent = (stats.risks.high || 0) > 0 ? `${stats.risks.high} خطر عالي` : "يحتاج تقييم";
+    }
+
+    // Rounds
+    if (stats.rounds) {
+      document.getElementById("kpi-rounds").textContent = stats.rounds.today || 0;
+      document.getElementById("kpi-rounds-sub").textContent = `${stats.rounds.delayed || 0} متأخرة`;
+    }
+
+    // Users
+    if (stats.users) {
+      document.getElementById("usersActiveCount").textContent = stats.users.active || 0;
+      document.getElementById("usersSuspendedCount").textContent = stats.users.suspended || 0;
+      document.getElementById("usersTotalCount").textContent = stats.users.total || 0;
+    }
+  } catch (e) {
+    console.error("Error loading dashboard stats:", e);
+  }
+}
+
+بدّل loadComplaints() (المهم!) إلى هذا:
+async function loadComplaints() {
+  const container = document.getElementById("complaintsContainer");
+  container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+
+  try {
+    // ✅ هنا نستخدم سكربت الشكاوى الصحيح
+    const data = await postToAppsScript(APIs.complaints, "getComplaints", {});
+    console.log("Complaints:", data);
+
+    const ok = data.success || data.ok;
+    const list = data.complaints || data.data || [];
+    if (!ok || !Array.isArray(list) || list.length === 0) {
+      container.innerHTML = '<div class="no-alerts">لا توجد شكاوى</div>';
+      return;
+    }
+
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>الرقم</th><th>التاريخ</th><th>الشاكي</th><th>القسم</th><th>الحالة</th><th>إجراء</th>';
+    html += '</tr></thead><tbody>';
+
+    list.forEach(c => {
+      const status = c.Status || c.الحالة || "جديد";
+      let statusClass = "status-new";
+      if (String(status).includes("progress") || String(status).includes("معالجة")) statusClass = "status-progress";
+      else if (String(status).includes("escalat") || String(status).includes("مصعد")) statusClass = "status-escalated";
+      else if (String(status).includes("closed") || String(status).includes("مغلق")) statusClass = "status-closed";
+
+      const id = c.ID || c.الرقم || "";
+      html += `<tr>
+        <td>${id || "-"}</td>
+        <td>${c.Date || c.التاريخ || "-"}</td>
+        <td>${c.Name || c.الاسم || "-"}</td>
+        <td>${c.Department || c.القسم || "-"}</td>
+        <td><span class="status-badge ${statusClass}">${status}</span></td>
+        <td>
+          <button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="viewComplaint('${id}')">
+            <i class="fas fa-eye"></i>
+          </button>
+        </td>
+      </tr>`;
+    });
+
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  } catch (e) {
+    console.error("Error loading complaints:", e);
+    container.innerHTML = '<div class="no-alerts">خطأ في تحميل الشكاوى</div>';
+  }
+}
+
+وبدّل loadIncidents() و loadRisks() و loadRounds() بنفس الفكرة
+
+الحوادث:
+
+const data = await postToAppsScript(APIs.incidents, "getIncidents", {});
+
+
+المخاطر:
+
+const data = await postToAppsScript(APIs.risks, "getRisks", {});
+
+
+الجولات:
+
+const data = await postToAppsScript(APIs.rounds, "getRounds", {});
+
+
+لا تستخدم APIs.main للشكاوى/الحوادث/… إلا لو سكربتك الرئيسي فعلاً يجمعها.
+
+✅ 3) اجعل “المالك يشوف كل شيء فورًا” بدون تعقيد staff_roles
+
+في auth.onAuthStateChanged عندك منطق يقرأ staff_roles لو البريد ليس owner.
+
+أنا أنصح للمالك تحديدًا:
+
+اعتمد على email فقط
+
+لا تدخل في staff_roles أصلاً
+
+استبدل شرط الدخول داخل if (user.email === OWNER_EMAIL) فقط، واحذف الفرع الثاني (roleDoc role owner) لتفادي أي Permission Denied عارض.
+
+✅ لماذا هذا أصلح من اللي عندك؟
+
+لأن JSONP يشتغل فقط إذا Web App صُمم له (doGet + callback + ContentService/MIME JAVASCRIPT)، وإلا بيطلع “بعض الأكشنز تعمل وبعضها لا”. 
+Google for Developers
+
+لأنك لما تجمع كل الأنظمة على endpoint واحد (API_URL) انت عمليًا تسأل سكربت الطوارئ عن الشكاوى… فيرجع فاضي/خطأ.
+
+لأن POST مثل صفحة الأدمن هو مسارك “المجرب” وبيكون موحّد.
+
+ملاحظة سريعة عن Firestore Rules (مهمة لك لاحقًا)
+
+لو عندك قواعد تعتمد على get()/exists() بشكل كبير، تذكر أن لها حد أقصى لكل طلب، وتجاوز الحد يعطي Permission Denied. 
+Firebase
++1
