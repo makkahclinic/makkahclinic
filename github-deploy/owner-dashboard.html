@@ -1228,27 +1228,12 @@
             });
         }
         
-        async function loadComplaints() {
+        function loadComplaints() {
             const container = document.getElementById('complaintsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            try {
-                const response = await fetch(APIs.complaints, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: 'getComplaints', payload: {} }),
-                    redirect: 'follow'
-                });
-                const text = await response.text();
-                let data;
-                try {
-                    data = JSON.parse(text);
-                } catch (e) {
-                    console.error('Parse error:', text.substring(0, 200));
-                    container.innerHTML = '<div class="no-alerts">خطأ في تحليل البيانات</div>';
-                    return;
-                }
-                
+            apiCall('getComplaints').then(data => {
+                console.log('Complaints data:', data);
                 if ((data.ok || data.success) && data.complaints && data.complaints.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>الرقم</th><th>التاريخ</th><th>الشاكي</th><th>القسم</th><th>الحالة</th><th>إجراء</th>';
@@ -1280,10 +1265,10 @@
                 } else {
                     container.innerHTML = '<div class="no-alerts">لا توجد شكاوى</div>';
                 }
-            } catch (e) {
+            }).catch(e => {
                 console.error('Error loading complaints:', e);
                 container.innerHTML = '<div class="no-alerts">خطأ في تحميل الشكاوى</div>';
-            }
+            });
         }
         
         function loadIncidents() {
