@@ -38,11 +38,17 @@ const AuthGuard = {
         if (this.isInitialized) return true;
         
         try {
-            const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+            const { initializeApp, getApps, getApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
             const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
             const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
             
-            const app = initializeApp(this.firebaseConfig);
+            let app;
+            if (getApps().length === 0) {
+                app = initializeApp(this.firebaseConfig);
+            } else {
+                app = getApp();
+            }
+            
             this.auth = getAuth(app);
             this.db = getFirestore(app);
             this._getDoc = getDoc;
