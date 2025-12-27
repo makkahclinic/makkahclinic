@@ -126,9 +126,22 @@ const AuthGuard = {
         }
     },
 
+    systemIds: ['complaints', 'incidents', 'risks', 'risk', 'rounds', 'calibration', 'maintenance', 'needlestick', 'eoc', 'cbahi'],
+
     canAccess(pageType) {
         const allowedRoles = this.pagePermissions[pageType] || this.pagePermissions['public'];
         return allowedRoles.includes(this.userRole);
+    },
+
+    canAccessSystem(systemId) {
+        if (this.userRole === 'owner' || this.userRole === 'admin') {
+            return true;
+        }
+        if (this.userData && this.userData.allowedSystems) {
+            const normalizedId = systemId === 'risk' ? 'risks' : systemId;
+            return this.userData.allowedSystems.includes(normalizedId);
+        }
+        return false;
     },
 
     async protectPage(pageType, redirectUrl = 'admin-login.html') {
@@ -153,6 +166,14 @@ const AuthGuard = {
             this.showAccessDenied('طلبك قيد المراجعة. انتظر الموافقة.', redirectUrl);
             await this.logout();
             return false;
+        }
+
+        if (this.systemIds.includes(pageType)) {
+            if (!this.canAccessSystem(pageType)) {
+                this.showAccessDenied('ليس لديك صلاحية للوصول لهذا النظام', redirectUrl);
+                return false;
+            }
+            return true;
         }
 
         if (!this.canAccess(pageType)) {
@@ -265,7 +286,8 @@ const AuthGuard = {
             return true;
         }
         if (this.userData && this.userData.allowedSystems) {
-            return this.userData.allowedSystems.includes(systemId);
+            const normalizedId = systemId === 'risk' ? 'risks' : systemId;
+            return this.userData.allowedSystems.includes(normalizedId);
         }
         return false;
     },
