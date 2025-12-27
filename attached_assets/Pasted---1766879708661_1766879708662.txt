@@ -1,0 +1,66 @@
+أيوه الآن فهمت بالضبط وش اللي صار — واللقطة اللي أرسلتها هي الدليل القاطع ✅
+
+المشكلة مو في التوكن الآن… المشكلة صارت CORS Preflight بسبب إنك غيرت الهيدر إلى:
+
+"Content-Type": "application/json"
+
+
+وهذا يخلي المتصفح يرسل OPTIONS preflight قبل الـPOST، وGoogle Apps Script Web App ما يعالج/يسمح بـ preflight بالشكل المطلوب، فيطلع:
+
+has been blocked by CORS policy
+Response to preflight request doesn't pass access control check
+No 'Access-Control-Allow-Origin' header…
+
+هذا سلوك معروف: طلبات “simple request” فقط تتفادى الـpreflight، وأحد شروطها أن يكون Content-Type واحد من: text/plain أو multipart/form-data أو application/x-www-form-urlencoded — أما application/json يعمل preflight. 
+MDN Web Docs
++2
+Stack Overflow
++2
+
+✅ الحل الآمن جدًا (بدون تخريب أي شيء): رجّع Content-Type إلى text/plain
+
+أنت كنت شغال “زي الحلاوة” قبل لأنك تستخدم text/plain (simple request) وما فيه preflight.
+
+عدّل دالة postToAppsScript في owner-dashboard.html بهذا الشكل
+
+فقط غيّر الهيدر من application/json إلى text/plain;charset=utf-8 وخلاص:
+
+async function postToAppsScript(url, action, payload = {}) {
+  const user = auth.currentUser;
+  const idToken = await getFreshIdToken();
+
+  const qs = new URLSearchParams({
+    action,
+    idToken: idToken || "",
+    staffEmail: user?.email || "",
+    staffId: user?.uid || ""
+  });
+
+  const urlWithQs = url + (url.includes("?") ? "&" : "?") + qs.toString();
+
+  const body = {
+    action,
+    payload: {
+      ...payload,
+      idToken,
+      staffEmail: user?.email || "",
+      staffId: user?.uid || ""
+    }
+  };
+
+  const res = await fetch(urlWithQs, {
+    method: "POST",
+    // ✅ هذا هو المفتاح: Simple request => بدون preflight
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(body),
+    redirect: "follow"
+  });
+
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Invalid JSON response:", text.substring(0, 200));
+    return { ok: false, success: false, error: "Invalid response" };
+  }
+}
