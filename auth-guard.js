@@ -1,20 +1,17 @@
 /**
  * نظام الحماية الموحد - مجمع مكة الطبي
- * يستخدم Firebase للتحقق من المصادقة والأدوار
- * 
- * الأدوار المتاحة:
- * - owner: المالك (كل الصلاحيات)
- * - admin: مدير (سباهي + إدارة)
- * - staff: موظف (سباهي فقط)
- * - doctor: طبيب
- * - pharmacist: صيدلي
- * - insurance: تأمين
- * - patient: مريض
- * - viewer: مشاهد فقط
+ * يعتمد على Firebase Auth + Firestore (staff_roles/{uid})
+ * v2.0 - 2025
  */
 
 const AuthGuard = {
-    // Firebase Configuration
+    currentUser: null,
+    userRole: null,
+    userData: null,
+    isInitialized: false,
+    db: null,
+    auth: null,
+    
     firebaseConfig: {
         apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
         authDomain: "insurance-check-6cec9.firebaseapp.com",
@@ -24,273 +21,262 @@ const AuthGuard = {
         appId: "1:992769471393:web:c8a9400210a0e7901011e0"
     },
 
-    // الأدوار المسموح لها بالوصول لكل نوع صفحة
+    OWNER_EMAIL: 'husseinbabsail@gmail.com',
+
     pagePermissions: {
-        'cbahi': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'rounds': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'calibration': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'complaints': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'eoc': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'incidents': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'maintenance': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'risk': ['owner', 'admin', 'staff', 'chair', 'member'],
-        'admin': ['owner', 'admin'],
-        'doctor': ['owner', 'admin', 'doctor'],
-        'pharmacist': ['owner', 'admin', 'pharmacist'],
-        'insurance': ['owner', 'admin', 'insurance'],
-        'patient': ['owner', 'patient'],
-        'owner': ['owner']
+        'public': ['guest', 'viewer', 'staff', 'member', 'chair', 'admin', 'owner'],
+        'staff': ['staff', 'member', 'chair', 'admin', 'owner'],
+        'cbahi': ['staff', 'member', 'chair', 'admin', 'owner'],
+        'admin': ['admin', 'owner'],
+        'owner': ['owner'],
+        'eoc': ['staff', 'member', 'chair', 'admin', 'owner'],
+        'reports': ['staff', 'member', 'chair', 'admin', 'owner'],
+        'committees': ['member', 'chair', 'admin', 'owner']
     },
 
-    // المتغيرات
-    auth: null,
-    db: null,
-    currentUser: null,
-    userRole: null,
-    isInitialized: false,
-
-    /**
-     * تهيئة النظام
-     */
     async init() {
-        if (this.isInitialized) return;
-
+        if (this.isInitialized) return true;
+        
         try {
-            const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+            const { initializeApp, getApps, getApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
             const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
             const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-
-            const app = initializeApp(this.firebaseConfig);
+            
+            let app;
+            if (getApps().length === 0) {
+                app = initializeApp(this.firebaseConfig);
+            } else {
+                app = getApp();
+            }
+            
             this.auth = getAuth(app);
             this.db = getFirestore(app);
-            this.isInitialized = true;
-
+            this._getDoc = getDoc;
+            this._doc = doc;
+            
             return new Promise((resolve) => {
                 onAuthStateChanged(this.auth, async (user) => {
                     if (user) {
                         this.currentUser = user;
-                        await this.loadUserRole(user.uid);
-                        resolve(true);
+                        await this.loadUserRole(user.uid, user.email);
                     } else {
                         this.currentUser = null;
-                        this.userRole = null;
-                        resolve(false);
+                        this.userRole = 'guest';
+                        this.userData = null;
                     }
+                    this.isInitialized = true;
+                    resolve(true);
                 });
+                
+                setTimeout(() => {
+                    if (!this.isInitialized) {
+                        this.isInitialized = true;
+                        this.userRole = 'guest';
+                        resolve(true);
+                    }
+                }, 5000);
             });
         } catch (error) {
             console.error('AuthGuard init error:', error);
+            this.isInitialized = true;
+            this.userRole = 'guest';
             return false;
         }
     },
 
-    // API URL for backend
-    apiUrl: 'https://script.google.com/macros/s/AKfycbyH9MJiYFP_0WaaL2EcxHawsUPxMZb4-W-gdBvaTdPxKbK6SeCqWd5wjjDNe9MzEfI/exec',
+    async loadUserRole(uid, email) {
+        if (email && email.toLowerCase() === this.OWNER_EMAIL.toLowerCase()) {
+            this.userRole = 'owner';
+            this.userData = {
+                role: 'owner',
+                status: 'active',
+                email: email,
+                fullName: 'المالك'
+            };
+            localStorage.setItem('staffRole', 'owner');
+            localStorage.setItem('staffEmail', email);
+            localStorage.setItem('staffUid', uid);
+            return;
+        }
 
-    /**
-     * تحميل دور المستخدم من Backend (Google Sheets via Apps Script)
-     * يستخدم API getUserRole بدلاً من Firestore
-     */
-    async loadUserRole(uid) {
         try {
-            const email = this.currentUser?.email;
-            if (!email) {
-                this.userRole = 'viewer';
-                return;
-            }
-
-            // المالك يحصل على دور owner تلقائياً
-            if (email === 'husseinbabsail@gmail.com') {
-                this.userRole = 'owner';
-                this.userName = 'المالك';
-                return;
-            }
-
-            // جلب الدور من Backend
-            const idToken = await this.currentUser.getIdToken();
-            const response = await fetch(this.apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'getUserRole',
-                    payload: { email, idToken }
-                })
-            });
-
-            const result = await response.json();
+            const docRef = this._doc(this.db, "staff_roles", uid);
+            const docSnap = await this._getDoc(docRef);
             
-            if (result.success) {
-                this.userRole = result.role || 'viewer';
-                this.userName = result.name || '';
+            if (docSnap.exists()) {
+                this.userData = docSnap.data();
+                
+                if (this.userData.status === 'suspended') {
+                    this.userRole = 'suspended';
+                } else {
+                    this.userRole = this.userData.role || 'viewer';
+                }
+                
+                localStorage.setItem('staffRole', this.userRole);
+                localStorage.setItem('staffEmail', email || '');
+                localStorage.setItem('staffUid', uid);
             } else {
-                console.error('Error from API:', result.error);
-                this.userRole = 'viewer';
+                this.userRole = 'pending';
+                this.userData = null;
             }
         } catch (error) {
             console.error('Error loading user role:', error);
-            this.userRole = 'viewer';
+            this.userRole = 'guest';
+            this.userData = null;
         }
     },
 
-    /**
-     * التحقق من صلاحية الوصول لنوع صفحة معين
-     * ⚠️ معطّل مؤقتاً - الكل يدخل
-     */
     canAccess(pageType) {
-        // ⚠️ معطّل مؤقتاً - السماح للجميع
-        return true;
-        
-        // الكود الأصلي (معلّق):
-        // if (!this.currentUser || !this.userRole) return false;
-        // const allowedRoles = this.pagePermissions[pageType] || [];
-        // return allowedRoles.includes(this.userRole);
+        const allowedRoles = this.pagePermissions[pageType] || this.pagePermissions['public'];
+        return allowedRoles.includes(this.userRole);
     },
 
-    /**
-     * حماية الصفحة - يعيد التوجيه إذا لم يكن مصرح
-     * ⚠️ معطّل مؤقتاً - الكل يدخل
-     */
-    async protectPage(pageType, redirectUrl = '/admin-login.html') {
+    async protectPage(pageType, redirectUrl = 'admin-login.html') {
         await this.init();
+        
+        if (pageType === 'public') {
+            return true;
+        }
 
-        // ⚠️ معطّل مؤقتاً - السماح للجميع حتى بدون تسجيل دخول
+        if (!this.currentUser) {
+            this.showAccessDenied('يجب تسجيل الدخول أولاً', redirectUrl);
+            return false;
+        }
+
+        if (this.userRole === 'suspended') {
+            this.showAccessDenied('حسابك معلق. تواصل مع الإدارة.', redirectUrl);
+            await this.logout();
+            return false;
+        }
+
+        if (this.userRole === 'pending') {
+            this.showAccessDenied('طلبك قيد المراجعة. انتظر الموافقة.', redirectUrl);
+            await this.logout();
+            return false;
+        }
+
+        if (!this.canAccess(pageType)) {
+            this.showAccessDenied('ليس لديك صلاحية لهذه الصفحة', redirectUrl);
+            return false;
+        }
+
         return true;
-
-        // الكود الأصلي (معلّق):
-        // if (!this.currentUser) {
-        //     window.location.href = redirectUrl;
-        //     return false;
-        // }
-        // if (!this.canAccess(pageType)) {
-        //     this.showAccessDenied();
-        //     return false;
-        // }
-        // return true;
     },
 
-    /**
-     * عرض رسالة عدم الصلاحية
-     */
-    showAccessDenied() {
-        document.body.innerHTML = `
-            <div style="
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                font-family: 'Tajawal', sans-serif;
-                background: linear-gradient(135deg, #1e3a5f 0%, #0d1f33 100%);
-                color: white;
-                text-align: center;
-                padding: 2rem;
-            ">
-                <div style="
-                    background: rgba(255,255,255,0.1);
-                    padding: 3rem;
-                    border-radius: 20px;
-                    max-width: 400px;
-                ">
-                    <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
-                    <h1 style="margin: 0 0 1rem; font-size: 1.8rem;">غير مصرح بالدخول</h1>
-                    <p style="opacity: 0.8; margin-bottom: 2rem;">
-                        ليس لديك صلاحية للوصول إلى هذه الصفحة.
-                        <br>يرجى التواصل مع الإدارة.
-                    </p>
-                    <a href="/" style="
-                        display: inline-block;
-                        padding: 12px 30px;
-                        background: #c9a962;
-                        color: #1e3a5f;
-                        text-decoration: none;
-                        border-radius: 10px;
-                        font-weight: bold;
-                    ">العودة للرئيسية</a>
+    showAccessDenied(message, redirectUrl) {
+        const overlay = document.createElement('div');
+        overlay.id = 'access-denied-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #1e3a5f 0%, #0d1f33 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            font-family: 'Tajawal', sans-serif;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        `;
+        overlay.innerHTML = `
+            <div style="background: rgba(255,255,255,0.1); padding: 40px; border-radius: 20px; max-width: 400px;">
+                <div style="width: 80px; height: 80px; background: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                    <i class="fas fa-lock" style="font-size: 2rem;"></i>
                 </div>
+                <h2 style="margin-bottom: 15px; color: #c9a962;">الوصول مرفوض</h2>
+                <p style="margin-bottom: 25px; opacity: 0.9;">${message}</p>
+                <a href="${redirectUrl}" style="display: inline-block; padding: 12px 30px; background: #c9a962; color: #1e3a5f; text-decoration: none; border-radius: 10px; font-weight: 700;">
+                    تسجيل الدخول
+                </a>
             </div>
         `;
+        document.body.innerHTML = '';
+        document.body.appendChild(overlay);
     },
 
-    /**
-     * الحصول على معلومات المستخدم الحالي
-     */
     getUserInfo() {
-        if (!this.currentUser) return null;
         return {
-            uid: this.currentUser.uid,
-            email: this.currentUser.email,
-            displayName: this.currentUser.displayName,
-            role: this.userRole
+            uid: this.currentUser?.uid || null,
+            email: this.currentUser?.email || null,
+            displayName: this.userData?.fullName || this.currentUser?.displayName || 'زائر',
+            role: this.userRole,
+            userData: this.userData
         };
     },
 
-    /**
-     * الحصول على ID Token للطلبات المحمية
-     */
     async getIdToken() {
-        if (!this.currentUser) return null;
-        return await this.currentUser.getIdToken();
+        if (this.currentUser) {
+            return await this.currentUser.getIdToken();
+        }
+        return null;
     },
 
-    /**
-     * تسجيل الخروج
-     */
     async logout() {
-        const { signOut } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
-        await signOut(this.auth);
-        window.location.href = '/';
+        try {
+            if (this.auth) {
+                await this.auth.signOut();
+            }
+            localStorage.removeItem('staffRole');
+            localStorage.removeItem('staffEmail');
+            localStorage.removeItem('staffUid');
+            this.currentUser = null;
+            this.userRole = 'guest';
+            this.userData = null;
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
     },
 
-    /**
-     * عرض شريط المستخدم
-     */
-    renderUserBar(containerId = 'user-bar') {
+    renderUserBar(containerId) {
         const container = document.getElementById(containerId);
-        if (!container || !this.currentUser) return;
-
-        const roleNames = {
+        if (!container) return;
+        
+        const info = this.getUserInfo();
+        const roleLabels = {
             'owner': 'المالك',
             'admin': 'مدير',
-            'staff': 'موظف',
             'chair': 'رئيس لجنة',
-            'member': 'عضو لجنة',
-            'doctor': 'طبيب',
-            'pharmacist': 'صيدلي',
-            'insurance': 'تأمين',
-            'patient': 'مريض',
-            'viewer': 'مشاهد'
+            'member': 'عضو',
+            'staff': 'موظف',
+            'viewer': 'مشاهد',
+            'guest': 'زائر',
+            'pending': 'قيد المراجعة',
+            'suspended': 'معلق'
         };
-
+        
         container.innerHTML = `
-            <div style="
-                display: flex;
-                align-items: center;
-                gap: 15px;
-                padding: 10px 20px;
-                background: rgba(255,255,255,0.1);
-                border-radius: 10px;
-            ">
-                <span style="opacity: 0.8;">${this.currentUser.email}</span>
-                <span style="
-                    background: #c9a962;
-                    color: #1e3a5f;
-                    padding: 4px 12px;
-                    border-radius: 15px;
-                    font-size: 0.85rem;
-                    font-weight: bold;
-                ">${roleNames[this.userRole] || this.userRole}</span>
-                <button onclick="AuthGuard.logout()" style="
-                    background: transparent;
-                    border: 1px solid rgba(255,255,255,0.3);
-                    color: white;
-                    padding: 6px 15px;
-                    border-radius: 8px;
-                    cursor: pointer;
-                ">خروج</button>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(201,169,98,0.1); border-radius: 10px;">
+                <div style="width: 35px; height: 35px; background: #c9a962; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #1e3a5f; font-weight: bold;">
+                    ${info.displayName?.charAt(0) || '؟'}
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 0.9rem;">${info.displayName}</div>
+                    <div style="font-size: 0.75rem; opacity: 0.7;">${roleLabels[info.role] || info.role}</div>
+                </div>
+                ${info.uid ? `<button onclick="AuthGuard.logout().then(() => location.href='admin-login.html')" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 5px;"><i class="fas fa-sign-out-alt"></i></button>` : ''}
             </div>
         `;
+    },
+
+    hasSystem(systemId) {
+        if (this.userRole === 'owner' || this.userRole === 'admin') {
+            return true;
+        }
+        if (this.userData && this.userData.allowedSystems) {
+            return this.userData.allowedSystems.includes(systemId);
+        }
+        return false;
+    },
+
+    isOwner() {
+        return this.userRole === 'owner';
+    },
+
+    isAdmin() {
+        return this.userRole === 'admin' || this.userRole === 'owner';
     }
 };
 
-// تصدير للاستخدام العام
 window.AuthGuard = AuthGuard;
