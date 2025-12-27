@@ -793,6 +793,7 @@
                         <option value="staff">موظف</option>
                     </select>
                     <button class="btn btn-primary" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <button class="btn" onclick="syncAuthUsers()" style="background:#10b981; color:white;"><i class="fas fa-cloud-download-alt"></i> مزامنة من Firebase</button>
                 </div>
                 <div id="usersContainer">
                     <div class="no-alerts">جاري التحميل...</div>
@@ -1434,6 +1435,33 @@
         function loadPermissions() {
             const container = document.getElementById('permissionsContainer');
             container.innerHTML = '<div class="no-alerts">نفس بيانات إدارة المستخدمين - استخدم تغيير الدور</div>';
+        }
+        
+        async function syncAuthUsers() {
+            if (!confirm('سيتم مزامنة جميع المستخدمين من Firebase Auth إلى قاعدة البيانات.\nهل تريد المتابعة؟')) return;
+            
+            const container = document.getElementById('usersContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري المزامنة...</div>';
+            
+            try {
+                const response = await fetch('/api/admin/sync-users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    showToast(`${data.message} (إجمالي: ${data.total})`);
+                    loadUsers();
+                } else {
+                    showToast('فشلت المزامنة: ' + data.error, true);
+                    container.innerHTML = '<div class="no-alerts">فشلت المزامنة</div>';
+                }
+            } catch(e) {
+                console.error('Sync error:', e);
+                showToast('خطأ في الاتصال', true);
+                container.innerHTML = '<div class="no-alerts">خطأ في الاتصال</div>';
+            }
         }
         
         async function toggleUserStatus(uid, currentStatus) {

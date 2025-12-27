@@ -1008,6 +1008,74 @@ app.get('/api/admin/auth-users', async (req, res) => {
   }
 });
 
+// Sync Firebase Auth users to Firestore staff_roles
+app.post('/api/admin/sync-users', async (req, res) => {
+  try {
+    if (!firebaseAdmin) {
+      return res.status(503).json({ ok: false, error: 'Firebase Admin not initialized' });
+    }
+    
+    const db = admin.firestore();
+    const listUsersResult = await admin.auth().listUsers(1000);
+    
+    let synced = 0;
+    let skipped = 0;
+    let errors = [];
+    
+    for (const user of listUsersResult.users) {
+      try {
+        const docRef = db.collection('staff_roles').doc(user.uid);
+        const docSnap = await docRef.get();
+        
+        if (!docSnap.exists) {
+          // Check if there's a membership request
+          const requestsSnap = await db.collection('membershipRequests')
+            .where('uid', '==', user.uid)
+            .limit(1)
+            .get();
+          
+          let userData = {
+            email: user.email || '',
+            fullName: user.displayName || user.email?.split('@')[0] || 'Unknown',
+            role: 'staff',
+            status: 'active',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            syncedFromAuth: true
+          };
+          
+          // If there's a membership request, use its data
+          if (!requestsSnap.empty) {
+            const reqData = requestsSnap.docs[0].data();
+            userData.fullName = reqData.fullName || userData.fullName;
+            userData.department = reqData.department || '';
+            userData.jobTitle = reqData.jobTitle || '';
+            userData.phone = reqData.phone || '';
+          }
+          
+          await docRef.set(userData);
+          synced++;
+        } else {
+          skipped++;
+        }
+      } catch (userErr) {
+        errors.push({ email: user.email, error: userErr.message });
+      }
+    }
+    
+    res.json({ 
+      ok: true, 
+      message: `تمت المزامنة: ${synced} جديد، ${skipped} موجود مسبقاً`,
+      synced,
+      skipped,
+      total: listUsersResult.users.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (err) {
+    console.error('Error syncing users:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Emergency Plan Documents API
 app.get('/api/emergency-docs', async (req, res) => {
   try {
