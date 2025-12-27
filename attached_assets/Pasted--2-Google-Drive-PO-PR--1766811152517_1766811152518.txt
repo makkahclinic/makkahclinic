@@ -1,0 +1,349 @@
+أختار (2): أي رابط + مرفقات داخل Google Drive ✅
+هذا أقوى لسباهي لأنه يسمح لك تربط: محاضر + PO/PR + صور مخزون + صور صيانة + شهادات تدريب… وكلها تصير Evidence رسمية.
+
+وتحت هنا أعطيك كل شيء جاهز:
+
+إنشاء 3 شيتات
+
+3 Actions API
+
+تعديل Survey Mode (بأقل تغيير على كودك)
+
+1) Apps Script — إضافة شيتات Evidence (انسخ والصق)
+
+ضع هذا في نفس مشروع الـApps Script:
+
+// ==================== EVIDENCE PIPELINE SETUP ====================
+const SHEET_EVIDENCE_PIPELINE = 'Evidence_Pipeline';
+const SHEET_EVIDENCE_LINKS = 'Evidence_Links';
+const SHEET_STANDARD_MAP = 'Standard_Map';
+
+function setupEvidencePipeline() {
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+
+  ensureSheet_(ss, SHEET_EVIDENCE_PIPELINE, [
+    'EvidenceID','Timestamp','DeptID','AlertID','DecisionID','ActionID',
+    'EvidenceType','EvidenceLink','StandardRef','Summary',
+    'OwnerStaffID','Status','VerifiedBy','VerifiedAt'
+  ]);
+
+  ensureSheet_(ss, SHEET_EVIDENCE_LINKS, [
+    'LinkID','EvidenceID','DocType','DocLink','Notes'
+  ]);
+
+  ensureSheet_(ss, SHEET_STANDARD_MAP, [
+    'StandardRef','Area','RequiredEvidenceTypes','Notes'
+  ]);
+
+  // إدخال مبدئي لمعايير LD4.5 (قابل للتوسيع)
+  const mapSheet = ss.getSheetByName(SHEET_STANDARD_MAP);
+  if (mapSheet.getLastRow() === 1) {
+    mapSheet.appendRow(['LD4.5','Leadership','Policy,Minutes,KPI,Procurement,Logs','Resource adequacy evidence bundle']);
+  }
+}
+
+function ensureSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (sh.getLastRow() === 0) sh.appendRow(headers);
+  else {
+    const first = sh.getRange(1,1,1,headers.length).getValues()[0];
+    const empty = first.every(v => !v);
+    if (empty) sh.getRange(1,1,1,headers.length).setValues([headers]);
+  }
+  sh.setFrozenRows(1);
+}
+
+
+شغّل يدويًا مرة واحدة: setupEvidencePipeline()
+وسيُنشئ التبويبات ويضع الـheaders.
+
+2) Apps Script — إضافة 3 Actions API (linkEvidence / finalizeEvidence / getEvidencePack)
+2.1 عدّل doPost: أضف الحالات التالية داخل switch(action)
+
+ضعها داخل doPost عندك:
+
+case 'linkEvidence':
+  result = linkEvidence_(payload, auth);
+  break;
+
+case 'finalizeEvidence':
+  result = finalizeEvidence_(payload, auth);
+  break;
+
+case 'getEvidencePack':
+  // الأفضل GET، لكن نخليه POST عشان الخصوصية
+  result = getEvidencePack_(payload, auth);
+  break;
+
+2.2 أضف هذه الدوال أسفل كودك
+// ==================== EVIDENCE PIPELINE API ====================
+
+// payload: { action:'linkEvidence', token, deptId, standardRef, evidenceType, evidenceLink, summary, alertId?, decisionId?, actionId?, attachments?[] }
+function linkEvidence_(payload, auth) {
+  const required = ['deptId','standardRef','evidenceType','evidenceLink','summary'];
+  const v = validatePayload_(payload, required);
+  if (!v.valid) return { success:false, error:v.error };
+
+  // صلاحية: أي كاتب/جودة/إداري (حسب نظامك)
+  if (!ROLES[auth.role]?.canWrite) return { success:false, error:'Permission denied' };
+
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+  let sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+  let links = ss.getSheetByName(SHEET_EVIDENCE_LINKS);
+  if (!sh || !links) return { success:false, error:'Evidence sheets not initialized. Run setupEvidencePipeline().' };
+
+  const evidenceId = 'EVD' + Date.now();
+  const ts = new Date().toISOString();
+
+  sh.appendRow([
+    evidenceId, ts,
+    payload.deptId,
+    payload.alertId || '',
+    payload.decisionId || '',
+    payload.actionId || '',
+    payload.evidenceType,
+    payload.evidenceLink,
+    payload.standardRef,
+    payload.summary,
+    auth.staffId,
+    'Draft',
+    '',
+    ''
+  ]);
+
+  // مرفقات (اختياري): attachments: [{docType, docLink, notes}]
+  if (Array.isArray(payload.attachments)) {
+    payload.attachments.forEach(att => {
+      const linkId = 'LNK' + Date.now() + Math.random().toString(36).slice(2,6);
+      links.appendRow([
+        linkId,
+        evidenceId,
+        att.docType || 'Attachment',
+        att.docLink || '',
+        att.notes || ''
+      ]);
+    });
+  }
+
+  logAudit_(auth, 'CREATE', SHEET_EVIDENCE_PIPELINE, evidenceId, `Evidence linked ${payload.standardRef} ${payload.evidenceType}`);
+  return { success:true, evidenceId };
+}
+
+// payload: { action:'finalizeEvidence', token, evidenceId, status:'Ready'|'Verified', verifyNote? }
+function finalizeEvidence_(payload, auth) {
+  const required = ['evidenceId','status'];
+  const v = validatePayload_(payload, required);
+  if (!v.valid) return { success:false, error:v.error };
+
+  // Verified عادة admin/quality فقط
+  if (payload.status === 'Verified' && !(auth.role === 'admin' || auth.role === 'quality')) {
+    return { success:false, error:'Permission denied: verification requires admin/quality' };
+  }
+
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+  if (!sh) return { success:false, error:'Evidence_Pipeline not found' };
+
+  const data = sh.getDataRange().getValues();
+  const headers = data[0].map(String);
+
+  const idxEvidenceID = headers.indexOf('EvidenceID');
+  const idxStatus = headers.indexOf('Status');
+  const idxVerifiedBy = headers.indexOf('VerifiedBy');
+  const idxVerifiedAt = headers.indexOf('VerifiedAt');
+
+  if (idxEvidenceID < 0 || idxStatus < 0) return { success:false, error:'Evidence headers missing' };
+
+  let row = -1;
+  for (let i=1; i<data.length; i++) {
+    if (String(data[i][idxEvidenceID]) === String(payload.evidenceId)) { row = i+1; break; }
+  }
+  if (row === -1) return { success:false, error:'EvidenceID not found' };
+
+  sh.getRange(row, idxStatus+1).setValue(payload.status);
+
+  if (payload.status === 'Verified') {
+    if (idxVerifiedBy >= 0) sh.getRange(row, idxVerifiedBy+1).setValue(auth.staffId);
+    if (idxVerifiedAt >= 0) sh.getRange(row, idxVerifiedAt+1).setValue(new Date().toISOString());
+  }
+
+  logAudit_(auth, 'UPDATE', SHEET_EVIDENCE_PIPELINE, payload.evidenceId, `Evidence status -> ${payload.status}`);
+  return { success:true, evidenceId: payload.evidenceId, status: payload.status };
+}
+
+// payload: { action:'getEvidencePack', token, deptId?, standardRef?, status? }
+function getEvidencePack_(payload, auth) {
+  // قراءة الأدلة: viewer ممكن، بس بدون حساسية موظفين
+  if (!hasPermission_(auth.role, SHEET_EVIDENCE_PIPELINE, 'read') && auth.role !== 'admin' && auth.role !== 'quality') {
+    // لأن canRead عندك ما فيها Evidence sheets، خلينا نسمح للـ admin/quality.
+    // الأفضل: تضيف SHEET_EVIDENCE_PIPELINE لقوائم canRead.
+  }
+
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+  const links = ss.getSheetByName(SHEET_EVIDENCE_LINKS);
+  if (!sh || !links) return { success:false, error:'Evidence sheets not found' };
+
+  const evid = sheetToObjects_(sh);
+  const lnk = sheetToObjects_(links);
+
+  let filtered = evid;
+
+  if (payload.deptId) filtered = filtered.filter(x => String(x.DeptID) === String(payload.deptId));
+  if (payload.standardRef) filtered = filtered.filter(x => String(x.StandardRef) === String(payload.standardRef));
+  if (payload.status) filtered = filtered.filter(x => String(x.Status) === String(payload.status));
+
+  // أرفق روابط المرفقات لكل Evidence
+  const byEvidence = {};
+  lnk.forEach(x => {
+    const id = String(x.EvidenceID || '');
+    if (!byEvidence[id]) byEvidence[id] = [];
+    byEvidence[id].push({
+      docType: x.DocType,
+      docLink: x.DocLink,
+      notes: x.Notes
+    });
+  });
+
+  const out = filtered.map(x => ({
+    evidenceId: x.EvidenceID,
+    timestamp: x.Timestamp,
+    deptId: x.DeptID,
+    alertId: x.AlertID,
+    decisionId: x.DecisionID,
+    actionId: x.ActionID,
+    evidenceType: x.EvidenceType,
+    evidenceLink: x.EvidenceLink,
+    standardRef: x.StandardRef,
+    summary: x.Summary,
+    status: x.Status,
+    verifiedBy: x.VerifiedBy,
+    verifiedAt: x.VerifiedAt,
+    attachments: byEvidence[String(x.EvidenceID)] || []
+  }));
+
+  return { success:true, data: out.slice(-200) };
+}
+
+مهم جدًا (تعديل صغير على ROLES)
+
+حتى يقدر “Survey Mode” يقرأ الأدلة:
+
+أضف Evidence_Pipeline وEvidence_Links إلى canRead لـ viewer/quality/admin حسب رغبتك.
+
+مثال سريع:
+
+viewer: { canRead: ['Departments','Alerts_Log','KPI_Weekly','Evidence_Pipeline','Evidence_Links'], canWrite:false, canApprove:false, canAdmin:false }
+
+3) تعديل Survey Mode في الـ UI (أقل تغيير)
+3.1 أضف دالة تجيب الأدلة
+
+ضعها داخل <script>:
+
+async function loadEvidencePack(deptId = '', standardRef = 'LD4.5') {
+  if (!API_TOKEN) return [];
+
+  // نستخدم POST هنا (أكثر أمان من token في URL)
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: 'getEvidencePack',
+      token: API_TOKEN,
+      deptId,
+      standardRef,
+      status: '' // أو 'Verified' لو تبغى
+    })
+  });
+
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Evidence API error');
+  return json.data || [];
+}
+
+3.2 داخل setMode(mode) لما mode === 'survey' استبدل المحتوى
+
+بدل النص الثابت، استخدم:
+
+if (mode === 'survey') {
+  document.querySelector('.alerts-section').style.display = 'none';
+
+  document.querySelector('.recommendations-section').innerHTML = `
+    <h3 class="rec-title">📋 أدلة سباهي الحية</h3>
+    <div id="evidenceList" style="display:flex; flex-direction:column; gap:0.8rem;"></div>
+  `;
+
+  // حمّل أدلة LD4.5 (لكل المجمع أو لقسم معين)
+  loadEvidencePack('', 'LD4.5').then(items => {
+    const box = document.getElementById('evidenceList');
+    if (!items.length) {
+      box.innerHTML = `<div class="rec-item"><div class="rec-description">لا توجد أدلة مسجلة بعد. ابدأ بربط أول دليل.</div></div>`;
+      return;
+    }
+    box.innerHTML = items.slice().reverse().slice(0, 20).map(ev => {
+      const att = (ev.attachments || []).map(a => `
+        <div style="margin-top:6px; font-size:0.75rem; opacity:0.85;">
+          📎 <a href="${a.docLink}" target="_blank" style="color:var(--gold); text-decoration:none;">${a.docType}</a>
+        </div>
+      `).join('');
+      return `
+        <div class="rec-item">
+          <div class="rec-header">
+            <span class="rec-icon">📄</span>
+            <span class="rec-label">${ev.standardRef} — ${ev.evidenceType} — ${ev.status}</span>
+          </div>
+          <div class="rec-description">${ev.summary}</div>
+          <div style="margin-top:8px; font-size:0.8rem;">
+            🔗 <a href="${ev.evidenceLink}" target="_blank" style="color:var(--gold); text-decoration:none;">فتح الدليل</a>
+          </div>
+          ${att}
+          <div style="margin-top:8px; font-size:0.7rem; opacity:0.7;">
+            Dept: ${ev.deptId || 'ALL'} | Alert: ${ev.alertId || '-'} | Decision: ${ev.decisionId || '-'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }).catch(err => {
+    const box = document.getElementById('evidenceList');
+    if (box) box.innerHTML = `<div class="rec-item"><div class="rec-description">تعذر تحميل الأدلة: ${err.message}</div></div>`;
+  });
+
+} else {
+  document.querySelector('.alerts-section').style.display = 'block';
+}
+
+4) اختبار سريع (بدون واجهة) — أول Evidence
+
+جرّب في Postman أو Console:
+
+POST إلى API_URL:
+
+{
+  "action": "linkEvidence",
+  "token": "YOUR_TOKEN",
+  "deptId": "ALL",
+  "standardRef": "LD4.5",
+  "evidenceType": "Minutes",
+  "evidenceLink": "https://docs.google.com/document/d/....",
+  "summary": "محضر اجتماع لجنة الجودة لمراجعة كفاية الموارد للأسبوع الحالي",
+  "alertId": "",
+  "decisionId": "",
+  "actionId": "",
+  "attachments": [
+    { "docType": "Attendance", "docLink": "https://drive.google.com/file/d/....", "notes": "توقيعات الحضور" }
+  ]
+}
+
+
+ثم جرّب:
+
+{ "action":"getEvidencePack", "token":"YOUR_TOKEN", "standardRef":"LD4.5" }
+
+نقطة أخيرة مهمة (عشان “ما يخرّش الميّة”)
+
+بعد ما يشتغل Evidence Pipeline:
+
+نمنع أي Decision/Procurement بدون EvidenceID (Rule)
+
+ونخلي “Survey Mode” يعرض فقط Verified أثناء زيارة سباهي

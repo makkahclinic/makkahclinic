@@ -9,6 +9,11 @@
 // ==================== CONFIGURATION ====================
 const MRIS_SPREADSHEET_ID = '1sbVyDFvjFn1pMc-2caKHuX2nwFAUtJ4RGq9As0_2vb4'; // ملف LD4.5
 
+// ==================== EVIDENCE PIPELINE SHEETS ====================
+const SHEET_EVIDENCE_PIPELINE = 'Evidence_Pipeline';
+const SHEET_EVIDENCE_LINKS = 'Evidence_Links';
+const SHEET_STANDARD_MAP = 'Standard_Map';
+
 // ==================== ROLES & PERMISSIONS ====================
 const ROLES = {
   admin: { 
@@ -42,7 +47,7 @@ const ROLES = {
     canAdmin: false 
   },
   viewer: { 
-    canRead: ['Departments', 'Alerts_Log', 'KPI_Weekly'], 
+    canRead: ['Departments', 'Alerts_Log', 'KPI_Weekly', 'Evidence_Pipeline', 'Evidence_Links'], 
     canWrite: false, 
     canApprove: false, 
     canAdmin: false 
@@ -189,6 +194,18 @@ function doPost(e) {
         }
         result = updateAssetStatus_(payload, auth);
         break;
+      
+      // ==================== EVIDENCE PIPELINE ACTIONS ====================
+      case 'linkEvidence':
+        result = linkEvidence_(payload, auth);
+        break;
+      case 'finalizeEvidence':
+        result = finalizeEvidence_(payload, auth);
+        break;
+      case 'getEvidencePack':
+        result = getEvidencePack_(payload, auth);
+        break;
+      
       default:
         result = { success: false, error: 'Unknown action' };
     }
@@ -1012,4 +1029,203 @@ function runAlertCheck() {
       }, auth);
     }
   }
+}
+
+// ==================== EVIDENCE PIPELINE SETUP ====================
+function setupEvidencePipeline() {
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+
+  ensureSheet_(ss, SHEET_EVIDENCE_PIPELINE, [
+    'EvidenceID','Timestamp','DeptID','AlertID','DecisionID','ActionID',
+    'EvidenceType','EvidenceLink','StandardRef','Summary',
+    'OwnerStaffID','Status','VerifiedBy','VerifiedAt'
+  ]);
+
+  ensureSheet_(ss, SHEET_EVIDENCE_LINKS, [
+    'LinkID','EvidenceID','DocType','DocLink','Notes'
+  ]);
+
+  ensureSheet_(ss, SHEET_STANDARD_MAP, [
+    'StandardRef','Area','RequiredEvidenceTypes','Notes'
+  ]);
+
+  // إدخال مبدئي لمعايير LD4.5
+  const mapSheet = ss.getSheetByName(SHEET_STANDARD_MAP);
+  if (mapSheet.getLastRow() === 1) {
+    mapSheet.appendRow(['LD4.5','Leadership','Policy,Minutes,KPI,Procurement,Logs','Resource adequacy evidence bundle']);
+    mapSheet.appendRow(['FMS.1','FMS','MaintenanceLog,Inspection,Certificate','Facility maintenance evidence']);
+    mapSheet.appendRow(['IPC.1','IPC','Training,Audit,Incidents','Infection control evidence']);
+  }
+  
+  return { success: true, message: 'Evidence Pipeline sheets created successfully' };
+}
+
+function ensureSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (sh.getLastRow() === 0) sh.appendRow(headers);
+  else {
+    const first = sh.getRange(1,1,1,headers.length).getValues()[0];
+    const empty = first.every(v => !v);
+    if (empty) sh.getRange(1,1,1,headers.length).setValues([headers]);
+  }
+  sh.setFrozenRows(1);
+}
+
+// ==================== EVIDENCE PIPELINE API ====================
+
+// payload: { deptId, standardRef, evidenceType, evidenceLink, summary, alertId?, decisionId?, actionId?, attachments?[] }
+function linkEvidence_(payload, auth) {
+  const required = ['deptId','standardRef','evidenceType','evidenceLink','summary'];
+  const v = validatePayload_(payload, required);
+  if (!v.valid) return { success:false, error:v.error };
+
+  // صلاحية: أي كاتب/جودة/إداري
+  if (!ROLES[auth.role]?.canWrite) return { success:false, error:'Permission denied: write access required' };
+
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+  let sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+  let links = ss.getSheetByName(SHEET_EVIDENCE_LINKS);
+  
+  if (!sh || !links) {
+    // محاولة إنشاء الشيتات تلقائياً
+    setupEvidencePipeline();
+    sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+    links = ss.getSheetByName(SHEET_EVIDENCE_LINKS);
+    if (!sh || !links) return { success:false, error:'Evidence sheets not found. Run setupEvidencePipeline().' };
+  }
+
+  const evidenceId = 'EVD' + Date.now();
+  const ts = new Date().toISOString();
+
+  sh.appendRow([
+    evidenceId, ts,
+    payload.deptId,
+    payload.alertId || '',
+    payload.decisionId || '',
+    payload.actionId || '',
+    payload.evidenceType,
+    payload.evidenceLink,
+    payload.standardRef,
+    payload.summary,
+    auth.staffId,
+    'Draft',
+    '',
+    ''
+  ]);
+
+  // مرفقات (اختياري): attachments: [{docType, docLink, notes}]
+  if (Array.isArray(payload.attachments)) {
+    payload.attachments.forEach(att => {
+      const linkId = 'LNK' + Date.now() + Math.random().toString(36).slice(2,6);
+      links.appendRow([
+        linkId,
+        evidenceId,
+        att.docType || 'Attachment',
+        att.docLink || '',
+        att.notes || ''
+      ]);
+    });
+  }
+
+  logAudit_(auth, 'CREATE', SHEET_EVIDENCE_PIPELINE, evidenceId, `Evidence linked ${payload.standardRef} ${payload.evidenceType}`);
+  return { success:true, evidenceId };
+}
+
+// payload: { evidenceId, status:'Ready'|'Verified', verifyNote? }
+function finalizeEvidence_(payload, auth) {
+  const required = ['evidenceId','status'];
+  const v = validatePayload_(payload, required);
+  if (!v.valid) return { success:false, error:v.error };
+
+  // Verified يتطلب admin/quality فقط
+  if (payload.status === 'Verified' && !(auth.role === 'admin' || auth.role === 'quality')) {
+    return { success:false, error:'Permission denied: verification requires admin/quality' };
+  }
+
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+  if (!sh) return { success:false, error:'Evidence_Pipeline not found' };
+
+  const data = sh.getDataRange().getValues();
+  const headers = data[0].map(String);
+
+  const idxEvidenceID = headers.indexOf('EvidenceID');
+  const idxStatus = headers.indexOf('Status');
+  const idxVerifiedBy = headers.indexOf('VerifiedBy');
+  const idxVerifiedAt = headers.indexOf('VerifiedAt');
+
+  if (idxEvidenceID < 0 || idxStatus < 0) return { success:false, error:'Evidence headers missing' };
+
+  let row = -1;
+  for (let i=1; i<data.length; i++) {
+    if (String(data[i][idxEvidenceID]) === String(payload.evidenceId)) { row = i+1; break; }
+  }
+  if (row === -1) return { success:false, error:'EvidenceID not found' };
+
+  sh.getRange(row, idxStatus+1).setValue(payload.status);
+
+  if (payload.status === 'Verified') {
+    if (idxVerifiedBy >= 0) sh.getRange(row, idxVerifiedBy+1).setValue(auth.staffId);
+    if (idxVerifiedAt >= 0) sh.getRange(row, idxVerifiedAt+1).setValue(new Date().toISOString());
+  }
+
+  logAudit_(auth, 'UPDATE', SHEET_EVIDENCE_PIPELINE, payload.evidenceId, `Evidence status -> ${payload.status}`);
+  return { success:true, evidenceId: payload.evidenceId, status: payload.status };
+}
+
+// payload: { deptId?, standardRef?, status? }
+function getEvidencePack_(payload, auth) {
+  // قراءة الأدلة: admin/quality/viewer مسموح
+  if (!hasPermission_(auth.role, SHEET_EVIDENCE_PIPELINE, 'read') && 
+      auth.role !== 'admin' && auth.role !== 'quality') {
+    return { success:false, error:'Permission denied: Evidence access required' };
+  }
+
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_EVIDENCE_PIPELINE);
+  const links = ss.getSheetByName(SHEET_EVIDENCE_LINKS);
+  
+  if (!sh || !links) return { success:false, error:'Evidence sheets not found' };
+
+  const evid = sheetToObjects_(sh);
+  const lnk = sheetToObjects_(links);
+
+  let filtered = evid;
+
+  if (payload.deptId) filtered = filtered.filter(x => String(x.DeptID) === String(payload.deptId));
+  if (payload.standardRef) filtered = filtered.filter(x => String(x.StandardRef) === String(payload.standardRef));
+  if (payload.status) filtered = filtered.filter(x => String(x.Status) === String(payload.status));
+
+  // أرفق روابط المرفقات لكل Evidence
+  const byEvidence = {};
+  lnk.forEach(x => {
+    const id = String(x.EvidenceID || '');
+    if (!byEvidence[id]) byEvidence[id] = [];
+    byEvidence[id].push({
+      docType: x.DocType,
+      docLink: x.DocLink,
+      notes: x.Notes
+    });
+  });
+
+  const out = filtered.map(x => ({
+    evidenceId: x.EvidenceID,
+    timestamp: x.Timestamp,
+    deptId: x.DeptID,
+    alertId: x.AlertID,
+    decisionId: x.DecisionID,
+    actionId: x.ActionID,
+    evidenceType: x.EvidenceType,
+    evidenceLink: x.EvidenceLink,
+    standardRef: x.StandardRef,
+    summary: x.Summary,
+    ownerStaffId: x.OwnerStaffID,
+    status: x.Status,
+    verifiedBy: x.VerifiedBy,
+    verifiedAt: x.VerifiedAt,
+    attachments: byEvidence[String(x.EvidenceID)] || []
+  }));
+
+  return { success:true, data: out.slice(-200) };
 }
