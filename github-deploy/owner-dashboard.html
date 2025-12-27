@@ -1063,106 +1063,143 @@
         
         async function loadDashboardStats() {
             try {
-                const data = await apiCall('getOwnerDashboardStats');
-                console.log('Dashboard stats:', data);
+                const [complaintsRes, incidentsRes, risksRes, roundsRes] = await Promise.all([
+                    fetch(APIs.complaints + '?action=getAll').then(r => r.json()).catch(e => ({ success: false })),
+                    fetch(APIs.incidents + '?action=getAll').then(r => r.json()).catch(e => ({ success: false })),
+                    fetch(APIs.risks + '?action=getAll').then(r => r.json()).catch(e => ({ success: false })),
+                    fetch(APIs.rounds + '?action=getAll').then(r => r.json()).catch(e => ({ success: false }))
+                ]);
                 
-                if (data.success) {
-                    const stats = data.stats || data;
+                console.log('Complaints:', complaintsRes);
+                console.log('Incidents:', incidentsRes);
+                console.log('Risks:', risksRes);
+                console.log('Rounds:', roundsRes);
+                
+                if (complaintsRes.success || complaintsRes.data || Array.isArray(complaintsRes)) {
+                    const complaints = complaintsRes.data || complaintsRes.complaints || complaintsRes || [];
+                    const arr = Array.isArray(complaints) ? complaints : [];
+                    const open = arr.filter(c => ['جديدة', 'قيد المعالجة', 'new', 'open', 'pending'].includes((c.status || c.الحالة || '').toLowerCase())).length;
+                    const newC = arr.filter(c => ['جديدة', 'new'].includes((c.status || c.الحالة || '').toLowerCase())).length;
+                    const inProgress = arr.filter(c => ['قيد المعالجة', 'pending', 'in_progress'].includes((c.status || c.الحالة || '').toLowerCase())).length;
+                    const escalated = arr.filter(c => ['مصعّدة', 'escalated'].includes((c.status || c.الحالة || '').toLowerCase())).length;
+                    const closed = arr.filter(c => ['مغلقة', 'closed', 'resolved'].includes((c.status || c.الحالة || '').toLowerCase())).length;
                     
-                    if (stats.emergency && stats.emergency.active) {
-                        document.getElementById('kpi-eoc').textContent = 'طوارئ!';
-                        document.getElementById('kpi-eoc-status').textContent = stats.emergency.type || 'حالة نشطة';
-                        document.getElementById('kpi-eoc-status').classList.add('danger');
-                        document.getElementById('eocIcon').classList.add('active');
-                    }
-                    
-                    if (stats.complaints) {
-                        document.getElementById('kpi-complaints').textContent = stats.complaints.open || 0;
-                        document.getElementById('stat-complaints-new').textContent = stats.complaints.new || 0;
-                        document.getElementById('stat-complaints-progress').textContent = stats.complaints.inProgress || 0;
-                        document.getElementById('stat-complaints-escalated').textContent = stats.complaints.escalated || 0;
-                        document.getElementById('stat-complaints-closed').textContent = stats.complaints.closed || 0;
-                        if (stats.complaints.escalated > 0) {
-                            document.getElementById('kpi-complaints-sub').textContent = stats.complaints.escalated + ' مصعّدة';
-                            document.getElementById('kpi-complaints-sub').classList.add('danger');
-                        }
-                    }
-                    
-                    if (stats.incidents) {
-                        document.getElementById('kpi-incidents').textContent = stats.incidents.open || 0;
-                        document.getElementById('stat-incidents-new').textContent = stats.incidents.new || 0;
-                        document.getElementById('stat-incidents-progress').textContent = stats.incidents.investigation || 0;
-                        document.getElementById('stat-incidents-escalated').textContent = stats.incidents.escalated || 0;
-                        document.getElementById('stat-incidents-closed').textContent = stats.incidents.closed || 0;
-                    }
-                    
-                    if (stats.risks) {
-                        document.getElementById('kpi-risks').textContent = stats.risks.active || 0;
-                        document.getElementById('stat-risks-high').textContent = stats.risks.high || 0;
-                        document.getElementById('stat-risks-medium').textContent = stats.risks.medium || 0;
-                        document.getElementById('stat-risks-low').textContent = stats.risks.low || 0;
-                        document.getElementById('stat-risks-resolved').textContent = stats.risks.resolved || 0;
-                        if (stats.risks.high > 0) {
-                            document.getElementById('kpi-risks-sub').textContent = stats.risks.high + ' خطر عالي';
-                        }
-                    }
-                    
-                    if (stats.rounds) {
-                        document.getElementById('kpi-rounds').textContent = stats.rounds.today || 0;
-                        document.getElementById('kpi-rounds-sub').textContent = (stats.rounds.delayed || 0) + ' متأخرة';
-                    }
-                    
-                    if (stats.users) {
-                        document.getElementById('usersActiveCount').textContent = stats.users.active || 0;
-                        document.getElementById('usersSuspendedCount').textContent = stats.users.suspended || 0;
-                        document.getElementById('usersTotalCount').textContent = stats.users.total || 0;
+                    document.getElementById('kpi-complaints').textContent = open || arr.length;
+                    document.getElementById('stat-complaints-new').textContent = newC;
+                    document.getElementById('stat-complaints-progress').textContent = inProgress;
+                    document.getElementById('stat-complaints-escalated').textContent = escalated;
+                    document.getElementById('stat-complaints-closed').textContent = closed;
+                    if (escalated > 0) {
+                        document.getElementById('kpi-complaints-sub').textContent = escalated + ' مصعّدة';
+                        document.getElementById('kpi-complaints-sub').classList.add('danger');
                     }
                 }
+                
+                if (incidentsRes.success || incidentsRes.data || Array.isArray(incidentsRes)) {
+                    const incidents = incidentsRes.data || incidentsRes.incidents || incidentsRes || [];
+                    const arr = Array.isArray(incidents) ? incidents : [];
+                    const open = arr.filter(i => !['مغلقة', 'closed', 'resolved'].includes((i.status || i.الحالة || '').toLowerCase())).length;
+                    const newI = arr.filter(i => ['جديدة', 'new'].includes((i.status || i.الحالة || '').toLowerCase())).length;
+                    const investigation = arr.filter(i => ['قيد التحقيق', 'investigating'].includes((i.status || i.الحالة || '').toLowerCase())).length;
+                    const escalated = arr.filter(i => ['مصعّدة', 'escalated'].includes((i.status || i.الحالة || '').toLowerCase())).length;
+                    const closed = arr.filter(i => ['مغلقة', 'closed', 'resolved'].includes((i.status || i.الحالة || '').toLowerCase())).length;
+                    
+                    document.getElementById('kpi-incidents').textContent = open || arr.length;
+                    document.getElementById('stat-incidents-new').textContent = newI;
+                    document.getElementById('stat-incidents-progress').textContent = investigation;
+                    document.getElementById('stat-incidents-escalated').textContent = escalated;
+                    document.getElementById('stat-incidents-closed').textContent = closed;
+                }
+                
+                if (risksRes.success || risksRes.data || Array.isArray(risksRes)) {
+                    const risks = risksRes.data || risksRes.risks || risksRes || [];
+                    const arr = Array.isArray(risks) ? risks : [];
+                    const active = arr.filter(r => !['مغلق', 'closed', 'resolved'].includes((r.status || r.الحالة || '').toLowerCase())).length;
+                    const high = arr.filter(r => ['عالي', 'high', 'critical'].includes((r.level || r.المستوى || r.severity || '').toLowerCase())).length;
+                    const medium = arr.filter(r => ['متوسط', 'medium'].includes((r.level || r.المستوى || r.severity || '').toLowerCase())).length;
+                    const low = arr.filter(r => ['منخفض', 'low'].includes((r.level || r.المستوى || r.severity || '').toLowerCase())).length;
+                    const resolved = arr.filter(r => ['مغلق', 'closed', 'resolved'].includes((r.status || r.الحالة || '').toLowerCase())).length;
+                    
+                    document.getElementById('kpi-risks').textContent = active || arr.length;
+                    document.getElementById('stat-risks-high').textContent = high;
+                    document.getElementById('stat-risks-medium').textContent = medium;
+                    document.getElementById('stat-risks-low').textContent = low;
+                    document.getElementById('stat-risks-resolved').textContent = resolved;
+                    if (high > 0) {
+                        document.getElementById('kpi-risks-sub').textContent = high + ' خطر عالي';
+                    }
+                }
+                
+                if (roundsRes.success || roundsRes.data || Array.isArray(roundsRes)) {
+                    const rounds = roundsRes.data || roundsRes.rounds || roundsRes || [];
+                    const arr = Array.isArray(rounds) ? rounds : [];
+                    const today = new Date().toDateString();
+                    const todayRounds = arr.filter(r => {
+                        const d = new Date(r.date || r.التاريخ || r.timestamp);
+                        return d.toDateString() === today;
+                    }).length;
+                    const delayed = arr.filter(r => ['متأخرة', 'delayed', 'overdue'].includes((r.status || r.الحالة || '').toLowerCase())).length;
+                    
+                    document.getElementById('kpi-rounds').textContent = todayRounds;
+                    document.getElementById('kpi-rounds-sub').textContent = delayed + ' متأخرة';
+                }
+                
             } catch (e) {
                 console.error('Error loading dashboard stats:', e);
             }
         }
         
-        function loadAlerts() {
+        async function loadAlerts() {
             const container = document.getElementById('alertsContainer');
-            apiCall('getOwnerDashboardStats').then(data => {
-                if (data.success) {
-                    const alerts = [];
-                    const stats = data.stats || data;
-                    
-                    if (stats.complaints && stats.complaints.escalated > 0) {
-                        alerts.push({ type: 'danger', icon: 'fas fa-comment-dots', text: `${stats.complaints.escalated} شكوى مصعّدة تحتاج مراجعة`, count: stats.complaints.escalated });
-                    }
-                    if (stats.incidents && stats.incidents.escalated > 0) {
-                        alerts.push({ type: 'danger', icon: 'fas fa-exclamation-triangle', text: `${stats.incidents.escalated} حادثة مصعّدة تحتاج تدخل`, count: stats.incidents.escalated });
-                    }
-                    if (stats.risks && stats.risks.high > 0) {
-                        alerts.push({ type: 'warning', icon: 'fas fa-shield-alt', text: `${stats.risks.high} مخاطر عالية المستوى`, count: stats.risks.high });
-                    }
-                    if (stats.rounds && stats.rounds.delayed > 0) {
-                        alerts.push({ type: 'warning', icon: 'fas fa-clipboard-check', text: `${stats.rounds.delayed} جولات متأخرة`, count: stats.rounds.delayed });
-                    }
-                    
-                    if (alerts.length > 0) {
-                        container.innerHTML = alerts.map(a => `
-                            <div class="alert-item ${a.type}">
-                                <i class="${a.icon}"></i>
-                                <span class="alert-text">${a.text}</span>
-                                <span class="alert-count">${a.count}</span>
-                            </div>
-                        `).join('');
-                    } else {
-                        container.innerHTML = `
-                            <div class="no-alerts">
-                                <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
-                                <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
-                            </div>
-                        `;
-                    }
+            const alerts = [];
+            
+            try {
+                const [complaintsRes, incidentsRes, risksRes, roundsRes] = await Promise.all([
+                    fetch(APIs.complaints + '?action=getAll').then(r => r.json()).catch(e => ({})),
+                    fetch(APIs.incidents + '?action=getAll').then(r => r.json()).catch(e => ({})),
+                    fetch(APIs.risks + '?action=getAll').then(r => r.json()).catch(e => ({})),
+                    fetch(APIs.rounds + '?action=getAll').then(r => r.json()).catch(e => ({}))
+                ]);
+                
+                const complaints = complaintsRes.data || complaintsRes.complaints || complaintsRes || [];
+                const arrC = Array.isArray(complaints) ? complaints : [];
+                const escalatedC = arrC.filter(c => ['مصعّدة', 'escalated'].includes((c.status || c.الحالة || '').toLowerCase())).length;
+                if (escalatedC > 0) alerts.push({ type: 'danger', icon: 'fas fa-comment-dots', text: `${escalatedC} شكوى مصعّدة تحتاج مراجعة`, count: escalatedC });
+                
+                const incidents = incidentsRes.data || incidentsRes.incidents || incidentsRes || [];
+                const arrI = Array.isArray(incidents) ? incidents : [];
+                const escalatedI = arrI.filter(i => ['مصعّدة', 'escalated'].includes((i.status || i.الحالة || '').toLowerCase())).length;
+                if (escalatedI > 0) alerts.push({ type: 'danger', icon: 'fas fa-exclamation-triangle', text: `${escalatedI} حادثة مصعّدة تحتاج تدخل`, count: escalatedI });
+                
+                const risks = risksRes.data || risksRes.risks || risksRes || [];
+                const arrR = Array.isArray(risks) ? risks : [];
+                const highR = arrR.filter(r => ['عالي', 'high', 'critical'].includes((r.level || r.المستوى || r.severity || '').toLowerCase())).length;
+                if (highR > 0) alerts.push({ type: 'warning', icon: 'fas fa-shield-alt', text: `${highR} مخاطر عالية المستوى`, count: highR });
+                
+                const rounds = roundsRes.data || roundsRes.rounds || roundsRes || [];
+                const arrRo = Array.isArray(rounds) ? rounds : [];
+                const delayed = arrRo.filter(r => ['متأخرة', 'delayed', 'overdue'].includes((r.status || r.الحالة || '').toLowerCase())).length;
+                if (delayed > 0) alerts.push({ type: 'warning', icon: 'fas fa-clipboard-check', text: `${delayed} جولات متأخرة`, count: delayed });
+                
+                if (alerts.length > 0) {
+                    container.innerHTML = alerts.map(a => `
+                        <div class="alert-item ${a.type}">
+                            <i class="${a.icon}"></i>
+                            <span class="alert-text">${a.text}</span>
+                            <span class="alert-count">${a.count}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = `
+                        <div class="no-alerts">
+                            <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
+                            <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
+                        </div>
+                    `;
                 }
-            }).catch(e => {
+            } catch (e) {
                 container.innerHTML = '<div class="no-alerts">خطأ في تحميل التنبيهات</div>';
-            });
+            }
         }
         
         function loadEocData() {
