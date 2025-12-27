@@ -359,9 +359,10 @@ function getHeatmap_(auth) {
     const required = parseInt(dept.RequiredBase) || 2;
     
     // حساب الموظفين الحاليين - بيانات حقيقية فقط
-    // Normalize Status للمقارنة + Unique StaffID لمنع التكرار
+    // Normalize DeptID + Status للمقارنة + Unique StaffID لمنع التكرار
+    const deptIdStr = String(deptId).trim();
     const currentShifts = shiftsData.filter(s => 
-      s.DeptID === deptId && 
+      String(s.DeptID || '').trim() === deptIdStr && 
       String(s.Status || '').toLowerCase().trim() === 'active'
     );
     // Unique staff count - لا نحسب نفس الموظف مرتين
@@ -1033,6 +1034,22 @@ function validatePayload_(payload, required) {
     }
   }
   return { valid: true };
+}
+
+// Lock wrapper لمنع التصادم في العمليات المتزامنة
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000); // انتظر 15 ثانية كحد أقصى
+    return fn();
+  } catch (e) {
+    if (e.message.includes('lock')) {
+      return { success: false, error: 'النظام مشغول حالياً، حاول مرة أخرى' };
+    }
+    throw e;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function logAudit_(auth, action, sheet, rowId, details) {
