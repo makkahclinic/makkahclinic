@@ -411,9 +411,16 @@ function getKpis_(auth) {
     ? Math.min(100, Math.round((shortfall / totalActual) * 50) + 10)
     : (totalRequired > 0 ? 100 : 0);
   
-  // سلامة الاستهلاك - حالياً ثابت حتى يتم ربط CurrentStock
-  // TODO: ربطها بـ Consumables_MinMax + Consumption_Live
-  const consumptionIntegrity = 90; // قيمة افتراضية آمنة
+  // سلامة الاستهلاك - من بيانات المخزون الحقيقية
+  let consumptionIntegrity = 90; // قيمة افتراضية
+  try {
+    const consumables = getConsumablesStatus_();
+    if (consumables.success && consumables.data.consumptionIntegrity !== undefined) {
+      consumptionIntegrity = consumables.data.consumptionIntegrity;
+    }
+  } catch (e) {
+    // إبقاء القيمة الافتراضية في حالة الخطأ
+  }
   
   const riskLevel = stressIndex > 40 || coverage < 70 ? 'high' : 
                     stressIndex > 25 || coverage < 85 ? 'medium' : 'low';
@@ -514,26 +521,43 @@ function getConsumablesStatus_() {
   const normal = [];
   
   data.forEach(item => {
-    const current = parseFloat(item['الاستهلاك الشهري']) || 0;
-    const min = parseFloat(item['حد أدنى (Min)']) || 0;
-    const max = parseFloat(item['حد أعلى (Max)']) || 100;
+    // المخزون الحالي - أولوية للـ CurrentStock ثم Balance
+    const currentStock = parseFloat(item['CurrentStock'] || item['المخزون الحالي'] || item['Balance']) || 0;
+    const min = parseFloat(item['حد أدنى (Min)'] || item['Min']) || 0;
+    const max = parseFloat(item['حد أعلى (Max)'] || item['Max']) || 100;
+    const monthlyUsage = parseFloat(item['الاستهلاك الشهري'] || item['MonthlyUsage']) || 1;
+    
+    // حساب نقطة إعادة الطلب = Min + (LeadTime بالأيام × متوسط الاستهلاك اليومي)
+    const leadTimeDays = parseFloat(item['LeadTime'] || 7); // افتراضي 7 أيام
+    const dailyUsage = monthlyUsage / 30;
+    const reorderPoint = min + (leadTimeDays * dailyUsage);
     
     const itemInfo = {
       name: item['الصنف'] || item.Item,
       department: item['الخدمة/القسم'] || item.Department,
-      current: current,
+      currentStock: currentStock,
       min: min,
-      max: max
+      max: max,
+      reorderPoint: Math.round(reorderPoint)
     };
     
-    if (current <= min) {
+    // التصنيف الصحيح: بناءً على المخزون الحالي
+    if (currentStock <= min) {
+      itemInfo.status = 'critical';
       critical.push(itemInfo);
-    } else if (current <= min * 1.5) {
+    } else if (currentStock <= reorderPoint) {
+      itemInfo.status = 'warning';
       warning.push(itemInfo);
     } else {
+      itemInfo.status = 'normal';
       normal.push(itemInfo);
     }
   });
+  
+  // حساب نسبة سلامة المخزون
+  const totalItems = data.length;
+  const healthyItems = normal.length;
+  const consumptionIntegrity = totalItems > 0 ? Math.round((healthyItems / totalItems) * 100) : 100;
   
   return {
     success: true,
@@ -541,7 +565,8 @@ function getConsumablesStatus_() {
       critical: critical.slice(0, 10),
       warning: warning.slice(0, 10),
       normalCount: normal.length,
-      total: data.length
+      total: totalItems,
+      consumptionIntegrity: consumptionIntegrity
     }
   };
 }
