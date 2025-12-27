@@ -1072,6 +1072,7 @@ function logAudit_(auth, action, sheet, rowId, details) {
     if (!auditSheet) {
       auditSheet = ss.insertSheet('Audit_Trail');
       auditSheet.appendRow(['AuditID', 'Timestamp', 'UserID', 'UserName', 'Action', 'Sheet', 'RowID', 'Details', 'Reason']);
+      protectAuditSheet_(ss, auditSheet);
     }
     
     auditSheet.appendRow([
@@ -1088,6 +1089,41 @@ function logAudit_(auth, action, sheet, rowId, details) {
   } catch (e) {
     console.log('Audit log error:', e.message);
   }
+}
+
+function protectAuditSheet_(ss, auditSheet) {
+  try {
+    const protection = auditSheet.protect().setDescription('Audit Trail - Protected from modification');
+    
+    const owner = ss.getOwner();
+    if (owner) {
+      protection.addEditor(owner);
+      protection.removeEditors(protection.getEditors());
+      protection.addEditor(owner);
+    }
+    
+    if (protection.canDomainEdit()) {
+      protection.setDomainEdit(false);
+    }
+    
+    protection.setWarningOnly(false);
+    console.log('Audit_Trail sheet protected successfully');
+  } catch (e) {
+    console.log('Protection setup error (non-critical):', e.message);
+  }
+}
+
+function setupAuditProtection() {
+  const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+  let auditSheet = ss.getSheetByName('Audit_Trail');
+  
+  if (!auditSheet) {
+    auditSheet = ss.insertSheet('Audit_Trail');
+    auditSheet.appendRow(['AuditID', 'Timestamp', 'UserID', 'UserName', 'Action', 'Sheet', 'RowID', 'Details', 'Reason']);
+  }
+  
+  protectAuditSheet_(ss, auditSheet);
+  return { success: true, message: 'Audit_Trail protection configured' };
 }
 
 function jsonpOutput_(data, callback) {
