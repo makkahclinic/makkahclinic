@@ -793,6 +793,7 @@
                         <option value="staff">موظف</option>
                     </select>
                     <button class="btn btn-primary" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <button class="btn" onclick="syncAuthUsers()" style="background:#10b981; color:white;"><i class="fas fa-cloud-download-alt"></i> مزامنة من Firebase</button>
                 </div>
                 <div id="usersContainer">
                     <div class="no-alerts">جاري التحميل...</div>
@@ -1360,47 +1361,60 @@
             });
         }
         
-        function loadUsers() {
+        async function loadUsers() {
             const container = document.getElementById('usersContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            apiCall('getStaffList').then(data => {
-                if (data.success && data.staff && data.staff.length > 0) {
+            try {
+                const snapshot = await db.collection('staff_roles').get();
+                const users = [];
+                snapshot.forEach(doc => {
+                    users.push({ uid: doc.id, ...doc.data() });
+                });
+                
+                if (users.length > 0) {
                     let active = 0, suspended = 0;
-                    data.staff.forEach(u => {
-                        if (u.Status === 'suspended' || u.Status === 'معلق') suspended++;
+                    users.forEach(u => {
+                        if (u.status === 'suspended') suspended++;
                         else active++;
                     });
                     
                     document.getElementById('usersActiveCount').textContent = active;
                     document.getElementById('usersSuspendedCount').textContent = suspended;
-                    document.getElementById('usersTotalCount').textContent = data.staff.length;
+                    document.getElementById('usersTotalCount').textContent = users.length;
                     
                     let html = '<table class="users-table"><thead><tr>';
                     html += '<th>الاسم</th><th>البريد</th><th>الدور</th><th>الحالة</th><th>إجراءات</th>';
                     html += '</tr></thead><tbody>';
                     
-                    data.staff.forEach(u => {
-                        const role = u.Role || u.الدور || 'staff';
-                        let roleClass = 'role-staff';
-                        let roleText = 'موظف';
-                        if (role === 'owner' || role === 'مالك') { roleClass = 'role-owner'; roleText = 'مالك'; }
-                        else if (role === 'admin' || role === 'مدير') { roleClass = 'role-admin'; roleText = 'مدير'; }
+                    const roleLabels = {
+                        'owner': { class: 'role-owner', text: 'مالك' },
+                        'admin': { class: 'role-admin', text: 'مدير' },
+                        'chair': { class: 'role-admin', text: 'رئيس لجنة' },
+                        'member': { class: 'role-staff', text: 'عضو' },
+                        'staff': { class: 'role-staff', text: 'موظف' },
+                        'viewer': { class: 'role-staff', text: 'مشاهد' },
+                        'pending': { class: 'role-staff', text: 'قيد المراجعة' }
+                    };
+                    
+                    users.forEach(u => {
+                        const role = u.role || 'staff';
+                        const roleInfo = roleLabels[role] || { class: 'role-staff', text: role };
                         
-                        const status = u.Status || 'active';
-                        const statusText = status === 'suspended' || status === 'معلق' ? 'معلق' : 'نشط';
-                        const statusColor = status === 'suspended' || status === 'معلق' ? '#f59e0b' : '#10b981';
+                        const status = u.status || 'active';
+                        const statusText = status === 'suspended' ? 'معلق' : 'نشط';
+                        const statusColor = status === 'suspended' ? '#f59e0b' : '#10b981';
                         
                         html += `<tr>
-                            <td>${u.Name || u.الاسم || '-'}</td>
-                            <td>${u.Email || u.البريد || '-'}</td>
-                            <td><span class="role-badge-small ${roleClass}">${roleText}</span></td>
+                            <td>${u.fullName || u.name || '-'}</td>
+                            <td>${u.email || '-'}</td>
+                            <td><span class="role-badge-small ${roleInfo.class}">${roleInfo.text}</span></td>
                             <td style="color:${statusColor}; font-weight:600;">${statusText}</td>
                             <td class="action-btns">
-                                <button onclick="toggleUserStatus('${u.Email || u.البريد}')" style="background:#f59e0b; color:white;" title="${status === 'suspended' ? 'تفعيل' : 'تعليق'}">
+                                <button onclick="toggleUserStatus('${u.uid}', '${status}')" style="background:#f59e0b; color:white;" title="${status === 'suspended' ? 'تفعيل' : 'تعليق'}">
                                     <i class="fas fa-${status === 'suspended' ? 'check' : 'pause'}"></i>
                                 </button>
-                                <button onclick="changeUserRole('${u.Email || u.البريد}')" style="background:#3b82f6; color:white;" title="تغيير الدور">
+                                <button onclick="changeUserRole('${u.uid}', '${role}')" style="background:#3b82f6; color:white;" title="تغيير الدور">
                                     <i class="fas fa-user-tag"></i>
                                 </button>
                             </td>
@@ -1410,12 +1424,12 @@
                     html += '</tbody></table>';
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = '<div class="no-alerts">لا يوجد مستخدمين</div>';
+                    container.innerHTML = '<div class="no-alerts">لا يوجد مستخدمين في staff_roles</div>';
                 }
-            }).catch(e => {
+            } catch(e) {
                 console.error('Error loading users:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المستخدمين</div>';
-            });
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المستخدمين: ' + e.message + '</div>';
+            }
         }
         
         function loadPermissions() {
@@ -1423,30 +1437,64 @@
             container.innerHTML = '<div class="no-alerts">نفس بيانات إدارة المستخدمين - استخدم تغيير الدور</div>';
         }
         
-        function toggleUserStatus(email) {
-            if (confirm('هل تريد تغيير حالة هذا المستخدم؟')) {
-                apiCall('toggleUserStatus', { email: email }).then(data => {
-                    if (data.success) {
-                        showToast('تم تغيير الحالة بنجاح');
-                        loadUsers();
-                    } else {
-                        showToast('فشل تغيير الحالة', true);
-                    }
-                }).catch(e => showToast('خطأ في الاتصال', true));
+        async function syncAuthUsers() {
+            if (!confirm('سيتم مزامنة جميع المستخدمين من Firebase Auth إلى قاعدة البيانات.\nهل تريد المتابعة؟')) return;
+            
+            const container = document.getElementById('usersContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري المزامنة...</div>';
+            
+            try {
+                const response = await fetch('/api/admin/sync-users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    showToast(`${data.message} (إجمالي: ${data.total})`);
+                    loadUsers();
+                } else {
+                    showToast('فشلت المزامنة: ' + data.error, true);
+                    container.innerHTML = '<div class="no-alerts">فشلت المزامنة</div>';
+                }
+            } catch(e) {
+                console.error('Sync error:', e);
+                showToast('خطأ في الاتصال', true);
+                container.innerHTML = '<div class="no-alerts">خطأ في الاتصال</div>';
             }
         }
         
-        function changeUserRole(email) {
-            const newRole = prompt('أدخل الدور الجديد (owner, admin, staff):');
-            if (newRole && ['owner', 'admin', 'staff'].includes(newRole.toLowerCase())) {
-                apiCall('changeUserRole', { email: email, role: newRole.toLowerCase() }).then(data => {
-                    if (data.success) {
-                        showToast('تم تغيير الدور بنجاح');
-                        loadUsers();
-                    } else {
-                        showToast('فشل تغيير الدور', true);
-                    }
-                }).catch(e => showToast('خطأ في الاتصال', true));
+        async function toggleUserStatus(uid, currentStatus) {
+            if (confirm('هل تريد تغيير حالة هذا المستخدم؟')) {
+                try {
+                    const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+                    await db.collection('staff_roles').doc(uid).update({
+                        status: newStatus
+                    });
+                    showToast('تم تغيير الحالة بنجاح');
+                    loadUsers();
+                } catch(e) {
+                    console.error('Error toggling status:', e);
+                    showToast('فشل تغيير الحالة: ' + e.message, true);
+                }
+            }
+        }
+        
+        async function changeUserRole(uid, currentRole) {
+            const newRole = prompt('أدخل الدور الجديد:\n(owner, admin, chair, member, staff, viewer)', currentRole);
+            if (newRole && ['owner', 'admin', 'chair', 'member', 'staff', 'viewer'].includes(newRole.toLowerCase())) {
+                try {
+                    await db.collection('staff_roles').doc(uid).update({
+                        role: newRole.toLowerCase()
+                    });
+                    showToast('تم تغيير الدور بنجاح');
+                    loadUsers();
+                } catch(e) {
+                    console.error('Error changing role:', e);
+                    showToast('فشل تغيير الدور: ' + e.message, true);
+                }
+            } else if (newRole) {
+                showToast('دور غير صالح', true);
             }
         }
         
