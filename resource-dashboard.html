@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRIS - نظام استخبارات الموارد الطبية</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1e3a5f;
+            --primary-light: #2d5a8a;
+            --gold: #c9a962;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --dark: #1a1a2e;
+            --darker: #0f0f1a;
+            --card-bg: rgba(30, 58, 95, 0.3);
+            --border: rgba(201, 169, 98, 0.2);
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 50%, var(--primary) 100%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: rgba(30, 58, 95, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .logo-section img {
+            height: 50px;
+        }
+        
+        .system-title {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .system-title h1 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--gold);
+        }
+        
+        .system-title span {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(0,0,0,0.3);
+            padding: 0.3rem;
+            border-radius: 10px;
+        }
+        
+        .mode-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+        
+        .mode-btn.active {
+            background: var(--primary-light);
+        }
+        
+        .mode-btn.normal.active { background: var(--success); }
+        .mode-btn.peak.active { background: var(--warning); }
+        .mode-btn.emergency.active { background: var(--danger); }
+        .mode-btn.survey.active { background: var(--info); }
+        
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        
+        .live-time {
+            text-align: center;
+        }
+        
+        .live-time .time {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--gold);
+        }
+        
+        .live-time .date {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+        }
+        
+        .kpi-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.2rem;
+            text-align: center;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gold);
+        }
+        
+        .kpi-card.success::before { background: var(--success); }
+        .kpi-card.warning::before { background: var(--warning); }
+        .kpi-card.danger::before { background: var(--danger); }
+        
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .kpi-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--gold);
+        }
+        
+        .kpi-card.success .kpi-value { color: var(--success); }
+        .kpi-card.warning .kpi-value { color: var(--warning); }
+        .kpi-card.danger .kpi-value { color: var(--danger); }
+        
+        .kpi-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-top: 0.3rem;
+        }
+        
+        .kpi-trend {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 10px;
+            display: inline-block;
+        }
+        
+        .kpi-trend.up { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .kpi-trend.down { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .kpi-trend.stable { background: rgba(59, 130, 246, 0.2); color: var(--info); }
+        
+        .heatmap-section {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            flex: 1;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--gold);
+        }
+        
+        .heatmap-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .heatmap-tab {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.8rem;
+            transition: all 0.3s;
+        }
+        
+        .heatmap-tab.active {
+            background: var(--gold);
+            color: var(--dark);
+            border-color: var(--gold);
+        }
+        
+        .floor-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .floor-section {
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        
+        .floor-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            color: var(--gold);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .floor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 0.8rem;
+        }
+        
+        .dept-cell {
+            background: rgba(16, 185, 129, 0.3);
+            border: 2px solid rgba(16, 185, 129, 0.5);
+            border-radius: 10px;
+            padding: 1rem 0.8rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .dept-cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+        
+        .dept-cell.green {
+            background: rgba(16, 185, 129, 0.3);
+            border-color: rgba(16, 185, 129, 0.6);
+        }
+        
+        .dept-cell.yellow {
+            background: rgba(245, 158, 11, 0.3);
+            border-color: rgba(245, 158, 11, 0.6);
+        }
+        
+        .dept-cell.red {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.6);
+            animation: pulse-red 2s infinite;
+        }
+        
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        
+        .dept-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .dept-stats {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            opacity: 0.9;
+        }
+        
+        .dept-coverage {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.5);
+        }
+        
+        .timeline-section {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1rem 1.5rem;
+        }
+        
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .timeline-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .timeline-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .timeline-btn {
+            padding: 0.3rem 0.6rem;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.75rem;
+        }
+        
+        .timeline-btn.active {
+            background: var(--gold);
+            color: var(--dark);
+            border-color: var(--gold);
+        }
+        
+        .timeline-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .timeline-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.2);
+            outline: none;
+        }
+        
+        .timeline-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--gold);
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .timeline-value {
+            min-width: 80px;
+            text-align: center;
+            font-weight: 600;
+            color: var(--gold);
+        }
+        
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .alerts-section {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.2rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .alerts-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .alert-badge {
+            background: var(--danger);
+            color: #fff;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        
+        .alert-item {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 0.8rem;
+            margin-bottom: 0.8rem;
+            border-right: 3px solid var(--warning);
+        }
+        
+        .alert-item.critical {
+            border-right-color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+        
+        .alert-item.info {
+            border-right-color: var(--info);
+        }
+        
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .alert-type {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--warning);
+        }
+        
+        .alert-item.critical .alert-type { color: var(--danger); }
+        .alert-item.info .alert-type { color: var(--info); }
+        
+        .alert-time {
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+        
+        .alert-message {
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        
+        .alert-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.8rem;
+        }
+        
+        .alert-action-btn {
+            flex: 1;
+            padding: 0.4rem;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .alert-action-btn.primary {
+            background: var(--gold);
+            color: var(--dark);
+        }
+        
+        .alert-action-btn.secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        
+        .recommendations-section {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.2rem;
+            flex: 1;
+        }
+        
+        .rec-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--gold);
+        }
+        
+        .rec-item {
+            background: rgba(201, 169, 98, 0.1);
+            border: 1px solid rgba(201, 169, 98, 0.3);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .rec-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .rec-icon {
+            font-size: 1.2rem;
+        }
+        
+        .rec-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .rec-description {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            line-height: 1.5;
+        }
+        
+        .rec-impact {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.8rem;
+            font-size: 0.7rem;
+        }
+        
+        .impact-item {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        
+        .impact-item.positive { color: var(--success); }
+        .impact-item.negative { color: var(--danger); }
+        .impact-item.neutral { color: var(--info); }
+        
+        .indices-section {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.2rem;
+        }
+        
+        .indices-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        
+        .index-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .index-item:last-child {
+            border-bottom: none;
+        }
+        
+        .index-name {
+            font-size: 0.85rem;
+        }
+        
+        .index-value {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .index-bar {
+            width: 60px;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .index-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+        
+        .index-fill.good { background: var(--success); }
+        .index-fill.medium { background: var(--warning); }
+        .index-fill.bad { background: var(--danger); }
+        
+        .index-percent {
+            font-size: 0.85rem;
+            font-weight: 600;
+            min-width: 40px;
+            text-align: left;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 15, 26, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border);
+            border-top-color: var(--gold);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 1.5rem;
+            font-size: 1rem;
+            color: var(--gold);
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: var(--dark);
+            border: 1px solid var(--gold);
+            border-radius: 8px;
+            padding: 0.8rem;
+            font-size: 0.8rem;
+            z-index: 1000;
+            min-width: 200px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            display: none;
+        }
+        
+        .tooltip.visible {
+            display: block;
+        }
+        
+        @media (max-width: 1200px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .kpi-row {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .right-panel {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .kpi-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .right-panel {
+                grid-template-columns: 1fr;
+            }
+            
+            .floor-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loader"></div>
+        <div class="loading-text">جاري تحميل نظام MRIS...</div>
+    </div>
+
+    <header class="header">
+        <div class="logo-section">
+            <img src="logo-transparent.png" alt="Logo" onerror="this.style.display='none'">
+            <div class="system-title">
+                <h1>نظام استخبارات الموارد الطبية</h1>
+                <span>Medical Resource Intelligence System - MRIS</span>
+            </div>
+        </div>
+        
+        <div class="mode-selector">
+            <button class="mode-btn normal active" data-mode="normal">🟢 عادي</button>
+            <button class="mode-btn peak" data-mode="peak">🟡 ذروة</button>
+            <button class="mode-btn emergency" data-mode="emergency">🔴 طوارئ</button>
+            <button class="mode-btn survey" data-mode="survey">📋 سباهي</button>
+        </div>
+        
+        <div class="header-info">
+            <div class="live-time">
+                <div class="time" id="liveTime">--:--:--</div>
+                <div class="date" id="liveDate">--</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <div class="left-panel">
+            <div class="kpi-row">
+                <div class="kpi-card success" id="kpi-coverage">
+                    <div class="kpi-icon">👥</div>
+                    <div class="kpi-value" id="coverageValue">--%</div>
+                    <div class="kpi-label">نسبة التغطية الإجمالية</div>
+                    <div class="kpi-trend stable" id="coverageTrend">⟷ مستقر</div>
+                </div>
+                
+                <div class="kpi-card" id="kpi-understaffed">
+                    <div class="kpi-icon">⚠️</div>
+                    <div class="kpi-value" id="understaffedValue">--</div>
+                    <div class="kpi-label">أقسام تحت الحد الأدنى</div>
+                    <div class="kpi-trend" id="understaffedTrend">--</div>
+                </div>
+                
+                <div class="kpi-card" id="kpi-stress">
+                    <div class="kpi-icon">💪</div>
+                    <div class="kpi-value" id="stressValue">--%</div>
+                    <div class="kpi-label">مؤشر إرهاق الطاقم</div>
+                    <div class="kpi-trend" id="stressTrend">--</div>
+                </div>
+                
+                <div class="kpi-card" id="kpi-consumption">
+                    <div class="kpi-icon">📦</div>
+                    <div class="kpi-value" id="consumptionValue">--%</div>
+                    <div class="kpi-label">سلامة الاستهلاك</div>
+                    <div class="kpi-trend" id="consumptionTrend">--</div>
+                </div>
+                
+                <div class="kpi-card" id="kpi-risk">
+                    <div class="kpi-icon">🛡️</div>
+                    <div class="kpi-value" id="riskValue">--</div>
+                    <div class="kpi-label">توقع المخاطر</div>
+                    <div class="kpi-trend" id="riskTrend">--</div>
+                </div>
+            </div>
+            
+            <div class="heatmap-section">
+                <div class="section-header">
+                    <h2 class="section-title">🗺️ خريطة الموارد الحية</h2>
+                    <div class="heatmap-tabs">
+                        <button class="heatmap-tab active" data-view="coverage">التغطية</button>
+                        <button class="heatmap-tab" data-view="workload">الضغط</button>
+                        <button class="heatmap-tab" data-view="consumption">الاستهلاك</button>
+                    </div>
+                </div>
+                
+                <div class="floor-container" id="floorContainer">
+                    <div class="floor-section">
+                        <div class="floor-label">🏢 الطابق الثاني</div>
+                        <div class="floor-grid" id="floor2"></div>
+                    </div>
+                    
+                    <div class="floor-section">
+                        <div class="floor-label">🏢 الطابق الأول</div>
+                        <div class="floor-grid" id="floor1"></div>
+                    </div>
+                    
+                    <div class="floor-section">
+                        <div class="floor-label">🏢 الطابق الأرضي</div>
+                        <div class="floor-grid" id="floor0"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="timeline-section">
+                <div class="timeline-header">
+                    <span class="timeline-title">⏱️ الخط الزمني</span>
+                    <div class="timeline-controls">
+                        <button class="timeline-btn active" data-range="today">اليوم</button>
+                        <button class="timeline-btn" data-range="week">الأسبوع</button>
+                        <button class="timeline-btn" data-range="month">الشهر</button>
+                    </div>
+                </div>
+                <div class="timeline-slider-container">
+                    <span>00:00</span>
+                    <input type="range" class="timeline-slider" id="timelineSlider" min="0" max="23" value="12">
+                    <span>23:59</span>
+                    <div class="timeline-value" id="timelineValue">12:00</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="alerts-section">
+                <h3 class="alerts-title">
+                    🔔 التنبيهات النشطة
+                    <span class="alert-badge" id="alertCount">0</span>
+                </h3>
+                <div id="alertsList">
+                    <div class="alert-item critical">
+                        <div class="alert-header">
+                            <span class="alert-type">⚠️ نقص تغطية</span>
+                            <span class="alert-time">منذ 5 دقائق</span>
+                        </div>
+                        <div class="alert-message">قسم الأسنان 2 - التغطية 60% فقط</div>
+                        <div class="alert-actions">
+                            <button class="alert-action-btn primary">اقتراح حل</button>
+                            <button class="alert-action-btn secondary">تأجيل</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="recommendations-section">
+                <h3 class="rec-title">💡 التوصيات الذكية</h3>
+                <div id="recommendationsList">
+                    <div class="rec-item">
+                        <div class="rec-header">
+                            <span class="rec-icon">🔄</span>
+                            <span class="rec-label">نقل موظف</span>
+                        </div>
+                        <div class="rec-description">نقل الممرضة (أ) من الباطنية 1 إلى الأسنان 2 سيحسن التغطية بنسبة 20%</div>
+                        <div class="rec-impact">
+                            <span class="impact-item positive">📈 تحسين التغطية</span>
+                            <span class="impact-item neutral">⏱️ 10 دقائق</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="indices-section">
+                <h3 class="indices-title">📊 المؤشرات الذكية</h3>
+                <div id="indicesList">
+                    <div class="index-item">
+                        <span class="index-name">Staff Stress Index</span>
+                        <div class="index-value">
+                            <div class="index-bar">
+                                <div class="index-fill good" style="width: 25%"></div>
+                            </div>
+                            <span class="index-percent">25%</span>
+                        </div>
+                    </div>
+                    <div class="index-item">
+                        <span class="index-name">Service Strain Index</span>
+                        <div class="index-value">
+                            <div class="index-bar">
+                                <div class="index-fill medium" style="width: 55%"></div>
+                            </div>
+                            <span class="index-percent">55%</span>
+                        </div>
+                    </div>
+                    <div class="index-item">
+                        <span class="index-name">Consumption Integrity</span>
+                        <div class="index-value">
+                            <div class="index-bar">
+                                <div class="index-fill good" style="width: 92%"></div>
+                            </div>
+                            <span class="index-percent">92%</span>
+                        </div>
+                    </div>
+                    <div class="index-item">
+                        <span class="index-name">Safety Risk Projection</span>
+                        <div class="index-value">
+                            <div class="index-bar">
+                                <div class="index-fill good" style="width: 15%"></div>
+                            </div>
+                            <span class="index-percent">15%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        const DEPARTMENTS = [
+            { id: 'reception', name: 'الاستقبال', floor: 1, required: 2, actual: 2 },
+            { id: 'batiniya1', name: 'الباطنية 1', floor: 2, required: 3, actual: 3 },
+            { id: 'batiniya2', name: 'الباطنية 2', floor: 2, required: 3, actual: 2 },
+            { id: 'batiniya3', name: 'الباطنية 3', floor: 2, required: 2, actual: 2 },
+            { id: 'dental', name: 'الأسنان', floor: 2, required: 4, actual: 3 },
+            { id: 'emergency', name: 'الطوارئ', floor: 1, required: 3, actual: 3 },
+            { id: 'general', name: 'الطب العام', floor: 1, required: 2, actual: 2 },
+            { id: 'pharmacy', name: 'الصيدلية', floor: 1, required: 2, actual: 2 },
+            { id: 'nursery', name: 'النساء والولادة', floor: 1, required: 2, actual: 1 },
+            { id: 'reception1', name: 'استقبال 1', floor: 1, required: 1, actual: 1 },
+            { id: 'reception2', name: 'استقبال 2', floor: 2, required: 1, actual: 1 },
+            { id: 'admin', name: 'الإدارة', floor: 0, required: 2, actual: 2 },
+            { id: 'lab', name: 'المختبر', floor: 0, required: 2, actual: 2 }
+        ];
+        
+        let currentMode = 'normal';
+        let currentView = 'coverage';
+        let currentHour = new Date().getHours();
+        
+        function updateLiveTime() {
+            const now = new Date();
+            document.getElementById('liveTime').textContent = now.toLocaleTimeString('ar-SA');
+            document.getElementById('liveDate').textContent = now.toLocaleDateString('ar-SA', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+        
+        function getCoverageClass(coverage) {
+            if (coverage >= 90) return 'green';
+            if (coverage >= 70) return 'yellow';
+            return 'red';
+        }
+        
+        function renderHeatmap() {
+            const floors = { 0: [], 1: [], 2: [] };
+            
+            DEPARTMENTS.forEach(dept => {
+                const coverage = Math.round((dept.actual / dept.required) * 100);
+                const colorClass = getCoverageClass(coverage);
+                
+                const cell = `
+                    <div class="dept-cell ${colorClass}" data-dept="${dept.id}" onclick="showDeptDetails('${dept.id}')">
+                        <span class="dept-coverage">${coverage}%</span>
+                        <div class="dept-name">${dept.name}</div>
+                        <div class="dept-stats">
+                            <span>👤 ${dept.actual}/${dept.required}</span>
+                        </div>
+                    </div>
+                `;
+                floors[dept.floor].push(cell);
+            });
+            
+            document.getElementById('floor0').innerHTML = floors[0].join('');
+            document.getElementById('floor1').innerHTML = floors[1].join('');
+            document.getElementById('floor2').innerHTML = floors[2].join('');
+        }
+        
+        function updateKPIs() {
+            let totalRequired = 0;
+            let totalActual = 0;
+            let understaffed = 0;
+            
+            DEPARTMENTS.forEach(dept => {
+                totalRequired += dept.required;
+                totalActual += dept.actual;
+                if (dept.actual < dept.required) understaffed++;
+            });
+            
+            const coverage = Math.round((totalActual / totalRequired) * 100);
+            
+            document.getElementById('coverageValue').textContent = coverage + '%';
+            document.getElementById('understaffedValue').textContent = understaffed;
+            
+            const coverageCard = document.getElementById('kpi-coverage');
+            coverageCard.className = 'kpi-card ' + (coverage >= 90 ? 'success' : coverage >= 70 ? 'warning' : 'danger');
+            
+            const understaffedCard = document.getElementById('kpi-understaffed');
+            understaffedCard.className = 'kpi-card ' + (understaffed === 0 ? 'success' : understaffed <= 2 ? 'warning' : 'danger');
+            
+            document.getElementById('stressValue').textContent = '25%';
+            document.getElementById('consumptionValue').textContent = '92%';
+            document.getElementById('riskValue').textContent = 'منخفض';
+            
+            document.getElementById('stressTrend').textContent = '↓ تحسن';
+            document.getElementById('stressTrend').className = 'kpi-trend up';
+            
+            document.getElementById('consumptionTrend').textContent = '⟷ طبيعي';
+            document.getElementById('consumptionTrend').className = 'kpi-trend stable';
+            
+            document.getElementById('riskTrend').textContent = '✓ آمن';
+            document.getElementById('riskTrend').className = 'kpi-trend up';
+            
+            document.getElementById('understaffedTrend').textContent = understaffed > 0 ? '↑ يحتاج متابعة' : '✓ ممتاز';
+            document.getElementById('understaffedTrend').className = 'kpi-trend ' + (understaffed > 0 ? 'down' : 'up');
+        }
+        
+        function showDeptDetails(deptId) {
+            const dept = DEPARTMENTS.find(d => d.id === deptId);
+            if (!dept) return;
+            
+            const coverage = Math.round((dept.actual / dept.required) * 100);
+            
+            alert(`
+${dept.name}
+────────────────
+التغطية: ${coverage}%
+الموظفين الحاليين: ${dept.actual}
+المطلوب: ${dept.required}
+الطابق: ${dept.floor === 0 ? 'الأرضي' : dept.floor === 1 ? 'الأول' : 'الثاني'}
+            `);
+        }
+        
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            
+            if (mode === 'survey') {
+                document.querySelector('.alerts-section').style.display = 'none';
+                document.querySelector('.recommendations-section').innerHTML = `
+                    <h3 class="rec-title">📋 أدلة سباهي الجاهزة</h3>
+                    <div class="rec-item">
+                        <div class="rec-header">
+                            <span class="rec-icon">📄</span>
+                            <span class="rec-label">LD 4.5 - Resource Adequacy</span>
+                        </div>
+                        <div class="rec-description">جميع الأدلة جاهزة: خطة التوظيف، المستهلكات، الصيانة</div>
+                    </div>
+                `;
+            } else {
+                document.querySelector('.alerts-section').style.display = 'block';
+            }
+        }
+        
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => setMode(btn.dataset.mode));
+        });
+        
+        document.querySelectorAll('.heatmap-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.heatmap-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentView = tab.dataset.view;
+                renderHeatmap();
+            });
+        });
+        
+        document.getElementById('timelineSlider').addEventListener('input', (e) => {
+            currentHour = parseInt(e.target.value);
+            document.getElementById('timelineValue').textContent = 
+                String(currentHour).padStart(2, '0') + ':00';
+        });
+        
+        document.querySelectorAll('.timeline-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.timeline-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+        
+        function init() {
+            updateLiveTime();
+            setInterval(updateLiveTime, 1000);
+            
+            renderHeatmap();
+            updateKPIs();
+            
+            setTimeout(() => {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }, 1500);
+            
+            document.getElementById('alertCount').textContent = '3';
+        }
+        
+        init();
+    </script>
+</body>
+</html>
