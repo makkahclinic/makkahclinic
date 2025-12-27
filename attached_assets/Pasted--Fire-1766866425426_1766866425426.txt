@@ -1,0 +1,113 @@
+سبب الإشكاليات الحقيقية + قرار واضح “إيش تمسح/إيش تبقي/إيش تطور/إيش تضيف”.
+المشكلة عندك الآن مو Firebase بحد ذاته… المشكلة تعدد مصادر الصلاحيات + عدم توحيد الـ Firebase Config + عدم توحيد اسم الحقول في Firestore Rules. وهذا بالضبط اللي يسبب “يدخل/ما يدخل” بشكل عشوائي.
+
+مبدأ أمني مهم: التحكم بالصلاحيات لازم يكون في كود موثوق (server-side / rules) وليس فقط في الواجهة. 
+OWASP
++1
+
+أهم 3 أخطاء لازم تنحل قبل أي تطوير كبير
+
+AuthGuard عندك فيه مصدر صلاحيات Apps Script (getUserRole)
+لكن صفحات الموظفين/الداشبورد عندك تعتمد Firestore (staff_roles / membershipRequests). هذا تضارب طبيعي.
+
+عندك Firebase Config مختلف داخل admin-request.html
+
+في admin-request.html عندك messagingSenderId و appId مختلفين عن باقي الصفحات (يعني غالبًا مشروع Firebase مختلف أو إعداد غلط).
+هذا وحده يخرب التسجيل/الأدوار لأن المستخدم يتسجل في مشروع، والدور ينبحث في مشروع ثاني.
+
+Firestore Rules عندك تستخدم حقل systems
+بينما الكود في الداشبورد يستخدم allowedSystems. هذا يخلي الدوال hasSystem() تفشل وبالتالي يتقفل/ينفتح وصول بشكل غير متوقع.
+
+كمان انتبه: Firestore Rules فيها حدود لعدد get()/exists() داخل الطلب، وتكرارها بكثرة ممكن يطلع “permission denied” لو تجاوزت الحد. 
+Firebase
+
+جدول القرارات: امسح / خليه / طوّره / أضف
+العنصر	القرار	السبب المختصر	التعديل المطلوب
+AuthGuard.loadUserRole() اللي يطلب من Apps Script	امسحه (في مسار الموظفين والسباهي)	عندك Firestore شغال ممتاز للموظفين (staff_roles) فخلّي مصدر واحد للصلاحيات	خلي AuthGuard يقرأ من staff_roles/{uid} بدل Apps Script
+AuthGuard.canAccess() و protectPage() اللي “معطّل مؤقتاً الكل يدخل”	امسحه فوراً (رجّعه شغال)	هذا يفتح النظام بالكامل لأي أحد ويكسر فكرة التحكم	رجّع الكود الأصلي وخلّه يعتمد على Firestore/Claims
+admin-login.html (موظفين) اللي يتحقق من staff_roles + status suspended	خليه	هذا صحيح كمنطق: لا دخول إلا للمقبولين	فقط وحّد role list وخلّيه يشتغل لكل أدوار الموظفين (مش بس admin/chair/member/staff/viewer)
+admin-dashboard.html (مركز القيادة) التحقق من staff_roles	خليه	الأفضل إن الداشبورد يعتمد Firestore مو Apps Script	لكن لازم تضيف “فلترة روابط الأنظمة” بدل ما تكون ثابتة للجميع (أو على الأقل تمنع فتح الأنظمة غير المصرح بها)
+doctor-login.html اللي يرجع للدور عبر Apps Script	طوّره	هذا حاليا مصدر مختلف عن الموظفين	خليه يعتمد على staff_roles أيضاً (role=doctor) أو Collection منفصل clinicians_roles
+admin-request.html اللي ينشئ مستخدم + يضيف membershipRequests	خليه مع تعديل	الفكرة ممتازة (طلب عضوية pending)	وحّد Firebase Config (نفس projectId/appId) + أضف فحص “البريد الرسمي” إن رغبت
+Firestore Rules الحالية	طوّرها	فيها mismatch (systems vs allowedSystems) + بعض الصلاحيات واسعة	عدّل hasSystem لتقرأ allowedSystems + قلّل الاعتماد على list/update العام
+تخزين staffRole في localStorage	قلّل الاعتماد عليه	localStorage قابل للتلاعب (مش مصدر صلاحية)	استخدمه فقط للـ UI، والصلاحية الحقيقية من Firestore Rules / Claims
+إضافة Custom Claims	أضفها كمرحلة ثانية (ممتازة)	تقلّل قراءات Firestore وتخلي القرار أسرع	Custom Claims تُضبط من Admin SDK فقط وتنتشر مع تجديد التوكن 
+Firebase
+“الطريقة الأحسن” لنظامك الحالي (بدون إعادة بناء من الصفر)
+المرحلة 1 (اليوم): توحيد المصدر = Firestore للموظفين
+
+خلي الموظفين + اللجان + سباهي + EOC كلها تعتمد على:
+
+staff_roles/{uid}: { role, status, allowedSystems, committee, ... }
+
+membershipRequests: pending/approved/rejected
+
+✅ تعديل AuthGuard (مهم)
+
+بدل Apps Script:
+
+loadUserRole(uid) يقرأ:
+
+staff_roles/{uid}
+
+وإذا ما موجود → role = viewer + status = pending (أو viewer فقط)
+
+المرحلة 2 (بعد ما يستقر): Custom Claims لتسريع القرار
+
+لما توافق على طلب في لوحة الإدارة:
+
+تكتب في Firestore
+
+وتضبط claims في المستخدم: { role: 'doctor', status: 'approved' }
+
+Firebase يشرح أن claims تُضبط فقط من Admin SDK وتحتاج refresh token لتظهر للعميل. 
+Firebase
+
+أهم إصلاح فوري في الـ Rules (عندك خطأ اسم حقل)
+
+أنت كاتب:
+
+(get(rolePath()).data.systems is list)
+&& get(rolePath()).data.systems.hasAny([sys]);
+
+
+بينما صفحاتك تستخدم:
+
+allowedSystems
+
+لازم توحّدهم. أقترح تخلي الاسم الرسمي: allowedSystems.
+
+أيضًا خذ بالك من حدود get/exists في rules. الأفضل تقلل تكرار get(rolePath()) قدر الإمكان لأن فيه حد أقصى للنداءات داخل الطلب. 
+Firebase
+
+نسخة محسّنة (فكرة جاهزة) لجزء hasSystem
+function roleDoc() {
+  return get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data;
+}
+
+function hasSystem(sys) {
+  return signedIn()
+    && exists(rolePath())
+    && roleDoc().status != "suspended"
+    && (roleDoc().allowedSystems is list)
+    && roleDoc().allowedSystems.hasAny([sys]);
+}
+
+أخطر نقطة لازم تعدلها الآن: Firebase Config في admin-request.html
+
+وجود appId و messagingSenderId مختلف = احتمالية كبيرة أنك تسجل المستخدم في مشروع، وتبحث عن صلاحياته في مشروع آخر.
+هذا يطلع لك مشاكل من نوع: “سجل… لكن ما يلقاه في staff_roles… أو الطلب ما يظهر”.
+
+قرار:
+✅ خلي كل الصفحات تستخدم نفس firebaseConfig حرفيًا.
+
+قرار نهائي (مختصر جدًا)
+
+خلي Firestore هو مصدر صلاحيات الموظفين بالكامل (staff_roles + membershipRequests).
+
+امسح اعتماد Apps Script في الموظفين/EOC/سباهي وخليه فقط للـ Logs والأنظمة التشغيلية.
+
+وحّد Firebase Config + وحّد اسم allowedSystems في rules والكود.
+
+بعد الاستقرار: أضف Custom Claims كترقية قوية. 
+Firebase
