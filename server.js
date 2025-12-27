@@ -1076,6 +1076,166 @@ app.post('/api/admin/sync-users', async (req, res) => {
   }
 });
 
+// Admin auth middleware - verify Firebase ID token
+async function requireAdminAuth(req, res, next) {
+  try {
+    if (!firebaseAdmin) {
+      return res.status(503).json({ ok: false, error: 'Firebase Admin not initialized' });
+    }
+    
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized - No token provided' });
+    }
+    
+    const idToken = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    
+    // Check if user is owner or admin
+    const OWNER_EMAIL = 'husseinbabsail@gmail.com';
+    if (decodedToken.email === OWNER_EMAIL) {
+      req.user = decodedToken;
+      return next();
+    }
+    
+    // Check staff_roles for admin role
+    const db = admin.firestore();
+    const roleDoc = await db.collection('staff_roles').doc(decodedToken.uid).get();
+    if (roleDoc.exists && ['owner', 'admin'].includes(roleDoc.data().role)) {
+      req.user = decodedToken;
+      return next();
+    }
+    
+    return res.status(403).json({ ok: false, error: 'Forbidden - Admin access required' });
+  } catch (err) {
+    console.error('Auth error:', err.message);
+    return res.status(401).json({ ok: false, error: 'Invalid token' });
+  }
+}
+
+// Reset user password (send reset email)
+app.post('/api/admin/users/:uid/reset-password', requireAdminAuth, async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const user = await admin.auth().getUser(uid);
+    
+    if (!user.email) {
+      return res.status(400).json({ ok: false, error: 'User has no email' });
+    }
+    
+    const resetLink = await admin.auth().generatePasswordResetLink(user.email);
+    
+    res.json({ 
+      ok: true, 
+      message: `تم إنشاء رابط إعادة تعيين كلمة السر`,
+      email: user.email,
+      resetLink
+    });
+  } catch (err) {
+    console.error('Error resetting password:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Delete user completely (Auth + Firestore)
+app.delete('/api/admin/users/:uid', requireAdminAuth, async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const db = admin.firestore();
+    
+    let authDeleted = false;
+    let firestoreDeleted = false;
+    let email = '';
+    
+    // Get user email first
+    try {
+      const user = await admin.auth().getUser(uid);
+      email = user.email || '';
+    } catch (e) {}
+    
+    // Delete from Firebase Auth
+    try {
+      await admin.auth().deleteUser(uid);
+      authDeleted = true;
+    } catch (e) {
+      console.error('Auth delete error:', e.message);
+    }
+    
+    // Delete from Firestore staff_roles
+    try {
+      await db.collection('staff_roles').doc(uid).delete();
+      firestoreDeleted = true;
+    } catch (e) {
+      console.error('Firestore delete error:', e.message);
+    }
+    
+    // Delete from membershipRequests if exists
+    if (email) {
+      try {
+        const requestsSnap = await db.collection('membershipRequests')
+          .where('email', '==', email).get();
+        for (const doc of requestsSnap.docs) {
+          await doc.ref.delete();
+        }
+      } catch (e) {}
+    }
+    
+    res.json({ 
+      ok: true, 
+      message: 'تم حذف المستخدم بالكامل',
+      authDeleted,
+      firestoreDeleted
+    });
+  } catch (err) {
+    console.error('Error deleting user:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Update user status (active/suspended)
+app.patch('/api/admin/users/:uid/status', requireAdminAuth, async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { status } = req.body;
+    
+    if (!['active', 'suspended'].includes(status)) {
+      return res.status(400).json({ ok: false, error: 'Invalid status' });
+    }
+    
+    const db = admin.firestore();
+    await db.collection('staff_roles').doc(uid).update({ status });
+    
+    // Also disable/enable in Firebase Auth
+    await admin.auth().updateUser(uid, { disabled: status === 'suspended' });
+    
+    res.json({ ok: true, message: `تم تحديث الحالة إلى ${status}` });
+  } catch (err) {
+    console.error('Error updating status:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Update user role
+app.patch('/api/admin/users/:uid/role', requireAdminAuth, async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { role } = req.body;
+    
+    const validRoles = ['owner', 'admin', 'chair', 'member', 'staff', 'viewer'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ ok: false, error: 'Invalid role' });
+    }
+    
+    const db = admin.firestore();
+    await db.collection('staff_roles').doc(uid).update({ role });
+    
+    res.json({ ok: true, message: `تم تحديث الدور إلى ${role}` });
+  } catch (err) {
+    console.error('Error updating role:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Emergency Plan Documents API
 app.get('/api/emergency-docs', async (req, res) => {
   try {
