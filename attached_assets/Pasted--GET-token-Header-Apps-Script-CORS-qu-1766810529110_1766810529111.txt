@@ -1,0 +1,123 @@
+✅ الحل:
+
+القراءة: GET لكن token في Header (صعب مع Apps Script مباشرة بدون CORS)، أو على الأقل حطه query لكن مع rotate tokens وقصر TTL.
+
+الكتابة: POST فقط (اللي أنت سويته ممتاز).
+
+للأفضل: “Reverse proxy” لاحقًا (Cloud Run / Vercel) لو تبي مستوى دولة فعلاً.
+
+3) Staff_Tokens مخزن توكنات نص صريح
+
+أي شخص عنده وصول للشيت يقدر يشوف التوكن.
+Properties Service موجود لتخزين مفاتيح/إعدادات (ليس مثالي 100% لكنه أفضل من وضعها في Sheet). 
+Google for Developers
++1
+
+✅ الحل العملي:
+
+لا تخزن التوكن “كما هو”
+
+خزنه Hash (مثلاً SHA-256) وقارن بالـ hash
+
+وخلي expiresAt إجباري + active إجباري
+
+4) الكتابة بـ appendRow فقط = مشاكل تزامن
+
+مع تعدد المستخدمين (Dashboard + Triggers) قد يصير overwrite أو تضارب، وهذا معروف مع appendRow تحت ضغط.
+الحل هو LockService + كتابة صفوف بطريقة آمنة. 
+Google for Developers
++1
+
+✅ الحل:
+
+لف كل عمليات الكتابة الحساسة بـ LockService.getScriptLock().waitLock(…); ثم release
+
+والأفضل: احسب nextRow واكتب setValues بدل appendRow
+
+5) الحساسية/الأمان: SENSITIVE_SHEETS متروك
+
+عرّفت SENSITIVE_SHEETS لكن ما استخدمته لحجب القراءة بشكل شامل.
+عندك getStaffRoster مضبوط، لكن لازم كمان:
+
+getDeptDetails لا يعرض staff إلا بإذن ✅ (موجود)
+
+لكن لازم تمنع أي action يقرأ شيتات حساسة “بالغلط” (Defense in depth).
+
+6) مشكلة منطقية في Consumables
+
+في getConsumablesStatus_() تستخدم الاستهلاك الشهري كأنه “المخزون الحالي” وتقارنه بـ Min/Max.
+هذا بيطلع قرارات توريد غلط.
+
+✅ التصحيح:
+
+لازم يكون عندك عمود: CurrentStock أو Balance
+
+ويُقارن بـ Min/Max
+
+أما “الاستهلاك الشهري” يستخدم لحساب Reorder Point وليس للحالة.
+
+7) أسماء الشيتات غير متسقة
+
+مرة Decisions_Log ومرة Decisions_Log/Decision_Log، ومرة Audit_Trail ومرة Audit_Trail…
+هذا يسبب أخطاء صامتة.
+
+✅ الحل:
+
+اعمل constants لأسماء الشيتات
+
+ولا تكتبها نصيًا في كل مكان
+
+8) خطأ catch في doGet
+
+أنت تستخدم catch (e) { ... e.parameter?.callback }
+لكن داخل catch، e أصبح الخطأ نفسه وليس event parameter.
+
+✅ الحل:
+
+سمّ الخطأ err
+
+واحتفظ بـ callback من البداية
+
+9) UI ممتازة… لكنها حالياً Demo أكثر من Live
+
+الواجهة تعرض قيم ثابتة (stress 25% / consumption 92%) وتوصيات نصية بدون data binding كامل.
+هذا ممتاز للعرض، لكن ليس تشغيل.
+
+✅ الحل:
+
+اربط getKpis/getIndices/getRecommendations/getAlerts فعلياً
+
+وبعدين “Survey mode” يطلع أدلة من الشيت (روابط PO/محاضر/سياسات)
+
+10) نظام “قرار → دليل” يحتاج ربط تلقائي
+
+أنت عندك logDecision / logAction / createProcurement
+لكن ما عندك:
+
+auto-link بين DecisionID و Procurement_ID و AlertID
+
+ولا “EvidenceRef” يجمع كل شيء في مكان واحد (Evidence Pack)
+
+✅ الحل:
+
+أي createProcurement لازم يأخذ decisionId أو alertRef إجباريًا
+
+وتكتب مرجعين في الطرفين
+
+إذا تبغى “مليون/100” (مستوى دولة) — 7 ترقيات لازم
+
+إزالة كل Random نهائياً (مع DEMO_MODE اختياري)
+
+Hash tokens + expiry + rotate
+
+LockService لكل كتابة + batch writes
+
+فصل “Logs append-only” مع حماية Sheet ranges (Protection)
+
+Data model ثابت: DeptID/StaffID/ItemID إلزامي
+
+Correct inventory logic (CurrentStock vs Consumption)
+
+Evidence pipeline: Decision → Action → Result → Evidence Pack
+
+حكمي النهائي
