@@ -83,24 +83,30 @@ const SPREADSHEET_IDS = {
 };
 
 async function main() {
-  console.log('=== قراءة بيانات الأقسام والموظفين ===\n');
+  console.log('=== تحليل ملف الموارد البشرية ===\n');
   
-  const EOC_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+  const HR_SHEET_ID = '1sbVyDFvjFn1pMc-2caKHuX2nwFAUtJ4RGq9As0_2vb4';
   
-  const sheetsToRead = ['EOC_DEPARTMENTS', 'Staff', 'Rooms', 'EOC_READINESS'];
+  console.log('📊 جلب قائمة الأوراق...\n');
+  const sheetNames = await getSheetNames(HR_SHEET_ID);
+  console.log('الأوراق المتوفرة:', sheetNames.join(' | '));
+  console.log('─'.repeat(60));
   
-  for (const sheetName of sheetsToRead) {
+  for (const sheetName of sheetNames) {
     console.log(`\n📋 ${sheetName}:`);
     console.log('─'.repeat(50));
     try {
-      const data = await readSheet(EOC_ID, sheetName);
+      const data = await readSheet(HR_SHEET_ID, sheetName);
       if (data && data.length > 0) {
-        console.log(`الأعمدة: ${data[0].join(' | ')}`);
+        console.log(`الأعمدة (${data[0].length}): ${data[0].join(' | ')}`);
         console.log(`عدد الصفوف: ${data.length - 1}`);
-        console.log('\nالبيانات:');
-        data.slice(1, 20).forEach((row, i) => {
-          console.log(`  ${i+1}. ${row.join(' | ')}`);
-        });
+        if (data.length > 1) {
+          console.log('\nعينة من البيانات:');
+          data.slice(1, 10).forEach((row, i) => {
+            const display = row.map(cell => String(cell || '').substring(0, 30)).join(' | ');
+            console.log(`  ${i+1}. ${display}`);
+          });
+        }
       } else {
         console.log('لا توجد بيانات');
       }
