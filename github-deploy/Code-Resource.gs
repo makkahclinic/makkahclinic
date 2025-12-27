@@ -724,12 +724,38 @@ function logDecision_(payload, auth) {
     sheet = ss.insertSheet('Decisions_Log');
     sheet.appendRow([
       'DecisionID', 'Timestamp', 'AlertID', 'RecommendationType', 'Description',
-      'Impact', 'Cost', 'Risk', 'ApprovedBy', 'ApprovalDate', 'Status'
+      'Impact', 'Cost', 'Risk', 'ApprovedBy', 'ApprovalDate', 'Status', 'EvidenceID'
     ]);
   }
   
   const decisionId = 'DEC' + Date.now();
   const timestamp = new Date().toISOString();
+  
+  // إنشاء Evidence Draft تلقائياً إذا لم يُقدم evidenceId
+  let evidenceId = payload.evidenceId || '';
+  if (!evidenceId) {
+    try {
+      const evidenceResult = linkEvidence_({
+        deptId: payload.deptId || 'ALL',
+        standardRef: payload.standardRef || 'LD4.5',
+        evidenceType: 'Decision',
+        evidenceLink: payload.evidenceLink || '',
+        summary: `قرار: ${payload.description}`,
+        alertId: payload.alertId,
+        decisionId: decisionId
+      }, auth);
+      
+      if (!evidenceResult.success) {
+        return { 
+          success: false, 
+          error: 'فشل إنشاء الدليل: ' + (evidenceResult.error || 'Unknown error')
+        };
+      }
+      evidenceId = evidenceResult.evidenceId;
+    } catch (e) {
+      return { success: false, error: 'خطأ في إنشاء الدليل: ' + e.message };
+    }
+  }
   
   sheet.appendRow([
     decisionId,
@@ -742,12 +768,13 @@ function logDecision_(payload, auth) {
     payload.risk || '',
     auth.staffName,
     timestamp,
-    'approved'
+    'approved',
+    evidenceId
   ]);
   
-  logAudit_(auth, 'CREATE', 'Decisions_Log', decisionId, 'Decision approved');
+  logAudit_(auth, 'CREATE', 'Decisions_Log', decisionId, 'Decision approved with evidence: ' + evidenceId);
   
-  return { success: true, decisionId: decisionId };
+  return { success: true, decisionId: decisionId, evidenceId: evidenceId };
 }
 
 function logAction_(payload, auth) {
@@ -837,6 +864,14 @@ function createProcurement_(payload, auth) {
     return { success: false, error: validation.error };
   }
   
+  // التحقق من وجود مرجع (Evidence أو Decision أو Alert) - إجباري للـ CBAHI
+  if (!payload.evidenceId && !payload.decisionId && !payload.alertRef) {
+    return { 
+      success: false, 
+      error: 'Evidence required: يجب تقديم evidenceId أو decisionId أو alertRef' 
+    };
+  }
+  
   const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
   let sheet = ss.getSheetByName('Procurement_Decisions');
   
@@ -844,12 +879,39 @@ function createProcurement_(payload, auth) {
     sheet = ss.insertSheet('Procurement_Decisions');
     sheet.appendRow([
       'ProcID', 'Date', 'ItemID', 'ItemName', 'Quantity', 'Justification',
-      'AlertRef', 'ApprovedBy', 'PRNumber', 'PONumber', 'DeliveryDate', 'Status'
+      'AlertRef', 'DecisionID', 'EvidenceID', 'ApprovedBy', 'PRNumber', 'PONumber', 'DeliveryDate', 'Status'
     ]);
   }
   
   const procId = 'PROC' + Date.now();
   const date = new Date().toISOString().split('T')[0];
+  
+  // إنشاء Evidence Draft تلقائياً للمشتريات
+  let evidenceId = payload.evidenceId || '';
+  if (!evidenceId) {
+    try {
+      const evidenceResult = linkEvidence_({
+        deptId: payload.deptId || 'ALL',
+        standardRef: 'LD4.5',
+        evidenceType: 'Procurement',
+        evidenceLink: payload.evidenceLink || '',
+        summary: `طلب شراء: ${payload.itemName || payload.itemId} - الكمية: ${payload.quantity}`,
+        alertId: payload.alertRef || '',
+        decisionId: payload.decisionId || '',
+        actionId: procId
+      }, auth);
+      
+      if (!evidenceResult.success) {
+        return { 
+          success: false, 
+          error: 'فشل إنشاء الدليل: ' + (evidenceResult.error || 'Unknown error')
+        };
+      }
+      evidenceId = evidenceResult.evidenceId;
+    } catch (e) {
+      return { success: false, error: 'خطأ في إنشاء الدليل: ' + e.message };
+    }
+  }
   
   sheet.appendRow([
     procId,
@@ -859,6 +921,8 @@ function createProcurement_(payload, auth) {
     payload.quantity,
     payload.justification,
     payload.alertRef || '',
+    payload.decisionId || '',
+    evidenceId,
     auth.staffName,
     '',
     '',
@@ -866,9 +930,9 @@ function createProcurement_(payload, auth) {
     'pending'
   ]);
   
-  logAudit_(auth, 'CREATE', 'Procurement_Decisions', procId, 'Procurement request: ' + payload.itemId);
+  logAudit_(auth, 'CREATE', 'Procurement_Decisions', procId, 'Procurement with evidence: ' + evidenceId);
   
-  return { success: true, procId: procId };
+  return { success: true, procId: procId, evidenceId: evidenceId };
 }
 
 function updateAssetStatus_(payload, auth) {
