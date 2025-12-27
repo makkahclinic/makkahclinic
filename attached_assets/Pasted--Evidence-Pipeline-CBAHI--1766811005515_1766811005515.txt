@@ -1,0 +1,135 @@
+✅ البداية الأفضل: ربط القرار → الدليل (Evidence Pipeline للـ CBAHI)
+لماذا هذه أولًا؟
+
+لأنها:
+
+تمنع أي “كلام بدون دليل”
+
+تجعل أي تنبيه/توصية/قرار قابل للتدقيق والتتبع
+
+وتخلي سباهي تشوف حوكمة تشغيل وليس واجهة جميلة فقط
+وبعدها، ربط الـUI والـalerts والمخزون يصير سهل لأن كل شيء صار له IDs ومسار رسمي.
+
+1) ما الذي سنضيفه داخل Google Sheet؟
+
+نضيف 3 تبويبات (إذا ما كانت موجودة):
+
+A) Evidence_Pipeline
+
+أعمدة مقترحة:
+
+EvidenceID
+
+Timestamp
+
+DeptID
+
+AlertID
+
+DecisionID
+
+ActionID
+
+EvidenceType (Policy / Minutes / PO / Photo / Training / Audit)
+
+EvidenceLink
+
+StandardRef (مثلاً LD4.5)
+
+Summary
+
+OwnerStaffID
+
+Status (Draft/Ready/Verified)
+
+VerifiedBy
+
+VerifiedAt
+
+B) Evidence_Links
+
+(لربط أكثر من دليل لنفس القرار)
+
+LinkID
+
+EvidenceID
+
+DocType
+
+DocLink
+
+Notes
+
+C) Standard_Map
+
+StandardRef
+
+Area (LD/HR/FMS/IC…)
+
+RequiredEvidenceTypes
+
+Notes
+
+2) ما الذي سيتغير في الـ API؟
+
+نضيف 3 Actions جديدة في doPost:
+
+✅ action=linkEvidence
+
+يربط دليل (رابط محضر/PO/سياسة/صورة) مع AlertID/DecisionID/ActionID.
+
+✅ action=finalizeEvidence
+
+يقفل الملف كـ “Ready” ويضيف توقيع/تحقق (VerifiedBy/At).
+
+✅ action=getEvidencePack
+
+يرجع لك قائمة أدلة جاهزة لقسم/فترة/معيار — وهذا اللي تستخدمه في “Survey Mode”.
+
+3) ربطه بالـ UI (Survey Mode)
+
+بدل النص الحالي في وضع “سباهي”، نخليه:
+
+يطلب getEvidencePack&deptId=...&standard=LD4.5
+
+ويعرض:
+
+Alerts → Decisions → Actions → Evidence Links
+
+زر Export لاحقًا (PDF/Excel)
+
+4) قواعد تمنع “الخبطة”
+
+لا يوجد قرار بدون ApprovedBy
+
+لا يوجد Procurement بدون DecisionID أو AlertID
+
+لا يوجد Evidence بدون StandardRef
+
+كل شيء Append-only في Logs
+
+5) بعدها مباشرة نعمل التالي (بالترتيب الصحيح)
+
+إصلاح Consumables بإضافة CurrentStock (لأن القرار الآن سيطلب دليل مخزون/توريد)
+
+نظام التنبيهات التلقائي (يبني Alerts قابلة للتدقيق)
+
+ربط UI بالبيانات الحية (الواجهة تصير حقيقة لا Demo)
+
+إضافة الأقسام الفعلية الـ13 على 3 طوابق (تغذية Heatmap الدقيقة)
+
+أحتاج منك فقط شيء واحد عشان أكتب لك كود الـ Pipeline جاهز
+
+هل تريد أن يكون EvidenceLink عبارة عن:
+
+روابط Google Drive/Docs فقط
+
+أو أي رابط + مرفقات (صور/ملفات) داخل Drive
+
+اختر رقم (1) أو (2)، وأنا أعطيك فورًا:
+
+تبويبات جاهزة + Headers
+
+Actions API الجديدة
+
+تعديل Survey Mode لعرض الدليل الحقيقي بدل النص.
