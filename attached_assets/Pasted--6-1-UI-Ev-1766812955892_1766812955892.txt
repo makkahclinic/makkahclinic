@@ -1,0 +1,101 @@
+اللي ينقص 6 نقاط هي “نواقص دولة” (صحة البيانات + تزامن + أمان + مصدر واحد للحقيقة).
+
+1) خلل UI في Evidence Pack (Bug منطقي)
+
+أنت كتبت:
+
+const response = await apiCall('getEvidencePack', {...});
+if (!response.success) throw ...
+return response.data || [];
+
+
+لكن apiCall() عندك يرجع response.data مباشرة (لأنه resolve(response.data)).
+يعني response.success غير موجود، وresponse.data غير موجود → هذا قد يخلي Survey Mode يطلع فاضي.
+
+✅ أصلحها هكذا:
+
+async function loadEvidencePack(deptId = '', standardRef = 'LD4.5') {
+  if (!API_TOKEN) return [];
+  try {
+    const items = await apiCall('getEvidencePack', { deptId, standardRef, status: '' });
+    return Array.isArray(items) ? items : [];
+  } catch (err) {
+    console.error('Failed to load evidence:', err);
+    return [];
+  }
+}
+
+2) Heatmap actual قد يحسب خطأ بسبب التكرار (لازم Unique StaffID)
+
+الآن actual = currentShifts.length
+لو نفس الموظف مسجل مرتين في Shifts_Live (أو في شفتين نشطين) سيتضاعف العدد.
+
+✅ تعديل بسيط داخل getHeatmap_:
+
+const currentShifts = shiftsData.filter(s =>
+  String(s.DeptID).trim() === String(deptId).trim() &&
+  String(s.Status || '').toLowerCase().trim() === 'active'
+);
+
+const uniqueStaff = new Set(
+  currentShifts.map(s => String(s.StaffID || '').trim()).filter(Boolean)
+);
+const actual = uniqueStaff.size;
+
+
+هذا يجعل النظام “دولة” لأن الرقم يصبح غير قابل للتلاعب بالتكرار.
+
+3) Status حساس للحروف (Active/active) ولازم normalize
+
+أنت تستخدم: s.Status === 'active'
+لازم:
+
+String(s.Status || '').toLowerCase().trim() === 'active'
+
+4) KPI Stress صار “أقوى”… لكنه ليس دولة بعد (ينقصه Ops_Feed)
+
+حساب الإرهاق عندك مبني على النقص فقط.
+لكن “دولة” لازم يدخل في الحساب:
+
+ضغط المرضى
+
+الانتظار
+
+الإجراءات
+
+✅ الحل: أنشئ Sheet Ops_Feed (أعمدة: Timestamp, DeptID, Patients_Count, Avg_Wait_Min, Procedures_Count)
+ثم عدّل stressIndex ليأخذ 40% نقص + 60% ضغط خدمة.
+
+(هذا بالضبط مفهوم الـ “services” في Web Apps وContentService لعرض JSON وقراءة البيانات). 
+Google for Developers
++1
+
+5) أكبر نقطة “دولة”: LockService لكل عمليات الكتابة
+
+حاليًا تستخدم appendRow بكثرة (Alerts/Decisions/Procurement/Evidence…).
+مع Trigger كل 15 دقيقة + مستخدمين متعددين، سيحدث Collision عاجلاً أم آجلاً.
+
+✅ أضف Wrapper عام:
+
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try { return fn(); }
+  finally { lock.releaseLock(); }
+}
+
+
+ثم لف كل write function هكذا:
+
+function logAlert_(payload, auth) {
+  return withLock_(() => {
+    // كل كود logAlert كما هو
+  });
+}
+
+
+LockService رسميًا مخصص لمنع التزامن والتصادم. 
+Google for Developers
++2
+Google for Developers
++2
