@@ -525,46 +525,46 @@
         <!-- قسم لوحة القيادة الرئيسية -->
         <section class="content-section active" id="section-dashboard">
             <div class="kpi-grid">
-                <div class="kpi-card" onclick="switchSection('eoc')">
+                <a href="eoc-command.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon eoc" id="eocIcon"><i class="fas fa-broadcast-tower"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-eoc">طبيعي</h3>
                         <p>حالة الطوارئ</p>
                         <span class="sub" id="kpi-eoc-status">الوضع طبيعي ✓</span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('complaints')">
+                </a>
+                <a href="complaint_mentoring.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-complaints">0</h3>
                         <p>شكوى مفتوحة</p>
                         <span class="sub" id="kpi-complaints-sub">قيد المعالجة</span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('incidents')">
+                </a>
+                <a href="incident-report-analysis.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon incidents"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-incidents">0</h3>
                         <p>حادثة مفتوحة</p>
                         <span class="sub" id="kpi-incidents-sub">تحتاج متابعة</span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('risks')">
+                </a>
+                <a href="risk-register.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon risks"><i class="fas fa-shield-alt"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-risks">0</h3>
                         <p>خطر نشط</p>
                         <span class="sub danger" id="kpi-risks-sub">يحتاج تقييم</span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('rounds')">
+                </a>
+                <a href="Round.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon rounds"><i class="fas fa-clipboard-check"></i></div>
                     <div class="kpi-info">
                         <h3 id="kpi-rounds">0</h3>
                         <p>جولة اليوم</p>
                         <span class="sub" id="kpi-rounds-sub">مكتملة</span>
                     </div>
-                </div>
+                </a>
                 <a href="calibration.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon calibration"><i class="fas fa-cogs"></i></div>
                     <div class="kpi-info">
@@ -1228,27 +1228,12 @@
             });
         }
         
-        async function loadComplaints() {
+        function loadComplaints() {
             const container = document.getElementById('complaintsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            try {
-                const response = await fetch(APIs.complaints, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: 'getComplaints', payload: {} }),
-                    redirect: 'follow'
-                });
-                const text = await response.text();
-                let data;
-                try {
-                    data = JSON.parse(text);
-                } catch (e) {
-                    console.error('Parse error:', text.substring(0, 200));
-                    container.innerHTML = '<div class="no-alerts">خطأ في تحليل البيانات</div>';
-                    return;
-                }
-                
+            apiCall('getComplaints').then(data => {
+                console.log('Complaints data:', data);
                 if ((data.ok || data.success) && data.complaints && data.complaints.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>الرقم</th><th>التاريخ</th><th>الشاكي</th><th>القسم</th><th>الحالة</th><th>إجراء</th>';
@@ -1280,10 +1265,10 @@
                 } else {
                     container.innerHTML = '<div class="no-alerts">لا توجد شكاوى</div>';
                 }
-            } catch (e) {
+            }).catch(e => {
                 console.error('Error loading complaints:', e);
                 container.innerHTML = '<div class="no-alerts">خطأ في تحميل الشكاوى</div>';
-            }
+            });
         }
         
         function loadIncidents() {
@@ -1484,7 +1469,7 @@
             'incidents': { name: 'الحوادث', icon: 'exclamation-triangle', color: '#f5576c' },
             'risks': { name: 'سجل المخاطر', icon: 'shield-alt', color: '#4facfe' },
             'rounds': { name: 'الجولات', icon: 'clipboard-check', color: '#43e97b' },
-            'calibration': { name: 'المعايرة', icon: 'tools', color: '#f093fb' },
+            'calibration': { name: 'المعايرة', icon: 'star-and-crescent', color: '#f093fb' },
             'maintenance': { name: 'الصيانة', icon: 'wrench', color: '#ffecd2' },
             'needlestick': { name: 'وخز الإبر', icon: 'syringe', color: '#ef4444' },
             'eoc': { name: 'مركز الطوارئ', icon: 'ambulance', color: '#dc2626' },
@@ -1815,29 +1800,17 @@
                 return;
             }
             
-            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم نهائياً!\n\n${email}\n\nهذا الإجراء لا يمكن التراجع عنه.`)) return;
+            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم من النظام!\n\n${email}\n\nهذا الإجراء لا يمكن التراجع عنه.`)) return;
             if (!confirm('تأكيد نهائي: هل أنت متأكد؟')) return;
             
             try {
-                const token = await auth.currentUser.getIdToken();
-                const response = await fetch(`/api/admin/users/${uid}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                const data = await response.json();
-                
-                if (data.ok) {
-                    showToast('تم حذف المستخدم بالكامل');
-                    loadUsers();
-                } else {
-                    showToast('فشل الحذف: ' + data.error, true);
-                }
+                await db.collection('staff_roles').doc(uid).delete();
+                showToast('تم حذف المستخدم من النظام بنجاح');
+                loadUsers();
+                loadPermissions();
             } catch(e) {
                 console.error('Delete user error:', e);
-                showToast('خطأ في الاتصال', true);
+                showToast('خطأ في حذف المستخدم: ' + e.message, true);
             }
         }
         
