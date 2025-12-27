@@ -403,7 +403,7 @@ function ensureSecureTokenSchema_(ss) {
     tokensSheet = ss.insertSheet('Staff_Tokens');
     tokensSheet.appendRow(expectedHeaders);
     tokensSheet.setFrozenRows(1);
-    return { sheet: tokensSheet, migrated: true };
+    return { sheet: tokensSheet, isNewSchema: true };
   }
   
   const data = tokensSheet.getDataRange().getValues();
@@ -411,20 +411,104 @@ function ensureSecureTokenSchema_(ss) {
   
   const hasNewSchema = currentHeaders.includes('tokenhash') || currentHeaders.includes('salt');
   
-  if (!hasNewSchema) {
-    const headerRow = tokensSheet.getRange(1, 1, 1, expectedHeaders.length);
-    headerRow.setValues([expectedHeaders]);
-    tokensSheet.setFrozenRows(1);
-    return { sheet: tokensSheet, migrated: true };
-  }
-  
-  return { sheet: tokensSheet, migrated: false };
+  return { sheet: tokensSheet, isNewSchema: hasNewSchema };
+}
+
+function migrateToSecureTokenSchema() {
+  return withLock_(() => {
+    const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
+    const tokensSheet = ss.getSheetByName('Staff_Tokens');
+    
+    if (!tokensSheet) {
+      return { success: false, error: 'Staff_Tokens sheet not found' };
+    }
+    
+    const data = tokensSheet.getDataRange().getValues();
+    const oldHeaders = data[0].map(h => String(h).toLowerCase().trim());
+    
+    const hasNewSchema = oldHeaders.includes('tokenhash') || oldHeaders.includes('salt');
+    if (hasNewSchema) {
+      return { success: true, message: 'Schema already migrated', migratedCount: 0 };
+    }
+    
+    const newSheet = ss.insertSheet('Staff_Tokens_Secure');
+    const newHeaders = ['StaffID', 'StaffName', 'Role', 'TokenHash', 'Salt', 'ExpiresAt', 'Active', 'CreatedAt'];
+    newSheet.appendRow(newHeaders);
+    newSheet.setFrozenRows(1);
+    
+    const oldTokenCol = oldHeaders.findIndex(h => h === 'token');
+    const oldStaffIdCol = oldHeaders.findIndex(h => h === 'staffid' || h === 'staff_id');
+    const oldStaffNameCol = oldHeaders.findIndex(h => h === 'staffname' || h === 'staff_name');
+    const oldRoleCol = oldHeaders.findIndex(h => h === 'role' || h === 'roleid');
+    const oldExpiresCol = oldHeaders.findIndex(h => h === 'expiresat' || h === 'expires_at' || h === 'expires');
+    const oldActiveCol = oldHeaders.findIndex(h => h === 'active');
+    
+    let migratedCount = 0;
+    const tokenMap = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const oldToken = oldTokenCol !== -1 ? String(row[oldTokenCol] || '') : '';
+      const staffId = oldStaffIdCol !== -1 ? row[oldStaffIdCol] : 'UNKNOWN';
+      const staffName = oldStaffNameCol !== -1 ? row[oldStaffNameCol] : 'مستخدم';
+      const role = oldRoleCol !== -1 ? String(row[oldRoleCol] || 'viewer').toLowerCase() : 'viewer';
+      const expiresAt = oldExpiresCol !== -1 && row[oldExpiresCol] ? row[oldExpiresCol] : '';
+      const isActive = oldActiveCol === -1 || String(row[oldActiveCol]).toUpperCase() !== 'FALSE';
+      
+      if (!oldToken || !isActive) continue;
+      
+      const newToken = generateSecureToken_();
+      const salt = generateSalt_();
+      const tokenHash = hashToken_(newToken, salt);
+      
+      const newExpiry = new Date();
+      newExpiry.setDate(newExpiry.getDate() + 30);
+      
+      newSheet.appendRow([
+        staffId,
+        staffName,
+        role,
+        tokenHash,
+        salt,
+        expiresAt || newExpiry.toISOString(),
+        'TRUE',
+        new Date().toISOString()
+      ]);
+      
+      tokenMap.push({
+        staffId: staffId,
+        staffName: staffName,
+        oldToken: oldToken.substring(0, 8) + '...',
+        newToken: newToken
+      });
+      
+      migratedCount++;
+    }
+    
+    ss.deleteSheet(tokensSheet);
+    newSheet.setName('Staff_Tokens');
+    
+    return { 
+      success: true, 
+      message: `Migration complete. ${migratedCount} tokens migrated to secure schema.`,
+      migratedCount: migratedCount,
+      tokenMap: tokenMap,
+      warning: 'IMPORTANT: Distribute new tokens to users. Old tokens are now invalid.'
+    };
+  });
 }
 
 function createHashedToken_(staffId, staffName, role, expiresInDays) {
   return withLock_(() => {
     const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-    const { sheet: tokensSheet } = ensureSecureTokenSchema_(ss);
+    const { sheet: tokensSheet, isNewSchema } = ensureSecureTokenSchema_(ss);
+    
+    if (!isNewSchema) {
+      return { 
+        success: false, 
+        error: 'Legacy token schema detected. Run migrateToSecureTokenSchema() first to migrate existing tokens.'
+      };
+    }
     
     const plainToken = generateSecureToken_();
     const salt = generateSalt_();
@@ -461,7 +545,14 @@ function rotateToken_(currentToken) {
   
   return withLock_(() => {
     const ss = SpreadsheetApp.openById(MRIS_SPREADSHEET_ID);
-    const { sheet: tokensSheet } = ensureSecureTokenSchema_(ss);
+    const { sheet: tokensSheet, isNewSchema } = ensureSecureTokenSchema_(ss);
+    
+    if (!isNewSchema) {
+      return { 
+        success: false, 
+        error: 'Legacy token schema detected. Run migrateToSecureTokenSchema() first to migrate existing tokens.'
+      };
+    }
     
     if (validation.rowIndex) {
       const data = tokensSheet.getDataRange().getValues();
