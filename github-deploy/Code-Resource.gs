@@ -58,11 +58,11 @@ const SENSITIVE_SHEETS = ['Staff_Roster', 'Staff_Tokens', 'Audit_Trail'];
 
 // ==================== MAIN API HANDLER ====================
 function doGet(e) {
+  const callback = e?.parameter?.callback;
   try {
     const p = e.parameter;
     const action = p.action;
     const token = p.token;
-    const callback = p.callback;
     
     // التحقق من التوكن
     const auth = validateToken_(token);
@@ -150,8 +150,8 @@ function doGet(e) {
     
     return jsonpOutput_(result, callback);
     
-  } catch (e) {
-    return jsonpOutput_({ success: false, error: e.message }, e.parameter?.callback);
+  } catch (err) {
+    return jsonpOutput_({ success: false, error: err.message }, callback);
   }
 }
 
@@ -358,12 +358,12 @@ function getHeatmap_(auth) {
     const deptId = dept.DeptID || dept.ID;
     const required = parseInt(dept.RequiredBase) || 2;
     
-    // حساب الموظفين الحاليين
+    // حساب الموظفين الحاليين - بيانات حقيقية فقط
     const currentShifts = shiftsData.filter(s => 
       s.DeptID === deptId && 
       s.Status === 'active'
     );
-    const actual = currentShifts.length || Math.floor(Math.random() * required) + 1; // محاكاة
+    const actual = currentShifts.length; // لا random - قيمة حقيقية
     
     const coverage = Math.round((actual / required) * 100);
     
@@ -402,11 +402,19 @@ function getKpis_(auth) {
     if (d.actual < d.required) understaffed++;
   });
   
-  const coverage = Math.round((totalActual / totalRequired) * 100);
+  const coverage = totalRequired > 0 ? Math.round((totalActual / totalRequired) * 100) : 0;
   
-  // مؤشرات إضافية (محاكاة)
-  const stressIndex = Math.floor(Math.random() * 30) + 10;
-  const consumptionIntegrity = Math.floor(Math.random() * 15) + 85;
+  // حساب مؤشر الإرهاق بناءً على نسبة النقص
+  // كلما زاد النقص زاد الضغط على الموظفين الموجودين
+  const shortfall = totalRequired - totalActual;
+  const stressIndex = totalActual > 0 
+    ? Math.min(100, Math.round((shortfall / totalActual) * 50) + 10)
+    : (totalRequired > 0 ? 100 : 0);
+  
+  // سلامة الاستهلاك - حالياً ثابت حتى يتم ربط CurrentStock
+  // TODO: ربطها بـ Consumables_MinMax + Consumption_Live
+  const consumptionIntegrity = 90; // قيمة افتراضية آمنة
+  
   const riskLevel = stressIndex > 40 || coverage < 70 ? 'high' : 
                     stressIndex > 25 || coverage < 85 ? 'medium' : 'low';
   
