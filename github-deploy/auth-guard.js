@@ -134,31 +134,38 @@ const AuthGuard = {
 
     /**
      * التحقق من صلاحية الوصول لنوع صفحة معين
+     * ⚠️ معطّل مؤقتاً - الكل يدخل
      */
     canAccess(pageType) {
-        if (!this.currentUser || !this.userRole) return false;
+        // ⚠️ معطّل مؤقتاً - السماح للجميع
+        return true;
         
-        const allowedRoles = this.pagePermissions[pageType] || [];
-        return allowedRoles.includes(this.userRole);
+        // الكود الأصلي (معلّق):
+        // if (!this.currentUser || !this.userRole) return false;
+        // const allowedRoles = this.pagePermissions[pageType] || [];
+        // return allowedRoles.includes(this.userRole);
     },
 
     /**
      * حماية الصفحة - يعيد التوجيه إذا لم يكن مصرح
+     * ⚠️ معطّل مؤقتاً - الكل يدخل
      */
     async protectPage(pageType, redirectUrl = '/admin-login.html') {
         await this.init();
 
-        if (!this.currentUser) {
-            window.location.href = redirectUrl;
-            return false;
-        }
-
-        if (!this.canAccess(pageType)) {
-            this.showAccessDenied();
-            return false;
-        }
-
+        // ⚠️ معطّل مؤقتاً - السماح للجميع حتى بدون تسجيل دخول
         return true;
+
+        // الكود الأصلي (معلّق):
+        // if (!this.currentUser) {
+        //     window.location.href = redirectUrl;
+        //     return false;
+        // }
+        // if (!this.canAccess(pageType)) {
+        //     this.showAccessDenied();
+        //     return false;
+        // }
+        // return true;
     },
 
     /**
