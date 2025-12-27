@@ -1127,6 +1127,24 @@ ${dept.name}
             `);
         }
         
+        async function loadEvidencePack(deptId = '', standardRef = 'LD4.5') {
+            if (!API_TOKEN) return [];
+            
+            try {
+                const response = await apiCall('getEvidencePack', {
+                    deptId: deptId,
+                    standardRef: standardRef,
+                    status: ''
+                });
+                
+                if (!response.success) throw new Error(response.error || 'Evidence API error');
+                return response.data || [];
+            } catch (err) {
+                console.error('Failed to load evidence:', err);
+                return [];
+            }
+        }
+        
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -1135,16 +1153,64 @@ ${dept.name}
             
             if (mode === 'survey') {
                 document.querySelector('.alerts-section').style.display = 'none';
+                
                 document.querySelector('.recommendations-section').innerHTML = `
-                    <h3 class="rec-title">📋 أدلة سباهي الجاهزة</h3>
-                    <div class="rec-item">
-                        <div class="rec-header">
-                            <span class="rec-icon">📄</span>
-                            <span class="rec-label">LD 4.5 - Resource Adequacy</span>
-                        </div>
-                        <div class="rec-description">جميع الأدلة جاهزة: خطة التوظيف، المستهلكات، الصيانة</div>
+                    <h3 class="rec-title">📋 أدلة سباهي الحية</h3>
+                    <div id="evidenceList" style="display:flex; flex-direction:column; gap:0.8rem;">
+                        <div class="rec-item"><div class="rec-description">جاري تحميل الأدلة...</div></div>
                     </div>
                 `;
+                
+                loadEvidencePack('', 'LD4.5').then(items => {
+                    const box = document.getElementById('evidenceList');
+                    if (!items.length) {
+                        box.innerHTML = `
+                            <div class="rec-item">
+                                <div class="rec-description">لا توجد أدلة مسجلة بعد. ابدأ بربط أول دليل عبر API.</div>
+                                <div style="margin-top:10px; font-size:0.75rem; opacity:0.7;">
+                                    استخدم action=linkEvidence لإضافة محاضر وسياسات وأوامر شراء
+                                </div>
+                            </div>`;
+                        return;
+                    }
+                    
+                    box.innerHTML = items.slice().reverse().slice(0, 20).map(ev => {
+                        const statusColor = ev.status === 'Verified' ? '#28a745' : 
+                                          ev.status === 'Ready' ? 'var(--gold)' : '#888';
+                        const statusIcon = ev.status === 'Verified' ? '✅' : 
+                                         ev.status === 'Ready' ? '📋' : '📝';
+                        
+                        const att = (ev.attachments || []).map(a => `
+                            <div style="margin-top:6px; font-size:0.75rem; opacity:0.85;">
+                                📎 <a href="${a.docLink}" target="_blank" style="color:var(--gold); text-decoration:none;">${a.docType}</a>
+                                ${a.notes ? `<span style="opacity:0.7;"> - ${a.notes}</span>` : ''}
+                            </div>
+                        `).join('');
+                        
+                        return `
+                            <div class="rec-item" style="border-right: 3px solid ${statusColor};">
+                                <div class="rec-header">
+                                    <span class="rec-icon">${statusIcon}</span>
+                                    <span class="rec-label">${ev.standardRef} — ${ev.evidenceType}</span>
+                                    <span style="margin-right:auto; font-size:0.7rem; color:${statusColor};">${ev.status}</span>
+                                </div>
+                                <div class="rec-description">${ev.summary}</div>
+                                <div style="margin-top:8px; font-size:0.8rem;">
+                                    🔗 <a href="${ev.evidenceLink}" target="_blank" style="color:var(--gold); text-decoration:none;">فتح الدليل الرئيسي</a>
+                                </div>
+                                ${att}
+                                <div style="margin-top:8px; font-size:0.7rem; opacity:0.6;">
+                                    القسم: ${ev.deptId || 'الكل'} | التنبيه: ${ev.alertId || '-'} | القرار: ${ev.decisionId || '-'}
+                                    ${ev.verifiedBy ? `| تحقق: ${ev.verifiedBy}` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }).catch(err => {
+                    const box = document.getElementById('evidenceList');
+                    if (box) box.innerHTML = `<div class="rec-item"><div class="rec-description">تعذر تحميل الأدلة: ${err.message}</div></div>`;
+                });
+                
             } else {
                 document.querySelector('.alerts-section').style.display = 'block';
             }

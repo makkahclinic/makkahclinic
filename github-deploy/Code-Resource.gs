@@ -130,6 +130,20 @@ function doGet(e) {
         }
         result = getRecommendations_(auth);
         break;
+      
+      // ==================== EVIDENCE PIPELINE GET ====================
+      case 'getEvidencePack':
+        if (!hasPermission_(auth.role, SHEET_EVIDENCE_PIPELINE, 'read') && 
+            auth.role !== 'admin' && auth.role !== 'quality') {
+          return jsonpOutput_({ success: false, error: 'Permission denied: Evidence access required' }, callback);
+        }
+        result = getEvidencePack_({
+          deptId: p.deptId || '',
+          standardRef: p.standardRef || '',
+          status: p.status || ''
+        }, auth);
+        break;
+      
       default:
         result = { success: false, error: 'Unknown action: ' + action };
     }
@@ -1132,11 +1146,22 @@ function linkEvidence_(payload, auth) {
   return { success:true, evidenceId };
 }
 
-// payload: { evidenceId, status:'Ready'|'Verified', verifyNote? }
+// payload: { evidenceId, status:'Draft'|'Ready'|'Verified' }
 function finalizeEvidence_(payload, auth) {
   const required = ['evidenceId','status'];
   const v = validatePayload_(payload, required);
   if (!v.valid) return { success:false, error:v.error };
+
+  // التحقق من الصلاحية: يجب أن يكون لديه canWrite
+  if (!ROLES[auth.role]?.canWrite) {
+    return { success:false, error:'Permission denied: write access required' };
+  }
+  
+  // التحقق من صحة قيمة Status
+  const validStatuses = ['Draft', 'Ready', 'Verified'];
+  if (!validStatuses.includes(payload.status)) {
+    return { success:false, error:'Invalid status. Must be: Draft, Ready, or Verified' };
+  }
 
   // Verified يتطلب admin/quality فقط
   if (payload.status === 'Verified' && !(auth.role === 'admin' || auth.role === 'quality')) {
