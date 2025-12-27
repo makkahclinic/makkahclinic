@@ -6,17 +6,14 @@
     <title>مركز القيادة والسيطرة - المالك</title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <style>
         :root {
             --primary: #1e3a5f;
             --primary-dark: #152a45;
             --gold: #c9a962;
-            --success: #10b981;
+            --success: #28a745;
+            --warning: #ffc107;
             --danger: #dc3545;
-            --warning: #f59e0b;
             --info: #17a2b8;
             --bg-light: #f8f9fa;
             --sidebar-width: 260px;
@@ -39,7 +36,6 @@
             right: 0;
             top: 0;
             z-index: 100;
-            transition: transform 0.3s;
             overflow-y: auto;
         }
         .sidebar-header {
@@ -124,9 +120,6 @@
         }
         .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
         .btn-outline:hover { background: var(--primary); color: white; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-success { background: var(--success); color: white; }
         
         .kpi-grid {
             display: grid;
@@ -177,22 +170,23 @@
             color: white;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-        .kpi-icon.eoc { background: linear-gradient(135deg, #10b981, #059669); }
-        .kpi-icon.eoc.active { background: linear-gradient(135deg, #dc2626, #991b1b); animation: pulse 1s infinite; }
+        .kpi-icon.eoc { background: linear-gradient(135deg, #10b981, #059669); transition: all 0.3s; }
+        .kpi-icon.eoc.active { background: linear-gradient(135deg, #dc2626, #991b1b); animation: eocPulse 1s infinite; }
+        @keyframes eocPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+            50% { transform: scale(1.08); box-shadow: 0 0 20px 5px rgba(220, 38, 38, 0.4); }
+        }
         .kpi-icon.complaints { background: linear-gradient(135deg, #667eea, #764ba2); }
         .kpi-icon.incidents { background: linear-gradient(135deg, #f093fb, #f5576c); }
         .kpi-icon.risks { background: linear-gradient(135deg, #4facfe, #00f2fe); }
         .kpi-icon.rounds { background: linear-gradient(135deg, #43e97b, #38f9d7); }
         .kpi-icon.calibration { background: linear-gradient(135deg, #fa709a, #fee140); }
         .kpi-icon.maintenance { background: linear-gradient(135deg, #667eea, #764ba2); }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
+        .kpi-icon.needlestick { background: linear-gradient(135deg, #a8edea, #fed6e3); color: #333; }
         .kpi-info h3 { font-size: 1.6rem; color: var(--primary); line-height: 1; font-weight: 700; }
         .kpi-info p { font-size: 0.8rem; color: #555; margin-top: 4px; font-weight: 500; }
         .kpi-info .sub { font-size: 0.75rem; color: #999; display: block; margin-top: 2px; }
-        .kpi-info .sub.danger { color: var(--danger) !important; font-weight: 700; }
+        .kpi-info .sub.danger { color: #DC143C !important; font-weight: 700; }
         
         .alerts-section {
             background: white;
@@ -293,87 +287,28 @@
         .refresh-btn:hover { background: #f0f0f0; }
         .refresh-btn.loading i { animation: spin 1s linear infinite; }
         
-        .users-table {
-            width: 100%;
-            border-collapse: collapse;
+        .quick-links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.8rem;
         }
-        .users-table th {
-            background: var(--bg-light);
-            padding: 12px;
-            text-align: right;
-            font-weight: 600;
-            color: var(--primary);
-            border-bottom: 2px solid #e2e8f0;
-        }
-        .users-table td {
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .users-table tr:hover { background: #f8fafc; }
-        .role-badge-small {
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .role-owner { background: #fef3c7; color: #92400e; }
-        .role-admin { background: #dbeafe; color: #1e40af; }
-        .role-staff { background: #e5e7eb; color: #374151; }
-        
-        .action-btns { display: flex; gap: 5px; }
-        .action-btns button {
-            padding: 5px 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: all 0.3s;
-        }
-        
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-        .data-table th {
-            background: var(--primary);
-            color: white;
-            padding: 12px;
-            text-align: right;
-            font-weight: 600;
-        }
-        .data-table td {
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .data-table tr:hover { background: #f1f5f9; }
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .status-new { background: #dbeafe; color: #1e40af; }
-        .status-progress { background: #fef3c7; color: #92400e; }
-        .status-escalated { background: #fee2e2; color: #991b1b; }
-        .status-closed { background: #d1fae5; color: #065f46; }
-        .status-high { background: #fee2e2; color: #991b1b; }
-        .status-medium { background: #fef3c7; color: #92400e; }
-        .status-low { background: #d1fae5; color: #065f46; }
-        
-        .filter-bar {
+        .quick-link {
             display: flex;
-            gap: 10px;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 1rem;
+            background: white;
+            border-radius: 10px;
+            text-decoration: none;
+            color: var(--primary);
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            font-size: 0.8rem;
+            text-align: center;
         }
-        .filter-bar input, .filter-bar select {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-family: inherit;
-        }
-        .filter-bar input { flex: 1; min-width: 200px; }
+        .quick-link:hover { background: var(--primary); color: white; transform: translateY(-2px); }
+        .quick-link i { font-size: 1.5rem; }
         
         @media (max-width: 992px) {
             .sidebar { transform: translateX(100%); }
@@ -413,27 +348,6 @@
             font-weight: 700;
             margin-top: 20px;
         }
-        
-        .toast {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--success);
-            color: white;
-            padding: 15px 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            display: none;
-            z-index: 9999;
-            font-weight: 600;
-        }
-        .toast.error { background: var(--danger); }
-        .toast.show { display: block; animation: slideUp 0.3s ease; }
-        @keyframes slideUp {
-            from { transform: translate(-50%, 100px); opacity: 0; }
-            to { transform: translate(-50%, 0); opacity: 1; }
-        }
     </style>
 </head>
 <body>
@@ -451,7 +365,7 @@
 
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <img src="logo-transparent.png" alt="Logo" onerror="this.src='https://via.placeholder.com/60?text=M'">
+            <img src="logo-transparent.png" alt="Logo" onerror="this.style.display='none'">
             <h3 id="ownerName">المالك</h3>
             <span class="role-badge"><i class="fas fa-crown"></i> المالك</span>
         </div>
@@ -460,39 +374,44 @@
                 <i class="fas fa-tachometer-alt"></i>
                 <span>مركز القيادة</span>
             </a>
-            <a class="nav-item" data-section="eoc">
-                <i class="fas fa-broadcast-tower"></i>
-                <span>مركز EOC</span>
-            </a>
             <a class="nav-item" href="cbahi-portal.html" target="_blank">
                 <i class="fas fa-award"></i>
                 <span>بوابة سباهي</span>
             </a>
             <div class="nav-divider"></div>
-            <a class="nav-item" data-section="complaints">
+            <a class="nav-item" href="eoc-command.html" target="_blank">
+                <i class="fas fa-broadcast-tower"></i>
+                <span>مركز القيادة EOC</span>
+            </a>
+            <a class="nav-item" href="complaint_analysis.html" target="_blank">
                 <i class="fas fa-comment-dots"></i>
-                <span>الشكاوى</span>
+                <span>تحليل الشكاوى</span>
             </a>
-            <a class="nav-item" data-section="incidents">
+            <a class="nav-item" href="incident-report-analysis.html" target="_blank">
                 <i class="fas fa-exclamation-triangle"></i>
-                <span>الحوادث</span>
+                <span>تحليل الحوادث</span>
             </a>
-            <a class="nav-item" data-section="risks">
+            <a class="nav-item" href="risk-register.html" target="_blank">
                 <i class="fas fa-shield-alt"></i>
                 <span>سجل المخاطر</span>
             </a>
-            <a class="nav-item" data-section="rounds">
+            <a class="nav-item" href="Round.html" target="_blank">
                 <i class="fas fa-clipboard-check"></i>
                 <span>جولات السلامة</span>
             </a>
             <div class="nav-divider"></div>
-            <a class="nav-item" data-section="users">
-                <i class="fas fa-users-cog"></i>
-                <span>إدارة المستخدمين</span>
+            <a class="nav-item" href="calibration.html" target="_blank">
+                <i class="fas fa-cogs"></i>
+                <span>المعايرة</span>
             </a>
-            <a class="nav-item" data-section="permissions">
-                <i class="fas fa-user-shield"></i>
-                <span>إدارة الصلاحيات</span>
+            <a class="nav-item" href="maintenance.html" target="_blank">
+                <i class="fas fa-wrench"></i>
+                <span>الصيانة</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a class="nav-item" href="admin-dashboard.html" target="_blank">
+                <i class="fas fa-users-cog"></i>
+                <span>لوحة الإدارة</span>
             </a>
             <div class="nav-divider"></div>
             <a class="nav-item" id="logoutBtn">
@@ -512,7 +431,7 @@
                 <p id="dateDisplay">مجمع مكة الطبي بالزاهر</p>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
-                <button class="refresh-btn" id="refreshBtn" title="تحديث البيانات" onclick="loadAllData()">
+                <button class="refresh-btn" id="refreshBtn" title="تحديث البيانات" onclick="loadDashboardData()">
                     <i class="fas fa-sync-alt"></i>
                 </button>
                 <a href="index.html" class="btn btn-outline">
@@ -522,60 +441,84 @@
             </div>
         </div>
 
-        <!-- قسم لوحة القيادة الرئيسية -->
         <section class="content-section active" id="section-dashboard">
             <div class="kpi-grid">
-                <div class="kpi-card" onclick="switchSection('eoc')">
-                    <div class="kpi-icon eoc" id="eocIcon"><i class="fas fa-broadcast-tower"></i></div>
+                <a href="eoc-command.html" target="_blank" class="kpi-card" id="eocSmartCard">
+                    <div class="kpi-icon eoc" id="eocSmartIcon"><i class="fas fa-triangle-exclamation"></i></div>
                     <div class="kpi-info">
-                        <h3 id="kpi-eoc">طبيعي</h3>
-                        <p>حالة الطوارئ</p>
+                        <h3 id="kpi-eoc-count">0</h3>
+                        <p id="kpi-eoc-label">حالة طوارئ</p>
                         <span class="sub" id="kpi-eoc-status">الوضع طبيعي ✓</span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('complaints')">
+                </a>
+                <a href="complaint_analysis.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
                     <div class="kpi-info">
-                        <h3 id="kpi-complaints">0</h3>
+                        <h3 id="kpi-complaints-open">-</h3>
                         <p>شكوى مفتوحة</p>
-                        <span class="sub" id="kpi-complaints-sub">قيد المعالجة</span>
+                        <span class="sub" id="kpi-complaints-escalated"></span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('incidents')">
+                </a>
+                <a href="incident-report-analysis.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon incidents"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="kpi-info">
-                        <h3 id="kpi-incidents">0</h3>
+                        <h3 id="kpi-incidents-open">-</h3>
                         <p>حادثة مفتوحة</p>
-                        <span class="sub" id="kpi-incidents-sub">تحتاج متابعة</span>
+                        <span class="sub" id="kpi-incidents-escalated"></span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('risks')">
+                </a>
+                <a href="risk-register.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon risks"><i class="fas fa-shield-alt"></i></div>
                     <div class="kpi-info">
-                        <h3 id="kpi-risks">0</h3>
+                        <h3 id="kpi-risks-active">-</h3>
                         <p>خطر نشط</p>
-                        <span class="sub danger" id="kpi-risks-sub">يحتاج تقييم</span>
+                        <span class="sub" id="kpi-risks-high"></span>
                     </div>
-                </div>
-                <div class="kpi-card" onclick="switchSection('rounds')">
+                </a>
+                <a href="Round.html" target="_blank" class="kpi-card">
                     <div class="kpi-icon rounds"><i class="fas fa-clipboard-check"></i></div>
                     <div class="kpi-info">
-                        <h3 id="kpi-rounds">0</h3>
+                        <h3 id="kpi-rounds-today">-</h3>
                         <p>جولة اليوم</p>
-                        <span class="sub" id="kpi-rounds-sub">مكتملة</span>
+                        <span class="sub" id="kpi-rounds-delayed"></span>
                     </div>
-                </div>
+                </a>
+                <a href="calibration.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon calibration"><i class="fas fa-cogs"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-calibration-compliance">-</h3>
+                        <p>نسبة المعايرة</p>
+                        <span class="sub" id="kpi-calibration-overdue"></span>
+                    </div>
+                </a>
+                <a href="maintenance.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon maintenance"><i class="fas fa-wrench"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-maintenance-total">-</h3>
+                        <p>أجهزة بدون صيانة</p>
+                        <span class="sub" id="kpi-maintenance-completed" style="color:#28a745"></span>
+                        <span class="sub" id="kpi-maintenance-overdue"></span>
+                    </div>
+                </a>
+                <a href="pages/needlestick_analysis.html" target="_blank" class="kpi-card">
+                    <div class="kpi-icon needlestick"><i class="fas fa-syringe"></i></div>
+                    <div class="kpi-info">
+                        <h3 id="kpi-needlestick">-</h3>
+                        <p>حالة وخز إبري</p>
+                        <span class="sub" id="kpi-needlestick-month"></span>
+                    </div>
+                </a>
             </div>
 
             <div class="alerts-section">
                 <div class="section-header">
                     <h3><i class="fas fa-bell"></i> التنبيهات والتصعيدات</h3>
-                    <button class="refresh-btn" onclick="loadAlerts()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    <button class="refresh-btn" onclick="loadDashboardData()"><i class="fas fa-sync-alt"></i> تحديث</button>
                 </div>
                 <div id="alertsContainer">
                     <div class="no-alerts">
                         <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
-                        <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
+                        <p>جاري تحميل التنبيهات...</p>
                     </div>
                 </div>
             </div>
@@ -585,225 +528,99 @@
                     <h4><i class="fas fa-comment-dots"></i> الشكاوى</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
-                        <span class="value" id="stat-complaints-new">0</span>
+                        <span class="value" id="stat-complaints-new">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">قيد المعالجة</span>
-                        <span class="value warning" id="stat-complaints-progress">0</span>
+                        <span class="value warning" id="stat-complaints-progress">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">مصعّدة</span>
-                        <span class="value danger" id="stat-complaints-escalated">0</span>
+                        <span class="value danger" id="stat-complaints-escalated">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">مغلقة</span>
-                        <span class="value success" id="stat-complaints-closed">0</span>
+                        <span class="value success" id="stat-complaints-closed">-</span>
                     </div>
                 </div>
                 <div class="stats-box">
                     <h4><i class="fas fa-exclamation-triangle"></i> الحوادث</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
-                        <span class="value" id="stat-incidents-new">0</span>
+                        <span class="value" id="stat-incidents-new">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">قيد التحقيق</span>
-                        <span class="value warning" id="stat-incidents-progress">0</span>
+                        <span class="value warning" id="stat-incidents-progress">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">مصعّدة</span>
-                        <span class="value danger" id="stat-incidents-escalated">0</span>
+                        <span class="value danger" id="stat-incidents-escalated">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">مغلقة</span>
-                        <span class="value success" id="stat-incidents-closed">0</span>
+                        <span class="value success" id="stat-incidents-closed">-</span>
                     </div>
                 </div>
                 <div class="stats-box">
                     <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
                     <div class="stats-row">
                         <span class="label">خطر عالي</span>
-                        <span class="value danger" id="stat-risks-high">0</span>
+                        <span class="value danger" id="stat-risks-high">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">خطر متوسط</span>
-                        <span class="value warning" id="stat-risks-medium">0</span>
+                        <span class="value warning" id="stat-risks-medium">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">خطر منخفض</span>
-                        <span class="value" id="stat-risks-low">0</span>
+                        <span class="value" id="stat-risks-low">-</span>
                     </div>
                     <div class="stats-row">
                         <span class="label">مُعالجة</span>
-                        <span class="value success" id="stat-risks-resolved">0</span>
+                        <span class="value success" id="stat-risks-resolved">-</span>
                     </div>
                 </div>
             </div>
-        </section>
 
-        <!-- قسم مركز EOC -->
-        <section class="content-section" id="section-eoc">
             <div class="stats-box">
-                <h4><i class="fas fa-broadcast-tower"></i> مركز القيادة EOC - التحكم في الطوارئ</h4>
-                <div id="eocStatusCard" style="padding: 20px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 10px; color: white; text-align: center; margin-bottom: 20px;">
-                    <i class="fas fa-check-circle" style="font-size: 3rem; margin-bottom: 10px;"></i>
-                    <h3 style="font-size: 1.5rem;">الوضع طبيعي</h3>
-                    <p>لا توجد حالات طوارئ نشطة</p>
-                </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
-                    <a href="eoc-command.html" target="_blank" class="btn btn-primary"><i class="fas fa-external-link-alt"></i> فتح EOC كامل</a>
-                    <a href="emergency-report.html" target="_blank" class="btn btn-danger"><i class="fas fa-exclamation-circle"></i> إبلاغ طوارئ</a>
-                    <a href="Emergency.html" target="_blank" class="btn btn-outline"><i class="fas fa-tv"></i> شاشة العرض</a>
-                </div>
-                <h4 style="margin-top: 20px;"><i class="fas fa-history"></i> آخر البلاغات</h4>
-                <div id="eocReportsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم الشكاوى -->
-        <section class="content-section" id="section-complaints">
-            <div class="stats-box">
-                <h4><i class="fas fa-comment-dots"></i> إدارة الشكاوى</h4>
-                <div class="filter-bar">
-                    <input type="text" id="complaintsSearch" placeholder="🔍 بحث في الشكاوى...">
-                    <select id="complaintsFilter">
-                        <option value="">جميع الحالات</option>
-                        <option value="new">جديدة</option>
-                        <option value="in_progress">قيد المعالجة</option>
-                        <option value="escalated">مصعّدة</option>
-                        <option value="closed">مغلقة</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadComplaints()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="complaint_analysis.html" target="_blank" class="btn btn-outline"><i class="fas fa-chart-bar"></i> التحليل</a>
-                </div>
-                <div id="complaintsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم الحوادث -->
-        <section class="content-section" id="section-incidents">
-            <div class="stats-box">
-                <h4><i class="fas fa-exclamation-triangle"></i> إدارة الحوادث</h4>
-                <div class="filter-bar">
-                    <input type="text" id="incidentsSearch" placeholder="🔍 بحث في الحوادث...">
-                    <select id="incidentsFilter">
-                        <option value="">جميع الحالات</option>
-                        <option value="new">جديدة</option>
-                        <option value="under_investigation">قيد التحقيق</option>
-                        <option value="escalated">مصعّدة</option>
-                        <option value="closed">مغلقة</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadIncidents()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="incident-report-analysis.html" target="_blank" class="btn btn-outline"><i class="fas fa-chart-bar"></i> التحليل</a>
-                </div>
-                <div id="incidentsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم المخاطر -->
-        <section class="content-section" id="section-risks">
-            <div class="stats-box">
-                <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
-                <div class="filter-bar">
-                    <input type="text" id="risksSearch" placeholder="🔍 بحث في المخاطر...">
-                    <select id="risksFilter">
-                        <option value="">جميع المستويات</option>
-                        <option value="high">خطر عالي</option>
-                        <option value="medium">خطر متوسط</option>
-                        <option value="low">خطر منخفض</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadRisks()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="risk-register.html" target="_blank" class="btn btn-outline"><i class="fas fa-plus"></i> تسجيل خطر</a>
-                </div>
-                <div id="risksContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم الجولات -->
-        <section class="content-section" id="section-rounds">
-            <div class="stats-box">
-                <h4><i class="fas fa-clipboard-check"></i> جولات السلامة</h4>
-                <div class="filter-bar">
-                    <input type="date" id="roundsDate">
-                    <button class="btn btn-primary" onclick="loadRounds()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="Round.html" target="_blank" class="btn btn-outline"><i class="fas fa-external-link-alt"></i> نظام الجولات</a>
-                </div>
-                <div id="roundsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم إدارة المستخدمين -->
-        <section class="content-section" id="section-users">
-            <div class="stats-box">
-                <h4><i class="fas fa-users-cog"></i> إدارة المستخدمين - تحكم كامل</h4>
-                <div id="usersStats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius:12px;">
-                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #10b981;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:#10b981;" id="usersActiveCount">0</div>
-                        <div style="font-size:0.8rem; color:#666;">نشط</div>
-                    </div>
-                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #f59e0b;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="usersSuspendedCount">0</div>
-                        <div style="font-size:0.8rem; color:#666;">معلق</div>
-                    </div>
-                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #1e3a5f;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="usersTotalCount">0</div>
-                        <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
-                    </div>
-                </div>
-                <div class="filter-bar">
-                    <input type="text" id="usersSearch" placeholder="🔍 بحث بالاسم أو البريد...">
-                    <select id="usersRoleFilter">
-                        <option value="">جميع الأدوار</option>
-                        <option value="owner">مالك</option>
-                        <option value="admin">مدير</option>
-                        <option value="staff">موظف</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                </div>
-                <div id="usersContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم إدارة الصلاحيات -->
-        <section class="content-section" id="section-permissions">
-            <div class="stats-box">
-                <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات</h4>
-                <p style="color:#666; margin-bottom:15px;">تعيين الأدوار والصلاحيات للموظفين</p>
-                <div id="permissionsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
+                <h4><i class="fas fa-rocket"></i> الوصول السريع</h4>
+                <div class="quick-links-grid">
+                    <a href="report.html" class="quick-link" target="_blank">
+                        <i class="fas fa-comment-alt"></i>
+                        <span>رفع شكوى</span>
+                    </a>
+                    <a href="incident-report.html" class="quick-link" target="_blank">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>بلاغ حادثة</span>
+                    </a>
+                    <a href="risk-register.html?action=new" class="quick-link" target="_blank">
+                        <i class="fas fa-shield-virus"></i>
+                        <span>تسجيل خطر</span>
+                    </a>
+                    <a href="ipc/incidents/report-needlestick.html" class="quick-link" target="_blank">
+                        <i class="fas fa-syringe"></i>
+                        <span>بلاغ وخز</span>
+                    </a>
+                    <a href="mega.html" class="quick-link" target="_blank">
+                        <i class="fas fa-th-large"></i>
+                        <span>المركز الرقمي</span>
+                    </a>
+                    <a href="cbahi-portal.html" class="quick-link" target="_blank">
+                        <i class="fas fa-award"></i>
+                        <span>بوابة سباهي</span>
+                    </a>
                 </div>
             </div>
         </section>
     </main>
 
-    <div class="toast" id="toast">
-        <i class="fas fa-check-circle"></i>
-        <span id="toastMessage">تم الحفظ بنجاح</span>
-    </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    <script>
         const OWNER_EMAIL = 'husseinbabsail@gmail.com';
-        const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
-        
-        const APIs = {
-            main: API_URL,
-            complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBBF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
-            incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
-            risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
-            rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec"
-        };
         
         const firebaseConfig = {
             apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
@@ -813,535 +630,343 @@
             messagingSenderId: "992769471393",
             appId: "1:992769471393:web:c8a9400210a0e7901011e0"
         };
-        
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        
-        let currentUser = null;
-        let idToken = null;
-        
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const APIs = {
+            complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
+            incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
+            risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
+            rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec",
+            needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec",
+            calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec",
+            maintenance: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec",
+            eoc: "https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec"
+        };
+
         const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
         }).format(new Date());
         document.getElementById('dateDisplay').textContent = hijriDate;
-        
-        function jsonpCall(url, callback) {
-            const callbackName = 'jsonp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            const script = document.createElement('script');
-            
-            window[callbackName] = function(data) {
-                delete window[callbackName];
-                document.body.removeChild(script);
-                callback(null, data);
-            };
-            
-            script.onerror = function() {
-                delete window[callbackName];
-                document.body.removeChild(script);
-                callback(new Error('JSONP request failed'), null);
-            };
-            
-            const separator = url.includes('?') ? '&' : '?';
-            script.src = url + separator + 'callback=' + callbackName;
-            document.body.appendChild(script);
-        }
-        
-        function apiCall(action, params = {}) {
-            return new Promise((resolve, reject) => {
-                let url = API_URL + '?action=' + action;
-                for (const key in params) {
-                    url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+
+        function calculateCalibrationStats(data) {
+            if (!data || data.status !== 'success' || !data.data) {
+                return { compliance: 0, overdue: 0, pass: 0, fail: 0, total: 0, upcoming: 0 };
+            }
+            const assetsMap = data.data.assetsMap || {};
+            const records = data.data.records || [];
+            let totalTasks = 0;
+            Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
+            let pass = 0, fail = 0, overdue = 0, upcoming = 0;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const upcomingThreshold = new Date(today);
+            upcomingThreshold.setDate(upcomingThreshold.getDate() + 30);
+            const latestRecords = {};
+            records.forEach(r => {
+                const assetID = r.AssetID || r.assetID || r.asset_id;
+                const recordDate = r.TestDate || r.Timestamp || r.date;
+                if (!assetID) return;
+                if (!latestRecords[assetID] || new Date(recordDate) > new Date(latestRecords[assetID].recordDate)) {
+                    latestRecords[assetID] = { ...r, recordDate };
                 }
-                if (idToken) {
-                    url += '&idToken=' + encodeURIComponent(idToken);
-                }
-                
-                jsonpCall(url, (err, data) => {
-                    if (err) reject(err);
-                    else resolve(data);
-                });
             });
+            Object.values(latestRecords).forEach(r => {
+                const result = r.Result || r.result;
+                if (result === 'Pass') pass++;
+                else if (result === 'Fail') fail++;
+                const nd = r.NextDue || r.nextDue || r.next_due;
+                if (nd) {
+                    const nextDue = new Date(nd);
+                    if (nextDue < today) overdue++;
+                    else if (nextDue <= upcomingThreshold) upcoming++;
+                }
+            });
+            const compliance = totalTasks > 0 ? Math.round((pass / totalTasks) * 100) : 0;
+            return { compliance, overdue, pass, fail, total: totalTasks, upcoming };
         }
-        
-        function showToast(message, isError = false) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastMessage').textContent = message;
-            toast.classList.toggle('error', isError);
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        }
-        
-        function switchSection(sectionName) {
-            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            
-            const section = document.getElementById('section-' + sectionName);
-            if (section) {
-                section.classList.add('active');
-                const navItem = document.querySelector(`.nav-item[data-section="${sectionName}"]`);
-                if (navItem) navItem.classList.add('active');
-                
-                if (sectionName === 'complaints') loadComplaints();
-                else if (sectionName === 'incidents') loadIncidents();
-                else if (sectionName === 'risks') loadRisks();
-                else if (sectionName === 'rounds') loadRounds();
-                else if (sectionName === 'users') loadUsers();
-                else if (sectionName === 'permissions') loadPermissions();
-                else if (sectionName === 'eoc') loadEocData();
+
+        async function apiCall(url, action, payload = {}) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action, payload }),
+                    redirect: 'follow'
+                });
+                const text = await response.text();
+                try { return JSON.parse(text); }
+                catch (e) { return { ok: false, error: 'Invalid response' }; }
+            } catch (e) {
+                console.error(`API Error (${action}):`, e);
+                return { ok: false, error: e.message };
             }
         }
-        
-        document.querySelectorAll('.nav-item[data-section]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = item.dataset.section;
-                if (section) switchSection(section);
-            });
-        });
-        
-        document.getElementById('menuToggle').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-        
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            auth.signOut().then(() => {
-                window.location.href = 'portal.html';
-            });
-        });
-        
-        async function loadAllData() {
+
+        async function fetchJsonp(url) {
+            const r = await fetch(url, { redirect: 'follow' });
+            const text = await r.text();
+            const m = text.match(/^[a-zA-Z_$][\w$]*\s*\((.*)\)\s*;?\s*$/s);
+            if (m && m[1]) return JSON.parse(m[1]);
+            return JSON.parse(text);
+        }
+
+        window.loadDashboardData = async function() {
             const refreshBtn = document.getElementById('refreshBtn');
             refreshBtn.classList.add('loading');
-            
+            console.log('Loading dashboard data...');
+
             try {
-                await Promise.all([
-                    loadDashboardStats(),
-                    loadAlerts()
+                const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
+                    apiCall(APIs.complaints, 'getComplaintStats', {}),
+                    apiCall(APIs.incidents, 'getIncidentStats', {}),
+                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => ({ success: false })),
+                    apiCall(APIs.rounds, 'getMetrics', {}),
+                    fetchJsonp(APIs.needlestick + '?action=data').catch(e => ({ success: false })),
+                    fetch(APIs.calibration).then(r => r.json()).catch(e => ({ status: 'error' })),
+                    apiCall(APIs.maintenance, 'getKPIs', {})
                 ]);
+
+                console.log('Complaints:', complaintsRes);
+                console.log('Incidents:', incidentsRes);
+                console.log('Risks:', risksRes);
+                console.log('Rounds:', roundsRes);
+                console.log('Calibration:', calibrationRes);
+                console.log('Maintenance:', maintenanceRes);
+
+                if (complaintsRes.ok) {
+                    const s = complaintsRes;
+                    const openComplaints = (s.new || 0) + (s.in_progress || 0);
+                    document.getElementById('kpi-complaints-open').textContent = openComplaints;
+                    const escEl = document.getElementById('kpi-complaints-escalated');
+                    if (s.escalated > 0) {
+                        escEl.textContent = `${s.escalated} مصعّدة`;
+                        escEl.classList.add('danger');
+                    } else { escEl.textContent = ''; escEl.classList.remove('danger'); }
+                    document.getElementById('stat-complaints-new').textContent = s.new || 0;
+                    document.getElementById('stat-complaints-progress').textContent = s.in_progress || 0;
+                    document.getElementById('stat-complaints-escalated').textContent = s.escalated || 0;
+                    document.getElementById('stat-complaints-closed').textContent = s.closed || 0;
+                }
+
+                if (incidentsRes.ok) {
+                    const s = incidentsRes;
+                    const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
+                    const escalatedCount = s.byStatus?.escalated?.count || s.escalated || 0;
+                    document.getElementById('kpi-incidents-open').textContent = openIncidents;
+                    const incEscEl = document.getElementById('kpi-incidents-escalated');
+                    if (escalatedCount > 0) {
+                        incEscEl.textContent = `${escalatedCount} مصعّدة`;
+                        incEscEl.classList.add('danger');
+                    } else { incEscEl.textContent = ''; incEscEl.classList.remove('danger'); }
+                    document.getElementById('stat-incidents-new').textContent = s.new || s.open || 0;
+                    document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
+                    document.getElementById('stat-incidents-escalated').textContent = escalatedCount;
+                    document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
+                }
+
+                if (risksRes.ok) {
+                    const r = risksRes;
+                    const activeRisks = r.total || (r.high || 0) + (r.med || 0) + (r.low || 0);
+                    document.getElementById('kpi-risks-active').textContent = activeRisks;
+                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : '';
+                    document.getElementById('stat-risks-high').textContent = r.high || 0;
+                    document.getElementById('stat-risks-medium').textContent = r.med || r.medium || 0;
+                    document.getElementById('stat-risks-low').textContent = r.low || 0;
+                    document.getElementById('stat-risks-resolved').textContent = r.resolved || r.closed || 0;
+                }
+
+                if (roundsRes.ok) {
+                    const rd = roundsRes;
+                    document.getElementById('kpi-rounds-today').textContent = rd.completed || 0;
+                    if (rd.delayed > 0) {
+                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
+                        document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
+                    } else if (rd.violations > 0) {
+                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.violations} مخالفة`;
+                        document.getElementById('kpi-rounds-delayed').style.color = '#f0ad4e';
+                    } else {
+                        document.getElementById('kpi-rounds-delayed').textContent = '';
+                    }
+                }
+
+                const needleData = needlestickRes.rows || needlestickRes.data;
+                if ((needlestickRes.success || needlestickRes.status === 'success') && Array.isArray(needleData)) {
+                    const records = needleData;
+                    const total = records.length;
+                    const now = new Date();
+                    const thisMonth = records.filter(r => {
+                        const d = new Date(r.date || r.timestamp);
+                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    }).length;
+                    document.getElementById('kpi-needlestick').textContent = total;
+                    document.getElementById('kpi-needlestick-month').textContent = thisMonth > 0 ? `${thisMonth} هذا الشهر` : '';
+                } else if (needlestickRes.total !== undefined) {
+                    document.getElementById('kpi-needlestick').textContent = needlestickRes.total || 0;
+                    document.getElementById('kpi-needlestick-month').textContent = needlestickRes.thisMonth ? `${needlestickRes.thisMonth} هذا الشهر` : '';
+                } else {
+                    document.getElementById('kpi-needlestick').textContent = '0';
+                }
+
+                const calStats = calculateCalibrationStats(calibrationRes);
+                console.log('Calibration Stats:', calStats);
+                if (calStats.total > 0) {
+                    const compEl = document.getElementById('kpi-calibration-compliance');
+                    compEl.textContent = calStats.compliance + '%';
+                    if (calStats.compliance >= 80) compEl.style.color = '#28a745';
+                    else if (calStats.compliance >= 70) compEl.style.color = '#ff9800';
+                    else compEl.style.color = '#DC143C';
+                    const overdueEl = document.getElementById('kpi-calibration-overdue');
+                    if (calStats.overdue > 0) {
+                        overdueEl.textContent = `${calStats.overdue} جهاز متأخر`;
+                        overdueEl.classList.add('danger');
+                    } else {
+                        overdueEl.textContent = `${calStats.total} جهاز مُصان`;
+                        overdueEl.classList.remove('danger');
+                        overdueEl.style.color = '#28a745';
+                    }
+                } else {
+                    document.getElementById('kpi-calibration-compliance').textContent = '--';
+                    document.getElementById('kpi-calibration-overdue').textContent = 'لا توجد بيانات';
+                }
+
+                if (maintenanceRes && (maintenanceRes.success || maintenanceRes.ok || maintenanceRes.notServiced !== undefined)) {
+                    const m = maintenanceRes.data || maintenanceRes;
+                    const notServiced = m.notServiced ?? m.notServicedDevices ?? 0;
+                    const completed = m.completed ?? m.servicedDevices ?? 0;
+                    const overdue = m.overdue ?? m.overdueDevices ?? 0;
+                    document.getElementById('kpi-maintenance-total').textContent = notServiced;
+                    const completedEl = document.getElementById('kpi-maintenance-completed');
+                    const overdueEl = document.getElementById('kpi-maintenance-overdue');
+                    completedEl.textContent = `مكتملة ${completed}`;
+                    completedEl.style.color = '#28a745';
+                    if (overdue > 0) {
+                        overdueEl.textContent = `متأخرة ${overdue}`;
+                        overdueEl.style.color = '#DC143C';
+                    } else { overdueEl.textContent = ''; }
+                } else {
+                    document.getElementById('kpi-maintenance-total').textContent = '--';
+                    document.getElementById('kpi-maintenance-completed').textContent = '';
+                    document.getElementById('kpi-maintenance-overdue').textContent = 'لا توجد بيانات';
+                }
+
+                updateAlerts(complaintsRes, incidentsRes, risksRes, roundsRes, calStats);
+                updateEocSmartCard();
+
             } catch (e) {
-                console.error('Error loading data:', e);
+                console.error('Dashboard load error:', e);
             } finally {
                 refreshBtn.classList.remove('loading');
             }
+        };
+
+        function updateAlerts(complaints, incidents, risks, rounds, cal) {
+            const container = document.getElementById('alertsContainer');
+            const alerts = [];
+
+            if (complaints.ok && complaints.escalated > 0) {
+                alerts.push({ type: 'danger', icon: 'fas fa-comment-dots', text: `${complaints.escalated} شكوى مصعّدة تحتاج مراجعة` });
+            }
+            if (incidents.ok) {
+                const escCount = incidents.byStatus?.escalated?.count || incidents.escalated || 0;
+                if (escCount > 0) alerts.push({ type: 'danger', icon: 'fas fa-exclamation-triangle', text: `${escCount} حادثة مصعّدة تحتاج تدخل` });
+            }
+            if (risks.ok && risks.high > 0) {
+                alerts.push({ type: 'warning', icon: 'fas fa-shield-alt', text: `${risks.high} مخاطر عالية المستوى` });
+            }
+            if (rounds.ok && rounds.delayed > 0) {
+                alerts.push({ type: 'warning', icon: 'fas fa-clipboard-check', text: `${rounds.delayed} جولات متأخرة` });
+            }
+            if (cal && cal.overdue > 0) {
+                alerts.push({ type: 'info', icon: 'fas fa-cogs', text: `${cal.overdue} جهاز متأخر في المعايرة` });
+            }
+
+            if (alerts.length > 0) {
+                container.innerHTML = alerts.map(a => `
+                    <div class="alert-item ${a.type}">
+                        <i class="${a.icon}"></i>
+                        <span>${a.text}</span>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = `
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
+                        <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
+                    </div>
+                `;
+            }
         }
-        
-        async function loadDashboardStats() {
+
+        async function updateEocSmartCard() {
+            const card = document.getElementById('eocSmartCard');
+            const icon = document.getElementById('eocSmartIcon');
+            const countEl = document.getElementById('kpi-eoc-count');
+            const labelEl = document.getElementById('kpi-eoc-label');
+            const statusEl = document.getElementById('kpi-eoc-status');
+
             try {
-                const data = await apiCall('getOwnerDashboardStats');
-                console.log('Dashboard stats:', data);
-                
-                if (data.success) {
-                    const stats = data.stats || data;
-                    
-                    if (stats.emergency && stats.emergency.active) {
-                        document.getElementById('kpi-eoc').textContent = 'طوارئ!';
-                        document.getElementById('kpi-eoc-status').textContent = stats.emergency.type || 'حالة نشطة';
-                        document.getElementById('kpi-eoc-status').classList.add('danger');
-                        document.getElementById('eocIcon').classList.add('active');
-                    }
-                    
-                    if (stats.complaints) {
-                        document.getElementById('kpi-complaints').textContent = stats.complaints.open || 0;
-                        document.getElementById('stat-complaints-new').textContent = stats.complaints.new || 0;
-                        document.getElementById('stat-complaints-progress').textContent = stats.complaints.inProgress || 0;
-                        document.getElementById('stat-complaints-escalated').textContent = stats.complaints.escalated || 0;
-                        document.getElementById('stat-complaints-closed').textContent = stats.complaints.closed || 0;
-                        if (stats.complaints.escalated > 0) {
-                            document.getElementById('kpi-complaints-sub').textContent = stats.complaints.escalated + ' مصعّدة';
-                            document.getElementById('kpi-complaints-sub').classList.add('danger');
-                        }
-                    }
-                    
-                    if (stats.incidents) {
-                        document.getElementById('kpi-incidents').textContent = stats.incidents.open || 0;
-                        document.getElementById('stat-incidents-new').textContent = stats.incidents.new || 0;
-                        document.getElementById('stat-incidents-progress').textContent = stats.incidents.investigation || 0;
-                        document.getElementById('stat-incidents-escalated').textContent = stats.incidents.escalated || 0;
-                        document.getElementById('stat-incidents-closed').textContent = stats.incidents.closed || 0;
-                    }
-                    
-                    if (stats.risks) {
-                        document.getElementById('kpi-risks').textContent = stats.risks.active || 0;
-                        document.getElementById('stat-risks-high').textContent = stats.risks.high || 0;
-                        document.getElementById('stat-risks-medium').textContent = stats.risks.medium || 0;
-                        document.getElementById('stat-risks-low').textContent = stats.risks.low || 0;
-                        document.getElementById('stat-risks-resolved').textContent = stats.risks.resolved || 0;
-                        if (stats.risks.high > 0) {
-                            document.getElementById('kpi-risks-sub').textContent = stats.risks.high + ' خطر عالي';
-                        }
-                    }
-                    
-                    if (stats.rounds) {
-                        document.getElementById('kpi-rounds').textContent = stats.rounds.today || 0;
-                        document.getElementById('kpi-rounds-sub').textContent = (stats.rounds.delayed || 0) + ' متأخرة';
-                    }
-                    
-                    if (stats.users) {
-                        document.getElementById('usersActiveCount').textContent = stats.users.active || 0;
-                        document.getElementById('usersSuspendedCount').textContent = stats.users.suspended || 0;
-                        document.getElementById('usersTotalCount').textContent = stats.users.total || 0;
-                    }
+                const [activeRes, reportsRes] = await Promise.all([
+                    fetchJsonp(APIs.eoc + '?action=getActiveCommand'),
+                    fetchJsonp(APIs.eoc + '?action=getEmergencyReports&limit=100')
+                ]);
+
+                const cmd = activeRes.command || {};
+                const isActive = activeRes.ok && (cmd.status === 'active' || activeRes.status === 'active') && cmd.sessionId;
+
+                let totalReports = 0;
+                if (reportsRes.ok && Array.isArray(reportsRes.reports)) {
+                    totalReports = reportsRes.reports.length;
+                }
+
+                if (isActive) {
+                    icon.classList.add('active');
+                    countEl.textContent = '⚠️';
+                    labelEl.textContent = cmd.responseType || 'طوارئ نشطة';
+                    statusEl.textContent = cmd.location || 'تحقق الآن!';
+                    statusEl.classList.add('danger');
+                } else {
+                    icon.classList.remove('active');
+                    countEl.textContent = totalReports;
+                    labelEl.textContent = 'حالة طوارئ';
+                    statusEl.textContent = 'الوضع طبيعي ✓';
+                    statusEl.classList.remove('danger');
                 }
             } catch (e) {
-                console.error('Error loading dashboard stats:', e);
+                console.error('EOC error:', e);
+                countEl.textContent = '0';
+                statusEl.textContent = 'الوضع طبيعي ✓';
             }
         }
-        
-        function loadAlerts() {
-            const container = document.getElementById('alertsContainer');
-            apiCall('getOwnerDashboardStats').then(data => {
-                if (data.success) {
-                    const alerts = [];
-                    const stats = data.stats || data;
-                    
-                    if (stats.complaints && stats.complaints.escalated > 0) {
-                        alerts.push({ type: 'danger', icon: 'fas fa-comment-dots', text: `${stats.complaints.escalated} شكوى مصعّدة تحتاج مراجعة`, count: stats.complaints.escalated });
-                    }
-                    if (stats.incidents && stats.incidents.escalated > 0) {
-                        alerts.push({ type: 'danger', icon: 'fas fa-exclamation-triangle', text: `${stats.incidents.escalated} حادثة مصعّدة تحتاج تدخل`, count: stats.incidents.escalated });
-                    }
-                    if (stats.risks && stats.risks.high > 0) {
-                        alerts.push({ type: 'warning', icon: 'fas fa-shield-alt', text: `${stats.risks.high} مخاطر عالية المستوى`, count: stats.risks.high });
-                    }
-                    if (stats.rounds && stats.rounds.delayed > 0) {
-                        alerts.push({ type: 'warning', icon: 'fas fa-clipboard-check', text: `${stats.rounds.delayed} جولات متأخرة`, count: stats.rounds.delayed });
-                    }
-                    
-                    if (alerts.length > 0) {
-                        container.innerHTML = alerts.map(a => `
-                            <div class="alert-item ${a.type}">
-                                <i class="${a.icon}"></i>
-                                <span class="alert-text">${a.text}</span>
-                                <span class="alert-count">${a.count}</span>
-                            </div>
-                        `).join('');
-                    } else {
-                        container.innerHTML = `
-                            <div class="no-alerts">
-                                <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
-                                <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
-                            </div>
-                        `;
-                    }
-                }
-            }).catch(e => {
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل التنبيهات</div>';
-            });
-        }
-        
-        function loadEocData() {
-            const container = document.getElementById('eocReportsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            apiCall('getEmergencyReports').then(data => {
-                if (data.success && data.reports && data.reports.length > 0) {
-                    const statusCard = document.getElementById('eocStatusCard');
-                    const activeReport = data.reports.find(r => r.Status === 'active' || r.Status === 'نشط');
-                    
-                    if (activeReport) {
-                        statusCard.style.background = 'linear-gradient(135deg, #dc2626, #991b1b)';
-                        statusCard.innerHTML = `
-                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 10px; animation: pulse 1s infinite;"></i>
-                            <h3 style="font-size: 1.5rem;">حالة طوارئ نشطة!</h3>
-                            <p>${activeReport.Type || activeReport.النوع || 'طوارئ'} - ${activeReport.Location || activeReport.الموقع || ''}</p>
-                        `;
-                    }
-                    
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.reports.slice(0, 10).forEach(r => {
-                        const status = r.Status || r.الحالة || 'جديد';
-                        const statusClass = status === 'active' || status === 'نشط' ? 'status-escalated' : 'status-closed';
-                        html += `<tr>
-                            <td>${r.Timestamp || r.التاريخ || '-'}</td>
-                            <td>${r.Type || r.النوع || '-'}</td>
-                            <td>${r.Location || r.الموقع || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد بلاغات طوارئ سابقة</div>';
-                }
-            }).catch(e => {
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل البيانات</div>';
-            });
-        }
-        
-        function loadComplaints() {
-            const container = document.getElementById('complaintsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            apiCall('getComplaints').then(data => {
-                if (data.success && data.complaints && data.complaints.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>الرقم</th><th>التاريخ</th><th>الشاكي</th><th>القسم</th><th>الحالة</th><th>إجراء</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.complaints.forEach(c => {
-                        const status = c.Status || c.الحالة || 'جديد';
-                        let statusClass = 'status-new';
-                        if (status.includes('progress') || status.includes('معالجة')) statusClass = 'status-progress';
-                        else if (status.includes('escalat') || status.includes('مصعد')) statusClass = 'status-escalated';
-                        else if (status.includes('closed') || status.includes('مغلق')) statusClass = 'status-closed';
-                        
-                        html += `<tr>
-                            <td>${c.ID || c.الرقم || '-'}</td>
-                            <td>${c.Date || c.التاريخ || '-'}</td>
-                            <td>${c.Name || c.الاسم || '-'}</td>
-                            <td>${c.Department || c.القسم || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                            <td>
-                                <button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="viewComplaint('${c.ID || c.الرقم}')">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد شكاوى</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading complaints:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الشكاوى</div>';
-            });
-        }
-        
-        function loadIncidents() {
-            const container = document.getElementById('incidentsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            apiCall('getIncidents').then(data => {
-                if (data.success && data.incidents && data.incidents.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.incidents.forEach(i => {
-                        const status = i.Status || i.الحالة || 'جديد';
-                        let statusClass = 'status-new';
-                        if (status.includes('investigation') || status.includes('تحقيق')) statusClass = 'status-progress';
-                        else if (status.includes('escalat') || status.includes('مصعد')) statusClass = 'status-escalated';
-                        else if (status.includes('closed') || status.includes('مغلق')) statusClass = 'status-closed';
-                        
-                        html += `<tr>
-                            <td>${i.ID || i.الرقم || '-'}</td>
-                            <td>${i.Date || i.التاريخ || '-'}</td>
-                            <td>${i.Type || i.النوع || '-'}</td>
-                            <td>${i.Location || i.الموقع || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد حوادث</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading incidents:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الحوادث</div>';
-            });
-        }
-        
-        function loadRisks() {
-            const container = document.getElementById('risksContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            apiCall('getRisks').then(data => {
-                if (data.success && data.risks && data.risks.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.risks.forEach(r => {
-                        const level = r.Level || r.المستوى || 'medium';
-                        let levelClass = 'status-medium';
-                        if (level.includes('high') || level.includes('عالي')) levelClass = 'status-high';
-                        else if (level.includes('low') || level.includes('منخفض')) levelClass = 'status-low';
-                        
-                        html += `<tr>
-                            <td>${r.Description || r.الوصف || '-'}</td>
-                            <td>${r.Department || r.القسم || '-'}</td>
-                            <td><span class="status-badge ${levelClass}">${level}</span></td>
-                            <td>${r.Status || r.الحالة || '-'}</td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد مخاطر مسجلة</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading risks:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المخاطر</div>';
-            });
-        }
-        
-        function loadRounds() {
-            const container = document.getElementById('roundsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            apiCall('getRounds').then(data => {
-                if (data.success && data.rounds && data.rounds.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>التاريخ</th><th>المسؤول</th><th>القسم</th><th>الحالة</th><th>الملاحظات</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.rounds.forEach(r => {
-                        const status = r.Status || r.الحالة || 'مكتمل';
-                        let statusClass = status.includes('delayed') || status.includes('متأخر') ? 'status-escalated' : 'status-closed';
-                        
-                        html += `<tr>
-                            <td>${r.Date || r.التاريخ || '-'}</td>
-                            <td>${r.Inspector || r.المسؤول || '-'}</td>
-                            <td>${r.Department || r.القسم || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                            <td>${r.Notes || r.الملاحظات || '-'}</td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد جولات مسجلة</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading rounds:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الجولات</div>';
-            });
-        }
-        
-        function loadUsers() {
-            const container = document.getElementById('usersContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            apiCall('getStaffList').then(data => {
-                if (data.success && data.staff && data.staff.length > 0) {
-                    let active = 0, suspended = 0;
-                    data.staff.forEach(u => {
-                        if (u.Status === 'suspended' || u.Status === 'معلق') suspended++;
-                        else active++;
-                    });
-                    
-                    document.getElementById('usersActiveCount').textContent = active;
-                    document.getElementById('usersSuspendedCount').textContent = suspended;
-                    document.getElementById('usersTotalCount').textContent = data.staff.length;
-                    
-                    let html = '<table class="users-table"><thead><tr>';
-                    html += '<th>الاسم</th><th>البريد</th><th>الدور</th><th>الحالة</th><th>إجراءات</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.staff.forEach(u => {
-                        const role = u.Role || u.الدور || 'staff';
-                        let roleClass = 'role-staff';
-                        let roleText = 'موظف';
-                        if (role === 'owner' || role === 'مالك') { roleClass = 'role-owner'; roleText = 'مالك'; }
-                        else if (role === 'admin' || role === 'مدير') { roleClass = 'role-admin'; roleText = 'مدير'; }
-                        
-                        const status = u.Status || 'active';
-                        const statusText = status === 'suspended' || status === 'معلق' ? 'معلق' : 'نشط';
-                        const statusColor = status === 'suspended' || status === 'معلق' ? '#f59e0b' : '#10b981';
-                        
-                        html += `<tr>
-                            <td>${u.Name || u.الاسم || '-'}</td>
-                            <td>${u.Email || u.البريد || '-'}</td>
-                            <td><span class="role-badge-small ${roleClass}">${roleText}</span></td>
-                            <td style="color:${statusColor}; font-weight:600;">${statusText}</td>
-                            <td class="action-btns">
-                                <button onclick="toggleUserStatus('${u.Email || u.البريد}')" style="background:#f59e0b; color:white;" title="${status === 'suspended' ? 'تفعيل' : 'تعليق'}">
-                                    <i class="fas fa-${status === 'suspended' ? 'check' : 'pause'}"></i>
-                                </button>
-                                <button onclick="changeUserRole('${u.Email || u.البريد}')" style="background:#3b82f6; color:white;" title="تغيير الدور">
-                                    <i class="fas fa-user-tag"></i>
-                                </button>
-                            </td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا يوجد مستخدمين</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading users:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المستخدمين</div>';
-            });
-        }
-        
-        function loadPermissions() {
-            const container = document.getElementById('permissionsContainer');
-            container.innerHTML = '<div class="no-alerts">نفس بيانات إدارة المستخدمين - استخدم تغيير الدور</div>';
-        }
-        
-        function toggleUserStatus(email) {
-            if (confirm('هل تريد تغيير حالة هذا المستخدم؟')) {
-                apiCall('toggleUserStatus', { email: email }).then(data => {
-                    if (data.success) {
-                        showToast('تم تغيير الحالة بنجاح');
-                        loadUsers();
-                    } else {
-                        showToast('فشل تغيير الحالة', true);
-                    }
-                }).catch(e => showToast('خطأ في الاتصال', true));
-            }
-        }
-        
-        function changeUserRole(email) {
-            const newRole = prompt('أدخل الدور الجديد (owner, admin, staff):');
-            if (newRole && ['owner', 'admin', 'staff'].includes(newRole.toLowerCase())) {
-                apiCall('changeUserRole', { email: email, role: newRole.toLowerCase() }).then(data => {
-                    if (data.success) {
-                        showToast('تم تغيير الدور بنجاح');
-                        loadUsers();
-                    } else {
-                        showToast('فشل تغيير الدور', true);
-                    }
-                }).catch(e => showToast('خطأ في الاتصال', true));
-            }
-        }
-        
-        function viewComplaint(id) {
-            window.open('complaint_analysis.html?id=' + id, '_blank');
-        }
-        
-        auth.onAuthStateChanged(async (user) => {
+
+        document.getElementById('menuToggle').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            signOut(auth).then(() => window.location.href = 'portal.html');
+        });
+
+        onAuthStateChanged(auth, async (user) => {
             const loadingOverlay = document.getElementById('loadingOverlay');
             const accessDenied = document.getElementById('accessDenied');
-            
+
             if (user) {
-                currentUser = user;
-                
                 try {
-                    idToken = await user.getIdToken();
-                    
                     if (user.email === OWNER_EMAIL) {
                         document.getElementById('ownerName').textContent = user.displayName || user.email.split('@')[0];
                         document.body.classList.add('authenticated');
                         loadingOverlay.style.display = 'none';
-                        loadAllData();
+                        loadDashboardData();
                     } else {
-                        const roleDoc = await db.collection('staff_roles').doc(user.uid).get();
-                        if (roleDoc.exists && roleDoc.data().role === 'owner') {
+                        const roleDoc = await getDoc(doc(db, "staff_roles", user.uid));
+                        if (roleDoc.exists() && roleDoc.data().role === 'owner') {
                             document.getElementById('ownerName').textContent = user.displayName || roleDoc.data().name || user.email.split('@')[0];
                             document.body.classList.add('authenticated');
                             loadingOverlay.style.display = 'none';
-                            loadAllData();
+                            loadDashboardData();
                         } else {
                             loadingOverlay.style.display = 'none';
                             accessDenied.style.display = 'flex';
