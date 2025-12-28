@@ -684,6 +684,19 @@ function doPost(e) {
           validatePatientAuth_(payload);
           result = analyzeSymptoms(payload);
           break;
+        // ===== MRIS Chunk Upload APIs =====
+        case 'startUpload':
+          result = startMrisUpload_(payload);
+          break;
+        case 'uploadChunk':
+          result = uploadMrisChunk_(payload);
+          break;
+        case 'finishUpload':
+          result = finishMrisUpload_(payload);
+          break;
+        case 'getUploadStatus':
+          result = getMrisUploadStatus_(payload);
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }
@@ -4707,5 +4720,205 @@ function analyzeSymptoms(payload) {
   } catch (err) {
     return { success: false, error: err.message };
   }
+}
+
+// ==================== MRIS Chunk Upload Backend ====================
+
+const MRIS_SHEET_ID = '1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk';
+const MRIS_UPLOAD_FOLDER_ID = 'PUT_YOUR_FINAL_UPLOAD_FOLDER_ID_HERE';
+const MRIS_TEMP_FOLDER_NAME = 'MRIS_TEMP_UPLOADS';
+
+function requireMrisToken_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty('MRIS_TOKEN');
+  if (!expected) return;
+  const got = String(token || '').trim();
+  if (got !== expected) throw new Error('Unauthorized: invalid token');
+}
+
+function mrisMonthKey_(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yyyy}-${mm}`;
+}
+
+function ensureMrisUploadSheet_() {
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  let sh = ss.getSheetByName('MRIS_Upload_Log');
+  if (!sh) {
+    sh = ss.insertSheet('MRIS_Upload_Log');
+    sh.appendRow([
+      'Timestamp', 'MonthKey', 'ReportType', 'FileName', 'MimeType',
+      'FileSizeBytes', 'DriveFileId', 'DriveUrl', 'UploadedBy',
+      'UploadedByEmail', 'Notes', 'SessionId'
+    ]);
+  }
+  return sh;
+}
+
+function ensureMrisTempRootFolder_() {
+  const root = DriveApp.getRootFolder();
+  const it = root.getFoldersByName(MRIS_TEMP_FOLDER_NAME);
+  if (it.hasNext()) return it.next();
+  return root.createFolder(MRIS_TEMP_FOLDER_NAME);
+}
+
+function ensureMrisSessionFolder_(sessionId) {
+  const tempRoot = ensureMrisTempRootFolder_();
+  const it = tempRoot.getFoldersByName(sessionId);
+  if (it.hasNext()) return it.next();
+  return tempRoot.createFolder(sessionId);
+}
+
+function startMrisUpload_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const reportType = String(payload.reportType || '').trim();
+  const fileName = String(payload.fileName || '').trim();
+  const mimeType = String(payload.mimeType || 'application/octet-stream').trim();
+  const fileSize = Number(payload.fileSize || 0);
+  
+  if (!reportType) throw new Error('reportType is required');
+  if (!fileName) throw new Error('fileName is required');
+  
+  const now = new Date();
+  const sessionId = `MRIS_${now.getTime()}_${Math.random().toString(36).slice(2,10)}`;
+  const folder = ensureMrisSessionFolder_(sessionId);
+  
+  const meta = {
+    sessionId,
+    createdAt: now.toISOString(),
+    reportType,
+    fileName,
+    mimeType,
+    fileSize,
+    uploadedBy: payload.uploadedBy || '',
+    uploadedByEmail: payload.uploadedByEmail || '',
+    notes: payload.notes || ''
+  };
+  folder.createFile('meta.json', JSON.stringify(meta, null, 2), MimeType.PLAIN_TEXT);
+  
+  return { sessionId };
+}
+
+function uploadMrisChunk_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const sessionId = String(payload.sessionId || '').trim();
+  const index = Number(payload.index);
+  const total = Number(payload.total);
+  const chunkBase64 = String(payload.chunkBase64 || '').trim();
+  
+  if (!sessionId) throw new Error('sessionId is required');
+  if (!Number.isFinite(index) || index < 0) throw new Error('index invalid');
+  if (!Number.isFinite(total) || total <= 0) throw new Error('total invalid');
+  if (!chunkBase64) throw new Error('chunkBase64 is required');
+  
+  const folder = ensureMrisSessionFolder_(sessionId);
+  const name = `chunk_${String(index).padStart(6,'0')}.b64`;
+  folder.createFile(name, chunkBase64, MimeType.PLAIN_TEXT);
+  
+  return { received: index, total };
+}
+
+function finishMrisUpload_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const sessionId = String(payload.sessionId || '').trim();
+  if (!sessionId) throw new Error('sessionId is required');
+  
+  const folder = ensureMrisSessionFolder_(sessionId);
+  
+  let meta = null;
+  const metaIt = folder.getFilesByName('meta.json');
+  if (metaIt.hasNext()) {
+    meta = JSON.parse(metaIt.next().getBlob().getDataAsString('UTF-8'));
+  }
+  if (!meta) throw new Error('meta.json not found');
+  
+  const files = [];
+  const it = folder.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    const n = f.getName();
+    if (n.startsWith('chunk_') && n.endsWith('.b64')) files.push(f);
+  }
+  if (!files.length) throw new Error('No chunks found');
+  
+  files.sort((a,b) => a.getName().localeCompare(b.getName()));
+  
+  let totalLen = 0;
+  const byteParts = [];
+  for (const f of files) {
+    const b64 = f.getBlob().getDataAsString('UTF-8');
+    const bytes = Utilities.base64Decode(b64);
+    byteParts.push(bytes);
+    totalLen += bytes.length;
+  }
+  
+  const all = new Array(totalLen);
+  let offset = 0;
+  for (const part of byteParts) {
+    for (let i = 0; i < part.length; i++) {
+      all[offset + i] = part[i];
+    }
+    offset += part.length;
+  }
+  
+  const finalFolder = DriveApp.getFolderById(MRIS_UPLOAD_FOLDER_ID);
+  const blob = Utilities.newBlob(all, meta.mimeType || 'application/octet-stream', meta.fileName || 'upload.bin');
+  const finalFile = finalFolder.createFile(blob);
+  
+  const sh = ensureMrisUploadSheet_();
+  const now = new Date();
+  sh.appendRow(safeCellArray_([
+    now.toISOString(),
+    mrisMonthKey_(now),
+    meta.reportType,
+    meta.fileName,
+    meta.mimeType,
+    Number(meta.fileSize || totalLen),
+    finalFile.getId(),
+    finalFile.getUrl(),
+    meta.uploadedBy || '',
+    meta.uploadedByEmail || '',
+    meta.notes || '',
+    sessionId
+  ]));
+  
+  folder.setTrashed(true);
+  
+  return {
+    fileId: finalFile.getId(),
+    fileUrl: finalFile.getUrl(),
+    bytes: totalLen,
+    sessionId,
+    timestamp: now.toISOString()
+  };
+}
+
+function getMrisUploadStatus_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const sh = ensureMrisUploadSheet_();
+  const data = sh.getDataRange().getValues();
+  const mk = mrisMonthKey_(new Date());
+  
+  const lastByType = {};
+  for (let i = data.length - 1; i >= 1; i--) {
+    const row = data[i];
+    const rowMonth = String(row[1] || '');
+    if (rowMonth !== mk) continue;
+    const type = String(row[2] || '');
+    if (!type || lastByType[type]) continue;
+    
+    lastByType[type] = {
+      timestamp: row[0] || '',
+      fileName: row[3] || '',
+      driveUrl: row[7] || '',
+      uploadedBy: row[8] || ''
+    };
+  }
+  
+  return { monthKey: mk, lastByType };
 }
 

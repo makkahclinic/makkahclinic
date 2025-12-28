@@ -2125,6 +2125,21 @@ ${dept.name}
             }
         }
         
+        // Helper: Blob -> Base64 (بدون prefix)
+        function blobToBase64_(blob) {
+            return new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload = () => {
+                    const s = String(r.result || '');
+                    const idx = s.indexOf('base64,');
+                    if (idx === -1) return reject(new Error('Invalid DataURL'));
+                    resolve(s.slice(idx + 7));
+                };
+                r.onerror = () => reject(new Error('File read error'));
+                r.readAsDataURL(blob);
+            });
+        }
+        
         async function handleFileUpload(type, input) {
             const file = input.files[0];
             if (!file) return;
@@ -2135,52 +2150,89 @@ ${dept.name}
                 return;
             }
             
-            const MAX_MB = 8;
-            if (file.size > MAX_MB * 1024 * 1024) {
-                alert(`الملف كبير (${(file.size/1024/1024).toFixed(1)}MB). الحد الحالي ${MAX_MB}MB.`);
+            // حجم chunk (خام) بالبايت: 256KB ممتاز للتوازن
+            const CHUNK_SIZE = 256 * 1024;
+            
+            // 1) Start session
+            let sessionId = null;
+            try {
+                const uploader = uploadAssignments[type]?.name || 'غير محدد';
+                const uploaderEmail = uploadAssignments[type]?.email || '';
+                
+                const start = await apiCall('startUpload', {
+                    reportType: type,
+                    fileName: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    fileSize: file.size,
+                    uploadedBy: uploader,
+                    uploadedByEmail: uploaderEmail
+                });
+                sessionId = start.sessionId;
+            } catch (e) {
+                console.error(e);
+                alert('فشل بدء الرفع: ' + e.message);
                 input.value = '';
                 return;
             }
             
+            // 2) Upload chunks
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            
+            // رسالة تقدم بسيطة
+            const showProgress = (i) => {
+                const pct = Math.round(((i + 1) / totalChunks) * 100);
+                document.getElementById('periodStatus').textContent = `رفع... ${pct}%`;
+                document.getElementById('periodStatus').style.background = 'var(--info)';
+            };
+            
             try {
-                const base64 = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        const dataUrl = String(reader.result || '');
-                        const idx = dataUrl.indexOf('base64,');
-                        if (idx === -1) return reject(new Error('Invalid DataURL'));
-                        resolve(dataUrl.slice(idx + 7));
-                    };
-                    reader.onerror = () => reject(new Error('File read error'));
-                    reader.readAsDataURL(file);
-                });
-                
-                const uploader = uploadAssignments[type]?.name || 'غير محدد';
-                const uploaderEmail = uploadAssignments[type]?.email || '';
-                
-                const out = await apiCall('uploadFile', {
-                    reportType: type,
-                    fileName: file.name,
-                    mimeType: file.type || 'application/octet-stream',
-                    base64,
-                    uploadedBy: uploader,
-                    uploadedByEmail: uploaderEmail
-                });
+                for (let i = 0; i < totalChunks; i++) {
+                    const startByte = i * CHUNK_SIZE;
+                    const endByte = Math.min(file.size, startByte + CHUNK_SIZE);
+                    const blob = file.slice(startByte, endByte);
+                    
+                    const base64 = await blobToBase64_(blob);
+                    await apiCall('uploadChunk', {
+                        sessionId,
+                        index: i,
+                        total: totalChunks,
+                        chunkBase64: base64
+                    });
+                    
+                    showProgress(i);
+                }
+            } catch (e) {
+                console.error(e);
+                alert('فشل أثناء رفع الأجزاء: ' + e.message + '\nقد تحتاج إعادة المحاولة.');
+                input.value = '';
+                document.getElementById('periodStatus').textContent = 'جاري';
+                document.getElementById('periodStatus').style.background = 'var(--warning)';
+                return;
+            }
+            
+            // 3) Finish upload (assemble + save)
+            try {
+                const done = await apiCall('finishUpload', { sessionId });
                 
                 const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
-                if (lastUploadEl && out.timestamp) {
-                    lastUploadEl.textContent = new Date(out.timestamp).toLocaleDateString('ar-SA');
-                }
+                if (lastUploadEl) lastUploadEl.textContent = new Date(done.timestamp).toLocaleDateString('ar-SA');
                 
                 updateCardStatus(type, 'uploaded');
                 checkDelays();
                 
-                alert(`✅ تم رفع الملف إلى Drive وتسجيله\n\nالرابط:\n${out.fileUrl || 'تم الحفظ'}`);
+                document.getElementById('periodStatus').textContent = 'تم ✅';
+                document.getElementById('periodStatus').style.background = 'var(--success)';
+                
+                alert(`✅ تم رفع الملف بنجاح (Chunk Upload)\n\nالرابط:\n${done.fileUrl}`);
             } catch (e) {
                 console.error(e);
-                alert('فشل رفع الملف: ' + e.message);
+                alert('فشل إنهاء الرفع/الدمج: ' + e.message);
             } finally {
                 input.value = '';
+                setTimeout(() => {
+                    document.getElementById('periodStatus').textContent = 'جاري';
+                    document.getElementById('periodStatus').style.background = 'var(--warning)';
+                }, 2000);
             }
         }
         

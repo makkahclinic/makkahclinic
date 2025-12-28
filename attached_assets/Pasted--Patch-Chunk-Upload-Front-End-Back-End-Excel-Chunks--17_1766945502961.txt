@@ -1,0 +1,463 @@
+هذا Patch “Chunk Upload” كامل (Front-End + Back-End) يرفع ملفات Excel الكبيرة على دفعات (Chunks) إلى Apps Script، ويخزن كل Chunk مؤقتًا في Drive، ثم يجمعها في النهاية إلى ملف واحد داخل مجلدك الرسمي ويسجلها في Sheet.
+
+هذا الحل مصمم تحديدًا لملفات 15–30MB+ اللي تفشل مع Base64 دفعة واحدة.
+
+✅ 1) BACK-END Patch (Google Apps Script)
+
+الصق هذا في نفس مشروع Apps Script (الـ WebApp) اللي أنت رافع عليه:
+
+لا تنسَ:
+
+ضع MRIS_SHEET_ID (شيتك)
+
+ضع MRIS_UPLOAD_FOLDER_ID (Folder الرئيسي للرفع النهائي)
+
+ضع Script Property: MRIS_TOKEN
+
+/************* MRIS Chunk Upload Backend Patch *************/
+
+const MRIS_SHEET_ID = '1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk';
+const MRIS_UPLOAD_FOLDER_ID = 'PUT_YOUR_FINAL_UPLOAD_FOLDER_ID_HERE'; // Folder النهائي
+const MRIS_TEMP_FOLDER_NAME = 'MRIS_TEMP_UPLOADS'; // Folder مؤقت
+
+function requireMrisToken_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty('MRIS_TOKEN');
+  if (!expected) return; // لو ما حطيت توكن (غير مستحسن)
+  const got = String(token || '').trim();
+  if (got !== expected) throw new Error('Unauthorized: invalid token');
+}
+
+function safeCell_(v) {
+  const s = String(v ?? '');
+  if (/^[=+\-@]/.test(s.trim())) return "'" + s;
+  return s;
+}
+
+function monthKey_(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yyyy}-${mm}`;
+}
+
+function ensureUploadSheet_() {
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  let sh = ss.getSheetByName('MRIS_Upload_Log');
+  if (!sh) {
+    sh = ss.insertSheet('MRIS_Upload_Log');
+    sh.appendRow([
+      'Timestamp',
+      'MonthKey',
+      'ReportType',
+      'FileName',
+      'MimeType',
+      'FileSizeBytes',
+      'DriveFileId',
+      'DriveUrl',
+      'UploadedBy',
+      'UploadedByEmail',
+      'Notes',
+      'SessionId'
+    ]);
+  }
+  return sh;
+}
+
+function ensureTempRootFolder_() {
+  const root = DriveApp.getRootFolder();
+  const it = root.getFoldersByName(MRIS_TEMP_FOLDER_NAME);
+  if (it.hasNext()) return it.next();
+  return root.createFolder(MRIS_TEMP_FOLDER_NAME);
+}
+
+function ensureSessionFolder_(sessionId) {
+  const tempRoot = ensureTempRootFolder_();
+  const it = tempRoot.getFoldersByName(sessionId);
+  if (it.hasNext()) return it.next();
+  return tempRoot.createFolder(sessionId);
+}
+
+function startUpload_(payload) {
+  requireMrisToken_(payload.token);
+
+  const reportType = String(payload.reportType || '').trim();
+  const fileName = String(payload.fileName || '').trim();
+  const mimeType = String(payload.mimeType || 'application/octet-stream').trim();
+  const fileSize = Number(payload.fileSize || 0);
+
+  if (!reportType) throw new Error('reportType is required');
+  if (!fileName) throw new Error('fileName is required');
+
+  const now = new Date();
+  const sessionId = `MRIS_${now.getTime()}_${Math.random().toString(36).slice(2,10)}`;
+  const folder = ensureSessionFolder_(sessionId);
+
+  // ملف ميتاداتا للجلسة
+  const meta = {
+    sessionId,
+    createdAt: now.toISOString(),
+    reportType,
+    fileName,
+    mimeType,
+    fileSize,
+    uploadedBy: payload.uploadedBy || '',
+    uploadedByEmail: payload.uploadedByEmail || '',
+    notes: payload.notes || ''
+  };
+  folder.createFile('meta.json', JSON.stringify(meta, null, 2), MimeType.PLAIN_TEXT);
+
+  return { ok: true, sessionId };
+}
+
+function uploadChunk_(payload) {
+  requireMrisToken_(payload.token);
+
+  const sessionId = String(payload.sessionId || '').trim();
+  const index = Number(payload.index);
+  const total = Number(payload.total);
+  const chunkBase64 = String(payload.chunkBase64 || '').trim();
+
+  if (!sessionId) throw new Error('sessionId is required');
+  if (!Number.isFinite(index) || index < 0) throw new Error('index invalid');
+  if (!Number.isFinite(total) || total <= 0) throw new Error('total invalid');
+  if (!chunkBase64) throw new Error('chunkBase64 is required');
+
+  const folder = ensureSessionFolder_(sessionId);
+
+  const name = `chunk_${String(index).padStart(6,'0')}.b64`;
+  // نخزن الـ base64 كنص داخل ملف (أكثر مرونة من sheet/properties)
+  folder.createFile(name, chunkBase64, MimeType.PLAIN_TEXT);
+
+  return { ok: true, received: index, total };
+}
+
+function finishUpload_(payload) {
+  requireMrisToken_(payload.token);
+
+  const sessionId = String(payload.sessionId || '').trim();
+  if (!sessionId) throw new Error('sessionId is required');
+
+  const folder = ensureSessionFolder_(sessionId);
+
+  // اقرأ meta.json
+  let meta = null;
+  const metaIt = folder.getFilesByName('meta.json');
+  if (metaIt.hasNext()) {
+    meta = JSON.parse(metaIt.next().getBlob().getDataAsString('UTF-8'));
+  }
+  if (!meta) throw new Error('meta.json not found');
+
+  // اجمع chunks
+  const files = [];
+  const it = folder.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    const n = f.getName();
+    if (n.startsWith('chunk_') && n.endsWith('.b64')) files.push(f);
+  }
+  if (!files.length) throw new Error('No chunks found');
+
+  files.sort((a,b) => a.getName().localeCompare(b.getName()));
+
+  // decode + concat bytes
+  // ملاحظة: هذا يتحمل ملفات كبيرة (20-40MB) غالباً
+  let totalLen = 0;
+  const byteParts = [];
+
+  for (const f of files) {
+    const b64 = f.getBlob().getDataAsString('UTF-8');
+    const bytes = Utilities.base64Decode(b64);
+    byteParts.push(bytes);
+    totalLen += bytes.length;
+  }
+
+  const all = new Array(totalLen);
+  let offset = 0;
+  for (const part of byteParts) {
+    for (let i = 0; i < part.length; i++) {
+      all[offset + i] = part[i];
+    }
+    offset += part.length;
+  }
+
+  // حفظ الملف النهائي
+  const finalFolder = DriveApp.getFolderById(MRIS_UPLOAD_FOLDER_ID);
+  const blob = Utilities.newBlob(all, meta.mimeType || 'application/octet-stream', meta.fileName || 'upload.bin');
+  const finalFile = finalFolder.createFile(blob);
+
+  // سجل في الشيت
+  const sh = ensureUploadSheet_();
+  const now = new Date();
+  sh.appendRow([
+    now.toISOString(),
+    monthKey_(now),
+    safeCell_(meta.reportType),
+    safeCell_(meta.fileName),
+    safeCell_(meta.mimeType),
+    Number(meta.fileSize || totalLen),
+    finalFile.getId(),
+    finalFile.getUrl(),
+    safeCell_(meta.uploadedBy || ''),
+    safeCell_(meta.uploadedByEmail || ''),
+    safeCell_(meta.notes || ''),
+    safeCell_(sessionId)
+  ]);
+
+  // تنظيف: احذف فولدر الجلسة بالكامل
+  // (ننقله للمهملات بدل delete نهائي لتجنب صلاحيات)
+  folder.setTrashed(true);
+
+  return {
+    ok: true,
+    fileId: finalFile.getId(),
+    fileUrl: finalFile.getUrl(),
+    bytes: totalLen,
+    sessionId,
+    timestamp: now.toISOString()
+  };
+}
+
+function getUploadStatus_(payload) {
+  requireMrisToken_(payload.token);
+
+  const sh = ensureUploadSheet_();
+  const data = sh.getDataRange().getValues();
+  const mk = monthKey_(new Date());
+
+  const lastByType = {};
+  for (let i = data.length - 1; i >= 1; i--) {
+    const row = data[i];
+    const rowMonth = String(row[1] || '');
+    if (rowMonth !== mk) continue;
+    const type = String(row[2] || '');
+    if (!type || lastByType[type]) continue;
+
+    lastByType[type] = {
+      timestamp: row[0] || '',
+      fileName: row[3] || '',
+      driveUrl: row[7] || '',
+      uploadedBy: row[8] || ''
+    };
+  }
+
+  return { ok: true, monthKey: mk, lastByType };
+}
+
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents || '{}');
+    const action = String(body.action || '').trim();
+    const payload = body.payload || {};
+
+    let result;
+    if (action === 'startUpload') result = startUpload_(payload);
+    else if (action === 'uploadChunk') result = uploadChunk_(payload);
+    else if (action === 'finishUpload') result = finishUpload_(payload);
+    else if (action === 'getUploadStatus') result = getUploadStatus_(payload);
+    else throw new Error('Unknown action: ' + action);
+
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+إعدادات Back-End (مرة واحدة)
+
+Apps Script → Project Settings → Script Properties
+
+MRIS_TOKEN = مثلا: MRIS-2026-SECURE
+
+ضع MRIS_UPLOAD_FOLDER_ID (Folder النهائي)
+
+Deploy → Web app
+
+Execute as: Me
+
+Access: Anyone with the link
+
+خذ رابط الـ WebApp وحطه في الـ Front-End.
+
+✅ 2) FRONT-END Patch (HTML/JS)
+(A) استبدل apiCall عندك بـ POST (بدون JSONP)
+async function apiCall(action, params = {}) {
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action,
+      payload: {
+        ...params,
+        token: API_TOKEN
+      }
+    }),
+    redirect: "follow"
+  });
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); }
+  catch (e) { throw new Error("Invalid JSON: " + text.slice(0, 150)); }
+
+  if (json.ok === true) return json;
+  throw new Error(json.error || "API Error");
+}
+
+(B) Patch رفع Chunk بدل الرفع العادي
+
+استبدل handleFileUpload(type, input) بالكامل بهذا:
+
+async function handleFileUpload(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (!API_TOKEN) {
+    alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
+    input.value = '';
+    return;
+  }
+
+  // حجم chunk (خام) بالبايت: 256KB ممتاز للتوازن
+  const CHUNK_SIZE = 256 * 1024;
+
+  // 1) Start session
+  let sessionId = null;
+  try {
+    const uploader = uploadAssignments[type]?.name || 'غير محدد';
+    const uploaderEmail = uploadAssignments[type]?.email || '';
+
+    const start = await apiCall('startUpload', {
+      reportType: type,
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      fileSize: file.size,
+      uploadedBy: uploader,
+      uploadedByEmail: uploaderEmail
+    });
+    sessionId = start.sessionId;
+  } catch (e) {
+    console.error(e);
+    alert('فشل بدء الرفع: ' + e.message);
+    input.value = '';
+    return;
+  }
+
+  // 2) Upload chunks
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+  // (اختياري) رسالة تقدم بسيطة
+  const showProgress = (i) => {
+    const pct = Math.round(((i + 1) / totalChunks) * 100);
+    document.getElementById('periodStatus').textContent = `رفع... ${pct}%`;
+    document.getElementById('periodStatus').style.background = 'var(--info)';
+  };
+
+  try {
+    for (let i = 0; i < totalChunks; i++) {
+      const startByte = i * CHUNK_SIZE;
+      const endByte = Math.min(file.size, startByte + CHUNK_SIZE);
+      const blob = file.slice(startByte, endByte);
+
+      const base64 = await blobToBase64_(blob); // chunk base64
+      await apiCall('uploadChunk', {
+        sessionId,
+        index: i,
+        total: totalChunks,
+        chunkBase64: base64
+      });
+
+      showProgress(i);
+    }
+  } catch (e) {
+    console.error(e);
+    alert('فشل أثناء رفع الأجزاء: ' + e.message + '\nقد تحتاج إعادة المحاولة.');
+    input.value = '';
+    document.getElementById('periodStatus').textContent = 'جاري';
+    document.getElementById('periodStatus').style.background = 'var(--warning)';
+    return;
+  }
+
+  // 3) Finish upload (assemble + save)
+  try {
+    const done = await apiCall('finishUpload', { sessionId });
+
+    const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
+    if (lastUploadEl) lastUploadEl.textContent = new Date(done.timestamp).toLocaleDateString('ar-SA');
+
+    updateCardStatus(type, 'uploaded');
+    checkDelays();
+
+    document.getElementById('periodStatus').textContent = 'تم ✅';
+    document.getElementById('periodStatus').style.background = 'var(--success)';
+
+    alert(`✅ تم رفع الملف بنجاح (Chunk Upload)\n\nالرابط:\n${done.fileUrl}`);
+  } catch (e) {
+    console.error(e);
+    alert('فشل إنهاء الرفع/الدمج: ' + e.message);
+  } finally {
+    input.value = '';
+    setTimeout(() => {
+      document.getElementById('periodStatus').textContent = 'جاري';
+      document.getElementById('periodStatus').style.background = 'var(--warning)';
+    }, 2000);
+  }
+}
+
+// Helper: Blob -> Base64 (بدون prefix)
+function blobToBase64_(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = String(r.result || '');
+      const idx = s.indexOf('base64,');
+      if (idx === -1) return reject(new Error('Invalid DataURL'));
+      resolve(s.slice(idx + 7));
+    };
+    r.onerror = () => reject(new Error('File read error'));
+    r.readAsDataURL(blob);
+  });
+}
+
+(C) (اختياري ممتاز) Sync حالة الرفع من السيرفر
+
+أضف هذه واستدعها في initUploadsSection():
+
+async function syncUploadsThisMonth() {
+  if (!API_TOKEN) return;
+  const res = await apiCall('getUploadStatus', {});
+  const lastByType = res.lastByType || {};
+
+  Object.keys(reportTypes).forEach(type => {
+    const last = lastByType[type];
+    const el = document.querySelector(`.last-upload[data-type="${type}"]`);
+    if (el) el.textContent = last?.timestamp ? new Date(last.timestamp).toLocaleDateString('ar-SA') : '--';
+    updateCardStatus(type, last?.timestamp ? 'uploaded' : 'pending');
+  });
+
+  checkDelays();
+}
+
+
+وفي نهاية initUploadsSection():
+
+syncUploadsThisMonth().catch(console.warn);
+
+✅ كيف تستخدمه الآن (٣ خطوات فقط)
+
+في Apps Script
+
+ضع MRIS_UPLOAD_FOLDER_ID
+
+ضع Script Property: MRIS_TOKEN
+
+Deploy WebApp جديد وخذ الرابط
+
+في Front-End
+
+API_URL = رابط الويب آب
+
+ادخل Token من زر “تسجيل الدخول”
+
+جرّب رفع ملف كبير ✅
