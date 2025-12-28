@@ -434,12 +434,132 @@
             from { transform: translate(-50%, 100px); opacity: 0; }
             to { transform: translate(-50%, 0); opacity: 1; }
         }
+        
+        .confirm-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .confirm-modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .confirm-modal {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .confirm-modal-overlay.show .confirm-modal {
+            transform: scale(1);
+        }
+        .confirm-modal-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 32px;
+        }
+        .confirm-modal-icon.warning {
+            background: #fef3c7;
+            color: #f59e0b;
+        }
+        .confirm-modal-icon.danger {
+            background: #fee2e2;
+            color: #dc3545;
+        }
+        .confirm-modal-icon.info {
+            background: #dbeafe;
+            color: #3b82f6;
+        }
+        .confirm-modal-icon.success {
+            background: #d1fae5;
+            color: #10b981;
+        }
+        .confirm-modal h3 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+        .confirm-modal p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            white-space: pre-line;
+        }
+        .confirm-modal-btns {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .confirm-modal-btns button {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .confirm-modal-btns .btn-cancel {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        .confirm-modal-btns .btn-cancel:hover {
+            background: #d1d5db;
+        }
+        .confirm-modal-btns .btn-confirm {
+            background: var(--primary);
+            color: white;
+        }
+        .confirm-modal-btns .btn-confirm:hover {
+            background: var(--primary-dark);
+        }
+        .confirm-modal-btns .btn-confirm.danger {
+            background: var(--danger);
+        }
+        .confirm-modal-btns .btn-confirm.danger:hover {
+            background: #b91c1c;
+        }
     </style>
 </head>
 <body>
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner"></div>
         <p style="margin-top: 15px; color: var(--primary);">جاري تحميل مركز القيادة...</p>
+    </div>
+    
+    <div class="confirm-modal-overlay" id="confirmModal">
+        <div class="confirm-modal">
+            <div class="confirm-modal-icon warning" id="confirmIcon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3 id="confirmTitle">تأكيد</h3>
+            <p id="confirmMessage">هل أنت متأكد؟</p>
+            <div class="confirm-modal-btns">
+                <button class="btn-cancel" onclick="closeConfirmModal()">إلغاء</button>
+                <button class="btn-confirm" id="confirmBtn" onclick="confirmAction()">تأكيد</button>
+            </div>
+        </div>
     </div>
     
     <div class="access-denied" id="accessDenied" style="display: none;">
@@ -951,6 +1071,52 @@
             toast.classList.toggle('error', isError);
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        let confirmCallback = null;
+        
+        function showConfirmModal(options) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirmModal');
+                const icon = document.getElementById('confirmIcon');
+                const title = document.getElementById('confirmTitle');
+                const message = document.getElementById('confirmMessage');
+                const confirmBtn = document.getElementById('confirmBtn');
+                
+                title.textContent = options.title || 'تأكيد';
+                message.textContent = options.message || 'هل أنت متأكد؟';
+                confirmBtn.textContent = options.confirmText || 'تأكيد';
+                
+                icon.className = 'confirm-modal-icon ' + (options.type || 'warning');
+                confirmBtn.className = 'btn-confirm ' + (options.type === 'danger' ? 'danger' : '');
+                
+                const iconClass = {
+                    'warning': 'fa-exclamation-triangle',
+                    'danger': 'fa-trash-alt',
+                    'info': 'fa-info-circle',
+                    'success': 'fa-check-circle'
+                };
+                icon.innerHTML = `<i class="fas ${iconClass[options.type] || iconClass.warning}"></i>`;
+                
+                confirmCallback = resolve;
+                modal.classList.add('show');
+            });
+        }
+        
+        function closeConfirmModal() {
+            document.getElementById('confirmModal').classList.remove('show');
+            if (confirmCallback) {
+                confirmCallback(false);
+                confirmCallback = null;
+            }
+        }
+        
+        function confirmAction() {
+            document.getElementById('confirmModal').classList.remove('show');
+            if (confirmCallback) {
+                confirmCallback(true);
+                confirmCallback = null;
+            }
         }
         
         function switchSection(sectionName) {
@@ -1767,7 +1933,13 @@
         }
         
         async function syncAuthUsers() {
-            if (!confirm('سيتم مزامنة جميع المستخدمين من Firebase Auth إلى قاعدة البيانات.\nهل تريد المتابعة؟')) return;
+            const confirmed = await showConfirmModal({
+                title: 'مزامنة المستخدمين',
+                message: 'سيتم مزامنة جميع المستخدمين من Firebase Auth إلى قاعدة البيانات.',
+                type: 'info',
+                confirmText: 'مزامنة'
+            });
+            if (!confirmed) return;
             
             const container = document.getElementById('usersContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري المزامنة...</div>';
@@ -1794,18 +1966,24 @@
         }
         
         async function toggleUserStatus(uid, currentStatus) {
-            if (confirm('هل تريد تغيير حالة هذا المستخدم؟')) {
-                try {
-                    const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
-                    await db.collection('staff_roles').doc(uid).update({
-                        status: newStatus
-                    });
-                    showToast('تم تغيير الحالة بنجاح');
-                    loadUsers();
-                } catch(e) {
-                    console.error('Error toggling status:', e);
-                    showToast('فشل تغيير الحالة: ' + e.message, true);
-                }
+            const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+            const confirmed = await showConfirmModal({
+                title: 'تغيير حالة المستخدم',
+                message: newStatus === 'active' ? 'سيتم تفعيل هذا المستخدم' : 'سيتم تعليق هذا المستخدم',
+                type: newStatus === 'active' ? 'success' : 'warning',
+                confirmText: newStatus === 'active' ? 'تفعيل' : 'تعليق'
+            });
+            if (!confirmed) return;
+            
+            try {
+                await db.collection('staff_roles').doc(uid).update({
+                    status: newStatus
+                });
+                showToast('تم تغيير الحالة بنجاح');
+                loadUsers();
+            } catch(e) {
+                console.error('Error toggling status:', e);
+                showToast('فشل تغيير الحالة: ' + e.message, true);
             }
         }
         
@@ -1825,7 +2003,13 @@
         }
         
         async function resetUserPassword(uid) {
-            if (!confirm('سيتم إنشاء رابط إعادة تعيين كلمة السر.\nهل تريد المتابعة؟')) return;
+            const confirmed = await showConfirmModal({
+                title: 'إعادة تعيين كلمة السر',
+                message: 'سيتم إنشاء رابط إعادة تعيين كلمة السر وإرساله للمستخدم.',
+                type: 'info',
+                confirmText: 'إنشاء الرابط'
+            });
+            if (!confirmed) return;
             
             try {
                 const token = await auth.currentUser.getIdToken();
@@ -1839,10 +2023,17 @@
                 const data = await response.json();
                 
                 if (data.ok) {
-                    const copyLink = confirm(`تم إنشاء رابط إعادة تعيين كلمة السر للبريد: ${data.email}\n\nهل تريد نسخ الرابط؟`);
-                    if (copyLink && data.resetLink) {
-                        navigator.clipboard.writeText(data.resetLink);
-                        showToast('تم نسخ الرابط');
+                    if (data.resetLink) {
+                        const copyConfirm = await showConfirmModal({
+                            title: 'تم إنشاء الرابط',
+                            message: `تم إنشاء رابط إعادة تعيين كلمة السر للبريد:\n${data.email}`,
+                            type: 'success',
+                            confirmText: 'نسخ الرابط'
+                        });
+                        if (copyConfirm) {
+                            navigator.clipboard.writeText(data.resetLink);
+                            showToast('تم نسخ الرابط');
+                        }
                     } else {
                         showToast('تم إنشاء الرابط بنجاح');
                     }
@@ -1925,8 +2116,15 @@
                 return;
             }
             
-            const reason = prompt('سبب الحذف (اختياري):');
-            if (!confirm(`⚠️ سيتم نقل المستخدم للأرشيف:\n\n${email}\n\nيمكنك استعادته لاحقاً من قسم المحذوفين.`)) return;
+            const confirmed = await showConfirmModal({
+                title: 'نقل للأرشيف',
+                message: `سيتم نقل المستخدم للأرشيف:\n${email}\n\nيمكنك استعادته لاحقاً من قسم المحذوفين.`,
+                type: 'warning',
+                confirmText: 'نقل للأرشيف'
+            });
+            if (!confirmed) return;
+            
+            const reason = '';
             
             try {
                 const userDoc = await db.collection('staff_roles').doc(uid).get();
@@ -1957,7 +2155,13 @@
         }
         
         async function restoreUser(docId) {
-            if (!confirm('هل تريد استعادة هذا المستخدم؟')) return;
+            const confirmed = await showConfirmModal({
+                title: 'استعادة المستخدم',
+                message: 'سيتم استعادة هذا المستخدم وإعادة تفعيل حسابه.',
+                type: 'success',
+                confirmText: 'استعادة'
+            });
+            if (!confirmed) return;
             
             try {
                 const deletedDoc = await db.collection('deleted_staff').doc(docId).get();
@@ -1988,8 +2192,13 @@
         }
         
         async function permanentDeleteUser(docId, email) {
-            if (!confirm(`⚠️ تحذير نهائي!\n\nسيتم حذف "${email}" نهائياً من:\n- قاعدة البيانات\n- Firebase Authentication\n\nسيتمكن من إعادة التسجيل كمستخدم جديد.\n\nهل أنت متأكد؟`)) return;
-            if (!confirm('تأكيد أخير: هذا الإجراء لا يمكن التراجع عنه!')) return;
+            const confirmed = await showConfirmModal({
+                title: 'حذف نهائي',
+                message: `⚠️ تحذير!\n\nسيتم حذف "${email}" نهائياً من:\n• قاعدة البيانات\n• Firebase Authentication\n\nسيتمكن من إعادة التسجيل كمستخدم جديد.\n\nهذا الإجراء لا يمكن التراجع عنه!`,
+                type: 'danger',
+                confirmText: 'حذف نهائي'
+            });
+            if (!confirmed) return;
             
             try {
                 const token = await auth.currentUser.getIdToken();
