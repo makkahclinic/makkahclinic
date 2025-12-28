@@ -58,6 +58,17 @@
     return arr.map(v => safeCell_(v));
   }
 
+  // ======== Owner Bypass ========
+  
+  /**
+   * بريد المالك - يدخل بدون تحقق من التوكن
+   */
+  const OWNER_EMAIL = 'husseinbabsail@gmail.com';
+
+  function isOwnerByEmail_(email) {
+    return String(email || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
+  }
+
   // ======== دوال الأمان ========
 
   /**
@@ -106,10 +117,17 @@
   }
   
   /**
-   * التحقق من صلاحيات الموظف
+   * التحقق من صلاحيات الموظف - مع Owner Bypass
    * الأدوار المتاحة: owner, admin, staff, doctor, pharmacist, insurance, viewer
    */
   function validateStaffAuth_(payload, requiredRoles) {
+    // ✅ Owner Bypass - المالك يدخل بالبريد فقط بدون تحقق من التوكن
+    if (isOwnerByEmail_(payload.staffEmail)) {
+      console.log('✅ Owner bypass activated for:', payload.staffEmail);
+      return { verified: true, role: 'owner' };
+    }
+
+    // غير المالك: يحتاج كل البيانات
     if (!payload.staffId || !payload.staffEmail || !payload.idToken) {
       throw new Error('غير مصرح - يجب تسجيل الدخول');
     }
