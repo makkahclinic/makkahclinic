@@ -1214,35 +1214,38 @@
             });
         }
         
-        function loadEocData() {
+        async function loadEocData() {
             const container = document.getElementById('eocReportsContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            postToAppsScript(APIs.main, 'getEmergencyReports', {}).then(data => {
-                if (data.success && data.reports && data.reports.length > 0) {
-                    const statusCard = document.getElementById('eocStatusCard');
-                    const activeReport = data.reports.find(r => r.Status === 'active' || r.Status === 'نشط');
-                    
-                    if (activeReport) {
-                        statusCard.style.background = 'linear-gradient(135deg, #dc2626, #991b1b)';
-                        statusCard.innerHTML = `
-                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 10px; animation: pulse 1s infinite;"></i>
-                            <h3 style="font-size: 1.5rem;">حالة طوارئ نشطة!</h3>
-                            <p>${activeReport.Type || activeReport.النوع || 'طوارئ'} - ${activeReport.Location || activeReport.الموقع || ''}</p>
-                        `;
-                    }
-                    
+            try {
+                const reportsRes = await fetchJsonp(APIs.main + '?action=getEmergencyReports&limit=10&callback=_');
+                const activeRes = await fetchJsonp(APIs.main + '?action=getActiveCommand&callback=_');
+                
+                const statusCard = document.getElementById('eocStatusCard');
+                const cmd = activeRes?.command;
+                if (activeRes?.ok && cmd?.active) {
+                    statusCard.style.background = 'linear-gradient(135deg, #dc2626, #991b1b)';
+                    statusCard.innerHTML = `
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 10px; animation: pulse 1s infinite;"></i>
+                        <h3 style="font-size: 1.5rem;">حالة طوارئ نشطة!</h3>
+                        <p>${cmd.responseType || ''} - ${cmd.location || ''}</p>
+                    `;
+                }
+                
+                const reports = reportsRes?.reports || [];
+                if (reports.length > 0) {
                     let html = '<table class="data-table"><thead><tr>';
                     html += '<th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
                     html += '</tr></thead><tbody>';
                     
-                    data.reports.slice(0, 10).forEach(r => {
-                        const status = r.Status || r.الحالة || 'جديد';
-                        const statusClass = status === 'active' || status === 'نشط' ? 'status-escalated' : 'status-closed';
+                    reports.slice(0, 10).forEach(r => {
+                        const status = r.status || r.Status || r.الحالة || 'جديد';
+                        const statusClass = String(status).includes('مغلق') || String(status).includes('closed') ? 'status-closed' : 'status-escalated';
                         html += `<tr>
-                            <td>${r.Timestamp || r.التاريخ || '-'}</td>
-                            <td>${r.Type || r.النوع || '-'}</td>
-                            <td>${r.Location || r.الموقع || '-'}</td>
+                            <td>${r.date || r.Timestamp || r.التاريخ || '-'} ${r.time || ''}</td>
+                            <td>${r.type || r.Type || r.النوع || '-'}</td>
+                            <td>${r.location || r.Location || r.الموقع || '-'}</td>
                             <td><span class="status-badge ${statusClass}">${status}</span></td>
                         </tr>`;
                     });
@@ -1252,9 +1255,10 @@
                 } else {
                     container.innerHTML = '<div class="no-alerts">لا توجد بلاغات طوارئ سابقة</div>';
                 }
-            }).catch(e => {
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل البيانات</div>';
-            });
+            } catch(e) {
+                console.error('EOC load error:', e);
+                container.innerHTML = '<div class="no-alerts">خطأ في تحميل بيانات الطوارئ</div>';
+            }
         }
         
         function loadComplaints() {
@@ -1337,39 +1341,60 @@
             });
         }
         
-        function loadRisks() {
+        async function loadRisks() {
             const container = document.getElementById('risksContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
-            postToAppsScript(APIs.risks, 'getRisks', {}).then(data => {
-                if (data.success && data.risks && data.risks.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
-                    html += '</tr></thead><tbody>';
+            try {
+                const res = await fetch(APIs.risks + '?action=metrics', { redirect: 'follow' });
+                const data = await res.json();
+                
+                if (data?.ok && (data.high > 0 || data.medium > 0 || data.low > 0)) {
+                    let html = '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-bottom:20px;">';
+                    html += `<div style="background:#fee2e2; padding:15px; border-radius:10px; text-align:center;">
+                        <div style="font-size:2rem; font-weight:bold; color:#dc2626;">${data.high || 0}</div>
+                        <div style="color:#991b1b;">مخاطر عالية</div>
+                    </div>`;
+                    html += `<div style="background:#fef3c7; padding:15px; border-radius:10px; text-align:center;">
+                        <div style="font-size:2rem; font-weight:bold; color:#d97706;">${data.medium || 0}</div>
+                        <div style="color:#92400e;">مخاطر متوسطة</div>
+                    </div>`;
+                    html += `<div style="background:#d1fae5; padding:15px; border-radius:10px; text-align:center;">
+                        <div style="font-size:2rem; font-weight:bold; color:#059669;">${data.low || 0}</div>
+                        <div style="color:#065f46;">مخاطر منخفضة</div>
+                    </div>`;
+                    html += '</div>';
                     
-                    data.risks.forEach(r => {
-                        const level = r.Level || r.المستوى || 'medium';
-                        let levelClass = 'status-medium';
-                        if (level.includes('high') || level.includes('عالي')) levelClass = 'status-high';
-                        else if (level.includes('low') || level.includes('منخفض')) levelClass = 'status-low';
+                    if (data.risks && data.risks.length > 0) {
+                        html += '<table class="data-table"><thead><tr>';
+                        html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
+                        html += '</tr></thead><tbody>';
                         
-                        html += `<tr>
-                            <td>${r.Description || r.الوصف || '-'}</td>
-                            <td>${r.Department || r.القسم || '-'}</td>
-                            <td><span class="status-badge ${levelClass}">${level}</span></td>
-                            <td>${r.Status || r.الحالة || '-'}</td>
-                        </tr>`;
-                    });
+                        data.risks.forEach(r => {
+                            const level = r.Level || r.المستوى || r.level || 'medium';
+                            let levelClass = 'status-medium';
+                            if (String(level).includes('high') || String(level).includes('عالي')) levelClass = 'status-high';
+                            else if (String(level).includes('low') || String(level).includes('منخفض')) levelClass = 'status-low';
+                            
+                            html += `<tr>
+                                <td>${r.Description || r.الوصف || r.description || '-'}</td>
+                                <td>${r.Department || r.القسم || r.department || '-'}</td>
+                                <td><span class="status-badge ${levelClass}">${level}</span></td>
+                                <td>${r.Status || r.الحالة || r.status || '-'}</td>
+                            </tr>`;
+                        });
+                        
+                        html += '</tbody></table>';
+                    }
                     
-                    html += '</tbody></table>';
                     container.innerHTML = html;
                 } else {
                     container.innerHTML = '<div class="no-alerts">لا توجد مخاطر مسجلة</div>';
                 }
-            }).catch(e => {
+            } catch(e) {
                 console.error('Error loading risks:', e);
                 container.innerHTML = '<div class="no-alerts">خطأ في تحميل المخاطر</div>';
-            });
+            }
         }
         
         function loadRounds() {
