@@ -1988,12 +1988,30 @@
         }
         
         async function permanentDeleteUser(docId, email) {
-            if (!confirm(`⚠️ تحذير نهائي!\n\nسيتم حذف "${email}" نهائياً.\nسيتمكن من إعادة التسجيل كمستخدم جديد.\n\nهل أنت متأكد؟`)) return;
+            if (!confirm(`⚠️ تحذير نهائي!\n\nسيتم حذف "${email}" نهائياً من:\n- قاعدة البيانات\n- Firebase Authentication\n\nسيتمكن من إعادة التسجيل كمستخدم جديد.\n\nهل أنت متأكد؟`)) return;
             if (!confirm('تأكيد أخير: هذا الإجراء لا يمكن التراجع عنه!')) return;
             
             try {
+                const token = await auth.currentUser.getIdToken();
+                
+                const authRes = await fetch(`/api/admin/users/${docId}`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const authData = await authRes.json();
+                
+                if (authData.ok) {
+                    console.log('User deleted from Firebase Auth:', authData);
+                } else {
+                    console.warn('Firebase Auth delete warning:', authData.error);
+                }
+                
                 await db.collection('deleted_staff').doc(docId).delete();
-                showToast('تم الحذف النهائي - يمكن للمستخدم إعادة التسجيل');
+                
+                showToast('تم الحذف النهائي - يمكن للمستخدم إعادة التسجيل الآن');
                 loadDeletedUsers();
             } catch(e) {
                 console.error('Permanent delete error:', e);
