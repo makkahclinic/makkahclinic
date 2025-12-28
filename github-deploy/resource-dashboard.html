@@ -1624,25 +1624,17 @@
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({
                     action,
-                    payload: {
-                        ...params,
-                        token: API_TOKEN
-                    }
+                    payload: { ...params, token: API_TOKEN }
                 }),
                 redirect: "follow"
             });
-            
+
             const text = await res.text();
             let json;
-            try { 
-                json = JSON.parse(text); 
-            } catch (e) { 
-                throw new Error("Invalid JSON: " + text.slice(0, 120)); 
-            }
-            
-            if (json.ok === true || json.success === true || json.saved === true || json.data || json.monthKey || json.lastByType) {
-                return json.data ?? json;
-            }
+            try { json = JSON.parse(text); }
+            catch (e) { throw new Error("Invalid JSON: " + text.slice(0, 160)); }
+
+            if (json.ok === true || json.success === true) return json;
             throw new Error(json.error || "API Error");
         }
         
@@ -2032,7 +2024,11 @@ ${dept.name}
                     lastUploadEl.textContent = hist[0]?.date || '--';
                 }
                 
-                const isUploadedThisMonth = !!hist[0]?.timestamp && hist[0]?.timestamp.startsWith(uploadStatusMeta.monthKey);
+                const isSameMonth = (tsIso, monthKey) => {
+                    if (!tsIso || !monthKey) return false;
+                    return String(tsIso).slice(0,7) === monthKey;
+                };
+                const isUploadedThisMonth = isSameMonth(hist[0]?.timestamp, uploadStatusMeta.monthKey);
                 if (isUploadedThisMonth) updateCardStatus(type, 'uploaded');
                 else updateCardStatus(type, 'pending');
             });
@@ -2094,7 +2090,7 @@ ${dept.name}
             currentAssignType = null;
         }
         
-        async function confirmAssignment() {
+        function confirmAssignment() {
             const name = document.getElementById('assignEmployeeName').value.trim();
             const email = document.getElementById('assignEmployeeEmail').value.trim();
             const deadline = parseInt(document.getElementById('assignDeadline').value, 10);
@@ -2103,26 +2099,11 @@ ${dept.name}
                 alert('الرجاء إدخال اسم الموظف');
                 return;
             }
-            if (!API_TOKEN) {
-                alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
-                return;
-            }
             
-            try {
-                await apiCall('setAssignment', {
-                    reportType: currentAssignType,
-                    name,
-                    email,
-                    deadlineDay: deadline
-                });
-                
-                closeAssignModal();
-                await syncUploadsFromServer();
-                alert('تم حفظ التكليف بنجاح ✅');
-            } catch (e) {
-                console.error(e);
-                alert('فشل حفظ التكليف: ' + e.message);
-            }
+            uploadAssignments[currentAssignType] = { name, email, deadline };
+            closeAssignModal();
+            checkDelays();
+            alert('تم حفظ التكليف محلياً ✅');
         }
         
         // Helper: Blob -> Base64 (بدون prefix)

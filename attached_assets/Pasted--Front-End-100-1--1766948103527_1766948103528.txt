@@ -1,0 +1,110 @@
+شغلك قريب جدًا ✅ لكن عندك ٣ أشياء ناقصة/مكسورة في الـ Front-End تمنع المنظومة تشتغل “صح” 100%:
+
+1) ❌ apiCall() عندك يرجّع json.data ?? json
+
+وهذا يكسر أفعال مثل: startUpload / finishUpload / getUploadStatus لأنهم ما يرجّعون data أصلاً…
+وبالتالي هذا السطر عندك:
+
+sessionId = start.sessionId;
+
+
+يصير undefined (لأن start صار json.data وليس json).
+
+✅ الحل (Patch صغير)
+
+بدّل apiCall بالكامل بهذا (يرجع JSON كامل):
+
+async function apiCall(action, params = {}) {
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action,
+      payload: { ...params, token: API_TOKEN }
+    }),
+    redirect: "follow"
+  });
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); }
+  catch (e) { throw new Error("Invalid JSON: " + text.slice(0, 160)); }
+
+  // نجاح موحّد
+  if (json.ok === true || json.success === true) return json;
+
+  throw new Error(json.error || "API Error");
+}
+
+
+بعد هذا التعديل:
+start.sessionId ✅
+done.fileUrl ✅
+res.monthKey ✅
+
+2) ❌ confirmAssignment() ينادي action اسمها setAssignment
+
+لكن الـ Back-End Patch اللي عطيتك سابقًا ما فيه setAssignment أصلاً (فراح يعطيك Unknown action).
+
+✅ حلين (اختر واحد)
+الحل A (الأفضل): احذف استدعاء setAssignment وخلي التكليف Local فقط
+
+يعني نفس نظامك القديم.
+ببساطة في confirmAssignment() استبدل الكود بهذا:
+
+uploadAssignments[currentAssignType] = { name, email, deadline };
+closeAssignModal();
+checkDelays();
+alert('تم حفظ التكليف محلياً ✅');
+
+الحل B (إذا تبي التكليف يصير مركزي في الشيت): أضيف لك back-end action setAssignment
+
+إذا تبغاه سيرفر لازم تضيف في Apps Script دالة setAssignment_() وتدخلها في doPost
+وقتها أكتب لك Patch جاهز (قولي تبغاه A ولا B).
+
+3) ⚠️ isUploadedThisMonth عندك خطأ منطقي
+
+أنت تسوي:
+
+hist[0]?.timestamp.startsWith(uploadStatusMeta.monthKey)
+
+
+لكن الـ timestamp اللي عندك غالبًا ISO مثل:
+2025-12-28T...
+و monthKey مثل:
+2025-12
+
+هذا ممكن يشتغل، لكن عندك حالات كثير timestamp قد يرجع فارغ أو بصيغة ثانية.
+
+✅ الأفضل
+
+اعمل مقارنة بالشهر مباشرة:
+
+function isSameMonth(tsIso, monthKey){
+  if (!tsIso || !monthKey) return false;
+  return String(tsIso).slice(0,7) === monthKey;
+}
+
+
+واستخدمها:
+
+const isUploadedThisMonth = isSameMonth(hist[0]?.timestamp, uploadStatusMeta.monthKey);
+
+✅ الآن: كيف أتأكد أنت “ماشي صح”؟
+
+افتح Console وشغّل 3 أوامر بسرعة:
+
+console.log("TOKEN", API_TOKEN);
+apiCall("startUpload",{ reportType:"assets", fileName:"t.xlsx", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileSize:10, uploadedBy:"test", uploadedByEmail:"a@a.com" }).then(console.log).catch(console.error);
+apiCall("getUploadStatus",{}).then(console.log).catch(console.error);
+
+
+لو رجع:
+
+startUpload فيه sessionId ✅
+
+getUploadStatus فيه monthKey ✅
+
+يبقى الرفع سيشتغل.
+
+🚀 Patch جاهز سريع (تطبقه الآن)
