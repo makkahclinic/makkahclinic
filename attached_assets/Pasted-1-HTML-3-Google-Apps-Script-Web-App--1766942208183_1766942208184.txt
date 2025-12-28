@@ -1,0 +1,498 @@
+1) قبل ما تعدّل الـ HTML: ثبّت 3 أشياء في Google Apps Script
+(أ) إعدادات النشر (Web App)
+
+لازم السكربت يكون Web App ومفعّل “Who has access” بشكل يسمح لصفحتك تقرأ (خاصة إذا بتستخدم JSONP / Script tag). إعدادات النشر وموضوع “Execute as / Who has access” هي اللي تحكم هل الصفحة تقدر تجيب الداتا ولا لا. 
+Google for Developers
+
+(ب) سبب إنك تستخدم JSONP
+
+أنت الآن تستخدم JSONP (تضيف <script src=...>). هذا عادة يُستخدم لتفادي مشاكل CORS مع Web Apps. عشان يشتغل لازم doGet يرجّع:
+callbackName(JSON_STRING); مع ContentService.MimeType.JAVASCRIPT. (هذا أسلوب Apps Script القياسي). 
+Google for Developers
+
+(ج) Token بدل “كشف روابط”
+
+خَلِّ التوكن في Script Properties (مثلاً MRIS_TOKEN) بدل ما يكون ثابت بالكود. وخلّ doGet يتحقق من token ويمنع أي طلب بدون توكن.
+
+2) ماذا تعدّل في الـ HTML الآن (أهم 5 تعديلات)
+
+أنت رفعت:
+
+Google Sheet (ID = 1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk)
+
+Web App URL:
+https://script.google.com/macros/s/AKfycbysDVVd26WYP02PcGvoSncf-H6lY1zlfumzwRXvySvAeKXVXVhr3b2hKqte_VkssbxA9A/exec
+
+التعديل 1: غيّر API_URL في صفحة MRIS
+
+بدّل هذا:
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbyH9MJiYFP_0WaaL2EcxHawsUPxMZb4-W-gdBvaTdPxKbK6SeCqWd5wjjDNe9MzEfI/exec';
+
+
+إلى:
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbysDVVd26WYP02PcGvoSncf-H6lY1zlfumzwRXvySvAeKXVXVhr3b2hKqte_VkssbxA9A/exec';
+
+التعديل 2: وحّد شكل الاستجابة في apiCall
+
+حالياً تتوقع:
+
+if (response.success) resolve(response.data)
+
+
+خلّها تدعم الشكلين (عشان ما تتعب مع اختلاف السكربتات):
+
+const ok = response.ok === true || response.success === true;
+if (ok) resolve(response.data ?? response);
+else reject(new Error(response.error || response.message || 'API Error'));
+
+التعديل 3: لا تخزّن التوكن كـ “مفتاح النظام”
+
+التوكن الآن مجرد طبقة حماية بسيطة. الأفضل لاحقاً تربطه بتوكن Firebase (مثل نظام الإدارة عندك)، لكن حالياً خله “مفتاح قراءة” فقط.
+
+التعديل 4: “رفع الملفات” في الواجهة الآن وهمي (localStorage)
+
+الكود الحالي يسجّل الرفع محلياً فقط. إذا تبغاه رسمي “يرفع الراس” لازم يتحول إلى:
+
+رفع ملف إلى Drive (أو تحويله إلى CSV) عبر Apps Script
+
+أو على الأقل: تسجيل “رفع” في Google Sheet (Upload_Log) من خلال API action مثل logUpload
+
+التعديل 5: افصل “البيانات الحية” عن “ملفات الشهر”
+
+لا تخلط Heatmap/KPIs مع Upload tracking في نفس شيت بطريقة عشوائية. خليه Tabs واضحة في نفس الملف.
+
+3) ما هو “فورمات” الملفات المطلوب؟
+
+نعم: الأفضل يكون عندك 4 فورمات رسمية ثابتة (حتى لو برنامج المجمع يطلع ملف مختلف، نعمل “Mapping/Import” بدل ما نغيّر البرنامج).
+
+(A) فورمات الأجهزة والأصول (Assets Master) — المرجع الأساسي
+
+هذا أهم ملف عندك (للصيانة/المعايرة/الجاهزية). الحد الأدنى المطلوب:
+
+Asset_ID (إلزامي ومميز)
+
+Asset_Name_AR / EN
+
+Department
+
+Floor
+
+Category (Radiology/Lab/Dental…)
+
+Manufacturer / Model / Serial
+
+Status (Active/OutOfService)
+
+Criticality (High/Med/Low) مهم جداً لسباهي
+
+PM_Frequency (days)
+
+Last_PM_Date
+
+Next_PM_Due
+
+Calibration_Required (Yes/No)
+
+Last_Cal_Date
+
+Next_Cal_Due
+
+Vendor
+
+Purchase_Date
+
+Warranty_End
+
+Replacement_Value (SAR) (اختياري لكن قوي جداً)
+
+هل المبالغ المالية مهمة؟
+
+ليست شرطاً لكل معيار، لكن وجودها يعطيك “إدارة دولة”:
+
+Replacement Value + CAPEX plan + cost of downtime = ذكاء إداري ممتاز (وخاصة عند LD/ FMS).
+
+إذا تبغى تبدأ خفيف: خَلّها Optional ثم توسع.
+
+(B) فورمات الاستهلاك (Consumption)
+
+Item_Code
+
+Item_Name
+
+Department
+
+Monthly_Usage_Qty
+
+Current_Stock
+
+Min_Stock
+
+Reorder_Point
+
+Supplier
+
+Lead_Time_Days
+
+Unit_Cost (اختياري)
+
+(C) فورمات القوى العاملة للتغطية (Staffing Coverage)
+
+Department
+
+Required_Staff (per shift/per day)
+
+Actual_Staff
+
+Shift (AM/PM/Night أو “فترة”)
+
+Date
+
+(D) فورمات Evidence Pack (LD4.5 وغيرها)
+
+StandardRef (مثلاً LD4.5)
+
+EvidenceType (Policy/Procedure/Minutes/PO/Training…)
+
+Summary
+
+EvidenceLink
+
+Status (Draft/Ready/Verified)
+
+VerifiedBy
+
+Attachments (روابط)
+
+4) Backend جاهز (Google Apps Script) — نفس ملفك + نفس الشيت
+
+هذا كود “نظيف” يدعم JSONP للأكشنات التي تحتاجها واجهتك الآن:
+
+getHeatmap
+
+getKpis
+
+getEvidencePack
+
+logUpload (بدل localStorage)
+
+setAssignment (تكليف موظف)
+
+getUploadStatus
+
+انسخه كملف Code.gs في نفس مشروع Apps Script واربطه بملف Google Sheet الذي أعطيته.
+
+مهم: ضع MRIS_TOKEN في Script Properties.
+Publish Web App كما ذكرنا. 
+Google for Developers
++1
+
+/*************** MRIS - Backend (Apps Script Web App) ***************/
+const SPREADSHEET_ID = '1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk';
+
+// Sheet names (أنشئها إذا غير موجودة)
+const SHEET_DEPTS = 'MRIS_Departments';      // heatmap
+const SHEET_KPIS  = 'MRIS_KPIs';             // KPIs
+const SHEET_EVID  = 'MRIS_EvidencePack';     // evidence
+const SHEET_UPLOG = 'MRIS_Upload_Log';       // upload log
+const SHEET_ASSIGN= 'MRIS_Assignments';      // assignments
+
+function doGet(e) {
+  const p = (e && e.parameter) ? e.parameter : {};
+  const action = String(p.action || '').trim();
+  const callback = String(p.callback || '').trim();
+  const token = String(p.token || '').trim();
+
+  // Basic protection
+  if (!isValidToken_(token)) {
+    return output_(callback, { ok:false, error:'Unauthorized' });
+  }
+
+  try {
+    let data;
+    switch (action) {
+      case 'getHeatmap':
+        data = getHeatmap_();
+        return output_(callback, { ok:true, data });
+
+      case 'getKpis':
+        data = getKpis_();
+        return output_(callback, { ok:true, data });
+
+      case 'getEvidencePack':
+        data = getEvidencePack_({
+          deptId: String(p.deptId || '').trim(),
+          standardRef: String(p.standardRef || 'LD4.5').trim(),
+          status: String(p.status || '').trim()
+        });
+        return output_(callback, { ok:true, data });
+
+      case 'getUploadStatus':
+        data = getUploadStatus_();
+        return output_(callback, { ok:true, data });
+
+      // actions that modify data: allow via GET if you insist, but better via POST later
+      case 'logUpload':
+        data = logUpload_({
+          reportType: String(p.reportType || '').trim(),
+          fileName: String(p.fileName || '').trim(),
+          uploadedBy: String(p.uploadedBy || '').trim(),
+          uploadedByEmail: String(p.uploadedByEmail || '').trim()
+        });
+        return output_(callback, { ok:true, data });
+
+      case 'setAssignment':
+        data = setAssignment_({
+          reportType: String(p.reportType || '').trim(),
+          name: String(p.name || '').trim(),
+          email: String(p.email || '').trim(),
+          deadlineDay: Number(p.deadlineDay || 5)
+        });
+        return output_(callback, { ok:true, data });
+
+      default:
+        return output_(callback, { ok:false, error:'Unknown action: ' + action });
+    }
+  } catch (err) {
+    return output_(callback, { ok:false, error: err.message });
+  }
+}
+
+/** JSONP output */
+function output_(callback, obj) {
+  const json = JSON.stringify(obj);
+  if (callback) {
+    const safeCb = callback.replace(/[^\w$.]/g, '');
+    return ContentService
+      .createTextOutput(`${safeCb}(${json});`)
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/** Token check from Script Properties */
+function isValidToken_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty('MRIS_TOKEN');
+  if (!expected) return true; // لو ما ضبطته، يعتبر مفتوح (غير مستحسن)
+  return token && token === expected;
+}
+
+function ss_() { return SpreadsheetApp.openById(SPREADSHEET_ID); }
+
+function ensureSheet_(name, headers) {
+  const ss = ss_();
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (sh.getLastRow() === 0) sh.appendRow(headers);
+  const firstRow = sh.getRange(1,1,1,headers.length).getValues()[0];
+  if (firstRow.join('|') !== headers.join('|')) {
+    sh.getRange(1,1,1,headers.length).setValues([headers]);
+  }
+  return sh;
+}
+
+function sheetToObjects_(sh) {
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0].map(String);
+  return values.slice(1).map((row, idx) => {
+    const o = { _row: idx + 2 };
+    headers.forEach((h, i) => o[h] = row[i]);
+    return o;
+  });
+}
+
+/******************** Heatmap ********************/
+function getHeatmap_() {
+  const sh = ensureSheet_(SHEET_DEPTS, [
+    'deptId','name','floor','required','actual','updatedAt'
+  ]);
+  const rows = sheetToObjects_(sh);
+  return rows.map(r => ({
+    deptId: String(r.deptId || '').trim(),
+    name: String(r.name || '').trim(),
+    floor: Number(r.floor || 1),
+    required: Number(r.required || 0),
+    actual: Number(r.actual || 0),
+    updatedAt: r.updatedAt || ''
+  })).filter(x => x.deptId && x.name);
+}
+
+/******************** KPIs ********************/
+function getKpis_() {
+  // You can compute from other tables later; for now read MRIS_KPIs
+  const sh = ensureSheet_(SHEET_KPIS, [
+    'stressIndex','consumptionIntegrity','riskLevel','updatedAt'
+  ]);
+  const rows = sheetToObjects_(sh);
+  const last = rows[rows.length - 1] || {};
+  return {
+    stressIndex: Number(last.stressIndex ?? 25),
+    consumptionIntegrity: Number(last.consumptionIntegrity ?? 92),
+    riskLevel: String(last.riskLevel || 'low').toLowerCase(), // low/medium/high
+    updatedAt: last.updatedAt || ''
+  };
+}
+
+/******************** Evidence Pack ********************/
+function getEvidencePack_(q) {
+  const sh = ensureSheet_(SHEET_EVID, [
+    'standardRef','deptId','evidenceType','summary','evidenceLink','status','verifiedBy','alertId','decisionId','attachmentsJson','updatedAt'
+  ]);
+  const rows = sheetToObjects_(sh);
+
+  return rows
+    .filter(r => {
+      if (q.standardRef && String(r.standardRef || '') !== q.standardRef) return false;
+      if (q.deptId && String(r.deptId || '') !== q.deptId) return false;
+      if (q.status && String(r.status || '') !== q.status) return false;
+      return true;
+    })
+    .map(r => ({
+      standardRef: String(r.standardRef || ''),
+      deptId: String(r.deptId || ''),
+      evidenceType: String(r.evidenceType || ''),
+      summary: String(r.summary || ''),
+      evidenceLink: String(r.evidenceLink || ''),
+      status: String(r.status || 'Draft'),
+      verifiedBy: String(r.verifiedBy || ''),
+      alertId: String(r.alertId || ''),
+      decisionId: String(r.decisionId || ''),
+      attachments: parseJsonSafe_(r.attachmentsJson),
+      updatedAt: r.updatedAt || ''
+    }));
+}
+
+function parseJsonSafe_(v) {
+  if (!v) return [];
+  try { return JSON.parse(String(v)); } catch(e) { return []; }
+}
+
+/******************** Upload log (بديل localStorage) ********************/
+function logUpload_(p) {
+  if (!p.reportType) throw new Error('reportType required');
+
+  const sh = ensureSheet_(SHEET_UPLOG, [
+    'timestamp','reportType','fileName','uploadedBy','uploadedByEmail','monthKey'
+  ]);
+  const now = new Date();
+  const monthKey = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM');
+
+  sh.appendRow([
+    now.toISOString(),
+    p.reportType,
+    p.fileName || '',
+    p.uploadedBy || '',
+    p.uploadedByEmail || '',
+    monthKey
+  ]);
+
+  return { saved:true };
+}
+
+function setAssignment_(p) {
+  if (!p.reportType) throw new Error('reportType required');
+  if (!p.name) throw new Error('name required');
+
+  const sh = ensureSheet_(SHEET_ASSIGN, [
+    'reportType','name','email','deadlineDay','assignedAt'
+  ]);
+  const rows = sheetToObjects_(sh);
+  const idx = rows.find(r => String(r.reportType) === p.reportType);
+
+  if (idx) {
+    sh.getRange(idx._row, 2).setValue(p.name);
+    sh.getRange(idx._row, 3).setValue(p.email || '');
+    sh.getRange(idx._row, 4).setValue(Number(p.deadlineDay || 5));
+    sh.getRange(idx._row, 5).setValue(new Date().toISOString());
+  } else {
+    sh.appendRow([
+      p.reportType, p.name, p.email || '', Number(p.deadlineDay || 5), new Date().toISOString()
+    ]);
+  }
+  return { saved:true };
+}
+
+function getUploadStatus_() {
+  const up = ensureSheet_(SHEET_UPLOG, ['timestamp','reportType','fileName','uploadedBy','uploadedByEmail','monthKey']);
+  const as = ensureSheet_(SHEET_ASSIGN, ['reportType','name','email','deadlineDay','assignedAt']);
+
+  const logs = sheetToObjects_(up);
+  const assigns = sheetToObjects_(as);
+
+  const now = new Date();
+  const monthKey = Utilities.formatDate(now, 'Asia/Riyadh', 'yyyy-MM');
+
+  // latest per reportType for this month
+  const latest = {};
+  logs.forEach(r => {
+    if (String(r.monthKey) !== monthKey) return;
+    const t = String(r.reportType || '');
+    if (!t) return;
+    if (!latest[t] || String(r.timestamp) > String(latest[t].timestamp)) latest[t] = r;
+  });
+
+  const out = {};
+  assigns.forEach(a => {
+    const rt = String(a.reportType || '');
+    out[rt] = {
+      reportType: rt,
+      assignee: { name: String(a.name||''), email: String(a.email||'') },
+      deadlineDay: Number(a.deadlineDay || 5),
+      lastUpload: latest[rt] ? {
+        timestamp: latest[rt].timestamp,
+        fileName: latest[rt].fileName,
+        uploadedBy: latest[rt].uploadedBy
+      } : null
+    };
+  });
+
+  return { monthKey, status: out };
+}
+
+5) كيف تربط “رفع الملفات” في الواجهة مع الباك اند (بدل localStorage)
+
+بدل ما تسجّل محليًا فقط، بعد نجاح الرفع (حتى لو رفع صوري الآن) استدعِ:
+
+setAssignment عند التكليف
+
+logUpload عند الرفع
+
+getUploadStatus عند تحميل الصفحة
+
+مثال سريع داخل handleFileUpload بعد ما تتأكد من نوع الملف:
+
+await apiCall('logUpload', {
+  reportType: type,
+  fileName: file.name,
+  uploadedBy: uploadAssignments[type]?.name || '',
+  uploadedByEmail: uploadAssignments[type]?.email || ''
+});
+
+
+ومثال داخل confirmAssignment() بعد ما تحفظ:
+
+await apiCall('setAssignment', {
+  reportType: currentAssignType,
+  name,
+  email,
+  deadlineDay: deadline
+});
+
+6) سؤالك الأخير: “هل ملف برنامج المجمع نلتزم به؟ وهل نحتاج معلومات إضافية؟”
+
+نعم نقدر نلتزم بملف البرنامج كمصدر (Source)، لكن لازم يكون عندك Master Reference ثابت (هو اللي عملناه قبل) ثم تعمل Import/Mapping من ملف البرنامج إلى الماستر.
+
+المعلومات الإضافية اللي غالباً ما تكون ناقصة في ملفات البرامج وتفيدك جداً:
+
+Criticality (High/Med/Low) للأجهزة والخدمات
+
+Risk/Impact (تأثير تعطل الجهاز على الخدمة)
+
+PM & Calibration policy fields (دورية + آخر/قادم)
+
+Ownership & Vendor SLA (المورّد + رقم عقد/اتفاقية + زمن الاستجابة)
+
+Replacement Value (اختياري لكنه قوي جداً للإدارة والاعتماد)

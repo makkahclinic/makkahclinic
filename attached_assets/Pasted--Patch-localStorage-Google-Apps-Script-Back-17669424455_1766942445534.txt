@@ -1,0 +1,287 @@
+هذا “Patch” جاهز (قص/لصق) يحوّل قسم رفع الفورمات الشهرية من localStorage إلى Google Apps Script Backend (Actions: getUploadStatus, setAssignment, logUpload) بدون ما تخرب باقي النظام.
+
+قبل اللصق: تأكد أنك عدّلت:
+
+API_URL = رابط Web App حقك الجديد
+
+API_TOKEN = نفس التوكن الموجود في Script Properties (MRIS_TOKEN)
+
+✅ PATCH 1 — عدّل apiCall (يدعم ok/success + يرجّع data أو response)
+
+ابحث عن دالة apiCall(action, params = {}) واستبدل الـ window[callbackName] logic بهذا الجزء:
+
+window[callbackName] = function (response) {
+  try {
+    const ok = response?.ok === true || response?.success === true;
+    if (ok) resolve(response.data ?? response);
+    else reject(new Error(response?.error || response?.message || 'API Error'));
+  } finally {
+    delete window[callbackName];
+    if (script && script.parentNode) script.parentNode.removeChild(script);
+  }
+};
+
+
+(باقي الدالة زي ما هو.)
+
+✅ PATCH 2 — احذف localStorage للرفعات والتكليفات (استبداله بالباك اند)
+
+ابحث عن هذا الجزء واحذفه/علّق عليه:
+
+let uploadAssignments = JSON.parse(localStorage.getItem('mris_assignments') || '{}');
+let uploadHistory = JSON.parse(localStorage.getItem('mris_upload_history') || '{}');
+
+
+واستبدله بهذا:
+
+let uploadAssignments = {}; // من السيرفر
+let uploadHistory = {};     // من السيرفر (آخر رفع فقط)
+let uploadStatusMeta = { monthKey: '' };
+let currentAssignType = null;
+
+✅ PATCH 3 — أضف هذه الدوال الجديدة (Paste مرة واحدة)
+
+ضعها بعد reportTypes مباشرة (أو قبل initUploadsSection()):
+
+function arDateShort(iso) {
+  if (!iso) return '--';
+  try {
+    return new Date(iso).toLocaleDateString('ar-SA');
+  } catch (e) {
+    return '--';
+  }
+}
+
+function computeDelayDays(deadlineDay) {
+  const now = new Date();
+  const currentDay = now.getDate();
+  const d = Number(deadlineDay || 5);
+  return currentDay > d ? (currentDay - d) : 0;
+}
+
+async function syncUploadsFromServer() {
+  // يحتاج token
+  if (!API_TOKEN) {
+    console.warn('No API_TOKEN; uploads will show as demo');
+    return;
+  }
+
+  const res = await apiCall('getUploadStatus');
+  // res = { monthKey, status: { revenue:{...}, ... } }
+  uploadStatusMeta.monthKey = res.monthKey || '';
+
+  const statusObj = res.status || {};
+  uploadAssignments = {};
+  uploadHistory = {};
+
+  Object.keys(reportTypes).forEach(type => {
+    const s = statusObj[type] || null;
+    if (s) {
+      uploadAssignments[type] = {
+        name: s.assignee?.name || '',
+        email: s.assignee?.email || '',
+        deadline: Number(s.deadlineDay || reportTypes[type].deadline)
+      };
+      // نخزن آخر رفع فقط (إن وجد)
+      uploadHistory[type] = s.lastUpload
+        ? [{
+            date: arDateShort(s.lastUpload.timestamp),
+            fileName: s.lastUpload.fileName || '',
+            uploadedBy: s.lastUpload.uploadedBy || '',
+            timestamp: s.lastUpload.timestamp
+          }]
+        : [];
+    } else {
+      // لو ما فيه تكليف في الشيت
+      uploadAssignments[type] = {
+        name: '',
+        email: '',
+        deadline: reportTypes[type].deadline
+      };
+      uploadHistory[type] = [];
+    }
+  });
+
+  // بعد التزامن: حدّث الواجهة
+  renderUploadsUIFromServer();
+}
+
+function renderUploadsUIFromServer() {
+  // عرض الشهر
+  if (uploadStatusMeta.monthKey) {
+    // monthKey: yyyy-MM
+    const [yy, mm] = uploadStatusMeta.monthKey.split('-').map(x => Number(x));
+    const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+    if (yy && mm) {
+      document.getElementById('currentMonth').textContent = `${monthNames[mm - 1]} ${yy}`;
+    }
+  }
+
+  // تعبئة المسؤول + آخر رفع
+  Object.keys(reportTypes).forEach(type => {
+    const asg = uploadAssignments[type] || {};
+    const hist = uploadHistory[type] || [];
+
+    const assigneeEl = document.querySelector(`.assignee[data-type="${type}"]`);
+    if (assigneeEl) {
+      assigneeEl.textContent = asg.name ? asg.name : 'لم يُحدد بعد';
+    }
+
+    const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
+    if (lastUploadEl) {
+      lastUploadEl.textContent = hist[0]?.date || '--';
+    }
+
+    // الحالة: uploaded إذا فيه رفع هذا الشهر
+    const isUploadedThisMonth = !!hist[0]?.timestamp && hist[0]?.timestamp.startsWith(uploadStatusMeta.monthKey);
+    if (isUploadedThisMonth) updateCardStatus(type, 'uploaded');
+    else updateCardStatus(type, 'pending');
+  });
+
+  // احسب التأخيرات فعلياً
+  checkDelays();
+}
+
+✅ PATCH 4 — عدّل initUploadsSection() (بدل localStorage)
+
+استبدل initUploadsSection() بالكامل بهذا:
+
+async function initUploadsSection() {
+  // عرض الشهر الحالي كبداية (قبل الاتصال)
+  const now = new Date();
+  const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  document.getElementById('currentMonth').textContent = monthNames[now.getMonth()] + ' ' + now.getFullYear();
+
+  try {
+    await syncUploadsFromServer();
+  } catch (e) {
+    console.warn('Uploads sync failed:', e.message);
+    // fallback: اعرض pending بدون كسر الصفحة
+    checkDelays();
+  }
+}
+
+✅ PATCH 5 — عدّل confirmAssignment() ليحفظ في السيرفر
+
+استبدل confirmAssignment() بالكامل بهذا:
+
+async function confirmAssignment() {
+  const name = document.getElementById('assignEmployeeName').value.trim();
+  const email = document.getElementById('assignEmployeeEmail').value.trim();
+  const deadline = parseInt(document.getElementById('assignDeadline').value, 10);
+
+  if (!name) {
+    alert('الرجاء إدخال اسم الموظف');
+    return;
+  }
+  if (!API_TOKEN) {
+    alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
+    return;
+  }
+
+  try {
+    await apiCall('setAssignment', {
+      reportType: currentAssignType,
+      name,
+      email,
+      deadlineDay: deadline
+    });
+
+    closeAssignModal();
+    await syncUploadsFromServer();
+    alert('تم حفظ التكليف بنجاح ✅');
+  } catch (e) {
+    console.error(e);
+    alert('فشل حفظ التكليف: ' + e.message);
+  }
+}
+
+✅ PATCH 6 — عدّل handleFileUpload() ليسجل الرفع في السيرفر
+
+داخل handleFileUpload(type, input) بعد التحقق من الملف، استبدل الجزء الذي يسجل في localStorage بالكامل، واجعل النهاية مثل هذا:
+
+async function handleFileUpload(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const allowedTypes = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'text/csv'
+  ];
+
+  if (!allowedTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+    alert('الرجاء رفع ملف Excel أو CSV فقط');
+    input.value = '';
+    return;
+  }
+
+  if (!API_TOKEN) {
+    alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
+    input.value = '';
+    return;
+  }
+
+  // ملاحظة: هنا نحن "نسجل" الرفع فقط (Logging)
+  // رفع الملف نفسه إلى Drive يحتاج خطوة إضافية (أقدر أضيفها لك بعدين)
+  try {
+    const uploader = uploadAssignments[type]?.name || 'غير محدد';
+    const uploaderEmail = uploadAssignments[type]?.email || '';
+
+    await apiCall('logUpload', {
+      reportType: type,
+      fileName: file.name,
+      uploadedBy: uploader,
+      uploadedByEmail: uploaderEmail
+    });
+
+    await syncUploadsFromServer();
+    alert(`تم تسجيل الرفع بنجاح ✅\n${file.name}`);
+  } catch (e) {
+    console.error(e);
+    alert('فشل تسجيل الرفع: ' + e.message);
+  } finally {
+    input.value = '';
+  }
+}
+
+✅ PATCH 7 — عدّل showUploadHistory() (لأن السيرفر الآن لا يعيد تاريخ كامل)
+
+حالياً الباك اند يرجّع “آخر رفع فقط” لكل تقرير. خلي سجل الرفعات يعرض آخر رفع كبداية:
+
+استبدل showUploadHistory(type) بهذا:
+
+function showUploadHistory(type) {
+  const history = uploadHistory[type] || [];
+  const tbody = document.getElementById('historyBody');
+
+  if (history.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">لا توجد رفعات (هذا الشهر)</td></tr>';
+  } else {
+    tbody.innerHTML = history.map(h => `
+      <tr>
+        <td>${h.date}</td>
+        <td>${h.fileName || '-'}</td>
+        <td>${h.uploadedBy || '-'}</td>
+        <td><span style="color: var(--success);">✅ مسجل</span></td>
+      </tr>
+    `).join('');
+  }
+
+  document.getElementById('historyModal').style.display = 'flex';
+}
+
+✅ PATCH 8 — في نهاية الملف: استدعاء initUploadsSection بشكل صحيح
+
+اترك:
+
+initUploadsSection();
+
+
+لكن خله يدعم async (بدون ما يكسّر شيء) مثل:
+
+initUploadsSection().catch(console.error);
+
+ملاحظة مهمة (حتى لا تنصدم)
+
+هذا الباتش يجعل الرفع “تسجيل رسمي” في الشيت (Upload Log) ويظهر حالة Uploaded/Delayed/Assigned بشكل صحيح.

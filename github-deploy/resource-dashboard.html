@@ -1597,7 +1597,7 @@
 
     <script>
         // ==================== API CONFIGURATION ====================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbyH9MJiYFP_0WaaL2EcxHawsUPxMZb4-W-gdBvaTdPxKbK6SeCqWd5wjjDNe9MzEfI/exec';
+        const API_URL = 'https://script.google.com/macros/s/AKfycbysDVVd26WYP02PcGvoSncf-H6lY1zlfumzwRXvySvAeKXVXVhr3b2hKqte_VkssbxA9A/exec';
         let API_TOKEN = localStorage.getItem('mris_token') || '';
         
         // بيانات افتراضية (تستخدم إذا فشل الاتصال بالـ API)
@@ -1622,13 +1622,16 @@
             return new Promise((resolve, reject) => {
                 const callbackName = 'mrisCallback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 
+                const script = document.createElement('script');
+                
                 window[callbackName] = function(response) {
-                    delete window[callbackName];
-                    document.body.removeChild(script);
-                    if (response.success) {
-                        resolve(response.data);
-                    } else {
-                        reject(new Error(response.error || 'API Error'));
+                    try {
+                        const ok = response?.ok === true || response?.success === true;
+                        if (ok) resolve(response.data ?? response);
+                        else reject(new Error(response?.error || response?.message || 'API Error'));
+                    } finally {
+                        delete window[callbackName];
+                        if (script && script.parentNode) script.parentNode.removeChild(script);
                     }
                 };
                 
@@ -1639,11 +1642,10 @@
                     ...params
                 });
                 
-                const script = document.createElement('script');
                 script.src = API_URL + '?' + queryParams.toString();
                 script.onerror = () => {
                     delete window[callbackName];
-                    document.body.removeChild(script);
+                    if (script.parentNode) script.parentNode.removeChild(script);
                     reject(new Error('Network error'));
                 };
                 document.body.appendChild(script);
@@ -1651,7 +1653,7 @@
                 setTimeout(() => {
                     if (window[callbackName]) {
                         delete window[callbackName];
-                        if (script.parentNode) document.body.removeChild(script);
+                        if (script.parentNode) script.parentNode.removeChild(script);
                         reject(new Error('Timeout'));
                     }
                 }, 15000);
@@ -1958,36 +1960,117 @@ ${dept.name}
             assets: { name: 'حالة الأجهزة', deadline: 10 }
         };
         
-        let uploadAssignments = JSON.parse(localStorage.getItem('mris_assignments') || '{}');
-        let uploadHistory = JSON.parse(localStorage.getItem('mris_upload_history') || '{}');
+        let uploadAssignments = {};
+        let uploadHistory = {};
+        let uploadStatusMeta = { monthKey: '' };
         let currentAssignType = null;
         
-        function initUploadsSection() {
+        function arDateShort(iso) {
+            if (!iso) return '--';
+            try {
+                return new Date(iso).toLocaleDateString('ar-SA');
+            } catch (e) {
+                return '--';
+            }
+        }
+        
+        function computeDelayDays(deadlineDay) {
+            const now = new Date();
+            const currentDay = now.getDate();
+            const d = Number(deadlineDay || 5);
+            return currentDay > d ? (currentDay - d) : 0;
+        }
+        
+        async function syncUploadsFromServer() {
+            if (!API_TOKEN) {
+                console.warn('No API_TOKEN; uploads will show as demo');
+                return;
+            }
+            
+            try {
+                const res = await apiCall('getUploadStatus');
+                uploadStatusMeta.monthKey = res.monthKey || '';
+                
+                const statusObj = res.status || {};
+                uploadAssignments = {};
+                uploadHistory = {};
+                
+                Object.keys(reportTypes).forEach(type => {
+                    const s = statusObj[type] || null;
+                    if (s) {
+                        uploadAssignments[type] = {
+                            name: s.assignee?.name || '',
+                            email: s.assignee?.email || '',
+                            deadline: Number(s.deadlineDay || reportTypes[type].deadline)
+                        };
+                        uploadHistory[type] = s.lastUpload
+                            ? [{
+                                date: arDateShort(s.lastUpload.timestamp),
+                                fileName: s.lastUpload.fileName || '',
+                                uploadedBy: s.lastUpload.uploadedBy || '',
+                                timestamp: s.lastUpload.timestamp
+                            }]
+                            : [];
+                    } else {
+                        uploadAssignments[type] = {
+                            name: '',
+                            email: '',
+                            deadline: reportTypes[type].deadline
+                        };
+                        uploadHistory[type] = [];
+                    }
+                });
+                
+                renderUploadsUIFromServer();
+            } catch (e) {
+                console.warn('Failed to sync uploads:', e.message);
+            }
+        }
+        
+        function renderUploadsUIFromServer() {
+            if (uploadStatusMeta.monthKey) {
+                const [yy, mm] = uploadStatusMeta.monthKey.split('-').map(x => Number(x));
+                const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+                if (yy && mm) {
+                    document.getElementById('currentMonth').textContent = `${monthNames[mm - 1]} ${yy}`;
+                }
+            }
+            
+            Object.keys(reportTypes).forEach(type => {
+                const asg = uploadAssignments[type] || {};
+                const hist = uploadHistory[type] || [];
+                
+                const assigneeEl = document.querySelector(`.assignee[data-type="${type}"]`);
+                if (assigneeEl) {
+                    assigneeEl.textContent = asg.name ? asg.name : 'لم يُحدد بعد';
+                }
+                
+                const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
+                if (lastUploadEl) {
+                    lastUploadEl.textContent = hist[0]?.date || '--';
+                }
+                
+                const isUploadedThisMonth = !!hist[0]?.timestamp && hist[0]?.timestamp.startsWith(uploadStatusMeta.monthKey);
+                if (isUploadedThisMonth) updateCardStatus(type, 'uploaded');
+                else updateCardStatus(type, 'pending');
+            });
+            
+            checkDelays();
+        }
+        
+        async function initUploadsSection() {
             const now = new Date();
             const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
                               'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
             document.getElementById('currentMonth').textContent = 
                 monthNames[now.getMonth()] + ' ' + now.getFullYear();
             
-            loadAssignments();
-            checkDelays();
-        }
-        
-        function loadAssignments() {
-            Object.keys(reportTypes).forEach(type => {
-                const assignee = uploadAssignments[type];
-                const el = document.querySelector(`.assignee[data-type="${type}"]`);
-                if (el && assignee) {
-                    el.textContent = assignee.name;
-                }
-                
-                const lastUpload = uploadHistory[type]?.[0];
-                const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
-                if (lastUploadEl && lastUpload) {
-                    lastUploadEl.textContent = lastUpload.date;
-                    updateCardStatus(type, 'uploaded');
-                }
-            });
+            try {
+                await syncUploadsFromServer();
+            } catch (e) {
+                console.warn('Uploads sync failed:', e.message);
+                checkDelays();
+            }
         }
         
         function updateCardStatus(type, status) {
@@ -2029,33 +2112,38 @@ ${dept.name}
             currentAssignType = null;
         }
         
-        function confirmAssignment() {
+        async function confirmAssignment() {
             const name = document.getElementById('assignEmployeeName').value.trim();
             const email = document.getElementById('assignEmployeeEmail').value.trim();
-            const deadline = document.getElementById('assignDeadline').value;
+            const deadline = parseInt(document.getElementById('assignDeadline').value, 10);
             
             if (!name) {
                 alert('الرجاء إدخال اسم الموظف');
                 return;
             }
+            if (!API_TOKEN) {
+                alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
+                return;
+            }
             
-            uploadAssignments[currentAssignType] = {
-                name: name,
-                email: email,
-                deadline: parseInt(deadline),
-                assignedAt: new Date().toISOString()
-            };
-            
-            localStorage.setItem('mris_assignments', JSON.stringify(uploadAssignments));
-            
-            const el = document.querySelector(`.assignee[data-type="${currentAssignType}"]`);
-            if (el) el.textContent = name;
-            
-            closeAssignModal();
-            checkDelays();
+            try {
+                await apiCall('setAssignment', {
+                    reportType: currentAssignType,
+                    name,
+                    email,
+                    deadlineDay: deadline
+                });
+                
+                closeAssignModal();
+                await syncUploadsFromServer();
+                alert('تم حفظ التكليف بنجاح ✅');
+            } catch (e) {
+                console.error(e);
+                alert('فشل حفظ التكليف: ' + e.message);
+            }
         }
         
-        function handleFileUpload(type, input) {
+        async function handleFileUpload(type, input) {
             const file = input.files[0];
             if (!file) return;
             
@@ -2071,31 +2159,31 @@ ${dept.name}
                 return;
             }
             
-            const now = new Date();
-            const uploadRecord = {
-                date: now.toLocaleDateString('ar-SA'),
-                fileName: file.name,
-                uploadedBy: uploadAssignments[type]?.name || 'غير محدد',
-                timestamp: now.toISOString()
-            };
-            
-            if (!uploadHistory[type]) uploadHistory[type] = [];
-            uploadHistory[type].unshift(uploadRecord);
-            
-            if (uploadHistory[type].length > 12) {
-                uploadHistory[type] = uploadHistory[type].slice(0, 12);
+            if (!API_TOKEN) {
+                alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
+                input.value = '';
+                return;
             }
             
-            localStorage.setItem('mris_upload_history', JSON.stringify(uploadHistory));
-            
-            const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
-            if (lastUploadEl) lastUploadEl.textContent = uploadRecord.date;
-            
-            updateCardStatus(type, 'uploaded');
-            checkDelays();
-            
-            alert(`تم رفع الملف بنجاح!\n${file.name}`);
-            input.value = '';
+            try {
+                const uploader = uploadAssignments[type]?.name || 'غير محدد';
+                const uploaderEmail = uploadAssignments[type]?.email || '';
+                
+                await apiCall('logUpload', {
+                    reportType: type,
+                    fileName: file.name,
+                    uploadedBy: uploader,
+                    uploadedByEmail: uploaderEmail
+                });
+                
+                await syncUploadsFromServer();
+                alert(`تم تسجيل الرفع بنجاح ✅\n${file.name}`);
+            } catch (e) {
+                console.error(e);
+                alert('فشل تسجيل الرفع: ' + e.message);
+            } finally {
+                input.value = '';
+            }
         }
         
         function showUploadHistory(type) {
@@ -2103,14 +2191,14 @@ ${dept.name}
             const tbody = document.getElementById('historyBody');
             
             if (history.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">لا توجد رفعات سابقة</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">لا توجد رفعات (هذا الشهر)</td></tr>';
             } else {
                 tbody.innerHTML = history.map(h => `
                     <tr>
                         <td>${h.date}</td>
-                        <td>${h.fileName}</td>
-                        <td>${h.uploadedBy}</td>
-                        <td><span style="color: var(--success);">✅ مكتمل</span></td>
+                        <td>${h.fileName || '-'}</td>
+                        <td>${h.uploadedBy || '-'}</td>
+                        <td><span style="color: var(--success);">✅ مسجل</span></td>
                     </tr>
                 `).join('');
             }
@@ -2199,7 +2287,7 @@ ${dept.name}
             }
         }
         
-        initUploadsSection();
+        initUploadsSection().catch(console.error);
     </script>
 </body>
 </html>
