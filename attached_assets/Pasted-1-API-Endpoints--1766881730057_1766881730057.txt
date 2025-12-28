@@ -1,0 +1,132 @@
+1) ليش “الشكاوى” تشتغل و “الطوارئ + المخاطر” لا؟
+
+لأن عندك نوعين API في سكربتاتك:
+
+Endpoints شغّالة على doGet (GET/JSONP) مثل:
+getActiveCommand, getEmergencyReports … إلخ (واضح عندك في doGet).
+
+وEndpoints شغّالة على doPost (POST) مثل أغلب Actions الأخرى الموجودة في switch(action) داخل doPost.
+
+وفي Apps Script الويب آب:
+
+أي GET ينادي doGet(e)
+
+أي POST ينادي doPost(e) 
+Google for Developers
+
+أنت في صفحة المالك صرت تستدعي الطوارئ/المخاطر بـ POST (بدالة postToAppsScript)… لكن الطوارئ بالذات عندك غالبًا موجودة في doGet فقط (JSONP)، لذلك POST يروح لـ doPost ويطلع “Unknown action” أو يرجع رفض/فشل.
+
+والدليل من لقطة الكونسل عندك قبل: كان يطلع success:false في Dashboard stats، وبعدين ظهرت رسائل CORS لما غيرت الهيدر إلى application/json.
+
+2) سبب CORS اللي ظهر عندك في صفحة المالك
+
+لأنك لما استخدمت:
+
+headers: { "Content-Type": "application/json" }
+
+
+المتصفح يسوي preflight OPTIONS، وApps Script web app ما يرجّع هيدرز CORS مثل Access-Control-Allow-Origin بالطريقة اللي يحتاجها المتصفح، فتطلع “blocked by CORS policy”.
+
+بينما في صفحة الأدمن أنت تستخدم text/plain (زي ما واضح في كودك)، وهذا غالبًا يتجنب الـ preflight.
+
+(توثيق Apps Script يوضح إنك ترجع الرد عبر ContentService.createTextOutput() وتحدد mime type… 
+Google for Developers
+)
+
+الحل السريع (بدون تخريب الأدمن): خلّ صفحة المالك تستخدم نفس “ستايل” الأدمن للطوارئ والمخاطر
+A) الطوارئ EOC (الأفضل: استخدم GET/JSONP بدل POST)
+
+في صفحة المالك لا تستدعي getEmergencyReports بـ postToAppsScript.
+استعمل نفس اللي عندك في الأدمن: fetchJsonp على doGet.
+
+مثال مباشر (استبدل loadEocData() في صفحة المالك):
+
+async function loadEocData() {
+  const container = document.getElementById('eocReportsContainer');
+  container.innerHTML = '<div class="no-alerts">جاري التحميل...</div>';
+
+  try {
+    const reportsRes = await fetchJsonp(APIs.main + '?action=getEmergencyReports&limit=10&callback=_');
+    const activeRes  = await fetchJsonp(APIs.main + '?action=getActiveCommand&callback=_');
+
+    // عرض الأوامر النشطة إن وجدت
+    const cmd = activeRes?.command;
+    if (activeRes?.ok && cmd?.active) {
+      const statusCard = document.getElementById('eocStatusCard');
+      statusCard.style.background = 'linear-gradient(135deg, #dc2626, #991b1b)';
+      statusCard.innerHTML = `
+        <i class="fas fa-exclamation-triangle" style="font-size:3rem;margin-bottom:10px;animation:pulse 1s infinite;"></i>
+        <h3 style="font-size:1.5rem;">طوارئ نشطة!</h3>
+        <p>${cmd.responseType || ''} - ${cmd.location || ''}</p>
+      `;
+    }
+
+    const reports = reportsRes?.reports || [];
+    if (!reports.length) {
+      container.innerHTML = '<div class="no-alerts">لا توجد بلاغات</div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th></tr></thead>
+        <tbody>
+          ${reports.slice(0,10).map(r => `
+            <tr>
+              <td>${r.date || ''} ${r.time || ''}</td>
+              <td>${r.type || ''}</td>
+              <td>${r.location || ''}</td>
+              <td><span class="status-badge ${String(r.status).includes('مغلق') ? 'status-closed' : 'status-escalated'}">${r.status || 'جديد'}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = '<div class="no-alerts">خطأ في تحميل بيانات الطوارئ</div>';
+  }
+}
+
+
+ليش هذا يحلها؟ لأن getEmergencyReports/getActiveCommand عندك مهيّأة في doGet (JSONP)، وApps Script أصلاً يفرّق بين doGet/doPost 
+Google for Developers
+.
+
+B) المخاطر (أنت تستخدم endpoint غلط/بشكل غلط)
+
+في صفحة الأدمن أنت تجيب المخاطر كذا:
+
+fetch(APIs.risks + '?action=metrics').then(r => r.json())
+
+
+أما في صفحة المالك أنت تحاول:
+
+postToAppsScript(APIs.risks, 'getRisks', {})
+
+
+وهذا غالبًا ما يطابق طريقة الـ API في سكربت المخاطر (واضح أنه يعتمد ?action=metrics).
+
+فالحل: خلك مثل الأدمن:
+
+async function loadRisks() {
+  const container = document.getElementById('risksContainer');
+  container.innerHTML = '<div class="no-alerts">جاري التحميل...</div>';
+
+  try {
+    const res = await fetch(APIs.risks + '?action=metrics', { redirect: 'follow' });
+    const data = await res.json();
+
+    // حسب شكل رجوعك (أنت بالأدمن تتعامل مع ok/high/med/low…)
+    if (!data?.ok) {
+      container.innerHTML = '<div class="no-alerts">لا توجد بيانات مخاطر</div>';
+      return;
+    }
+
+    // (هنا اعرض جدول بسيط حسب data)
+    container.innerHTML = '<div class="no-alerts">تم تحميل المخاطر ✓</div>';
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = '<div class="no-alerts">خطأ في تحميل المخاطر</div>';
+  }
+}
