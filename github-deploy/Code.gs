@@ -4741,7 +4741,7 @@ function analyzeSymptoms(payload) {
 // ==================== MRIS Chunk Upload Backend ====================
 
 const MRIS_SHEET_ID = '1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk';
-const MRIS_UPLOAD_FOLDER_ID = 'PUT_YOUR_FINAL_UPLOAD_FOLDER_ID_HERE';
+const MRIS_UPLOAD_FOLDER_ID = '1a_MRIS_MonthlyUploads'; // TODO: Replace with actual Google Drive Folder ID
 const MRIS_TEMP_FOLDER_NAME = 'MRIS_TEMP_UPLOADS';
 
 function requireMrisToken_(token) {
@@ -4943,7 +4943,7 @@ function getMrisUploadStatus_(payload) {
 const MRIS_SHEET_ASSIGNMENTS = 'MRIS_Assignments';
 
 function ensureMrisAssignmentsSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
   let sh = ss.getSheetByName(MRIS_SHEET_ASSIGNMENTS);
   if (!sh) {
     sh = ss.insertSheet(MRIS_SHEET_ASSIGNMENTS);
@@ -5014,7 +5014,7 @@ const MRIS_SHEET_KPIS = 'MRIS_KPIs';
 const MRIS_SHEET_EVIDENCE = 'MRIS_EvidencePack';
 
 function getMrisHeatmap_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
   const sh = ss.getSheetByName(MRIS_SHEET_HEATMAP);
   if (!sh || sh.getLastRow() < 2) {
     return { data: [
@@ -5040,7 +5040,7 @@ function getMrisHeatmap_() {
 }
 
 function getMrisKpis_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
   const sh = ss.getSheetByName(MRIS_SHEET_KPIS);
   if (!sh || sh.getLastRow() < 2) {
     return { data: { stressIndex: 25, consumptionIntegrity: 92, riskLevel: 'low' } };
@@ -5064,7 +5064,7 @@ function getMrisEvidencePack_(payload) {
   const standardRef = String(payload.standardRef || 'LD4.5').trim();
   const deptId = String(payload.deptId || '').trim();
   
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
   const sh = ss.getSheetByName(MRIS_SHEET_EVIDENCE);
   if (!sh || sh.getLastRow() < 2) return { data: [] };
   

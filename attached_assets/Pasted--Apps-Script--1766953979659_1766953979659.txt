@@ -1,0 +1,197 @@
+المشكلة واضحة من الصورة + من الكود: الواجهة الأمامية تتصل بالـ Apps Script صح، لكن طريقة قراءة الرد (JSON) غلط → لذلك تظهر لك رسائل مثل:
+
+No API_TOKEN; uploads will show as demo = أنت ما أدخلت توكن / أو التوكن اللي أدخلته لا يطابق اللي محفوظ في Script Properties.
+
+KPIs fallback: Unknown action: getKpis (كانت تظهر عندك قبل) = الواجهة كانت تطلب getKpis لكن إمّا:
+
+كانت تضرب Endpoint قديم ما فيه هذا الـ action، أو
+
+كانت تضرب الـ endpoint الصحيح لكن الواجهة تقرأ الرد غلط فتظن أنه فشل.
+
+وفي لقطة الشاشة عندك أيضاً:
+
+logo-transparent.png 404 = الملف غير موجود على السيرفر في نفس المسار.
+
+1) هل لازم تدخل التوكن كل مرة؟
+
+لا إذا خليته يتخزن في المتصفح.
+أنت بالفعل عامل:
+localStorage.setItem('mris_token', token)
+فهذا يعني تدخل التوكن مرة واحدة وبعدها الصفحة تقراه تلقائياً… إلا إذا:
+
+فتحت الصفحة من متصفح/جهاز ثاني
+
+مسحت الكاش/الـ localStorage
+
+أو التوكن تغيّر عندك في السكربت
+
+لكن أهم نقطة: لازم التوكن اللي تدخله = نفس التوكن اللي تحطه في Script Properties داخل Apps Script. (PropertiesService). 
+Google for Developers
+
+2) أهم خطأ في الواجهة الآن (سبب أن البيانات ما تتعبّى)
+
+في apiCall() عندك أنت ترجع الـ JSON كامل (مثل {ok:true, data: ...})
+لكن في loadLiveData() أنت تتوقع أن heatmapData مصفوفة مباشرة وتستخدم heatmapData.length.
+
+يعني لازم تعمل:
+
+const res = await apiCall('getHeatmap');
+
+ثم تستخدم res.data
+
+ونفس الشيء لـ getKpis و getUploadStatus.
+
+✅ باتش (Patch) للواجهة الأمامية
+
+بدّل apiCall() بهذا الشكل (يرجع json.data لو موجود):
+
+async function apiCall(action, params = {}) {
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action, payload: { ...params, token: API_TOKEN } }),
+    redirect: "follow",
+  });
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); }
+  catch { throw new Error("Invalid JSON: " + text.slice(0, 160)); }
+
+  if (json.ok === true || json.success === true) {
+    return (json.data !== undefined) ? json.data : json;
+  }
+  throw new Error(json.error || "API Error");
+}
+
+
+بعدها عدّل الاستدعاءات:
+
+// HEATMAP
+const heatmapData = await apiCall('getHeatmap'); // الآن ترجع data مباشرة
+if (Array.isArray(heatmapData) && heatmapData.length > 0) {
+  DEPARTMENTS = heatmapData.map(d => ({
+    id: d.deptId,
+    name: d.name,
+    floor: parseInt(d.floor) || 1,
+    required: Number(d.required) || 0,
+    actual: Number(d.actual) || 0
+  }));
+}
+
+
+وفي KPIs:
+
+const kpis = await apiCall('getKpis'); // ترجع data مباشرة
+stressIndex = Number(kpis.stressIndex ?? 25);
+consumptionIntegrity = Number(kpis.consumptionIntegrity ?? 92);
+riskLevel = (kpis.riskLevel === 'high') ? 'مرتفع' :
+            (kpis.riskLevel === 'medium') ? 'متوسط' : 'منخفض';
+
+
+وفي getUploadStatus:
+
+const status = await apiCall('getUploadStatus'); // ترجع data أو object حسب باتش
+uploadStatusMeta.monthKey = status.monthKey || '';
+const lastByType = status.lastByType || {};
+const assignments = status.assignments || {};
+// هنا عبّي uploadAssignments من assignments بدل ما تتركها فاضية
+
+
+سبب هذا التعديل: Apps Script غالباً يرجّع JSON في ContentService.createTextOutput() 
+Google for Developers
+، وإنت مغلفه بـ {ok:true, ...}، فلازم الواجهة تفكّه صح.
+
+3) مشكلة “No API_TOKEN” رغم أنك تدخل توكن
+
+في الباك-إند عندك دالة:
+
+function requireMrisToken_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty('MRIS_TOKEN');
+
+
+يعني لازم تروح لـ Apps Script → Project Settings → Script Properties
+وتضيف:
+
+MRIS_TOKEN = نفس القيمة اللي تدخلها في الصفحة
+
+هذا استخدام رسمي للـ Script Properties. 
+Google for Developers
+
+ملاحظة: أنت عندك كمان requireToken_() للأنظمة الثانية باسم API_TOKEN.
+لا تخلط بينهم:
+
+هذا MRIS لازم MRIS_TOKEN
+
+الأنظمة القديمة ممكن تستخدم API_TOKEN
+
+4) مشكلة الرفع (ستفشل لو ما ضبطت هذا)
+
+في الباك-إند عندك:
+
+const MRIS_UPLOAD_FOLDER_ID = 'PUT_YOUR_FINAL_UPLOAD_FOLDER_ID_HERE';
+
+
+إذا ما غيّرته إلى Folder ID حقيقي في Google Drive → finishUpload سيفشل عند:
+DriveApp.getFolderById(...)
+
+لازم:
+
+تسوي فولدر في Drive (مثلاً: MRIS Monthly Uploads)
+
+تجيب الـ Folder ID من الرابط
+
+تحطه بدل النص.
+
+5) خطأ مهم في الباك-إند (Assignments تُكتب في ملف غلط)
+
+عندك:
+
+function ensureMrisAssignmentsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+
+هذا يكتب في ملف الجودة العام (SPREADSHEET_ID)، بينما MRIS حقك له شيت مستقل:
+MRIS_SHEET_ID = '1aw8pqrIr...'
+
+الأصح:
+
+const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+
+
+وإلا بتستغرب: “ليش التكليف ما يطلع في لوحة MRIS؟”
+
+6) 404 للّوجو
+
+الواجهة تطلب logo-transparent.png من نفس مسار الصفحة، لكن السيرفر يرجع 404.
+الحل:
+
+ارفع الملف فعلاً في نفس فولدر الموقع m2020m.org/
+
+أو غيّر المسار في <img src="...">
+
+7) هل تفصل MRIS عن “السكريبت المركزي”؟
+
+الأفضل نعم (عملياً وأمنياً) للأسباب:
+
+سكريبتك المركزي صار ضخم وفيه أنظمة كثيرة → أي تعديل في MRIS قد يكسر شيء ثاني.
+
+MRIS فيه رفع ملفات (Drive + chunks) وهذا حساس.
+
+تقدر تخلي المركزي للأنظمة التشغيلية (الشكاوى/الحوادث/الجولات) وMRIS سكربت مستقل للمؤشرات والرفع.
+
+هذا نمط شائع لتقليل “blast radius” في أنظمة الويب. (والـ Apps Script Web App أصلاً مبني كـ endpoint مستقل لكل مشروع). 
+Google for Developers
++1
+
+خلاصة “ايش ناقص” عندك الآن
+
+✅ باتش قراءة JSON في الواجهة (أهم شيء)
+
+✅ إضافة MRIS_TOKEN في Script Properties
+
+✅ ضبط MRIS_UPLOAD_FOLDER_ID
+
+✅ تعديل Assignments لتكتب في MRIS_SHEET_ID وليس SPREADSHEET_ID
+
+✅ إصلاح مسار الشعار 404
