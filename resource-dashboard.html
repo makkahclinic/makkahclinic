@@ -1618,49 +1618,32 @@
         ];
         
         // ==================== API FUNCTIONS ====================
-        function apiCall(action, params = {}) {
-            return new Promise((resolve, reject) => {
-                const callbackName = 'mrisCallback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                
-                const script = document.createElement('script');
-                
-                window[callbackName] = function(response) {
-                    try {
-                        const hasError = response?.error || response?.message;
-                        const isSuccess = response?.ok === true || response?.success === true || 
-                                         response?.saved === true || response?.status || response?.monthKey ||
-                                         (typeof response === 'object' && !hasError);
-                        if (isSuccess) resolve(response.data ?? response);
-                        else reject(new Error(response?.error || response?.message || 'API Error'));
-                    } finally {
-                        delete window[callbackName];
-                        if (script && script.parentNode) script.parentNode.removeChild(script);
+        async function apiCall(action, params = {}) {
+            const res = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({
+                    action,
+                    payload: {
+                        ...params,
+                        token: API_TOKEN
                     }
-                };
-                
-                const queryParams = new URLSearchParams({
-                    action: action,
-                    token: API_TOKEN,
-                    callback: callbackName,
-                    ...params
-                });
-                
-                script.src = API_URL + '?' + queryParams.toString();
-                script.onerror = () => {
-                    delete window[callbackName];
-                    if (script.parentNode) script.parentNode.removeChild(script);
-                    reject(new Error('Network error'));
-                };
-                document.body.appendChild(script);
-                
-                setTimeout(() => {
-                    if (window[callbackName]) {
-                        delete window[callbackName];
-                        if (script.parentNode) script.parentNode.removeChild(script);
-                        reject(new Error('Timeout'));
-                    }
-                }, 15000);
+                }),
+                redirect: "follow"
             });
+            
+            const text = await res.text();
+            let json;
+            try { 
+                json = JSON.parse(text); 
+            } catch (e) { 
+                throw new Error("Invalid JSON: " + text.slice(0, 120)); 
+            }
+            
+            if (json.ok === true || json.success === true || json.saved === true || json.data || json.monthKey || json.lastByType) {
+                return json.data ?? json;
+            }
+            throw new Error(json.error || "API Error");
         }
         
         async function loadLiveData() {
@@ -1994,33 +1977,29 @@ ${dept.name}
                 const res = await apiCall('getUploadStatus');
                 uploadStatusMeta.monthKey = res.monthKey || '';
                 
-                const statusObj = res.status || {};
-                uploadAssignments = {};
+                const lastByType = res.lastByType || res.status || {};
                 uploadHistory = {};
                 
                 Object.keys(reportTypes).forEach(type => {
-                    const s = statusObj[type] || null;
-                    if (s) {
-                        uploadAssignments[type] = {
-                            name: s.assignee?.name || '',
-                            email: s.assignee?.email || '',
-                            deadline: Number(s.deadlineDay || reportTypes[type].deadline)
-                        };
-                        uploadHistory[type] = s.lastUpload
-                            ? [{
-                                date: arDateShort(s.lastUpload.timestamp),
-                                fileName: s.lastUpload.fileName || '',
-                                uploadedBy: s.lastUpload.uploadedBy || '',
-                                timestamp: s.lastUpload.timestamp
-                            }]
-                            : [];
+                    const last = lastByType[type];
+                    if (last) {
+                        uploadHistory[type] = [{
+                            date: arDateShort(last.timestamp),
+                            fileName: last.fileName || '',
+                            uploadedBy: last.uploadedBy || '',
+                            timestamp: last.timestamp,
+                            driveUrl: last.driveUrl || ''
+                        }];
                     } else {
+                        uploadHistory[type] = [];
+                    }
+                    
+                    if (!uploadAssignments[type]) {
                         uploadAssignments[type] = {
                             name: '',
                             email: '',
                             deadline: reportTypes[type].deadline
                         };
-                        uploadHistory[type] = [];
                     }
                 });
                 
@@ -2146,21 +2125,24 @@ ${dept.name}
             }
         }
         
+        // Helper: Blob -> Base64 (بدون prefix)
+        function blobToBase64_(blob) {
+            return new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload = () => {
+                    const s = String(r.result || '');
+                    const idx = s.indexOf('base64,');
+                    if (idx === -1) return reject(new Error('Invalid DataURL'));
+                    resolve(s.slice(idx + 7));
+                };
+                r.onerror = () => reject(new Error('File read error'));
+                r.readAsDataURL(blob);
+            });
+        }
+        
         async function handleFileUpload(type, input) {
             const file = input.files[0];
             if (!file) return;
-            
-            const allowedTypes = [
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-excel',
-                'text/csv'
-            ];
-            
-            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
-                alert('الرجاء رفع ملف Excel أو CSV فقط');
-                input.value = '';
-                return;
-            }
             
             if (!API_TOKEN) {
                 alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
@@ -2168,24 +2150,89 @@ ${dept.name}
                 return;
             }
             
+            // حجم chunk (خام) بالبايت: 256KB ممتاز للتوازن
+            const CHUNK_SIZE = 256 * 1024;
+            
+            // 1) Start session
+            let sessionId = null;
             try {
                 const uploader = uploadAssignments[type]?.name || 'غير محدد';
                 const uploaderEmail = uploadAssignments[type]?.email || '';
                 
-                await apiCall('logUpload', {
+                const start = await apiCall('startUpload', {
                     reportType: type,
                     fileName: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    fileSize: file.size,
                     uploadedBy: uploader,
                     uploadedByEmail: uploaderEmail
                 });
-                
-                await syncUploadsFromServer();
-                alert(`تم تسجيل الرفع بنجاح ✅\n${file.name}`);
+                sessionId = start.sessionId;
             } catch (e) {
                 console.error(e);
-                alert('فشل تسجيل الرفع: ' + e.message);
+                alert('فشل بدء الرفع: ' + e.message);
+                input.value = '';
+                return;
+            }
+            
+            // 2) Upload chunks
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            
+            // رسالة تقدم بسيطة
+            const showProgress = (i) => {
+                const pct = Math.round(((i + 1) / totalChunks) * 100);
+                document.getElementById('periodStatus').textContent = `رفع... ${pct}%`;
+                document.getElementById('periodStatus').style.background = 'var(--info)';
+            };
+            
+            try {
+                for (let i = 0; i < totalChunks; i++) {
+                    const startByte = i * CHUNK_SIZE;
+                    const endByte = Math.min(file.size, startByte + CHUNK_SIZE);
+                    const blob = file.slice(startByte, endByte);
+                    
+                    const base64 = await blobToBase64_(blob);
+                    await apiCall('uploadChunk', {
+                        sessionId,
+                        index: i,
+                        total: totalChunks,
+                        chunkBase64: base64
+                    });
+                    
+                    showProgress(i);
+                }
+            } catch (e) {
+                console.error(e);
+                alert('فشل أثناء رفع الأجزاء: ' + e.message + '\nقد تحتاج إعادة المحاولة.');
+                input.value = '';
+                document.getElementById('periodStatus').textContent = 'جاري';
+                document.getElementById('periodStatus').style.background = 'var(--warning)';
+                return;
+            }
+            
+            // 3) Finish upload (assemble + save)
+            try {
+                const done = await apiCall('finishUpload', { sessionId });
+                
+                const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
+                if (lastUploadEl) lastUploadEl.textContent = new Date(done.timestamp).toLocaleDateString('ar-SA');
+                
+                updateCardStatus(type, 'uploaded');
+                checkDelays();
+                
+                document.getElementById('periodStatus').textContent = 'تم ✅';
+                document.getElementById('periodStatus').style.background = 'var(--success)';
+                
+                alert(`✅ تم رفع الملف بنجاح (Chunk Upload)\n\nالرابط:\n${done.fileUrl}`);
+            } catch (e) {
+                console.error(e);
+                alert('فشل إنهاء الرفع/الدمج: ' + e.message);
             } finally {
                 input.value = '';
+                setTimeout(() => {
+                    document.getElementById('periodStatus').textContent = 'جاري';
+                    document.getElementById('periodStatus').style.background = 'var(--warning)';
+                }, 2000);
             }
         }
         
