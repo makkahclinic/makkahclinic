@@ -1150,7 +1150,7 @@
 
     <header class="header">
         <div class="logo-section">
-            <img src="logo-transparent.png" alt="Logo" onerror="this.style.display='none'">
+            <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="Logo" onerror="this.style.display='none'">
             <div class="system-title">
                 <h1>مركز المؤشرات والإنذار المبكر للموارد الطبية</h1>
                 <span>Medical Resource Intelligence System - MRIS</span>
@@ -1667,11 +1667,44 @@
         }
         
         function promptForToken() {
-            const token = prompt('أدخل رمز الدخول (Token):');
-            if (token) {
-                API_TOKEN = token;
-                localStorage.setItem('mris_token', token);
+            const existing = localStorage.getItem('mris_token');
+            
+            if (existing && existing.trim()) {
+                API_TOKEN = existing.trim();
+                alert('✅ أنت مسجّل دخول بالفعل');
                 loadLiveData();
+                syncUploadsFromServer?.();
+                return;
+            }
+            
+            const token = prompt('أدخل رمز الدخول (Token):');
+            if (token && token.trim()) {
+                API_TOKEN = token.trim();
+                localStorage.setItem('mris_token', API_TOKEN);
+                alert('✅ تم حفظ التوكن');
+                loadLiveData();
+                syncUploadsFromServer?.();
+                updateLoginButtonLabel();
+            }
+        }
+        
+        function logoutToken() {
+            localStorage.removeItem('mris_token');
+            API_TOKEN = '';
+            alert('تم تسجيل الخروج');
+            location.reload();
+        }
+        
+        function updateLoginButtonLabel() {
+            const btn = document.getElementById('loginBtn');
+            if (!btn) return;
+            const t = localStorage.getItem('mris_token');
+            if (t && t.trim()) {
+                btn.textContent = '🚪 تسجيل خروج';
+                btn.onclick = logoutToken;
+            } else {
+                btn.textContent = '🔐 تسجيل الدخول';
+                btn.onclick = promptForToken;
             }
         }
         
@@ -1930,8 +1963,9 @@ ${dept.name}
         
         // إضافة زر تسجيل الدخول في الهيدر
         document.querySelector('.header-info').insertAdjacentHTML('beforeend', 
-            '<button onclick="promptForToken()" style="background: var(--gold); color: var(--primary); border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600;">🔐 تسجيل الدخول</button>'
+            '<button id="loginBtn" style="background: var(--gold); color: var(--primary); border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600;">🔐 تسجيل الدخول</button>'
         );
+        updateLoginButtonLabel();
         
         // ==================== نظام رفع الفورمات الشهرية ====================
         
