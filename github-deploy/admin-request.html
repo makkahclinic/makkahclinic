@@ -342,26 +342,42 @@
             const jobTitle = document.getElementById('jobTitle').value.trim();
             const reason = document.getElementById('reason').value.trim();
 
+            let createdUser = null;
+            
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
+                createdUser = userCredential.user;
 
-                await sendEmailVerification(user);
+                try {
+                    await addDoc(collection(db, 'membershipRequests'), {
+                        uid: createdUser.uid,
+                        fullName: fullName,
+                        email: email,
+                        phone: phone,
+                        department: department,
+                        jobTitle: jobTitle,
+                        reason: reason,
+                        status: 'pending',
+                        requestedAt: serverTimestamp(),
+                        reviewedAt: null,
+                        reviewedBy: null,
+                        notes: ''
+                    });
+                } catch (firestoreError) {
+                    console.error('Firestore error, rolling back Auth user:', firestoreError);
+                    try {
+                        await createdUser.delete();
+                    } catch (deleteError) {
+                        console.error('Failed to rollback Auth user:', deleteError);
+                    }
+                    throw new Error('فشل حفظ الطلب. حاول مرة أخرى.');
+                }
 
-                await addDoc(collection(db, 'membershipRequests'), {
-                    uid: user.uid,
-                    fullName: fullName,
-                    email: email,
-                    phone: phone,
-                    department: department,
-                    jobTitle: jobTitle,
-                    reason: reason,
-                    status: 'pending',
-                    requestedAt: serverTimestamp(),
-                    reviewedAt: null,
-                    reviewedBy: null,
-                    notes: ''
-                });
+                try {
+                    await sendEmailVerification(createdUser);
+                } catch (emailError) {
+                    console.warn('Email verification failed (non-critical):', emailError);
+                }
 
                 showSuccess();
                 
@@ -379,6 +395,8 @@
                     errorMessage = 'كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل.';
                 } else if (error.code === 'auth/invalid-email') {
                     errorMessage = 'البريد الإلكتروني غير صحيح.';
+                } else if (error.message) {
+                    errorMessage = error.message;
                 }
                 
                 showError(errorMessage);
