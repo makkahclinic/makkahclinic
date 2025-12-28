@@ -1626,8 +1626,11 @@
                 
                 window[callbackName] = function(response) {
                     try {
-                        const ok = response?.ok === true || response?.success === true;
-                        if (ok) resolve(response.data ?? response);
+                        const hasError = response?.error || response?.message;
+                        const isSuccess = response?.ok === true || response?.success === true || 
+                                         response?.saved === true || response?.status || response?.monthKey ||
+                                         (typeof response === 'object' && !hasError);
+                        if (isSuccess) resolve(response.data ?? response);
                         else reject(new Error(response?.error || response?.message || 'API Error'));
                     } finally {
                         delete window[callbackName];
