@@ -606,6 +606,11 @@
                 <span>جولات السلامة</span>
             </a>
             <div class="nav-divider"></div>
+            <a class="nav-item" data-section="requests">
+                <i class="fas fa-user-plus"></i>
+                <span>طلبات العضوية</span>
+                <span id="requestsBadge" style="background:#ef4444; color:white; font-size:0.7rem; padding:2px 8px; border-radius:10px; margin-right:auto; display:none;">0</span>
+            </a>
             <a class="nav-item" data-section="users">
                 <i class="fas fa-users-cog"></i>
                 <span>إدارة المستخدمين</span>
@@ -882,6 +887,18 @@
                 </div>
                 <div id="roundsContainer">
                     <div class="no-alerts">جاري التحميل...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- قسم طلبات العضوية -->
+        <section class="content-section" id="section-requests">
+            <div class="stats-box">
+                <h4><i class="fas fa-user-plus"></i> طلبات العضوية الجديدة</h4>
+                <p style="color:#666; margin-bottom:20px;">مراجعة والموافقة على طلبات الانضمام الجديدة</p>
+                
+                <div id="requestsContainer">
+                    <div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
                 </div>
             </div>
         </section>
@@ -1165,12 +1182,176 @@
                 await Promise.all([
                     loadDashboardStats(),
                     loadAlerts(),
-                    loadExtraKPIs()
+                    loadExtraKPIs(),
+                    loadMembershipRequests()
                 ]);
             } catch (e) {
                 console.error('Error loading data:', e);
             } finally {
                 refreshBtn.classList.remove('loading');
+            }
+        }
+        
+        async function loadMembershipRequests() {
+            const container = document.getElementById('requestsContainer');
+            const badge = document.getElementById('requestsBadge');
+            
+            try {
+                const snapshot = await db.collection('membershipRequests')
+                    .where('status', '==', 'pending')
+                    .orderBy('requestedAt', 'desc')
+                    .get();
+                
+                const requests = [];
+                snapshot.forEach(doc => {
+                    requests.push({ id: doc.id, ...doc.data() });
+                });
+                
+                if (requests.length > 0) {
+                    badge.textContent = requests.length;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+                
+                if (requests.length === 0) {
+                    container.innerHTML = `
+                        <div class="no-alerts" style="background:#f0fdf4; border:2px dashed #86efac;">
+                            <i class="fas fa-check-circle" style="color:#22c55e; font-size:2rem; margin-bottom:10px;"></i>
+                            <p style="color:#166534;">لا توجد طلبات معلقة حالياً</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let html = `
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>الاسم</th>
+                                <th>البريد</th>
+                                <th>الجوال</th>
+                                <th>القسم</th>
+                                <th>المسمى</th>
+                                <th>تاريخ الطلب</th>
+                                <th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                requests.forEach(r => {
+                    const date = r.requestedAt?.toDate ? r.requestedAt.toDate().toLocaleDateString('ar-SA') : '-';
+                    html += `
+                        <tr>
+                            <td><strong>${r.fullName || '-'}</strong></td>
+                            <td style="font-size:0.85rem;">${r.email || '-'}</td>
+                            <td>${r.phone || '-'}</td>
+                            <td>${r.department || '-'}</td>
+                            <td>${r.jobTitle || '-'}</td>
+                            <td>${date}</td>
+                            <td style="display:flex; gap:8px;">
+                                <button onclick="approveRequest('${r.id}', '${r.uid}', '${r.email}', '${r.fullName}')" 
+                                        style="background:#10b981; color:white; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-family:inherit;">
+                                    <i class="fas fa-check"></i> موافقة
+                                </button>
+                                <button onclick="rejectRequest('${r.id}', '${r.email}')" 
+                                        style="background:#ef4444; color:white; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-family:inherit;">
+                                    <i class="fas fa-times"></i> رفض
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+                
+            } catch(e) {
+                console.error('Error loading membership requests:', e);
+                container.innerHTML = `<div class="no-alerts">خطأ في تحميل الطلبات: ${e.message}</div>`;
+            }
+        }
+        
+        async function approveRequest(requestId, uid, email, fullName) {
+            const confirmed = await showConfirmModal({
+                title: 'الموافقة على الطلب',
+                message: `سيتم قبول طلب:\n${fullName}\n${email}\n\nوإضافته كموظف في النظام.`,
+                type: 'success',
+                confirmText: 'موافقة'
+            });
+            if (!confirmed) return;
+            
+            try {
+                await db.collection('staff_roles').doc(uid).set({
+                    email: email,
+                    fullName: fullName,
+                    name: fullName,
+                    role: 'staff',
+                    status: 'active',
+                    allowedSystems: [],
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    approvedBy: currentUser.email,
+                    approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                await db.collection('membershipRequests').doc(requestId).update({
+                    status: 'approved',
+                    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    reviewedBy: currentUser.email
+                });
+                
+                showToast('تمت الموافقة على الطلب بنجاح');
+                loadMembershipRequests();
+                loadUsers();
+                loadPermissions();
+                
+            } catch(e) {
+                console.error('Approve error:', e);
+                showToast('خطأ في الموافقة: ' + e.message, true);
+            }
+        }
+        
+        async function rejectRequest(requestId, email) {
+            const confirmed = await showConfirmModal({
+                title: 'رفض الطلب',
+                message: `سيتم رفض طلب:\n${email}\n\nوحذف حسابه من النظام.`,
+                type: 'danger',
+                confirmText: 'رفض'
+            });
+            if (!confirmed) return;
+            
+            try {
+                const reqDoc = await db.collection('membershipRequests').doc(requestId).get();
+                const uid = reqDoc.data()?.uid;
+                
+                await db.collection('membershipRequests').doc(requestId).update({
+                    status: 'rejected',
+                    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    reviewedBy: currentUser.email
+                });
+                
+                if (uid) {
+                    try {
+                        const token = await auth.currentUser.getIdToken();
+                        await fetch(`/api/admin/users/${uid}`, {
+                            method: 'DELETE',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                    } catch(deleteErr) {
+                        console.warn('Could not delete from Auth:', deleteErr);
+                    }
+                }
+                
+                showToast('تم رفض الطلب');
+                loadMembershipRequests();
+                
+            } catch(e) {
+                console.error('Reject error:', e);
+                showToast('خطأ في الرفض: ' + e.message, true);
             }
         }
         
