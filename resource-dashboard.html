@@ -1634,32 +1634,35 @@
             try { json = JSON.parse(text); }
             catch (e) { throw new Error("Invalid JSON: " + text.slice(0, 160)); }
 
-            if (json.ok === true || json.success === true) return json;
+            if (json.ok === true || json.success === true) {
+                return json;
+            }
             throw new Error(json.error || "API Error");
         }
         
         async function loadLiveData() {
             if (!API_TOKEN) {
-                console.log('No token - using demo data');
+                console.log('No API_TOKEN; uploads will show as demo');
                 return;
             }
             
             try {
-                const heatmapData = await apiCall('getHeatmap');
-                if (heatmapData && heatmapData.length > 0) {
+                const res = await apiCall('getHeatmap');
+                const heatmapData = res.data || [];
+                if (Array.isArray(heatmapData) && heatmapData.length > 0) {
                     DEPARTMENTS = heatmapData.map(d => ({
                         id: d.deptId,
                         name: d.name,
                         floor: parseInt(d.floor) || 1,
-                        required: d.required,
-                        actual: d.actual
+                        required: Number(d.required) || 0,
+                        actual: Number(d.actual) || 0
                     }));
                     renderHeatmap();
-                    await updateKPIs();
-                    console.log('Live data loaded successfully');
                 }
+                await updateKPIs();
+                console.log('Live data loaded successfully');
             } catch (error) {
-                console.warn('Failed to load live data:', error.message);
+                console.warn('Heatmap fallback:', error.message);
             }
         }
         
@@ -1743,10 +1746,11 @@
             let stressIndex = 25, consumptionIntegrity = 92, riskLevel = 'منخفض';
             
             try {
-                const kpis = await apiCall('getKpis');
+                const res = await apiCall('getKpis');
+                const kpis = res.data || res;
                 if (kpis) {
-                    stressIndex = kpis.stressIndex || 25;
-                    consumptionIntegrity = kpis.consumptionIntegrity || 92;
+                    stressIndex = Number(kpis.stressIndex) || 25;
+                    consumptionIntegrity = Number(kpis.consumptionIntegrity) || 92;
                     riskLevel = kpis.riskLevel === 'high' ? 'مرتفع' : 
                                kpis.riskLevel === 'medium' ? 'متوسط' : 'منخفض';
                 }
@@ -1792,12 +1796,12 @@ ${dept.name}
             if (!API_TOKEN) return [];
             
             try {
-                const items = await apiCall('getEvidencePack', {
+                const res = await apiCall('getEvidencePack', {
                     deptId: deptId,
                     standardRef: standardRef,
                     status: ''
                 });
-                
+                const items = res.data || [];
                 return Array.isArray(items) ? items : [];
             } catch (err) {
                 console.error('Failed to load evidence:', err);
@@ -1970,6 +1974,7 @@ ${dept.name}
                 uploadStatusMeta.monthKey = res.monthKey || '';
                 
                 const lastByType = res.lastByType || res.status || {};
+                const serverAssignments = res.assignments || {};
                 uploadHistory = {};
                 
                 Object.keys(reportTypes).forEach(type => {
@@ -1986,7 +1991,14 @@ ${dept.name}
                         uploadHistory[type] = [];
                     }
                     
-                    if (!uploadAssignments[type]) {
+                    const srvAsg = serverAssignments[type];
+                    if (srvAsg && srvAsg.name) {
+                        uploadAssignments[type] = {
+                            name: srvAsg.name,
+                            email: srvAsg.email || '',
+                            deadline: srvAsg.deadlineDay || reportTypes[type].deadline
+                        };
+                    } else if (!uploadAssignments[type]) {
                         uploadAssignments[type] = {
                             name: '',
                             email: '',
