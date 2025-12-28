@@ -697,6 +697,22 @@ function doPost(e) {
         case 'getUploadStatus':
           result = getMrisUploadStatus_(payload);
           break;
+        // ===== MRIS Assignment & Data APIs =====
+        case 'setAssignment':
+          result = setMrisAssignment_(payload);
+          break;
+        case 'getAssignments':
+          result = getMrisAssignments_();
+          break;
+        case 'getHeatmap':
+          result = getMrisHeatmap_();
+          break;
+        case 'getKpis':
+          result = getMrisKpis_();
+          break;
+        case 'getEvidencePack':
+          result = getMrisEvidencePack_(payload);
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }
@@ -4919,6 +4935,162 @@ function getMrisUploadStatus_(payload) {
     };
   }
   
-  return { monthKey: mk, lastByType };
+  const assignments = getMrisAssignments_().assignments || {};
+  return { monthKey: mk, lastByType, assignments };
+}
+
+// ===== MRIS Assignment Functions =====
+const MRIS_SHEET_ASSIGNMENTS = 'MRIS_Assignments';
+
+function ensureMrisAssignmentsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(MRIS_SHEET_ASSIGNMENTS);
+  if (!sh) {
+    sh = ss.insertSheet(MRIS_SHEET_ASSIGNMENTS);
+    sh.appendRow(['reportType', 'assigneeName', 'assigneeEmail', 'deadlineDay', 'updatedAt', 'updatedBy']);
+  }
+  return sh;
+}
+
+function setMrisAssignment_(payload) {
+  requireMrisToken_(payload.token);
+  
+  const reportType = String(payload.reportType || '').trim();
+  const name = String(payload.name || '').trim();
+  const email = String(payload.email || '').trim();
+  const deadlineDay = Number(payload.deadlineDay || 5);
+  
+  if (!reportType) throw new Error('reportType required');
+  if (!name) throw new Error('name required');
+  
+  const sh = ensureMrisAssignmentsSheet_();
+  const data = sh.getDataRange().getValues();
+  const updatedAt = new Date().toISOString();
+  const updatedBy = String(payload.actor || payload.staffEmail || payload.email || 'system');
+  
+  let found = false;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === reportType) {
+      sh.getRange(i + 1, 2).setValue(name);
+      sh.getRange(i + 1, 3).setValue(email);
+      sh.getRange(i + 1, 4).setValue(deadlineDay);
+      sh.getRange(i + 1, 5).setValue(updatedAt);
+      sh.getRange(i + 1, 6).setValue(updatedBy);
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    sh.appendRow([reportType, name, email, deadlineDay, updatedAt, updatedBy]);
+  }
+  
+  return { saved: true };
+}
+
+function getMrisAssignments_() {
+  const sh = ensureMrisAssignmentsSheet_();
+  const data = sh.getDataRange().getValues();
+  
+  const assignments = {};
+  for (let i = 1; i < data.length; i++) {
+    const rt = String(data[i][0] || '').trim();
+    if (!rt) continue;
+    assignments[rt] = {
+      name: String(data[i][1] || '').trim(),
+      email: String(data[i][2] || '').trim(),
+      deadlineDay: Number(data[i][3] || 5),
+      updatedAt: data[i][4] || '',
+      updatedBy: data[i][5] || ''
+    };
+  }
+  
+  return { assignments };
+}
+
+// ===== MRIS Heatmap / KPIs / Evidence =====
+const MRIS_SHEET_HEATMAP = 'MRIS_Heatmap';
+const MRIS_SHEET_KPIS = 'MRIS_KPIs';
+const MRIS_SHEET_EVIDENCE = 'MRIS_EvidencePack';
+
+function getMrisHeatmap_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(MRIS_SHEET_HEATMAP);
+  if (!sh || sh.getLastRow() < 2) {
+    return { data: [
+      { deptId:'reception', name:'الاستقبال', floor:1, required:2, actual:2 },
+      { deptId:'dental', name:'الأسنان', floor:2, required:4, actual:3 },
+      { deptId:'emergency', name:'الطوارئ', floor:1, required:3, actual:3 }
+    ]};
+  }
+  const values = sh.getDataRange().getValues();
+  const headers = values[0];
+  const data = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    data.push({
+      deptId: String(row[headers.indexOf('deptId')] || row[0] || '').trim(),
+      name: String(row[headers.indexOf('name')] || row[1] || '').trim(),
+      floor: Number(row[headers.indexOf('floor')] || row[2] || 1),
+      required: Number(row[headers.indexOf('required')] || row[3] || 0),
+      actual: Number(row[headers.indexOf('actual')] || row[4] || 0)
+    });
+  }
+  return { data: data.filter(x => x.deptId && x.name) };
+}
+
+function getMrisKpis_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(MRIS_SHEET_KPIS);
+  if (!sh || sh.getLastRow() < 2) {
+    return { data: { stressIndex: 25, consumptionIntegrity: 92, riskLevel: 'low' } };
+  }
+  const values = sh.getDataRange().getValues();
+  const obj = {};
+  for (let i = 1; i < values.length; i++) {
+    const k = String(values[i][0] || '').trim();
+    const v = values[i][1];
+    if (k) obj[k] = v;
+  }
+  return { data: {
+    stressIndex: Number(obj.stressIndex || 25),
+    consumptionIntegrity: Number(obj.consumptionIntegrity || 92),
+    riskLevel: String(obj.riskLevel || 'low')
+  }};
+}
+
+function getMrisEvidencePack_(payload) {
+  requireMrisToken_(payload.token);
+  const standardRef = String(payload.standardRef || 'LD4.5').trim();
+  const deptId = String(payload.deptId || '').trim();
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(MRIS_SHEET_EVIDENCE);
+  if (!sh || sh.getLastRow() < 2) return { data: [] };
+  
+  const values = sh.getDataRange().getValues();
+  const headers = values[0];
+  const items = [];
+  
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const sr = String(row[headers.indexOf('standardRef')] || row[0] || '').trim();
+    const d = String(row[headers.indexOf('deptId')] || row[1] || '').trim();
+    
+    if (standardRef && sr !== standardRef) continue;
+    if (deptId && d !== deptId) continue;
+    
+    items.push({
+      standardRef: sr,
+      deptId: d,
+      evidenceType: String(row[headers.indexOf('evidenceType')] || row[2] || ''),
+      summary: String(row[headers.indexOf('summary')] || row[3] || ''),
+      status: String(row[headers.indexOf('status')] || row[4] || 'Ready'),
+      evidenceLink: String(row[headers.indexOf('evidenceLink')] || row[5] || ''),
+      attachments: []
+    });
+  }
+  
+  return { data: items };
 }
 
