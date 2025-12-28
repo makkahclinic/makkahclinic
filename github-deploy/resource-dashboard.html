@@ -2090,7 +2090,7 @@ ${dept.name}
             currentAssignType = null;
         }
         
-        function confirmAssignment() {
+        async function confirmAssignment() {
             const name = document.getElementById('assignEmployeeName').value.trim();
             const email = document.getElementById('assignEmployeeEmail').value.trim();
             const deadline = parseInt(document.getElementById('assignDeadline').value, 10);
@@ -2099,11 +2099,27 @@ ${dept.name}
                 alert('الرجاء إدخال اسم الموظف');
                 return;
             }
+            if (!API_TOKEN) {
+                alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
+                return;
+            }
             
-            uploadAssignments[currentAssignType] = { name, email, deadline };
-            closeAssignModal();
-            checkDelays();
-            alert('تم حفظ التكليف محلياً ✅');
+            try {
+                await apiCall('setAssignment', {
+                    reportType: currentAssignType,
+                    name,
+                    email,
+                    deadlineDay: deadline
+                });
+                
+                uploadAssignments[currentAssignType] = { name, email, deadline };
+                closeAssignModal();
+                checkDelays();
+                alert('تم حفظ التكليف بنجاح ✅');
+            } catch (e) {
+                console.error(e);
+                alert('فشل حفظ التكليف: ' + e.message);
+            }
         }
         
         // Helper: Blob -> Base64 (بدون prefix)

@@ -1,0 +1,515 @@
+/**************************************
+ * MRIS Backend - Google Apps Script
+ * Supports: POST JSON {action, payload:{..., token}}
+ * Sheets as DB + Drive for uploaded files (chunk upload)
+ **************************************/
+
+const SPREADSHEET_ID = '1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk';
+
+// Sheets
+const SHEET_ASSIGNMENTS = 'MRIS_Assignments';
+const SHEET_UPLOAD_LOG = 'MRIS_Upload_Log';
+const SHEET_UPLOAD_SESSIONS = 'MRIS_Upload_Sessions';
+const SHEET_HEATMAP = 'MRIS_Heatmap';      // optional
+const SHEET_KPIS = 'MRIS_KPIs';            // optional
+const SHEET_EVIDENCE = 'MRIS_EvidencePack';// optional
+
+// Drive folders (created automatically)
+const PROP_UPLOADS_FOLDER_ID = 'MRIS_UPLOADS_FOLDER_ID';
+const PROP_TEMP_FOLDER_ID = 'MRIS_TEMP_FOLDER_ID';
+
+// ===== Security =====
+function requireToken_(payload) {
+  const expected = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
+  if (!expected) return; // if not set, skip check (not recommended)
+  const got = String((payload && payload.token) || '').trim();
+  if (!got || got !== expected) throw new Error('Unauthorized: invalid token');
+}
+
+// ===== Helpers =====
+function jsonOut_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function nowIso_() {
+  return new Date().toISOString();
+}
+
+function monthKey_(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yyyy}-${mm}`;
+}
+
+function ensureSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (headers && sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else if (headers && sh.getLastRow() >= 1) {
+    // ensure headers exist
+    const firstRow = sh.getRange(1, 1, 1, headers.length).getValues()[0];
+    const ok = headers.every((h, i) => String(firstRow[i] || '').trim() === h);
+    if (!ok) {
+      sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    }
+  }
+  return sh;
+}
+
+function sheetToObjects_(sh) {
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0].map(h => String(h || '').trim());
+  return values.slice(1).map((row, idx) => {
+    const o = { _rowIndex: idx + 2 };
+    headers.forEach((h, i) => o[h] = row[i]);
+    return o;
+  });
+}
+
+function getOrCreateFolderId_(propKey, folderName) {
+  const props = PropertiesService.getScriptProperties();
+  let id = props.getProperty(propKey);
+  if (id) {
+    try { DriveApp.getFolderById(id); return id; } catch (e) {}
+  }
+  const it = DriveApp.getFoldersByName(folderName);
+  const folder = it.hasNext() ? it.next() : DriveApp.createFolder(folderName);
+  id = folder.getId();
+  props.setProperty(propKey, id);
+  return id;
+}
+
+function getUploadsFolder_() {
+  const id = getOrCreateFolderId_(PROP_UPLOADS_FOLDER_ID, 'MRIS_Uploads');
+  return DriveApp.getFolderById(id);
+}
+
+function getTempFolder_() {
+  const id = getOrCreateFolderId_(PROP_TEMP_FOLDER_ID, 'MRIS_Upload_Temp');
+  return DriveApp.getFolderById(id);
+}
+
+function safeFileName_(name) {
+  return String(name || 'file')
+    .replace(/[\\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 150);
+}
+
+// ===== Assignments =====
+function setAssignment_(p) {
+  requireToken_(p);
+
+  const reportType = String(p.reportType || '').trim();
+  const name = String(p.name || '').trim();
+  const email = String(p.email || '').trim();
+  const deadlineDay = Number(p.deadlineDay || 5);
+
+  if (!reportType) throw new Error('reportType required');
+  if (!name) throw new Error('name required');
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ensureSheet_(ss, SHEET_ASSIGNMENTS, [
+    'reportType', 'assigneeName', 'assigneeEmail', 'deadlineDay',
+    'updatedAt', 'updatedBy'
+  ]);
+
+  const data = sheetToObjects_(sh);
+  const existing = data.find(r => String(r.reportType) === reportType);
+
+  const updatedAt = nowIso_();
+  const updatedBy = String(p.actor || p.staffEmail || p.email || 'system');
+
+  if (existing) {
+    sh.getRange(existing._rowIndex, 2).setValue(name);
+    sh.getRange(existing._rowIndex, 3).setValue(email);
+    sh.getRange(existing._rowIndex, 4).setValue(deadlineDay);
+    sh.getRange(existing._rowIndex, 5).setValue(updatedAt);
+    sh.getRange(existing._rowIndex, 6).setValue(updatedBy);
+  } else {
+    sh.appendRow([reportType, name, email, deadlineDay, updatedAt, updatedBy]);
+  }
+
+  return { ok: true, saved: true };
+}
+
+function getAssignments_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ensureSheet_(ss, SHEET_ASSIGNMENTS, [
+    'reportType', 'assigneeName', 'assigneeEmail', 'deadlineDay',
+    'updatedAt', 'updatedBy'
+  ]);
+  const data = sheetToObjects_(sh);
+
+  const out = {};
+  data.forEach(r => {
+    const rt = String(r.reportType || '').trim();
+    if (!rt) return;
+    out[rt] = {
+      name: String(r.assigneeName || '').trim(),
+      email: String(r.assigneeEmail || '').trim(),
+      deadlineDay: Number(r.deadlineDay || 5),
+      updatedAt: r.updatedAt || '',
+      updatedBy: r.updatedBy || ''
+    };
+  });
+
+  return { ok: true, assignments: out };
+}
+
+// ===== Upload Status =====
+function getUploadStatus_(p) {
+  requireToken_(p);
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const shLog = ensureSheet_(ss, SHEET_UPLOAD_LOG, [
+    'timestamp', 'monthKey', 'reportType', 'fileName',
+    'uploadedBy', 'uploadedByEmail', 'driveFileId', 'driveUrl', 'sizeBytes'
+  ]);
+
+  const mk = monthKey_(new Date());
+  const rows = sheetToObjects_(shLog)
+    .filter(r => String(r.monthKey || '') === mk);
+
+  // lastByType: latest for each reportType
+  const lastByType = {};
+  rows.forEach(r => {
+    const t = String(r.reportType || '').trim();
+    if (!t) return;
+    const ts = String(r.timestamp || '');
+    if (!lastByType[t] || String(lastByType[t].timestamp || '') < ts) {
+      lastByType[t] = {
+        timestamp: ts,
+        monthKey: r.monthKey,
+        reportType: t,
+        fileName: r.fileName,
+        uploadedBy: r.uploadedBy,
+        uploadedByEmail: r.uploadedByEmail,
+        driveFileId: r.driveFileId,
+        driveUrl: r.driveUrl,
+        sizeBytes: r.sizeBytes
+      };
+    }
+  });
+
+  const assignments = getAssignments_().assignments;
+
+  return {
+    ok: true,
+    monthKey: mk,
+    lastByType,
+    assignments
+  };
+}
+
+// ===== Chunk Upload =====
+function startUpload_(p) {
+  requireToken_(p);
+
+  const reportType = String(p.reportType || '').trim();
+  const fileName = safeFileName_(p.fileName || '');
+  const mimeType = String(p.mimeType || 'application/octet-stream');
+  const fileSize = Number(p.fileSize || 0);
+  const uploadedBy = String(p.uploadedBy || '').trim();
+  const uploadedByEmail = String(p.uploadedByEmail || '').trim();
+
+  if (!reportType) throw new Error('reportType required');
+  if (!fileName) throw new Error('fileName required');
+  if (!fileSize || fileSize <= 0) throw new Error('fileSize required');
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ensureSheet_(ss, SHEET_UPLOAD_SESSIONS, [
+    'sessionId', 'createdAt', 'monthKey', 'reportType', 'fileName', 'mimeType',
+    'fileSize', 'uploadedBy', 'uploadedByEmail', 'totalChunks', 'receivedChunks',
+    'status', 'finalDriveFileId', 'finalDriveUrl'
+  ]);
+
+  const sessionId = `UP-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const mk = monthKey_(new Date());
+
+  sh.appendRow([
+    sessionId, nowIso_(), mk, reportType, fileName, mimeType,
+    fileSize, uploadedBy, uploadedByEmail, 0, 0, 'started', '', ''
+  ]);
+
+  // ensure temp folder exists
+  getTempFolder_();
+
+  return { ok: true, sessionId, monthKey: mk };
+}
+
+function uploadChunk_(p) {
+  requireToken_(p);
+
+  const sessionId = String(p.sessionId || '').trim();
+  const index = Number(p.index);
+  const total = Number(p.total);
+  const chunkBase64 = String(p.chunkBase64 || '');
+
+  if (!sessionId) throw new Error('sessionId required');
+  if (!Number.isFinite(index) || index < 0) throw new Error('index invalid');
+  if (!Number.isFinite(total) || total <= 0) throw new Error('total invalid');
+  if (!chunkBase64) throw new Error('chunkBase64 required');
+
+  // write chunk as temp drive file
+  const tempFolder = getTempFolder_();
+  const bytes = Utilities.base64Decode(chunkBase64);
+  const blob = Utilities.newBlob(bytes, 'application/octet-stream', `${sessionId}_${index}.part`);
+  tempFolder.createFile(blob);
+
+  // update session row counters
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ensureSheet_(ss, SHEET_UPLOAD_SESSIONS, [
+    'sessionId', 'createdAt', 'monthKey', 'reportType', 'fileName', 'mimeType',
+    'fileSize', 'uploadedBy', 'uploadedByEmail', 'totalChunks', 'receivedChunks',
+    'status', 'finalDriveFileId', 'finalDriveUrl'
+  ]);
+
+  const data = sheetToObjects_(sh);
+  const row = data.find(r => String(r.sessionId) === sessionId);
+  if (!row) throw new Error('session not found');
+
+  // set totalChunks once
+  if (!row.totalChunks || Number(row.totalChunks) === 0) {
+    sh.getRange(row._rowIndex, 10).setValue(total);
+  }
+
+  // increment receivedChunks
+  const received = Number(row.receivedChunks || 0) + 1;
+  sh.getRange(row._rowIndex, 11).setValue(received);
+  sh.getRange(row._rowIndex, 12).setValue('uploading');
+
+  return { ok: true, receivedChunks: received, totalChunks: total };
+}
+
+function finishUpload_(p) {
+  requireToken_(p);
+
+  const sessionId = String(p.sessionId || '').trim();
+  if (!sessionId) throw new Error('sessionId required');
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const shSess = ensureSheet_(ss, SHEET_UPLOAD_SESSIONS, [
+    'sessionId', 'createdAt', 'monthKey', 'reportType', 'fileName', 'mimeType',
+    'fileSize', 'uploadedBy', 'uploadedByEmail', 'totalChunks', 'receivedChunks',
+    'status', 'finalDriveFileId', 'finalDriveUrl'
+  ]);
+  const sessions = sheetToObjects_(shSess);
+  const s = sessions.find(r => String(r.sessionId) === sessionId);
+  if (!s) throw new Error('session not found');
+
+  const totalChunks = Number(s.totalChunks || 0);
+  const receivedChunks = Number(s.receivedChunks || 0);
+  const fileSize = Number(s.fileSize || 0);
+  const reportType = String(s.reportType || '').trim();
+  const fileName = safeFileName_(s.fileName || '');
+  const mimeType = String(s.mimeType || 'application/octet-stream');
+  const mk = String(s.monthKey || monthKey_(new Date()));
+  const uploadedBy = String(s.uploadedBy || '');
+  const uploadedByEmail = String(s.uploadedByEmail || '');
+
+  if (!totalChunks) throw new Error('totalChunks not set');
+  if (receivedChunks < totalChunks) {
+    throw new Error(`chunks missing: received ${receivedChunks}/${totalChunks}`);
+  }
+
+  // collect temp parts
+  const tempFolder = getTempFolder_();
+  const parts = [];
+  const files = tempFolder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    const name = f.getName();
+    if (name.startsWith(sessionId + '_') && name.endsWith('.part')) {
+      const idx = Number(name.replace(sessionId + '_', '').replace('.part', ''));
+      if (Number.isFinite(idx)) parts.push({ idx, file: f });
+    }
+  }
+  parts.sort((a, b) => a.idx - b.idx);
+
+  if (parts.length < totalChunks) {
+    throw new Error(`temp parts missing: found ${parts.length}/${totalChunks}`);
+  }
+
+  // assemble bytes (Uint8Array) using expected fileSize (best effort)
+  let out;
+  try {
+    out = new Uint8Array(fileSize);
+  } catch (e) {
+    throw new Error('File too large to assemble in memory. Reduce chunk size / file size.');
+  }
+
+  let offset = 0;
+  for (let i = 0; i < totalChunks; i++) {
+    const part = parts[i];
+    const bytes = part.file.getBlob().getBytes(); // byte[]
+    // copy into Uint8Array
+    for (let j = 0; j < bytes.length; j++) {
+      if (offset + j < out.length) out[offset + j] = (bytes[j] & 0xFF);
+    }
+    offset += bytes.length;
+  }
+
+  const finalBlob = Utilities.newBlob(out, mimeType, `${mk}_${reportType}_${fileName}`);
+  const uploadsFolder = getUploadsFolder_();
+  const finalFile = uploadsFolder.createFile(finalBlob);
+  const driveUrl = finalFile.getUrl();
+  const driveFileId = finalFile.getId();
+
+  // log
+  const shLog = ensureSheet_(ss, SHEET_UPLOAD_LOG, [
+    'timestamp', 'monthKey', 'reportType', 'fileName',
+    'uploadedBy', 'uploadedByEmail', 'driveFileId', 'driveUrl', 'sizeBytes'
+  ]);
+  const ts = nowIso_();
+  shLog.appendRow([ts, mk, reportType, fileName, uploadedBy, uploadedByEmail, driveFileId, driveUrl, fileSize]);
+
+  // mark session done
+  shSess.getRange(s._rowIndex, 12).setValue('done');
+  shSess.getRange(s._rowIndex, 13).setValue(driveFileId);
+  shSess.getRange(s._rowIndex, 14).setValue(driveUrl);
+
+  // cleanup temp parts
+  parts.forEach(p => {
+    try { p.file.setTrashed(true); } catch (e) {}
+  });
+
+  return { ok: true, timestamp: ts, fileUrl: driveUrl, driveFileId, monthKey: mk, reportType };
+}
+
+// ===== Heatmap / KPIs / Evidence (simple v1) =====
+function getHeatmap_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_HEATMAP);
+  if (!sh || sh.getLastRow() < 2) {
+    // fallback demo
+    return {
+      ok: true,
+      data: [
+        { deptId:'reception', name:'الاستقبال', floor:1, required:2, actual:2 },
+        { deptId:'dental', name:'الأسنان', floor:2, required:4, actual:3 },
+        { deptId:'emergency', name:'الطوارئ', floor:1, required:3, actual:3 }
+      ]
+    };
+  }
+  const rows = sheetToObjects_(sh);
+  const data = rows.map(r => ({
+    deptId: String(r.deptId || r.DeptID || r.departmentId || '').trim(),
+    name: String(r.name || r.Department || r.deptName || '').trim(),
+    floor: Number(r.floor || r.Floor || 1),
+    required: Number(r.required || r.Required || 0),
+    actual: Number(r.actual || r.Actual || 0)
+  })).filter(x => x.deptId && x.name);
+
+  return { ok: true, data };
+}
+
+function getKpis_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_KPIS);
+  if (!sh || sh.getLastRow() < 2) {
+    return { ok: true, data: { stressIndex: 25, consumptionIntegrity: 92, riskLevel: 'low' } };
+  }
+  // Expect one row: key,value
+  const rows = sheetToObjects_(sh);
+  const obj = {};
+  rows.forEach(r => {
+    const k = String(r.key || r.Key || '').trim();
+    const v = r.value ?? r.Value;
+    if (k) obj[k] = v;
+  });
+  return {
+    ok: true,
+    data: {
+      stressIndex: Number(obj.stressIndex || 25),
+      consumptionIntegrity: Number(obj.consumptionIntegrity || 92),
+      riskLevel: String(obj.riskLevel || 'low')
+    }
+  };
+}
+
+function getEvidencePack_(p) {
+  requireToken_(p);
+  const standardRef = String(p.standardRef || 'LD4.5').trim();
+  const deptId = String(p.deptId || '').trim();
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEET_EVIDENCE);
+  if (!sh || sh.getLastRow() < 2) {
+    return { ok: true, data: [] };
+  }
+
+  const rows = sheetToObjects_(sh);
+  const items = rows.filter(r => {
+    const sr = String(r.standardRef || r.StandardRef || '').trim();
+    const d = String(r.deptId || r.DepartmentId || '').trim();
+    if (standardRef && sr !== standardRef) return false;
+    if (deptId && d !== deptId) return false;
+    return true;
+  }).map(r => ({
+    standardRef: r.standardRef || r.StandardRef || '',
+    deptId: r.deptId || r.DepartmentId || '',
+    evidenceType: r.evidenceType || r.EvidenceType || '',
+    summary: r.summary || r.Summary || '',
+    status: r.status || r.Status || 'Ready',
+    evidenceLink: r.evidenceLink || r.EvidenceLink || '',
+    attachments: [] // you can extend later
+  }));
+
+  return { ok: true, data: items };
+}
+
+// ===== Router =====
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents || '{}');
+    const action = String(body.action || '').trim();
+    const payload = body.payload || {};
+
+    let result;
+    switch (action) {
+      case 'setAssignment':
+        result = setAssignment_(payload);
+        break;
+      case 'getAssignments':
+        result = getAssignments_();
+        break;
+      case 'getUploadStatus':
+        result = getUploadStatus_(payload);
+        break;
+      case 'startUpload':
+        result = startUpload_(payload);
+        break;
+      case 'uploadChunk':
+        result = uploadChunk_(payload);
+        break;
+      case 'finishUpload':
+        result = finishUpload_(payload);
+        break;
+      case 'getHeatmap':
+        result = getHeatmap_();
+        break;
+      case 'getKpis':
+        result = getKpis_();
+        break;
+      case 'getEvidencePack':
+        result = getEvidencePack_(payload);
+        break;
+      default:
+        throw new Error('Unknown action: ' + action);
+    }
+
+    // Normalize response to what your frontend accepts
+    if (result && result.data !== undefined) {
+      return jsonOut_({ ok: true, ...result });
+    }
+    return jsonOut_({ ok: true, ...result });
+
+  } catch (err) {
+    return jsonOut_({ ok: false, error: err.message || String(err) });
+  }
+}
