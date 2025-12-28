@@ -1618,49 +1618,32 @@
         ];
         
         // ==================== API FUNCTIONS ====================
-        function apiCall(action, params = {}) {
-            return new Promise((resolve, reject) => {
-                const callbackName = 'mrisCallback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                
-                const script = document.createElement('script');
-                
-                window[callbackName] = function(response) {
-                    try {
-                        const hasError = response?.error || response?.message;
-                        const isSuccess = response?.ok === true || response?.success === true || 
-                                         response?.saved === true || response?.status || response?.monthKey ||
-                                         (typeof response === 'object' && !hasError);
-                        if (isSuccess) resolve(response.data ?? response);
-                        else reject(new Error(response?.error || response?.message || 'API Error'));
-                    } finally {
-                        delete window[callbackName];
-                        if (script && script.parentNode) script.parentNode.removeChild(script);
+        async function apiCall(action, params = {}) {
+            const res = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({
+                    action,
+                    payload: {
+                        ...params,
+                        token: API_TOKEN
                     }
-                };
-                
-                const queryParams = new URLSearchParams({
-                    action: action,
-                    token: API_TOKEN,
-                    callback: callbackName,
-                    ...params
-                });
-                
-                script.src = API_URL + '?' + queryParams.toString();
-                script.onerror = () => {
-                    delete window[callbackName];
-                    if (script.parentNode) script.parentNode.removeChild(script);
-                    reject(new Error('Network error'));
-                };
-                document.body.appendChild(script);
-                
-                setTimeout(() => {
-                    if (window[callbackName]) {
-                        delete window[callbackName];
-                        if (script.parentNode) script.parentNode.removeChild(script);
-                        reject(new Error('Timeout'));
-                    }
-                }, 15000);
+                }),
+                redirect: "follow"
             });
+            
+            const text = await res.text();
+            let json;
+            try { 
+                json = JSON.parse(text); 
+            } catch (e) { 
+                throw new Error("Invalid JSON: " + text.slice(0, 120)); 
+            }
+            
+            if (json.ok === true || json.success === true || json.saved === true || json.data || json.monthKey || json.lastByType) {
+                return json.data ?? json;
+            }
+            throw new Error(json.error || "API Error");
         }
         
         async function loadLiveData() {
@@ -1994,33 +1977,29 @@ ${dept.name}
                 const res = await apiCall('getUploadStatus');
                 uploadStatusMeta.monthKey = res.monthKey || '';
                 
-                const statusObj = res.status || {};
-                uploadAssignments = {};
+                const lastByType = res.lastByType || res.status || {};
                 uploadHistory = {};
                 
                 Object.keys(reportTypes).forEach(type => {
-                    const s = statusObj[type] || null;
-                    if (s) {
-                        uploadAssignments[type] = {
-                            name: s.assignee?.name || '',
-                            email: s.assignee?.email || '',
-                            deadline: Number(s.deadlineDay || reportTypes[type].deadline)
-                        };
-                        uploadHistory[type] = s.lastUpload
-                            ? [{
-                                date: arDateShort(s.lastUpload.timestamp),
-                                fileName: s.lastUpload.fileName || '',
-                                uploadedBy: s.lastUpload.uploadedBy || '',
-                                timestamp: s.lastUpload.timestamp
-                            }]
-                            : [];
+                    const last = lastByType[type];
+                    if (last) {
+                        uploadHistory[type] = [{
+                            date: arDateShort(last.timestamp),
+                            fileName: last.fileName || '',
+                            uploadedBy: last.uploadedBy || '',
+                            timestamp: last.timestamp,
+                            driveUrl: last.driveUrl || ''
+                        }];
                     } else {
+                        uploadHistory[type] = [];
+                    }
+                    
+                    if (!uploadAssignments[type]) {
                         uploadAssignments[type] = {
                             name: '',
                             email: '',
                             deadline: reportTypes[type].deadline
                         };
-                        uploadHistory[type] = [];
                     }
                 });
                 
@@ -2150,40 +2129,56 @@ ${dept.name}
             const file = input.files[0];
             if (!file) return;
             
-            const allowedTypes = [
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-excel',
-                'text/csv'
-            ];
-            
-            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
-                alert('الرجاء رفع ملف Excel أو CSV فقط');
-                input.value = '';
-                return;
-            }
-            
             if (!API_TOKEN) {
                 alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
                 input.value = '';
                 return;
             }
             
+            const MAX_MB = 8;
+            if (file.size > MAX_MB * 1024 * 1024) {
+                alert(`الملف كبير (${(file.size/1024/1024).toFixed(1)}MB). الحد الحالي ${MAX_MB}MB.`);
+                input.value = '';
+                return;
+            }
+            
             try {
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const dataUrl = String(reader.result || '');
+                        const idx = dataUrl.indexOf('base64,');
+                        if (idx === -1) return reject(new Error('Invalid DataURL'));
+                        resolve(dataUrl.slice(idx + 7));
+                    };
+                    reader.onerror = () => reject(new Error('File read error'));
+                    reader.readAsDataURL(file);
+                });
+                
                 const uploader = uploadAssignments[type]?.name || 'غير محدد';
                 const uploaderEmail = uploadAssignments[type]?.email || '';
                 
-                await apiCall('logUpload', {
+                const out = await apiCall('uploadFile', {
                     reportType: type,
                     fileName: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    base64,
                     uploadedBy: uploader,
                     uploadedByEmail: uploaderEmail
                 });
                 
-                await syncUploadsFromServer();
-                alert(`تم تسجيل الرفع بنجاح ✅\n${file.name}`);
+                const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
+                if (lastUploadEl && out.timestamp) {
+                    lastUploadEl.textContent = new Date(out.timestamp).toLocaleDateString('ar-SA');
+                }
+                
+                updateCardStatus(type, 'uploaded');
+                checkDelays();
+                
+                alert(`✅ تم رفع الملف إلى Drive وتسجيله\n\nالرابط:\n${out.fileUrl || 'تم الحفظ'}`);
             } catch (e) {
                 console.error(e);
-                alert('فشل تسجيل الرفع: ' + e.message);
+                alert('فشل رفع الملف: ' + e.message);
             } finally {
                 input.value = '';
             }

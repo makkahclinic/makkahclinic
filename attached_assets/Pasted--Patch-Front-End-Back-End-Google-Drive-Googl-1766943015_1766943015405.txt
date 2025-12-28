@@ -1,0 +1,330 @@
+هذا Patch كامل (Front-End + Back-End) لرفع الملف فعليًا إلى Google Drive + تسجيل رابط الملف في Google Sheet (MRIS_Upload_Log) + تحديث واجهتك تلقائيًا.
+
+الفكرة: المستخدم يختار ملف → المتصفح يحوله Base64 → يرسل لـ Apps Script → السكربت يحفظ الملف داخل Folder في Drive → يسجل الرابط في الشيت → يرجع fileUrl → الواجهة تعرضه.
+
+1) BACK-END (Google Apps Script) — Patch جاهز
+
+افتح سكربت الـ WebApp هذا:
+https://script.google.com/macros/s/AKfycbysDVVd26WYP02PcGvoSncf-H6lY1zlfumzwRXvySvAeKXVXVhr3b2hKqte_VkssbxA9A/exec
+ثم في Apps Script Editor الصق هذا الكود (أو أضفه داخل مشروعك) — أهم شيء دوال:
+ensureUploadSheet_ + uploadFileToDrive_ + مسار doPost (case uploadFile)
+
+مهم: ضع Folder ID حق درايف في المتغير MRIS_UPLOAD_FOLDER_ID.
+
+/************* MRIS Upload Backend Patch *************/
+
+// 1) ضع هنا Sheet ID (نفس اللي رفعتها) أو استخدم Active Spreadsheet لو السكربت مرتبط بالشيت
+const MRIS_SHEET_ID = '1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk';
+
+// 2) ضع Folder ID في Google Drive لتخزين الرفعات
+// أنشئ Folder في Drive > افتحه > انسخ ID من الرابط
+const MRIS_UPLOAD_FOLDER_ID = 'PUT_YOUR_FOLDER_ID_HERE';
+
+// 3) Token للحماية (ضعه في Script Properties باسم MRIS_TOKEN)
+function requireMrisToken_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty('MRIS_TOKEN');
+  if (!expected) return; // لو ما حطيت توكن، يسمح (غير مستحسن)
+  const got = String(token || '').trim();
+  if (got !== expected) throw new Error('Unauthorized: invalid token');
+}
+
+function ensureUploadSheet_() {
+  const ss = SpreadsheetApp.openById(MRIS_SHEET_ID);
+  let sh = ss.getSheetByName('MRIS_Upload_Log');
+  if (!sh) {
+    sh = ss.insertSheet('MRIS_Upload_Log');
+    sh.appendRow([
+      'Timestamp',
+      'MonthKey',
+      'ReportType',
+      'FileName',
+      'MimeType',
+      'DriveFileId',
+      'DriveUrl',
+      'UploadedBy',
+      'UploadedByEmail',
+      'Notes'
+    ]);
+  }
+  return sh;
+}
+
+function monthKey_(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yyyy}-${mm}`;
+}
+
+function safeCell_(v) {
+  const s = String(v ?? '');
+  if (/^[=+\-@]/.test(s.trim())) return "'" + s;
+  return s;
+}
+
+function uploadFileToDrive_(payload) {
+  // payload: { token, reportType, fileName, mimeType, base64, uploadedBy, uploadedByEmail, notes }
+  requireMrisToken_(payload.token);
+
+  const reportType = String(payload.reportType || '').trim();
+  const fileName = String(payload.fileName || '').trim();
+  const mimeType = String(payload.mimeType || 'application/octet-stream').trim();
+  const base64 = String(payload.base64 || '').trim();
+
+  if (!reportType) throw new Error('reportType is required');
+  if (!fileName) throw new Error('fileName is required');
+  if (!base64) throw new Error('base64 is required');
+
+  const bytes = Utilities.base64Decode(base64);
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+
+  const folder = DriveApp.getFolderById(MRIS_UPLOAD_FOLDER_ID);
+  const file = folder.createFile(blob);
+
+  // لو تبغى تسمح بالعرض لأي شخص بالرابط (غير مستحسن للبيانات الحساسة)
+  // file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  const now = new Date();
+  const sh = ensureUploadSheet_();
+
+  const row = [
+    now.toISOString(),
+    monthKey_(now),
+    safeCell_(reportType),
+    safeCell_(fileName),
+    safeCell_(mimeType),
+    file.getId(),
+    file.getUrl(),
+    safeCell_(payload.uploadedBy || ''),
+    safeCell_(payload.uploadedByEmail || ''),
+    safeCell_(payload.notes || '')
+  ];
+  sh.appendRow(row);
+
+  return {
+    ok: true,
+    fileId: file.getId(),
+    fileUrl: file.getUrl(),
+    monthKey: monthKey_(now),
+    timestamp: now.toISOString()
+  };
+}
+
+function getUploadStatus_(payload) {
+  // يرجع حالة الرفعات لهذا الشهر لكل ReportType
+  requireMrisToken_(payload.token);
+
+  const sh = ensureUploadSheet_();
+  const data = sh.getDataRange().getValues();
+  const now = new Date();
+  const mk = monthKey_(now);
+
+  // آخر رفع لكل نوع داخل هذا الشهر
+  const lastByType = {};
+  for (let i = data.length - 1; i >= 1; i--) {
+    const row = data[i];
+    const rowMonth = String(row[1] || '');
+    if (rowMonth !== mk) continue;
+    const type = String(row[2] || '');
+    if (!type || lastByType[type]) continue;
+
+    lastByType[type] = {
+      timestamp: row[0] || '',
+      fileName: row[3] || '',
+      mimeType: row[4] || '',
+      driveFileId: row[5] || '',
+      driveUrl: row[6] || '',
+      uploadedBy: row[7] || '',
+      uploadedByEmail: row[8] || ''
+    };
+  }
+
+  return { ok: true, monthKey: mk, lastByType };
+}
+
+/**
+ * doPost: يدعم JSON body:
+ * { action: "uploadFile" | "getUploadStatus", payload: {...} }
+ */
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents || '{}');
+    const action = String(body.action || '').trim();
+    const payload = body.payload || {};
+
+    let result;
+    if (action === 'uploadFile') {
+      result = uploadFileToDrive_(payload);
+    } else if (action === 'getUploadStatus') {
+      result = getUploadStatus_(payload);
+    } else {
+      throw new Error('Unknown action: ' + action);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+إعدادات لازمة في Apps Script (مرة واحدة)
+
+Script Properties
+Project Settings → Script Properties:
+
+MRIS_TOKEN = أي كلمة سر (مثلاً: MRIS-2026-SECURE)
+
+ضع MRIS_UPLOAD_FOLDER_ID في الكود
+
+Deploy → New deployment → Web app
+
+Execute as: Me
+
+Who has access: Anyone (أو Anyone with link)
+ثم خذ رابط الـ WebApp الجديد وضعه في Front-End.
+
+2) FRONT-END — Patch رفع فعلي للـ Drive
+
+في ملف الـ MRIS HTML عندك:
+
+(A) عدّل API_URL إلى رابط WebApp الجديد
+const API_URL = 'PUT_YOUR_NEW_WEBAPP_URL_HERE';
+
+(B) عدّل apiCall ليكون POST (بدون JSONP)
+
+استبدل apiCall بالكامل بهذا (أهم شيء Content-Type: text/plain لتفادي CORS preflight غالباً):
+
+async function apiCall(action, params = {}) {
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      action,
+      payload: {
+        ...params,
+        token: API_TOKEN
+      }
+    }),
+    redirect: "follow"
+  });
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch (e) { throw new Error("Invalid JSON: " + text.slice(0, 120)); }
+
+  if (json.ok === true || json.success === true) return json;
+  throw new Error(json.error || "API Error");
+}
+
+3) PATCH دالة رفع الملف (ترفع للـ Drive + ترجع رابط)
+
+استبدل handleFileUpload(type, input) بالكامل بهذا:
+
+async function handleFileUpload(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (!API_TOKEN) {
+    alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
+    input.value = '';
+    return;
+  }
+
+  // حد عملي (Apps Script body). لو ملفات ضخمة جداً نحتاج Chunk Upload.
+  const MAX_MB = 8; 
+  if (file.size > MAX_MB * 1024 * 1024) {
+    alert(`الملف كبير (${(file.size/1024/1024).toFixed(1)}MB). الحد الحالي ${MAX_MB}MB.\nإذا تبغى ندعم ملفات أكبر، أسوي لك رفع مقسّم (Chunks).`);
+    input.value = '';
+    return;
+  }
+
+  // اقرأ الملف Base64
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      const idx = dataUrl.indexOf('base64,');
+      if (idx === -1) return reject(new Error('Invalid DataURL'));
+      resolve(dataUrl.slice(idx + 7));
+    };
+    reader.onerror = () => reject(new Error('File read error'));
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    const uploader = uploadAssignments[type]?.name || 'غير محدد';
+    const uploaderEmail = uploadAssignments[type]?.email || '';
+
+    const out = await apiCall('uploadFile', {
+      reportType: type,
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      base64,
+      uploadedBy: uploader,
+      uploadedByEmail: uploaderEmail
+    });
+
+    // تحديث واجهة آخر رفع + تحويل الحالة Uploaded
+    const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
+    if (lastUploadEl) lastUploadEl.textContent = new Date(out.timestamp).toLocaleDateString('ar-SA');
+
+    updateCardStatus(type, 'uploaded');
+    checkDelays();
+
+    alert(`✅ تم رفع الملف إلى Drive وتسجيله\n\nالرابط:\n${out.fileUrl}`);
+  } catch (e) {
+    console.error(e);
+    alert('فشل رفع الملف: ' + e.message);
+  } finally {
+    input.value = '';
+  }
+}
+
+4) PATCH “حالة الرفع” (جلب آخر رفع من السيرفر بدل localStorage)
+
+أضف هذه الدالة واستدعها داخل initUploadsSection():
+
+async function syncUploadsThisMonth() {
+  if (!API_TOKEN) return;
+
+  const res = await apiCall('getUploadStatus', {});
+  const lastByType = res.lastByType || {};
+
+  Object.keys(reportTypes).forEach(type => {
+    const last = lastByType[type];
+    const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
+    if (lastUploadEl) {
+      lastUploadEl.textContent = last?.timestamp ? new Date(last.timestamp).toLocaleDateString('ar-SA') : '--';
+    }
+    updateCardStatus(type, last?.timestamp ? 'uploaded' : 'pending');
+  });
+
+  checkDelays();
+}
+
+
+ثم داخل initUploadsSection() في النهاية:
+
+syncUploadsThisMonth().catch(console.warn);
+
+الآن تقول لي “إيش أسوي بالترتيب؟”
+
+في Apps Script:
+
+ضع MRIS_UPLOAD_FOLDER_ID
+
+أضف MRIS_TOKEN في Script Properties
+
+Deploy WebApp جديد وخذ الرابط
+
+في Front-End:
+
+ضع API_URL = رابط WebApp
+
+حط API_TOKEN من زر “تسجيل الدخول”
+
+ألصق PATCHات (apiCall + handleFileUpload + syncUploadsThisMonth)
