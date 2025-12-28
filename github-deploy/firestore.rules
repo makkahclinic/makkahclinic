@@ -70,6 +70,21 @@ service cloud.firestore {
       allow write: if isPrivileged();
     }
     
+    // Membership requests - any authenticated user can create their own request
+    match /membershipRequests/{requestId} {
+      // Any authenticated user can create a request (for registration)
+      allow create: if isAuthenticated() && 
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      
+      // Users can read their own requests, privileged can read all
+      allow read: if isAuthenticated() && 
+        (resource.data.uid == request.auth.uid || isPrivileged());
+      
+      // Only privileged users can update/delete requests
+      allow update, delete: if isPrivileged();
+    }
+    
     // Default deny - no catch-all rule
     // All other collections must be explicitly defined
   }
