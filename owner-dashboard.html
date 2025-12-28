@@ -779,6 +779,10 @@
                         <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="usersSuspendedCount">0</div>
                         <div style="font-size:0.8rem; color:#666;">معلق</div>
                     </div>
+                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #ef4444; cursor:pointer;" onclick="toggleDeletedUsers()">
+                        <div style="font-size:1.5rem; font-weight:bold; color:#ef4444;" id="usersDeletedCount">0</div>
+                        <div style="font-size:0.8rem; color:#666;">محذوف <i class="fas fa-filter"></i></div>
+                    </div>
                     <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #1e3a5f;">
                         <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="usersTotalCount">0</div>
                         <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
@@ -797,6 +801,19 @@
                 </div>
                 <div id="usersContainer">
                     <div class="no-alerts">جاري التحميل...</div>
+                </div>
+                
+                <!-- قسم المستخدمين المحذوفين -->
+                <div id="deletedUsersSection" style="display:none; margin-top:20px; padding:15px; background:#fef2f2; border-radius:10px; border:2px solid #ef4444;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h5 style="color:#dc2626; margin:0;"><i class="fas fa-trash-alt"></i> المستخدمين المحذوفين</h5>
+                        <button onclick="toggleDeletedUsers()" style="background:#ef4444; color:white; border:none; padding:5px 10px; border-radius:6px; cursor:pointer;">
+                            <i class="fas fa-times"></i> إغلاق
+                        </button>
+                    </div>
+                    <div id="deletedUsersContainer">
+                        <div class="no-alerts">جاري التحميل...</div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1411,6 +1428,13 @@
                     document.getElementById('usersSuspendedCount').textContent = suspended;
                     document.getElementById('usersTotalCount').textContent = users.length;
                     
+                    try {
+                        const deletedSnapshot = await db.collection('deleted_staff').get();
+                        document.getElementById('usersDeletedCount').textContent = deletedSnapshot.size;
+                    } catch(e) {
+                        document.getElementById('usersDeletedCount').textContent = '0';
+                    }
+                    
                     let html = '<table class="users-table"><thead><tr>';
                     html += '<th>الاسم</th><th>البريد</th><th>الدور</th><th>الحالة</th><th>إجراءات</th>';
                     html += '</tr></thead><tbody>';
@@ -1806,23 +1830,149 @@
             }
         }
         
+        let showingDeleted = false;
+        
+        async function toggleDeletedUsers() {
+            const section = document.getElementById('deletedUsersSection');
+            showingDeleted = !showingDeleted;
+            section.style.display = showingDeleted ? 'block' : 'none';
+            if (showingDeleted) {
+                loadDeletedUsers();
+            }
+        }
+        
+        async function loadDeletedUsers() {
+            const container = document.getElementById('deletedUsersContainer');
+            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            
+            try {
+                const snapshot = await db.collection('deleted_staff').orderBy('deletedAt', 'desc').get();
+                const deletedUsers = [];
+                snapshot.forEach(doc => {
+                    deletedUsers.push({ docId: doc.id, ...doc.data() });
+                });
+                
+                document.getElementById('usersDeletedCount').textContent = deletedUsers.length;
+                
+                if (deletedUsers.length > 0) {
+                    let html = '<table class="users-table" style="font-size:0.85rem;"><thead><tr>';
+                    html += '<th>الاسم</th><th>البريد</th><th>حذف بواسطة</th><th>تاريخ الحذف</th><th>السبب</th><th>إجراءات</th>';
+                    html += '</tr></thead><tbody>';
+                    
+                    deletedUsers.forEach(u => {
+                        const deletedDate = u.deletedAt ? new Date(u.deletedAt.toDate()).toLocaleDateString('ar-SA') : '-';
+                        html += `<tr style="background:#fff5f5;">
+                            <td>${u.fullName || u.name || '-'}</td>
+                            <td style="font-size:0.8rem;">${u.email || '-'}</td>
+                            <td style="color:#dc2626; font-weight:bold;">${u.deletedBy || 'غير معروف'}</td>
+                            <td>${deletedDate}</td>
+                            <td style="font-size:0.8rem;">${u.deleteReason || '-'}</td>
+                            <td style="display:flex; gap:5px;">
+                                <button onclick="restoreUser('${u.docId}')" style="background:#10b981; color:white; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;" title="استعادة">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                <button onclick="permanentDeleteUser('${u.docId}', '${u.email}')" style="background:#7f1d1d; color:white; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;" title="حذف نهائي">
+                                    <i class="fas fa-skull-crossbones"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="no-alerts" style="background:#fff;">لا يوجد مستخدمين محذوفين</div>';
+                }
+            } catch(e) {
+                console.error('Error loading deleted users:', e);
+                if (e.code === 'permission-denied') {
+                    container.innerHTML = '<div class="no-alerts">لا يوجد مستخدمين محذوفين</div>';
+                    document.getElementById('usersDeletedCount').textContent = '0';
+                } else {
+                    container.innerHTML = '<div class="no-alerts">خطأ في التحميل: ' + e.message + '</div>';
+                }
+            }
+        }
+        
         async function deleteUser(uid, email) {
             if (email === OWNER_EMAIL) {
                 showToast('لا يمكن حذف المالك', true);
                 return;
             }
             
-            if (!confirm(`⚠️ تحذير: سيتم حذف المستخدم من النظام!\n\n${email}\n\nهذا الإجراء لا يمكن التراجع عنه.`)) return;
-            if (!confirm('تأكيد نهائي: هل أنت متأكد؟')) return;
+            const reason = prompt('سبب الحذف (اختياري):');
+            if (!confirm(`⚠️ سيتم نقل المستخدم للأرشيف:\n\n${email}\n\nيمكنك استعادته لاحقاً من قسم المحذوفين.`)) return;
             
             try {
+                const userDoc = await db.collection('staff_roles').doc(uid).get();
+                if (!userDoc.exists) {
+                    showToast('المستخدم غير موجود', true);
+                    return;
+                }
+                
+                const userData = userDoc.data();
+                await db.collection('deleted_staff').doc(uid).set({
+                    ...userData,
+                    originalUid: uid,
+                    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    deletedBy: currentUser.email,
+                    deleteReason: reason || ''
+                });
+                
                 await db.collection('staff_roles').doc(uid).delete();
-                showToast('تم حذف المستخدم من النظام بنجاح');
+                
+                showToast('تم نقل المستخدم للأرشيف');
                 loadUsers();
                 loadPermissions();
+                if (showingDeleted) loadDeletedUsers();
             } catch(e) {
                 console.error('Delete user error:', e);
                 showToast('خطأ في حذف المستخدم: ' + e.message, true);
+            }
+        }
+        
+        async function restoreUser(docId) {
+            if (!confirm('هل تريد استعادة هذا المستخدم؟')) return;
+            
+            try {
+                const deletedDoc = await db.collection('deleted_staff').doc(docId).get();
+                if (!deletedDoc.exists) {
+                    showToast('السجل غير موجود', true);
+                    return;
+                }
+                
+                const data = deletedDoc.data();
+                const { deletedAt, deletedBy, deleteReason, docId: _, ...userData } = data;
+                
+                await db.collection('staff_roles').doc(docId).set({
+                    ...userData,
+                    restoredAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    restoredBy: currentUser.email
+                });
+                
+                await db.collection('deleted_staff').doc(docId).delete();
+                
+                showToast('تم استعادة المستخدم بنجاح');
+                loadUsers();
+                loadDeletedUsers();
+                loadPermissions();
+            } catch(e) {
+                console.error('Restore user error:', e);
+                showToast('خطأ في الاستعادة: ' + e.message, true);
+            }
+        }
+        
+        async function permanentDeleteUser(docId, email) {
+            if (!confirm(`⚠️ تحذير نهائي!\n\nسيتم حذف "${email}" نهائياً.\nسيتمكن من إعادة التسجيل كمستخدم جديد.\n\nهل أنت متأكد؟`)) return;
+            if (!confirm('تأكيد أخير: هذا الإجراء لا يمكن التراجع عنه!')) return;
+            
+            try {
+                await db.collection('deleted_staff').doc(docId).delete();
+                showToast('تم الحذف النهائي - يمكن للمستخدم إعادة التسجيل');
+                loadDeletedUsers();
+            } catch(e) {
+                console.error('Permanent delete error:', e);
+                showToast('خطأ في الحذف: ' + e.message, true);
             }
         }
         
