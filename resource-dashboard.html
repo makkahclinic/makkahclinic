@@ -1,2386 +1,677 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MRIS - مركز المؤشرات والإنذار المبكر للموارد الطبية</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #1e3a5f;
-            --primary-light: #2d5a8a;
-            --gold: #c9a962;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #3b82f6;
-            --dark: #1a1a2e;
-            --darker: #0f0f1a;
-            --card-bg: rgba(30, 58, 95, 0.3);
-            --border: rgba(201, 169, 98, 0.2);
-        }
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: 'Tajawal', sans-serif;
-            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 50%, var(--primary) 100%);
-            min-height: 100vh;
-            color: #fff;
-            overflow-x: hidden;
-        }
-        
-        .header {
-            background: rgba(30, 58, 95, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        
-        .logo-section {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .logo-section img {
-            height: 50px;
-        }
-        
-        .system-title {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .system-title h1 {
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: var(--gold);
-        }
-        
-        .system-title span {
-            font-size: 0.8rem;
-            opacity: 0.7;
-        }
-        
-        .mode-selector {
-            display: flex;
-            gap: 0.5rem;
-            background: rgba(0,0,0,0.3);
-            padding: 0.3rem;
-            border-radius: 10px;
-        }
-        
-        .mode-btn {
-            padding: 0.5rem 1rem;
-            border: none;
-            background: transparent;
-            color: #fff;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.85rem;
-            transition: all 0.3s;
-        }
-        
-        .mode-btn.active {
-            background: var(--primary-light);
-        }
-        
-        .mode-btn.normal.active { background: var(--success); }
-        .mode-btn.peak.active { background: var(--warning); }
-        .mode-btn.emergency.active { background: var(--danger); }
-        .mode-btn.survey.active { background: var(--info); }
-        
-        .header-info {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-        }
-        
-        .live-time {
-            text-align: center;
-        }
-        
-        .live-time .time {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--gold);
-        }
-        
-        .live-time .date {
-            font-size: 0.75rem;
-            opacity: 0.7;
-        }
-        
-        .main-container {
-            display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            max-width: 1800px;
-            margin: 0 auto;
-        }
-        
-        .left-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-        
-        .kpi-row {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 1rem;
-        }
-        
-        .kpi-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.2rem;
-            text-align: center;
-            transition: all 0.3s;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .kpi-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--gold);
-        }
-        
-        .kpi-card.success::before { background: var(--success); }
-        .kpi-card.warning::before { background: var(--warning); }
-        .kpi-card.danger::before { background: var(--danger); }
-        
-        .kpi-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        }
-        
-        .kpi-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .kpi-value {
-            font-size: 2rem;
-            font-weight: 800;
-            color: var(--gold);
-        }
-        
-        .kpi-card.success .kpi-value { color: var(--success); }
-        .kpi-card.warning .kpi-value { color: var(--warning); }
-        .kpi-card.danger .kpi-value { color: var(--danger); }
-        
-        .kpi-label {
-            font-size: 0.85rem;
-            opacity: 0.8;
-            margin-top: 0.3rem;
-        }
-        
-        .kpi-trend {
-            font-size: 0.75rem;
-            margin-top: 0.5rem;
-            padding: 0.2rem 0.5rem;
-            border-radius: 10px;
-            display: inline-block;
-        }
-        
-        .kpi-trend.up { background: rgba(16, 185, 129, 0.2); color: var(--success); }
-        .kpi-trend.down { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
-        .kpi-trend.stable { background: rgba(59, 130, 246, 0.2); color: var(--info); }
-        
-        .heatmap-section {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            flex: 1;
-        }
-        
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-        
-        .section-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--gold);
-        }
-        
-        .heatmap-tabs {
-            display: flex;
-            gap: 0.5rem;
-        }
-        
-        .heatmap-tab {
-            padding: 0.4rem 0.8rem;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: #fff;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.8rem;
-            transition: all 0.3s;
-        }
-        
-        .heatmap-tab.active {
-            background: var(--gold);
-            color: var(--dark);
-            border-color: var(--gold);
-        }
-        
-        .floor-container {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-        
-        .floor-section {
-            background: rgba(0,0,0,0.2);
-            border-radius: 12px;
-            padding: 1rem;
-        }
-        
-        .floor-label {
-            font-size: 0.9rem;
-            font-weight: 600;
-            margin-bottom: 0.8rem;
-            color: var(--gold);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .floor-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 0.8rem;
-        }
-        
-        .dept-cell {
-            background: rgba(16, 185, 129, 0.3);
-            border: 2px solid rgba(16, 185, 129, 0.5);
-            border-radius: 10px;
-            padding: 1rem 0.8rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            position: relative;
-        }
-        
-        .dept-cell:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-        }
-        
-        .dept-cell.green {
-            background: rgba(16, 185, 129, 0.3);
-            border-color: rgba(16, 185, 129, 0.6);
-        }
-        
-        .dept-cell.yellow {
-            background: rgba(245, 158, 11, 0.3);
-            border-color: rgba(245, 158, 11, 0.6);
-        }
-        
-        .dept-cell.red {
-            background: rgba(239, 68, 68, 0.3);
-            border-color: rgba(239, 68, 68, 0.6);
-            animation: pulse-red 2s infinite;
-        }
-        
-        @keyframes pulse-red {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-        }
-        
-        .dept-name {
-            font-weight: 600;
-            font-size: 0.9rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .dept-stats {
-            display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-            font-size: 0.75rem;
-            opacity: 0.9;
-        }
-        
-        .dept-coverage {
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: rgba(0,0,0,0.5);
-        }
-        
-        .timeline-section {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1rem 1.5rem;
-        }
-        
-        .timeline-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        .timeline-title {
-            font-size: 1rem;
-            font-weight: 600;
-        }
-        
-        .timeline-controls {
-            display: flex;
-            gap: 0.5rem;
-        }
-        
-        .timeline-btn {
-            padding: 0.3rem 0.6rem;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: #fff;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.75rem;
-        }
-        
-        .timeline-btn.active {
-            background: var(--gold);
-            color: var(--dark);
-            border-color: var(--gold);
-        }
-        
-        .timeline-slider-container {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .timeline-slider {
-            flex: 1;
-            -webkit-appearance: none;
-            height: 6px;
-            border-radius: 3px;
-            background: rgba(255,255,255,0.2);
-            outline: none;
-        }
-        
-        .timeline-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: var(--gold);
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-        
-        .timeline-value {
-            min-width: 80px;
-            text-align: center;
-            font-weight: 600;
-            color: var(--gold);
-        }
-        
-        .right-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-        
-        .alerts-section {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.2rem;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        
-        .alerts-title {
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .alert-badge {
-            background: var(--danger);
-            color: #fff;
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            border-radius: 10px;
-        }
-        
-        .alert-item {
-            background: rgba(0,0,0,0.2);
-            border-radius: 10px;
-            padding: 0.8rem;
-            margin-bottom: 0.8rem;
-            border-right: 3px solid var(--warning);
-        }
-        
-        .alert-item.critical {
-            border-right-color: var(--danger);
-            background: rgba(239, 68, 68, 0.1);
-        }
-        
-        .alert-item.info {
-            border-right-color: var(--info);
-        }
-        
-        .alert-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-        
-        .alert-type {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--warning);
-        }
-        
-        .alert-item.critical .alert-type { color: var(--danger); }
-        .alert-item.info .alert-type { color: var(--info); }
-        
-        .alert-time {
-            font-size: 0.7rem;
-            opacity: 0.6;
-        }
-        
-        .alert-message {
-            font-size: 0.85rem;
-            line-height: 1.5;
-        }
-        
-        .alert-actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 0.8rem;
-        }
-        
-        .alert-action-btn {
-            flex: 1;
-            padding: 0.4rem;
-            border: none;
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.75rem;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .alert-action-btn.primary {
-            background: var(--gold);
-            color: var(--dark);
-        }
-        
-        .alert-action-btn.secondary {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-        }
-        
-        .recommendations-section {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.2rem;
-            flex: 1;
-        }
-        
-        .rec-title {
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            color: var(--gold);
-        }
-        
-        .rec-item {
-            background: rgba(201, 169, 98, 0.1);
-            border: 1px solid rgba(201, 169, 98, 0.3);
-            border-radius: 10px;
-            padding: 1rem;
-            margin-bottom: 0.8rem;
-        }
-        
-        .rec-header {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .rec-icon {
-            font-size: 1.2rem;
-        }
-        
-        .rec-label {
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        
-        .rec-description {
-            font-size: 0.8rem;
-            opacity: 0.8;
-            line-height: 1.5;
-        }
-        
-        .rec-impact {
-            display: flex;
-            gap: 1rem;
-            margin-top: 0.8rem;
-            font-size: 0.7rem;
-        }
-        
-        .impact-item {
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-        }
-        
-        .impact-item.positive { color: var(--success); }
-        .impact-item.negative { color: var(--danger); }
-        .impact-item.neutral { color: var(--info); }
-        
-        .indices-section {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.2rem;
-        }
-        
-        .indices-title {
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-        }
-        
-        .index-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.8rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .index-item:last-child {
-            border-bottom: none;
-        }
-        
-        .index-name {
-            font-size: 0.85rem;
-        }
-        
-        .index-value {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .index-bar {
-            width: 60px;
-            height: 6px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .index-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.5s;
-        }
-        
-        .index-fill.good { background: var(--success); }
-        .index-fill.medium { background: var(--warning); }
-        .index-fill.bad { background: var(--danger); }
-        
-        .index-percent {
-            font-size: 0.85rem;
-            font-weight: 600;
-            min-width: 40px;
-            text-align: left;
-        }
-        
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(15, 15, 26, 0.95);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            transition: opacity 0.5s;
-        }
-        
-        .loading-overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        
-        .loader {
-            width: 60px;
-            height: 60px;
-            border: 4px solid var(--border);
-            border-top-color: var(--gold);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .loading-text {
-            margin-top: 1.5rem;
-            font-size: 1rem;
-            color: var(--gold);
-        }
-        
-        .tooltip {
-            position: absolute;
-            background: var(--dark);
-            border: 1px solid var(--gold);
-            border-radius: 8px;
-            padding: 0.8rem;
-            font-size: 0.8rem;
-            z-index: 1000;
-            min-width: 200px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            display: none;
-        }
-        
-        .tooltip.visible {
-            display: block;
-        }
-        
-        @media (max-width: 1200px) {
-            .main-container {
-                grid-template-columns: 1fr;
-            }
-            
-            .kpi-row {
-                grid-template-columns: repeat(3, 1fr);
-            }
-            
-            .right-panel {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .header {
-                flex-direction: column;
-                gap: 1rem;
-            }
-            
-            .kpi-row {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .right-panel {
-                grid-template-columns: 1fr;
-            }
-            
-            .floor-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        /* ========== قسم رفع الفورمات ========== */
-        .uploads-section {
-            background: linear-gradient(135deg, rgba(30, 58, 95, 0.95), rgba(15, 15, 26, 0.95));
-            padding: 2rem;
-            margin-top: 1rem;
-            border-top: 2px solid var(--gold);
-        }
-        
-        .section-container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .section-header-main {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-        }
-        
-        .section-header-main h2 {
-            font-size: 1.5rem;
-            color: var(--gold);
-        }
-        
-        .current-period {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            background: rgba(0,0,0,0.3);
-            padding: 0.5rem 1.5rem;
-            border-radius: 25px;
-        }
-        
-        .current-period span:first-child {
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-        
-        .period-status {
-            background: var(--warning);
-            color: #000;
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-        
-        .upload-monitoring h3,
-        .delays-section h3 {
-            font-size: 1.2rem;
-            margin-bottom: 1.5rem;
-            color: #fff;
-        }
-        
-        .upload-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .upload-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            transition: all 0.3s;
-        }
-        
-        .upload-card:hover {
-            border-color: var(--gold);
-            transform: translateY(-3px);
-        }
-        
-        .upload-card-header {
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-            margin-bottom: 1rem;
-        }
-        
-        .upload-icon {
-            font-size: 1.8rem;
-        }
-        
-        .upload-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-        
-        .upload-status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1rem;
-            border-radius: 10px;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
-        }
-        
-        .upload-status.pending {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--warning);
-        }
-        
-        .upload-status.uploaded {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-        }
-        
-        .upload-status.delayed {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-        }
-        
-        .upload-info {
-            margin-bottom: 1rem;
-        }
-        
-        .info-row {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            font-size: 0.9rem;
-        }
-        
-        .info-label {
-            color: rgba(255,255,255,0.6);
-            min-width: 70px;
-        }
-        
-        .info-value {
-            flex: 1;
-        }
-        
-        .assign-btn {
-            background: var(--primary-light);
-            color: #fff;
-            border: none;
-            padding: 4px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.75rem;
-            transition: all 0.3s;
-        }
-        
-        .assign-btn:hover {
-            background: var(--gold);
-            color: var(--dark);
-        }
-        
-        .upload-actions {
-            display: flex;
-            gap: 0.8rem;
-        }
-        
-        .upload-btn, .history-btn {
-            flex: 1;
-            padding: 0.7rem;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.85rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            transition: all 0.3s;
-        }
-        
-        .upload-btn {
-            background: var(--gold);
-            color: var(--dark);
-        }
-        
-        .upload-btn:hover {
-            background: #e0c07a;
-        }
-        
-        .history-btn {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-        }
-        
-        .history-btn:hover {
-            background: rgba(255,255,255,0.2);
-        }
-        
-        /* جدول التأخيرات */
-        .delays-section {
-            margin-top: 2rem;
-            padding-top: 2rem;
-            border-top: 1px solid var(--border);
-        }
-        
-        .delays-table-container {
-            overflow-x: auto;
-        }
-        
-        .delays-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-        
-        .delays-table th {
-            background: rgba(0,0,0,0.3);
-            padding: 1rem;
-            text-align: right;
-            font-weight: 600;
-            color: var(--gold);
-        }
-        
-        .delays-table td {
-            padding: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        
-        .delays-table tr:hover {
-            background: rgba(255,255,255,0.03);
-        }
-        
-        .no-delays-msg {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 2rem;
-            color: var(--success);
-        }
-        
-        .delay-badge {
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-        
-        .delay-badge.critical {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-        }
-        
-        .delay-badge.warning {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--warning);
-        }
-        
-        .remind-btn {
-            background: var(--info);
-            color: #fff;
-            border: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 0.8rem;
-        }
-        
-        /* Modal Styles */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        
-        .modal-content {
-            background: var(--dark);
-            border: 1px solid var(--gold);
-            border-radius: 16px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        
-        .modal-content.modal-large {
-            max-width: 800px;
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-        
-        .modal-header h3 {
-            color: var(--gold);
-            font-size: 1.2rem;
-        }
-        
-        .modal-close {
-            background: none;
-            border: none;
-            color: #fff;
-            font-size: 1.5rem;
-            cursor: pointer;
-            opacity: 0.7;
-        }
-        
-        .modal-close:hover {
-            opacity: 1;
-        }
-        
-        .modal-body {
-            padding: 1.5rem;
-        }
-        
-        .form-group {
-            margin-bottom: 1.2rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: rgba(255,255,255,0.8);
-            font-size: 0.9rem;
-        }
-        
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 0.8rem 1rem;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: #fff;
-            font-family: inherit;
-            font-size: 1rem;
-        }
-        
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--gold);
-        }
-        
-        .modal-footer {
-            display: flex;
-            gap: 1rem;
-            padding: 1.5rem;
-            border-top: 1px solid var(--border);
-        }
-        
-        .btn-cancel, .btn-confirm {
-            flex: 1;
-            padding: 0.8rem;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 1rem;
-            font-weight: 600;
-        }
-        
-        .btn-cancel {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-        }
-        
-        .btn-confirm {
-            background: var(--gold);
-            color: var(--dark);
-        }
-        
-        .history-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .history-table th {
-            background: rgba(0,0,0,0.3);
-            padding: 0.8rem;
-            text-align: right;
-            font-size: 0.85rem;
-        }
-        
-        .history-table td {
-            padding: 0.8rem;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.85rem;
-        }
-        
-        @media (max-width: 768px) {
-            .upload-cards {
-                grid-template-columns: 1fr;
-            }
-            
-            .section-header-main {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>مركز قيادة التشغيل - مجمع مكة الطبي</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0b1220; --panel:#0f1a31; --panel2:#111c33;
+      --line:rgba(255,255,255,.10); --muted:rgba(255,255,255,.72);
+      --gold:#c9a962; --danger:#ef4444; --warn:#f59e0b; --ok:#10b981; --info:#3b82f6;
+      --shadow: 0 16px 50px rgba(0,0,0,.35);
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Tajawal,sans-serif;background:radial-gradient(1200px 800px at 20% 0%, #12224a 0%, var(--bg) 50%) fixed;color:#fff}
+    a{color:var(--gold);text-decoration:none}
+    header{
+      position:sticky;top:0;z-index:50;
+      background:rgba(10,16,30,.92);backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--line);
+    }
+    .wrap{max-width:1280px;margin:0 auto;padding:14px 16px}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .brand{
+      display:flex;align-items:center;gap:10px;
+    }
+    .brand h1{margin:0;font-size:18px;font-weight:800;color:var(--gold)}
+    .brand .sub{font-size:12px;color:var(--muted)}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tab{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.04);
+      color:#fff;border-radius:999px;padding:8px 12px;cursor:pointer;font-weight:700;font-size:13px;
+    }
+    .tab.active{background:rgba(201,169,98,.18);border-color:rgba(201,169,98,.38);color:var(--gold)}
+    .btn{
+      border:0;border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:800;font-family:inherit;
+      background:var(--gold);color:#101826;
+    }
+    .btn2{
+      border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:800;font-family:inherit;
+      background:rgba(255,255,255,.05);color:#fff;
+    }
+    .btnDanger{background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.35);color:#fff}
+    .pill{padding:4px 10px;border-radius:999px;font-weight:900;font-size:12px;border:1px solid var(--line);background:rgba(255,255,255,.04)}
+    .pill.ok{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.14)}
+    .pill.warn{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.14)}
+    .pill.danger{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.14)}
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    @media (max-width:980px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    .kpi{
+      background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:var(--radius);
+      padding:12px 12px;box-shadow:var(--shadow);
+    }
+    .kpi .label{color:var(--muted);font-size:12px}
+    .kpi .value{font-size:26px;font-weight:900;margin-top:4px}
+    .kpi .hint{color:var(--muted);font-size:12px;margin-top:2px}
+    main{max-width:1280px;margin:0 auto;padding:14px 16px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    @media (max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media (max-width:700px){.grid{grid-template-columns:1fr;}}
+    .card{
+      background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:var(--radius);
+      padding:14px;box-shadow:var(--shadow);
+      position:relative;overflow:hidden;
+    }
+    .card::before{
+      content:"";position:absolute;inset:0 0 auto 0;height:4px;background:rgba(201,169,98,.8);
+    }
+    .card.RED::before{background:rgba(239,68,68,.9)}
+    .card.AMBER::before{background:rgba(245,158,11,.95)}
+    .card.GREEN::before{background:rgba(16,185,129,.95)}
+    .cardHead{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .deptName{font-size:16px;font-weight:900}
+    .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:12px}
+    .meta b{color:#fff}
+    .rec{
+      margin-top:10px;padding:10px;border-radius:14px;border:1px solid var(--line);
+      background:rgba(0,0,0,.18)
+    }
+    .rec .title{font-weight:900}
+    .rec .sub{color:var(--muted);font-size:12px;margin-top:4px;line-height:1.5}
+    .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    .divider{height:1px;background:var(--line);margin:12px 0}
+    .muted{color:var(--muted)}
+    /* Modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:100}
+    .modal>div{
+      width:min(760px,94vw);max-height:92vh;overflow:auto;
+      background:rgba(15,26,49,.96);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow);
+    }
+    .modalHeader{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .modalHeader h3{margin:0;font-size:16px;color:var(--gold)}
+    .formGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+    @media (max-width:900px){.formGrid{grid-template-columns:1fr}}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input,select,textarea{
+      width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);
+      background:rgba(0,0,0,.22);color:#fff;font-family:inherit;font-weight:700;
+      outline:none;
+    }
+    textarea{min-height:90px;resize:vertical}
+    .toast{
+      position:fixed;left:16px;bottom:16px;z-index:200;
+      background:rgba(17,24,39,.95);border:1px solid var(--line);border-radius:14px;
+      padding:10px 12px;display:none;gap:10px;align-items:center;box-shadow:var(--shadow)
+    }
+    .badge{font-weight:900}
+    .rightTools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .small{font-size:12px}
+  </style>
 </head>
 <body>
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loader"></div>
-        <div class="loading-text">جاري تحميل نظام MRIS...</div>
+
+<header>
+  <div class="wrap row">
+    <div class="brand">
+      <div>
+        <h1>مركز قيادة التشغيل</h1>
+        <div class="sub">مجمع مكة الطبي — نظام تشغيل محكم (بدون ربط خارجي)</div>
+      </div>
+      <span class="pill" id="liveClock">--</span>
+      <span class="pill ok" id="apiHealth">API: --</span>
     </div>
 
-    <header class="header">
-        <div class="logo-section">
-            <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="Logo" onerror="this.style.display='none'">
-            <div class="system-title">
-                <h1>مركز المؤشرات والإنذار المبكر للموارد الطبية</h1>
-                <span>Medical Resource Intelligence System - MRIS</span>
-            </div>
-        </div>
-        
-        <div class="mode-selector">
-            <button class="mode-btn normal active" data-mode="normal">🟢 عادي</button>
-            <button class="mode-btn peak" data-mode="peak">🟡 ذروة</button>
-            <button class="mode-btn emergency" data-mode="emergency">🔴 طوارئ</button>
-            <button class="mode-btn survey" data-mode="survey">📋 سباهي</button>
-        </div>
-        
-        <div class="header-info">
-            <div class="live-time">
-                <div class="time" id="liveTime">--:--:--</div>
-                <div class="date" id="liveDate">--</div>
-            </div>
-        </div>
-    </header>
-
-    <main class="main-container">
-        <div class="left-panel">
-            <div class="kpi-row">
-                <div class="kpi-card success" id="kpi-coverage">
-                    <div class="kpi-icon">👥</div>
-                    <div class="kpi-value" id="coverageValue">--%</div>
-                    <div class="kpi-label">نسبة التغطية الإجمالية</div>
-                    <div class="kpi-trend stable" id="coverageTrend">⟷ مستقر</div>
-                </div>
-                
-                <div class="kpi-card" id="kpi-understaffed">
-                    <div class="kpi-icon">⚠️</div>
-                    <div class="kpi-value" id="understaffedValue">--</div>
-                    <div class="kpi-label">أقسام تحت الحد الأدنى</div>
-                    <div class="kpi-trend" id="understaffedTrend">--</div>
-                </div>
-                
-                <div class="kpi-card" id="kpi-stress">
-                    <div class="kpi-icon">💪</div>
-                    <div class="kpi-value" id="stressValue">--%</div>
-                    <div class="kpi-label">مؤشر إرهاق الطاقم</div>
-                    <div class="kpi-trend" id="stressTrend">--</div>
-                </div>
-                
-                <div class="kpi-card" id="kpi-consumption">
-                    <div class="kpi-icon">📦</div>
-                    <div class="kpi-value" id="consumptionValue">--%</div>
-                    <div class="kpi-label">سلامة الاستهلاك</div>
-                    <div class="kpi-trend" id="consumptionTrend">--</div>
-                </div>
-                
-                <div class="kpi-card" id="kpi-risk">
-                    <div class="kpi-icon">🛡️</div>
-                    <div class="kpi-value" id="riskValue">--</div>
-                    <div class="kpi-label">توقع المخاطر</div>
-                    <div class="kpi-trend" id="riskTrend">--</div>
-                </div>
-            </div>
-            
-            <div class="heatmap-section">
-                <div class="section-header">
-                    <h2 class="section-title">🗺️ خريطة الموارد الحية</h2>
-                    <div class="heatmap-tabs">
-                        <button class="heatmap-tab active" data-view="coverage">التغطية</button>
-                        <button class="heatmap-tab" data-view="workload">الضغط</button>
-                        <button class="heatmap-tab" data-view="consumption">الاستهلاك</button>
-                    </div>
-                </div>
-                
-                <div class="floor-container" id="floorContainer">
-                    <div class="floor-section">
-                        <div class="floor-label">🏢 الطابق الثاني</div>
-                        <div class="floor-grid" id="floor2"></div>
-                    </div>
-                    
-                    <div class="floor-section">
-                        <div class="floor-label">🏢 الطابق الأول</div>
-                        <div class="floor-grid" id="floor1"></div>
-                    </div>
-                    
-                    <div class="floor-section">
-                        <div class="floor-label">🏢 الطابق الأرضي</div>
-                        <div class="floor-grid" id="floor0"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="timeline-section">
-                <div class="timeline-header">
-                    <span class="timeline-title">⏱️ الخط الزمني</span>
-                    <div class="timeline-controls">
-                        <button class="timeline-btn active" data-range="today">اليوم</button>
-                        <button class="timeline-btn" data-range="week">الأسبوع</button>
-                        <button class="timeline-btn" data-range="month">الشهر</button>
-                    </div>
-                </div>
-                <div class="timeline-slider-container">
-                    <span>00:00</span>
-                    <input type="range" class="timeline-slider" id="timelineSlider" min="0" max="23" value="12">
-                    <span>23:59</span>
-                    <div class="timeline-value" id="timelineValue">12:00</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="right-panel">
-            <div class="alerts-section">
-                <h3 class="alerts-title">
-                    🔔 التنبيهات النشطة
-                    <span class="alert-badge" id="alertCount">0</span>
-                </h3>
-                <div id="alertsList">
-                    <div class="alert-item critical">
-                        <div class="alert-header">
-                            <span class="alert-type">⚠️ نقص تغطية</span>
-                            <span class="alert-time">منذ 5 دقائق</span>
-                        </div>
-                        <div class="alert-message">قسم الأسنان 2 - التغطية 60% فقط</div>
-                        <div class="alert-actions">
-                            <button class="alert-action-btn primary">اقتراح حل</button>
-                            <button class="alert-action-btn secondary">تأجيل</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="recommendations-section">
-                <h3 class="rec-title">💡 التوصيات الذكية</h3>
-                <div id="recommendationsList">
-                    <div class="rec-item">
-                        <div class="rec-header">
-                            <span class="rec-icon">🔄</span>
-                            <span class="rec-label">نقل موظف</span>
-                        </div>
-                        <div class="rec-description">نقل الممرضة (أ) من الباطنية 1 إلى الأسنان 2 سيحسن التغطية بنسبة 20%</div>
-                        <div class="rec-impact">
-                            <span class="impact-item positive">📈 تحسين التغطية</span>
-                            <span class="impact-item neutral">⏱️ 10 دقائق</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="indices-section">
-                <h3 class="indices-title">📊 المؤشرات الذكية</h3>
-                <div id="indicesList">
-                    <div class="index-item">
-                        <span class="index-name">Staff Stress Index</span>
-                        <div class="index-value">
-                            <div class="index-bar">
-                                <div class="index-fill good" style="width: 25%"></div>
-                            </div>
-                            <span class="index-percent">25%</span>
-                        </div>
-                    </div>
-                    <div class="index-item">
-                        <span class="index-name">Service Strain Index</span>
-                        <div class="index-value">
-                            <div class="index-bar">
-                                <div class="index-fill medium" style="width: 55%"></div>
-                            </div>
-                            <span class="index-percent">55%</span>
-                        </div>
-                    </div>
-                    <div class="index-item">
-                        <span class="index-name">Consumption Integrity</span>
-                        <div class="index-value">
-                            <div class="index-bar">
-                                <div class="index-fill good" style="width: 92%"></div>
-                            </div>
-                            <span class="index-percent">92%</span>
-                        </div>
-                    </div>
-                    <div class="index-item">
-                        <span class="index-name">Safety Risk Projection</span>
-                        <div class="index-value">
-                            <div class="index-bar">
-                                <div class="index-fill good" style="width: 15%"></div>
-                            </div>
-                            <span class="index-percent">15%</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-    
-    <div class="tooltip" id="tooltip"></div>
-
-    <!-- قسم رفع الفورمات الشهرية -->
-    <section class="uploads-section" id="uploadsSection">
-        <div class="section-container">
-            <div class="section-header-main">
-                <h2>📤 رفع الفورمات الشهرية</h2>
-                <div class="current-period">
-                    <span id="currentMonth">--</span>
-                    <span class="period-status" id="periodStatus">جاري</span>
-                </div>
-            </div>
-            
-            <!-- لوحة مراقبة حالة الرفع -->
-            <div class="upload-monitoring">
-                <h3>📊 حالة الرفع الشهري</h3>
-                <div class="upload-cards" id="uploadCards">
-                    <!-- بطاقة رفع الإيرادات -->
-                    <div class="upload-card" data-type="revenue">
-                        <div class="upload-card-header">
-                            <span class="upload-icon">💰</span>
-                            <span class="upload-title">تقرير الإيرادات</span>
-                        </div>
-                        <div class="upload-status pending">
-                            <span class="status-icon">⏳</span>
-                            <span class="status-text">في انتظار الرفع</span>
-                        </div>
-                        <div class="upload-info">
-                            <div class="info-row">
-                                <span class="info-label">المسؤول:</span>
-                                <span class="info-value assignee" data-type="revenue">لم يُحدد بعد</span>
-                                <button class="assign-btn" onclick="assignEmployee('revenue')">تكليف</button>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">الموعد:</span>
-                                <span class="info-value deadline">يوم 5 من كل شهر</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">آخر رفع:</span>
-                                <span class="info-value last-upload" data-type="revenue">--</span>
-                            </div>
-                        </div>
-                        <div class="upload-actions">
-                            <input type="file" id="file-revenue" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload('revenue', this)">
-                            <button class="upload-btn" onclick="document.getElementById('file-revenue').click()">
-                                <span>📁</span> رفع الملف
-                            </button>
-                            <button class="history-btn" onclick="showUploadHistory('revenue')">
-                                📜 السجل
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- بطاقة رفع إحصائيات المرضى -->
-                    <div class="upload-card" data-type="patients">
-                        <div class="upload-card-header">
-                            <span class="upload-icon">👥</span>
-                            <span class="upload-title">إحصائيات المرضى</span>
-                        </div>
-                        <div class="upload-status pending">
-                            <span class="status-icon">⏳</span>
-                            <span class="status-text">في انتظار الرفع</span>
-                        </div>
-                        <div class="upload-info">
-                            <div class="info-row">
-                                <span class="info-label">المسؤول:</span>
-                                <span class="info-value assignee" data-type="patients">لم يُحدد بعد</span>
-                                <button class="assign-btn" onclick="assignEmployee('patients')">تكليف</button>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">الموعد:</span>
-                                <span class="info-value deadline">يوم 5 من كل شهر</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">آخر رفع:</span>
-                                <span class="info-value last-upload" data-type="patients">--</span>
-                            </div>
-                        </div>
-                        <div class="upload-actions">
-                            <input type="file" id="file-patients" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload('patients', this)">
-                            <button class="upload-btn" onclick="document.getElementById('file-patients').click()">
-                                <span>📁</span> رفع الملف
-                            </button>
-                            <button class="history-btn" onclick="showUploadHistory('patients')">
-                                📜 السجل
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- بطاقة رفع الاستهلاك -->
-                    <div class="upload-card" data-type="consumption">
-                        <div class="upload-card-header">
-                            <span class="upload-icon">📦</span>
-                            <span class="upload-title">تقرير الاستهلاك</span>
-                        </div>
-                        <div class="upload-status pending">
-                            <span class="status-icon">⏳</span>
-                            <span class="status-text">في انتظار الرفع</span>
-                        </div>
-                        <div class="upload-info">
-                            <div class="info-row">
-                                <span class="info-label">المسؤول:</span>
-                                <span class="info-value assignee" data-type="consumption">لم يُحدد بعد</span>
-                                <button class="assign-btn" onclick="assignEmployee('consumption')">تكليف</button>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">الموعد:</span>
-                                <span class="info-value deadline">يوم 5 من كل شهر</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">آخر رفع:</span>
-                                <span class="info-value last-upload" data-type="consumption">--</span>
-                            </div>
-                        </div>
-                        <div class="upload-actions">
-                            <input type="file" id="file-consumption" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload('consumption', this)">
-                            <button class="upload-btn" onclick="document.getElementById('file-consumption').click()">
-                                <span>📁</span> رفع الملف
-                            </button>
-                            <button class="history-btn" onclick="showUploadHistory('consumption')">
-                                📜 السجل
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- بطاقة رفع حالة الأجهزة -->
-                    <div class="upload-card" data-type="assets">
-                        <div class="upload-card-header">
-                            <span class="upload-icon">🔧</span>
-                            <span class="upload-title">حالة الأجهزة</span>
-                        </div>
-                        <div class="upload-status pending">
-                            <span class="status-icon">⏳</span>
-                            <span class="status-text">في انتظار الرفع</span>
-                        </div>
-                        <div class="upload-info">
-                            <div class="info-row">
-                                <span class="info-label">المسؤول:</span>
-                                <span class="info-value assignee" data-type="assets">لم يُحدد بعد</span>
-                                <button class="assign-btn" onclick="assignEmployee('assets')">تكليف</button>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">الموعد:</span>
-                                <span class="info-value deadline">يوم 10 من كل شهر</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">آخر رفع:</span>
-                                <span class="info-value last-upload" data-type="assets">--</span>
-                            </div>
-                        </div>
-                        <div class="upload-actions">
-                            <input type="file" id="file-assets" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload('assets', this)">
-                            <button class="upload-btn" onclick="document.getElementById('file-assets').click()">
-                                <span>📁</span> رفع الملف
-                            </button>
-                            <button class="history-btn" onclick="showUploadHistory('assets')">
-                                📜 السجل
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- جدول التأخيرات -->
-            <div class="delays-section" id="delaysSection">
-                <h3>⚠️ التأخيرات</h3>
-                <div class="delays-table-container">
-                    <table class="delays-table" id="delaysTable">
-                        <thead>
-                            <tr>
-                                <th>التقرير</th>
-                                <th>المسؤول</th>
-                                <th>الموعد</th>
-                                <th>أيام التأخير</th>
-                                <th>الحالة</th>
-                                <th>إجراء</th>
-                            </tr>
-                        </thead>
-                        <tbody id="delaysBody">
-                            <tr class="no-delays">
-                                <td colspan="6">
-                                    <div class="no-delays-msg">
-                                        <span>✅</span>
-                                        <span>لا توجد تأخيرات حالياً</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </section>
-    
-    <!-- Modal تكليف موظف -->
-    <div class="modal-overlay" id="assignModal" style="display:none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>👤 تكليف موظف</h3>
-                <button class="modal-close" onclick="closeAssignModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>نوع التقرير:</label>
-                    <input type="text" id="assignReportType" readonly>
-                </div>
-                <div class="form-group">
-                    <label>اسم الموظف:</label>
-                    <input type="text" id="assignEmployeeName" placeholder="أدخل اسم الموظف">
-                </div>
-                <div class="form-group">
-                    <label>البريد الإلكتروني:</label>
-                    <input type="email" id="assignEmployeeEmail" placeholder="البريد الإلكتروني">
-                </div>
-                <div class="form-group">
-                    <label>موعد التسليم:</label>
-                    <select id="assignDeadline">
-                        <option value="5">يوم 5 من كل شهر</option>
-                        <option value="10">يوم 10 من كل شهر</option>
-                        <option value="15">يوم 15 من كل شهر</option>
-                        <option value="20">يوم 20 من كل شهر</option>
-                        <option value="25">يوم 25 من كل شهر</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeAssignModal()">إلغاء</button>
-                <button class="btn-confirm" onclick="confirmAssignment()">تأكيد التكليف</button>
-            </div>
-        </div>
+    <div class="rightTools">
+      <div class="tabs">
+        <button class="tab active" data-tab="dashboard" onclick="setTab('dashboard')">لوحة الأقسام</button>
+        <button class="tab" data-tab="recommendations" onclick="setTab('recommendations')">التوصيات</button>
+        <button class="tab" data-tab="decisions" onclick="setTab('decisions')">دفتر القرارات</button>
+      </div>
+      <button class="btn2" onclick="openSnapshot()">+ إدخال قراءة</button>
+      <button class="btn" onclick="refreshAll()">تحديث</button>
     </div>
-    
-    <!-- Modal سجل الرفعات -->
-    <div class="modal-overlay" id="historyModal" style="display:none;">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3>📜 سجل الرفعات</h3>
-                <button class="modal-close" onclick="closeHistoryModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>التاريخ</th>
-                            <th>الملف</th>
-                            <th>رفع بواسطة</th>
-                            <th>الحالة</th>
-                        </tr>
-                    </thead>
-                    <tbody id="historyBody">
-                    </tbody>
-                </table>
-            </div>
-        </div>
+  </div>
+</header>
+
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div class="divider"></div>
+
+  <!-- Dashboard -->
+  <section id="tab-dashboard">
+    <div class="row" style="margin-bottom:10px">
+      <div class="muted small">يتم ترتيب الأقسام تلقائيًا: الأحمر ثم الأصفر ثم الأخضر. (مصدر البيانات: OPS_SNAPSHOT)</div>
+      <div class="row">
+        <span class="pill danger" id="countRed">🔴 0</span>
+        <span class="pill warn" id="countAmber">🟡 0</span>
+        <span class="pill ok" id="countGreen">🟢 0</span>
+      </div>
+    </div>
+    <div class="grid" id="cards"></div>
+  </section>
+
+  <!-- Recommendations -->
+  <section id="tab-recommendations" style="display:none">
+    <div class="row" style="margin-bottom:10px">
+      <div class="muted">قائمة التوصيات للأقسام غير الخضراء + عناصر حرجة (تحتاج تدخل).</div>
+    </div>
+    <div class="grid" id="recs"></div>
+  </section>
+
+  <!-- Decisions (simple view via recent approvals from client cache) -->
+  <section id="tab-decisions" style="display:none">
+    <div class="row" style="margin-bottom:10px">
+      <div class="muted">هذه الصفحة تعرض القرارات التي تم اعتمادها من خلال الواجهة (جلسة المتصفح). (يمكن لاحقًا إضافة endpoint لجلبها من OPS_DECISIONS).</div>
+      <button class="btn2" onclick="downloadLocalDecisions()">تصدير القرارات (CSV)</button>
+    </div>
+    <div class="grid" id="decisionsList"></div>
+  </section>
+</main>
+
+<!-- Snapshot Modal -->
+<div class="modal" id="snapModal">
+  <div>
+    <div class="modalHeader">
+      <h3>إدخال قراءة تشغيلية (OPS_SNAPSHOT)</h3>
+      <button class="btn2" onclick="closeSnapshot()">إغلاق</button>
+    </div>
+    <div class="formGrid">
+      <div>
+        <label>القسم</label>
+        <select id="f_dept"></select>
+      </div>
+      <div>
+        <label>المدخل (اسم/دور)</label>
+        <input id="f_by" placeholder="مثال: مشرف التمريض" />
+      </div>
+      <div>
+        <label>ملاحظات</label>
+        <input id="f_notes" placeholder="اختياري" />
+      </div>
+
+      <div>
+        <label>عدد المنتظرين</label>
+        <input id="f_waiting" type="number" value="0" min="0" />
+      </div>
+      <div>
+        <label>متوسط الانتظار (دقيقة)</label>
+        <input id="f_avg" type="number" value="0" min="0" />
+      </div>
+      <div>
+        <label>مواعيد الساعة القادمة</label>
+        <input id="f_next" type="number" value="0" min="0" />
+      </div>
+
+      <div>
+        <label>التمريض المتواجد</label>
+        <input id="f_nurses" type="number" value="0" min="0" />
+      </div>
+      <div>
+        <label>الأطباء المتواجدون</label>
+        <input id="f_docs" type="number" value="0" min="0" />
+      </div>
+      <div>
+        <label>زر سريع</label>
+        <button class="btn2" onclick="fillQuick()">تعبئة سريعة من آخر قراءة</button>
+      </div>
     </div>
 
-    <script>
-        // ==================== API CONFIGURATION ====================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
-        let API_TOKEN = localStorage.getItem('mris_token') || '';
-        
-        // بيانات افتراضية (تستخدم إذا فشل الاتصال بالـ API)
-        let DEPARTMENTS = [
-            { id: 'reception', name: 'الاستقبال', floor: 1, required: 2, actual: 2 },
-            { id: 'batiniya1', name: 'الباطنية 1', floor: 2, required: 3, actual: 3 },
-            { id: 'batiniya2', name: 'الباطنية 2', floor: 2, required: 3, actual: 2 },
-            { id: 'batiniya3', name: 'الباطنية 3', floor: 2, required: 2, actual: 2 },
-            { id: 'dental', name: 'الأسنان', floor: 2, required: 4, actual: 3 },
-            { id: 'emergency', name: 'الطوارئ', floor: 1, required: 3, actual: 3 },
-            { id: 'general', name: 'الطب العام', floor: 1, required: 2, actual: 2 },
-            { id: 'pharmacy', name: 'الصيدلية', floor: 1, required: 2, actual: 2 },
-            { id: 'nursery', name: 'النساء والولادة', floor: 1, required: 2, actual: 1 },
-            { id: 'reception1', name: 'استقبال 1', floor: 1, required: 1, actual: 1 },
-            { id: 'reception2', name: 'استقبال 2', floor: 2, required: 1, actual: 1 },
-            { id: 'admin', name: 'الإدارة', floor: 0, required: 2, actual: 2 },
-            { id: 'lab', name: 'المختبر', floor: 0, required: 2, actual: 2 }
-        ];
-        
-        // ==================== API FUNCTIONS ====================
-        async function apiCall(action, params = {}) {
-            const res = await fetch(API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                    action,
-                    payload: { ...params, token: API_TOKEN }
-                }),
-                redirect: "follow"
-            });
+    <div class="divider"></div>
+    <div class="row">
+      <div class="muted small">تلميح: إدخال القراءة كل 30–60 دقيقة يعطي مصداقية عالية للتتبع والقرار.</div>
+      <button class="btn" onclick="submitSnapshot()">حفظ</button>
+    </div>
+  </div>
+</div>
 
-            const text = await res.text();
-            let json;
-            try { json = JSON.parse(text); }
-            catch (e) { throw new Error("Invalid JSON: " + text.slice(0, 160)); }
+<!-- Approve Modal -->
+<div class="modal" id="approveModal">
+  <div>
+    <div class="modalHeader">
+      <h3>اعتماد قرار وتسجيله (OPS_DECISIONS)</h3>
+      <button class="btn2" onclick="closeApprove()">إغلاق</button>
+    </div>
 
-            if (json.ok === true || json.success === true) {
-                return json;
+    <div class="divider"></div>
+    <div id="approveSummary" class="muted"></div>
+
+    <div class="formGrid">
+      <div>
+        <label>المعتمد</label>
+        <input id="a_by" placeholder="مثال: مدير العمليات" />
+      </div>
+      <div>
+        <label>مدة الإجراء (دقيقة)</label>
+        <input id="a_dur" type="number" value="90" min="15" />
+      </div>
+      <div>
+        <label>ملاحظات</label>
+        <input id="a_notes" placeholder="اختياري" />
+      </div>
+      <div style="grid-column:1/-1">
+        <label>تفاصيل الإجراء (اختياري)</label>
+        <textarea id="a_detail" placeholder="مثال: دعم تمريضي مؤقت من الطب العام - 90 دقيقة + مراجعة بعد ساعة"></textarea>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="row">
+      <div class="muted small">كل اعتماد يُسجل بالوقت + المعتمد + سبب القرار (Pressure/Coverage) — هذا هو “دفتر الدولة”.</div>
+      <button class="btn" onclick="approveNow()">اعتماد وتسجيل</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="badge" id="toastBadge">✅</span>
+  <span id="toastText">تم</span>
+</div>
+
+<script>
+  // =======================
+  // CONFIG
+  // =======================
+  const API_URL = 'PUT_YOUR_WEBAPP_URL_HERE'; // 👈 ضع رابط Apps Script Web App هنا
+
+  // =======================
+  // STATE
+  // =======================
+  let state = {
+    status: [],
+    rules: {},
+    depts: [],
+    lastSnapshots: {},
+    approveTarget: null,
+    localDecisions: JSON.parse(localStorage.getItem('ops_local_decisions') || '[]'),
+  };
+
+  // =======================
+  // HELPERS
+  // =======================
+  function nowClock(){
+    const d = new Date();
+    return d.toLocaleString('ar-SA', { weekday:'long', year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+  function showToast(text, ok=true){
+    const t = document.getElementById('toast');
+    document.getElementById('toastBadge').textContent = ok ? '✅' : '⚠️';
+    document.getElementById('toastText').textContent = text;
+    t.style.display = 'flex';
+    setTimeout(()=> t.style.display='none', 2200);
+  }
+  function pillStatus(s){
+    if (s === 'RED') return `<span class="pill danger">🔴 أحمر</span>`;
+    if (s === 'AMBER') return `<span class="pill warn">🟡 أصفر</span>`;
+    return `<span class="pill ok">🟢 أخضر</span>`;
+  }
+  function safeNum(x, fallback='-'){
+    if (x === null || x === undefined || x === '') return fallback;
+    const n = Number(x);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  function escapeHtml(str){
+    return String(str ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  }
+
+  async function api(action, payload={}){
+    const res = await fetch(API_URL, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action, payload })
+    });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); }
+    catch(e){ throw new Error('Invalid JSON: ' + text.slice(0,120)); }
+
+    if (json.ok === true || json.success === true) return json;
+    throw new Error(json.error || 'API Error');
+  }
+
+  function setTab(tab){
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.getElementById('tab-dashboard').style.display = tab === 'dashboard' ? '' : 'none';
+    document.getElementById('tab-recommendations').style.display = tab === 'recommendations' ? '' : 'none';
+    document.getElementById('tab-decisions').style.display = tab === 'decisions' ? '' : 'none';
+    if (tab === 'decisions') renderLocalDecisions();
+  }
+
+  // =======================
+  // RENDER
+  // =======================
+  function renderKpis(){
+    const items = state.status || [];
+    const red = items.filter(x=>x.status==='RED').length;
+    const amber = items.filter(x=>x.status==='AMBER').length;
+    const green = items.filter(x=>x.status==='GREEN').length;
+
+    const avgPressure = items.length ? Math.round(items.reduce((s,x)=>s + (Number(x.pressureScore)||0),0)/items.length) : 0;
+    const avgCoverage = items.length ? Math.round(items.reduce((s,x)=>s + (Number(x.coverageRatio)||0),0)/items.length * 100 / items.length)/100 : 0;
+
+    document.getElementById('kpis').innerHTML = `
+      <div class="kpi"><div class="label">إجمالي الأقسام</div><div class="value">${items.length}</div><div class="hint">OPS_DEPARTMENTS</div></div>
+      <div class="kpi"><div class="label">أقسام حمراء</div><div class="value" style="color:var(--danger)">${red}</div><div class="hint">تدخل فوري</div></div>
+      <div class="kpi"><div class="label">متوسط الضغط</div><div class="value">${avgPressure}</div><div class="hint">PressureScore</div></div>
+      <div class="kpi"><div class="label">متوسط التغطية</div><div class="value">${avgCoverage}</div><div class="hint">CoverageRatio</div></div>
+    `;
+    document.getElementById('countRed').textContent = `🔴 ${red}`;
+    document.getElementById('countAmber').textContent = `🟡 ${amber}`;
+    document.getElementById('countGreen').textContent = `🟢 ${green}`;
+  }
+
+  function renderCards(){
+    const list = state.status || [];
+    const html = list.map(x=>{
+      const snap = x.snap || {};
+      const ts = snap.ts ? new Date(snap.ts).toLocaleString('ar-SA') : '—';
+      const hint = x.proposedAction === 'REQUEST_NURSING_SUPPORT'
+        ? 'اقتراح: دعم تمريضي مؤقت'
+        : x.proposedAction === 'FAST_TRACK_OR_REDIRECT'
+          ? 'اقتراح: تسريع المسار / توجيه'
+          : x.proposedAction || '—';
+
+      return `
+        <div class="card ${x.status}">
+          <div class="cardHead">
+            <div class="deptName">${escapeHtml(x.deptName)}</div>
+            ${pillStatus(x.status)}
+          </div>
+
+          <div class="meta">
+            <span class="pill">الدور: <b>${safeNum(x.floor,'-')}</b></span>
+            <span class="pill">الحد الأدنى تمريض: <b>${safeNum(x.minNurses,'-')}</b></span>
+            <span class="pill">هدف الانتظار: <b>${safeNum(x.targetWaitMin,'-')}</b> د</span>
+          </div>
+
+          <div class="meta">
+            <span class="pill">Waiting: <b>${safeNum(snap.waiting)}</b></span>
+            <span class="pill">AvgWait: <b>${safeNum(snap.avgWaitMin)}</b> د</span>
+            <span class="pill">NextHour: <b>${safeNum(snap.nextHour)}</b></span>
+          </div>
+
+          <div class="meta">
+            <span class="pill">Nurses: <b>${safeNum(snap.onDutyNurses)}</b></span>
+            <span class="pill">Doctors: <b>${safeNum(snap.onDutyDoctors)}</b></span>
+            <span class="pill">Pressure: <b>${safeNum(x.pressureScore)}</b></span>
+            <span class="pill">Coverage: <b>${safeNum(x.coverageRatio)}</b></span>
+          </div>
+
+          <div class="rec">
+            <div class="title">${escapeHtml(x.recommendation || '—')}</div>
+            <div class="sub">
+              آخر تحديث: <b>${escapeHtml(ts)}</b><br/>
+              الإجراء المقترح: <b>${escapeHtml(hint)}</b><br/>
+              ملاحظات: <b>${escapeHtml(snap.notes || '—')}</b>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn2" onclick="openSnapshot('${escapeHtml(x.deptId)}')">تحديث قراءة</button>
+            ${x.status !== 'GREEN'
+              ? `<button class="btn" onclick='openApprove(${encodeURIComponent(JSON.stringify(x))})'>اعتماد قرار</button>`
+              : `<button class="btn2" disabled style="opacity:.6;cursor:not-allowed">لا يحتاج قرار</button>`
             }
-            throw new Error(json.error || "API Error");
-        }
-        
-        async function loadLiveData() {
-            if (!API_TOKEN) {
-                console.log('No API_TOKEN; uploads will show as demo');
-                return;
-            }
-            
-            try {
-                const res = await apiCall('getHeatmap');
-                const heatmapData = res.data || [];
-                if (Array.isArray(heatmapData) && heatmapData.length > 0) {
-                    DEPARTMENTS = heatmapData.map(d => ({
-                        id: d.deptId,
-                        name: d.name,
-                        floor: parseInt(d.floor) || 1,
-                        required: Number(d.required) || 0,
-                        actual: Number(d.actual) || 0
-                    }));
-                    renderHeatmap();
-                }
-                await updateKPIs();
-                console.log('Live data loaded successfully');
-            } catch (error) {
-                console.warn('Heatmap fallback:', error.message);
-            }
-        }
-        
-        function promptForToken() {
-            const existing = localStorage.getItem('mris_token');
-            
-            if (existing && existing.trim()) {
-                API_TOKEN = existing.trim();
-                alert('✅ أنت مسجّل دخول بالفعل');
-                loadLiveData();
-                syncUploadsFromServer?.();
-                return;
-            }
-            
-            const token = prompt('أدخل رمز الدخول (Token):');
-            if (token && token.trim()) {
-                API_TOKEN = token.trim();
-                localStorage.setItem('mris_token', API_TOKEN);
-                alert('✅ تم حفظ التوكن');
-                loadLiveData();
-                syncUploadsFromServer?.();
-                updateLoginButtonLabel();
-            }
-        }
-        
-        function logoutToken() {
-            localStorage.removeItem('mris_token');
-            API_TOKEN = '';
-            alert('تم تسجيل الخروج');
-            location.reload();
-        }
-        
-        function updateLoginButtonLabel() {
-            const btn = document.getElementById('loginBtn');
-            if (!btn) return;
-            const t = localStorage.getItem('mris_token');
-            if (t && t.trim()) {
-                btn.textContent = '🚪 تسجيل خروج';
-                btn.onclick = logoutToken;
-            } else {
-                btn.textContent = '🔐 تسجيل الدخول';
-                btn.onclick = promptForToken;
-            }
-        }
-        
-        let currentMode = 'normal';
-        let currentView = 'coverage';
-        let currentHour = new Date().getHours();
-        
-        function updateLiveTime() {
-            const now = new Date();
-            document.getElementById('liveTime').textContent = now.toLocaleTimeString('ar-SA');
-            document.getElementById('liveDate').textContent = now.toLocaleDateString('ar-SA', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-        }
-        
-        function getCoverageClass(coverage) {
-            if (coverage >= 90) return 'green';
-            if (coverage >= 70) return 'yellow';
-            return 'red';
-        }
-        
-        function renderHeatmap() {
-            const floors = { 0: [], 1: [], 2: [] };
-            
-            DEPARTMENTS.forEach(dept => {
-                const coverage = Math.round((dept.actual / dept.required) * 100);
-                const colorClass = getCoverageClass(coverage);
-                
-                const cell = `
-                    <div class="dept-cell ${colorClass}" data-dept="${dept.id}" onclick="showDeptDetails('${dept.id}')">
-                        <span class="dept-coverage">${coverage}%</span>
-                        <div class="dept-name">${dept.name}</div>
-                        <div class="dept-stats">
-                            <span>👤 ${dept.actual}/${dept.required}</span>
-                        </div>
-                    </div>
-                `;
-                floors[dept.floor].push(cell);
-            });
-            
-            document.getElementById('floor0').innerHTML = floors[0].join('');
-            document.getElementById('floor1').innerHTML = floors[1].join('');
-            document.getElementById('floor2').innerHTML = floors[2].join('');
-        }
-        
-        async function updateKPIs() {
-            let totalRequired = 0;
-            let totalActual = 0;
-            let understaffed = 0;
-            
-            DEPARTMENTS.forEach(dept => {
-                totalRequired += dept.required;
-                totalActual += dept.actual;
-                if (dept.actual < dept.required) understaffed++;
-            });
-            
-            const coverage = Math.round((totalActual / totalRequired) * 100);
-            
-            document.getElementById('coverageValue').textContent = coverage + '%';
-            document.getElementById('understaffedValue').textContent = understaffed;
-            
-            const coverageCard = document.getElementById('kpi-coverage');
-            coverageCard.className = 'kpi-card ' + (coverage >= 90 ? 'success' : coverage >= 70 ? 'warning' : 'danger');
-            
-            const understaffedCard = document.getElementById('kpi-understaffed');
-            understaffedCard.className = 'kpi-card ' + (understaffed === 0 ? 'success' : understaffed <= 2 ? 'warning' : 'danger');
-            
-            // جلب KPIs و Indices من الـ API
-            let stressIndex = 25, consumptionIntegrity = 92, riskLevel = 'منخفض';
-            
-            try {
-                const res = await apiCall('getKpis');
-                const kpis = res.data || res;
-                if (kpis) {
-                    stressIndex = Number(kpis.stressIndex) || 25;
-                    consumptionIntegrity = Number(kpis.consumptionIntegrity) || 92;
-                    riskLevel = kpis.riskLevel === 'high' ? 'مرتفع' : 
-                               kpis.riskLevel === 'medium' ? 'متوسط' : 'منخفض';
-                }
-            } catch (e) {
-                console.warn('KPIs fallback:', e.message);
-            }
-            
-            document.getElementById('stressValue').textContent = stressIndex + '%';
-            document.getElementById('consumptionValue').textContent = consumptionIntegrity + '%';
-            document.getElementById('riskValue').textContent = riskLevel;
-            
-            // Trends بناءً على القيم
-            document.getElementById('stressTrend').textContent = stressIndex <= 30 ? '↓ تحسن' : stressIndex <= 50 ? '⟷ متوسط' : '↑ حرج';
-            document.getElementById('stressTrend').className = 'kpi-trend ' + (stressIndex <= 30 ? 'up' : stressIndex <= 50 ? 'stable' : 'down');
-            
-            document.getElementById('consumptionTrend').textContent = consumptionIntegrity >= 80 ? '✓ ممتاز' : consumptionIntegrity >= 60 ? '⟷ طبيعي' : '↓ نقص';
-            document.getElementById('consumptionTrend').className = 'kpi-trend ' + (consumptionIntegrity >= 80 ? 'up' : consumptionIntegrity >= 60 ? 'stable' : 'down');
-            
-            document.getElementById('riskTrend').textContent = riskLevel === 'منخفض' ? '✓ آمن' : riskLevel === 'متوسط' ? '⚠ مراقبة' : '⛔ تدخل';
-            document.getElementById('riskTrend').className = 'kpi-trend ' + (riskLevel === 'منخفض' ? 'up' : riskLevel === 'متوسط' ? 'stable' : 'down');
-            
-            document.getElementById('understaffedTrend').textContent = understaffed > 0 ? '↑ يحتاج متابعة' : '✓ ممتاز';
-            document.getElementById('understaffedTrend').className = 'kpi-trend ' + (understaffed > 0 ? 'down' : 'up');
-        }
-        
-        function showDeptDetails(deptId) {
-            const dept = DEPARTMENTS.find(d => d.id === deptId);
-            if (!dept) return;
-            
-            const coverage = Math.round((dept.actual / dept.required) * 100);
-            
-            alert(`
-${dept.name}
-────────────────
-التغطية: ${coverage}%
-الموظفين الحاليين: ${dept.actual}
-المطلوب: ${dept.required}
-الطابق: ${dept.floor === 0 ? 'الأرضي' : dept.floor === 1 ? 'الأول' : 'الثاني'}
-            `);
-        }
-        
-        async function loadEvidencePack(deptId = '', standardRef = 'LD4.5') {
-            if (!API_TOKEN) return [];
-            
-            try {
-                const res = await apiCall('getEvidencePack', {
-                    deptId: deptId,
-                    standardRef: standardRef,
-                    status: ''
-                });
-                const items = res.data || [];
-                return Array.isArray(items) ? items : [];
-            } catch (err) {
-                console.error('Failed to load evidence:', err);
-                return [];
-            }
-        }
-        
-        function setMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.mode === mode);
-            });
-            
-            if (mode === 'survey') {
-                document.querySelector('.alerts-section').style.display = 'none';
-                
-                document.querySelector('.recommendations-section').innerHTML = `
-                    <h3 class="rec-title">📋 أدلة سباهي الحية</h3>
-                    <div id="evidenceList" style="display:flex; flex-direction:column; gap:0.8rem;">
-                        <div class="rec-item"><div class="rec-description">جاري تحميل الأدلة...</div></div>
-                    </div>
-                `;
-                
-                loadEvidencePack('', 'LD4.5').then(items => {
-                    const box = document.getElementById('evidenceList');
-                    if (!items.length) {
-                        box.innerHTML = `
-                            <div class="rec-item">
-                                <div class="rec-description">لا توجد أدلة مسجلة بعد. ابدأ بربط أول دليل عبر API.</div>
-                                <div style="margin-top:10px; font-size:0.75rem; opacity:0.7;">
-                                    استخدم action=linkEvidence لإضافة محاضر وسياسات وأوامر شراء
-                                </div>
-                            </div>`;
-                        return;
-                    }
-                    
-                    box.innerHTML = items.slice().reverse().slice(0, 20).map(ev => {
-                        const statusColor = ev.status === 'Verified' ? '#28a745' : 
-                                          ev.status === 'Ready' ? 'var(--gold)' : '#888';
-                        const statusIcon = ev.status === 'Verified' ? '✅' : 
-                                         ev.status === 'Ready' ? '📋' : '📝';
-                        
-                        const att = (ev.attachments || []).map(a => `
-                            <div style="margin-top:6px; font-size:0.75rem; opacity:0.85;">
-                                📎 <a href="${a.docLink}" target="_blank" style="color:var(--gold); text-decoration:none;">${a.docType}</a>
-                                ${a.notes ? `<span style="opacity:0.7;"> - ${a.notes}</span>` : ''}
-                            </div>
-                        `).join('');
-                        
-                        return `
-                            <div class="rec-item" style="border-right: 3px solid ${statusColor};">
-                                <div class="rec-header">
-                                    <span class="rec-icon">${statusIcon}</span>
-                                    <span class="rec-label">${ev.standardRef} — ${ev.evidenceType}</span>
-                                    <span style="margin-right:auto; font-size:0.7rem; color:${statusColor};">${ev.status}</span>
-                                </div>
-                                <div class="rec-description">${ev.summary}</div>
-                                <div style="margin-top:8px; font-size:0.8rem;">
-                                    🔗 <a href="${ev.evidenceLink}" target="_blank" style="color:var(--gold); text-decoration:none;">فتح الدليل الرئيسي</a>
-                                </div>
-                                ${att}
-                                <div style="margin-top:8px; font-size:0.7rem; opacity:0.6;">
-                                    القسم: ${ev.deptId || 'الكل'} | التنبيه: ${ev.alertId || '-'} | القرار: ${ev.decisionId || '-'}
-                                    ${ev.verifiedBy ? `| تحقق: ${ev.verifiedBy}` : ''}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                }).catch(err => {
-                    const box = document.getElementById('evidenceList');
-                    if (box) box.innerHTML = `<div class="rec-item"><div class="rec-description">تعذر تحميل الأدلة: ${err.message}</div></div>`;
-                });
-                
-            } else {
-                document.querySelector('.alerts-section').style.display = 'block';
-            }
-        }
-        
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => setMode(btn.dataset.mode));
-        });
-        
-        document.querySelectorAll('.heatmap-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.heatmap-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                currentView = tab.dataset.view;
-                renderHeatmap();
-            });
-        });
-        
-        document.getElementById('timelineSlider').addEventListener('input', (e) => {
-            currentHour = parseInt(e.target.value);
-            document.getElementById('timelineValue').textContent = 
-                String(currentHour).padStart(2, '0') + ':00';
-        });
-        
-        document.querySelectorAll('.timeline-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.timeline-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            });
-        });
-        
-        async function init() {
-            updateLiveTime();
-            setInterval(updateLiveTime, 1000);
-            
-            renderHeatmap();
-            await updateKPIs();
-            
-            // تحميل البيانات الحية من API
-            await loadLiveData();
-            
-            // تحديث البيانات كل 30 ثانية
-            setInterval(loadLiveData, 30000);
-            
-            setTimeout(() => {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-            }, 1500);
-            
-            document.getElementById('alertCount').textContent = '3';
-        }
-        
-        init();
-        
-        // إضافة زر تسجيل الدخول في الهيدر
-        document.querySelector('.header-info').insertAdjacentHTML('beforeend', 
-            '<button id="loginBtn" style="background: var(--gold); color: var(--primary); border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600;">🔐 تسجيل الدخول</button>'
-        );
-        updateLoginButtonLabel();
-        
-        // ==================== نظام رفع الفورمات الشهرية ====================
-        
-        const reportTypes = {
-            revenue: { name: 'تقرير الإيرادات', deadline: 5 },
-            patients: { name: 'إحصائيات المرضى', deadline: 5 },
-            consumption: { name: 'تقرير الاستهلاك', deadline: 5 },
-            assets: { name: 'حالة الأجهزة', deadline: 10 }
-        };
-        
-        let uploadAssignments = {};
-        let uploadHistory = {};
-        let uploadStatusMeta = { monthKey: '' };
-        let currentAssignType = null;
-        
-        function arDateShort(iso) {
-            if (!iso) return '--';
-            try {
-                return new Date(iso).toLocaleDateString('ar-SA');
-            } catch (e) {
-                return '--';
-            }
-        }
-        
-        function computeDelayDays(deadlineDay) {
-            const now = new Date();
-            const currentDay = now.getDate();
-            const d = Number(deadlineDay || 5);
-            return currentDay > d ? (currentDay - d) : 0;
-        }
-        
-        async function syncUploadsFromServer() {
-            if (!API_TOKEN) {
-                console.warn('No API_TOKEN; uploads will show as demo');
-                return;
-            }
-            
-            try {
-                const res = await apiCall('getUploadStatus');
-                uploadStatusMeta.monthKey = res.monthKey || '';
-                
-                const lastByType = res.lastByType || res.status || {};
-                const serverAssignments = res.assignments || {};
-                uploadHistory = {};
-                
-                Object.keys(reportTypes).forEach(type => {
-                    const last = lastByType[type];
-                    if (last) {
-                        uploadHistory[type] = [{
-                            date: arDateShort(last.timestamp),
-                            fileName: last.fileName || '',
-                            uploadedBy: last.uploadedBy || '',
-                            timestamp: last.timestamp,
-                            driveUrl: last.driveUrl || ''
-                        }];
-                    } else {
-                        uploadHistory[type] = [];
-                    }
-                    
-                    const srvAsg = serverAssignments[type];
-                    if (srvAsg && srvAsg.name) {
-                        uploadAssignments[type] = {
-                            name: srvAsg.name,
-                            email: srvAsg.email || '',
-                            deadline: srvAsg.deadlineDay || reportTypes[type].deadline
-                        };
-                    } else if (!uploadAssignments[type]) {
-                        uploadAssignments[type] = {
-                            name: '',
-                            email: '',
-                            deadline: reportTypes[type].deadline
-                        };
-                    }
-                });
-                
-                renderUploadsUIFromServer();
-            } catch (e) {
-                console.warn('Failed to sync uploads:', e.message);
-            }
-        }
-        
-        function renderUploadsUIFromServer() {
-            if (uploadStatusMeta.monthKey) {
-                const [yy, mm] = uploadStatusMeta.monthKey.split('-').map(x => Number(x));
-                const monthNames = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-                if (yy && mm) {
-                    document.getElementById('currentMonth').textContent = `${monthNames[mm - 1]} ${yy}`;
-                }
-            }
-            
-            Object.keys(reportTypes).forEach(type => {
-                const asg = uploadAssignments[type] || {};
-                const hist = uploadHistory[type] || [];
-                
-                const assigneeEl = document.querySelector(`.assignee[data-type="${type}"]`);
-                if (assigneeEl) {
-                    assigneeEl.textContent = asg.name ? asg.name : 'لم يُحدد بعد';
-                }
-                
-                const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
-                if (lastUploadEl) {
-                    lastUploadEl.textContent = hist[0]?.date || '--';
-                }
-                
-                const isSameMonth = (tsIso, monthKey) => {
-                    if (!tsIso || !monthKey) return false;
-                    return String(tsIso).slice(0,7) === monthKey;
-                };
-                const isUploadedThisMonth = isSameMonth(hist[0]?.timestamp, uploadStatusMeta.monthKey);
-                if (isUploadedThisMonth) updateCardStatus(type, 'uploaded');
-                else updateCardStatus(type, 'pending');
-            });
-            
-            checkDelays();
-        }
-        
-        async function initUploadsSection() {
-            const now = new Date();
-            const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
-                              'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-            document.getElementById('currentMonth').textContent = 
-                monthNames[now.getMonth()] + ' ' + now.getFullYear();
-            
-            try {
-                await syncUploadsFromServer();
-            } catch (e) {
-                console.warn('Uploads sync failed:', e.message);
-                checkDelays();
-            }
-        }
-        
-        function updateCardStatus(type, status) {
-            const card = document.querySelector(`.upload-card[data-type="${type}"]`);
-            if (!card) return;
-            
-            const statusDiv = card.querySelector('.upload-status');
-            statusDiv.className = 'upload-status ' + status;
-            
-            if (status === 'uploaded') {
-                statusDiv.innerHTML = '<span class="status-icon">✅</span><span class="status-text">تم الرفع</span>';
-            } else if (status === 'delayed') {
-                statusDiv.innerHTML = '<span class="status-icon">🚨</span><span class="status-text">متأخر</span>';
-            } else {
-                statusDiv.innerHTML = '<span class="status-icon">⏳</span><span class="status-text">في انتظار الرفع</span>';
-            }
-        }
-        
-        function assignEmployee(type) {
-            currentAssignType = type;
-            document.getElementById('assignReportType').value = reportTypes[type].name;
-            
-            const existing = uploadAssignments[type];
-            if (existing) {
-                document.getElementById('assignEmployeeName').value = existing.name || '';
-                document.getElementById('assignEmployeeEmail').value = existing.email || '';
-                document.getElementById('assignDeadline').value = existing.deadline || reportTypes[type].deadline;
-            } else {
-                document.getElementById('assignEmployeeName').value = '';
-                document.getElementById('assignEmployeeEmail').value = '';
-                document.getElementById('assignDeadline').value = reportTypes[type].deadline;
-            }
-            
-            document.getElementById('assignModal').style.display = 'flex';
-        }
-        
-        function closeAssignModal() {
-            document.getElementById('assignModal').style.display = 'none';
-            currentAssignType = null;
-        }
-        
-        async function confirmAssignment() {
-            const name = document.getElementById('assignEmployeeName').value.trim();
-            const email = document.getElementById('assignEmployeeEmail').value.trim();
-            const deadline = parseInt(document.getElementById('assignDeadline').value, 10);
-            
-            if (!name) {
-                alert('الرجاء إدخال اسم الموظف');
-                return;
-            }
-            if (!API_TOKEN) {
-                alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
-                return;
-            }
-            
-            try {
-                await apiCall('setAssignment', {
-                    reportType: currentAssignType,
-                    name,
-                    email,
-                    deadlineDay: deadline
-                });
-                
-                uploadAssignments[currentAssignType] = { name, email, deadline };
-                closeAssignModal();
-                checkDelays();
-                alert('تم حفظ التكليف بنجاح ✅');
-            } catch (e) {
-                console.error(e);
-                alert('فشل حفظ التكليف: ' + e.message);
-            }
-        }
-        
-        // Helper: Blob -> Base64 (بدون prefix)
-        function blobToBase64_(blob) {
-            return new Promise((resolve, reject) => {
-                const r = new FileReader();
-                r.onload = () => {
-                    const s = String(r.result || '');
-                    const idx = s.indexOf('base64,');
-                    if (idx === -1) return reject(new Error('Invalid DataURL'));
-                    resolve(s.slice(idx + 7));
-                };
-                r.onerror = () => reject(new Error('File read error'));
-                r.readAsDataURL(blob);
-            });
-        }
-        
-        async function handleFileUpload(type, input) {
-            const file = input.files[0];
-            if (!file) return;
-            
-            if (!API_TOKEN) {
-                alert('لا يوجد Token. اضغط "تسجيل الدخول" أولاً.');
-                input.value = '';
-                return;
-            }
-            
-            // حجم chunk (خام) بالبايت: 256KB ممتاز للتوازن
-            const CHUNK_SIZE = 256 * 1024;
-            
-            // 1) Start session
-            let sessionId = null;
-            try {
-                const uploader = uploadAssignments[type]?.name || 'غير محدد';
-                const uploaderEmail = uploadAssignments[type]?.email || '';
-                
-                const start = await apiCall('startUpload', {
-                    reportType: type,
-                    fileName: file.name,
-                    mimeType: file.type || 'application/octet-stream',
-                    fileSize: file.size,
-                    uploadedBy: uploader,
-                    uploadedByEmail: uploaderEmail
-                });
-                sessionId = start.sessionId;
-            } catch (e) {
-                console.error(e);
-                alert('فشل بدء الرفع: ' + e.message);
-                input.value = '';
-                return;
-            }
-            
-            // 2) Upload chunks
-            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-            
-            // رسالة تقدم بسيطة
-            const showProgress = (i) => {
-                const pct = Math.round(((i + 1) / totalChunks) * 100);
-                document.getElementById('periodStatus').textContent = `رفع... ${pct}%`;
-                document.getElementById('periodStatus').style.background = 'var(--info)';
-            };
-            
-            try {
-                for (let i = 0; i < totalChunks; i++) {
-                    const startByte = i * CHUNK_SIZE;
-                    const endByte = Math.min(file.size, startByte + CHUNK_SIZE);
-                    const blob = file.slice(startByte, endByte);
-                    
-                    const base64 = await blobToBase64_(blob);
-                    await apiCall('uploadChunk', {
-                        sessionId,
-                        index: i,
-                        total: totalChunks,
-                        chunkBase64: base64
-                    });
-                    
-                    showProgress(i);
-                }
-            } catch (e) {
-                console.error(e);
-                alert('فشل أثناء رفع الأجزاء: ' + e.message + '\nقد تحتاج إعادة المحاولة.');
-                input.value = '';
-                document.getElementById('periodStatus').textContent = 'جاري';
-                document.getElementById('periodStatus').style.background = 'var(--warning)';
-                return;
-            }
-            
-            // 3) Finish upload (assemble + save)
-            try {
-                const done = await apiCall('finishUpload', { sessionId });
-                
-                const lastUploadEl = document.querySelector(`.last-upload[data-type="${type}"]`);
-                if (lastUploadEl) lastUploadEl.textContent = new Date(done.timestamp).toLocaleDateString('ar-SA');
-                
-                updateCardStatus(type, 'uploaded');
-                checkDelays();
-                
-                document.getElementById('periodStatus').textContent = 'تم ✅';
-                document.getElementById('periodStatus').style.background = 'var(--success)';
-                
-                alert(`✅ تم رفع الملف بنجاح (Chunk Upload)\n\nالرابط:\n${done.fileUrl}`);
-            } catch (e) {
-                console.error(e);
-                alert('فشل إنهاء الرفع/الدمج: ' + e.message);
-            } finally {
-                input.value = '';
-                setTimeout(() => {
-                    document.getElementById('periodStatus').textContent = 'جاري';
-                    document.getElementById('periodStatus').style.background = 'var(--warning)';
-                }, 2000);
-            }
-        }
-        
-        function showUploadHistory(type) {
-            const history = uploadHistory[type] || [];
-            const tbody = document.getElementById('historyBody');
-            
-            if (history.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:2rem;">لا توجد رفعات (هذا الشهر)</td></tr>';
-            } else {
-                tbody.innerHTML = history.map(h => `
-                    <tr>
-                        <td>${h.date}</td>
-                        <td>${h.fileName || '-'}</td>
-                        <td>${h.uploadedBy || '-'}</td>
-                        <td><span style="color: var(--success);">✅ مسجل</span></td>
-                    </tr>
-                `).join('');
-            }
-            
-            document.getElementById('historyModal').style.display = 'flex';
-        }
-        
-        function closeHistoryModal() {
-            document.getElementById('historyModal').style.display = 'none';
-        }
-        
-        function checkDelays() {
-            const now = new Date();
-            const currentDay = now.getDate();
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
-            
-            const delays = [];
-            
-            Object.keys(reportTypes).forEach(type => {
-                const assignment = uploadAssignments[type];
-                const deadline = assignment?.deadline || reportTypes[type].deadline;
-                const lastUpload = uploadHistory[type]?.[0];
-                
-                let isUploaded = false;
-                if (lastUpload) {
-                    const uploadDate = new Date(lastUpload.timestamp);
-                    isUploaded = uploadDate.getMonth() === currentMonth && 
-                                uploadDate.getFullYear() === currentYear;
-                }
-                
-                if (!isUploaded && currentDay > deadline) {
-                    const delayDays = currentDay - deadline;
-                    delays.push({
-                        type: type,
-                        name: reportTypes[type].name,
-                        assignee: assignment?.name || 'لم يُحدد',
-                        deadline: `يوم ${deadline}`,
-                        delayDays: delayDays,
-                        severity: delayDays > 5 ? 'critical' : 'warning'
-                    });
-                    updateCardStatus(type, 'delayed');
-                } else if (!isUploaded) {
-                    updateCardStatus(type, 'pending');
-                }
-            });
-            
-            renderDelaysTable(delays);
-        }
-        
-        function renderDelaysTable(delays) {
-            const tbody = document.getElementById('delaysBody');
-            
-            if (delays.length === 0) {
-                tbody.innerHTML = `
-                    <tr class="no-delays">
-                        <td colspan="6">
-                            <div class="no-delays-msg">
-                                <span>✅</span>
-                                <span>لا توجد تأخيرات حالياً</span>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-            
-            tbody.innerHTML = delays.map(d => `
-                <tr>
-                    <td>${d.name}</td>
-                    <td>${d.assignee}</td>
-                    <td>${d.deadline}</td>
-                    <td><span class="delay-badge ${d.severity}">${d.delayDays} يوم</span></td>
-                    <td><span class="delay-badge ${d.severity}">${d.severity === 'critical' ? 'حرج' : 'تحذير'}</span></td>
-                    <td><button class="remind-btn" onclick="sendReminder('${d.type}')">📧 تذكير</button></td>
-                </tr>
-            `).join('');
-        }
-        
-        function sendReminder(type) {
-            const assignment = uploadAssignments[type];
-            if (assignment?.email) {
-                alert(`تم إرسال تذكير إلى: ${assignment.name}\n${assignment.email}`);
-            } else {
-                alert('لم يتم تحديد بريد إلكتروني للموظف');
-            }
-        }
-        
-        initUploadsSection().catch(console.error);
-    </script>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('cards').innerHTML = html || `<div class="muted">لا توجد بيانات بعد. أدخل أول قراءة.</div>`;
+  }
+
+  function renderRecommendations(recs){
+    const items = recs || [];
+    const html = items.map(x=>{
+      const snap = x.snap || {};
+      return `
+        <div class="card ${x.status}">
+          <div class="cardHead">
+            <div class="deptName">${escapeHtml(x.deptName)}</div>
+            ${pillStatus(x.status)}
+          </div>
+          <div class="meta">
+            <span class="pill">Pressure: <b>${safeNum(x.pressureScore)}</b></span>
+            <span class="pill">Coverage: <b>${safeNum(x.coverageRatio)}</b></span>
+            <span class="pill">Waiting: <b>${safeNum(snap.waiting)}</b></span>
+            <span class="pill">AvgWait: <b>${safeNum(snap.avgWaitMin)}</b> د</span>
+          </div>
+          <div class="rec">
+            <div class="title">${escapeHtml(x.recommendation || '—')}</div>
+            <div class="sub">Proposed: <b>${escapeHtml(x.proposedAction || '—')}</b></div>
+          </div>
+          <div class="actions">
+            <button class="btn2" onclick="openSnapshot('${escapeHtml(x.deptId)}')">تحديث قراءة</button>
+            <button class="btn" onclick='openApprove(${encodeURIComponent(JSON.stringify(x))})'>اعتماد</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    document.getElementById('recs').innerHTML = html || `<div class="muted">لا توجد توصيات حاليًا.</div>`;
+  }
+
+  function renderLocalDecisions(){
+    const list = state.localDecisions || [];
+    const html = list.slice().reverse().map(d=>{
+      return `
+        <div class="card ${escapeHtml(d.status || 'GREEN')}">
+          <div class="cardHead">
+            <div class="deptName">${escapeHtml(d.deptName || d.deptId)}</div>
+            ${pillStatus(d.status || 'GREEN')}
+          </div>
+          <div class="meta">
+            <span class="pill">وقت: <b>${escapeHtml(d.ts)}</b></span>
+            <span class="pill">Pressure: <b>${escapeHtml(d.pressureScore)}</b></span>
+            <span class="pill">Coverage: <b>${escapeHtml(d.coverageRatio)}</b></span>
+          </div>
+          <div class="rec">
+            <div class="title">${escapeHtml(d.recommendation || '')}</div>
+            <div class="sub">
+              ApprovedBy: <b>${escapeHtml(d.approvedBy || '')}</b> | Duration: <b>${escapeHtml(d.durationMin)}</b> د<br/>
+              Notes: <b>${escapeHtml(d.notes || '')}</b>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('decisionsList').innerHTML = html || `<div class="muted">لا توجد قرارات مسجلة من هذه الواجهة بعد.</div>`;
+  }
+
+  function downloadLocalDecisions(){
+    const rows = state.localDecisions || [];
+    if (!rows.length) return showToast('لا يوجد بيانات للتصدير', false);
+
+    const headers = ['ts','deptId','deptName','status','pressureScore','coverageRatio','recommendation','proposedAction','approvedBy','durationMin','notes'];
+    const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => `"${String(r[h] ?? '').replace(/"/g,'""')}"`).join(','))).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'OPS_DECISIONS_local.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // =======================
+  // MODALS
+  // =======================
+  function openSnapshot(deptId){
+    document.getElementById('snapModal').style.display = 'flex';
+    // fill departments dropdown
+    const sel = document.getElementById('f_dept');
+    sel.innerHTML = (state.status || []).map(d => `<option value="${escapeHtml(d.deptId)}">${escapeHtml(d.deptName)}</option>`).join('');
+    if (deptId) sel.value = deptId;
+
+    // try preload from latest status
+    const x = (state.status || []).find(z => z.deptId === sel.value);
+    if (x && x.snap){
+      document.getElementById('f_waiting').value = x.snap.waiting ?? 0;
+      document.getElementById('f_avg').value = x.snap.avgWaitMin ?? 0;
+      document.getElementById('f_next').value = x.snap.nextHour ?? 0;
+      document.getElementById('f_nurses').value = x.snap.onDutyNurses ?? 0;
+      document.getElementById('f_docs').value = x.snap.onDutyDoctors ?? 0;
+      document.getElementById('f_notes').value = x.snap.notes ?? '';
+    }
+  }
+  function closeSnapshot(){ document.getElementById('snapModal').style.display='none'; }
+  function fillQuick(){
+    const sel = document.getElementById('f_dept').value;
+    const x = (state.status || []).find(z => z.deptId === sel);
+    if (!x || !x.snap) return showToast('لا توجد قراءة سابقة لهذا القسم', false);
+    document.getElementById('f_waiting').value = x.snap.waiting ?? 0;
+    document.getElementById('f_avg').value = x.snap.avgWaitMin ?? 0;
+    document.getElementById('f_next').value = x.snap.nextHour ?? 0;
+    document.getElementById('f_nurses').value = x.snap.onDutyNurses ?? 0;
+    document.getElementById('f_docs').value = x.snap.onDutyDoctors ?? 0;
+    document.getElementById('f_notes').value = x.snap.notes ?? '';
+    showToast('تمت التعبئة من آخر قراءة');
+  }
+
+  function openApprove(encoded){
+    const x = JSON.parse(decodeURIComponent(encoded));
+    state.approveTarget = x;
+
+    const snap = x.snap || {};
+    document.getElementById('approveSummary').innerHTML = `
+      <div class="row">
+        <div><b>${escapeHtml(x.deptName)}</b> — ${pillStatus(x.status)}</div>
+        <div class="muted small">Pressure: <b>${safeNum(x.pressureScore)}</b> | Coverage: <b>${safeNum(x.coverageRatio)}</b></div>
+      </div>
+      <div class="divider"></div>
+      <div class="muted small">
+        Recommendation: <b>${escapeHtml(x.recommendation)}</b><br/>
+        ProposedAction: <b>${escapeHtml(x.proposedAction)}</b><br/>
+        Snapshot: Waiting <b>${safeNum(snap.waiting)}</b>, AvgWait <b>${safeNum(snap.avgWaitMin)}</b> د, Nurses <b>${safeNum(snap.onDutyNurses)}</b>
+      </div>
+    `;
+    document.getElementById('approveModal').style.display = 'flex';
+  }
+  function closeApprove(){ document.getElementById('approveModal').style.display='none'; state.approveTarget=null; }
+
+  // =======================
+  // ACTIONS
+  // =======================
+  async function submitSnapshot(){
+    try{
+      const payload = {
+        deptId: document.getElementById('f_dept').value,
+        enteredBy: document.getElementById('f_by').value,
+        waiting: Number(document.getElementById('f_waiting').value || 0),
+        avgWaitMin: Number(document.getElementById('f_avg').value || 0),
+        nextHour: Number(document.getElementById('f_next').value || 0),
+        onDutyNurses: Number(document.getElementById('f_nurses').value || 0),
+        onDutyDoctors: Number(document.getElementById('f_docs').value || 0),
+        notes: document.getElementById('f_notes').value
+      };
+      await api('submitOpsSnapshot', payload);
+      closeSnapshot();
+      showToast('تم حفظ القراءة');
+      await refreshAll();
+    }catch(e){
+      showToast(e.message, false);
+    }
+  }
+
+  async function approveNow(){
+    try{
+      const x = state.approveTarget;
+      if (!x) return;
+
+      const payload = {
+        deptId: x.deptId,
+        status: x.status,
+        pressureScore: x.pressureScore,
+        coverageRatio: x.coverageRatio,
+        recommendation: x.recommendation,
+        proposedAction: x.proposedAction,
+        approvedBy: document.getElementById('a_by').value,
+        durationMin: Number(document.getElementById('a_dur').value || 90),
+        notes: document.getElementById('a_notes').value,
+        detail: document.getElementById('a_detail').value
+      };
+
+      const res = await api('approveOpsDecision', payload);
+
+      // store locally for decisions tab (optional)
+      const deptName = (state.status || []).find(z=>z.deptId===x.deptId)?.deptName || x.deptId;
+      const row = {
+        ts: new Date().toLocaleString('ar-SA'),
+        deptId: x.deptId,
+        deptName,
+        status: x.status,
+        pressureScore: x.pressureScore,
+        coverageRatio: x.coverageRatio,
+        recommendation: x.recommendation,
+        proposedAction: x.proposedAction,
+        approvedBy: payload.approvedBy,
+        durationMin: payload.durationMin,
+        notes: (payload.notes || '') + (payload.detail ? (' | ' + payload.detail) : ''),
+        decisionId: res.decisionId || ''
+      };
+      state.localDecisions.push(row);
+      localStorage.setItem('ops_local_decisions', JSON.stringify(state.localDecisions));
+
+      closeApprove();
+      showToast('تم اعتماد القرار وتسجيله');
+      await refreshAll();
+    }catch(e){
+      showToast(e.message, false);
+    }
+  }
+
+  async function refreshAll(){
+    document.getElementById('liveClock').textContent = nowClock();
+
+    // Health ping
+    try{
+      const ping = await api('ping', {});
+      document.getElementById('apiHealth').textContent = 'API: OK';
+      document.getElementById('apiHealth').className = 'pill ok';
+    }catch(e){
+      document.getElementById('apiHealth').textContent = 'API: ERROR';
+      document.getElementById('apiHealth').className = 'pill danger';
+      showToast('API غير متاح: ضع API_URL الصحيح', false);
+      return;
+    }
+
+    // OPS status
+    const s = await api('getOpsStatus', {});
+    state.status = s.status || [];
+    state.rules = s.rules || {};
+
+    renderKpis();
+    renderCards();
+
+    // Recommendations
+    try{
+      const r = await api('getOpsRecommendations', {});
+      renderRecommendations((r.recommendations || []));
+    }catch(e){
+      // fallback: use non-green from status
+      renderRecommendations((state.status || []).filter(x=>x.status!=='GREEN'));
+    }
+  }
+
+  // =======================
+  // INIT
+  // =======================
+  function startClock(){
+    document.getElementById('liveClock').textContent = nowClock();
+    setInterval(()=> document.getElementById('liveClock').textContent = nowClock(), 15000);
+  }
+
+  startClock();
+  refreshAll().catch(e=>showToast(e.message,false));
+
+  // Auto refresh every 30s
+  setInterval(()=> refreshAll().catch(()=>{}), 30000);
+</script>
+
 </body>
 </html>
