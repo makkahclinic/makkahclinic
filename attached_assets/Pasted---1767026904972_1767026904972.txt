@@ -1,0 +1,236 @@
+هذه “حزمة قفل الأمان” كاملة مرّة واحدة تطبّقها فورًا. (هي أقل تغييرات ممكنة لكنها تقفل أكبر ثغرة وتوحّد صلاحيات الـ API).
+
+الفكرة:
+أي Action ليس ضمن PUBLIC_ACTIONS = لازم Auth
+وAuth يكون إمّا:
+
+Firebase ID Token + Staff_Roles (المفضل)
+
+أو API_TOKEN (للعمليات الإدارية/الداخلية)
+مع إلغاء Owner bypass بالبريد لأنه خطر (لا تثق بأي قيمة يرسلها العميل). 
+OWASP Cheat Sheet Series
++1
+
+0) قبل الكود: جهّز Script Properties
+
+في Apps Script → Project Settings → Script properties أضف:
+
+FIREBASE_API_KEY = Firebase Web API Key (للتحقق الحالي عبر Identity Toolkit) 
+Firebase
+
+API_TOKEN = توكن داخلي (اختياري لكنه مفيد للطوارئ) 
+Google for Developers
+
+MRIS_TOKEN = توكن رفع ملفات MRIS (إذا تستخدم الرفع) 
+Google for Developers
+
+1) احذف Owner bypass نهائيًا واستبدله بالنسخة الآمنة
+
+استبدل دالتك الحالية validateStaffAuth_ بالكامل بهذا:
+
+/**
+ * ✅ Staff Auth (NO Owner bypass)
+ * يعتمد على:
+ * - Firebase ID Token (مع FIREBASE_API_KEY)
+ * - ثم Role من Staff_Roles
+ */
+function validateStaffAuth_(payload, requiredRoles) {
+  if (!payload || !payload.staffEmail) {
+    throw new Error('غير مصرح - البريد مطلوب');
+  }
+
+  // 1) لازم idToken لكل staff endpoints
+  if (!payload.idToken || !payload.staffId) {
+    throw new Error('غير مصرح - يجب تسجيل الدخول');
+  }
+
+  // 2) تحقق من Firebase ID Token (lookup)
+  const verified = verifyFirebaseIdToken_(payload.idToken);
+  if (!verified) throw new Error('غير مصرح - التوكن غير صالح');
+
+  // 3) تطابق UID + Email
+  const email = String(payload.staffEmail || '').trim().toLowerCase();
+  const vEmail = String(verified.email || '').trim().toLowerCase();
+  const vUid = String(verified.localId || '').trim();
+  const uid = String(payload.staffId || '').trim();
+
+  if (!vUid || vUid !== uid) throw new Error('غير مصرح - UID غير متطابق');
+  if (!vEmail || vEmail !== email) throw new Error('غير مصرح - البريد غير متطابق');
+
+  // 4) جلب الدور من Staff_Roles
+  const staffRole = getStaffRole_(email);
+  if (!staffRole) throw new Error('غير مصرح - لم يتم العثور على صلاحياتك');
+
+  // 5) تحقق role المطلوبة
+  if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(staffRole)) {
+    throw new Error('غير مصرح - ليس لديك صلاحية لهذا الإجراء');
+  }
+
+  return { verified: true, role: staffRole, email };
+}
+
+
+✅ هذا يقفل الثغرة الأساسية: “أنا Owner لأنّي قلت بريدي Owner” (غير مقبول أمنيًا). 
+OWASP Cheat Sheet Series
+
+2) فعّل PUBLIC_ACTIONS + Role Mapping (Gatekeeper)
+
+أضف هذا القسم مرة واحدة (فوق doPost/doGet):
+
+// ✅ Role requirements per action (عدّل حسب رغبتك)
+const ACTION_ROLES = {
+  // Staff roles management
+  setStaffRole: ['owner', 'admin'],
+  getStaffList: ['owner', 'admin'],
+  revokeStaffRole: ['owner'],
+
+  // Owner dashboard
+  getOwnerDashboardStats: ['owner', 'admin'],
+
+  // Complaints / Incidents (قراءة/إدارة)
+  getComplaints: ['owner', 'admin'],
+  updateComplaint: ['owner', 'admin'],
+  getIncidents: ['owner', 'admin'],
+  updateIncidentStatus: ['owner', 'admin'],
+  assignIncident: ['owner', 'admin'],
+  escalateIncident: ['owner', 'admin'],
+  closeIncident: ['owner', 'admin'],
+  saveRCA: ['owner', 'admin'],
+
+  // Rounds admin
+  getRoundsLog: ['owner', 'admin'],
+  getRounds: ['owner', 'admin'],
+  getViolations: ['owner', 'admin'],
+  resolveViolation: ['owner', 'admin'],
+
+  // MRIS uploads (توكن منفصل أصلاً داخل الدوال)
+  startUpload: ['owner', 'admin'],
+  uploadChunk: ['owner', 'admin'],
+  finishUpload: ['owner', 'admin'],
+  getUploadStatus: ['owner', 'admin'],
+  setAssignment: ['owner', 'admin'],
+};
+
+// ✅ Gatekeeper: يقرر هل نطلب auth أم لا
+function enforceAuthOrToken_(action, payload) {
+  // 1) Public actions = بدون auth
+  if (PUBLIC_ACTIONS.has(action)) return { ok: true, auth: null };
+
+  // 2) إذا مفعّل API_TOKEN: نسمح كبديل (مثل أدوات داخلية)
+  // لكن لو وصل staffId/idToken نفضل staffAuth
+  try {
+    if (payload && payload.staffId && payload.staffEmail && payload.idToken) {
+      const roles = ACTION_ROLES[action] || [];
+      const auth = validateStaffAuth_(payload, roles);
+      return { ok: true, auth };
+    }
+  } catch (e) {
+    // لو فشل staffAuth نكمّل ونحاول API_TOKEN (إذا متوفر)
+  }
+
+  // 3) API_TOKEN fallback (اختياري)
+  requireToken_(payload); // يرمي Unauthorized إذا token غلط
+  return { ok: true, auth: { role: 'api_token' } };
+}
+
+3) عدّل doPost: أضف سطرين فقط قبل switch
+
+داخل doPost بعد استخراج action/payload وقبل switch أضف:
+
+// ✅ enforce auth (public vs protected)
+enforceAuthOrToken_(action, payload);
+
+
+مثال موضعه:
+
+const action = sanitizeInput(body.action);
+const payload = sanitizePayload(body.payload || {});
+
+// ✅ هنا
+enforceAuthOrToken_(action, payload);
+
+switch (action) {
+  ...
+}
+
+4) اقفل JSONP للأشياء الحساسة في doGet
+
+حاليًا doGet يسمح callback (JSONP) حتى للحساس—هذا يوسّع المخاطر.
+عدّل جزء output_ بحيث لا يسمح JSONP إلا للأكشنات العامة فقط:
+
+استبدل function output_(obj) { ... } بهذا:
+
+function output_(obj) {
+  const json = JSON.stringify(obj);
+
+  // ✅ JSONP فقط للأكشنات العامة
+  const allowJsonp = callback && PUBLIC_ACTIONS.has(action);
+
+  if (allowJsonp) {
+    const safe = String(callback).replace(/[^\w$.]/g, '');
+    return ContentService.createTextOutput(safe + '(' + json + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+ContentService و doGet/doPost هي طريقة Apps Script الرسمية لخدمات JSON. 
+Google for Developers
++1
+
+5) (مهم) اجعل getUserRole غير “Owner تلقائي”
+
+داخل getUserRole عندك:
+
+if (email === ownerEmail) return { success:true, role:'owner' }
+
+
+هذا نفس مشكلة “الاعتماد على البريد فقط” ولكن بشكل أخف.
+
+غيّرها إلى:
+
+لا تعطي owner إلا إذا الدور موجود في Staff_Roles (والأفضل مع idToken)
+
+استبدل هذا الجزء بـ:
+
+// لا تعطي owner تلقائيًا بالبريد فقط
+// إذا فيه idToken، تحقق منه
+if (idToken) {
+  const verified = verifyFirebaseIdToken_(idToken);
+  if (!verified) return { success: false, error: 'التوكن غير صالح' };
+  if (String(verified.email || '').toLowerCase() !== String(email).toLowerCase()) {
+    return { success: false, error: 'البريد غير متطابق' };
+  }
+}
+
+// الدور من Staff_Roles فقط
+const role = getStaffRole_(String(email).toLowerCase());
+return { success: true, role: role || 'patient', name: '' };
+
+بعد التطبيق: كيف تختبر بسرعة؟
+
+افتح رابط الـ Web App
+
+جرّب ?action=ping ← لازم يشتغل بدون توكن
+
+جرّب POST action=getStaffList بدون idToken ← لازم يرجع Unauthorized
+
+جرّب بنفس الطلب لكن مع staffEmail/staffId/idToken ← لازم يشتغل
+
+مراجع (مختصرة ومباشرة)
+
+OWASP Authentication/Authorization: لا تثق ببيانات هوية يرسلها العميل، وطبّق Authorization على مستوى كل endpoint. 
+OWASP Cheat Sheet Series
++1
+
+Firebase: التحقق من ID tokens هو الأساس للتحقق من هوية المستخدم. 
+Firebase
+
+Apps Script PropertiesService لتخزين المفاتيح/التوكنات. 
+Google for Developers
+
+Apps Script Web Apps + ContentService (doGet/doPost). 
+Google for Developers
++1

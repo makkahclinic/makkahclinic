@@ -127,48 +127,45 @@
   }
   
   /**
-   * التحقق من صلاحيات الموظف - مع Owner Bypass
+   * ✅ Staff Auth (NO Owner bypass) - نسخة آمنة
+   * يعتمد على:
+   * - Firebase ID Token (مع FIREBASE_API_KEY)
+   * - ثم Role من Staff_Roles
    * الأدوار المتاحة: owner, admin, staff, doctor, pharmacist, insurance, viewer
    */
   function validateStaffAuth_(payload, requiredRoles) {
-    // ✅ Owner Bypass - المالك يدخل بالبريد فقط بدون تحقق من التوكن
-    if (isOwnerByEmail_(payload.staffEmail)) {
-      console.log('✅ Owner bypass activated for:', payload.staffEmail);
-      return { verified: true, role: 'owner' };
+    if (!payload || !payload.staffEmail) {
+      throw new Error('غير مصرح - البريد مطلوب');
     }
 
-    // غير المالك: يحتاج كل البيانات
-    if (!payload.staffId || !payload.staffEmail || !payload.idToken) {
+    // 1) لازم idToken لكل staff endpoints
+    if (!payload.idToken || !payload.staffId) {
       throw new Error('غير مصرح - يجب تسجيل الدخول');
     }
-    
-    // التحقق من Firebase ID Token
+
+    // 2) تحقق من Firebase ID Token
     const verified = verifyFirebaseIdToken_(payload.idToken);
-    if (!verified) {
-      throw new Error('غير مصرح - التوكن غير صالح');
+    if (!verified) throw new Error('غير مصرح - التوكن غير صالح');
+
+    // 3) تطابق UID + Email
+    const email = String(payload.staffEmail || '').trim().toLowerCase();
+    const vEmail = String(verified.email || '').trim().toLowerCase();
+    const vUid = String(verified.localId || '').trim();
+    const uid = String(payload.staffId || '').trim();
+
+    if (!vUid || vUid !== uid) throw new Error('غير مصرح - UID غير متطابق');
+    if (!vEmail || vEmail !== email) throw new Error('غير مصرح - البريد غير متطابق');
+
+    // 4) جلب الدور من Staff_Roles
+    const staffRole = getStaffRole_(email);
+    if (!staffRole) throw new Error('غير مصرح - لم يتم العثور على صلاحياتك');
+
+    // 5) تحقق role المطلوبة
+    if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(staffRole)) {
+      throw new Error('غير مصرح - ليس لديك صلاحية لهذا الإجراء');
     }
-    
-    // التأكد من تطابق البيانات
-    if (verified.localId !== payload.staffId || verified.email !== payload.staffEmail) {
-      throw new Error('غير مصرح - بيانات غير متطابقة');
-    }
-    
-    // جلب دور الموظف من Firestore (يجب تخزينه هناك)
-    // حالياً نستخدم جدول Staff_Roles في Sheets
-    const staffRole = getStaffRole_(payload.staffEmail);
-    
-    if (!staffRole) {
-      throw new Error('غير مصرح - لم يتم العثور على صلاحياتك');
-    }
-    
-    // التحقق من أن الدور مسموح
-    if (requiredRoles && requiredRoles.length > 0) {
-      if (!requiredRoles.includes(staffRole)) {
-        throw new Error('غير مصرح - ليس لديك صلاحية لهذا الإجراء');
-      }
-    }
-    
-    return { verified: true, role: staffRole };
+
+    return { verified: true, role: staffRole, email };
   }
   
   /**
@@ -322,8 +319,8 @@
   }
 
   /**
-   * جلب دور المستخدم (API عام للـ frontend)
-   * يتحقق من Firebase Token ويرجع الدور من جدول Staff_Roles
+   * ✅ جلب دور المستخدم (API عام للـ frontend) - نسخة آمنة
+   * لا يعطي owner تلقائياً بالبريد فقط
    */
   function getUserRole(payload) {
     const { email, idToken } = payload;
@@ -332,28 +329,24 @@
       return { success: false, error: 'البريد الإلكتروني مطلوب' };
     }
     
-    // المالك يحصل على دور owner تلقائياً
-    const ownerEmail = "husseinbabsail@gmail.com";
-    if (email === ownerEmail) {
-      return { success: true, role: 'owner', name: 'المالك' };
-    }
+    const normalizedEmail = String(email).trim().toLowerCase();
     
-    // التحقق من Firebase Token إذا كان موجوداً
+    // ✅ لا تعطي owner تلقائيًا بالبريد فقط - لازم idToken
     if (idToken) {
       const verified = verifyFirebaseIdToken_(idToken);
       if (!verified) {
         return { success: false, error: 'التوكن غير صالح' };
       }
-      if (verified.email !== email) {
+      if (String(verified.email || '').toLowerCase() !== normalizedEmail) {
         return { success: false, error: 'البريد غير متطابق' };
       }
     }
     
-    // جلب الدور من الجدول
-    const role = getStaffRole_(email);
+    // الدور من Staff_Roles فقط
+    const role = getStaffRole_(normalizedEmail);
     
     if (!role) {
-      // مستخدم جديد - دور افتراضي patient/viewer
+      // مستخدم جديد - دور افتراضي patient
       return { success: true, role: 'patient', name: '' };
     }
     
@@ -364,7 +357,7 @@
       if (sheet) {
         const data = sheet.getDataRange().getValues();
         for (let i = 1; i < data.length; i++) {
-          if (data[i][0] === email) {
+          if (String(data[i][0]).toLowerCase() === normalizedEmail) {
             return { success: true, role: data[i][1], name: data[i][2] || '' };
           }
         }
@@ -495,6 +488,68 @@
     cache.put(key, JSON.stringify(parsed), windowSec - (now - parsed.start));
     return true;
   }
+
+  // ✅ Role requirements per action (Gatekeeper)
+  const ACTION_ROLES = {
+    // Staff roles management
+    setStaffRole: ['owner', 'admin'],
+    getStaffList: ['owner', 'admin'],
+    revokeStaffRole: ['owner'],
+
+    // Owner dashboard
+    getOwnerDashboardStats: ['owner', 'admin'],
+
+    // Complaints / Incidents
+    getComplaints: ['owner', 'admin'],
+    updateComplaint: ['owner', 'admin'],
+    getIncidents: ['owner', 'admin'],
+    updateIncidentStatus: ['owner', 'admin'],
+    assignIncident: ['owner', 'admin'],
+    escalateIncident: ['owner', 'admin'],
+    closeIncident: ['owner', 'admin'],
+    saveRCA: ['owner', 'admin'],
+
+    // Rounds admin
+    getRoundsLog: ['owner', 'admin'],
+    getViolations: ['owner', 'admin'],
+    resolveViolation: ['owner', 'admin'],
+
+    // MRIS uploads
+    startUpload: ['owner', 'admin'],
+    uploadChunk: ['owner', 'admin'],
+    finishUpload: ['owner', 'admin'],
+    getUploadStatus: ['owner', 'admin'],
+    setAssignment: ['owner', 'admin'],
+    getAssignments: ['owner', 'admin'],
+  };
+
+  /**
+   * ✅ Gatekeeper: يقرر هل نطلب auth أم لا
+   * - Public actions = بدون auth
+   * - Protected actions = staffAuth أو API_TOKEN
+   */
+  function enforceAuthOrToken_(action, payload) {
+    // 1) Public actions = بدون auth
+    if (PUBLIC_ACTIONS.has(action)) return { ok: true, auth: null };
+
+    // 2) getUserRole استثناء خاص - يمكن استدعاؤه بدون auth كامل
+    if (action === 'getUserRole') return { ok: true, auth: null };
+
+    // 3) إذا مفعّل staffAuth
+    try {
+      if (payload && payload.staffId && payload.staffEmail && payload.idToken) {
+        const roles = ACTION_ROLES[action] || [];
+        const auth = validateStaffAuth_(payload, roles);
+        return { ok: true, auth };
+      }
+    } catch (e) {
+      // لو فشل staffAuth نكمّل ونحاول API_TOKEN
+    }
+
+    // 4) API_TOKEN fallback
+    requireToken_(payload);
+    return { ok: true, auth: { role: 'api_token' } };
+  }
   
 function doPost(e) {
     try {
@@ -509,6 +564,9 @@ function doPost(e) {
           error: 'تم تجاوز الحد الأقصى للطلبات. حاول مرة أخرى بعد دقيقة.'
         })).setMimeType(ContentService.MimeType.JSON);
       }
+      
+      // ✅ enforce auth (public vs protected)
+      enforceAuthOrToken_(action, payload);
       
       let result;
       
@@ -758,7 +816,11 @@ function doPost(e) {
     
     function output_(obj) {
       const json = JSON.stringify(obj);
-      if (callback) {
+
+      // ✅ JSONP فقط للأكشنات العامة
+      const allowJsonp = callback && PUBLIC_ACTIONS.has(action);
+
+      if (allowJsonp) {
         const safe = String(callback).replace(/[^\w$.]/g, '');
         return ContentService.createTextOutput(safe + '(' + json + ');')
           .setMimeType(ContentService.MimeType.JAVASCRIPT);
