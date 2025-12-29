@@ -6,9 +6,19 @@
    * - نظام جولات السلامة
    * - نظام الاجتماعات واللجان
    * - نظام حوادث سلامة المرضى
+   * - نظام MRIS للموارد الطبية
    */
   
-  const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
+  // ✅ ملف الإكسل المعتمد الموحد - جميع الأنظمة تستخدم نفس الملف
+  const MASTER_SHEET_ID = '1aijUPpTqUGUaKmYAyohq0RHmk1CF0CzCm17gfixHKOg';
+  
+  // توحيد جميع معرفات الشيتات
+  const SPREADSHEET_ID = MASTER_SHEET_ID;
+  const PATIENTS_SPREADSHEET_ID = MASTER_SHEET_ID;
+  const EOC_SPREADSHEET_ID = MASTER_SHEET_ID;
+  const INCIDENTS_SPREADSHEET_ID = MASTER_SHEET_ID;
+  const COMPLAINTS_SPREADSHEET_ID = MASTER_SHEET_ID;
+  const MRIS_SHEET_ID = MASTER_SHEET_ID;
 
   // ======== دوال الأمان المتقدمة ========
   
@@ -1036,8 +1046,7 @@ function doPost(e) {
   }
   
   // Emergency Report Functions
-  // الشيت الرئيسي للطوارئ والإخلاء
-  const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+  // الشيت الرئيسي للطوارئ والإخلاء (تم تعريفه في أعلى الملف)
 
   /******************** EOC BOOTSTRAP ********************/
   const EOC_BOOTSTRAP_VERSION = 2;
@@ -3072,9 +3081,8 @@ function doPost(e) {
   // ============================================================
   // نظام بلاغات حوادث سلامة المرضى
   // Patient Safety Incidents System
+  // (تم تعريف INCIDENTS_SPREADSHEET_ID في أعلى الملف)
   // ============================================================
-  
-  const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
   
   const INCIDENT_TYPES = {
     'medication_error': 'خطأ دوائي',
@@ -3880,9 +3888,8 @@ function doPost(e) {
 
   // ============================================
   // نظام الشكاوى - Complaints System
+  // (تم تعريف COMPLAINTS_SPREADSHEET_ID في أعلى الملف)
   // ============================================
-  
-  const COMPLAINTS_SPREADSHEET_ID = '1d4BRDY6qAa2u7zKRwwhtXKHIjDn16Yf0NuWA0FWLdMQ';
   
   function getComplaintsSheet(sheetName) {
     const ss = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID);
@@ -4476,8 +4483,7 @@ function doPost(e) {
   
 
 // ======== Patient Portal Functions ========
-
-const PATIENTS_SPREADSHEET_ID = "1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc";
+// (تم تعريف PATIENTS_SPREADSHEET_ID في أعلى الملف)
 
 /**
  * تسجيل مريض جديد
@@ -4739,9 +4745,10 @@ function analyzeSymptoms(payload) {
 }
 
 // ==================== MRIS Chunk Upload Backend ====================
+// (تم تعريف MRIS_SHEET_ID في أعلى الملف)
 
-const MRIS_SHEET_ID = '1aw8pqrIrBYWvgqocIyyqtT7QT4uocyqDOsGC-F0b7Nk';
-const MRIS_UPLOAD_FOLDER_ID = '1a_MRIS_MonthlyUploads'; // TODO: Replace with actual Google Drive Folder ID
+// ⚠️ مهم: استبدل هذا بـ Folder ID حقيقي من Google Drive
+const MRIS_UPLOAD_FOLDER_ID = 'PUT_YOUR_DRIVE_FOLDER_ID_HERE';
 const MRIS_TEMP_FOLDER_NAME = 'MRIS_TEMP_UPLOADS';
 
 function requireMrisToken_(token) {
