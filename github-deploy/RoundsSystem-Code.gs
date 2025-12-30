@@ -229,29 +229,15 @@ function extractFailedItems(notes) {
 // ============================================
 
 /**
- * إضافة متابعة جديدة - تحفظ في شيت منفصل
- * لا تضيف أعمدة جديدة أبداً!
+ * Helper: الحصول على شيت المتابعات أو إنشاؤه
+ * يمنع Race Condition عند الإنشاء
  */
-function addFollowUp(params) {
+function getFollowUpsSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  
-  // جلب معلومات المخالفة من Rounds_Log
-  const roundsSheet = ss.getSheetByName('Rounds_Log');
-  if (!roundsSheet) return { success: false, error: 'Rounds_Log not found' };
-  
-  const rowIndex = params.rowIndex;
-  if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row index' };
-  
-  // جلب بيانات الصف
-  const rowData = roundsSheet.getRange(rowIndex, 1, 1, 11).getValues()[0];
-  const area = rowData[4] || rowData[3] || '';
-  const execResponsible = rowData[6] || rowData[5] || '';
-  
-  // الحصول على شيت المتابعات أو إنشاؤه
-  let followUpsSheet = ss.getSheetByName('Rounds_FollowUps');
-  if (!followUpsSheet) {
-    followUpsSheet = ss.insertSheet('Rounds_FollowUps');
-    followUpsSheet.appendRow([
+  let sh = ss.getSheetByName('Rounds_FollowUps');
+  if (!sh) {
+    sh = ss.insertSheet('Rounds_FollowUps');
+    sh.appendRow([
       'FollowUp_ID',
       'Round_RowIndex',
       'Area',
@@ -262,6 +248,31 @@ function addFollowUp(params) {
       'Created_Date'
     ]);
   }
+  return sh;
+}
+
+/**
+ * إضافة متابعة جديدة - تحفظ في شيت منفصل
+ * لا تضيف أعمدة جديدة أبداً!
+ */
+function addFollowUp(params) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  const roundsSheet = ss.getSheetByName('Rounds_Log');
+  if (!roundsSheet) return { success: false, error: 'Rounds_Log not found' };
+  
+  const rowIndex = params.rowIndex;
+  if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row index' };
+  
+  // قراءة بالـ headers بدل أرقام الأعمدة (أكثر أماناً)
+  const headers = roundsSheet.getRange(1, 1, 1, roundsSheet.getLastColumn()).getValues()[0];
+  const row = roundsSheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+  
+  const area = row[headers.indexOf('Area')] || row[headers.indexOf('Round_Name')] || '';
+  const execResponsible = row[headers.indexOf('Execution_Responsible')] || row[headers.indexOf('Responsible_Role')] || '';
+  
+  // استخدام الـ helper للحصول على شيت المتابعات
+  const followUpsSheet = getFollowUpsSheet_();
   
   // توليد ID فريد
   const now = getSaudiDate();
