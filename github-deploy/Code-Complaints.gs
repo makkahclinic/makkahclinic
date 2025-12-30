@@ -60,6 +60,9 @@ function doPost(e) {
       case 'escalateComplaint':
         result = escalateComplaint(payload);
         break;
+      case 'deescalateComplaint':
+        result = deescalateComplaint(payload);
+        break;
       case 'closeComplaint':
         result = closeComplaint(payload);
         break;
@@ -924,4 +927,46 @@ function closeComplaint(payload) {
   });
   
   return { success: true, message: 'تم إغلاق الشكوى بنجاح' };
+}
+
+function deescalateComplaint(payload) {
+  const sheet = getComplaintsSheet('Complaints_Log');
+  const data = sheetToObjects(sheet);
+  
+  const complaint = data.find(c => c.Complaint_ID === payload.complaintId);
+  if (!complaint) {
+    return { success: false, error: 'الشكوى غير موجودة' };
+  }
+  
+  const rowIndex = complaint._rowIndex;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const now = getSaudiDate();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  
+  // مسح بيانات التصعيد
+  const escalatedToCol = headers.indexOf('Escalated_To');
+  const deescalatedByCol = headers.indexOf('Deescalated_By');
+  const deescalationDateCol = headers.indexOf('Deescalation_Date');
+  const deescalationReasonCol = headers.indexOf('Deescalation_Reason');
+  
+  if (escalatedToCol !== -1) sheet.getRange(rowIndex, escalatedToCol + 1).setValue('');
+  if (deescalatedByCol !== -1) sheet.getRange(rowIndex, deescalatedByCol + 1).setValue(payload.deescalatedBy || 'النظام');
+  if (deescalationDateCol !== -1) sheet.getRange(rowIndex, deescalationDateCol + 1).setValue(dateStr);
+  if (deescalationReasonCol !== -1) sheet.getRange(rowIndex, deescalationReasonCol + 1).setValue(payload.reason || '');
+  
+  // إعادة الأولوية إلى متوسطة
+  const priorityCol = headers.indexOf('Priority');
+  if (priorityCol !== -1) sheet.getRange(rowIndex, priorityCol + 1).setValue('medium');
+  
+  addComplaintFollowup({
+    complaintId: payload.complaintId,
+    action: `إنهاء التصعيد - الإجراء: ${payload.action || 'غير محدد'}`,
+    actionBy: payload.deescalatedBy || 'النظام',
+    notes: payload.reason || ''
+  });
+  
+  return { 
+    success: true, 
+    message: 'تم إنهاء التصعيد بنجاح'
+  };
 }

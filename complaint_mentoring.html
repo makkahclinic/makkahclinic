@@ -1729,6 +1729,7 @@
                     <td>${c.escalationReason || '-'}</td>
                     <td>
                         <button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-info btn-sm" onclick="showDeescalateModal('${c.id}')" title="إنهاء التصعيد"><i class="fas fa-level-down-alt"></i> إنهاء</button>
                         <button class="btn btn-success btn-sm" onclick="showCloseModal('${c.id}')"><i class="fas fa-check"></i> إغلاق</button>
                     </td>
                 </tr>`;
@@ -1837,6 +1838,7 @@
                 ${c.status === 'new' ? `<button class="btn btn-success" onclick="showAssignModal('${c.id}')"><i class="fas fa-user-plus"></i> تكليف موظف</button>` : ''}
                 ${c.status === 'in_progress' ? `<button class="btn btn-success" onclick="showCloseModal('${c.id}')"><i class="fas fa-check"></i> إغلاق الشكوى</button>` : ''}
                 <button class="btn btn-warning" onclick="showEscalateModal('${c.id}')"><i class="fas fa-level-up-alt"></i> تصعيد</button>
+                ${c.escalatedTo ? `<button class="btn btn-info" onclick="showDeescalateModal('${c.id}')"><i class="fas fa-level-down-alt"></i> إنهاء التصعيد</button>` : ''}
                 <button class="btn btn-purple" onclick="showAddNoteModal('${c.id}')"><i class="fas fa-sticky-note"></i> إضافة ملاحظة</button>
             </div>`;
             
@@ -1913,6 +1915,49 @@
             });
             if (result.ok) {
                 alert('تم التصعيد بنجاح');
+                closeActionModal();
+                closeModal();
+                loadDashboard();
+            } else {
+                alert('خطأ: ' + (result.error || 'فشل التصعيد'));
+            }
+        }
+
+        function showDeescalateModal(complaintId) {
+            currentComplaintId = complaintId;
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-level-down-alt"></i> إنهاء التصعيد';
+            document.getElementById('actionModalBody').innerHTML = `
+                <div class="form-group">
+                    <label>سبب إنهاء التصعيد</label>
+                    <textarea id="deescalateReason" placeholder="أدخل سبب إنهاء التصعيد أو نتيجة المعالجة..." style="min-height:100px;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>الإجراء المتخذ</label>
+                    <textarea id="deescalateAction" placeholder="ما الذي تم فعله لحل المشكلة؟" style="min-height:80px;"></textarea>
+                </div>
+                <button class="btn btn-info" onclick="submitDeescalate()" style="width:100%;"><i class="fas fa-check"></i> تأكيد إنهاء التصعيد</button>
+            `;
+            document.getElementById('actionModal').classList.add('active');
+        }
+
+        async function submitDeescalate() {
+            const reason = document.getElementById('deescalateReason').value;
+            const action = document.getElementById('deescalateAction').value;
+            
+            if (!reason.trim()) {
+                alert('يرجى إدخال سبب إنهاء التصعيد');
+                return;
+            }
+            
+            const result = await apiCall('deescalateComplaint', {
+                complaintId: currentComplaintId,
+                deescalatedBy: currentUser,
+                reason: reason,
+                action: action
+            });
+            
+            if (result.ok) {
+                alert('تم إنهاء التصعيد بنجاح');
                 closeActionModal();
                 closeModal();
                 loadDashboard();
