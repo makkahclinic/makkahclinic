@@ -879,11 +879,12 @@
               </select>
             </div>
             <div class="col-md-2">
-              <label class="form-label small">المعالجة</label>
+              <label class="form-label small">الحالة</label>
               <select class="form-select form-select-sm" id="historyResolvedFilter">
                 <option value="">الكل</option>
-                <option value="yes">نعم - تم المعالجة</option>
-                <option value="no">لا - لم يتم المعالجة</option>
+                <option value="closed">مغلقة (تمت المعالجة)</option>
+                <option value="open">مفتوحة (لم تتم)</option>
+                <option value="followup">تحت المتابعة</option>
               </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
@@ -907,11 +908,12 @@
                     <th class="text-center">مسؤول التنفيذ</th>
                     <th class="text-center">الحالة</th>
                     <th class="text-center">المعالجة</th>
+                    <th class="text-center">المتابعات</th>
                     <th class="text-center">ملاحظات</th>
                   </tr>
                 </thead>
                 <tbody id="historyTableBody">
-                  <tr><td colspan="8" class="text-center text-muted py-4">اختر الفترة الزمنية واضغط بحث</td></tr>
+                  <tr><td colspan="9" class="text-center text-muted py-4">اختر الفترة الزمنية واضغط بحث</td></tr>
                 </tbody>
               </table>
             </div>
@@ -2921,16 +2923,13 @@
       loadHistory();
     }
     
+    let HISTORY_FOLLOWUPS_CACHE = {};
+    
     async function loadHistory() {
       const startDate = document.getElementById('historyStartDate').value;
       const endDate = document.getElementById('historyEndDate').value;
       const staff = document.getElementById('historyStaffFilter').value;
-      const resolved = document.getElementById('historyResolvedFilter').value;
-      
-      const params = new URLSearchParams();
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      if (staff) params.append('staff', staff);
+      const statusFilter = document.getElementById('historyResolvedFilter').value;
       
       showSpinner(true);
       try {
@@ -2939,35 +2938,50 @@
         const tbody = document.getElementById('historyTableBody');
         if (!data.entries || !data.entries.length) {
           HISTORY_DATA = [];
-          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
           return;
         }
         
         let entries = data.entries;
         
-        if (resolved === 'yes') {
+        // فلترة حسب الحالة
+        if (statusFilter === 'closed') {
           entries = entries.filter(e => e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes');
-        } else if (resolved === 'no') {
-          entries = entries.filter(e => !e.Closed_YN || e.Closed_YN === 'No' || e.Closed_YN === 'لا' || e.Closed_YN === '');
+        } else if (statusFilter === 'open') {
+          entries = entries.filter(e => {
+            const isClosed = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
+            const hasFollowUp = e.hasFollowUp || false;
+            return !isClosed && !hasFollowUp;
+          });
+        } else if (statusFilter === 'followup') {
+          entries = entries.filter(e => {
+            const isClosed = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
+            return !isClosed; // عرض غير المغلقة للمتابعة
+          });
         }
         
         HISTORY_DATA = entries;
         
         if (!entries.length) {
-          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
           return;
         }
         
-        tbody.innerHTML = entries.map(e => {
+        tbody.innerHTML = entries.map((e, idx) => {
           const statusClass = e.Status === 'متأخر' ? 'bg-warning text-dark' : 
                              e.Status === 'خلل' ? 'bg-danger' :
                              e.Status === 'في الوقت' ? 'bg-success' : 'bg-secondary';
           const isResolved = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
           const resolvedBadge = isResolved ? 
-            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>تمت</span>' : 
-            '<span class="badge bg-secondary">لم تتم</span>';
+            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>مغلقة</span>' : 
+            '<span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>مفتوحة</span>';
+          
+          const rowIndex = e._rowIndex || 0;
+          const hasViolation = e.Is_Violation === 'Yes' || e.Is_Violation === 'true' || e.Status === 'خلل';
+          const rowStyle = hasViolation ? 'cursor: pointer; background: linear-gradient(135deg, #fff5f5, #ffe5e5);' : 'cursor: pointer;';
+          
           return `
-            <tr>
+            <tr onclick="showHistoryDetails(${rowIndex}, ${idx})" style="${rowStyle}" title="انقر لعرض التفاصيل">
               <td class="small text-center">${e.Date?.split(' ')[0] || '-'}</td>
               <td class="small text-center">${e.Actual_Time || e.Date?.split(' ')[1] || '-'}</td>
               <td class="small">${e.Area || e.Round_Name || '-'}</td>
@@ -2975,15 +2989,189 @@
               <td class="small text-center">${e.Execution_Responsible || '-'}</td>
               <td class="text-center"><span class="badge ${statusClass}">${e.Status || 'تم'}</span></td>
               <td class="text-center">${resolvedBadge}</td>
-              <td class="small">${e.Negative_Notes || '-'}</td>
+              <td class="text-center">
+                <span class="badge bg-info" id="followupCount-${rowIndex}">
+                  <i class="fas fa-spinner fa-spin"></i>
+                </span>
+              </td>
+              <td class="small">${(e.Negative_Notes || '-').substring(0, 30)}${(e.Negative_Notes || '').length > 30 ? '...' : ''}</td>
             </tr>
           `;
         }).join('');
+        
+        // تحميل عدد المتابعات لكل صف
+        loadFollowUpCounts(entries);
+        
       } catch (err) {
         console.error('History error:', err);
       } finally {
         showSpinner(false);
       }
+    }
+    
+    async function loadFollowUpCounts(entries) {
+      for (const e of entries) {
+        const rowIndex = e._rowIndex;
+        if (!rowIndex) continue;
+        
+        try {
+          const data = await callApi('getFollowUpsByRound', { rowIndex });
+          const count = data.followUps ? data.followUps.length : 0;
+          HISTORY_FOLLOWUPS_CACHE[rowIndex] = data.followUps || [];
+          
+          const badge = document.getElementById(`followupCount-${rowIndex}`);
+          if (badge) {
+            if (count > 0) {
+              badge.innerHTML = `<i class="fas fa-comments me-1"></i>${count}`;
+              badge.className = 'badge bg-primary';
+            } else {
+              badge.innerHTML = '-';
+              badge.className = 'badge bg-light text-muted';
+            }
+          }
+        } catch (err) {
+          const badge = document.getElementById(`followupCount-${rowIndex}`);
+          if (badge) {
+            badge.innerHTML = '-';
+            badge.className = 'badge bg-light text-muted';
+          }
+        }
+      }
+    }
+    
+    async function showHistoryDetails(rowIndex, entryIdx) {
+      const entry = HISTORY_DATA[entryIdx];
+      if (!entry) return;
+      
+      // جلب المتابعات
+      let followUps = HISTORY_FOLLOWUPS_CACHE[rowIndex] || [];
+      if (!followUps.length && rowIndex) {
+        try {
+          const data = await callApi('getFollowUpsByRound', { rowIndex });
+          followUps = data.followUps || [];
+        } catch (err) {
+          console.error('Error loading follow-ups:', err);
+        }
+      }
+      
+      const isResolved = entry.Closed_YN === 'Yes' || entry.Closed_YN === 'نعم' || entry.Is_Resolved === 'Yes';
+      const statusBadge = isResolved ? 
+        '<span class="badge bg-success fs-6"><i class="fas fa-check-circle me-1"></i>مغلقة</span>' : 
+        '<span class="badge bg-warning text-dark fs-6"><i class="fas fa-clock me-1"></i>مفتوحة</span>';
+      
+      const followUpsHtml = followUps.length > 0 ? followUps.map(f => `
+        <div class="border-start border-3 border-primary ps-3 mb-2" style="background: #f0f9ff; padding: 10px; border-radius: 8px;">
+          <div class="d-flex justify-content-between">
+            <strong><i class="fas fa-user me-1"></i>${f.follower || 'غير محدد'}</strong>
+            <small class="text-muted">${f.createdAt || ''}</small>
+          </div>
+          <div class="mt-1">${f.notes || 'لا توجد ملاحظات'}</div>
+        </div>
+      `).join('') : '<p class="text-muted text-center py-3">لا توجد متابعات مسجلة</p>';
+      
+      const modalHtml = `
+        <div class="modal fade" id="historyDetailModal" tabindex="-1">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0" style="border-radius: 15px;">
+              <div class="modal-header" style="background: linear-gradient(135deg, #1e3a5f, #2d5a8a); color: white; border-radius: 15px 15px 0 0;">
+                <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>تفاصيل الجولة</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="card mb-2" style="background: #f8fafc;">
+                      <div class="card-body py-2">
+                        <small class="text-muted">التاريخ والوقت</small>
+                        <div class="fw-bold">${entry.Date || '-'} - ${entry.Actual_Time || '-'}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="card mb-2" style="background: #f8fafc;">
+                      <div class="card-body py-2">
+                        <small class="text-muted">الحالة</small>
+                        <div>${statusBadge}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="card mb-3" style="background: #fdf2f4;">
+                  <div class="card-body py-2">
+                    <small class="text-muted">الجولة / المنطقة</small>
+                    <div class="fw-bold">${entry.Area || entry.Round_Name || '-'}</div>
+                  </div>
+                </div>
+                
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="card" style="background: #f0fdf4;">
+                      <div class="card-body py-2">
+                        <small class="text-muted">المسؤول</small>
+                        <div class="fw-bold">${entry.Responsible_Role || entry.Staff || '-'}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="card" style="background: #eff6ff;">
+                      <div class="card-body py-2">
+                        <small class="text-muted">مسؤول التنفيذ</small>
+                        <div class="fw-bold">${entry.Execution_Responsible || '-'}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                ${entry.Negative_Notes ? `
+                <div class="card mb-3" style="background: #fef2f2; border: 1px solid #fecaca;">
+                  <div class="card-body py-2">
+                    <small class="text-muted"><i class="fas fa-exclamation-triangle text-danger me-1"></i>ملاحظات الخلل</small>
+                    <div>${entry.Negative_Notes}</div>
+                  </div>
+                </div>
+                ` : ''}
+                
+                <div class="card" style="background: #f0f9ff;">
+                  <div class="card-header bg-primary text-white py-2">
+                    <i class="fas fa-comments me-2"></i>المتابعات (${followUps.length})
+                  </div>
+                  <div class="card-body" style="max-height: 200px; overflow-y: auto;">
+                    ${followUpsHtml}
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                ${!isResolved && rowIndex ? `
+                <button class="btn btn-primary" onclick="openFollowUpFromHistory(${rowIndex}, '${(entry.Area || entry.Round_Name || '').replace(/'/g, "\\'")}')">
+                  <i class="fas fa-plus me-1"></i>إضافة متابعة
+                </button>
+                ` : ''}
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // إزالة أي modal سابق
+      const existingModal = document.getElementById('historyDetailModal');
+      if (existingModal) existingModal.remove();
+      
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+      const modal = new bootstrap.Modal(document.getElementById('historyDetailModal'));
+      modal.show();
+    }
+    
+    function openFollowUpFromHistory(rowIndex, area) {
+      // إغلاق modal التفاصيل
+      const detailModal = bootstrap.Modal.getInstance(document.getElementById('historyDetailModal'));
+      if (detailModal) detailModal.hide();
+      
+      // فتح modal المتابعة
+      setTimeout(() => {
+        openFollowUpModal({ _rowIndex: rowIndex, Area: area });
+      }, 300);
     }
     
     function exportHistory() {
