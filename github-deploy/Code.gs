@@ -35,7 +35,16 @@
     'getEmergencyReports',
     'submitEmergencyReport',
     'getTrainingLog',
-    'getEmergencyStatus'
+    'getEmergencyStatus',
+    // Rounds system (الموظفون في الموقع بدون Firebase)
+    'verifyPasscode',
+    'resolveViolation',
+    'addFollowUp',
+    'logRound',
+    'getViolations',
+    'getMasterTasks',
+    'getStaff',
+    'getDelayed'
   ]);
 
   /**
@@ -621,6 +630,9 @@ function doPost(e) {
           break;
         case 'resolveViolation':
           result = resolveViolation(payload);
+          break;
+        case 'addFollowUp':
+          result = addFollowUp(payload);
           break;
         // debug action DISABLED for security
         // Committee Meeting APIs
@@ -2657,6 +2669,66 @@ function doPost(e) {
     }
     
     return { success: true };
+  }
+  
+  /**
+   * إضافة متابعة للمخالفة (بدون إغلاقها)
+   * تسجل اسم المتابع وتاريخ المتابعة وملاحظاته
+   */
+  function addFollowUp(params) {
+    const sheet = getSheet('Rounds_Log');
+    if (!sheet) return { success: false, error: 'Sheet not found' };
+    
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    const rowIndex = params.rowIndex;
+    if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row' };
+    
+    // البحث عن أعمدة المتابعة (نضيفها إذا غير موجودة)
+    let followUpByCol = headers.indexOf('FollowUp_By');
+    let followUpDateCol = headers.indexOf('FollowUp_Date');
+    let followUpNotesCol = headers.indexOf('FollowUp_Notes');
+    
+    // إذا الأعمدة غير موجودة، نضيفها
+    const lastCol = headers.length;
+    if (followUpByCol === -1) {
+      followUpByCol = lastCol;
+      sheet.getRange(1, lastCol + 1).setValue('FollowUp_By');
+    }
+    if (followUpDateCol === -1) {
+      followUpDateCol = lastCol + 1;
+      sheet.getRange(1, lastCol + 2).setValue('FollowUp_Date');
+    }
+    if (followUpNotesCol === -1) {
+      followUpNotesCol = lastCol + 2;
+      sheet.getRange(1, lastCol + 3).setValue('FollowUp_Notes');
+    }
+    
+    // إعادة جلب الـ headers بعد التحديث
+    const newHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    followUpByCol = newHeaders.indexOf('FollowUp_By');
+    followUpDateCol = newHeaders.indexOf('FollowUp_Date');
+    followUpNotesCol = newHeaders.indexOf('FollowUp_Notes');
+    
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    // الحصول على المتابعات السابقة وإضافة الجديدة
+    const existingFollower = sheet.getRange(rowIndex, followUpByCol + 1).getValue() || '';
+    const existingDate = sheet.getRange(rowIndex, followUpDateCol + 1).getValue() || '';
+    const existingNotes = sheet.getRange(rowIndex, followUpNotesCol + 1).getValue() || '';
+    
+    // إضافة المتابعة الجديدة (مع فاصل إذا فيه متابعات سابقة)
+    const newFollower = existingFollower ? existingFollower + ' | ' + params.followerName : params.followerName;
+    const newDate = existingDate ? existingDate + ' | ' + dateStr : dateStr;
+    const newNotes = params.followUpNotes ? (existingNotes ? existingNotes + ' | ' + params.followUpNotes : params.followUpNotes) : existingNotes;
+    
+    sheet.getRange(rowIndex, followUpByCol + 1).setValue(newFollower);
+    sheet.getRange(rowIndex, followUpDateCol + 1).setValue(newDate);
+    sheet.getRange(rowIndex, followUpNotesCol + 1).setValue(newNotes);
+    
+    return { success: true, ok: true, message: 'تم تسجيل المتابعة بنجاح' };
   }
   
   function logRound(payload) {

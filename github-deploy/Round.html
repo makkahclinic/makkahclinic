@@ -1009,6 +1009,81 @@
     </div>
   </div>
 
+  <!-- Follow Up Modal - نافذة المتابعة -->
+  <div class="modal fade" id="followUpModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 overflow-hidden" style="border-radius: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
+        <!-- Header with gradient and logo -->
+        <div class="text-center py-4" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 50%, #117a8b 100%);">
+          <div class="mb-3">
+            <img src="https://m2020m.org/attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg" 
+                 alt="شعار المجمع" 
+                 style="width: 80px; height: 80px; border-radius: 50%; border: 4px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+          </div>
+          <h4 class="text-white mb-0 fw-bold">مجمع مكة الطبي</h4>
+          <small class="text-white-50">تسجيل متابعة المخالفة</small>
+        </div>
+        
+        <!-- Body -->
+        <div class="modal-body text-center p-4" style="background: linear-gradient(180deg, #fff 0%, #f8f9fa 100%);">
+          <!-- Icon -->
+          <div class="mb-4">
+            <div style="width: 80px; height: 80px; margin: 0 auto; background: linear-gradient(135deg, #17a2b8, #138496); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(23,162,184,0.4);">
+              <i class="fas fa-clipboard-check fa-2x text-white"></i>
+            </div>
+          </div>
+          
+          <!-- Title -->
+          <h4 class="fw-bold mb-3" style="color: #1e3a5f;">تسجيل متابعة</h4>
+          <p class="text-muted mb-4">سيتم تسجيل المتابعة بدون إغلاق المخالفة</p>
+          
+          <!-- Violation Info Card -->
+          <div id="followUpViolationInfo" class="p-3 mb-4 text-end" 
+               style="background: #fff; border-radius: 12px; border: 2px solid #e9ecef; border-right: 5px solid #17a2b8; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+          </div>
+          
+          <!-- اسم المتابع -->
+          <div class="mb-4 text-end">
+            <label class="form-label fw-bold" style="color: #1e3a5f;">
+              <i class="fas fa-user me-2"></i>اسم المتابع
+            </label>
+            <input type="text" class="form-control form-control-lg text-end" id="followUpName" 
+                   placeholder="أدخل اسمك الكامل..." 
+                   style="border-radius: 12px; border: 2px solid #e9ecef; padding: 12px 16px;">
+          </div>
+          
+          <!-- ملاحظات المتابعة (اختياري) -->
+          <div class="mb-4 text-end">
+            <label class="form-label fw-bold" style="color: #1e3a5f;">
+              <i class="fas fa-sticky-note me-2"></i>ملاحظات المتابعة <small class="text-muted">(اختياري)</small>
+            </label>
+            <textarea class="form-control text-end" id="followUpNotes" rows="2"
+                   placeholder="أضف ملاحظاتك عن المتابعة..." 
+                   style="border-radius: 12px; border: 2px solid #e9ecef; padding: 12px 16px;"></textarea>
+          </div>
+          
+          <!-- Info Note -->
+          <div class="alert py-2 px-3 mb-4" style="background: #d1ecf1; border-radius: 10px; border: none;">
+            <i class="fas fa-info-circle text-info me-2"></i>
+            <small class="text-dark">المخالفة ستبقى مفتوحة حتى يتم معالجتها</small>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div class="d-flex gap-3 justify-content-center">
+            <button type="button" class="btn btn-lg px-5 py-3 fw-bold" data-bs-dismiss="modal"
+                    style="background: #e9ecef; color: #495057; border-radius: 12px; border: none; min-width: 130px;">
+              <i class="fas fa-times me-2"></i>إلغاء
+            </button>
+            <button type="button" class="btn btn-lg px-5 py-3 fw-bold text-white" onclick="confirmFollowUp()"
+                    style="background: linear-gradient(135deg, #17a2b8, #138496); border-radius: 12px; border: none; min-width: 130px; box-shadow: 0 4px 15px rgba(23,162,184,0.4);">
+              <i class="fas fa-save me-2"></i>حفظ المتابعة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Passcode Input Modal -->
   <div class="modal fade" id="passcodeModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 320px;">
@@ -1237,6 +1312,75 @@
       const area = btn.dataset.area || '';
       const notes = btn.dataset.notes || '';
       openResolveModal(rowIndex, staffName, area, notes);
+    }
+    
+    // === Follow Up (متابعة) handling ===
+    let currentFollowUpData = null;
+    
+    function handleFollowUpClick(btn) {
+      const rowIndex = parseInt(btn.dataset.row) || 0;
+      const staffName = btn.dataset.staff || '';
+      const area = btn.dataset.area || '';
+      const notes = btn.dataset.notes || '';
+      openFollowUpModal(rowIndex, staffName, area, notes);
+    }
+    
+    function openFollowUpModal(rowIndex, staffName, area, issue) {
+      currentFollowUpData = { rowIndex, staffName, area, issue };
+      document.getElementById('followUpViolationInfo').innerHTML = `
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-map-marker-alt text-info me-2"></i>
+          <strong>الجولة:</strong>&nbsp;${area || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-user-cog text-primary me-2"></i>
+          <strong>المكلف:</strong>&nbsp;${staffName || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-start">
+          <i class="fas fa-exclamation-circle text-warning me-2 mt-1"></i>
+          <div><strong>الخلل:</strong>&nbsp;${issue || 'مخالفة مسجلة'}</div>
+        </div>
+      `;
+      document.getElementById('followUpName').value = '';
+      document.getElementById('followUpNotes').value = '';
+      const modal = new bootstrap.Modal(document.getElementById('followUpModal'));
+      modal.show();
+    }
+    
+    async function confirmFollowUp() {
+      const followerName = document.getElementById('followUpName').value.trim();
+      const followUpNotes = document.getElementById('followUpNotes').value.trim();
+      
+      if (!followerName) {
+        showErrorToast('الرجاء إدخال اسم المتابع');
+        document.getElementById('followUpName').focus();
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('addFollowUp', {
+          rowIndex: currentFollowUpData.rowIndex,
+          followerName: followerName,
+          followUpNotes: followUpNotes,
+          followUpDate: new Date().toLocaleDateString('en-US')
+        });
+        
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          bootstrap.Modal.getInstance(document.getElementById('followUpModal')).hide();
+          showSuccessToast(`تم تسجيل المتابعة بواسطة ${followerName}`);
+          currentFollowUpData = null;
+          await loadViolations();
+          renderViolations();
+        } else {
+          showErrorToast(result.message || result.error || 'حدث خطأ أثناء حفظ المتابعة');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
     }
     
     function openResolveModal(rowIndex, staffName, area, issue) {
@@ -2422,9 +2566,14 @@
                       </span>
                     </div>
                     ${!isResolved ? `
-                      <button class="btn btn-sm btn-outline-success px-3 py-1" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleResolveClick(this)">
-                        <i class="fas fa-check me-1"></i>معالجة
-                      </button>
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-info px-3 py-1" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleFollowUpClick(this)">
+                          <i class="fas fa-clipboard-check me-1"></i>متابعة
+                        </button>
+                        <button class="btn btn-sm btn-outline-success px-3 py-1" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleResolveClick(this)">
+                          <i class="fas fa-check me-1"></i>معالجة
+                        </button>
+                      </div>
                     ` : `
                       <small class="text-muted">
                         ${v.Resolved_By ? v.Resolved_By : ''}
