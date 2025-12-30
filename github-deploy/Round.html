@@ -2516,48 +2516,25 @@
       let filtered = [...VIOLATIONS_DATA.violations];
       let infoMessage = '';
       
-      // جلب معلومات المتابعات لكل مخالفة (مرة واحدة)
-      if (Object.keys(VIOLATIONS_FOLLOWUP_CACHE).length === 0) {
-        await loadViolationFollowupCounts();
-      }
-      
+      // استخدام State القادمة من السيرفر مباشرة (مبسط وموثوق)
       switch (filter) {
         case 'open':
-          // المخالفات التي لم تعالج ولا توجد لها متابعات
-          filtered = VIOLATIONS_DATA.violations.filter(v => {
-            const isResolved = String(v.Is_Resolved || v.Closed_YN || '').toLowerCase() === 'yes';
-            const hasFollowUp = VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] > 0;
-            return !isResolved && !hasFollowUp;
-          });
-          infoMessage = `عرض ${filtered.length} مخالفة لم تعالج بعد ولا توجد لها متابعات`;
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'open');
+          infoMessage = `عرض ${filtered.length} مخالفة لم تعالج بعد`;
           break;
           
         case 'followup':
-          // المخالفات التي لها متابعات ولكن غير مغلقة
-          filtered = VIOLATIONS_DATA.violations.filter(v => {
-            const isResolved = String(v.Is_Resolved || v.Closed_YN || '').toLowerCase() === 'yes';
-            const hasFollowUp = VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] > 0;
-            return !isResolved && hasFollowUp;
-          });
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'followup');
           infoMessage = `عرض ${filtered.length} مخالفة تحت المتابعة`;
           break;
           
         case 'closed':
-          // المخالفات المغلقة (غير مؤرشفة)
-          filtered = VIOLATIONS_DATA.violations.filter(v => {
-            const isResolved = String(v.Is_Resolved || v.Closed_YN || '').toLowerCase() === 'yes';
-            const isArchived = String(v.Is_Archived || '').toLowerCase() === 'yes';
-            return isResolved && !isArchived;
-          });
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'closed');
           infoMessage = `عرض ${filtered.length} مخالفة منتهية (تمت معالجتها)`;
           break;
           
         case 'archived':
-          // المخالفات المؤرشفة
-          filtered = VIOLATIONS_DATA.violations.filter(v => {
-            const isArchived = String(v.Is_Archived || '').toLowerCase() === 'yes';
-            return isArchived;
-          });
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'archived');
           infoMessage = `عرض ${filtered.length} مخالفة مؤرشفة`;
           break;
           

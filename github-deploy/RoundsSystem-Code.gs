@@ -302,6 +302,72 @@ function extractFailedItems(notes) {
 }
 
 // ============================================
+// محرك المخالفات - مصدر الحقيقة الموحد
+// ============================================
+
+/**
+ * تحديد هل السجل يمثل مخالفة حقيقية
+ * يبحث في: Is_Violation + Status + Negative_Notes
+ */
+function isRealViolation(row) {
+  const isViolationFlag = String(row.Is_Violation || '').toLowerCase();
+  const status = String(row.Status || '').toLowerCase();
+  const notes = String(row.Negative_Notes || '');
+
+  if (isViolationFlag === 'yes' || isViolationFlag === 'true') return true;
+  if (status.includes('خلل') || status.includes('مخالفة')) return true;
+  if (notes.includes('❌') || notes.includes('نقاط الخلل')) return true;
+
+  return false;
+}
+
+/**
+ * بناء فهرس المتابعات لأداء سريع
+ */
+function buildFollowUpsIndex() {
+  const followUpsSheet = getSheet('Rounds_FollowUps');
+  const index = {};
+  
+  if (followUpsSheet) {
+    const data = followUpsSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const rowIndex = Number(data[i][1]);
+      if (rowIndex) {
+        if (!index[rowIndex]) index[rowIndex] = [];
+        index[rowIndex].push({
+          date: data[i][2],
+          notes: data[i][3],
+          user: data[i][4]
+        });
+      }
+    }
+  }
+  
+  return index;
+}
+
+/**
+ * تحديد حالة المخالفة: open / followup / closed / archived
+ */
+function getViolationState(row, followUpsIndex) {
+  const rowIndex = row._rowIndex;
+  
+  const isClosed =
+    String(row.Closed_YN || '').toLowerCase() === 'yes' ||
+    String(row.Is_Resolved || '').toLowerCase() === 'yes';
+
+  const isArchived =
+    String(row.Is_Archived || '').toLowerCase() === 'yes';
+
+  const hasFollowUps = followUpsIndex && rowIndex && followUpsIndex[rowIndex] && followUpsIndex[rowIndex].length > 0;
+
+  if (isArchived) return 'archived';
+  if (isClosed) return 'closed';
+  if (hasFollowUps) return 'followup';
+  return 'open';
+}
+
+// ============================================
 // دالة الإضافة الآمنة (تمنع خطأ 10M cells)
 // ============================================
 
@@ -624,46 +690,57 @@ function getDelayed() {
 
 function getViolations() {
   const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+  
+  // بناء فهرس المتابعات مرة واحدة لأداء أفضل
+  const followUpsIndex = buildFollowUpsIndex();
 
-  const allViolations = roundsLog.filter(r => {
-    const isViolation = String(r.Is_Violation || '').toLowerCase();
-    if (isViolation === 'true' || isViolation === 'yes') return true;
+  // استخدام isRealViolation الموحدة لتحديد المخالفات
+  const allViolations = roundsLog
+    .filter(r => isRealViolation(r))
+    .map(r => {
+      let area = r.Area || r.Round_Name || '';
+      if (/^\d+$/.test(String(area).trim())) {
+        area = r.Round_Name || 'منطقة غير محددة';
+      }
+      
+      const failedItems = extractFailedItems(r.Negative_Notes);
+      
+      // تحديد حالة المخالفة باستخدام الدالة الموحدة
+      const state = getViolationState(r, followUpsIndex);
+      
+      return {
+        _rowIndex: r._rowIndex,
+        Date: formatDate(r.Date),
+        Actual_Time: formatTime(r.Actual_Time),
+        Area: area,
+        Round_Name: r.Round_Name || area || '',
+        Responsible_Role: r.Responsible_Role || '',
+        Execution_Responsible: r.Execution_Responsible || '',
+        Status: r.Status || '',
+        Negative_Notes: r.Negative_Notes || r.Notes || '',
+        Is_Resolved: String(r.Closed_YN || r.Is_Resolved || 'no').toLowerCase(),
+        Is_Archived: String(r.Is_Archived || 'no').toLowerCase(),
+        Resolved_By: r.Resolved_By || '',
+        Resolved_Date: formatDate(r.Resolved_Date) || '',
+        failedItems: failedItems,
+        State: state,
+        hasFollowUps: followUpsIndex[r._rowIndex] ? true : false,
+        followUpsCount: followUpsIndex[r._rowIndex] ? followUpsIndex[r._rowIndex].length : 0
+      };
+    });
 
-    const status = String(r.Status || '').toLowerCase();
-    const notes = String(r.Negative_Notes || '').toLowerCase();
-    return status.includes('خلل') || notes.includes('نقاط الخلل') || notes.includes('❌');
-  }).map(r => {
-    let area = r.Area || r.Round_Name || '';
-    if (/^\d+$/.test(String(area).trim())) {
-      area = r.Round_Name || 'منطقة غير محددة';
-    }
-    
-    const failedItems = extractFailedItems(r.Negative_Notes);
-    
-    return {
-      _rowIndex: r._rowIndex,
-      Date: formatDate(r.Date),
-      Actual_Time: formatTime(r.Actual_Time),
-      Area: area,
-      Round_Name: r.Round_Name || area || '',
-      Responsible_Role: r.Responsible_Role || '',
-      Execution_Responsible: r.Execution_Responsible || '',
-      Status: r.Status || '',
-      Negative_Notes: r.Negative_Notes || r.Notes || '',
-      Is_Resolved: String(r.Closed_YN || r.Is_Resolved || 'no').toLowerCase(),
-      Is_Archived: String(r.Is_Archived || 'no').toLowerCase(),
-      Resolved_By: r.Resolved_By || '',
-      Resolved_Date: formatDate(r.Resolved_Date) || '',
-      failedItems: failedItems
-    };
-  });
-
-  const openViolations = allViolations.filter(v => v.Is_Resolved !== 'yes');
-  const resolvedViolations = allViolations.filter(v => v.Is_Resolved === 'yes');
+  // تصنيف المخالفات حسب الحالة
+  const openViolations = allViolations.filter(v => v.State === 'open');
+  const followupViolations = allViolations.filter(v => v.State === 'followup');
+  const closedViolations = allViolations.filter(v => v.State === 'closed');
+  const archivedViolations = allViolations.filter(v => v.State === 'archived');
 
   const repeatGroups = {};
   
-  openViolations.forEach(v => {
+  // المخالفات غير المغلقة للتجميع (open + followup)
+  const activeViolations = allViolations.filter(v => v.State === 'open' || v.State === 'followup');
+  
+  activeViolations.forEach(v => {
     const area = v.Area || v.Round_Name || 'غير محدد';
     
     let foundGroup = null;
@@ -713,9 +790,14 @@ function getViolations() {
   return {
     violations: allViolations,
     repeated,
-    resolved: resolvedViolations,
+    resolved: closedViolations,
     total: allViolations.length,
-    pending: openViolations.length
+    pending: openViolations.length,
+    // إحصائيات جديدة حسب الحالة
+    open: openViolations.length,
+    followup: followupViolations.length,
+    closed: closedViolations.length,
+    archived: archivedViolations.length
   };
 }
 

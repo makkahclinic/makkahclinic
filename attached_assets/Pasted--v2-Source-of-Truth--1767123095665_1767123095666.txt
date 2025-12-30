@@ -1,0 +1,215 @@
+تمام ✅
+سأبني لك حزمة تصحيحات v2 نظيفة + احترافية تشمل:
+
+توحيد تعريف المخالفة (Source of Truth)
+
+حالة ذكية للمخالفة (open / followup / closed / archived)
+
+فلترة صحيحة 100% Backend + Frontend
+
+تصحيح التاريخ واختفاء السجلات
+
+́Migration ذكية لتنظيف البيانات القديمة بدون كسر النظام**
+
+سأعطيك الكود فقط مع شرح قصير جدًا عند الضرورة.
+
+🔴 (1) مصدر الحقيقة للمخالفة – Violation Engine
+✨ أضف هذا القسم في أعلى Google Apps Script
+/***************************************
+ * VIOLATION ENGINE - SOURCE OF TRUTH
+ ***************************************/
+function isRealViolation(row) {
+  const isViolationFlag = String(row.Is_Violation || '').toLowerCase();
+  const status = String(row.Status || '').toLowerCase();
+  const notes = String(row.Negative_Notes || '');
+
+  if (isViolationFlag === 'yes' || isViolationFlag === 'true') return true;
+  if (status.includes('خلل') || status.includes('مخالفة')) return true;
+  if (notes.includes('❌') || notes.includes('نقاط الخلل')) return true;
+
+  return false;
+}
+
+🔴 (2) حالة ذكية للمخالفة (Open / FollowUp / Closed / Archived)
+✨ أضف هذه الدالة في GAS
+function getViolationState(row) {
+  const rowIndex = row._rowIndex;
+  const isClosed =
+    String(row.Closed_YN || '').toLowerCase() === 'yes' ||
+    String(row.Is_Resolved || '').toLowerCase() === 'yes';
+
+  const isArchived =
+    String(row.Is_Archived || '').toLowerCase() === 'yes';
+
+  let hasFollowUps = false;
+  const followUpsSheet = getSheet('Rounds_FollowUps');
+
+  if (followUpsSheet && rowIndex) {
+    const data = followUpsSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (Number(data[i][1]) === Number(rowIndex)) {
+        hasFollowUps = true;
+        break;
+      }
+    }
+  }
+
+  if (isArchived) return 'archived';
+  if (isClosed) return 'closed';
+  if (hasFollowUps) return 'followup';
+  return 'open';
+}
+
+🔴 (3) إصلاح getViolations() جذريًا
+❌ احذف الفلترة القديمة بالكامل
+✅ استخدم هذا الإصدار النظيف:
+function getViolations() {
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
+
+  const violations = roundsLog
+    .filter(r => isRealViolation(r))
+    .map(r => {
+      const area = r.Area || r.Round_Name || 'غير محدد';
+
+      return {
+        _rowIndex: r._rowIndex,
+        Date: formatDate(r.Date),
+        Time: formatTime(r.Actual_Time),
+        Area: area,
+        Round_Name: r.Round_Name || area,
+        Responsible_Role: r.Responsible_Role || '',
+        Execution_Responsible: r.Execution_Responsible || '',
+        Negative_Notes: r.Negative_Notes || '',
+        Resolved_By: r.Resolved_By || '',
+        Resolved_Date: formatDate(r.Resolved_Date),
+        Is_Archived: r.Is_Archived || 'No',
+        State: getViolationState(r)
+      };
+    });
+
+  return {
+    violations,
+    total: violations.length,
+    open: violations.filter(v => v.State === 'open').length,
+    followup: violations.filter(v => v.State === 'followup').length,
+    closed: violations.filter(v => v.State === 'closed').length,
+    archived: violations.filter(v => v.State === 'archived').length
+  };
+}
+
+
+📌 الآن كل مخالفة = حقيقية + حالة واحدة فقط.
+
+🔴 (4) فلترة Front-End نظيفة (بدون كاش ولا تعقيد)
+✨ عدل filterViolations() في JavaScript:
+function filterViolations(state) {
+  CURRENT_VIOLATION_FILTER = state;
+
+  document.querySelectorAll('.violation-filter-btn')
+    .forEach(b => b.classList.remove('active'));
+
+  document.querySelector(`[data-filter="${state}"]`)?.classList.add('active');
+
+  let filtered = VIOLATIONS_DATA.violations;
+
+  if (state !== 'all') {
+    filtered = filtered.filter(v => v.State === state);
+  }
+
+  renderViolations({
+    ...VIOLATIONS_DATA,
+    violations: filtered
+  });
+}
+
+
+📌 لا كاش
+📌 لا استعلامات إضافية
+📌 الحالة من السيرفر مباشرة
+
+🔴 (5) إصلاح جذري لمشكلة التاريخ واختفاء السجلات
+✨ استبدل getHistory() بالكامل بهذا:
+function getHistory(params) {
+  let rows = sheetToObjects(getSheet('Rounds_Log'));
+
+  if (params.startDate || params.endDate) {
+    const start = params.startDate ? new Date(params.startDate) : null;
+    const end = params.endDate ? new Date(params.endDate + 'T23:59:59') : null;
+
+    rows = rows.filter(r => {
+      const d = parseLogDate(r.Date);
+      if (!d) return false;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    });
+
+  } else if (params.days) {
+    const cutoff = getSaudiDate();
+    cutoff.setDate(cutoff.getDate() - params.days);
+    rows = rows.filter(r => {
+      const d = parseLogDate(r.Date);
+      return d && d >= cutoff;
+    });
+  }
+
+  if (params.staff) {
+    rows = rows.filter(r =>
+      r.Responsible_Role === params.staff ||
+      r.Execution_Responsible === params.staff
+    );
+  }
+
+  rows.sort((a, b) => parseLogDate(b.Date) - parseLogDate(a.Date));
+
+  return {
+    entries: rows.map(r => ({
+      _rowIndex: r._rowIndex,
+      Date: formatDate(r.Date),
+      Time: formatTime(r.Actual_Time),
+      Area: r.Area || r.Round_Name,
+      Responsible_Role: r.Responsible_Role,
+      Execution_Responsible: r.Execution_Responsible,
+      Status: r.Status,
+      Negative_Notes: r.Negative_Notes,
+      State: getViolationState(r)
+    }))
+  };
+}
+
+
+📌 لا تضارب
+📌 لا فقد بيانات
+📌 نفس الرقم في كل التبويبات
+
+🧼 (6) Migration ذكية لتنظيف البيانات القديمة (اختياري لكن قوي)
+✨ نفّذ مرة واحدة فقط
+function migrateOldViolations() {
+  const sheet = getSheet('Rounds_Log');
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const colIsViolation = headers.indexOf('Is_Violation') + 1;
+
+  let fixed = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = {};
+    headers.forEach((h, idx) => row[h] = data[i][idx]);
+
+    if (isRealViolation(row) && !data[i][colIsViolation - 1]) {
+      sheet.getRange(i + 1, colIsViolation).setValue('Yes');
+      fixed++;
+    }
+  }
+
+  return { fixed };
+}
+
+✅ النتيجة بعد v2
+
+✔️ كل مخالفة مرصودة = ظاهرة
+✔️ حالة واحدة واضحة لا تتداخل
+✔️ فلترة دقيقة
+✔️ التاريخ ثابت
+✔️ صالح للتقارير الرسمية (سباهي / جودة / إدارة)
