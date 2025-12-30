@@ -2135,6 +2135,20 @@ function doPost(e) {
   }
   
   function getStaff() {
+    // جلب الموظفين من Staff_Passcodes أولاً
+    const passcodesSheet = getSheet('Staff_Passcodes');
+    if (passcodesSheet) {
+      const passcodeData = sheetToObjects(passcodesSheet);
+      const staffFromPasscodes = passcodeData
+        .map(row => row.Staff_Name || row.Name || '')
+        .filter(name => name.trim());
+      
+      if (staffFromPasscodes.length > 0) {
+        return { staff: staffFromPasscodes };
+      }
+    }
+    
+    // Fallback: جلب من MASTER_TASKS
     const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
     const staffSet = new Set();
     masterTasks.forEach(t => {

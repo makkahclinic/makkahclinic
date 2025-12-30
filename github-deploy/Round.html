@@ -1527,25 +1527,31 @@
       clearPin();
       document.getElementById('passcodeError').style.display = 'none';
       
-      // جلب قائمة الموظفين من Staff_Passcodes
+      // جلب قائمة الموظفين من Staff_Passcodes أو استخدام STAFF_LIST كـ fallback
+      let staffNames = [];
       try {
         const data = await callApi('getStaffPasscodes');
-        STAFF_PASSCODES = data.staff || [];
+        if (data.staff && data.staff.length > 0) {
+          staffNames = data.staff.map(s => s.name || s.Staff_Name || s.Name || '').filter(Boolean);
+        }
       } catch (err) {
-        console.error('Error loading staff passcodes:', err);
+        console.log('getStaffPasscodes not available, using STAFF_LIST fallback');
+      }
+      
+      // Fallback to STAFF_LIST if getStaffPasscodes failed or returned empty
+      if (staffNames.length === 0 && STAFF_LIST && STAFF_LIST.length > 0) {
+        staffNames = STAFF_LIST.map(s => {
+          if (typeof s === 'string') return s;
+          return s.Staff_Name || s.Name || s.name || '';
+        }).filter(Boolean);
       }
       
       // ملء قائمة الموظفين
       const staffSelect = document.getElementById('resolveStaffSelect');
       staffSelect.innerHTML = '<option value="">-- اختر اسمك --</option>';
-      if (STAFF_PASSCODES && STAFF_PASSCODES.length > 0) {
-        STAFF_PASSCODES.forEach(staff => {
-          const name = staff.name || staff.Staff_Name || staff.Name || '';
-          if (name) {
-            staffSelect.innerHTML += `<option value="${name}">${name}</option>`;
-          }
-        });
-      }
+      staffNames.forEach(name => {
+        staffSelect.innerHTML += `<option value="${name}">${name}</option>`;
+      });
       
       setTimeout(() => {
         const modal = new bootstrap.Modal(document.getElementById('passcodeModal'));
