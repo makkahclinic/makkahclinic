@@ -782,6 +782,10 @@ function getMetrics(days) {
   let delayed = 0;
   let violations = 0;
   
+  const byDate = {};
+  const byStaff = {};
+  const byArea = {};
+  
   filtered.forEach(r => {
     const status = String(r.Status || '').toLowerCase().trim();
     const notes = String(r.Negative_Notes || '').toLowerCase();
@@ -791,14 +795,47 @@ function getMetrics(days) {
         VIOLATION_STATUS.some(s => status.includes(s.toLowerCase())) ||
         notes.includes('نقاط الخلل') || notes.includes('❌');
     
+    const isDelayed = DELAYED_STATUS.some(s => status.includes(s.toLowerCase()));
+    const isCompleted = !isViolation && !isDelayed && COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()));
+    
     if (isViolation) {
       violations++;
-    } else if (COMPLETED_STATUS.some(s => status.includes(s.toLowerCase()))) {
+    } else if (isCompleted) {
       completed++;
-    } else if (DELAYED_STATUS.some(s => status.includes(s.toLowerCase()))) {
+    } else if (isDelayed) {
       delayed++;
     } else {
       completed++;
+    }
+    
+    // تجميع حسب التاريخ
+    const dateStr = formatDate(r.Date);
+    if (dateStr) {
+      if (!byDate[dateStr]) byDate[dateStr] = { completed: 0, delayed: 0, violations: 0, total: 0 };
+      byDate[dateStr].total++;
+      if (isViolation) byDate[dateStr].violations++;
+      else if (isDelayed) byDate[dateStr].delayed++;
+      else byDate[dateStr].completed++;
+    }
+    
+    // تجميع حسب الموظف
+    const staff = r.Responsible_Role || r.Execution_Responsible || '';
+    if (staff) {
+      if (!byStaff[staff]) byStaff[staff] = { completed: 0, delayed: 0, violations: 0, total: 0 };
+      byStaff[staff].total++;
+      if (isViolation) byStaff[staff].violations++;
+      else if (isDelayed) byStaff[staff].delayed++;
+      else byStaff[staff].completed++;
+    }
+    
+    // تجميع حسب المنطقة
+    const area = r.Area || r.Round_Name || '';
+    if (area) {
+      if (!byArea[area]) byArea[area] = { completed: 0, delayed: 0, violations: 0, total: 0 };
+      byArea[area].total++;
+      if (isViolation) byArea[area].violations++;
+      else if (isDelayed) byArea[area].delayed++;
+      else byArea[area].completed++;
     }
   });
   
@@ -809,7 +846,11 @@ function getMetrics(days) {
     completed,
     delayed,
     violations,
-    complianceRate
+    complianceRate,
+    compliance: complianceRate,
+    byDate,
+    byStaff,
+    byArea
   };
 }
 
