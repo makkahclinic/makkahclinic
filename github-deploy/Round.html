@@ -3124,7 +3124,13 @@
       
       showSpinner(true);
       try {
-        const data = await callApi('getHistory', { startDate, endDate, staff });
+        // تمرير status للـ API للفلترة من السيرفر (أكثر دقة)
+        const apiParams = { startDate, endDate, staff };
+        if (statusFilter && statusFilter !== 'all') {
+          apiParams.status = statusFilter;
+        }
+        
+        const data = await callApi('getHistory', apiParams);
         
         const tbody = document.getElementById('historyTableBody');
         if (!data.entries || !data.entries.length) {
@@ -3134,22 +3140,6 @@
         }
         
         let entries = data.entries;
-        
-        // فلترة حسب الحالة
-        if (statusFilter === 'closed') {
-          entries = entries.filter(e => e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes');
-        } else if (statusFilter === 'open') {
-          entries = entries.filter(e => {
-            const isClosed = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
-            const hasFollowUp = e.hasFollowUp || false;
-            return !isClosed && !hasFollowUp;
-          });
-        } else if (statusFilter === 'followup') {
-          entries = entries.filter(e => {
-            const isClosed = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
-            return !isClosed; // عرض غير المغلقة للمتابعة
-          });
-        }
         
         HISTORY_DATA = entries;
         
@@ -3162,14 +3152,29 @@
           const statusClass = e.Status === 'متأخر' ? 'bg-warning text-dark' : 
                              e.Status === 'خلل' ? 'bg-danger' :
                              e.Status === 'في الوقت' ? 'bg-success' : 'bg-secondary';
-          const isResolved = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
-          const resolvedBadge = isResolved ? 
-            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>مغلقة</span>' : 
-            '<span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>مفتوحة</span>';
+          
+          // استخدام State القادمة من السيرفر لتحديد حالة المعالجة
+          const state = e.State || 'open';
+          let resolvedBadge = '';
+          if (state === 'archived') {
+            resolvedBadge = '<span class="badge bg-secondary"><i class="fas fa-archive me-1"></i>مؤرشفة</span>';
+          } else if (state === 'closed') {
+            resolvedBadge = '<span class="badge bg-success"><i class="fas fa-check me-1"></i>مغلقة</span>';
+          } else if (state === 'followup') {
+            resolvedBadge = '<span class="badge bg-primary"><i class="fas fa-comments me-1"></i>متابعة</span>';
+          } else {
+            resolvedBadge = '<span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>مفتوحة</span>';
+          }
           
           const rowIndex = e._rowIndex || 0;
           const hasViolation = e.Is_Violation === 'Yes' || e.Is_Violation === 'true' || e.Status === 'خلل';
           const rowStyle = hasViolation ? 'cursor: pointer; background: linear-gradient(135deg, #fff5f5, #ffe5e5);' : 'cursor: pointer;';
+          
+          // استخدام followUpsCount القادم من السيرفر مباشرة
+          const followUpCount = e.followUpsCount || 0;
+          const followUpBadge = followUpCount > 0 
+            ? `<span class="badge bg-primary"><i class="fas fa-comments me-1"></i>${followUpCount}</span>`
+            : '<span class="badge bg-light text-muted">-</span>';
           
           return `
             <tr onclick="showHistoryDetails(${rowIndex}, ${idx})" style="${rowStyle}" title="انقر لعرض التفاصيل">
@@ -3180,18 +3185,11 @@
               <td class="small text-center">${e.Execution_Responsible || '-'}</td>
               <td class="text-center"><span class="badge ${statusClass}">${e.Status || 'تم'}</span></td>
               <td class="text-center">${resolvedBadge}</td>
-              <td class="text-center">
-                <span class="badge bg-info" id="followupCount-${rowIndex}">
-                  <i class="fas fa-spinner fa-spin"></i>
-                </span>
-              </td>
+              <td class="text-center">${followUpBadge}</td>
               <td class="small">${(e.Negative_Notes || '-').substring(0, 30)}${(e.Negative_Notes || '').length > 30 ? '...' : ''}</td>
             </tr>
           `;
         }).join('');
-        
-        // تحميل عدد المتابعات لكل صف
-        loadFollowUpCounts(entries);
         
       } catch (err) {
         console.error('History error:', err);

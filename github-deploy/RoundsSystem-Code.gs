@@ -850,6 +850,9 @@ function resolveViolation(params) {
 function getHistory(params) {
   const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   
+  // بناء فهرس المتابعات لتحديد حالة المخالفات
+  const followUpsIndex = buildFollowUpsIndex();
+  
   let filtered = roundsLog;
   
   if (params.days && params.days > 0) {
@@ -885,6 +888,17 @@ function getHistory(params) {
     filtered = filtered.filter(r => r.TaskID === params.round);
   }
   
+  // فلترة حسب حالة المتابعة (status filter)
+  // تطبق فقط على المخالفات الحقيقية لضمان التطابق مع تبويب المخالفات
+  if (params.status) {
+    filtered = filtered.filter(r => {
+      // فقط المخالفات الحقيقية تُفلتر حسب الحالة
+      if (!isRealViolation(r)) return false;
+      const state = getViolationState(r, followUpsIndex);
+      return state === params.status;
+    });
+  }
+  
   filtered.sort((a, b) => {
     const dateA = parseLogDate(a.Date);
     const dateB = parseLogDate(b.Date);
@@ -911,7 +925,13 @@ function getHistory(params) {
       if (delayMin === 0) delayMin = 15;
     }
     
+    // تحديد حالة المخالفة (State) باستخدام نفس المنطق
+    const violationState = getViolationState(r, followUpsIndex);
+    const rowIndex = Number(r._rowIndex);
+    const followUpsCount = (followUpsIndex[rowIndex] || []).length;
+    
     return {
+      _rowIndex: r._rowIndex,
       Date: formatDate(r.Date),
       Actual_Time: formatTime(r.Actual_Time),
       Time: formatTime(r.Actual_Time),
@@ -931,7 +951,10 @@ function getHistory(params) {
       Closed_YN: r.Closed_YN,
       Is_Resolved: r.Closed_YN,
       Resolved_By: r.Resolved_By,
-      Resolved_Date: r.Resolved_Date
+      Resolved_Date: r.Resolved_Date,
+      State: violationState,
+      hasFollowUps: followUpsCount > 0,
+      followUpsCount: followUpsCount
     };
   });
   
