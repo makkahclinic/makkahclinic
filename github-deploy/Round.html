@@ -837,7 +837,30 @@
         <h6 class="fw-bold mb-3"><i class="fas fa-redo text-danger me-2"></i>مخالفات متكررة (تحتاج تدخل)</h6>
         <div id="repeatedViolationsList" class="row g-3 mb-4"></div>
         
-        <h6 class="fw-bold mb-3"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
+        <!-- فلتر المخالفات -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold mb-0"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
+          <div class="btn-group btn-group-sm" role="group" id="violationFilterGroup">
+            <button type="button" class="btn btn-outline-secondary violation-filter-btn active" data-filter="all" onclick="filterViolations('all')">
+              <i class="fas fa-list me-1"></i>الكل
+            </button>
+            <button type="button" class="btn btn-outline-danger violation-filter-btn" data-filter="open" onclick="filterViolations('open')">
+              <i class="fas fa-exclamation-circle me-1"></i>لم تعالج
+            </button>
+            <button type="button" class="btn btn-outline-primary violation-filter-btn" data-filter="followup" onclick="filterViolations('followup')">
+              <i class="fas fa-comments me-1"></i>تحت المتابعة
+            </button>
+            <button type="button" class="btn btn-outline-success violation-filter-btn" data-filter="closed" onclick="filterViolations('closed')">
+              <i class="fas fa-check-circle me-1"></i>منتهية
+            </button>
+            <button type="button" class="btn btn-outline-secondary violation-filter-btn" data-filter="archived" onclick="filterViolations('archived')">
+              <i class="fas fa-archive me-1"></i>مؤرشفة
+            </button>
+          </div>
+        </div>
+        <div id="violationFilterInfo" class="alert alert-info py-2 mb-3" style="display: none;">
+          <small><i class="fas fa-info-circle me-1"></i><span id="violationFilterText"></span></small>
+        </div>
         <div id="allViolationsList" class="row g-3"></div>
       </div>
 
@@ -2392,6 +2415,108 @@
 
     let violationTrendChart = null;
     let FILTERED_VIOLATIONS = [];
+    let CURRENT_VIOLATION_FILTER = 'all';
+    let VIOLATIONS_FOLLOWUP_CACHE = {};
+    
+    async function filterViolations(filter) {
+      CURRENT_VIOLATION_FILTER = filter;
+      
+      // تحديث الأزرار
+      document.querySelectorAll('.violation-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.filter === filter) btn.classList.add('active');
+      });
+      
+      const filterInfo = document.getElementById('violationFilterInfo');
+      const filterText = document.getElementById('violationFilterText');
+      
+      if (!VIOLATIONS_DATA || !VIOLATIONS_DATA.violations) {
+        filterInfo.style.display = 'none';
+        return;
+      }
+      
+      let filtered = [...VIOLATIONS_DATA.violations];
+      let infoMessage = '';
+      
+      // جلب معلومات المتابعات لكل مخالفة (مرة واحدة)
+      if (Object.keys(VIOLATIONS_FOLLOWUP_CACHE).length === 0) {
+        await loadViolationFollowupCounts();
+      }
+      
+      switch (filter) {
+        case 'open':
+          // المخالفات التي لم تعالج ولا توجد لها متابعات
+          filtered = VIOLATIONS_DATA.violations.filter(v => {
+            const isResolved = String(v.Is_Resolved || v.Closed_YN || '').toLowerCase() === 'yes';
+            const hasFollowUp = VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] > 0;
+            return !isResolved && !hasFollowUp;
+          });
+          infoMessage = `عرض ${filtered.length} مخالفة لم تعالج بعد ولا توجد لها متابعات`;
+          break;
+          
+        case 'followup':
+          // المخالفات التي لها متابعات ولكن غير مغلقة
+          filtered = VIOLATIONS_DATA.violations.filter(v => {
+            const isResolved = String(v.Is_Resolved || v.Closed_YN || '').toLowerCase() === 'yes';
+            const hasFollowUp = VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] > 0;
+            return !isResolved && hasFollowUp;
+          });
+          infoMessage = `عرض ${filtered.length} مخالفة تحت المتابعة`;
+          break;
+          
+        case 'closed':
+          // المخالفات المغلقة (غير مؤرشفة)
+          filtered = VIOLATIONS_DATA.violations.filter(v => {
+            const isResolved = String(v.Is_Resolved || v.Closed_YN || '').toLowerCase() === 'yes';
+            const isArchived = String(v.Is_Archived || '').toLowerCase() === 'yes';
+            return isResolved && !isArchived;
+          });
+          infoMessage = `عرض ${filtered.length} مخالفة منتهية (تمت معالجتها)`;
+          break;
+          
+        case 'archived':
+          // المخالفات المؤرشفة
+          filtered = VIOLATIONS_DATA.violations.filter(v => {
+            const isArchived = String(v.Is_Archived || '').toLowerCase() === 'yes';
+            return isArchived;
+          });
+          infoMessage = `عرض ${filtered.length} مخالفة مؤرشفة`;
+          break;
+          
+        default:
+          infoMessage = '';
+      }
+      
+      if (infoMessage) {
+        filterInfo.style.display = 'block';
+        filterText.textContent = infoMessage;
+      } else {
+        filterInfo.style.display = 'none';
+      }
+      
+      FILTERED_VIOLATIONS = filtered;
+      
+      // إعادة عرض المخالفات بالفلتر الجديد
+      const filteredData = {
+        ...VIOLATIONS_DATA,
+        violations: filtered
+      };
+      renderViolations(filteredData);
+    }
+    
+    async function loadViolationFollowupCounts() {
+      if (!VIOLATIONS_DATA || !VIOLATIONS_DATA.violations) return;
+      
+      for (const v of VIOLATIONS_DATA.violations) {
+        if (!v._rowIndex) continue;
+        try {
+          const res = await callApi('getFollowUpsByRound', { rowIndex: v._rowIndex });
+          VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] = (res.followUps || []).length;
+        } catch (err) {
+          VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] = 0;
+        }
+      }
+    }
     
     function renderViolations(filteredData = null) {
       const data = filteredData || VIOLATIONS_DATA;
