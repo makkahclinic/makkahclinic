@@ -1086,17 +1086,38 @@ function logRound(params) {
 
 function verifyPasscode(staffName, passcode) {
   const sheet = getSheet('Staff_Passcodes');
-  if (!sheet) return { verified: false, error: 'Staff sheet not found' };
+  if (!sheet) return { valid: false, error: 'جدول الموظفين غير موجود' };
   
   const data = sheet.getDataRange().getValues();
+  const headers = data[0];
   
+  // البحث عن أعمدة الاسم والباسكود
+  const nameCol = headers.indexOf('Staff_Name');
+  const passcodeCol = headers.indexOf('Passcode');
+  
+  // إذا لم يتم تحديد اسم الموظف، نبحث بالباسكود فقط
+  if (!staffName && passcode) {
+    for (let i = 1; i < data.length; i++) {
+      const rowPasscode = String(data[i][passcodeCol >= 0 ? passcodeCol : 1] || '').trim();
+      if (rowPasscode === String(passcode).trim()) {
+        const foundName = data[i][nameCol >= 0 ? nameCol : 0] || 'موظف';
+        return { valid: true, verified: true, staffName: foundName };
+      }
+    }
+    return { valid: false, verified: false, error: 'الرمز السري غير صحيح' };
+  }
+  
+  // البحث باسم الموظف والباسكود معاً
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === staffName && String(data[i][1]) === String(passcode)) {
-      return { verified: true, staffName: staffName };
+    const rowName = String(data[i][nameCol >= 0 ? nameCol : 0] || '').trim();
+    const rowPasscode = String(data[i][passcodeCol >= 0 ? passcodeCol : 1] || '').trim();
+    
+    if (rowName === String(staffName).trim() && rowPasscode === String(passcode).trim()) {
+      return { valid: true, verified: true, staffName: rowName };
     }
   }
   
-  return { verified: false, error: 'رمز الدخول غير صحيح' };
+  return { valid: false, verified: false, error: 'رمز الدخول غير صحيح' };
 }
 
 function getChecklist(taskId) {
