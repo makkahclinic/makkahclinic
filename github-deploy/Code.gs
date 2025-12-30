@@ -610,6 +610,9 @@ function doPost(e) {
         case 'getStaff':
           result = getStaff();
           break;
+        case 'getStaffPasscodes':
+          result = getStaffPasscodes();
+          break;
         case 'getStaffSummary':
           result = getStaffSummary();
           break;
@@ -2138,6 +2141,19 @@ function doPost(e) {
       if (t.Assigned_To) staffSet.add(t.Assigned_To);
     });
     return { staff: Array.from(staffSet) };
+  }
+  
+  function getStaffPasscodes() {
+    const sheet = getSheet('Staff_Passcodes');
+    if (!sheet) return { staff: [] };
+    
+    const data = sheetToObjects(sheet);
+    const staffList = data.map(row => ({
+      name: row.Staff_Name || row.Name || '',
+      role: row.Role || ''
+    })).filter(s => s.name);
+    
+    return { staff: staffList };
   }
   
   function getStaffSummary() {

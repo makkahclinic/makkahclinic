@@ -1308,6 +1308,7 @@
     let MASTER_TASKS = [];
     let ROUNDS_LOG = [];
     let STAFF_LIST = [];
+    let STAFF_PASSCODES = [];
     let DELAYED_LIST = [];
     let VIOLATIONS_DATA = { violations: [], repeated: [] };
 
@@ -1521,17 +1522,25 @@
       modal.show();
     }
     
-    function showPasscodeModal() {
+    async function showPasscodeModal() {
       bootstrap.Modal.getInstance(document.getElementById('resolveConfirmModal')).hide();
       clearPin();
       document.getElementById('passcodeError').style.display = 'none';
       
+      // جلب قائمة الموظفين من Staff_Passcodes
+      try {
+        const data = await callApi('getStaffPasscodes');
+        STAFF_PASSCODES = data.staff || [];
+      } catch (err) {
+        console.error('Error loading staff passcodes:', err);
+      }
+      
       // ملء قائمة الموظفين
       const staffSelect = document.getElementById('resolveStaffSelect');
       staffSelect.innerHTML = '<option value="">-- اختر اسمك --</option>';
-      if (STAFF_LIST && STAFF_LIST.length > 0) {
-        STAFF_LIST.forEach(staff => {
-          const name = staff.Staff_Name || staff.Name || staff;
+      if (STAFF_PASSCODES && STAFF_PASSCODES.length > 0) {
+        STAFF_PASSCODES.forEach(staff => {
+          const name = staff.name || staff.Staff_Name || staff.Name || '';
           if (name) {
             staffSelect.innerHTML += `<option value="${name}">${name}</option>`;
           }
