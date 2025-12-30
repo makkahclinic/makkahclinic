@@ -2239,6 +2239,11 @@ function doPost(e) {
         Status: r.Status || '',
         Negative_Notes: r.Negative_Notes || r.Notes || '',
         Is_Resolved: String(r.Closed_YN || r.Is_Resolved || 'no').toLowerCase(),
+        Resolved_By: r.Resolved_By || '',
+        Resolved_Date: r.Closed_Date || '',
+        FollowUp_By: r.FollowUp_By || '',
+        FollowUp_Date: r.FollowUp_Date || '',
+        FollowUp_Notes: r.FollowUp_Notes || '',
         failedItems: failedItems
       };
     });
