@@ -2241,9 +2241,11 @@ function doPost(e) {
         Is_Resolved: String(r.Closed_YN || r.Is_Resolved || 'no').toLowerCase(),
         Resolved_By: r.Resolved_By || '',
         Resolved_Date: r.Closed_Date || '',
+        FollowUp_Status: r.FollowUp_Status || '',
         FollowUp_By: r.FollowUp_By || '',
-        FollowUp_Date: r.FollowUp_Date || '',
         FollowUp_Notes: r.FollowUp_Notes || '',
+        FollowUp_At: r.FollowUp_At || '',
+        Last_Action: r.Last_Action || '',
         failedItems: failedItems
       };
     });
@@ -2679,61 +2681,69 @@ function doPost(e) {
   /**
    * إضافة متابعة للمخالفة (بدون إغلاقها)
    * تسجل اسم المتابع وتاريخ المتابعة وملاحظاته
+   * الأعمدة: FollowUp_Status, FollowUp_By, FollowUp_Notes, FollowUp_At, Last_Action
    */
   function addFollowUp(params) {
     const sheet = getSheet('Rounds_Log');
     if (!sheet) return { success: false, error: 'Sheet not found' };
     
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    
     const rowIndex = params.rowIndex;
     if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row' };
     
-    // البحث عن أعمدة المتابعة (نضيفها إذا غير موجودة)
-    let followUpByCol = headers.indexOf('FollowUp_By');
-    let followUpDateCol = headers.indexOf('FollowUp_Date');
-    let followUpNotesCol = headers.indexOf('FollowUp_Notes');
+    // جلب الـ headers الحالية
+    let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     
-    // إذا الأعمدة غير موجودة، نضيفها
-    const lastCol = headers.length;
-    if (followUpByCol === -1) {
-      followUpByCol = lastCol;
-      sheet.getRange(1, lastCol + 1).setValue('FollowUp_By');
-    }
-    if (followUpDateCol === -1) {
-      followUpDateCol = lastCol + 1;
-      sheet.getRange(1, lastCol + 2).setValue('FollowUp_Date');
-    }
-    if (followUpNotesCol === -1) {
-      followUpNotesCol = lastCol + 2;
-      sheet.getRange(1, lastCol + 3).setValue('FollowUp_Notes');
-    }
+    // تعريف الأعمدة المطلوبة
+    const requiredColumns = ['FollowUp_Status', 'FollowUp_By', 'FollowUp_Notes', 'FollowUp_At', 'Last_Action'];
     
-    // إعادة جلب الـ headers بعد التحديث
-    const newHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    followUpByCol = newHeaders.indexOf('FollowUp_By');
-    followUpDateCol = newHeaders.indexOf('FollowUp_Date');
-    followUpNotesCol = newHeaders.indexOf('FollowUp_Notes');
+    // إنشاء الأعمدة إذا غير موجودة
+    let lastCol = headers.length;
+    requiredColumns.forEach(colName => {
+      if (headers.indexOf(colName) === -1) {
+        lastCol++;
+        sheet.getRange(1, lastCol).setValue(colName);
+      }
+    });
     
+    // إعادة جلب الـ headers بعد الإضافة
+    headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    // تحديد مواقع الأعمدة
+    const statusCol = headers.indexOf('FollowUp_Status') + 1;
+    const byCol = headers.indexOf('FollowUp_By') + 1;
+    const notesCol = headers.indexOf('FollowUp_Notes') + 1;
+    const atCol = headers.indexOf('FollowUp_At') + 1;
+    const actionCol = headers.indexOf('Last_Action') + 1;
+    
+    // تنسيق التاريخ والوقت
     const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const dateTimeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     
-    // الحصول على المتابعات السابقة وإضافة الجديدة
-    const existingFollower = sheet.getRange(rowIndex, followUpByCol + 1).getValue() || '';
-    const existingDate = sheet.getRange(rowIndex, followUpDateCol + 1).getValue() || '';
-    const existingNotes = sheet.getRange(rowIndex, followUpNotesCol + 1).getValue() || '';
+    // الحصول على المتابعات السابقة
+    const existingBy = sheet.getRange(rowIndex, byCol).getValue() || '';
+    const existingAt = sheet.getRange(rowIndex, atCol).getValue() || '';
+    const existingNotes = sheet.getRange(rowIndex, notesCol).getValue() || '';
     
     // إضافة المتابعة الجديدة (مع فاصل إذا فيه متابعات سابقة)
-    const newFollower = existingFollower ? existingFollower + ' | ' + params.followerName : params.followerName;
-    const newDate = existingDate ? existingDate + ' | ' + dateStr : dateStr;
+    const newBy = existingBy ? existingBy + ' | ' + params.followerName : params.followerName;
+    const newAt = existingAt ? existingAt + ' | ' + dateTimeStr : dateTimeStr;
     const newNotes = params.followUpNotes ? (existingNotes ? existingNotes + ' | ' + params.followUpNotes : params.followUpNotes) : existingNotes;
     
-    sheet.getRange(rowIndex, followUpByCol + 1).setValue(newFollower);
-    sheet.getRange(rowIndex, followUpDateCol + 1).setValue(newDate);
-    sheet.getRange(rowIndex, followUpNotesCol + 1).setValue(newNotes);
+    // تحديث الخلايا
+    sheet.getRange(rowIndex, statusCol).setValue('تمت متابعة');
+    sheet.getRange(rowIndex, byCol).setValue(newBy);
+    sheet.getRange(rowIndex, notesCol).setValue(newNotes);
+    sheet.getRange(rowIndex, atCol).setValue(newAt);
+    sheet.getRange(rowIndex, actionCol).setValue('Follow-Up');
     
-    return { success: true, ok: true, message: 'تم تسجيل المتابعة بنجاح' };
+    return { 
+      success: true, 
+      ok: true, 
+      message: 'تم تسجيل المتابعة بنجاح',
+      followerName: params.followerName,
+      followedAt: dateTimeStr,
+      notes: params.followUpNotes || ''
+    };
   }
   
   function logRound(payload) {
