@@ -838,9 +838,16 @@
         <div id="repeatedViolationsList" class="row g-3 mb-4"></div>
         
         <!-- فلتر المخالفات -->
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <h6 class="fw-bold mb-0"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
-          <div class="btn-group btn-group-sm" role="group" id="violationFilterGroup">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-secondary" onclick="runAutoArchive()" title="أرشفة المخالفات المغلقة منذ أكثر من أسبوع">
+              <i class="fas fa-archive me-1"></i>أرشفة تلقائية
+            </button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <div class="btn-group btn-group-sm flex-wrap" role="group" id="violationFilterGroup">
             <button type="button" class="btn btn-outline-secondary violation-filter-btn active" data-filter="all" onclick="filterViolations('all')">
               <i class="fas fa-list me-1"></i>الكل
             </button>
@@ -1401,6 +1408,77 @@
           renderViolations();
         } else {
           showErrorToast(result.message || result.error || 'حدث خطأ أثناء حفظ المتابعة');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
+    }
+    
+    // === Archive Violation Functions ===
+    async function archiveViolation(rowIndex) {
+      if (!confirm('هل تريد أرشفة هذه المخالفة؟\nستبقى في السجل ولكن لن تظهر إلا عند اختيار فلتر "المؤرشفة"')) {
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('archiveViolation', { rowIndex: rowIndex });
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          showSuccessToast('تمت أرشفة المخالفة بنجاح');
+          VIOLATIONS_FOLLOWUP_CACHE = {}; // Clear cache
+          await loadViolations();
+        } else {
+          showErrorToast(result.message || result.error || 'حدث خطأ أثناء الأرشفة');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
+    }
+    
+    async function unarchiveViolation(rowIndex) {
+      if (!confirm('هل تريد إلغاء أرشفة هذه المخالفة؟\nستظهر مجدداً في قائمة المخالفات المنتهية')) {
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('unarchiveViolation', { rowIndex: rowIndex });
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          showSuccessToast('تم إلغاء الأرشفة بنجاح');
+          VIOLATIONS_FOLLOWUP_CACHE = {}; // Clear cache
+          await loadViolations();
+        } else {
+          showErrorToast(result.message || result.error || 'حدث خطأ');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
+    }
+    
+    // === Run Auto-Archive (للاستخدام اليدوي) ===
+    async function runAutoArchive() {
+      if (!confirm('هل تريد تشغيل الأرشفة التلقائية الآن؟\nسيتم أرشفة جميع المخالفات المغلقة التي مضى عليها أكثر من أسبوع')) {
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('archiveOldClosed');
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          showSuccessToast(result.message || `تمت أرشفة ${result.archivedCount || 0} مخالفة`);
+          VIOLATIONS_FOLLOWUP_CACHE = {};
+          await loadViolations();
+        } else {
+          showErrorToast(result.error || 'حدث خطأ');
         }
       } catch (err) {
         showSpinner(false);
@@ -2642,6 +2720,7 @@
           const notes = formatIssueText(v.Negative_Notes || v.NegativeNotes);
           const areaName = v.Area || v.Round_Name || 'جولة';
           const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
+          const isArchived = String(v.Is_Archived || '').toLowerCase() === 'yes';
           const repeatKey = `${v.Area || v.Round_Name}_${assignedTo}`;
           const repeatCount = repeatCounts[repeatKey] || 1;
           const dateStr = v.Date || '-';
@@ -2655,11 +2734,12 @@
           return `
             <div class="col-md-6 mb-3">
               <div class="card h-100 shadow" style="border: 2px solid ${isResolved ? '#198754' : '#dc3545'}; border-radius: 14px; overflow: hidden;">
-                <div class="card-header py-2" style="background: ${isResolved ? 'linear-gradient(135deg, #198754, #157347)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
+                <div class="card-header py-2" style="background: ${isArchived ? 'linear-gradient(135deg, #6b7280, #4b5563)' : isResolved ? 'linear-gradient(135deg, #198754, #157347)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="text-white">
-                      <i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+                      <i class="fas ${isArchived ? 'fa-archive' : isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
                       <span class="fw-bold">${areaName}</span>
+                      ${isArchived ? '<span class="badge bg-secondary ms-2">مؤرشفة</span>' : ''}
                     </div>
                     <div class="d-flex align-items-center gap-2">
                       ${repeatCount > 1 ? `<span class="badge bg-warning text-dark">🔁 ${repeatCount}</span>` : ''}
@@ -2708,11 +2788,20 @@
                           <i class="fas fa-check me-1"></i>معالجة
                         </button>
                       </div>
+                    ` : isArchived ? `
+                      <button class="btn btn-sm btn-outline-secondary px-3 py-1" onclick="unarchiveViolation(${rowIdx})">
+                        <i class="fas fa-undo me-1"></i>إلغاء الأرشفة
+                      </button>
                     ` : `
-                      <small class="text-muted">
-                        ${v.Resolved_By ? v.Resolved_By : ''}
-                        ${v.Resolved_Date ? ' - ' + v.Resolved_Date : ''}
-                      </small>
+                      <div class="d-flex gap-2 align-items-center">
+                        <small class="text-muted">
+                          ${v.Resolved_By ? v.Resolved_By : ''}
+                          ${v.Resolved_Date ? ' - ' + v.Resolved_Date : ''}
+                        </small>
+                        <button class="btn btn-sm btn-outline-secondary px-2 py-1" onclick="archiveViolation(${rowIdx})" title="أرشفة">
+                          <i class="fas fa-archive"></i>
+                        </button>
+                      </div>
                     `}
                   </div>
                 </div>

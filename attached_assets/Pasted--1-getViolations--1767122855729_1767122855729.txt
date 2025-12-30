@@ -1,0 +1,201 @@
+🧨 المشكلة (1):
+المخالفات “المرصودة” ليست كلها ظاهرة فعليًا
+🔴 السبب الحقيقي
+
+في getViolations() أنت تخلط بين 3 مصادر تحديد للمخالفة:
+
+Is_Violation
+Status
+Negative_Notes
+
+
+لكن:
+
+بعض السجلات فيها ❌ بدون Is_Violation = Yes
+
+وبعضها فيها Status = خلل لكن بدون ❌
+
+وبعضها قديم بصيغة مختلفة
+
+➡️ النتيجة: مخالفات حقيقية لا تُعرض
+
+✅ الحل العبقري (توحيد معيار المخالفة)
+🔧 أضف دالة معيارية واحدة (مصدر الحقيقة):
+function isRealViolation(row) {
+  const isViolationFlag = String(row.Is_Violation || '').toLowerCase();
+  const status = String(row.Status || '').toLowerCase();
+  const notes = String(row.Negative_Notes || '');
+
+  if (isViolationFlag === 'yes' || isViolationFlag === 'true') return true;
+  if (status.includes('خلل') || status.includes('مخالفة')) return true;
+  if (notes.includes('❌') || notes.includes('نقاط الخلل')) return true;
+
+  return false;
+}
+
+🔧 ثم عدل getViolations():
+
+❌ احذف هذا:
+
+const allViolations = roundsLog.filter(r => {
+  ...
+});
+
+
+✅ واستبدله بـ:
+
+const allViolations = roundsLog
+  .filter(r => isRealViolation(r))
+  .map(r => { ... });
+
+
+📌 الآن:
+
+أي خلل = مخالفة
+
+لا يوجد فقد بيانات
+
+لا يعتمد على صيغة واحدة فقط
+
+🧨 المشكلة (2):
+لا يوجد فصل واضح بين:
+
+مفتوحة
+
+تحت المتابعة
+
+مغلقة
+
+مؤرشفة
+
+🔴 السبب الحقيقي
+
+أنت تعتمد فقط على:
+
+Closed_YN
+
+
+لكن المتابعات موجودة في Sheet منفصل (Rounds_FollowUps)
+
+➡️ المخالفة التي لها FollowUps لكنها غير مغلقة تظهر “مفتوحة” ❌
+
+✅ الحل العبقري (حالة ذكية للمخالفة)
+🔧 أضف هذه الدالة في GAS:
+function getViolationState(rowIndex) {
+  const followUpsSheet = getSheet('Rounds_FollowUps');
+  let hasFollowUps = false;
+
+  if (followUpsSheet) {
+    const data = followUpsSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (Number(data[i][1]) === Number(rowIndex)) {
+        hasFollowUps = true;
+        break;
+      }
+    }
+  }
+
+  const isClosed = String(rowIndex.Closed_YN || '').toLowerCase() === 'yes';
+  const isArchived = String(rowIndex.Is_Archived || '').toLowerCase() === 'yes';
+
+  if (isArchived) return 'archived';
+  if (isClosed) return 'closed';
+  if (hasFollowUps) return 'followup';
+  return 'open';
+}
+
+🔧 ثم داخل getViolations():
+
+أضف:
+
+State: getViolationState(r),
+
+
+📌 الآن كل مخالفة ترجع بـ:
+
+open | followup | closed | archived
+
+🧨 المشكلة (3):
+فلترة الواجهة غير متطابقة مع الواقع
+🔴 السبب
+
+Front-end يعتمد على:
+
+Is_Resolved
+VIOLATIONS_FOLLOWUP_CACHE
+
+
+لكن الـ Backend لم يرجع حالة موحدة
+
+✅ الحل العبقري (فلترة نظيفة 100%)
+🔧 عدل filterViolations() (Front-end):
+
+❌ احذف أي منطق معقّد
+✅ واستخدم الحالة القادمة من السيرفر:
+
+filtered = VIOLATIONS_DATA.violations.filter(v => v.State === filter);
+
+🔧 أزرار الفلترة تصبح:
+زر	State
+الكل	all
+لم تُعالج	open
+تحت المتابعة	followup
+منتهية	closed
+مؤرشفة	archived
+
+📌 هذا يزيل 70% من التعقيد الحالي.
+
+🧨 المشكلة (4):
+التاريخ لا يعرض كل السجلات + اختلاف الأرقام
+🔴 السبب الحقيقي
+
+في getHistory():
+
+if (params.days) ...
+if (params.startDate) ...
+
+
+❗ يتم تكديس الفلاتر فوق بعض
+
+تختار فترة
+
+ثم تاريخ
+
+ثم مسؤول
+
+➡️ النتيجة: بيانات ناقصة
+
+✅ الحل العبقري (فلترة ذكية واحدة)
+🔧 عدل getHistory():
+function getHistory(params) {
+  let filtered = sheetToObjects(getSheet('Rounds_Log'));
+
+  if (params.startDate || params.endDate) {
+    const start = params.startDate ? new Date(params.startDate) : null;
+    const end = params.endDate ? new Date(params.endDate + 'T23:59:59') : null;
+
+    filtered = filtered.filter(r => {
+      const d = parseLogDate(r.Date);
+      if (!d) return false;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    });
+  } else if (params.days) {
+    const cutoff = getSaudiDate();
+    cutoff.setDate(cutoff.getDate() - params.days);
+    filtered = filtered.filter(r => {
+      const d = parseLogDate(r.Date);
+      return d && d >= cutoff;
+    });
+  }
+
+  ...
+}
+
+
+📌 الآن:
+
+إما تاريخ محدد
+
+أو فترة

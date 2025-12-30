@@ -66,6 +66,18 @@ function doPost(e) {
       case 'getFollowUpsByRound':
         result = getFollowUpsByRound(payload);
         break;
+      case 'archiveViolation':
+        result = archiveViolation(payload);
+        break;
+      case 'unarchiveViolation':
+        result = unarchiveViolation(payload);
+        break;
+      case 'archiveOldClosed':
+        result = archiveOldClosedViolations();
+        break;
+      case 'setupArchiveTrigger':
+        result = setupWeeklyArchiveTrigger();
+        break;
       case 'debug':
         result = debugInfo();
         break;
@@ -196,6 +208,71 @@ function parseLogDate(dateValue) {
   
   const d = new Date(dateValue);
   return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * تحويل تاريخ ووقت مع الحفاظ على جزء الوقت
+ * يدعم صيغ متعددة:
+ * - ISO: "2025-12-27T14:05:00Z" أو "2025-12-27T14:05:00+03:00"
+ * - Space: "27/12/2025 14:05" أو "2025-12-27 14:05"
+ * - AM/PM: "27/12/2025 02:05 PM"
+ */
+function parseClosureDateTime(dateValue) {
+  if (!dateValue) return null;
+  if (dateValue instanceof Date) return dateValue;
+  
+  const str = String(dateValue).trim();
+  
+  // صيغة ISO مع T: استخدام new Date() مباشرة للحفاظ على timezone
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d;
+  }
+  
+  // صيغة: DD/MM/YYYY HH:MM أو DD-MM-YYYY HH:MM
+  let match = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (match) {
+    let hours = parseInt(match[4]);
+    // التحقق من AM/PM
+    if (/PM/i.test(str) && hours < 12) hours += 12;
+    if (/AM/i.test(str) && hours === 12) hours = 0;
+    
+    return new Date(
+      parseInt(match[3]), 
+      parseInt(match[2]) - 1, 
+      parseInt(match[1]),
+      hours,
+      parseInt(match[5])
+    );
+  }
+  
+  // صيغة: YYYY-MM-DD HH:MM أو YYYY/MM/DD HH:MM
+  match = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})\s+(\d{1,2}):(\d{2})/);
+  if (match) {
+    let hours = parseInt(match[4]);
+    if (/PM/i.test(str) && hours < 12) hours += 12;
+    if (/AM/i.test(str) && hours === 12) hours = 0;
+    
+    return new Date(
+      parseInt(match[1]), 
+      parseInt(match[2]) - 1, 
+      parseInt(match[3]),
+      hours,
+      parseInt(match[5])
+    );
+  }
+  
+  // محاولة استخدام Date مباشرة (يدعم ISO وغيرها)
+  const d = new Date(dateValue);
+  if (!isNaN(d.getTime())) return d;
+  
+  // إذا لم يوجد وقت، استخدم parseLogDate العادية مع إضافة نهاية اليوم للأمان
+  const dateOnly = parseLogDate(dateValue);
+  if (dateOnly) {
+    // إضافة 23:59:59 لنهاية اليوم لضمان عدم الأرشفة المبكرة
+    dateOnly.setHours(23, 59, 59, 999);
+  }
+  return dateOnly;
 }
 
 function parseTime(timeStr) {
@@ -574,6 +651,9 @@ function getViolations() {
       Status: r.Status || '',
       Negative_Notes: r.Negative_Notes || r.Notes || '',
       Is_Resolved: String(r.Closed_YN || r.Is_Resolved || 'no').toLowerCase(),
+      Is_Archived: String(r.Is_Archived || 'no').toLowerCase(),
+      Resolved_By: r.Resolved_By || '',
+      Resolved_Date: formatDate(r.Resolved_Date) || '',
       failedItems: failedItems
     };
   });
@@ -919,4 +999,166 @@ function debugInfo() {
     sheets: sheets,
     timestamp: getSaudiDate().toISOString()
   };
+}
+
+// ============================================
+// نظام الأرشفة التلقائية الأسبوعية
+// ============================================
+
+/**
+ * أرشفة المخالفات المغلقة التي مضى عليها أسبوع
+ * يتم استدعاء هذه الدالة يدوياً أو عبر Trigger أسبوعي
+ */
+function archiveOldClosedViolations() {
+  const sheet = getSheet('Rounds_Log');
+  if (!sheet) return { success: false, error: 'Rounds_Log sheet not found' };
+  
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  // البحث عن الأعمدة المطلوبة
+  const colDate = headers.indexOf('Date');
+  const colResolvedDate = headers.indexOf('Resolved_Date');
+  const colClosedOn = headers.indexOf('Closed_On');
+  const colStatusDate = headers.indexOf('Status_Date');
+  const colIsViolation = headers.indexOf('Is_Violation');
+  const colIsResolved = headers.indexOf('Is_Resolved');
+  const colClosedYN = headers.indexOf('Closed_YN');
+  let colIsArchived = headers.indexOf('Is_Archived');
+  
+  // إضافة عمود الأرشفة إذا لم يكن موجوداً
+  if (colIsArchived === -1) {
+    colIsArchived = headers.length;
+    sheet.getRange(1, colIsArchived + 1).setValue('Is_Archived');
+  }
+  
+  const now = getSaudiDate();
+  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  let archivedCount = 0;
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    
+    // تجاهل الصفوف الفارغة
+    if (!row[colDate]) continue;
+    
+    // التحقق من أنها مخالفة مغلقة وغير مؤرشفة
+    const isViolation = String(row[colIsViolation] || '').toLowerCase() === 'yes' ||
+                        String(row[colIsViolation] || '').toLowerCase() === 'true';
+    
+    // التحقق من الإغلاق في Closed_YN أو Is_Resolved
+    const resolvedVal = colIsResolved >= 0 ? String(row[colIsResolved] || '').toLowerCase() : '';
+    const closedVal = colClosedYN >= 0 ? String(row[colClosedYN] || '').toLowerCase() : '';
+    const isResolved = resolvedVal === 'yes' || resolvedVal === 'true' ||
+                       closedVal === 'yes' || closedVal === 'true';
+    
+    const archivedVal = colIsArchived >= 0 ? String(row[colIsArchived] || '').toLowerCase() : '';
+    const isArchived = archivedVal === 'yes' || archivedVal === 'true';
+    
+    if (!isViolation || !isResolved || isArchived) continue;
+    
+    // تحديد تاريخ الإغلاق (Resolved_Date أو Closed_On أو Status_Date) - بدون fallback لتاريخ السجل
+    let closedDate = null;
+    
+    // محاولة الحصول على تاريخ الإغلاق من الأعمدة المخصصة (مع الحفاظ على الوقت)
+    const closureCols = [colResolvedDate, colClosedOn, colStatusDate];
+    for (const col of closureCols) {
+      if (col >= 0 && row[col]) {
+        const cellValue = row[col];
+        if (cellValue instanceof Date) {
+          closedDate = cellValue;
+          break;
+        }
+        // استخدام parseClosureDateTime للحفاظ على الوقت
+        const parsed = parseClosureDateTime(cellValue);
+        if (parsed) {
+          closedDate = parsed;
+          break;
+        }
+      }
+    }
+    
+    // إذا لم يتوفر تاريخ إغلاق صريح، نتخطى هذا السجل
+    // (لا نستخدم fallback لتاريخ السجل الأصلي لتجنب الأرشفة الخاطئة)
+    if (!closedDate) continue;
+    
+    // أرشفة إذا مضى 7 أيام كاملة على الإغلاق (مقارنة بالتوقيت الكامل)
+    if (closedDate.getTime() < oneWeekAgo.getTime()) {
+      sheet.getRange(i + 1, colIsArchived + 1).setValue('Yes');
+      archivedCount++;
+    }
+  }
+  
+  return { 
+    success: true, 
+    archivedCount: archivedCount,
+    message: `تمت أرشفة ${archivedCount} مخالفة مغلقة`
+  };
+}
+
+/**
+ * إعداد Trigger أسبوعي للأرشفة التلقائية
+ * يتم استدعاء هذه الدالة مرة واحدة لإعداد الجدولة
+ */
+function setupWeeklyArchiveTrigger() {
+  // حذف أي Triggers قديمة
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => {
+    if (t.getHandlerFunction() === 'archiveOldClosedViolations') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  
+  // إنشاء Trigger جديد (كل يوم أحد الساعة 2 صباحاً)
+  ScriptApp.newTrigger('archiveOldClosedViolations')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(2)
+    .create();
+  
+  return { success: true, message: 'تم إعداد الأرشفة التلقائية كل يوم أحد الساعة 2 صباحاً' };
+}
+
+/**
+ * أرشفة يدوية لمخالفة محددة
+ */
+function archiveViolation(params) {
+  const sheet = getSheet('Rounds_Log');
+  if (!sheet) return { success: false, error: 'Rounds_Log sheet not found' };
+  
+  const rowIndex = parseInt(params.rowIndex);
+  if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row index' };
+  
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  let colIsArchived = headers.indexOf('Is_Archived');
+  
+  // إضافة عمود الأرشفة إذا لم يكن موجوداً
+  if (colIsArchived === -1) {
+    colIsArchived = headers.length;
+    sheet.getRange(1, colIsArchived + 1).setValue('Is_Archived');
+  }
+  
+  sheet.getRange(rowIndex, colIsArchived + 1).setValue('Yes');
+  
+  return { success: true, message: 'تمت أرشفة المخالفة بنجاح' };
+}
+
+/**
+ * إلغاء أرشفة مخالفة
+ */
+function unarchiveViolation(params) {
+  const sheet = getSheet('Rounds_Log');
+  if (!sheet) return { success: false, error: 'Rounds_Log sheet not found' };
+  
+  const rowIndex = parseInt(params.rowIndex);
+  if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row index' };
+  
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const colIsArchived = headers.indexOf('Is_Archived');
+  
+  if (colIsArchived === -1) return { success: false, error: 'Is_Archived column not found' };
+  
+  sheet.getRange(rowIndex, colIsArchived + 1).setValue('No');
+  
+  return { success: true, message: 'تم إلغاء الأرشفة بنجاح' };
 }
