@@ -1,0 +1,162 @@
+🧱 افتراضات بسيطة (مهمة)
+
+هذا الحل يفترض أن:
+
+لديك Backend فيه الدالة الجديدة addFollowUp
+
+وشيت اسمه:
+
+Rounds_FollowUps
+
+
+الأعمدة كما اتفقنا:
+
+FollowUp_ID
+Round_RowIndex
+Area
+Execution_Responsible
+Follower_Name
+FollowUp_Notes
+Created_At
+Created_Date
+
+🟢 الجزء 1: إضافة API جديد (Backend صغير جدًا)
+
+أضيفه مرة واحدة فقط (ضروري للفرونت)
+
+function getFollowUpsByRound(payload) {
+  const rowIndex = payload.rowIndex;
+  if (!rowIndex || rowIndex < 2) return { followUps: [] };
+
+  const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('Rounds_FollowUps');
+  if (!sh) return { followUps: [] };
+
+  const data = sh.getDataRange().getValues();
+  const headers = data[0];
+
+  const result = [];
+
+  for (let i = 1; i < data.length; i++) {
+    if (Number(data[i][headers.indexOf('Round_RowIndex')]) === Number(rowIndex)) {
+      result.push({
+        id: data[i][headers.indexOf('FollowUp_ID')],
+        follower: data[i][headers.indexOf('Follower_Name')],
+        notes: data[i][headers.indexOf('FollowUp_Notes')],
+        createdAt: data[i][headers.indexOf('Created_At')]
+      });
+    }
+  }
+
+  // الأحدث أولًا
+  result.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+  return { followUps: result };
+}
+
+
+ولا تنسَ إضافته في doPost:
+
+case 'getFollowUpsByRound':
+  result = getFollowUpsByRound(payload);
+  break;
+
+🟢 الجزء 2: Frontend كامل (انسخ كما هو)
+1️⃣ دالة جلب المتابعات
+async function loadFollowUps(rowIndex) {
+  const res = await callApi('getFollowUpsByRound', { rowIndex });
+  return res.followUps || [];
+}
+
+2️⃣ HTML – حاوية التايملاين (تُوضع داخل كرت المخالفة)
+<div class="followups-container mt-3" id="followups-{{ROW_INDEX}}">
+  <div class="text-muted small text-center">جاري تحميل المتابعات...</div>
+</div>
+
+
+لاحقًا نستبدل {{ROW_INDEX}} برقم الصف
+
+3️⃣ CSS (جمالي – خفيف – احترافي)
+<style>
+.followup-timeline {
+  border-right: 3px solid #0d6efd;
+  padding-right: 12px;
+  margin-top: 10px;
+}
+.followup-item {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.followup-item::before {
+  content: '';
+  position: absolute;
+  right: -11px;
+  top: 14px;
+  width: 10px;
+  height: 10px;
+  background: #0d6efd;
+  border-radius: 50%;
+}
+.followup-name {
+  font-weight: 700;
+  color: #0d6efd;
+}
+.followup-date {
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+.followup-notes {
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+</style>
+
+4️⃣ JS – رسم التايملاين (السحر الحقيقي ✨)
+async function renderFollowUps(rowIndex) {
+  const container = document.getElementById(`followups-${rowIndex}`);
+  if (!container) return;
+
+  try {
+    const followUps = await loadFollowUps(rowIndex);
+
+    if (!followUps.length) {
+      container.innerHTML = `
+        <div class="alert alert-info py-2 small text-center">
+          لا توجد متابعات مسجلة
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="followup-timeline">
+        ${followUps.map(f => `
+          <div class="followup-item">
+            <div class="followup-name">
+              <i class="fas fa-user-check me-1"></i>${f.follower}
+            </div>
+            <div class="followup-date">
+              <i class="fas fa-clock me-1"></i>${f.createdAt}
+            </div>
+            ${f.notes ? `<div class="followup-notes">${f.notes}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) {
+    container.innerHTML = `
+      <div class="alert alert-danger py-2 small text-center">
+        فشل تحميل المتابعات
+      </div>`;
+  }
+}
+
+5️⃣ ربطها مع كرت المخالفة (سطر واحد فقط)
+
+بعد عرض كرت المخالفة:
+
+renderFollowUps(rowIndex);
+
+
+🎯 هذا كل شيء
