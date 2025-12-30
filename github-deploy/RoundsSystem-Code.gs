@@ -225,19 +225,36 @@ function extractFailedItems(notes) {
 }
 
 // ============================================
+// دالة الإضافة الآمنة (تمنع خطأ 10M cells)
+// ============================================
+
+function appendRowSafe(sheet, rowData) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn() || rowData.length;
+  
+  for (let r = 2; r <= Math.min(lastRow, 50); r++) {
+    const range = sheet.getRange(r, 1, 1, lastCol).getValues()[0];
+    const isEmpty = range.every(v => v === '' || v === null);
+    if (isEmpty) {
+      sheet.getRange(r, 1, 1, rowData.length).setValues([rowData]);
+      return;
+    }
+  }
+  
+  sheet.insertRowAfter(lastRow);
+  sheet.getRange(lastRow + 1, 1, 1, rowData.length).setValues([rowData]);
+}
+
+// ============================================
 // دوال نظام المتابعات الجديد
 // ============================================
 
-/**
- * Helper: الحصول على شيت المتابعات أو إنشاؤه
- * يمنع Race Condition عند الإنشاء
- */
 function getFollowUpsSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh = ss.getSheetByName('Rounds_FollowUps');
   if (!sh) {
     sh = ss.insertSheet('Rounds_FollowUps');
-    sh.appendRow([
+    sh.getRange(1, 1, 1, 8).setValues([[
       'FollowUp_ID',
       'Round_RowIndex',
       'Area',
@@ -246,15 +263,11 @@ function getFollowUpsSheet_() {
       'FollowUp_Notes',
       'Created_At',
       'Created_Date'
-    ]);
+    ]]);
   }
   return sh;
 }
 
-/**
- * إضافة متابعة جديدة - تحفظ في شيت منفصل
- * لا تضيف أعمدة جديدة أبداً!
- */
 function addFollowUp(params) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   
@@ -264,25 +277,21 @@ function addFollowUp(params) {
   const rowIndex = params.rowIndex;
   if (!rowIndex || rowIndex < 2) return { success: false, error: 'Invalid row index' };
   
-  // قراءة بالـ headers بدل أرقام الأعمدة (أكثر أماناً)
   const headers = roundsSheet.getRange(1, 1, 1, roundsSheet.getLastColumn()).getValues()[0];
   const row = roundsSheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
   
   const area = row[headers.indexOf('Area')] || row[headers.indexOf('Round_Name')] || '';
   const execResponsible = row[headers.indexOf('Execution_Responsible')] || row[headers.indexOf('Responsible_Role')] || '';
   
-  // استخدام الـ helper للحصول على شيت المتابعات
   const followUpsSheet = getFollowUpsSheet_();
   
-  // توليد ID فريد
   const now = getSaudiDate();
   const followUpId = 'FU-' + now.getTime() + '-' + Math.floor(Math.random() * 1000);
   
   const dateTimeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const dateStr = getTodayString();
   
-  // إضافة صف جديد في شيت المتابعات
-  followUpsSheet.appendRow([
+  appendRowSafe(followUpsSheet, [
     followUpId,
     rowIndex,
     area,
