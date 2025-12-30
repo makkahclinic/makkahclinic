@@ -307,16 +307,27 @@ function extractFailedItems(notes) {
 
 /**
  * تحديد هل السجل يمثل مخالفة حقيقية
- * يبحث في: Is_Violation + Status + Negative_Notes
+ * يبحث في: Is_Violation + Status + Negative_Notes + Notes
+ * يغطي جميع الصيغ المستخدمة في البيانات الفعلية
  */
 function isRealViolation(row) {
   const isViolationFlag = String(row.Is_Violation || '').toLowerCase();
   const status = String(row.Status || '').toLowerCase();
-  const notes = String(row.Negative_Notes || '');
+  const negativeNotes = String(row.Negative_Notes || '');
+  const notes = String(row.Notes || '');
+  const allNotes = negativeNotes + ' ' + notes;
 
-  if (isViolationFlag === 'yes' || isViolationFlag === 'true') return true;
-  if (status.includes('خلل') || status.includes('مخالفة')) return true;
-  if (notes.includes('❌') || notes.includes('نقاط الخلل')) return true;
+  // 1. العلم الصريح
+  if (isViolationFlag === 'yes' || isViolationFlag === 'true' || isViolationFlag === '1') return true;
+  
+  // 2. حالة تدل على مخالفة
+  if (status.includes('خلل') || status.includes('مخالفة') || status.includes('متأخر')) return true;
+  
+  // 3. ملاحظات سلبية
+  if (allNotes.includes('❌') || allNotes.includes('نقاط الخلل')) return true;
+  
+  // 4. وجود ملاحظات سلبية غير فارغة (حقل Negative_Notes مخصص للمخالفات)
+  if (negativeNotes.trim().length > 3) return true;
 
   return false;
 }
@@ -350,7 +361,8 @@ function buildFollowUpsIndex() {
  * تحديد حالة المخالفة: open / followup / closed / archived
  */
 function getViolationState(row, followUpsIndex) {
-  const rowIndex = row._rowIndex;
+  // تحويل rowIndex لرقم للمطابقة الصحيحة مع الفهرس
+  const rowIndex = Number(row._rowIndex);
   
   const isClosed =
     String(row.Closed_YN || '').toLowerCase() === 'yes' ||
@@ -359,7 +371,9 @@ function getViolationState(row, followUpsIndex) {
   const isArchived =
     String(row.Is_Archived || '').toLowerCase() === 'yes';
 
-  const hasFollowUps = followUpsIndex && rowIndex && followUpsIndex[rowIndex] && followUpsIndex[rowIndex].length > 0;
+  // مطابقة آمنة مع الفهرس
+  const hasFollowUps = followUpsIndex && rowIndex && !isNaN(rowIndex) && 
+    followUpsIndex[rowIndex] && followUpsIndex[rowIndex].length > 0;
 
   if (isArchived) return 'archived';
   if (isClosed) return 'closed';
