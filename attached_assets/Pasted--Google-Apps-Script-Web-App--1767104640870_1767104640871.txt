@@ -1,0 +1,129 @@
+طّلعت على الواجهة الأمامية والخلفية (Google Apps Script Web App) مع رسالة الخطأ الظاهرة في الصورة، والخطأ واضح ومحدد، وليس له علاقة بالـ UI أو Bootstrap أو المودالات.
+
+❌ الخطأ الفعلي (Root Cause)
+رسالة الخطأ:
+Unknown action: addFollowUp
+
+أين يظهر؟
+
+عند الضغط على زر حفظ المتابعة
+
+من الدالة:
+
+confirmFollowUp()
+
+السطر المسؤول في الواجهة:
+const result = await callApi('addFollowUp', {
+  rowIndex: currentFollowUpData.rowIndex,
+  followerName: followerName,
+  followUpNotes: followUpNotes,
+  followUpDate: new Date().toLocaleDateString('en-US')
+});
+
+🔍 السبب الحقيقي
+الواجهة الأمامية ترسل action = 'addFollowUp'
+
+لكن…
+
+❗ Google Apps Script (الخلفي) لا يحتوي على case أو handler باسم addFollowUp
+
+أي أن الـ backend لديك يعرف أشياء مثل:
+
+getViolations
+
+resolveViolation
+
+verifyPasscode
+
+logRound
+
+getHistory
+
+…إلخ
+
+❌ لكنه لا يعرف ماذا يفعل عند استقبال addFollowUp
+
+ولهذا يرجع:
+
+Unknown action
+
+✅ التصحيح الصحيح (الحل)
+1️⃣ أضف handler في Google Apps Script
+
+في ملف الـ Apps Script (عادة Code.gs) أضف داخل doPost(e) أو handleAction:
+
+case 'addFollowUp':
+  return addFollowUp(payload);
+
+2️⃣ أضف دالة addFollowUp في الخلفية
+مثال صحيح ومتوافق مع كودك الحالي:
+function addFollowUp(payload) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+    .getSheetByName('Violations_Log'); // تأكد من الاسم
+
+  const row = payload.rowIndex;
+  if (!row || row < 2) {
+    return { ok: false, error: 'Invalid row index' };
+  }
+
+  // افترض الأعمدة التالية (عدّل حسب شيتك):
+  // FollowUp_By | FollowUp_Date | FollowUp_Notes
+
+  sheet.getRange(row, FOLLOWUP_BY_COL).setValue(payload.followerName);
+  sheet.getRange(row, FOLLOWUP_DATE_COL).setValue(payload.followUpDate);
+  sheet.getRange(row, FOLLOWUP_NOTES_COL).setValue(payload.followUpNotes || '');
+
+  return {
+    ok: true,
+    success: true
+  };
+}
+
+
+⚠️ مهم جداً:
+استبدل:
+
+FOLLOWUP_BY_COL
+FOLLOWUP_DATE_COL
+FOLLOWUP_NOTES_COL
+
+
+بأرقام الأعمدة الحقيقية في شيتك (مثلاً 12، 13، 14)
+
+3️⃣ تأكد من rowIndex
+
+في الواجهة لديك:
+
+const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx + 2;
+
+
+✔️ هذا صحيح
+لكن يجب أن:
+
+_rowIndex يُرسل من backend فعلياً
+
+أو يكون idx + 2 مطابق لصف Google Sheet
+
+🔧 تحسين أمني (موصى به)
+
+أضف تسجيل المستخدم الذي قام بالمتابعة تلقائياً:
+
+const user = Session.getActiveUser().getEmail();
+sheet.getRange(row, FOLLOWUP_BY_COL).setValue(payload.followerName + ' (' + user + ')');
+
+
+📚 مرجع Google:
+
+Google Apps Script – SpreadsheetApp
+https://developers.google.com/apps-script/reference/spreadsheet
+
+doPost Web App pattern
+https://developers.google.com/apps-script/guides/web
+
+🧠 ملخص نهائي
+البند	الحالة
+الواجهة الأمامية	✅ صحيحة 100%
+مودال المتابعة	✅ سليم
+callApi	✅ سليم
+السبب	❌ addFollowUp غير معرف في backend
+الحل	✅ إضافة handler + function في Apps Script
