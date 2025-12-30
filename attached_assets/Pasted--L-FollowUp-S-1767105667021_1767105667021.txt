@@ -1,0 +1,91 @@
+لأعمدة (كما عندك الآن – ممتاز)
+
+حسب صورتك الأخيرة، العناوين موجودة فعلًا:
+
+العمود	الاسم
+L	FollowUp_Status
+M	FollowUp_By
+N	FollowUp_Notes
+O	FollowUp_At
+P	Last_Action
+
+✔️ ممتاز — ما نغير ولا حرف
+
+✳️ التعديل الأول (صغير جدًا): Router داخل doPost
+🔴 لا تحذف doPost
+🟢 فقط أضف هذا في بدايته بعد JSON.parse
+🔧 أضف هذا المقطع فقط داخل doPost:
+// ====== ROUTER: Actions (Follow-Up etc) ======
+if (body.action === 'addFollowUp') {
+  const result = addFollowUp_(body.payload);
+  return respondSuccess(result, 'تم تسجيل المتابعة بنجاح');
+}
+
+
+📌 مكانه الصحيح:
+بعد:
+
+const body = JSON.parse(e.postData.contents);
+const d = body.data || {};
+const fileData = body.fileData || {};
+
+
+ولا تغيّر أي شيء بعدها.
+
+✳️ التعديل الثاني: إضافة دالة واحدة فقط (NEW)
+🟢 أضف هذه الدالة أسفل الكود (قبل respondSuccess مثلاً)
+/* =========================================================
+* 🟡 FOLLOW-UP — تسجيل متابعة بدون إغلاق
+* =======================================================*/
+function addFollowUp_(payload) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(CONFIG.SHEETS.LOG);
+
+  const row = Number(payload.rowIndex);
+  if (!row || row < 2) {
+    throw new Error('Invalid row index');
+  }
+
+  const now = Utilities.formatDate(
+    new Date(),
+    CONFIG.TIMEZONE,
+    'yyyy-MM-dd HH:mm:ss'
+  );
+
+  // L → P (كما هو عندك)
+  sh.getRange(row, 12).setValue('تمت متابعة');              // FollowUp_Status
+  sh.getRange(row, 13).setValue(payload.followerName);     // FollowUp_By
+  sh.getRange(row, 14).setValue(payload.followUpNotes || ''); // FollowUp_Notes
+  sh.getRange(row, 15).setValue(now);                       // FollowUp_At
+  sh.getRange(row, 16).setValue('Follow-Up');               // Last_Action
+
+  return {
+    rowIndex: row,
+    followerName: payload.followerName,
+    followUpNotes: payload.followUpNotes || '',
+    followedAt: now
+  };
+}
+
+🧪 ماذا سيحدث الآن فعليًا؟
+عند الضغط على حفظ المتابعة:
+
+المستخدم يكتب اسمه ✔️
+
+يكتب ملاحظته ✔️
+
+يتم تسجيل:
+
+L: تمت متابعة
+
+M: الاسم
+
+N: الملاحظة
+
+O: التاريخ + الساعة
+
+P: Follow-Up
+
+❌ لا يتم إغلاق السجل
+
+👀 أي شخص يدخل يشوف المتابعة مباشرة
