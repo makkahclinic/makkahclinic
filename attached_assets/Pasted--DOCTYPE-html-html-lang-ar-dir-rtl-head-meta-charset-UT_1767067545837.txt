@@ -1,0 +1,3209 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>نظام جولات السلامة المطوّر – المجمع الطبي</title>
+
+  <!-- نظام الحماية الموحد -->
+  <script src="auth-guard.js"></script>
+  <script>
+    (async function() {
+      const allowed = await AuthGuard.protectPage('rounds');
+      if (!allowed) return;
+    })();
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --primary-light: #2d5a8a;
+      --crimson: #DC143C;
+      --crimson-80: rgba(220, 20, 60, 0.8);
+      --gold: #c9a962;
+      --success: #198754;
+      --warning: #ffc107;
+      --danger: #dc3545;
+    }
+    body {
+      font-family: 'Tajawal', system-ui, sans-serif;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      min-height: 100vh;
+    }
+    .navbar-custom {
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: #fff;
+    }
+    .navbar-custom .navbar-brand { color: #fff !important; }
+    .logo-img {
+      height: 42px;
+      width: 42px;
+      border-radius: 50%;
+      object-fit: contain;
+      background: var(--crimson-80);
+      padding: 3px;
+      margin-left: .5rem;
+    }
+    .nav-tabs .nav-link {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .nav-tabs .nav-link.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .card-custom {
+      border-radius: 1rem;
+      border: 0;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+    .station-card {
+      border-radius: 1rem;
+      border: 2px solid transparent;
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: all 0.2s;
+      padding: 1rem;
+    }
+    .station-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    }
+    .station-card.active {
+      border-color: var(--crimson);
+      background: #fff5f5;
+    }
+    .chip {
+      border-radius: 20px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+      display: inline-block;
+    }
+    .chip-success { background: #d1e7dd; color: #0f5132; }
+    .chip-danger { background: #f8d7da; color: #842029; }
+    .chip-warning { background: #fff3cd; color: #664d03; }
+    .chip-info { background: #cff4fc; color: #055160; }
+    .delayed-card {
+      background: linear-gradient(135deg, #fff5f5, #ffe8e8);
+      border-right: 4px solid var(--danger);
+    }
+    .violation-card {
+      background: linear-gradient(135deg, #fff8e1, #ffecb3);
+      border-right: 4px solid var(--warning);
+    }
+    .repeat-badge {
+      background: var(--danger);
+      color: #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.9; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .spinner-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.8);
+      z-index: 2000;
+      backdrop-filter: blur(3px);
+    }
+    .filter-section {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .stats-mini {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .stat-box {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .stat-box .number {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .stat-box.danger .number { color: var(--danger); }
+    .stat-box.warning .number { color: #d97706; }
+    .stat-box.success .number { color: var(--success); }
+    .text-crimson { color: var(--crimson); }
+    
+    /* KPI Cards for Dashboard */
+    .kpi-card {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      gap: 0.75rem;
+    }
+    .kpi-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+    .kpi-content { flex: 1; min-width: 0; }
+    .kpi-value {
+      font-size: 1.3rem;
+      font-weight: 800;
+      line-height: 1.2;
+      word-break: break-word;
+      color: #1f2937;
+    }
+    .kpi-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+    .btn-start-round {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      color: #78350f;
+      border: none;
+      font-weight: 600;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+    }
+    .btn-start-round:hover { background: #f59e0b; color: #451a03; }
+    .btn-completed {
+      background: #d1fae5;
+      color: #065f46;
+      border: none;
+      font-weight: 600;
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+    }
+    .checklist-row {
+      display: flex;
+      align-items: center;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .checklist-row:last-child { border-bottom: none; }
+    .checklist-btns-rtl { 
+      display: flex; 
+      gap: 0.25rem; 
+      flex-shrink: 0;
+    }
+    .checklist-text { 
+      flex: 1; 
+      font-size: 0.9rem; 
+      text-align: right;
+      padding-right: 1rem;
+      color: #374151;
+    }
+    .btn-yes { 
+      background: #d1fae5; 
+      color: #065f46; 
+      border: 1px solid #a7f3d0; 
+      min-width: 50px;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.6rem;
+    }
+    .btn-yes:hover { background: #a7f3d0; }
+    .btn-yes.active { background: #10b981; color: white; border-color: #10b981; }
+    .btn-no { 
+      background: #fee2e2; 
+      color: #991b1b; 
+      border: 1px solid #fca5a5; 
+      min-width: 50px;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.6rem;
+    }
+    .btn-no:hover { background: #fca5a5; }
+    .btn-no.active { background: #ef4444; color: white; border-color: #ef4444; }
+    .staff-card-detailed {
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .staff-card-detailed:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .staff-card-detailed.active { border-color: var(--crimson); background: #fff5f5; }
+    .staff-stats { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .staff-stat { 
+      background: #f3f4f6; 
+      padding: 0.25rem 0.5rem; 
+      border-radius: 6px; 
+      font-size: 0.8rem;
+    }
+    .staff-stat.done { background: #d1fae5; color: #065f46; }
+    .staff-stat.remaining { background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-custom shadow-sm">
+    <div class="container-fluid px-4">
+      <span class="navbar-brand fw-bold d-flex align-items-center">
+        <img src="logo-new.png" alt="شعار مجمع مكة الطبي" class="logo-img" />
+        <span>نظام جولات السلامة المطوّر</span>
+      </span>
+      <span class="navbar-text small ms-auto text-white" id="todayInfoText"></span>
+    </div>
+  </nav>
+
+  <div class="container-fluid py-4">
+    <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" id="today-tab" data-bs-toggle="tab" data-bs-target="#todayPane" type="button">
+          <i class="fas fa-calendar-day me-1"></i> اليوم
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboardPane" type="button">
+          <i class="fas fa-chart-line me-1"></i> لوحة التحكم
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="delayed-tab" data-bs-toggle="tab" data-bs-target="#delayedPane" type="button">
+          <i class="fas fa-clock me-1"></i> المتأخرون
+          <span class="badge bg-danger ms-1" id="delayedCount">0</span>
+          <span class="badge bg-secondary ms-1" id="delayedPeriodLabel" style="font-size: 0.65rem;">3 أشهر</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="violations-tab" data-bs-toggle="tab" data-bs-target="#violationsPane" type="button">
+          <i class="fas fa-exclamation-triangle me-1"></i> المخالفات
+          <span class="badge bg-warning text-dark ms-1" id="violationsCount">0</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#historyPane" type="button">
+          <i class="fas fa-history me-1"></i> التاريخ
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- Today Tab -->
+      <div class="tab-pane fade show active" id="todayPane">
+        <div class="row g-3" style="direction: ltr;">
+          <!-- Main Content - Left Side -->
+          <div class="col-lg-8">
+            <!-- Staff Tasks Card -->
+            <div class="card card-custom mb-3" id="staffTasksCard" style="display:none;">
+              <div class="card-header" style="background: linear-gradient(135deg, #fef2f2, #fee2e2); border-bottom: 2px solid #DC143C;">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0" style="color: #DC143C;">
+                    <i class="fas fa-clipboard-list me-2"></i>
+                    مهام اليوم للمسؤول: <span id="selectedStaffName" class="fw-bold"></span>
+                  </h5>
+                  <div class="d-flex gap-2">
+                    <span class="badge bg-secondary">مهام اليوم: <span id="staffTodayTotal">0</span></span>
+                    <span class="badge bg-success">منجز: <span id="staffTodayDone">0</span></span>
+                    <span class="badge bg-warning text-dark">متبقي: <span id="staffTodayRemaining">0</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                  <thead style="background: #f8f9fa;">
+                    <tr>
+                      <th style="padding: 0.75rem 1rem;">الجولة</th>
+                      <th class="text-center" style="width: 120px;">منفذة / مطلوبة اليوم</th>
+                      <th class="text-center" style="width: 100px;">الوقت المستهدف</th>
+                      <th class="text-center" style="width: 120px;">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody id="staffTasksTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+            
+            <!-- Checklist Form Card -->
+            <div id="checklistFormCard" class="card card-custom mb-3" style="display:none;">
+              <div class="card-header py-2" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-bottom: 2px solid #22c55e;">
+                <div class="d-flex align-items-center">
+                  <i class="fas fa-check-square me-2" style="color: #16a34a;"></i>
+                  <span class="fw-bold" style="color: #166534;">نموذج التحقق للجولة المختارة</span>
+                </div>
+                <div class="small mt-1" id="checklistRoundName" style="color: #4b5563;"></div>
+              </div>
+              <div class="card-body p-0">
+                <div id="checklistItems" style="max-height: 300px; overflow-y: auto;"></div>
+                
+                <div class="p-3" style="background: #f9fafb; border-top: 1px solid #e5e7eb;">
+                  <div class="mb-3">
+                    <label class="form-label fw-bold small mb-1">مسؤول التنفيذ (في حال وجود خلل)</label>
+                    <select class="form-select form-select-sm" id="checklistResponsible">
+                      <option value="">لا يوجد (لا حاجة لإجراء)</option>
+                    </select>
+                    <div class="small text-muted mt-1">اختر الشخص المكلف بتصحيح الخلل من قائمة المسؤولين للجولة.</div>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label fw-bold small mb-1">ملاحظات إضافية (اختياري)</label>
+                    <textarea class="form-control form-control-sm" id="checklistNotes" rows="2" placeholder=""></textarea>
+                  </div>
+                  <div class="text-start">
+                    <button class="btn btn-success px-4" onclick="submitChecklist()">
+                      <i class="fas fa-save me-1"></i> حفظ الجولة
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Staff Performance Chart -->
+            <div class="card card-custom mb-3">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0" style="color: #DC143C;">
+                  <i class="fas fa-chart-bar me-2"></i>مؤشر إنجاز جولات اليوم حسب المسؤول
+                </h6>
+                <small class="text-muted">العمود الذهبي = مهام اليوم، العمود الأخضر = المنجز اليوم</small>
+              </div>
+              <div class="card-body" style="height: 280px;">
+                <canvas id="staffPerformanceChart"></canvas>
+              </div>
+            </div>
+            
+            <!-- Log Table -->
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0"><i class="fas fa-list-alt text-secondary me-2"></i>سجل جولات اليوم <small class="text-muted">(يتم السحب مباشرة من Rounds_Log)</small></h6>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                  <table class="table table-sm table-hover mb-0">
+                    <thead style="background: #f8f9fa; position: sticky; top: 0;">
+                      <tr>
+                        <th style="width: 70px;">الوقت</th>
+                        <th>الجولة</th>
+                        <th style="width: 100px;">المسؤول</th>
+                        <th style="width: 80px;">مسؤول التنفيذ</th>
+                        <th style="width: 70px;">الحالة</th>
+                        <th>ملخص الخلل</th>
+                      </tr>
+                    </thead>
+                    <tbody id="roundsLogBody">
+                      <tr><td colspan="6" class="text-center text-muted">جاري التحميل...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Staff Cards - Right Side -->
+          <div class="col-lg-4">
+            <div class="card card-custom mb-3">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 text-end"><i class="fas fa-users text-primary me-2"></i>محطات المسؤولين</h6>
+                <small class="text-muted d-block text-end">الأسماء تُسحب تلقائياً من عمود Assigned_To في MASTER_TASKS</small>
+              </div>
+              <div class="card-body" id="stationCardsContainer" style="max-height: 600px; overflow-y: auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Tab -->
+      <div class="tab-pane fade" id="dashboardPane">
+        <!-- Date Filter -->
+        <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <label class="small fw-bold text-muted mb-0">الفترة:</label>
+            <select class="form-select form-select-sm" id="dashPeriodFilter" style="width: auto;">
+              <option value="1">اليوم</option>
+              <option value="7">آخر أسبوع</option>
+              <option value="14">آخر أسبوعين</option>
+              <option value="30">آخر شهر</option>
+              <option value="60">آخر شهرين</option>
+              <option value="90" selected>آخر 3 أشهر</option>
+              <option value="180">آخر 6 أشهر</option>
+              <option value="365">آخر سنة</option>
+            </select>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="loadDashboardData()">
+            <i class="fas fa-sync-alt me-1"></i>تحديث
+          </button>
+        </div>
+        
+        <!-- KPI Summary Row -->
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border-right: 4px solid #3b82f6;">
+              <div class="kpi-icon"><i class="fas fa-clipboard-list" style="color:#3b82f6;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashTotalRounds">0</div>
+                <div class="kpi-label">إجمالي الجولات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-right: 4px solid #22c55e;">
+              <div class="kpi-icon"><i class="fas fa-check-circle" style="color:#22c55e;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashCompleted">0</div>
+                <div class="kpi-label">مكتملة</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef2f2, #fee2e2); border-right: 4px solid #ef4444;">
+              <div class="kpi-icon"><i class="fas fa-clock" style="color:#ef4444;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashDelayed">0</div>
+                <div class="kpi-label">متأخرة</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fefce8, #fef9c3); border-right: 4px solid #eab308;">
+              <div class="kpi-icon"><i class="fas fa-percentage" style="color:#eab308;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="dashCompliance">0%</div>
+                <div class="kpi-label">نسبة الامتثال</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Row 1: Trend + Donut -->
+        <div class="row g-2 mb-2">
+          <div class="col-lg-8">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-line text-primary me-1"></i>الأداء اليومي</h6>
+              </div>
+              <div class="card-body p-2" style="height: 160px;">
+                <canvas id="trendChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-pie text-success me-1"></i>توزيع الحالات</h6>
+              </div>
+              <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 160px;">
+                <canvas id="statusChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Row 2: Staff + Area -->
+        <div class="row g-2 mb-2">
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-user-tie text-info me-1"></i>أداء المسؤولين</h6>
+              </div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="staffChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-map-marker-alt text-warning me-1"></i>الأداء حسب المنطقة</h6>
+              </div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="areaChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Row 3: Top Issues -->
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-exclamation-triangle text-danger me-1"></i>أكثر المشاكل تكراراً (خلال الفترة المحددة)</h6>
+              </div>
+              <div class="card-body p-2">
+                <div id="topIssuesList" class="d-flex flex-wrap gap-2">
+                  <div class="text-muted text-center py-2 w-100">جاري التحميل...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delayed Tab -->
+      <div class="tab-pane fade" id="delayedPane">
+        <div class="filter-section">
+          <h5 class="mb-3"><i class="fas fa-clock text-danger me-2"></i>سجل التأخيرات</h5>
+          
+          <!-- Filters Row -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الفترة الزمنية</label>
+              <select class="form-select form-select-sm" id="delayedPeriodFilter" onchange="updateDelayedPeriodLabel()">
+                <option value="1">اليوم</option>
+                <option value="7">آخر أسبوع</option>
+                <option value="14">آخر أسبوعين</option>
+                <option value="30">آخر شهر</option>
+                <option value="60">آخر شهرين</option>
+                <option value="90" selected>آخر 3 أشهر</option>
+                <option value="0">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">المسؤول</label>
+              <select class="form-select form-select-sm" id="delayedStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الجولة</label>
+              <select class="form-select form-select-sm" id="delayedRoundFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-danger btn-sm w-100" onclick="applyDelayedFilters()">
+                <i class="fas fa-filter me-1"></i>تطبيق الفلتر
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="row g-2 mb-4">
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-right: 4px solid #ef4444;">
+              <div class="kpi-icon"><i class="fas fa-clock" style="color:#ef4444;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedTotalCount">0</div>
+                <div class="kpi-label">إجمالي التأخيرات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fefce8, #fef08a); border-right: 4px solid #eab308;">
+              <div class="kpi-icon"><i class="fas fa-hourglass-half" style="color:#eab308;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedAvgTime">0</div>
+                <div class="kpi-label">متوسط التأخير (دقيقة)</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fdf2f8, #fbcfe8); border-right: 4px solid #ec4899;">
+              <div class="kpi-icon"><i class="fas fa-user-clock" style="color:#ec4899;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedTopStaff">-</div>
+                <div class="kpi-label">أكثر تأخيراً</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #f0f9ff, #bae6fd); border-right: 4px solid #0ea5e9;">
+              <div class="kpi-icon"><i class="fas fa-calendar-day" style="color:#0ea5e9;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="delayedTodayCount">0</div>
+                <div class="kpi-label">تأخيرات اليوم</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Charts Section -->
+        <div class="row g-3 mb-4">
+          <!-- Delays by Staff (Donut Chart) -->
+          <div class="col-lg-4">
+            <div class="card card-custom h-100">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-pie text-danger me-1"></i>التأخيرات حسب المسؤول</h6>
+              </div>
+              <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 200px;">
+                <canvas id="delayedByStaffChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <!-- Delays by Day (Bar Chart) -->
+          <div class="col-lg-4">
+            <div class="card card-custom h-100">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-bar text-primary me-1"></i>التأخيرات حسب اليوم</h6>
+              </div>
+              <div class="card-body p-2" style="height: 200px;">
+                <canvas id="delayedByDayChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <!-- Delay Trend (Line Chart) -->
+          <div class="col-lg-4">
+            <div class="card card-custom h-100">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-chart-line text-success me-1"></i>اتجاه التأخيرات</h6>
+              </div>
+              <div class="card-body p-2" style="height: 200px;">
+                <canvas id="delayedTrendChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Top Delayed Rounds -->
+        <div class="row g-3 mb-4">
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-list-ol text-warning me-1"></i>أكثر الجولات تأخيراً</h6>
+              </div>
+              <div class="card-body p-2" style="height: 180px;">
+                <canvas id="topDelayedRoundsChart"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card card-custom">
+              <div class="card-header bg-white border-0 py-2">
+                <h6 class="mb-0 small"><i class="fas fa-tachometer-alt text-info me-1"></i>توزيع مدة التأخير</h6>
+              </div>
+              <div class="card-body p-2" style="height: 150px;">
+                <canvas id="delayDurationChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Today's Delayed Section -->
+        <div class="card card-custom mb-3">
+          <div class="card-header bg-white border-0 py-2">
+            <h6 class="mb-0"><i class="fas fa-exclamation-circle text-danger me-2"></i>الجولات المتأخرة الآن (اليوم)</h6>
+            <small class="text-muted">الجولات التي تجاوزت وقتها المحدد ولم تُنفذ بعد</small>
+          </div>
+          <div class="card-body p-3">
+            <div id="delayedNowList" class="row g-3">
+              <div class="col-12 text-center text-muted py-3">جاري التحميل...</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Historical Delays Table -->
+        <div class="card card-custom">
+          <div class="card-header bg-white border-0 py-2">
+            <h6 class="mb-0"><i class="fas fa-history text-secondary me-2"></i>سجل التأخيرات التاريخي</h6>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+              <table class="table table-hover table-sm mb-0">
+                <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>الجولة</th>
+                    <th>المسؤول</th>
+                    <th>الوقت المتوقع</th>
+                    <th>الوقت الفعلي</th>
+                    <th>التأخير</th>
+                  </tr>
+                </thead>
+                <tbody id="delayedHistoryBody">
+                  <tr><td colspan="6" class="text-center text-muted py-3">جاري التحميل...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Violations Tab -->
+      <div class="tab-pane fade" id="violationsPane">
+        <div class="filter-section">
+          <h5 class="mb-3"><i class="fas fa-exclamation-triangle text-warning me-2"></i>المخالفات والتكرارات</h5>
+          
+          <!-- Filters Row -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الفترة الزمنية</label>
+              <select class="form-select form-select-sm" id="violationPeriodFilter">
+                <option value="7">آخر أسبوع</option>
+                <option value="14">آخر أسبوعين</option>
+                <option value="30" selected>آخر شهر</option>
+                <option value="90">آخر 3 أشهر</option>
+                <option value="365">آخر سنة</option>
+                <option value="0">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">المسؤول</label>
+              <select class="form-select form-select-sm" id="violationStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">الجولة</label>
+              <select class="form-select form-select-sm" id="violationRoundFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-primary btn-sm w-100" onclick="applyViolationFilters()">
+                <i class="fas fa-filter me-1"></i>تطبيق الفلتر
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="row g-2 mb-4">
+          <div class="col-6 col-lg-2">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-right: 4px solid #ef4444;">
+              <div class="kpi-icon"><i class="fas fa-exclamation-circle" style="color:#ef4444;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTotalCount">0</div>
+                <div class="kpi-label">إجمالي المخالفات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #ecfdf5, #a7f3d0); border-right: 4px solid #10b981;">
+              <div class="kpi-icon"><i class="fas fa-check-circle" style="color:#10b981;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationResolvedCount">0</div>
+                <div class="kpi-label">تم معالجتها</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-2">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-right: 4px solid #f59e0b;">
+              <div class="kpi-icon"><i class="fas fa-redo" style="color:#f59e0b;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationRepeatedCount">0</div>
+                <div class="kpi-label">متكررة</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border-right: 4px solid #3b82f6;">
+              <div class="kpi-icon"><i class="fas fa-user-times" style="color:#3b82f6;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTopStaff">-</div>
+                <div class="kpi-label">أكثر مسؤول مخالفات</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #fdf4ff, #f5d0fe); border-right: 4px solid #a855f7;">
+              <div class="kpi-icon"><i class="fas fa-map-marker-alt" style="color:#a855f7;"></i></div>
+              <div class="kpi-content">
+                <div class="kpi-value" id="violationTopArea">-</div>
+                <div class="kpi-label">أكثر منطقة مخالفات</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trend Chart -->
+        <div class="card card-custom mb-4">
+          <div class="card-header bg-white border-0 py-2">
+            <h6 class="mb-0 small"><i class="fas fa-chart-line text-danger me-2"></i>تكرار المخالفات عبر الزمن</h6>
+          </div>
+          <div class="card-body" style="height: 200px;">
+            <canvas id="violationTrendChart"></canvas>
+          </div>
+        </div>
+        
+        <h6 class="fw-bold mb-3"><i class="fas fa-redo text-danger me-2"></i>مخالفات متكررة (تحتاج تدخل)</h6>
+        <div id="repeatedViolationsList" class="row g-3 mb-4"></div>
+        
+        <h6 class="fw-bold mb-3"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
+        <div id="allViolationsList" class="row g-3"></div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-pane fade" id="historyPane">
+        <div class="filter-section" style="background: linear-gradient(135deg, #fdf2f4, #fce7eb); border: 1px solid rgba(139, 69, 100, 0.2);">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="fas fa-history me-2" style="color: var(--crimson);"></i>سجل الجولات التاريخي</h5>
+            <button class="btn btn-sm" style="background: var(--crimson); color: white;" onclick="exportHistory()">
+              <i class="fas fa-file-export me-1"></i>تصدير التقرير
+            </button>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label small fw-bold">اختيار سريع:</label>
+            <div class="btn-group btn-group-sm" role="group" id="dateRangeBtnGroup">
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="today" onclick="setHistoryRange('today')">اليوم</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="week" onclick="setHistoryRange('week')">أسبوع</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="2weeks" onclick="setHistoryRange('2weeks')">أسبوعين</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="month" onclick="setHistoryRange('month')">شهر</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="2months" onclick="setHistoryRange('2months')">شهرين</button>
+              <button type="button" class="btn btn-outline-secondary date-range-btn" data-range="3months" onclick="setHistoryRange('3months')">3 أشهر</button>
+            </div>
+          </div>
+          
+          <div class="row g-3">
+            <div class="col-md-2">
+              <label class="form-label small">من تاريخ</label>
+              <input type="date" class="form-control form-control-sm" id="historyStartDate" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">إلى تاريخ</label>
+              <input type="date" class="form-control form-control-sm" id="historyEndDate" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">المسؤول</label>
+              <select class="form-select form-select-sm" id="historyStaffFilter">
+                <option value="">الكل</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">المعالجة</label>
+              <select class="form-select form-select-sm" id="historyResolvedFilter">
+                <option value="">الكل</option>
+                <option value="yes">نعم - تم المعالجة</option>
+                <option value="no">لا - لم يتم المعالجة</option>
+              </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button class="btn btn-sm w-100" style="background: var(--primary); color: white;" onclick="loadHistory()">
+                <i class="fas fa-search me-1"></i>بحث
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card" style="border: 2px solid rgba(139, 69, 100, 0.3); background: linear-gradient(135deg, #fffbfc, #fff5f7);">
+          <div class="card-body p-2">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0" id="historyTable" style="background: white;">
+                <thead style="background: linear-gradient(135deg, #8b4563, #6b3548); color: white;">
+                  <tr>
+                    <th class="text-center">التاريخ</th>
+                    <th class="text-center">الوقت</th>
+                    <th class="text-center">الجولة</th>
+                    <th class="text-center">المسؤول</th>
+                    <th class="text-center">مسؤول التنفيذ</th>
+                    <th class="text-center">الحالة</th>
+                    <th class="text-center">المعالجة</th>
+                    <th class="text-center">ملاحظات</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                  <tr><td colspan="8" class="text-center text-muted py-4">اختر الفترة الزمنية واضغط بحث</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="spinnerOverlay" class="spinner-overlay">
+    <div class="text-center">
+      <div class="spinner-border text-primary mb-3" role="status"></div>
+      <div class="fw-semibold">جاري تحميل البيانات...</div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-5">
+          <i class="fas fa-check-circle me-2"></i>
+          <span id="successToastMessage">تم بنجاح!</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+    <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-5">
+          <i class="fas fa-exclamation-circle me-2"></i>
+          <span id="errorToastMessage">حدث خطأ!</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resolve Confirmation Modal - Beautiful Design -->
+  <div class="modal fade" id="resolveConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 overflow-hidden" style="border-radius: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
+        <!-- Header with gradient and logo -->
+        <div class="text-center py-4" style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8a 50%, #1e3a5f 100%);">
+          <div class="mb-3">
+            <img src="https://m2020m.org/attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg" 
+                 alt="شعار المجمع" 
+                 style="width: 80px; height: 80px; border-radius: 50%; border: 4px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+          </div>
+          <h4 class="text-white mb-0 fw-bold">مجمع مكة الطبي</h4>
+          <small class="text-white-50">نظام جولات السلامة</small>
+        </div>
+        
+        <!-- Body -->
+        <div class="modal-body text-center p-4" style="background: linear-gradient(180deg, #fff 0%, #f8f9fa 100%);">
+          <!-- Question Icon -->
+          <div class="mb-4">
+            <div style="width: 80px; height: 80px; margin: 0 auto; background: linear-gradient(135deg, #ffd700, #ffb300); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(255,193,7,0.4);">
+              <i class="fas fa-question fa-2x text-white"></i>
+            </div>
+          </div>
+          
+          <!-- Question Text -->
+          <h4 class="fw-bold mb-3" style="color: #1e3a5f;">هل أنت متأكد؟</h4>
+          <p class="text-muted mb-4" style="font-size: 1.1rem;">
+            هل تريد تأكيد معالجة هذه المخالفة؟
+          </p>
+          
+          <!-- Violation Info Card -->
+          <div id="resolveViolationInfo" class="p-3 mb-4 text-end" 
+               style="background: #fff; border-radius: 12px; border: 2px solid #e9ecef; border-right: 5px solid #dc3545; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+          </div>
+          
+          <!-- Warning Note -->
+          <div class="alert py-2 px-3 mb-4" style="background: #fff3cd; border-radius: 10px; border: none;">
+            <i class="fas fa-info-circle text-warning me-2"></i>
+            <small class="text-dark">سيتم تسجيل المعالجة باسمك وتاريخ اليوم</small>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div class="d-flex gap-3 justify-content-center">
+            <button type="button" class="btn btn-lg px-5 py-3 fw-bold" data-bs-dismiss="modal"
+                    style="background: #e9ecef; color: #495057; border-radius: 12px; border: none; min-width: 130px; transition: all 0.2s;"
+                    onmouseover="this.style.background='#dee2e6'" onmouseout="this.style.background='#e9ecef'">
+              <i class="fas fa-times me-2"></i>إلغاء
+            </button>
+            <button type="button" class="btn btn-lg px-5 py-3 fw-bold text-white" onclick="showPasscodeModal()"
+                    style="background: linear-gradient(135deg, #28a745, #218838); border-radius: 12px; border: none; min-width: 130px; box-shadow: 0 4px 15px rgba(40,167,69,0.4); transition: all 0.2s;"
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(40,167,69,0.5)'" 
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(40,167,69,0.4)'">
+              <i class="fas fa-check-circle me-2"></i>نعم، تأكيد
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Follow Up Modal - نافذة المتابعة -->
+  <div class="modal fade" id="followUpModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 overflow-hidden" style="border-radius: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
+        <!-- Header with gradient and logo -->
+        <div class="text-center py-4" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 50%, #117a8b 100%);">
+          <div class="mb-3">
+            <img src="https://m2020m.org/attached_assets/شعار_للموقع_المجمع_1765489579657.jpeg" 
+                 alt="شعار المجمع" 
+                 style="width: 80px; height: 80px; border-radius: 50%; border: 4px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+          </div>
+          <h4 class="text-white mb-0 fw-bold">مجمع مكة الطبي</h4>
+          <small class="text-white-50">تسجيل متابعة المخالفة</small>
+        </div>
+        
+        <!-- Body -->
+        <div class="modal-body text-center p-4" style="background: linear-gradient(180deg, #fff 0%, #f8f9fa 100%);">
+          <!-- Icon -->
+          <div class="mb-4">
+            <div style="width: 80px; height: 80px; margin: 0 auto; background: linear-gradient(135deg, #17a2b8, #138496); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(23,162,184,0.4);">
+              <i class="fas fa-clipboard-check fa-2x text-white"></i>
+            </div>
+          </div>
+          
+          <!-- Title -->
+          <h4 class="fw-bold mb-3" style="color: #1e3a5f;">تسجيل متابعة</h4>
+          <p class="text-muted mb-4">سيتم تسجيل المتابعة بدون إغلاق المخالفة</p>
+          
+          <!-- Violation Info Card -->
+          <div id="followUpViolationInfo" class="p-3 mb-4 text-end" 
+               style="background: #fff; border-radius: 12px; border: 2px solid #e9ecef; border-right: 5px solid #17a2b8; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+          </div>
+          
+          <!-- اسم المتابع -->
+          <div class="mb-4 text-end">
+            <label class="form-label fw-bold" style="color: #1e3a5f;">
+              <i class="fas fa-user me-2"></i>اسم المتابع
+            </label>
+            <input type="text" class="form-control form-control-lg text-end" id="followUpName" 
+                   placeholder="أدخل اسمك الكامل..." 
+                   style="border-radius: 12px; border: 2px solid #e9ecef; padding: 12px 16px;">
+          </div>
+          
+          <!-- ملاحظات المتابعة (اختياري) -->
+          <div class="mb-4 text-end">
+            <label class="form-label fw-bold" style="color: #1e3a5f;">
+              <i class="fas fa-sticky-note me-2"></i>ملاحظات المتابعة <small class="text-muted">(اختياري)</small>
+            </label>
+            <textarea class="form-control text-end" id="followUpNotes" rows="2"
+                   placeholder="أضف ملاحظاتك عن المتابعة..." 
+                   style="border-radius: 12px; border: 2px solid #e9ecef; padding: 12px 16px;"></textarea>
+          </div>
+          
+          <!-- Info Note -->
+          <div class="alert py-2 px-3 mb-4" style="background: #d1ecf1; border-radius: 10px; border: none;">
+            <i class="fas fa-info-circle text-info me-2"></i>
+            <small class="text-dark">المخالفة ستبقى مفتوحة حتى يتم معالجتها</small>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div class="d-flex gap-3 justify-content-center">
+            <button type="button" class="btn btn-lg px-5 py-3 fw-bold" data-bs-dismiss="modal"
+                    style="background: #e9ecef; color: #495057; border-radius: 12px; border: none; min-width: 130px;">
+              <i class="fas fa-times me-2"></i>إلغاء
+            </button>
+            <button type="button" class="btn btn-lg px-5 py-3 fw-bold text-white" onclick="confirmFollowUp()"
+                    style="background: linear-gradient(135deg, #17a2b8, #138496); border-radius: 12px; border: none; min-width: 130px; box-shadow: 0 4px 15px rgba(23,162,184,0.4);">
+              <i class="fas fa-save me-2"></i>حفظ المتابعة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Passcode Input Modal -->
+  <div class="modal fade" id="passcodeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 320px;">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+        <div class="modal-header border-0" style="background: var(--primary); color: white;">
+          <h6 class="modal-title"><i class="fas fa-lock me-2"></i>الرمز السري</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted small mb-3 text-center">أدخل رمزك السري للتأكيد</p>
+          
+          <!-- PIN Display -->
+          <div class="d-flex justify-content-center gap-2 mb-4" id="pinDisplay">
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+          </div>
+          <input type="hidden" id="passcodeInput" maxlength="4">
+          
+          <!-- Number Pad -->
+          <div class="numpad-grid">
+            <button type="button" class="numpad-btn" onclick="addPinDigit('1')">1</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('2')">2</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('3')">3</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('4')">4</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('5')">5</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('6')">6</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('7')">7</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('8')">8</button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('9')">9</button>
+            <button type="button" class="numpad-btn numpad-clear" onclick="clearPin()"><i class="fas fa-backspace"></i></button>
+            <button type="button" class="numpad-btn" onclick="addPinDigit('0')">0</button>
+            <button type="button" class="numpad-btn numpad-submit" onclick="verifyAndResolve()"><i class="fas fa-check"></i></button>
+          </div>
+          
+          <div id="passcodeError" class="text-danger small mt-3 text-center" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <style>
+    .pin-dot {
+      width: 18px; height: 18px;
+      border: 2px solid var(--primary);
+      border-radius: 50%;
+      background: #fff;
+      transition: all 0.15s ease;
+    }
+    .pin-dot.filled {
+      background: var(--primary);
+      transform: scale(1.15);
+      box-shadow: 0 0 8px rgba(30, 58, 95, 0.4);
+    }
+    .numpad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .numpad-btn {
+      width: 100%; height: 55px;
+      border: none;
+      border-radius: 12px;
+      background: #f3f4f6;
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #1f2937;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .numpad-btn:active {
+      transform: scale(0.92);
+      background: #e5e7eb;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
+    }
+    .numpad-btn:hover {
+      background: #e5e7eb;
+    }
+    .numpad-clear { background: #fef2f2; color: #dc3545; }
+    .numpad-clear:hover { background: #fee2e2; }
+    .numpad-submit { background: #d1fae5; color: #059669; }
+    .numpad-submit:hover { background: #a7f3d0; }
+  </style>
+
+
+  <div class="modal fade" id="roundFormModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background: var(--primary); color: white;">
+          <h5 class="modal-title"><i class="fas fa-clipboard-check me-2"></i>تسجيل جولة رقابية</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="roundForm">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">المسؤول <span class="text-danger">*</span></label>
+                <select class="form-select" id="formStaff" required>
+                  <option value="">اختر المسؤول...</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">منفذ الجولة</label>
+                <input type="text" class="form-control" id="formExecResponsible" placeholder="اسم المنفذ (اختياري)">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">الجولة <span class="text-danger">*</span></label>
+                <select class="form-select" id="formRound" required>
+                  <option value="">اختر الجولة...</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">الحالة <span class="text-danger">*</span></label>
+                <select class="form-select" id="formStatus" required>
+                  <option value="في الوقت">في الوقت - مكتمل</option>
+                  <option value="متأخر">متأخر</option>
+                  <option value="خلل">يوجد خلل / مخالفة</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-bold">وقت التنفيذ</label>
+                <input type="time" class="form-control" id="formTime">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">ملاحظات إيجابية</label>
+                <textarea class="form-control" id="formPositiveNotes" rows="2" placeholder="نقاط القوة والإيجابيات..."></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">نقاط الخلل / المخالفات</label>
+                <textarea class="form-control" id="formNegativeNotes" rows="2" placeholder="المشاكل والملاحظات السلبية (إن وجدت)..."></textarea>
+                <div class="form-check mt-2">
+                  <input class="form-check-input border-danger" type="checkbox" id="formIsViolation" style="width: 1.3em; height: 1.3em;">
+                  <label class="form-check-label text-danger fw-bold" for="formIsViolation" style="font-size: 0.95rem;">
+                    اعتبر هذه مخالفة تستوجب المتابعة
+                  </label>
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold">الإجراءات المتخذة</label>
+                <textarea class="form-control" id="formActions" rows="2" placeholder="ما تم فعله لحل المشكلة (إن وجد)..."></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+          <button type="button" class="btn btn-success" onclick="submitRoundForm()">
+            <i class="fas fa-save me-1"></i> حفظ الجولة
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Google Apps Script Web App URL
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec';
+    
+    // API helper function
+    async function callApi(action, payload = {}) {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Backend error');
+      return data;
+    }
+    
+    let MASTER_TASKS = [];
+    let ROUNDS_LOG = [];
+    let STAFF_LIST = [];
+    let DELAYED_LIST = [];
+    let VIOLATIONS_DATA = { violations: [], repeated: [] };
+
+    // الحصول على التاريخ بتوقيت السعودية (UTC+3)
+    function getSaudiDate() {
+      const now = new Date();
+      // تحويل إلى UTC ثم إضافة 3 ساعات للسعودية
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      return new Date(utc + (3 * 60 * 60000));
+    }
+    
+    // الحصول على تاريخ اليوم بتنسيق YYYY-MM-DD بتوقيت السعودية
+    function getSaudiTodayStr() {
+      const d = getSaudiDate();
+      return d.getFullYear() + '-' + 
+             String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+             String(d.getDate()).padStart(2, '0');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateTodayHeader();
+      loadAllData();
+    });
+
+    function showSpinner(show) {
+      document.getElementById('spinnerOverlay').style.display = show ? 'flex' : 'none';
+    }
+    
+    function showSuccessToast(message) {
+      const toastEl = document.getElementById('successToast');
+      document.getElementById('successToastMessage').textContent = message;
+      const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+      toast.show();
+    }
+    
+    function showErrorToast(message) {
+      const toastEl = document.getElementById('errorToast');
+      document.getElementById('errorToastMessage').textContent = message;
+      const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+      toast.show();
+    }
+
+    // Resolve violation modal handling
+    let currentResolveData = null;
+    
+    function handleResolveClick(btn) {
+      const rowIndex = parseInt(btn.dataset.row) || 0;
+      const staffName = btn.dataset.staff || '';
+      const area = btn.dataset.area || '';
+      const notes = btn.dataset.notes || '';
+      openResolveModal(rowIndex, staffName, area, notes);
+    }
+    
+    // === Follow Up (متابعة) handling ===
+    let currentFollowUpData = null;
+    
+    function handleFollowUpClick(btn) {
+      const rowIndex = parseInt(btn.dataset.row) || 0;
+      const staffName = btn.dataset.staff || '';
+      const area = btn.dataset.area || '';
+      const notes = btn.dataset.notes || '';
+      openFollowUpModal(rowIndex, staffName, area, notes);
+    }
+    
+    function openFollowUpModal(rowIndex, staffName, area, issue) {
+      currentFollowUpData = { rowIndex, staffName, area, issue };
+      document.getElementById('followUpViolationInfo').innerHTML = `
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-map-marker-alt text-info me-2"></i>
+          <strong>الجولة:</strong>&nbsp;${area || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-user-cog text-primary me-2"></i>
+          <strong>المكلف:</strong>&nbsp;${staffName || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-start">
+          <i class="fas fa-exclamation-circle text-warning me-2 mt-1"></i>
+          <div><strong>الخلل:</strong>&nbsp;${issue || 'مخالفة مسجلة'}</div>
+        </div>
+      `;
+      document.getElementById('followUpName').value = '';
+      document.getElementById('followUpNotes').value = '';
+      const modal = new bootstrap.Modal(document.getElementById('followUpModal'));
+      modal.show();
+    }
+    
+    async function confirmFollowUp() {
+      const followerName = document.getElementById('followUpName').value.trim();
+      const followUpNotes = document.getElementById('followUpNotes').value.trim();
+      
+      if (!followerName) {
+        showErrorToast('الرجاء إدخال اسم المتابع');
+        document.getElementById('followUpName').focus();
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('addFollowUp', {
+          rowIndex: currentFollowUpData.rowIndex,
+          followerName: followerName,
+          followUpNotes: followUpNotes,
+          followUpDate: new Date().toLocaleDateString('en-US')
+        });
+        
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          bootstrap.Modal.getInstance(document.getElementById('followUpModal')).hide();
+          showSuccessToast(`تم تسجيل المتابعة بواسطة ${followerName}`);
+          currentFollowUpData = null;
+          await loadViolations();
+          renderViolations();
+        } else {
+          showErrorToast(result.message || result.error || 'حدث خطأ أثناء حفظ المتابعة');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
+    }
+    
+    function openResolveModal(rowIndex, staffName, area, issue) {
+      currentResolveData = { rowIndex, staffName, area, issue };
+      document.getElementById('resolveViolationInfo').innerHTML = `
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-map-marker-alt text-danger me-2"></i>
+          <strong>الجولة:</strong>&nbsp;${area || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-center mb-2">
+          <i class="fas fa-user-cog text-primary me-2"></i>
+          <strong>المكلف:</strong>&nbsp;${staffName || 'غير محدد'}
+        </div>
+        <div class="d-flex align-items-start">
+          <i class="fas fa-exclamation-circle text-warning me-2 mt-1"></i>
+          <div><strong>الخلل:</strong>&nbsp;${issue || 'مخالفة مسجلة'}</div>
+        </div>
+      `;
+      const modal = new bootstrap.Modal(document.getElementById('resolveConfirmModal'));
+      modal.show();
+    }
+    
+    function showPasscodeModal() {
+      bootstrap.Modal.getInstance(document.getElementById('resolveConfirmModal')).hide();
+      clearPin();
+      document.getElementById('passcodeError').style.display = 'none';
+      setTimeout(() => {
+        const modal = new bootstrap.Modal(document.getElementById('passcodeModal'));
+        modal.show();
+      }, 300);
+    }
+    
+    // دوال لوحة الأرقام
+    function addPinDigit(digit) {
+      const input = document.getElementById('passcodeInput');
+      if (input.value.length < 4) {
+        input.value += digit;
+        updatePinDisplay();
+        // اهتزاز خفيف للتأكيد
+        if (navigator.vibrate) navigator.vibrate(30);
+      }
+    }
+    
+    function clearPin() {
+      document.getElementById('passcodeInput').value = '';
+      updatePinDisplay();
+    }
+    
+    function updatePinDisplay() {
+      const len = document.getElementById('passcodeInput').value.length;
+      const dots = document.querySelectorAll('#pinDisplay .pin-dot');
+      dots.forEach((dot, i) => {
+        dot.classList.toggle('filled', i < len);
+      });
+    }
+    
+    async function verifyAndResolve() {
+      const passcode = document.getElementById('passcodeInput').value;
+      
+      if (!passcode || passcode.length < 4) {
+        document.getElementById('passcodeError').textContent = 'الرجاء إدخال الرمز السري';
+        document.getElementById('passcodeError').style.display = 'block';
+        return;
+      }
+      
+      try {
+        // Verify passcode - الآن يقبل أي رمز صحيح ويرجع اسم صاحبه
+        const verifyData = await callApi('verifyPasscode', { passcode });
+        
+        if (!verifyData.valid) {
+          document.getElementById('passcodeError').textContent = verifyData.error || 'الرمز السري غير صحيح';
+          document.getElementById('passcodeError').style.display = 'block';
+          return;
+        }
+        
+        // استخدام اسم الموظف الذي أدخل الرمز (من الـ API)
+        const resolvedByName = verifyData.staffName || 'موظف';
+        
+        // Mark as resolved
+        const resolveData = await callApi('resolveViolation', {
+          rowIndex: currentResolveData.rowIndex,
+          resolvedBy: resolvedByName,
+          resolvedDate: new Date().toLocaleDateString('en-US')
+        });
+        
+        if (resolveData.ok || resolveData.success) {
+          bootstrap.Modal.getInstance(document.getElementById('passcodeModal')).hide();
+          showSuccessToast(`تم تسجيل المعالجة بواسطة ${resolvedByName}`);
+          currentResolveData = null;
+          // Reload violations
+          await loadViolations();
+          renderViolations();
+        } else {
+          showErrorToast(resolveData.message || resolveData.error || 'حدث خطأ');
+        }
+      } catch (err) {
+        console.error('Resolve error:', err);
+        showErrorToast('حدث خطأ في الاتصال');
+      }
+    }
+
+    function updateTodayHeader() {
+      const today = getSaudiDate();
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      document.getElementById('todayInfoText').textContent = today.toLocaleDateString('ar-SA', options);
+    }
+
+    async function loadAllData() {
+      showSpinner(true);
+      try {
+        await Promise.all([
+          loadMasterTasks(),
+          loadRoundsLog(),
+          loadStaffList(),
+          loadDelayed(),
+          loadViolations(),
+          loadStaffSummary()
+        ]);
+        updateStats();
+      } catch (err) {
+        console.error('Load error:', err);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    async function loadMasterTasks() {
+      try {
+        const data = await callApi('getMasterTasks');
+        MASTER_TASKS = data.tasks || [];
+        renderStationCards();
+      } catch (err) {
+        console.error('Master tasks error:', err);
+      }
+    }
+
+    async function loadRoundsLog() {
+      try {
+        const data = await callApi('getRoundsLog', { limit: 100 });
+        ROUNDS_LOG = data.entries || [];
+        renderRoundsLog();
+      } catch (err) {
+        console.error('Rounds log error:', err);
+      }
+    }
+
+    async function loadStaffList() {
+      try {
+        const data = await callApi('getStaff');
+        STAFF_LIST = data.staff || [];
+        populateStaffFilter();
+      } catch (err) {
+        console.error('Staff list error:', err);
+      }
+    }
+
+    let DELAYED_HISTORY = [];
+    
+    async function loadDelayed() {
+      try {
+        const data = await callApi('getDelayed');
+        DELAYED_LIST = data.delayed || [];
+        document.getElementById('delayedCount').textContent = DELAYED_LIST.length;
+        document.getElementById('delayedTodayCount').textContent = DELAYED_LIST.length;
+        renderDelayedNow();
+        loadDelayedHistory();
+      } catch (err) {
+        console.error('Delayed error:', err);
+      }
+    }
+    
+    function renderDelayedNow() {
+      const container = document.getElementById('delayedNowList');
+      if (!DELAYED_LIST.length) {
+        container.innerHTML = `
+          <div class="col-12">
+            <div class="alert alert-success text-center mb-0">
+              <i class="fas fa-check-circle me-2"></i>لا توجد جولات متأخرة - ممتاز!
+            </div>
+          </div>`;
+        return;
+      }
+      
+      container.innerHTML = DELAYED_LIST.map(d => `
+        <div class="col-md-6 col-lg-4">
+          <div class="delayed-card p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h6 class="mb-0 text-danger">${d.roundName || d.taskId}</h6>
+              <span class="badge bg-danger">${d.delayFormatted}</span>
+            </div>
+            <div class="small text-muted mb-1">
+              <i class="fas fa-user me-1"></i>${d.staff || 'غير محدد'}
+            </div>
+            <div class="small text-muted">
+              <i class="fas fa-clock me-1"></i>الوقت المتوقع: ${d.expectedTime}
+            </div>
+            <div class="small text-danger mt-1">
+              <i class="fas fa-hourglass-end me-1"></i>متأخر ${d.delayMinutes} دقيقة
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    async function loadDelayedHistory() {
+      try {
+        const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 90;
+        const data = await callApi('getHistory', { days: days });
+        
+        // Filter entries that are delayed (Status contains 'متأخر' or has delay info)
+        DELAYED_HISTORY = (data.entries || []).filter(e => {
+          const status = String(e.Status || '').toLowerCase();
+          const delayMin = parseInt(e.Delay_Min) || 0;
+          return status.includes('متأخر') || delayMin > 0;
+        });
+        
+        populateDelayedFilters();
+        applyDelayedFilters();
+      } catch (err) {
+        console.error('Delayed history error:', err);
+      }
+    }
+    
+    function updateDelayedPeriodLabel() {
+      const select = document.getElementById('delayedPeriodFilter');
+      const label = document.getElementById('delayedPeriodLabel');
+      if (select && label) {
+        const periodLabels = {
+          '1': 'اليوم',
+          '7': 'أسبوع',
+          '14': 'أسبوعين',
+          '30': 'شهر',
+          '60': 'شهرين',
+          '90': '3 أشهر',
+          '0': 'الكل'
+        };
+        label.textContent = periodLabels[select.value] || 'أسبوع';
+      }
+    }
+    
+    function populateDelayedFilters() {
+      // Populate staff filter
+      const staffFilter = document.getElementById('delayedStaffFilter');
+      const staffSet = new Set(DELAYED_HISTORY.map(d => d.Staff || d.Responsible_Role).filter(Boolean));
+      staffFilter.innerHTML = '<option value="">الكل</option>' + 
+        Array.from(staffSet).map(s => `<option value="${s}">${s}</option>`).join('');
+      
+      // Populate round filter
+      const roundFilter = document.getElementById('delayedRoundFilter');
+      const roundSet = new Set(DELAYED_HISTORY.map(d => d.Round_Name || d.Area).filter(Boolean));
+      roundFilter.innerHTML = '<option value="">الكل</option>' + 
+        Array.from(roundSet).map(r => `<option value="${r}">${r}</option>`).join('');
+    }
+    
+    function applyDelayedFilters() {
+      const days = parseInt(document.getElementById('delayedPeriodFilter')?.value) || 0;
+      const staff = document.getElementById('delayedStaffFilter')?.value || '';
+      const round = document.getElementById('delayedRoundFilter')?.value || '';
+      
+      let filtered = [...DELAYED_HISTORY];
+      
+      // Filter by date
+      if (days > 0) {
+        const cutoff = getSaudiDate();
+        cutoff.setDate(cutoff.getDate() - days);
+        filtered = filtered.filter(d => {
+          const date = new Date(d.Date);
+          return date >= cutoff;
+        });
+      }
+      
+      // Filter by staff
+      if (staff) {
+        filtered = filtered.filter(d => (d.Staff || d.Responsible_Role) === staff);
+      }
+      
+      // Filter by round
+      if (round) {
+        filtered = filtered.filter(d => (d.Round_Name || d.Area) === round);
+      }
+      
+      // Update statistics
+      document.getElementById('delayedTotalCount').textContent = filtered.length;
+      // تحديث رقم التبويب ليعكس إجمالي التأخيرات
+      document.getElementById('delayedCount').textContent = filtered.length;
+      updateDelayedPeriodLabel();
+      
+      // Calculate average delay
+      const delays = filtered.map(d => parseInt(d.Delay_Min) || 0).filter(d => d > 0);
+      const avgDelay = delays.length ? Math.round(delays.reduce((a,b) => a+b, 0) / delays.length) : 0;
+      document.getElementById('delayedAvgTime').textContent = avgDelay;
+      
+      // Find top delayed staff
+      const staffCounts = {};
+      filtered.forEach(d => {
+        const s = d.Staff || d.Responsible_Role || 'غير محدد';
+        staffCounts[s] = (staffCounts[s] || 0) + 1;
+      });
+      const topStaff = Object.entries(staffCounts).sort((a,b) => b[1] - a[1])[0];
+      document.getElementById('delayedTopStaff').textContent = topStaff ? topStaff[0] : '-';
+      
+      // Render charts and table
+      renderDelayedCharts(filtered);
+      renderDelayedHistoryTable(filtered);
+    }
+    
+    // Chart instances for delayed tab
+    let delayedByStaffChartInstance = null;
+    let delayedByDayChartInstance = null;
+    let delayedTrendChartInstance = null;
+    let topDelayedRoundsChartInstance = null;
+    let delayDurationChartInstance = null;
+
+    function renderDelayedCharts(data) {
+      const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'];
+      
+      // 1. Delays by Staff (Donut)
+      const staffCounts = {};
+      data.forEach(d => {
+        const staff = d.Staff || d.Responsible_Role || 'غير محدد';
+        staffCounts[staff] = (staffCounts[staff] || 0) + 1;
+      });
+      
+      const staffCtx = document.getElementById('delayedByStaffChart');
+      if (staffCtx) {
+        if (delayedByStaffChartInstance) delayedByStaffChartInstance.destroy();
+        delayedByStaffChartInstance = new Chart(staffCtx, {
+          type: 'doughnut',
+          data: {
+            labels: Object.keys(staffCounts),
+            datasets: [{
+              data: Object.values(staffCounts),
+              backgroundColor: colors,
+              borderWidth: 2,
+              borderColor: '#fff'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } }
+          }
+        });
+      }
+      
+      // 2. Delays by Day (Bar) - using Saudi timezone (UTC+3)
+      const dayCounts = {};
+      const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      dayNames.forEach(d => dayCounts[d] = 0);
+      data.forEach(d => {
+        if (!d.Date) return;
+        // Parse date and add 3 hours for Saudi timezone
+        let date = new Date(d.Date);
+        if (!isNaN(date.getTime())) {
+          // Add 3 hours to convert UTC to Saudi time (UTC+3)
+          date = new Date(date.getTime() + (3 * 60 * 60 * 1000));
+          dayCounts[dayNames[date.getUTCDay()]]++;
+        }
+      });
+      
+      const dayCtx = document.getElementById('delayedByDayChart');
+      if (dayCtx) {
+        if (delayedByDayChartInstance) delayedByDayChartInstance.destroy();
+        delayedByDayChartInstance = new Chart(dayCtx, {
+          type: 'bar',
+          data: {
+            labels: dayNames,
+            datasets: [{
+              label: 'عدد التأخيرات',
+              data: dayNames.map(d => dayCounts[d]),
+              backgroundColor: 'rgba(239, 68, 68, 0.7)',
+              borderColor: '#ef4444',
+              borderWidth: 1,
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+          }
+        });
+      }
+      
+      // 3. Delay Trend (Line)
+      const dateCounts = {};
+      data.forEach(d => {
+        const dateStr = d.Date?.split(' ')[0] || d.Date;
+        if (dateStr) dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+      });
+      const sortedDates = Object.keys(dateCounts).sort().slice(-14);
+      
+      const trendCtx = document.getElementById('delayedTrendChart');
+      if (trendCtx) {
+        if (delayedTrendChartInstance) delayedTrendChartInstance.destroy();
+        delayedTrendChartInstance = new Chart(trendCtx, {
+          type: 'line',
+          data: {
+            labels: sortedDates.map(d => d.slice(-5)),
+            datasets: [{
+              label: 'التأخيرات',
+              data: sortedDates.map(d => dateCounts[d]),
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }
+      
+      // 4. Top Delayed Rounds (Horizontal Bar)
+      const roundCounts = {};
+      data.forEach(d => {
+        const round = d.Round_Name || d.Area || 'غير محدد';
+        roundCounts[round] = (roundCounts[round] || 0) + 1;
+      });
+      const topRounds = Object.entries(roundCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+      
+      const topCtx = document.getElementById('topDelayedRoundsChart');
+      if (topCtx) {
+        if (topDelayedRoundsChartInstance) topDelayedRoundsChartInstance.destroy();
+        // Store full names for tooltips
+        const fullNames = topRounds.map(r => r[0]);
+        topDelayedRoundsChartInstance = new Chart(topCtx, {
+          type: 'bar',
+          data: {
+            labels: topRounds.map(r => {
+              // Truncate long names but keep readable
+              const name = r[0];
+              if (name.length > 18) {
+                return name.substring(0, 15) + '...';
+              }
+              return name;
+            }),
+            datasets: [{
+              data: topRounds.map(r => r[1]),
+              backgroundColor: colors.slice(0, 5),
+              borderRadius: 4
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { 
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: function(context) {
+                    // Show full name in tooltip
+                    return fullNames[context[0].dataIndex];
+                  },
+                  label: function(context) {
+                    return 'التأخيرات: ' + context.raw;
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                ticks: {
+                  font: { size: 11 },
+                  autoSkip: false
+                }
+              }
+            }
+          }
+        });
+      }
+      
+      // 5. Delay Duration Distribution
+      const durationBuckets = { '0-15': 0, '16-30': 0, '31-60': 0, '61-120': 0, '120+': 0 };
+      data.forEach(d => {
+        const min = parseInt(d.Delay_Min) || 0;
+        if (min <= 15) durationBuckets['0-15']++;
+        else if (min <= 30) durationBuckets['16-30']++;
+        else if (min <= 60) durationBuckets['31-60']++;
+        else if (min <= 120) durationBuckets['61-120']++;
+        else durationBuckets['120+']++;
+      });
+      
+      const durCtx = document.getElementById('delayDurationChart');
+      if (durCtx) {
+        if (delayDurationChartInstance) delayDurationChartInstance.destroy();
+        delayDurationChartInstance = new Chart(durCtx, {
+          type: 'bar',
+          data: {
+            labels: Object.keys(durationBuckets).map(k => k + ' دقيقة'),
+            datasets: [{
+              data: Object.values(durationBuckets),
+              backgroundColor: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444'],
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }
+    }
+
+    function renderDelayedHistoryTable(data) {
+      const tbody = document.getElementById('delayedHistoryBody');
+      
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">لا توجد تأخيرات في هذه الفترة</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = data.map(d => {
+        const delayMin = parseInt(d.Delay_Min) || 0;
+        const delayClass = delayMin > 60 ? 'text-danger fw-bold' : delayMin > 30 ? 'text-warning' : 'text-muted';
+        const delayText = delayMin > 0 ? `${delayMin} دقيقة` : '-';
+        
+        return `
+          <tr>
+            <td>${d.Date || '-'}</td>
+            <td>${d.Round_Name || d.Area || '-'}</td>
+            <td>${d.Staff || d.Responsible_Role || '-'}</td>
+            <td>${d.Planned_Time || '-'}</td>
+            <td>${d.Actual_Time || '-'}</td>
+            <td class="${delayClass}">${delayText}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function loadViolations() {
+      try {
+        const data = await callApi('getViolations');
+        VIOLATIONS_DATA = data;
+        document.getElementById('violationsCount').textContent = (data.violations || []).length;
+        renderViolations();
+      } catch (err) {
+        console.error('Violations error:', err);
+      }
+    }
+
+    function updateStats() {
+      const todayStr = getSaudiTodayStr();
+      const todayTasks = MASTER_TASKS.filter(t => {
+        const dayMap = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+        const today = getSaudiDate().getDay();
+        const dayKey = dayMap[today];
+        return t[dayKey] && t[dayKey].toLowerCase() === 'yes';
+      });
+      
+      const total = todayTasks.reduce((sum, t) => sum + (parseInt(t.Rounds_Per_Day) || 0), 0);
+      const todayLogs = ROUNDS_LOG.filter(r => r.Date && r.Date.includes(todayStr.split('-')[2]));
+      const done = todayLogs.filter(r => r.Status !== 'متأخر').length;
+      const delayed = DELAYED_LIST.length;
+      
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      setEl('statTotal', total);
+      setEl('statDone', done);
+      setEl('statPending', Math.max(0, total - done - delayed));
+      setEl('statDelayed', delayed);
+    }
+
+    let STAFF_SUMMARY = [];
+    let currentChecklist = null;
+    let selectedStaffData = null;
+    
+    async function loadStaffSummary() {
+      try {
+        const data = await callApi('getStaffSummary');
+        STAFF_SUMMARY = data.staff || [];
+        window.IS_HOLIDAY = data.isHoliday || false;
+        renderStationCards();
+        renderStaffPerformanceChart();
+        
+        // Re-render selected staff's tasks if one is selected
+        if (selectedStaffData) {
+          const updatedStaff = STAFF_SUMMARY.find(s => s.name === selectedStaffData.name);
+          if (updatedStaff) {
+            selectStaff(updatedStaff.name);
+          }
+        }
+      } catch (err) {
+        console.error('Staff summary error:', err);
+      }
+    }
+    
+    let staffPerformanceChartInstance = null;
+    function renderStaffPerformanceChart() {
+      const ctx = document.getElementById('staffPerformanceChart');
+      if (!ctx || !STAFF_SUMMARY.length) return;
+      
+      if (staffPerformanceChartInstance) {
+        staffPerformanceChartInstance.destroy();
+      }
+      
+      const labels = STAFF_SUMMARY.map(s => s.name);
+      const todayTasks = STAFF_SUMMARY.map(s => s.todayTasks);
+      const todayDone = STAFF_SUMMARY.map(s => s.todayDone);
+      
+      staffPerformanceChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'مهام اليوم',
+              data: todayTasks,
+              backgroundColor: '#c9a962',
+              borderRadius: 4,
+              barThickness: 30
+            },
+            {
+              label: 'منجز اليوم',
+              data: todayDone,
+              backgroundColor: '#22c55e',
+              borderRadius: 4,
+              barThickness: 30
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { family: 'Tajawal' }, usePointStyle: true }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { stepSize: 1, font: { family: 'Tajawal' } },
+              grid: { color: 'rgba(0,0,0,0.05)' }
+            },
+            x: {
+              ticks: { font: { family: 'Tajawal', size: 11 } },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function renderStationCards() {
+      const container = document.getElementById('stationCardsContainer');
+      
+      if (!STAFF_SUMMARY.length) {
+        // عرض رسالة الإجازة إذا كانت متوفرة
+        if (window.IS_HOLIDAY) {
+          container.innerHTML = `
+            <div class="text-center py-4" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 16px; border: 2px dashed #86efac;">
+              <div style="font-size: 3rem; margin-bottom: 10px;">🌴</div>
+              <div style="font-size: 1.3rem; font-weight: bold; color: #166534; margin-bottom: 8px;">اليوم إجازة!</div>
+              <div style="color: #15803d; font-size: 1rem;">استمتع بيومك وارتح 😊</div>
+              <div style="color: #22c55e; font-size: 0.85rem; margin-top: 10px;">لا توجد مهام مجدولة اليوم</div>
+            </div>
+          `;
+        } else {
+          container.innerHTML = '<div class="text-muted text-center py-3">لا توجد بيانات</div>';
+        }
+        return;
+      }
+      
+      container.innerHTML = STAFF_SUMMARY.map(s => {
+        return `
+        <div class="staff-card-detailed" onclick="selectStaff('${s.name}', this)">
+          <div class="d-flex align-items-center mb-2">
+            <div class="me-2" style="width:36px;height:36px;background:linear-gradient(135deg,#f3f4f6,#e5e7eb);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <i class="fas fa-user-tie" style="color:#6b7280;font-size:1rem;"></i>
+            </div>
+            <div>
+              <div class="fw-bold" style="font-size:1.05rem;">${s.name}</div>
+              <div class="small text-muted">مسؤول عن جولات السلامة حسب MASTER_TASKS</div>
+            </div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <span class="badge" style="background:#dbeafe;color:#1e40af;font-weight:500;">مهام اليوم: ${s.todayTasks}</span>
+            <span class="badge" style="background:#d1fae5;color:#065f46;font-weight:500;">منجز ${s.todayDone}</span>
+            <span class="badge" style="background:#fef3c7;color:#92400e;font-weight:500;">متبقي: ${s.todayRemaining}</span>
+          </div>
+          <div class="small text-muted mt-2">إجمالي مهام الأسبوع (حسب Yes في الأيام): ${s.weeklyTotal}</div>
+          ${s.topRounds.length ? `
+            <div class="mt-2 pt-2" style="border-top:1px dashed #e5e7eb;">
+              <div class="small fw-bold mb-1" style="color:#374151;">أهم جولات اليوم:</div>
+              ${s.topRounds.slice(0,3).map(r => `
+                <div class="small d-flex justify-content-between align-items-center py-1" style="color:#6b7280;">
+                  <span>• ${(r.name || r.taskId || 'غير محدد').substring(0,30)}${(r.name || '').length>30?'...':''}</span>
+                  <span class="badge ${r.done >= r.roundsRequired ? 'bg-success' : 'bg-warning text-dark'}" style="font-size:0.65rem;">x${r.roundsRequired || 1}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `}).join('');
+    }
+
+    function selectStaff(staffName, el) {
+      document.querySelectorAll('.staff-card-detailed').forEach(c => c.classList.remove('active'));
+      el?.classList.add('active');
+      
+      selectedStaffData = STAFF_SUMMARY.find(s => s.name === staffName);
+      if (!selectedStaffData) return;
+      
+      document.getElementById('staffTasksCard').style.display = 'block';
+      document.getElementById('checklistFormCard').style.display = 'none';
+      document.getElementById('selectedStaffName').textContent = staffName;
+      document.getElementById('staffTodayTotal').textContent = selectedStaffData.todayTasks;
+      document.getElementById('staffTodayDone').textContent = selectedStaffData.todayDone;
+      document.getElementById('staffTodayRemaining').textContent = selectedStaffData.todayRemaining;
+      
+      const tbody = document.getElementById('staffTasksTableBody');
+      
+      if (!selectedStaffData.topRounds.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">لا توجد مهام لهذا اليوم</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = selectedStaffData.topRounds.map(r => {
+        const isComplete = r.done >= r.roundsRequired;
+        const rowStyle = isComplete ? 'background:#f0fdf4;' : '';
+        const roundName = r.name || r.taskId || 'غير محدد';
+        const statusCell = isComplete 
+          ? `<span class="badge bg-success rounded-pill px-3">مكتملة</span>`
+          : `<span class="badge bg-warning text-dark rounded-pill px-3" style="cursor:pointer;" onclick="startRound('${r.taskId}', '${roundName}')">بدء الجولة</span>`;
+        
+        return `
+          <tr style="${rowStyle}">
+            <td class="py-2 ps-3">${roundName}</td>
+            <td class="text-center py-2"><span class="fw-bold">${r.done}</span>/${r.roundsRequired}</td>
+            <td class="text-center py-2">${r.targetTime || '-'}</td>
+            <td class="text-center py-2">${statusCell}</td>
+          </tr>
+        `;
+      }).join('');
+      
+      document.getElementById('staffTasksCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    async function startRound(taskId, roundName) {
+      showSpinner(true);
+      try {
+        const data = await callApi('getChecklist', { taskId });
+        
+        currentChecklist = { taskId, roundName, task: data.task || {}, items: data.items || [], responsibles: data.responsibles || STAFF_LIST || [] };
+        renderChecklistForm();
+      } catch (err) {
+        console.error('Checklist error:', err);
+        alert('خطأ في الاتصال');
+      } finally {
+        showSpinner(false);
+      }
+    }
+    
+    function renderChecklistForm() {
+      document.getElementById('checklistFormCard').style.display = 'block';
+      document.getElementById('checklistRoundName').innerHTML = `
+        الجولة: <strong>${currentChecklist.roundName}</strong> - المسؤول: <strong>${selectedStaffData?.name || ''}</strong>
+      `;
+      const countEl = document.getElementById('checklistItemsCount');
+      if (countEl) countEl.textContent = currentChecklist.items.length || 0;
+      
+      const container = document.getElementById('checklistItems');
+      
+      // DEBUG: Log what we received from API
+      console.log('Checklist items received:', JSON.stringify(currentChecklist.items, null, 2));
+      
+      currentChecklist.items.forEach(item => { item.answer = true; });
+      
+      if (!currentChecklist.items.length) {
+        container.innerHTML = `
+          <div class="text-center py-4" style="background:#f8fafc;border-radius:8px;">
+            <i class="fas fa-clipboard-check fa-2x text-muted mb-2"></i>
+            <div class="text-muted">لا توجد قائمة فحص محددة لهذه الجولة</div>
+            <div class="small text-muted">يمكنك إضافة ملاحظات أدناه وحفظ الجولة</div>
+          </div>
+        `;
+      } else {
+        // Extract text properly - handle both 'text' and 'item' properties
+        container.innerHTML = currentChecklist.items.map((item, idx) => {
+          const itemText = String(item.text || item.item || item.Item || item.description || `بند ${idx+1}`);
+          return `
+            <div class="checklist-row" data-id="${item.id}">
+              <div class="checklist-btns-rtl">
+                <button class="btn btn-sm btn-yes active" onclick="setChecklistAnswer(${item.id}, true, this)">نعم</button>
+                <button class="btn btn-sm btn-no" onclick="setChecklistAnswer(${item.id}, false, this)">لا</button>
+              </div>
+              <div class="checklist-text">${itemText}</div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      const respSelect = document.getElementById('checklistResponsible');
+      respSelect.innerHTML = '<option value="">لا يوجد (لا حاجة لإجراء)</option>';
+      currentChecklist.responsibles.forEach(r => {
+        respSelect.innerHTML += `<option value="${r}">${r}</option>`;
+      });
+      
+      document.getElementById('checklistFormCard').scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    function setChecklistAnswer(itemId, isYes, btn) {
+      const row = btn.closest('.checklist-row');
+      if (row) {
+        row.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // إعادة تعيين الشكل الافتراضي ثم تطبيق الجديد
+        row.style.background = '';
+        row.style.borderRight = '';
+        const textEl = row.querySelector('.checklist-text');
+        if (textEl) textEl.style.color = '';
+        
+        // تحديث شكل الصف بناءً على الإجابة
+        if (isYes) {
+          row.style.background = '#f0fdf4';
+          row.style.borderRight = '3px solid #22c55e';
+          if (textEl) textEl.style.color = '#166534';
+        } else {
+          row.style.background = '#fef2f2';
+          row.style.borderRight = '3px solid #dc3545';
+          if (textEl) textEl.style.color = '#991b1b';
+        }
+      }
+      
+      const itemData = currentChecklist.items.find(i => i.id === itemId);
+      if (itemData) itemData.answer = isYes;
+    }
+    
+    function cancelChecklist() {
+      document.getElementById('checklistFormCard').style.display = 'none';
+      currentChecklist = null;
+    }
+    
+    async function submitChecklist() {
+      if (!currentChecklist) return;
+      
+      const hasIssues = currentChecklist.items.some(i => i.answer === false);
+      const responsible = document.getElementById('checklistResponsible').value;
+      const notes = document.getElementById('checklistNotes').value;
+      
+      // التحقق: إذا فيه بنود "لا" لازم يختار مسؤول التنفيذ
+      if (hasIssues && !responsible) {
+        showErrorToast('يوجد بنود عليها "لا" — اختر مسؤول التنفيذ لمعالجة الخلل.');
+        return;
+      }
+      
+      let status = 'في الوقت';
+      let negativeNotes = '';
+      
+      if (hasIssues) {
+        // تسجيل البنود الفاشلة فقط (بدون اسم الجولة)
+        const noItems = currentChecklist.items
+          .filter(i => i.answer === false)
+          .map(i => `❌ ${i.text || i.item || ''}`);
+        negativeNotes = noItems.join(' | ');
+        status = 'خلل';
+      }
+      
+      const now = getSaudiDate();
+      const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+      const payload = {
+        date: getSaudiTodayStr(),
+        time: timeStr,
+        roundName: currentChecklist.roundName,
+        staff: selectedStaffData?.name || '',
+        execResponsible: responsible,
+        status: status,
+        positiveNotes: currentChecklist.items.filter(i => i.answer === true).map(i => i.text || i.item || i.description || '').join('، '),
+        negativeNotes: negativeNotes + (notes ? ' | ' + notes : ''),
+        actionsTaken: '',
+        isViolation: hasIssues ? 'Yes' : 'No'
+      };
+      
+      showSpinner(true);
+      try {
+        const data = await callApi('logRound', {
+          taskId: currentChecklist.taskId,
+          roundName: currentChecklist.roundName || '',
+          area: currentChecklist.roundName || '',
+          time: payload.time,
+          staff: payload.staff,
+          execResponsible: payload.execResponsible,
+          status: payload.status,
+          positiveNotes: payload.positiveNotes || '',
+          negativeNotes: payload.negativeNotes || '',
+          notes: payload.negativeNotes,
+          isViolation: payload.isViolation === 'Yes'
+        });
+        
+        showSuccessToast('تم حفظ الجولة بنجاح!');
+        cancelChecklist();
+        await loadAllData();
+      } catch (err) {
+        console.error('Submit error:', err);
+        showErrorToast('حدث خطأ في الاتصال: ' + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    function renderRoundsLog() {
+      const tbody = document.getElementById('roundsLogBody');
+      
+      if (!ROUNDS_LOG.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">لا توجد جولات مسجلة اليوم</td></tr>';
+        return;
+      }
+      
+      // تنظيف وتنسيق الملاحظات - معالجة البيانات القديمة والجديدة
+      const formatLogNotes = (notes, hasIssues) => {
+        if (!notes) return hasIssues ? '<span class="text-danger">يوجد خلل</span>' : '-';
+        
+        let cleaned = String(notes).trim();
+        
+        // إذا كانت الملاحظات تحتوي على أرقام فقط (بيانات قديمة)
+        if (/^[\d\s\-|×xX]+$/.test(cleaned)) {
+          return hasIssues ? '<span class="text-danger">يوجد خلل</span>' : '-';
+        }
+        
+        // البيانات القديمة: اسم الجولة مكرر عدة مرات
+        // نكتشف ذلك إذا نفس النص يتكرر أكثر من مرتين
+        const parts = cleaned.split('|').map(p => p.replace(/❌/g, '').trim()).filter(Boolean);
+        const uniqueParts = [...new Set(parts)];
+        
+        // إذا كل البنود متشابهة = بيانات قديمة خاطئة
+        if (parts.length > 2 && uniqueParts.length === 1) {
+          return `<span class="text-danger">يوجد ${parts.length} نقاط خلل</span>`;
+        }
+        
+        // تنظيف وعرض البنود الفريدة
+        cleaned = cleaned
+          .replace(/نقاط الخلل[:\s]*/g, '')
+          .replace(/\s*\|\s*/g, ' | ');
+        
+        if (cleaned.includes('❌')) {
+          const items = cleaned.split('|').map(item => item.trim()).filter(Boolean);
+          // عرض أول 3 بنود فقط
+          const display = items.slice(0, 3);
+          const remaining = items.length - 3;
+          let html = display.map(item => `<span class="text-danger">${item}</span>`).join(' | ');
+          if (remaining > 0) html += ` <span class="badge bg-secondary">+${remaining}</span>`;
+          return html;
+        }
+        
+        return cleaned.length > 100 ? cleaned.substring(0, 100) + '...' : cleaned;
+      };
+      
+      tbody.innerHTML = ROUNDS_LOG.slice(0, 50).map(entry => {
+        const status = entry.Status || '';
+        const hasIssues = status === 'خلل' || (entry.Negative_Notes && entry.Negative_Notes.includes('❌'));
+        
+        let statusClass = 'bg-secondary';
+        let statusText = '';
+        if (status === 'متأخر') { statusClass = 'bg-danger'; statusText = 'متأخر'; }
+        else if (status === 'في الوقت' || status === 'مكتمل' || status === 'مكتملة' || status === 'تم') { statusClass = 'bg-success'; statusText = 'مكتملة'; }
+        else if (status === 'خلل') { statusClass = 'bg-warning text-dark'; statusText = 'خلل'; }
+        else if (!status || status.trim() === '') { statusClass = 'bg-success'; statusText = 'مكتملة'; }
+        else { statusText = status; }
+        
+        const formattedNotes = formatLogNotes(entry.Negative_Notes, hasIssues);
+        
+        return `
+          <tr class="${hasIssues ? 'table-warning' : ''}">
+            <td class="small">${entry.Actual_Time || entry.Date?.split(' ')[1] || '-'}</td>
+            <td class="small text-truncate" style="max-width:200px;" title="${entry.Area || entry.Round_Name || '-'}">${entry.Area || entry.Round_Name || '-'}</td>
+            <td class="small">${entry.Staff || entry.Responsible_Role || '-'}</td>
+            <td class="small">${entry.Exec_Responsible || '-'}</td>
+            <td><span class="badge ${statusClass} rounded-pill" style="font-size: 0.7rem;">${statusText}</span></td>
+            <td class="small" style="max-width:200px;">${formattedNotes}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderDelayedList() {
+      const container = document.getElementById('delayedList');
+      
+      if (!DELAYED_LIST.length) {
+        container.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد جولات متأخرة - ممتاز!</div></div>';
+        return;
+      }
+      
+      container.innerHTML = DELAYED_LIST.map(d => `
+        <div class="col-md-6 col-lg-4">
+          <div class="card card-custom delayed-card p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h6 class="fw-bold mb-0">${d.Area || d.Round_Name || 'جولة'}</h6>
+              <span class="badge bg-danger">${d.Delay_Min || 0} دقيقة تأخير</span>
+            </div>
+            <div class="small text-muted mb-1"><i class="fas fa-user me-1"></i>${d.Responsible_Role || d.Staff || '-'}</div>
+            <div class="small text-muted mb-1"><i class="fas fa-clock me-1"></i>الوقت المحدد: ${d.Planned_Time || '-'}</div>
+            <div class="small text-muted"><i class="fas fa-calendar me-1"></i>${d.Date || '-'}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    let violationTrendChart = null;
+    let FILTERED_VIOLATIONS = [];
+    
+    function renderViolations(filteredData = null) {
+      const data = filteredData || VIOLATIONS_DATA;
+      const repeatedContainer = document.getElementById('repeatedViolationsList');
+      const allContainer = document.getElementById('allViolationsList');
+      
+      // Update statistics
+      document.getElementById('violationTotalCount').textContent = data.violations?.length || 0;
+      document.getElementById('violationResolvedCount').textContent = data.resolved?.length || VIOLATIONS_DATA.resolved?.length || 0;
+      document.getElementById('violationRepeatedCount').textContent = data.repeated?.length || 0;
+      
+      // Calculate top staff and area
+      const staffCounts = {};
+      const areaCounts = {};
+      (data.violations || []).forEach(v => {
+        const staff = v.Responsible_Role || v.Staff || 'غير محدد';
+        const area = v.Area || v.Round_Name || 'غير محدد';
+        staffCounts[staff] = (staffCounts[staff] || 0) + 1;
+        areaCounts[area] = (areaCounts[area] || 0) + 1;
+      });
+      
+      const topStaff = Object.entries(staffCounts).sort((a,b) => b[1]-a[1])[0];
+      const topArea = Object.entries(areaCounts).sort((a,b) => b[1]-a[1])[0];
+      document.getElementById('violationTopStaff').textContent = topStaff ? `${topStaff[0]} (${topStaff[1]})` : '-';
+      // عرض اسم المنطقة كاملاً بفونت أصغر
+      const topAreaEl = document.getElementById('violationTopArea');
+      if (topArea) {
+        topAreaEl.innerHTML = `<span style="font-size: 0.95rem;">${topArea[0]}</span> <span class="badge bg-danger">${topArea[1]}</span>`;
+      } else {
+        topAreaEl.textContent = '-';
+      }
+      
+      // Render trend chart
+      renderViolationTrendChart(data.violations || []);
+      
+      // تنسيق نص المخالفة - إبقاء علامة ❌ واضحة
+      const formatIssueText = (text) => {
+        if (!text) return '<span class="text-danger">❌ مخالفة</span>';
+        let cleaned = String(text)
+          .replace(/نقاط الخلل[:\s]*/g, '')
+          .trim();
+        
+        // إذا كانت بيانات قديمة (أرقام فقط)
+        if (/^[\d\s\-|×xX]+$/.test(cleaned) || !cleaned) {
+          return '<span class="text-danger">❌ مخالفة مسجلة</span>';
+        }
+        
+        // فصل البنود وإضافة ❌ لكل بند
+        const items = cleaned.split('|').map(s => s.trim()).filter(Boolean);
+        const formatted = items.map(item => {
+          // إذا البند لا يحتوي على ❌، نضيفها
+          if (!item.includes('❌')) {
+            return `<span class="text-danger">❌ ${item}</span>`;
+          }
+          return `<span class="text-danger">${item}</span>`;
+        });
+        
+        return formatted.join('<br>');
+      };
+      
+      // قسم المخالفات المتكررة (تحذير بصري)
+      if (!data.repeated?.length) {
+        repeatedContainer.innerHTML = '<div class="col-12"><div class="alert alert-info border-info"><i class="fas fa-info-circle me-2"></i>لا توجد مخالفات متكررة حالياً - ممتاز!</div></div>';
+      } else {
+        repeatedContainer.innerHTML = data.repeated.map(v => `
+          <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-lg" style="border: 3px solid #dc3545; border-radius: 16px; overflow: hidden;">
+              <div class="card-header py-3" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="text-white">
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    <span class="fw-bold fs-6">${v.area || 'منطقة'}</span>
+                  </div>
+                  <span class="badge bg-warning text-dark fs-5 px-3 py-2" style="animation: pulse 1.5s infinite;">
+                    🔁 ${v.count}
+                  </span>
+                </div>
+              </div>
+              <div class="card-body py-3" style="background: #fff5f5;">
+                <div class="mb-3 p-2 bg-white rounded" style="border-right: 3px solid #dc3545;">
+                  <small class="text-muted d-block mb-1">تفاصيل المخالفة:</small>
+                  <p class="mb-0 small" style="line-height: 1.8; white-space: pre-line;">${formatIssueText(v.issue)}</p>
+                </div>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <div class="p-2 bg-white rounded text-center">
+                      <small class="text-muted d-block"><i class="fas fa-user-cog me-1"></i>المكلف بالإصلاح</small>
+                      <strong class="text-danger">${v.assignedTo || 'غير محدد'}</strong>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-2 bg-white rounded text-center">
+                      <small class="text-muted d-block"><i class="fas fa-calendar me-1"></i>آخر تكرار</small>
+                      <strong>${v.dates?.[v.dates.length-1] || '-'}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card-footer py-2 text-center" style="background: #fff3cd;">
+                <span class="badge bg-danger fs-6 px-4 py-2">⚠️ تكرار ${v.count} مرات - يحتاج تدخل عاجل</span>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      // قسم جميع المخالفات - يعرض كل مخالفة مع زر المعالجة
+      if (!data.violations?.length) {
+        allContainer.innerHTML = '<div class="col-12"><div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>لا توجد مخالفات مسجلة</div></div>';
+      } else {
+        // حساب عدد التكرار لكل مخالفة بناءً على المنطقة والمكلف بالإصلاح
+        const repeatCounts = {};
+        data.violations.forEach(v => {
+          const key = `${v.Area || v.Round_Name}_${v.Execution_Responsible || ''}`;
+          repeatCounts[key] = (repeatCounts[key] || 0) + 1;
+        });
+        
+        // عرض جميع المخالفات في كروت واضحة مع زر المعالجة
+        allContainer.innerHTML = data.violations.slice(0, 100).map((v, idx) => {
+          const rowIdx = v._rowIndex !== undefined ? v._rowIndex : idx + 2;
+          const detectedBy = v.Responsible_Role || '';
+          const assignedTo = v.Execution_Responsible || 'غير محدد';
+          const notes = formatIssueText(v.Negative_Notes || v.NegativeNotes);
+          const areaName = v.Area || v.Round_Name || 'جولة';
+          const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
+          const repeatKey = `${v.Area || v.Round_Name}_${assignedTo}`;
+          const repeatCount = repeatCounts[repeatKey] || 1;
+          const dateStr = v.Date || '-';
+          const timeStr = v.Actual_Time || v.Time || '';
+          
+          // تنظيف النصوص للاستخدام في onclick
+          const safeArea = areaName.replace(/['"\\]/g, '');
+          const safeAssigned = assignedTo.replace(/['"\\]/g, '');
+          const safeNotes = notes.substring(0, 40).replace(/['"\\<>\n\r]/g, ' ').trim();
+          
+          return `
+            <div class="col-md-6 mb-3">
+              <div class="card h-100 shadow" style="border: 2px solid ${isResolved ? '#198754' : '#dc3545'}; border-radius: 14px; overflow: hidden;">
+                <div class="card-header py-2" style="background: ${isResolved ? 'linear-gradient(135deg, #198754, #157347)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-white">
+                      <i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+                      <span class="fw-bold">${areaName}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      ${repeatCount > 1 ? `<span class="badge bg-warning text-dark">🔁 ${repeatCount}</span>` : ''}
+                      <span class="badge bg-light text-dark">${dateStr}${timeStr ? ' ' + timeStr : ''}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-body py-3" style="background: ${isResolved ? '#f0fdf4' : '#fef2f2'};">
+                  <div class="p-2 bg-white rounded mb-3" style="border-right: 3px solid ${isResolved ? '#198754' : '#dc3545'}; white-space: pre-line; line-height: 1.7;">
+                    ${notes}
+                  </div>
+                  <div class="row g-2 small">
+                    <div class="col-6">
+                      <div class="p-2 bg-white rounded">
+                        <i class="fas fa-eye text-info me-1"></i>اكتشفها: <strong>${detectedBy || '-'}</strong>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="p-2 bg-white rounded">
+                        <i class="fas fa-user-cog text-danger me-1"></i>المكلف: <strong>${assignedTo}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  ${v.FollowUp_By ? `
+                  <div class="mt-3 p-2 rounded" style="background: linear-gradient(135deg, #e0f2fe, #bae6fd); border-right: 3px solid #0284c7;">
+                    <div class="d-flex align-items-center mb-2">
+                      <i class="fas fa-clipboard-check text-info me-2"></i>
+                      <strong class="text-dark">سجل المتابعات:</strong>
+                    </div>
+                    <div class="small">
+                      <div class="mb-1"><i class="fas fa-user me-1 text-primary"></i><strong>المتابع:</strong> ${v.FollowUp_By}</div>
+                      <div class="mb-1"><i class="fas fa-calendar me-1 text-secondary"></i><strong>التاريخ:</strong> ${v.FollowUp_Date || '-'}</div>
+                      ${v.FollowUp_Notes ? `<div><i class="fas fa-sticky-note me-1 text-warning"></i><strong>ملاحظات:</strong> ${v.FollowUp_Notes}</div>` : ''}
+                    </div>
+                  </div>
+                  ` : ''}
+                </div>
+                <div class="card-footer py-2 ${isResolved ? '' : 'bg-white'} border-top" style="${isResolved ? 'background: #d1e7dd;' : ''}">
+                  <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                      <span class="small text-muted">حالة المعالجة:</span>
+                      <span class="fw-bold ${isResolved ? 'text-success' : 'text-danger'} ms-1">
+                        ${isResolved ? '<i class="fas fa-check-circle me-1"></i>تمت' : '<i class="fas fa-times-circle me-1"></i>لم تتم'}
+                      </span>
+                    </div>
+                    ${!isResolved ? `
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-info px-3 py-1" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleFollowUpClick(this)">
+                          <i class="fas fa-clipboard-check me-1"></i>متابعة
+                        </button>
+                        <button class="btn btn-sm btn-outline-success px-3 py-1" data-row="${rowIdx}" data-staff="${safeAssigned}" data-area="${safeArea}" data-notes="${safeNotes}" onclick="handleResolveClick(this)">
+                          <i class="fas fa-check me-1"></i>معالجة
+                        </button>
+                      </div>
+                    ` : `
+                      <small class="text-muted">
+                        ${v.Resolved_By ? v.Resolved_By : ''}
+                        ${v.Resolved_Date ? ' - ' + v.Resolved_Date : ''}
+                      </small>
+                    `}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    
+    function renderViolationTrendChart(violations) {
+      const ctx = document.getElementById('violationTrendChart');
+      if (!ctx) return;
+      
+      // Group by date
+      const dateCounts = {};
+      violations.forEach(v => {
+        const dateStr = v.Date?.split(' ')[0] || v.Date;
+        if (dateStr) {
+          dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+        }
+      });
+      
+      // Sort dates and get last 14 days
+      const sortedDates = Object.keys(dateCounts).sort((a,b) => new Date(a) - new Date(b)).slice(-14);
+      const chartData = sortedDates.map(d => dateCounts[d] || 0);
+      
+      if (violationTrendChart) {
+        violationTrendChart.destroy();
+      }
+      
+      violationTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: sortedDates.map(d => d.replace(/^\d{4}-/, '').replace(/\//g, '/')),
+          datasets: [{
+            label: 'عدد المخالفات',
+            data: chartData,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointBackgroundColor: '#ef4444'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+            x: { ticks: { maxRotation: 45 } }
+          }
+        }
+      });
+    }
+    
+    // Helper to parse date in various formats
+    function parseViolationDate(dateStr) {
+      if (!dateStr) return null;
+      // Try parsing as MM/DD/YYYY or DD/MM/YYYY
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        // Assume MM/DD/YYYY format (US)
+        const month = parseInt(parts[0]) - 1;
+        const day = parseInt(parts[1]);
+        const year = parseInt(parts[2]);
+        if (year > 1900 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+          return new Date(year, month, day);
+        }
+      }
+      // Fallback to standard parsing
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    
+    function applyViolationFilters() {
+      const period = parseInt(document.getElementById('violationPeriodFilter').value) || 0;
+      const staff = document.getElementById('violationStaffFilter').value;
+      const round = document.getElementById('violationRoundFilter').value;
+      
+      let filtered = [...(VIOLATIONS_DATA.violations || [])];
+      
+      // Filter by period
+      if (period > 0) {
+        const cutoff = getSaudiDate();
+        cutoff.setDate(cutoff.getDate() - period);
+        cutoff.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(v => {
+          const vDate = parseViolationDate(v.Date);
+          return vDate && vDate >= cutoff;
+        });
+      }
+      
+      // Filter by staff
+      if (staff) {
+        filtered = filtered.filter(v => 
+          (v.Responsible_Role || v.Staff || '').includes(staff)
+        );
+      }
+      
+      // Filter by round
+      if (round) {
+        filtered = filtered.filter(v => 
+          (v.Area || v.Round_Name || '').includes(round)
+        );
+      }
+      
+      // Recalculate repeated based on filtered - استخدام المكلف بالإصلاح
+      const issueMap = {};
+      filtered.forEach(v => {
+        const key = (v.Area || v.Round_Name || '') + '|' + (v.Execution_Responsible || v.Exec_Responsible || '');
+        if (!issueMap[key]) {
+          issueMap[key] = { 
+            area: v.Area || v.Round_Name, 
+            issue: v.Negative_Notes || v.NegativeNotes, 
+            assignedTo: v.Execution_Responsible || v.Exec_Responsible || 'غير محدد',
+            detectedBy: v.Staff || v.Responsible_Role || '',
+            count: 0, 
+            dates: [],
+            rowIndices: []
+          };
+        }
+        issueMap[key].count++;
+        issueMap[key].dates.push(v.Date);
+        if (v._rowIndex !== undefined) issueMap[key].rowIndices.push(v._rowIndex);
+      });
+      const repeated = Object.values(issueMap).filter(x => x.count >= 2).sort((a,b) => b.count - a.count);
+      
+      renderViolations({ violations: filtered, repeated });
+    }
+
+    function resetSelectKeepFirst(sel) {
+      if (!sel) return;
+      while (sel.options.length > 1) sel.remove(1);
+    }
+
+    function populateStaffFilter() {
+      const historySelect = document.getElementById('historyStaffFilter');
+      const formSelect = document.getElementById('formStaff');
+      const violationStaffSelect = document.getElementById('violationStaffFilter');
+      const violationRoundSelect = document.getElementById('violationRoundFilter');
+      const roundSelect = document.getElementById('formRound');
+      
+      // تنظيف القوائم أولاً
+      [historySelect, formSelect, violationStaffSelect].forEach(resetSelectKeepFirst);
+      [violationRoundSelect, roundSelect].forEach(resetSelectKeepFirst);
+      
+      // Staff بدون تكرار
+      const uniqueStaff = [...new Set((STAFF_LIST || []).map(x => String(x || '').trim()).filter(Boolean))];
+      uniqueStaff.forEach(s => {
+        [historySelect, formSelect, violationStaffSelect].forEach(sel => {
+          if (!sel) return;
+          const opt = document.createElement('option');
+          opt.value = s;
+          opt.textContent = s;
+          sel.appendChild(opt);
+        });
+      });
+      
+      // Rounds بدون تكرار - استخدام Round_Name_AR أولاً
+      const uniqueRounds = [...new Set((MASTER_TASKS || []).map(t => (t.Round_Name_AR || t.Round_Name || t.Area || t.TaskID || '').toString().trim()).filter(Boolean))];
+      uniqueRounds.forEach(r => {
+        [roundSelect, violationRoundSelect].forEach(sel => {
+          if (!sel) return;
+          const opt = document.createElement('option');
+          opt.value = r;
+          opt.textContent = r;
+          sel.appendChild(opt);
+        });
+      });
+    }
+    
+    async function submitRoundForm() {
+      const staff = document.getElementById('formStaff').value;
+      const roundName = document.getElementById('formRound').value;
+      const status = document.getElementById('formStatus').value;
+      
+      if (!staff || !roundName) {
+        alert('الرجاء اختيار المسؤول والجولة');
+        return;
+      }
+      
+      const now = getSaudiDate();
+      const defaultTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+      const payload = {
+        date: getSaudiTodayStr(),
+        time: document.getElementById('formTime').value || defaultTime,
+        roundName: roundName,
+        staff: staff,
+        execResponsible: document.getElementById('formExecResponsible').value,
+        status: status,
+        positiveNotes: document.getElementById('formPositiveNotes').value,
+        negativeNotes: document.getElementById('formNegativeNotes').value,
+        actionsTaken: document.getElementById('formActions').value,
+        isViolation: document.getElementById('formIsViolation').checked ? 'Yes' : 'No'
+      };
+      
+      showSpinner(true);
+      try {
+        await callApi('logRound', {
+          taskId: roundName,
+          roundName: roundName,
+          area: roundName,
+          time: payload.time,
+          staff: staff,
+          execResponsible: payload.execResponsible,
+          status: payload.status,
+          positiveNotes: payload.positiveNotes || '',
+          negativeNotes: payload.negativeNotes || '',
+          notes: payload.negativeNotes,
+          isViolation: payload.isViolation === 'Yes'
+        });
+        
+        showSuccessToast('تم حفظ الجولة بنجاح!');
+        document.getElementById('roundForm').reset();
+        bootstrap.Modal.getInstance(document.getElementById('roundFormModal')).hide();
+        await loadAllData();
+      } catch (err) {
+        console.error('Submit error:', err);
+        showErrorToast('حدث خطأ في الاتصال: ' + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    }
+
+    let HISTORY_DATA = [];
+    
+    function setHistoryRange(range) {
+      const today = getSaudiDate();
+      const endDate = getSaudiTodayStr();
+      let startDate;
+      
+      document.querySelectorAll('.date-range-btn').forEach(btn => {
+        btn.classList.remove('active', 'btn-primary');
+        btn.classList.add('btn-outline-secondary');
+      });
+      
+      const activeBtn = document.querySelector(`.date-range-btn[data-range="${range}"]`);
+      if (activeBtn) {
+        activeBtn.classList.remove('btn-outline-secondary');
+        activeBtn.classList.add('active', 'btn-primary');
+      }
+      
+      // Helper to format date as YYYY-MM-DD
+      const formatDateStr = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      
+      switch(range) {
+        case 'today':
+          startDate = endDate;
+          break;
+        case 'week':
+          const weekAgo = new Date(today);
+          weekAgo.setDate(today.getDate() - 7);
+          startDate = formatDateStr(weekAgo);
+          break;
+        case '2weeks':
+          const twoWeeksAgo = new Date(today);
+          twoWeeksAgo.setDate(today.getDate() - 14);
+          startDate = formatDateStr(twoWeeksAgo);
+          break;
+        case 'month':
+          const monthAgo = new Date(today);
+          monthAgo.setMonth(today.getMonth() - 1);
+          startDate = formatDateStr(monthAgo);
+          break;
+        case '2months':
+          const twoMonthsAgo = new Date(today);
+          twoMonthsAgo.setMonth(today.getMonth() - 2);
+          startDate = formatDateStr(twoMonthsAgo);
+          break;
+        case '3months':
+          const threeMonthsAgo = new Date(today);
+          threeMonthsAgo.setMonth(today.getMonth() - 3);
+          startDate = formatDateStr(threeMonthsAgo);
+          break;
+        case 'year':
+          const yearAgo = new Date(today);
+          yearAgo.setFullYear(today.getFullYear() - 1);
+          startDate = formatDateStr(yearAgo);
+          break;
+        default:
+          startDate = endDate;
+      }
+      
+      document.getElementById('historyStartDate').value = startDate;
+      document.getElementById('historyEndDate').value = endDate;
+      loadHistory();
+    }
+    
+    async function loadHistory() {
+      const startDate = document.getElementById('historyStartDate').value;
+      const endDate = document.getElementById('historyEndDate').value;
+      const staff = document.getElementById('historyStaffFilter').value;
+      const resolved = document.getElementById('historyResolvedFilter').value;
+      
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (staff) params.append('staff', staff);
+      
+      showSpinner(true);
+      try {
+        const data = await callApi('getHistory', { startDate, endDate, staff });
+        
+        const tbody = document.getElementById('historyTableBody');
+        if (!data.entries || !data.entries.length) {
+          HISTORY_DATA = [];
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
+          return;
+        }
+        
+        let entries = data.entries;
+        
+        if (resolved === 'yes') {
+          entries = entries.filter(e => e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes');
+        } else if (resolved === 'no') {
+          entries = entries.filter(e => !e.Closed_YN || e.Closed_YN === 'No' || e.Closed_YN === 'لا' || e.Closed_YN === '');
+        }
+        
+        HISTORY_DATA = entries;
+        
+        if (!entries.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد نتائج</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = entries.map(e => {
+          const statusClass = e.Status === 'متأخر' ? 'bg-warning text-dark' : 
+                             e.Status === 'خلل' ? 'bg-danger' :
+                             e.Status === 'في الوقت' ? 'bg-success' : 'bg-secondary';
+          const isResolved = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
+          const resolvedBadge = isResolved ? 
+            '<span class="badge bg-success"><i class="fas fa-check me-1"></i>تمت</span>' : 
+            '<span class="badge bg-secondary">لم تتم</span>';
+          return `
+            <tr>
+              <td class="small text-center">${e.Date?.split(' ')[0] || '-'}</td>
+              <td class="small text-center">${e.Actual_Time || e.Date?.split(' ')[1] || '-'}</td>
+              <td class="small">${e.Area || e.Round_Name || '-'}</td>
+              <td class="small text-center">${e.Responsible_Role || e.Staff || '-'}</td>
+              <td class="small text-center">${e.Execution_Responsible || '-'}</td>
+              <td class="text-center"><span class="badge ${statusClass}">${e.Status || 'تم'}</span></td>
+              <td class="text-center">${resolvedBadge}</td>
+              <td class="small">${e.Negative_Notes || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('History error:', err);
+      } finally {
+        showSpinner(false);
+      }
+    }
+    
+    function exportHistory() {
+      if (!HISTORY_DATA.length) {
+        showErrorToast('لا توجد بيانات للتصدير');
+        return;
+      }
+      
+      const startDate = document.getElementById('historyStartDate').value || 'غير محدد';
+      const endDate = document.getElementById('historyEndDate').value || 'غير محدد';
+      
+      const tableRows = HISTORY_DATA.map(e => {
+        const statusClass = e.Status === 'متأخر' ? 'badge-warning' : 
+                           e.Status === 'خلل' ? 'badge-danger' :
+                           e.Status === 'في الوقت' ? 'badge-success' : 'badge-secondary';
+        const isResolved = e.Closed_YN === 'Yes' || e.Closed_YN === 'نعم' || e.Is_Resolved === 'Yes';
+        const resolvedClass = isResolved ? 'badge-success' : 'badge-secondary';
+        const resolvedText = isResolved ? 'تمت' : 'لم تتم';
+        return '<tr>' +
+          '<td>' + (e.Date?.split(' ')[0] || '-') + '</td>' +
+          '<td>' + (e.Actual_Time || '-') + '</td>' +
+          '<td>' + (e.Area || e.Round_Name || '-') + '</td>' +
+          '<td>' + (e.Responsible_Role || '-') + '</td>' +
+          '<td>' + (e.Execution_Responsible || '-') + '</td>' +
+          '<td><span class="badge ' + statusClass + '">' + (e.Status || 'تم') + '</span></td>' +
+          '<td><span class="badge ' + resolvedClass + '">' + resolvedText + '</span></td>' +
+          '<td>' + (e.Negative_Notes || '-') + '</td>' +
+        '</tr>';
+      }).join('');
+      
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(
+        '<!DOCTYPE html>' +
+        '<html dir="rtl" lang="ar">' +
+        '<head>' +
+        '<meta charset="UTF-8">' +
+        '<title>تقرير الجولات - مجمع مكة الطبي</title>' +
+        '<style>' +
+        '* { font-family: Tajawal, sans-serif; }' +
+        'body { padding: 20px; background: #fff; }' +
+        '.header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #8b4563; padding-bottom: 20px; }' +
+        '.logo { width: 80px; height: 80px; margin-bottom: 10px; }' +
+        '.title { color: #1e3a5f; font-size: 24px; font-weight: bold; margin: 10px 0; }' +
+        '.subtitle { color: #8b4563; font-size: 16px; }' +
+        '.date-range { background: #fdf2f4; padding: 10px 20px; border-radius: 8px; display: inline-block; margin: 15px 0; }' +
+        'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
+        'th { background: #8b4563; color: white; padding: 12px 8px; font-size: 14px; }' +
+        'td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 13px; }' +
+        'tr:nth-child(even) { background: #fdf2f4; }' +
+        '.badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; display: inline-block; }' +
+        '.badge-success { background: #10b981; color: white; }' +
+        '.badge-warning { background: #f59e0b; color: #000; }' +
+        '.badge-danger { background: #ef4444; color: white; }' +
+        '.badge-secondary { background: #6b7280; color: white; }' +
+        '.footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 15px; }' +
+        '@media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }' +
+        '</style>' +
+        '</head>' +
+        '<body>' +
+        '<div class="header">' +
+        '<img src="logo-new.png" class="logo" alt="شعار المجمع">' +
+        '<div class="title">مجمع مكة الطبي بالزاهر</div>' +
+        '<div class="subtitle">تقرير سجل الجولات الرقابية</div>' +
+        '<div class="date-range"><strong>الفترة:</strong> من ' + startDate + ' إلى ' + endDate + '</div>' +
+        '</div>' +
+        '<table>' +
+        '<thead><tr><th>التاريخ</th><th>الوقت</th><th>الجولة</th><th>المسؤول</th><th>منفذ الجولة</th><th>الحالة</th><th>المعالجة</th><th>ملاحظات</th></tr></thead>' +
+        '<tbody>' + tableRows + '</tbody>' +
+        '</table>' +
+        '<div class="footer">' +
+        '<p>تم إنشاء هذا التقرير بواسطة نظام جولات السلامة المطوّر</p>' +
+        '<p>مجمع مكة الطبي بالزاهر - ' + new Date().toLocaleDateString('ar-SA') + '</p>' +
+        '</div>' +
+        '<script>window.onload = function() { window.print(); }<\/script>' +
+        '</body></html>'
+      );
+      printWindow.document.close();
+    }
+
+    let chartsLoaded = false;
+    let trendChart, statusChart, staffChart, areaChart;
+    
+    document.getElementById('dashboard-tab').addEventListener('shown.bs.tab', () => {
+      if (!chartsLoaded) {
+        loadDashboardData();
+        chartsLoaded = true;
+      }
+    });
+    
+    async function loadDashboardData() {
+      try {
+        const days = parseInt(document.getElementById('dashPeriodFilter')?.value) || 14;
+        const data = await callApi('getMetrics', { days });
+        
+        const m = {
+          totalRounds: data.total || 0,
+          completed: data.completed || 0,
+          delayed: data.delayed || 0,
+          violations: data.violations || 0,
+          complianceRate: data.compliance || 0,
+          byDay: Object.entries(data.byDate || {}).map(([date, v]) => ({ 
+            date, 
+            completed: typeof v === 'object' ? (v.completed || 0) : v, 
+            delayed: typeof v === 'object' ? (v.delayed || 0) : 0 
+          })),
+          byStaff: data.byStaff || {},
+          byArea: data.byArea || {}
+        };
+        document.getElementById('dashTotalRounds').textContent = m.totalRounds;
+        document.getElementById('dashCompleted').textContent = m.completed;
+        document.getElementById('dashDelayed').textContent = m.delayed;
+        document.getElementById('dashCompliance').textContent = m.complianceRate + '%';
+        
+        renderTrendChart(m.byDay);
+        renderStatusChart(m);
+        renderStaffChart(m.byStaff);
+        renderAreaChart(m.byArea);
+        renderTopIssues(m.byArea);
+      } catch (err) {
+        console.error('Dashboard error:', err);
+      }
+    }
+    
+    function renderTrendChart(byDay) {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (trendChart) trendChart.destroy();
+      
+      const labels = byDay.map(d => d.date.split('-').slice(1).join('/'));
+      trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: byDay.map(d => d.completed), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
+            { label: 'متأخرة', data: byDay.map(d => d.delayed), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 }
+          ]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10, family: 'Tajawal' } } } }, 
+          scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 9 } }, grid: { display: false } } } 
+        }
+      });
+    }
+    
+    function renderStatusChart(m) {
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      if (statusChart) statusChart.destroy();
+      
+      statusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['مكتملة', 'متأخرة', 'مخالفات'],
+          datasets: [{
+            data: [m.completed, m.delayed, m.violations],
+            backgroundColor: ['#22c55e', '#ef4444', '#eab308'],
+            borderWidth: 0
+          }]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          cutout: '60%',
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' }, padding: 8 } } } 
+        }
+      });
+    }
+    
+    function renderStaffChart(byStaff) {
+      const ctx = document.getElementById('staffChart').getContext('2d');
+      if (staffChart) staffChart.destroy();
+      
+      // ترتيب حسب الإجمالي وأخذ أول 5
+      const sorted = Object.entries(byStaff).sort((a, b) => (b[1].total || 0) - (a[1].total || 0)).slice(0, 5);
+      const labels = sorted.map(([k]) => k.length > 15 ? k.slice(0, 15) + '...' : k);
+      const completed = sorted.map(([, v]) => v.completed || 0);
+      const delayed = sorted.map(([, v]) => v.delayed || 0);
+      const violations = sorted.map(([, v]) => v.violations || 0);
+      
+      staffChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 12 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 12 },
+            { label: 'مخالفات', data: violations, backgroundColor: '#eab308', borderRadius: 3, barThickness: 12 }
+          ]
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' } } } }, 
+          scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { ticks: { font: { size: 9 } }, grid: { display: false } } } 
+        }
+      });
+    }
+    
+    function renderAreaChart(byArea) {
+      const ctx = document.getElementById('areaChart').getContext('2d');
+      if (areaChart) areaChart.destroy();
+      
+      // ترتيب حسب المخالفات أولاً ثم الإجمالي
+      const sorted = Object.entries(byArea).sort((a, b) => {
+        const violA = b[1].violations || 0;
+        const violB = a[1].violations || 0;
+        if (violA !== violB) return violA - violB;
+        return (b[1].total || 0) - (a[1].total || 0);
+      }).slice(0, 5);
+      const labels = sorted.map(([k]) => k.length > 15 ? k.slice(0, 15) + '...' : k);
+      const completed = sorted.map(([, v]) => v.completed || 0);
+      const delayed = sorted.map(([, v]) => v.delayed || 0);
+      const violations = sorted.map(([, v]) => v.violations || 0);
+      
+      areaChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'مكتملة', data: completed, backgroundColor: '#22c55e', borderRadius: 3, barThickness: 10 },
+            { label: 'متأخرة', data: delayed, backgroundColor: '#ef4444', borderRadius: 3, barThickness: 10 },
+            { label: 'مخالفات', data: violations, backgroundColor: '#eab308', borderRadius: 3, barThickness: 10 }
+          ]
+        },
+        options: { 
+          indexAxis: 'y', 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Tajawal' } } } },
+          scales: { x: { beginAtZero: true, ticks: { font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } }, y: { ticks: { font: { size: 9 } }, grid: { display: false } } }
+        }
+      });
+    }
+    
+    function renderTopIssues(byArea) {
+      const container = document.getElementById('topIssuesList');
+      if (!container) return;
+      
+      // المخالفات + المتأخرة = المشاكل
+      const sorted = Object.entries(byArea)
+        .map(([name, data]) => ({ name, issues: (data.violations || 0) + (data.delayed || 0), violations: data.violations || 0 }))
+        .filter(d => d.issues > 0)
+        .sort((a, b) => b.issues - a.issues)
+        .slice(0, 8);
+        
+      if (!sorted.length) {
+        container.innerHTML = '<div class="text-muted text-center py-2 w-100">لا توجد مشاكل مسجلة في هذه الفترة</div>';
+        return;
+      }
+      
+      container.innerHTML = sorted.map(d => `
+        <div class="issue-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${d.issues > 10 ? '#fef2f2' : d.issues > 5 ? '#fefce8' : '#f3f4f6'}; border-radius: 20px; border: 1px solid ${d.issues > 10 ? '#fecaca' : d.issues > 5 ? '#fef08a' : '#e5e7eb'};">
+          <span class="badge ${d.issues > 10 ? 'bg-danger' : d.issues > 5 ? 'bg-warning text-dark' : 'bg-secondary'}" style="font-size: 0.7rem;">${d.issues}</span>
+          <span style="font-size: 0.8rem; color: #374151;">${d.name.length > 30 ? d.name.slice(0, 30) + '...' : d.name}</span>
+        </div>
+      `).join('');
+    }
+  </script>
+</body>
+</html>
