@@ -2637,15 +2637,24 @@ function doPost(e) {
       String(p.Passcode) === String(passcode) || String(p.Code) === String(passcode)
     );
     
-    if (staffByPasscode) {
-      // الرمز صحيح - نرجع اسم الموظف صاحب الرمز
-      return { 
-        valid: true, 
-        staffName: staffByPasscode.Staff_Name || staffByPasscode.Name || staffName 
-      };
+    if (!staffByPasscode) {
+      return { valid: false, error: 'الرمز السري غير صحيح' };
     }
     
-    return { valid: false, error: 'الرمز السري غير صحيح' };
+    const actualName = staffByPasscode.Staff_Name || staffByPasscode.Name || '';
+    
+    // إذا تم تحديد اسم الموظف، نتحقق من تطابقه مع صاحب الرمز
+    if (staffName && staffName.trim()) {
+      if (actualName.trim() !== staffName.trim()) {
+        return { valid: false, error: 'الرمز السري لا يتطابق مع الاسم المختار' };
+      }
+    }
+    
+    // الرمز صحيح والاسم متطابق
+    return { 
+      valid: true, 
+      staffName: actualName || staffName 
+    };
   }
   
   function resolveViolation(params) {

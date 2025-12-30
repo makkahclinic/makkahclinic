@@ -1095,29 +1095,32 @@ function verifyPasscode(staffName, passcode) {
   const nameCol = headers.indexOf('Staff_Name');
   const passcodeCol = headers.indexOf('Passcode');
   
-  // إذا لم يتم تحديد اسم الموظف، نبحث بالباسكود فقط
-  if (!staffName && passcode) {
-    for (let i = 1; i < data.length; i++) {
-      const rowPasscode = String(data[i][passcodeCol >= 0 ? passcodeCol : 1] || '').trim();
-      if (rowPasscode === String(passcode).trim()) {
-        const foundName = data[i][nameCol >= 0 ? nameCol : 0] || 'موظف';
-        return { valid: true, verified: true, staffName: foundName };
-      }
-    }
-    return { valid: false, verified: false, error: 'الرمز السري غير صحيح' };
-  }
-  
-  // البحث باسم الموظف والباسكود معاً
+  // البحث عن صاحب هذا الرمز السري
+  let foundStaff = null;
   for (let i = 1; i < data.length; i++) {
-    const rowName = String(data[i][nameCol >= 0 ? nameCol : 0] || '').trim();
     const rowPasscode = String(data[i][passcodeCol >= 0 ? passcodeCol : 1] || '').trim();
-    
-    if (rowName === String(staffName).trim() && rowPasscode === String(passcode).trim()) {
-      return { valid: true, verified: true, staffName: rowName };
+    if (rowPasscode === String(passcode).trim()) {
+      foundStaff = {
+        name: data[i][nameCol >= 0 ? nameCol : 0] || 'موظف',
+        passcode: rowPasscode
+      };
+      break;
     }
   }
   
-  return { valid: false, verified: false, error: 'رمز الدخول غير صحيح' };
+  if (!foundStaff) {
+    return { valid: false, error: 'الرمز السري غير صحيح' };
+  }
+  
+  // إذا تم تحديد اسم الموظف، نتحقق من تطابقه مع صاحب الرمز
+  if (staffName && staffName.trim()) {
+    if (foundStaff.name.trim() !== staffName.trim()) {
+      return { valid: false, error: 'الرمز السري لا يتطابق مع الاسم المختار' };
+    }
+  }
+  
+  // الرمز صحيح والاسم متطابق
+  return { valid: true, verified: true, staffName: foundStaff.name };
 }
 
 function getChecklist(taskId) {

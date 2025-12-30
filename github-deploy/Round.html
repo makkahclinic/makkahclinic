@@ -1118,17 +1118,32 @@
 
   <!-- Passcode Input Modal -->
   <div class="modal fade" id="passcodeModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 320px;">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 340px;">
       <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
         <div class="modal-header border-0" style="background: var(--primary); color: white;">
-          <h6 class="modal-title"><i class="fas fa-lock me-2"></i>الرمز السري</h6>
+          <h6 class="modal-title"><i class="fas fa-user-check me-2"></i>تأكيد المعالجة</h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
-          <p class="text-muted small mb-3 text-center">أدخل رمزك السري للتأكيد</p>
+          <!-- Staff Name Selection -->
+          <div class="mb-3">
+            <label class="form-label fw-bold text-muted small mb-2">
+              <i class="fas fa-user me-1"></i>اختر اسمك
+            </label>
+            <select id="resolveStaffSelect" class="form-select" 
+                    style="border-radius: 10px; border: 2px solid #e9ecef; padding: 10px 12px;">
+              <option value="">-- اختر اسمك --</option>
+            </select>
+          </div>
+          
+          <hr class="my-3" style="border-color: #e9ecef;">
+          
+          <p class="text-muted small mb-2 text-center">
+            <i class="fas fa-lock me-1"></i>أدخل رمزك السري للتأكيد
+          </p>
           
           <!-- PIN Display -->
-          <div class="d-flex justify-content-center gap-2 mb-4" id="pinDisplay">
+          <div class="d-flex justify-content-center gap-2 mb-3" id="pinDisplay">
             <div class="pin-dot"></div>
             <div class="pin-dot"></div>
             <div class="pin-dot"></div>
@@ -1510,6 +1525,19 @@
       bootstrap.Modal.getInstance(document.getElementById('resolveConfirmModal')).hide();
       clearPin();
       document.getElementById('passcodeError').style.display = 'none';
+      
+      // ملء قائمة الموظفين
+      const staffSelect = document.getElementById('resolveStaffSelect');
+      staffSelect.innerHTML = '<option value="">-- اختر اسمك --</option>';
+      if (STAFF_LIST && STAFF_LIST.length > 0) {
+        STAFF_LIST.forEach(staff => {
+          const name = staff.Staff_Name || staff.Name || staff;
+          if (name) {
+            staffSelect.innerHTML += `<option value="${name}">${name}</option>`;
+          }
+        });
+      }
+      
       setTimeout(() => {
         const modal = new bootstrap.Modal(document.getElementById('passcodeModal'));
         modal.show();
@@ -1541,7 +1569,15 @@
     }
     
     async function verifyAndResolve() {
+      const selectedStaff = document.getElementById('resolveStaffSelect').value;
       const passcode = document.getElementById('passcodeInput').value;
+      
+      // التحقق من اختيار الاسم
+      if (!selectedStaff) {
+        document.getElementById('passcodeError').textContent = 'الرجاء اختيار اسمك من القائمة';
+        document.getElementById('passcodeError').style.display = 'block';
+        return;
+      }
       
       if (!passcode || passcode.length < 4) {
         document.getElementById('passcodeError').textContent = 'الرجاء إدخال الرمز السري';
@@ -1550,17 +1586,20 @@
       }
       
       try {
-        // Verify passcode - الآن يقبل أي رمز صحيح ويرجع اسم صاحبه
-        const verifyData = await callApi('verifyPasscode', { passcode });
+        // Verify passcode مع اسم الموظف المختار
+        const verifyData = await callApi('verifyPasscode', { 
+          staffName: selectedStaff, 
+          passcode: passcode 
+        });
         
         if (!verifyData.valid) {
-          document.getElementById('passcodeError').textContent = verifyData.error || 'الرمز السري غير صحيح';
+          document.getElementById('passcodeError').textContent = verifyData.error || 'الرمز السري غير صحيح لهذا الاسم';
           document.getElementById('passcodeError').style.display = 'block';
           return;
         }
         
-        // استخدام اسم الموظف الذي أدخل الرمز (من الـ API)
-        const resolvedByName = verifyData.staffName || 'موظف';
+        // استخدام اسم الموظف المختار
+        const resolvedByName = selectedStaff;
         
         // Mark as resolved
         const resolveData = await callApi('resolveViolation', {
