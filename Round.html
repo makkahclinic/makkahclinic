@@ -837,7 +837,37 @@
         <h6 class="fw-bold mb-3"><i class="fas fa-redo text-danger me-2"></i>مخالفات متكررة (تحتاج تدخل)</h6>
         <div id="repeatedViolationsList" class="row g-3 mb-4"></div>
         
-        <h6 class="fw-bold mb-3"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
+        <!-- فلتر المخالفات -->
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h6 class="fw-bold mb-0"><i class="fas fa-list text-warning me-2"></i>جميع المخالفات</h6>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-secondary" onclick="runAutoArchive()" title="أرشفة المخالفات المغلقة منذ أكثر من أسبوع">
+              <i class="fas fa-archive me-1"></i>أرشفة تلقائية
+            </button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <div class="btn-group btn-group-sm flex-wrap" role="group" id="violationFilterGroup">
+            <button type="button" class="btn btn-outline-secondary violation-filter-btn active" data-filter="all" onclick="filterViolations('all')">
+              <i class="fas fa-list me-1"></i>الكل
+            </button>
+            <button type="button" class="btn btn-outline-danger violation-filter-btn" data-filter="open" onclick="filterViolations('open')">
+              <i class="fas fa-exclamation-circle me-1"></i>لم تعالج
+            </button>
+            <button type="button" class="btn btn-outline-primary violation-filter-btn" data-filter="followup" onclick="filterViolations('followup')">
+              <i class="fas fa-comments me-1"></i>تحت المتابعة
+            </button>
+            <button type="button" class="btn btn-outline-success violation-filter-btn" data-filter="closed" onclick="filterViolations('closed')">
+              <i class="fas fa-check-circle me-1"></i>منتهية
+            </button>
+            <button type="button" class="btn btn-outline-secondary violation-filter-btn" data-filter="archived" onclick="filterViolations('archived')">
+              <i class="fas fa-archive me-1"></i>مؤرشفة
+            </button>
+          </div>
+        </div>
+        <div id="violationFilterInfo" class="alert alert-info py-2 mb-3" style="display: none;">
+          <small><i class="fas fa-info-circle me-1"></i><span id="violationFilterText"></span></small>
+        </div>
         <div id="allViolationsList" class="row g-3"></div>
       </div>
 
@@ -1378,6 +1408,77 @@
           renderViolations();
         } else {
           showErrorToast(result.message || result.error || 'حدث خطأ أثناء حفظ المتابعة');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
+    }
+    
+    // === Archive Violation Functions ===
+    async function archiveViolation(rowIndex) {
+      if (!confirm('هل تريد أرشفة هذه المخالفة؟\nستبقى في السجل ولكن لن تظهر إلا عند اختيار فلتر "المؤرشفة"')) {
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('archiveViolation', { rowIndex: rowIndex });
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          showSuccessToast('تمت أرشفة المخالفة بنجاح');
+          VIOLATIONS_FOLLOWUP_CACHE = {}; // Clear cache
+          await loadViolations();
+        } else {
+          showErrorToast(result.message || result.error || 'حدث خطأ أثناء الأرشفة');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
+    }
+    
+    async function unarchiveViolation(rowIndex) {
+      if (!confirm('هل تريد إلغاء أرشفة هذه المخالفة؟\nستظهر مجدداً في قائمة المخالفات المنتهية')) {
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('unarchiveViolation', { rowIndex: rowIndex });
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          showSuccessToast('تم إلغاء الأرشفة بنجاح');
+          VIOLATIONS_FOLLOWUP_CACHE = {}; // Clear cache
+          await loadViolations();
+        } else {
+          showErrorToast(result.message || result.error || 'حدث خطأ');
+        }
+      } catch (err) {
+        showSpinner(false);
+        showErrorToast('حدث خطأ: ' + err.message);
+      }
+    }
+    
+    // === Run Auto-Archive (للاستخدام اليدوي) ===
+    async function runAutoArchive() {
+      if (!confirm('هل تريد تشغيل الأرشفة التلقائية الآن؟\nسيتم أرشفة جميع المخالفات المغلقة التي مضى عليها أكثر من أسبوع')) {
+        return;
+      }
+      
+      try {
+        showSpinner(true);
+        const result = await callApi('archiveOldClosed');
+        showSpinner(false);
+        
+        if (result.ok || result.success) {
+          showSuccessToast(result.message || `تمت أرشفة ${result.archivedCount || 0} مخالفة`);
+          VIOLATIONS_FOLLOWUP_CACHE = {};
+          await loadViolations();
+        } else {
+          showErrorToast(result.error || 'حدث خطأ');
         }
       } catch (err) {
         showSpinner(false);
@@ -2392,6 +2493,85 @@
 
     let violationTrendChart = null;
     let FILTERED_VIOLATIONS = [];
+    let CURRENT_VIOLATION_FILTER = 'all';
+    let VIOLATIONS_FOLLOWUP_CACHE = {};
+    
+    async function filterViolations(filter) {
+      CURRENT_VIOLATION_FILTER = filter;
+      
+      // تحديث الأزرار
+      document.querySelectorAll('.violation-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.filter === filter) btn.classList.add('active');
+      });
+      
+      const filterInfo = document.getElementById('violationFilterInfo');
+      const filterText = document.getElementById('violationFilterText');
+      
+      if (!VIOLATIONS_DATA || !VIOLATIONS_DATA.violations) {
+        filterInfo.style.display = 'none';
+        return;
+      }
+      
+      let filtered = [...VIOLATIONS_DATA.violations];
+      let infoMessage = '';
+      
+      // استخدام State القادمة من السيرفر مباشرة (مبسط وموثوق)
+      switch (filter) {
+        case 'open':
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'open');
+          infoMessage = `عرض ${filtered.length} مخالفة لم تعالج بعد`;
+          break;
+          
+        case 'followup':
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'followup');
+          infoMessage = `عرض ${filtered.length} مخالفة تحت المتابعة`;
+          break;
+          
+        case 'closed':
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'closed');
+          infoMessage = `عرض ${filtered.length} مخالفة منتهية (تمت معالجتها)`;
+          break;
+          
+        case 'archived':
+          filtered = VIOLATIONS_DATA.violations.filter(v => v.State === 'archived');
+          infoMessage = `عرض ${filtered.length} مخالفة مؤرشفة`;
+          break;
+          
+        default:
+          infoMessage = '';
+      }
+      
+      if (infoMessage) {
+        filterInfo.style.display = 'block';
+        filterText.textContent = infoMessage;
+      } else {
+        filterInfo.style.display = 'none';
+      }
+      
+      FILTERED_VIOLATIONS = filtered;
+      
+      // إعادة عرض المخالفات بالفلتر الجديد
+      const filteredData = {
+        ...VIOLATIONS_DATA,
+        violations: filtered
+      };
+      renderViolations(filteredData);
+    }
+    
+    async function loadViolationFollowupCounts() {
+      if (!VIOLATIONS_DATA || !VIOLATIONS_DATA.violations) return;
+      
+      for (const v of VIOLATIONS_DATA.violations) {
+        if (!v._rowIndex) continue;
+        try {
+          const res = await callApi('getFollowUpsByRound', { rowIndex: v._rowIndex });
+          VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] = (res.followUps || []).length;
+        } catch (err) {
+          VIOLATIONS_FOLLOWUP_CACHE[v._rowIndex] = 0;
+        }
+      }
+    }
     
     function renderViolations(filteredData = null) {
       const data = filteredData || VIOLATIONS_DATA;
@@ -2517,6 +2697,7 @@
           const notes = formatIssueText(v.Negative_Notes || v.NegativeNotes);
           const areaName = v.Area || v.Round_Name || 'جولة';
           const isResolved = String(v.Is_Resolved || '').toLowerCase() === 'yes';
+          const isArchived = String(v.Is_Archived || '').toLowerCase() === 'yes';
           const repeatKey = `${v.Area || v.Round_Name}_${assignedTo}`;
           const repeatCount = repeatCounts[repeatKey] || 1;
           const dateStr = v.Date || '-';
@@ -2530,11 +2711,12 @@
           return `
             <div class="col-md-6 mb-3">
               <div class="card h-100 shadow" style="border: 2px solid ${isResolved ? '#198754' : '#dc3545'}; border-radius: 14px; overflow: hidden;">
-                <div class="card-header py-2" style="background: ${isResolved ? 'linear-gradient(135deg, #198754, #157347)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
+                <div class="card-header py-2" style="background: ${isArchived ? 'linear-gradient(135deg, #6b7280, #4b5563)' : isResolved ? 'linear-gradient(135deg, #198754, #157347)' : 'linear-gradient(135deg, #dc3545, #c82333)'};">
                   <div class="d-flex justify-content-between align-items-center">
                     <div class="text-white">
-                      <i class="fas ${isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+                      <i class="fas ${isArchived ? 'fa-archive' : isResolved ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
                       <span class="fw-bold">${areaName}</span>
+                      ${isArchived ? '<span class="badge bg-secondary ms-2">مؤرشفة</span>' : ''}
                     </div>
                     <div class="d-flex align-items-center gap-2">
                       ${repeatCount > 1 ? `<span class="badge bg-warning text-dark">🔁 ${repeatCount}</span>` : ''}
@@ -2583,11 +2765,20 @@
                           <i class="fas fa-check me-1"></i>معالجة
                         </button>
                       </div>
+                    ` : isArchived ? `
+                      <button class="btn btn-sm btn-outline-secondary px-3 py-1" onclick="unarchiveViolation(${rowIdx})">
+                        <i class="fas fa-undo me-1"></i>إلغاء الأرشفة
+                      </button>
                     ` : `
-                      <small class="text-muted">
-                        ${v.Resolved_By ? v.Resolved_By : ''}
-                        ${v.Resolved_Date ? ' - ' + v.Resolved_Date : ''}
-                      </small>
+                      <div class="d-flex gap-2 align-items-center">
+                        <small class="text-muted">
+                          ${v.Resolved_By ? v.Resolved_By : ''}
+                          ${v.Resolved_Date ? ' - ' + v.Resolved_Date : ''}
+                        </small>
+                        <button class="btn btn-sm btn-outline-secondary px-2 py-1" onclick="archiveViolation(${rowIdx})" title="أرشفة">
+                          <i class="fas fa-archive"></i>
+                        </button>
+                      </div>
                     `}
                   </div>
                 </div>
