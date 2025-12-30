@@ -839,7 +839,7 @@ function logRound(params) {
     params.isViolation || 'No'
   ];
   
-  sheet.appendRow(newRow);
+  appendRowSafe(sheet, newRow);
   
   return { success: true, message: 'تم تسجيل الجولة بنجاح' };
 }
