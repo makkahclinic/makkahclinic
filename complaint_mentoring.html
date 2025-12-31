@@ -684,6 +684,9 @@
                             <span id="escalationBadge" style="display:none; position:absolute; top:-5px; right:-15px; background:#dc3545; color:white; border-radius:50%; width:24px; height:24px; font-size:0.7rem; line-height:24px;"></span>
                         </div>
                         <div class="stat-label" style="color:#dc3545; font-weight:bold;"><i class="fas fa-exclamation-triangle"></i> شكاوى مُصعّدة</div>
+                        <div id="deescalatedIndicator" style="display:none; margin-top:8px; padding:4px 10px; background:linear-gradient(135deg, #fff3cd, #ffeeba); border-radius:12px; font-size:0.75rem; color:#856404; border:1px solid #ffc107;">
+                            <i class="fas fa-history"></i> <span id="deescalatedCount">0</span> منتهية التصعيد
+                        </div>
                     </div>
                     <div class="stat-card success">
                         <div class="stat-number" id="closedComplaints">0</div>
@@ -1163,8 +1166,16 @@
                 const totalEscalated = escalatedItems.length;
                 const maxRepeat = Math.max(...allComplaints.map(c => Number(c.escalationCount || 0)), 0);
                 
-                // تحديث كرت المصعدة + تنبيه التكرار
-                updateEscalationBadges(totalEscalated, maxRepeat);
+                // حساب منتهية التصعيد (لديها تاريخ إنهاء تصعيد أو مغلقة مع تاريخ تصعيد سابق)
+                const deescalatedItems = allComplaints.filter(c => {
+                    const wasEscalated = Number(c.escalationCount || 0) > 0 || (c.deescalationDate || '').trim() !== '';
+                    const isDeescalated = (c.escalatedTo || '').trim() === '' && wasEscalated;
+                    return isDeescalated;
+                });
+                const totalDeescalated = deescalatedItems.length;
+                
+                // تحديث كرت المصعدة + تنبيه التكرار + منتهية التصعيد
+                updateEscalationBadges(totalEscalated, maxRepeat, totalDeescalated);
                 
                 // الحالات الحرجة
                 const criticalCases = getCriticalCases(allComplaints);
@@ -1181,15 +1192,19 @@
             }
         }
         
-        function updateEscalationBadges(totalEscalated, maxRepeat) {
+        function updateEscalationBadges(totalEscalated, maxRepeat, totalDeescalated = 0) {
             const el = document.getElementById('escalatedComplaints');
             const badge = document.getElementById('escalationBadge');
+            const deescIndicator = document.getElementById('deescalatedIndicator');
+            const deescCount = document.getElementById('deescalatedCount');
             
             el.innerHTML = totalEscalated;
             
             if (totalEscalated > 0) {
                 el.innerHTML += `<span style="position:absolute; top:-8px; right:-20px; background:#dc3545; color:white; border-radius:50%; min-width:22px; height:22px; font-size:0.65rem; line-height:22px; text-align:center; animation:pulse 1.5s infinite;">!</span>`;
                 el.parentElement.parentElement.style.animation = 'pulse 2s infinite';
+            } else {
+                el.parentElement.parentElement.style.animation = 'none';
             }
             
             if (badge && maxRepeat >= 2) {
@@ -1198,6 +1213,16 @@
                 badge.title = `أعلى تكرار تصعيد لنفس الشكوى = ${maxRepeat}`;
             } else if (badge) {
                 badge.style.display = 'none';
+            }
+            
+            // مؤشر منتهية التصعيد (أصفر)
+            if (deescIndicator && deescCount) {
+                if (totalDeescalated > 0) {
+                    deescIndicator.style.display = 'inline-block';
+                    deescCount.textContent = totalDeescalated;
+                } else {
+                    deescIndicator.style.display = 'none';
+                }
             }
         }
         
