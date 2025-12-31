@@ -1129,11 +1129,26 @@
                 document.getElementById('typeChart').innerHTML = typeHtml || '<p style="text-align:center;color:#999;">لا توجد بيانات</p>';
             }
             
+            // حساب المصعدة النشطة ومنتهية التصعيد من البيانات المحلية
+            const activeEscalated = allComplaints.filter(c => {
+                const hasEsc = (c.escalatedTo || '').trim() !== '';
+                const isClosed = c.status === 'closed' || c.status === 'مغلقة';
+                return hasEsc && !isClosed;
+            }).length;
+            
+            const deescalatedCount = allComplaints.filter(c => {
+                const wasEsc = Number(c.escalationCount || 0) > 0 || (c.deescalationDate || '').trim() !== '';
+                const isClosed = c.status === 'closed' || c.status === 'مغلقة';
+                const escEmpty = (c.escalatedTo || '').trim() === '';
+                return wasEsc && (isClosed || escEmpty);
+            }).length;
+            
             // تشارت تنفيذي واضح
             const chartData = [
-                { label: 'مصعدة ⚠️', value: stats.escalated || 0, color: '#dc3545' },
+                { label: 'مصعدة نشطة ⚠️', value: activeEscalated, color: '#dc3545' },
+                { label: 'منتهية التصعيد 🔔', value: deescalatedCount, color: '#ffc107' },
                 { label: 'قيد المعالجة', value: stats.in_progress || 0, color: '#fd7e14' },
-                { label: 'جديدة', value: stats.new || 0, color: '#ffc107' },
+                { label: 'جديدة', value: stats.new || 0, color: '#17a2b8' },
                 { label: 'مغلقة', value: stats.closed || 0, color: '#28a745' }
             ];
             
@@ -1495,6 +1510,13 @@
             const container = document.getElementById('riskHeatmap');
             const note = document.getElementById('riskHeatmapNote');
             if (!container) return;
+
+            // إذا لا توجد بيانات
+            if (locations.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:40px; color:#999; background:#f8f9fa; border-radius:8px;"><i class="fas fa-info-circle" style="font-size:2rem; margin-bottom:10px;"></i><br>لا توجد شكاوى مفتوحة حالياً لعرضها في Heatmap.<br><small>جرب إلغاء تفعيل "فقط المفتوحة" أو تغيير الفترة الزمنية.</small></div>';
+                if (note) note.textContent = '';
+                return;
+            }
 
             const grid = document.createElement('div');
             grid.className = 'heatmap-grid';
