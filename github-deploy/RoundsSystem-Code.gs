@@ -564,8 +564,9 @@ function getHomeData() {
   });
   
   todayLog.forEach(log => {
-    const staff = log.Responsible_Role || log.Execution_Responsible || '';
-    const taskId = log.TaskID || '';
+    // البحث عن اسم الموظف بأسماء أعمدة متعددة
+    const staff = log.Responsible_Role || log.responsibleRole || log.Staff || log.Execution_Responsible || log.executionResponsible || '';
+    const taskId = log.TaskID || log.taskId || log.Task_ID || '';
     if (staffMap[staff]) {
       staffMap[staff].todayDone++;
       const round = staffMap[staff].topRounds.find(r => r.taskId === taskId);
@@ -1091,6 +1092,9 @@ function logRound(params) {
   const sheet = getSheet('Rounds_Log');
   if (!sheet) return { success: false, error: 'Rounds_Log sheet not found' };
   
+  // التأكد من وجود الـ Headers الصحيحة
+  ensureRoundsLogHeaders(sheet);
+  
   const now = getSaudiDate();
   const dateStr = getTodayString();
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -1112,6 +1116,21 @@ function logRound(params) {
   appendRowSafe(sheet, newRow);
   
   return { success: true, message: 'تم تسجيل الجولة بنجاح' };
+}
+
+function ensureRoundsLogHeaders(sheet) {
+  const expectedHeaders = [
+    'Date', 'Actual_Time', 'TaskID', 'Round_Name', 'Area', 
+    'Responsible_Role', 'Execution_Responsible', 'Status', 
+    'Positive_Notes', 'Negative_Notes', 'Is_Violation'
+  ];
+  
+  const firstRow = sheet.getRange(1, 1, 1, expectedHeaders.length).getValues()[0];
+  const isEmpty = firstRow.every(cell => !cell || String(cell).trim() === '');
+  
+  if (isEmpty) {
+    sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+  }
 }
 
 function verifyPasscode(staffName, passcode) {
