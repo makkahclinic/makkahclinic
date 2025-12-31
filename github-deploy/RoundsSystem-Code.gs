@@ -1233,11 +1233,16 @@ function verifyPasscode(staffName, passcode, checkResolvePermission = false) {
 }
 
 function getChecklist(taskId, roundName) {
-  const sheet = getSheet('Checklists');
+  if (!taskId) return { items: [], responsibles: getStaffList() };
+  
+  // تحديد اسم الـ Sheet من TaskID
+  // مثال: taskId = 1 → R01_Checklist، taskId = 2 → R02_Checklist
+  const sheetName = `R${String(taskId).padStart(2, '0')}_Checklist`;
+  const sheet = getSheet(sheetName);
+  
   if (!sheet) {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const allSheets = ss.getSheets().map(s => s.getName());
-    return { items: [], responsibles: getStaffList() };
+    // Fallback: جرب البحث في Checklists الموحد
+    return getChecklistFromUnified(taskId, roundName);
   }
   
   const data = sheet.getDataRange().getValues();
@@ -1245,8 +1250,47 @@ function getChecklist(taskId, roundName) {
   
   const headers = data[0];
   
-  // البحث عن عمود النص (البند)
-  const textColNames = ['Item', 'item', 'Text', 'text', 'البند', 'نص البند', 'Description', 'description', 'Checklist_Item', 'عنصر الفحص'];
+  // البحث عن عمود البند
+  const itemColNames = ['Item', 'item', 'البند', 'نص البند', 'Text', 'Description'];
+  let itemCol = -1;
+  for (const name of itemColNames) {
+    const idx = headers.indexOf(name);
+    if (idx >= 0) {
+      itemCol = idx;
+      break;
+    }
+  }
+  
+  // Fallback: استخدم أول عمود إذا لم يوجد
+  if (itemCol === -1) itemCol = 0;
+  
+  const items = [];
+  for (let i = 1; i < data.length; i++) {
+    const text = String(data[i][itemCol] || '').trim();
+    if (text) {
+      items.push({
+        id: i,
+        text,
+        item: text
+      });
+    }
+  }
+  
+  return { items, responsibles: getStaffList() };
+}
+
+// Fallback: البحث في Sheet Checklists الموحد
+function getChecklistFromUnified(taskId, roundName) {
+  const sheet = getSheet('Checklists');
+  if (!sheet) return { items: [], responsibles: getStaffList() };
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { items: [], responsibles: getStaffList() };
+  
+  const headers = data[0];
+  
+  // البحث عن عمود النص
+  const textColNames = ['Item', 'item', 'البند', 'نص البند', 'Text', 'Description', 'Checklist_Item'];
   let textColIndex = -1;
   for (const name of textColNames) {
     const idx = headers.indexOf(name);
@@ -1256,7 +1300,7 @@ function getChecklist(taskId, roundName) {
     }
   }
   
-  // مفاتيح البحث (taskId + roundName)
+  // مفاتيح البحث
   const searchKeys = [
     String(taskId || '').trim().toLowerCase(),
     String(roundName || '').trim().toLowerCase()
@@ -1266,15 +1310,11 @@ function getChecklist(taskId, roundName) {
   
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    
-    // دمج كل خلايا الصف في نص واحد للبحث الشامل
     const rowText = row.map(cell => String(cell || '').toLowerCase()).join(' ');
     
-    // هل أي مفتاح موجود داخل الصف؟
     const matched = searchKeys.some(key => rowText.includes(key));
     
     if (matched) {
-      // استخراج نص البند
       const itemText = textColIndex >= 0 
         ? row[textColIndex] 
         : row.find(v => v && String(v).length > 3) || '';
@@ -1287,10 +1327,7 @@ function getChecklist(taskId, roundName) {
     }
   }
   
-  // جلب قائمة المسؤولين
-  const responsibles = getStaffList();
-  
-  return { items, responsibles };
+  return { items, responsibles: getStaffList() };
 }
 
 // دالة مساعدة لجلب قائمة الموظفين مع Fallback ذكي
