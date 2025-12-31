@@ -1259,8 +1259,8 @@ function getChecklist(taskId, roundName) {
   
   const headers = data[0].map(h => String(h || '').trim());
   
-  // البحث عن عمود البند (Item_Desc أو أي اسم مشابه)
-  const itemColNames = ['Item_Desc_No', 'Item_Desc', 'Item', 'البند', 'نص البند', 'Description', 'Text', 'item'];
+  // البحث عن عمود البند
+  const itemColNames = ['Item_Description_AR', 'Item_Description', 'Item_Desc', 'البند', 'نص البند', 'Description', 'Item', 'Text'];
   let itemCol = -1;
   for (const name of itemColNames) {
     const idx = headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
@@ -1312,7 +1312,7 @@ function getChecklistFromUnified(taskId, roundName) {
   const headers = data[0];
   
   // البحث عن عمود النص
-  const textColNames = ['Item', 'item', 'البند', 'نص البند', 'Text', 'Description', 'Checklist_Item'];
+  const textColNames = ['Item_Description_AR', 'Item_Description', 'Item_Desc', 'البند', 'نص البند', 'Description', 'Item', 'Text'];
   let textColIndex = -1;
   for (const name of textColNames) {
     const idx = headers.indexOf(name);
