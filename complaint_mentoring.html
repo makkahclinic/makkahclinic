@@ -1162,15 +1162,24 @@
                 rebuildHeatmapFromUI();
                 
                 // حساب المصعدة وأعلى تكرار
-                const escalatedItems = allComplaints.filter(c => (c.escalatedTo || '').trim() !== '');
+                // المصعدة النشطة = لديها escalatedTo غير فارغ + غير مغلقة
+                const escalatedItems = allComplaints.filter(c => {
+                    const hasEscalation = (c.escalatedTo || '').trim() !== '';
+                    const isClosed = c.status === 'closed' || c.status === 'مغلقة';
+                    return hasEscalation && !isClosed;
+                });
                 const totalEscalated = escalatedItems.length;
                 const maxRepeat = Math.max(...allComplaints.map(c => Number(c.escalationCount || 0)), 0);
                 
-                // حساب منتهية التصعيد (لديها تاريخ إنهاء تصعيد أو مغلقة مع تاريخ تصعيد سابق)
+                // حساب منتهية التصعيد:
+                // 1. كانت مصعدة (escalationCount > 0 أو deescalationDate موجود)
+                // 2. وانتهت بأحد الطرق: escalatedTo فارغ، أو الشكوى مغلقة
                 const deescalatedItems = allComplaints.filter(c => {
                     const wasEscalated = Number(c.escalationCount || 0) > 0 || (c.deescalationDate || '').trim() !== '';
-                    const isDeescalated = (c.escalatedTo || '').trim() === '' && wasEscalated;
-                    return isDeescalated;
+                    const isClosed = c.status === 'closed' || c.status === 'مغلقة';
+                    const escalatedToEmpty = (c.escalatedTo || '').trim() === '';
+                    // انتهت = (مغلقة وكانت مصعدة) أو (escalatedTo فارغ وكانت مصعدة)
+                    return wasEscalated && (isClosed || escalatedToEmpty);
                 });
                 const totalDeescalated = deescalatedItems.length;
                 
