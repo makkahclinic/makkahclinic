@@ -880,15 +880,16 @@ function getViolations() {
 
   return {
     violations: allViolations,
+    active: activeViolations,
     repeated,
     resolved: closedViolations,
     total: allViolations.length,
     pending: openViolations.length,
-    // إحصائيات جديدة حسب الحالة
     open: openViolations.length,
     followup: followupViolations.length,
     closed: closedViolations.length,
-    archived: archivedViolations.length
+    archived: archivedViolations.length,
+    activeCount: activeViolations.length
   };
 }
 
@@ -1223,19 +1224,18 @@ function verifyPasscode(staffName, passcode) {
 function getChecklist(taskId) {
   const sheet = getSheet('Checklists');
   if (!sheet) {
-    // DEBUG: محاولة إيجاد شيت بأسماء بديلة
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const allSheets = ss.getSheets().map(s => s.getName());
-    return { items: [], debug: { error: 'Checklists sheet not found', availableSheets: allSheets } };
+    return { items: [], responsibles: getStaffList(), debug: { error: 'Checklists sheet not found', availableSheets: allSheets } };
   }
   
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return { items: [], debug: { error: 'No data in Checklists sheet' } };
+  if (data.length < 2) return { items: [], responsibles: getStaffList(), debug: { error: 'No data in Checklists sheet' } };
   
   const headers = data[0];
   
   // البحث عن عمود TaskID بأسماء مختلفة
-  const taskIdColNames = ['TaskID', 'Task_ID', 'taskId', 'task_id', 'معرف المهمة', 'رقم المهمة', 'Round_ID', 'RoundID'];
+  const taskIdColNames = ['TaskID', 'Task_ID', 'taskId', 'task_id', 'معرف المهمة', 'رقم المهمة', 'Round_ID', 'RoundID', 'Round_Name', 'Round_Name_AR', 'اسم الجولة'];
   let taskIdColIndex = -1;
   for (const name of taskIdColNames) {
     const idx = headers.indexOf(name);
@@ -1246,7 +1246,7 @@ function getChecklist(taskId) {
   }
   
   // البحث عن عمود النص بأسماء مختلفة
-  const textColNames = ['Item', 'item', 'Text', 'text', 'البند', 'نص البند', 'Description', 'description', 'Checklist_Item'];
+  const textColNames = ['Item', 'item', 'Text', 'text', 'البند', 'نص البند', 'Description', 'description', 'Checklist_Item', 'عنصر الفحص'];
   let textColIndex = -1;
   for (const name of textColNames) {
     const idx = headers.indexOf(name);
@@ -1266,16 +1266,18 @@ function getChecklist(taskId) {
   };
   
   if (taskIdColIndex === -1) {
-    return { items: [], debug: { ...debugInfo, error: 'TaskID column not found' } };
+    return { items: [], responsibles: getStaffList(), debug: { ...debugInfo, error: 'TaskID column not found' } };
   }
   
-  // تصفية البيانات مع مقارنة مرنة (تحويل للنص)
+  // تصفية البيانات مع مطابقة مرنة (تشمل الجزئية)
   const items = [];
-  const searchTaskId = String(taskId).trim().toLowerCase();
+  const searchKey = String(taskId).trim().toLowerCase();
   
   for (let i = 1; i < data.length; i++) {
-    const rowTaskId = String(data[i][taskIdColIndex] || '').trim().toLowerCase();
-    if (rowTaskId === searchTaskId) {
+    const rowValue = String(data[i][taskIdColIndex] || '').trim().toLowerCase();
+    
+    // مطابقة مرنة: تطابق تام أو جزئي في الاتجاهين
+    if (rowValue === searchKey || rowValue.includes(searchKey) || searchKey.includes(rowValue)) {
       const itemText = textColIndex >= 0 ? data[i][textColIndex] : '';
       items.push({
         id: i,
@@ -1288,7 +1290,41 @@ function getChecklist(taskId) {
   
   debugInfo.matchedItems = items.length;
   
-  return { items, debug: debugInfo };
+  // جلب قائمة المسؤولين
+  const responsibles = getStaffList();
+  
+  return { items, responsibles, debug: debugInfo };
+}
+
+// دالة مساعدة لجلب قائمة الموظفين
+function getStaffList() {
+  const staffSheet = getSheet('Staff_Passcodes');
+  if (!staffSheet) return [];
+  
+  const data = staffSheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  
+  const headers = data[0];
+  const nameColNames = ['Staff_Name', 'Name', 'الاسم', 'اسم الموظف', 'Staff'];
+  let nameColIndex = -1;
+  
+  for (const name of nameColNames) {
+    const idx = headers.indexOf(name);
+    if (idx >= 0) {
+      nameColIndex = idx;
+      break;
+    }
+  }
+  
+  if (nameColIndex === -1) nameColIndex = 0;
+  
+  const names = [];
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][nameColIndex] || '').trim();
+    if (name) names.push(name);
+  }
+  
+  return names;
 }
 
 function debugInfo() {
