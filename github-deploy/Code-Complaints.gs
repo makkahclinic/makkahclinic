@@ -648,6 +648,10 @@ function getComplaints(params) {
     escalationReason: c.Escalation_Reason || '',
     escalationCount: parseInt(c.Escalation_Count) || 0,
     isEscalated: c.Escalated_To ? true : false,
+    // حقول إنهاء التصعيد
+    deescalatedBy: c.Deescalated_By || '',
+    deescalationDate: formatDate(c.Deescalation_Date),
+    deescalationReason: c.Deescalation_Reason || '',
     // جذر المشكلة
     rootCauseCategory: c.Root_Cause_Category || '',
     rootCauseDetails: c.Root_Cause_Details || ''
@@ -707,6 +711,10 @@ function getComplaintDetails(complaintId) {
       escalationReason: complaint.Escalation_Reason || '',
       escalationCount: parseInt(complaint.Escalation_Count) || 0,
       isEscalated: complaint.Escalated_To ? true : false,
+      // حقول إنهاء التصعيد
+      deescalatedBy: complaint.Deescalated_By || '',
+      deescalationDate: formatDate(complaint.Deescalation_Date),
+      deescalationReason: complaint.Deescalation_Reason || '',
       // جذر المشكلة
       rootCauseCategory: complaint.Root_Cause_Category || '',
       rootCauseDetails: complaint.Root_Cause_Details || '',
@@ -929,8 +937,24 @@ function closeComplaint(payload) {
   return { success: true, message: 'تم إغلاق الشكوى بنجاح' };
 }
 
+function ensureDeescalationColumns(sheet) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const requiredCols = ['Deescalated_By', 'Deescalation_Date', 'Deescalation_Reason'];
+  
+  requiredCols.forEach(col => {
+    if (headers.indexOf(col) === -1) {
+      const lastCol = sheet.getLastColumn();
+      sheet.getRange(1, lastCol + 1).setValue(col);
+    }
+  });
+}
+
 function deescalateComplaint(payload) {
   const sheet = getComplaintsSheet('Complaints_Log');
+  
+  // إنشاء الأعمدة تلقائياً إذا لم تكن موجودة
+  ensureDeescalationColumns(sheet);
+  
   const data = sheetToObjects(sheet);
   
   const complaint = data.find(c => c.Complaint_ID === payload.complaintId);
