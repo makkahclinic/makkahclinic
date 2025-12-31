@@ -1,0 +1,142 @@
+🔴 التشخيص النهائي (Root Cause الحقيقي)
+❌ المشكلة ليست:
+
+في الواجهة
+
+ولا في fetch
+
+ولا في permisssions
+
+ولا في الأعمدة
+
+✅ المشكلة الحقيقية هي:
+
+الـ Frontend يرسل taskId
+بينما الـ Checklist في الإكسل مربوط فعليًا باسم الجولة (Round_Name)، وليس TaskID.
+
+والـ Console عندك يثبت هذا:
+
+Checklist items received: []
+
+
+يعني:
+
+الطلب وصل
+
+الدالة اشتغلت
+
+لكن ولا صف واحد طابق
+
+🔍 أين الخلل بالضبط؟
+في الواجهة (Round.html):
+
+عند الضغط على بدء الجولة يتم استدعاء:
+
+callApi('getChecklist', { taskId })
+
+
+وهذا taskId يأتي من:
+
+task.TaskID
+
+لكن في الواقع داخل Sheet Checklists:
+
+العمود يحتوي أحد هذه:
+
+اسم الجولة بالعربي
+
+اسم الجولة بالإنجليزي
+
+وصف الجولة
+❌ وليس TaskID
+
+مثال واقعي:
+
+Rounds_Log.TaskID = CLEAN-01
+Checklists.Round_Name = جولة دورات المياه العامة
+
+
+❌ لا يوجد أي تطابق نصي → النتيجة = []
+
+🧠 لماذا الـ fallback لم ينجح؟
+
+أنت أضفت fallback ممتاز تقنيًا، لكن فيه خطأ منطقي:
+
+const searchKey = String(taskId).trim().toLowerCase();
+
+
+ثم تحاول تبحث به داخل:
+
+Round_Name
+
+
+لكن:
+
+taskId = CLEAN-01
+
+Round_Name = جولة دورات المياه العامة
+
+❌ مستحيل يتطابقوا حتى مع includes.
+
+✅ الحل النهائي (نهائي فعليًا – بدون لف)
+🎯 القاعدة الصحيحة
+
+Checklist يجب أن تُجلب باستخدام اسم الجولة، وليس TaskID
+
+🛠️ الحل الصحيح 100%
+1️⃣ عدّل الواجهة (سطر واحد فقط)
+
+في startRound()
+بدل:
+
+callApi('getChecklist', { taskId });
+
+
+إلى:
+
+callApi('getChecklist', {
+  taskId,
+  roundName: roundName
+});
+
+2️⃣ عدّل توقيع الدالة في الخلفية
+قبل:
+function getChecklist(taskId) {
+
+بعد:
+function getChecklist(taskId, roundName) {
+
+
+وفي doPost:
+
+case 'getChecklist':
+  result = getChecklist(payload.taskId, payload.roundName);
+  break;
+
+3️⃣ عدّل منطق البحث (هذا هو المفتاح)
+
+استبدل كل منطق البحث الحالي بهذا:
+
+const searchKeys = [
+  String(taskId || '').trim().toLowerCase(),
+  String(roundName || '').trim().toLowerCase()
+].filter(Boolean);
+
+for (let i = 1; i < data.length; i++) {
+  const rowTask = String(data[i][taskIdColIndex] || '').trim().toLowerCase();
+
+  const matched = searchKeys.some(key =>
+    rowTask === key ||
+    rowTask.includes(key) ||
+    key.includes(rowTask)
+  );
+
+  if (matched) {
+    const itemText = textColIndex >= 0 ? data[i][textColIndex] : '';
+    items.push({
+      id: i,
+      text: String(itemText || ''),
+      taskId: data[i][taskIdColIndex]
+    });
+  }
+}

@@ -55,7 +55,7 @@ function doPost(e) {
         result = getMetrics(payload.days || 14);
         break;
       case 'getChecklist':
-        result = getChecklist(payload.taskId);
+        result = getChecklist(payload.taskId, payload.roundName);
         break;
       case 'verifyPasscode':
         result = verifyPasscode(payload.staffName, payload.passcode);
@@ -1232,7 +1232,7 @@ function verifyPasscode(staffName, passcode, checkResolvePermission = false) {
   return { valid: true, verified: true, staffName: foundStaff.name };
 }
 
-function getChecklist(taskId) {
+function getChecklist(taskId, roundName) {
   const sheet = getSheet('Checklists');
   if (!sheet) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -1245,18 +1245,18 @@ function getChecklist(taskId) {
   
   const headers = data[0];
   
-  // البحث عن عمود TaskID بأسماء مختلفة
-  const taskIdColNames = ['TaskID', 'Task_ID', 'taskId', 'task_id', 'معرف المهمة', 'رقم المهمة', 'Round_ID', 'RoundID', 'Round_Name', 'Round_Name_AR', 'اسم الجولة'];
-  let taskIdColIndex = -1;
-  for (const name of taskIdColNames) {
+  // البحث عن عمود التعريف (TaskID أو Round_Name)
+  const idColNames = ['TaskID', 'Task_ID', 'Round_ID', 'RoundID', 'Round_Name', 'Round_Name_AR', 'اسم الجولة', 'معرف المهمة', 'رقم المهمة'];
+  let idColIndex = -1;
+  for (const name of idColNames) {
     const idx = headers.indexOf(name);
     if (idx >= 0) {
-      taskIdColIndex = idx;
+      idColIndex = idx;
       break;
     }
   }
   
-  // البحث عن عمود النص بأسماء مختلفة
+  // البحث عن عمود النص
   const textColNames = ['Item', 'item', 'Text', 'text', 'البند', 'نص البند', 'Description', 'description', 'Checklist_Item', 'عنصر الفحص'];
   let textColIndex = -1;
   for (const name of textColNames) {
@@ -1270,66 +1270,52 @@ function getChecklist(taskId) {
   // DEBUG info
   const debugInfo = {
     headers: headers,
-    taskIdColIndex: taskIdColIndex,
+    idColIndex: idColIndex,
     textColIndex: textColIndex,
-    searchingFor: String(taskId),
+    searchingFor: { taskId, roundName },
     rowCount: data.length - 1
   };
   
-  if (taskIdColIndex === -1) {
-    return { items: [], responsibles: getStaffList(), debug: { ...debugInfo, error: 'TaskID column not found' } };
+  if (idColIndex === -1) {
+    return { items: [], responsibles: getStaffList(), debug: { ...debugInfo, error: 'ID column not found' } };
   }
   
-  // تصفية البيانات مع مطابقة مرنة (تشمل الجزئية)
+  // بناء مفاتيح البحث (taskId + roundName)
+  const searchKeys = [
+    String(taskId || '').trim().toLowerCase(),
+    String(roundName || '').trim().toLowerCase()
+  ].filter(k => k.length > 0);
+  
   const items = [];
-  const searchKey = String(taskId).trim().toLowerCase();
   
   for (let i = 1; i < data.length; i++) {
-    const rowValue = String(data[i][taskIdColIndex] || '').trim().toLowerCase();
+    const rowValue = String(data[i][idColIndex] || '').trim().toLowerCase();
     
-    // مطابقة مرنة: تطابق تام أو جزئي في الاتجاهين
-    if (rowValue === searchKey || rowValue.includes(searchKey) || searchKey.includes(rowValue)) {
+    // مطابقة مرنة: أي من مفاتيح البحث
+    const matched = searchKeys.some(key =>
+      rowValue === key ||
+      rowValue.includes(key) ||
+      key.includes(rowValue)
+    );
+    
+    if (matched) {
       const itemText = textColIndex >= 0 ? data[i][textColIndex] : '';
       items.push({
         id: i,
         text: String(itemText || ''),
         item: String(itemText || ''),
-        taskId: data[i][taskIdColIndex]
+        taskId: data[i][idColIndex]
       });
     }
   }
   
   debugInfo.matchedItems = items.length;
   
-  // Fallback: إذا لم نجد عناصر، جرّب البحث بـ Round_Name
-  if (items.length === 0 && taskIdColIndex >= 0) {
-    const roundNameCols = ['Round_Name', 'Round_Name_AR', 'اسم الجولة'];
-    for (const colName of roundNameCols) {
-      const rnIdx = headers.indexOf(colName);
-      if (rnIdx >= 0 && rnIdx !== taskIdColIndex) {
-        for (let i = 1; i < data.length; i++) {
-          const rowValue = String(data[i][rnIdx] || '').trim().toLowerCase();
-          if (rowValue === searchKey || rowValue.includes(searchKey) || searchKey.includes(rowValue)) {
-            const itemText = textColIndex >= 0 ? data[i][textColIndex] : '';
-            items.push({
-              id: i,
-              text: String(itemText || ''),
-              item: String(itemText || ''),
-              taskId: data[i][taskIdColIndex] || data[i][rnIdx]
-            });
-          }
-        }
-        if (items.length > 0) break;
-      }
-    }
-    debugInfo.fallbackUsed = items.length > 0;
-  }
-  
   // جلب قائمة المسؤولين
   const responsibles = getStaffList();
   
   // إرجاع debug فقط في وضع الاختبار
-  const isDebug = String(taskId).includes('__DEBUG__');
+  const isDebug = String(taskId || '').includes('__DEBUG__') || String(roundName || '').includes('__DEBUG__');
   
   return {
     items,
