@@ -971,14 +971,34 @@
     </div>
 
     <div id="actionModal" class="modal">
-        <div class="modal-content" style="max-width:500px;">
-            <div class="modal-header">
-                <h3 id="actionModalTitle"><i class="fas fa-tasks"></i> إجراء</h3>
-                <button class="modal-close" onclick="closeActionModal()">&times;</button>
+        <div class="modal-content" style="max-width:520px; border-radius:16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="background:linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding:20px 24px;">
+                <h3 id="actionModalTitle" style="font-size:1.2rem; display:flex; align-items:center; gap:10px;"><i class="fas fa-tasks"></i> إجراء</h3>
+                <button class="modal-close" onclick="closeActionModal()" style="font-size:1.8rem; opacity:0.8;">&times;</button>
             </div>
-            <div class="modal-body" id="actionModalBody"></div>
+            <div class="modal-body" id="actionModalBody" style="padding:28px; background:linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);"></div>
         </div>
     </div>
+    
+    <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:2000; align-items:center; justify-content:center; flex-direction:column;">
+        <div style="width:60px; height:60px; border:4px solid #e0e0e0; border-top-color:#1e3a5f; border-radius:50%; animation:spin 1s linear infinite;"></div>
+        <p style="margin-top:20px; color:#1e3a5f; font-weight:600; font-size:1.1rem;">جاري التحميل...</p>
+    </div>
+    
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #actionModal .form-group { margin-bottom:18px; }
+        #actionModal .form-group label { display:block; font-weight:600; color:#1e3a5f; margin-bottom:8px; font-size:0.95rem; }
+        #actionModal .form-group input, #actionModal .form-group select, #actionModal .form-group textarea { 
+            width:100%; padding:12px 14px; border:2px solid #e0e0e0; border-radius:10px; font-size:1rem; 
+            transition:border-color 0.2s, box-shadow 0.2s; background:#fff;
+        }
+        #actionModal .form-group input:focus, #actionModal .form-group select:focus, #actionModal .form-group textarea:focus { 
+            border-color:#1e3a5f; box-shadow:0 0 0 3px rgba(30,58,95,0.1); outline:none; 
+        }
+        #actionModal .btn { padding:14px 24px; font-size:1rem; border-radius:10px; font-weight:600; transition:transform 0.2s, box-shadow 0.2s; }
+        #actionModal .btn:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+    </style>
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec";
@@ -1923,19 +1943,35 @@
             }
         }
 
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+        
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
         function showDeescalateModal(complaintId) {
             currentComplaintId = complaintId;
-            document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-level-down-alt"></i> إنهاء التصعيد';
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fas fa-level-down-alt" style="color:#17a2b8;"></i> إنهاء التصعيد';
             document.getElementById('actionModalBody').innerHTML = `
+                <div style="text-align:center; margin-bottom:20px;">
+                    <div style="width:70px; height:70px; background:linear-gradient(135deg, #17a2b8, #138496); border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">
+                        <i class="fas fa-level-down-alt" style="font-size:28px; color:white;"></i>
+                    </div>
+                    <p style="margin-top:12px; color:#666; font-size:0.95rem;">سيتم إزالة الشكوى من قائمة المُصعّدة</p>
+                </div>
                 <div class="form-group">
-                    <label>سبب إنهاء التصعيد</label>
+                    <label><i class="fas fa-comment-alt" style="color:#17a2b8;"></i> سبب إنهاء التصعيد</label>
                     <textarea id="deescalateReason" placeholder="أدخل سبب إنهاء التصعيد أو نتيجة المعالجة..." style="min-height:100px;"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>الإجراء المتخذ</label>
+                    <label><i class="fas fa-check-circle" style="color:#28a745;"></i> الإجراء المتخذ</label>
                     <textarea id="deescalateAction" placeholder="ما الذي تم فعله لحل المشكلة؟" style="min-height:80px;"></textarea>
                 </div>
-                <button class="btn btn-info" onclick="submitDeescalate()" style="width:100%;"><i class="fas fa-check"></i> تأكيد إنهاء التصعيد</button>
+                <button class="btn" onclick="submitDeescalate()" style="width:100%; background:linear-gradient(135deg, #17a2b8, #138496); color:white; border:none;">
+                    <i class="fas fa-check"></i> تأكيد إنهاء التصعيد
+                </button>
             `;
             document.getElementById('actionModal').classList.add('active');
         }
@@ -1949,21 +1985,38 @@
                 return;
             }
             
-            const result = await apiCall('deescalateComplaint', {
-                complaintId: currentComplaintId,
-                deescalatedBy: currentUser,
-                reason: reason,
-                action: action
-            });
+            closeActionModal();
+            showLoading();
             
-            if (result.ok) {
-                alert('تم إنهاء التصعيد بنجاح');
-                closeActionModal();
-                closeModal();
-                loadDashboard();
-            } else {
-                alert('خطأ: ' + (result.error || 'فشل التصعيد'));
+            try {
+                const result = await apiCall('deescalateComplaint', {
+                    complaintId: currentComplaintId,
+                    deescalatedBy: currentUser,
+                    reason: reason,
+                    action: action
+                });
+                
+                hideLoading();
+                
+                if (result.ok) {
+                    closeModal();
+                    await loadDashboard();
+                    showSuccessToast('تم إنهاء التصعيد بنجاح');
+                } else {
+                    alert('خطأ: ' + (result.error || 'فشل إنهاء التصعيد'));
+                }
+            } catch (err) {
+                hideLoading();
+                alert('خطأ في الاتصال: ' + err.message);
             }
+        }
+        
+        function showSuccessToast(message) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg, #28a745, #20c997); color:white; padding:16px 32px; border-radius:12px; font-weight:600; box-shadow:0 8px 30px rgba(40,167,69,0.4); z-index:3000; display:flex; align-items:center; gap:10px; animation:slideUp 0.3s ease;';
+            toast.innerHTML = '<i class="fas fa-check-circle" style="font-size:1.2rem;"></i> ' + message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
         }
 
         function showCloseModal(complaintId) {
