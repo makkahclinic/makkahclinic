@@ -138,45 +138,6 @@ function sheetToObjects(sheet) {
   return rows;
 }
 
-// خريطة توحيد أسماء الأعمدة (عربي ↔ إنجليزي)
-const ROUNDS_LOG_COLUMN_MAP = {
-  // التاريخ
-  'Date': 'Date', 'التاريخ': 'Date', 'تاريخ': 'Date',
-  // الوقت
-  'Actual_Time': 'Actual_Time', 'Time': 'Actual_Time', 'الوقت': 'Actual_Time', 'وقت': 'Actual_Time',
-  // معرف المهمة
-  'TaskID': 'TaskID', 'Task_ID': 'TaskID', 'رقم المهمة': 'TaskID', 'معرف': 'TaskID',
-  // اسم الجولة
-  'Round_Name': 'Round_Name', 'اسم الجولة': 'Round_Name', 'الجولة': 'Round_Name', 'Round': 'Round_Name',
-  // المنطقة
-  'Area': 'Area', 'المنطقة': 'Area', 'الموقع': 'Area',
-  // المسؤول
-  'Responsible_Role': 'Responsible_Role', 'المسؤول': 'Responsible_Role', 'Staff': 'Responsible_Role', 'الموظف': 'Responsible_Role',
-  // مسؤول التنفيذ
-  'Execution_Responsible': 'Execution_Responsible', 'مسؤول التنفيذ': 'Execution_Responsible', 'المنفذ': 'Execution_Responsible',
-  // الحالة
-  'Status': 'Status', 'الحالة': 'Status',
-  // الملاحظات الإيجابية
-  'Positive_Notes': 'Positive_Notes', 'ملاحظات إيجابية': 'Positive_Notes', 'إيجابي': 'Positive_Notes',
-  // الملاحظات السلبية
-  'Negative_Notes': 'Negative_Notes', 'ملاحظات سلبية': 'Negative_Notes', 'سلبي': 'Negative_Notes', 'ملخص الخلل': 'Negative_Notes',
-  // هل مخالفة
-  'Is_Violation': 'Is_Violation', 'مخالفة': 'Is_Violation', 'Violation': 'Is_Violation'
-};
-
-function normalizeRoundsLogObject(obj) {
-  const normalized = { _rowIndex: obj._rowIndex };
-  for (const key in obj) {
-    if (key === '_rowIndex') continue;
-    const normalizedKey = ROUNDS_LOG_COLUMN_MAP[key] || key;
-    // إذا لم يكن المفتاح الموحد موجوداً بالفعل، أضفه
-    if (!normalized[normalizedKey]) {
-      normalized[normalizedKey] = obj[key];
-    }
-  }
-  return normalized;
-}
-
 function getSaudiDate() {
   const now = new Date();
   const saudiOffset = 3 * 60;
@@ -555,14 +516,10 @@ function getHomeData() {
   const dayName = getDayNameAr();
   
   const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-  // تطبيق التوحيد على بيانات الجولات
-  const roundsLogRaw = sheetToObjects(getSheet('Rounds_Log'));
-  const roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   
   const todayLog = roundsLog.filter(r => {
-    // البحث في التاريخ بعد التوحيد
-    const dateVal = r.Date || r['التاريخ'] || '';
-    const logDate = parseLogDate(dateVal);
+    const logDate = parseLogDate(r.Date);
     if (!logDate) return false;
     const logStr = `${logDate.getFullYear()}-${String(logDate.getMonth()+1).padStart(2,'0')}-${String(logDate.getDate()).padStart(2,'0')}`;
     return logStr === todayStr;
@@ -607,9 +564,9 @@ function getHomeData() {
   });
   
   todayLog.forEach(log => {
-    // بعد التوحيد، الأسماء موحدة
-    const staff = log.Responsible_Role || log.Execution_Responsible || '';
-    const taskId = log.TaskID || '';
+    // البحث عن اسم الموظف بأسماء أعمدة متعددة
+    const staff = log.Responsible_Role || log.responsibleRole || log.Staff || log.Execution_Responsible || log.executionResponsible || '';
+    const taskId = log.TaskID || log.taskId || log.Task_ID || '';
     if (staffMap[staff]) {
       staffMap[staff].todayDone++;
       const round = staffMap[staff].topRounds.find(r => r.taskId === taskId);
@@ -635,12 +592,11 @@ function getHomeData() {
 }
 
 function getRoundsLog(limit) {
-  const roundsLogRaw = sheetToObjects(getSheet('Rounds_Log'));
-  const roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   
   roundsLog.sort((a, b) => {
-    const dateA = new Date((a.Date || '') + ' ' + (a.Actual_Time || ''));
-    const dateB = new Date((b.Date || '') + ' ' + (b.Actual_Time || ''));
+    const dateA = new Date(a.Date + ' ' + (a.Actual_Time || ''));
+    const dateB = new Date(b.Date + ' ' + (b.Actual_Time || ''));
     return dateB - dateA;
   });
   
@@ -724,8 +680,7 @@ function getDelayed() {
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   
   const masterTasks = sheetToObjects(getSheet('MASTER_TASKS'));
-  const roundsLogRaw = sheetToObjects(getSheet('Rounds_Log'));
-  const roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   const schedule = sheetToObjects(getSheet('Round_Schedule'));
   
   const todayLog = roundsLog.filter(r => {
@@ -779,8 +734,7 @@ function getDelayed() {
 }
 
 function getViolations() {
-  const roundsLogRaw = sheetToObjects(getSheet('Rounds_Log'));
-  const roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   
   // بناء فهرس المتابعات مرة واحدة لأداء أفضل
   const followUpsIndex = buildFollowUpsIndex();
@@ -925,8 +879,7 @@ function resolveViolation(params) {
 // ============================================
 
 function getHistory(params) {
-  const roundsLogRaw = sheetToObjects(getSheet('Rounds_Log'));
-  const roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   
   // بناء فهرس المتابعات لتحديد حالة المخالفات
   const followUpsIndex = buildFollowUpsIndex();
@@ -1040,8 +993,7 @@ function getHistory(params) {
 }
 
 function getMetrics(days) {
-  const roundsLogRaw = sheetToObjects(getSheet('Rounds_Log'));
-  const roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  const roundsLog = sheetToObjects(getSheet('Rounds_Log'));
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   
