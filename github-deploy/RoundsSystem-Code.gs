@@ -1235,10 +1235,19 @@ function verifyPasscode(staffName, passcode, checkResolvePermission = false) {
 function getChecklist(taskId, roundName) {
   if (!taskId) return { items: [], responsibles: getStaffList() };
   
-  // تحديد اسم الـ Sheet من TaskID
-  // مثال: taskId = 1 → R01_Checklist، taskId = 2 → R02_Checklist
-  const sheetName = `R${String(taskId).padStart(2, '0')}_Checklist`;
-  const sheet = getSheet(sheetName);
+  // البحث عن Sheet يبدأ بـ R01_, R02_, إلخ
+  const roundPrefix = `R${String(taskId).padStart(2, '0')}_`;
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const allSheets = ss.getSheets();
+  
+  // البحث عن الـ Sheet المناسب
+  let sheet = null;
+  for (const s of allSheets) {
+    if (s.getName().startsWith(roundPrefix)) {
+      sheet = s;
+      break;
+    }
+  }
   
   if (!sheet) {
     // Fallback: جرب البحث في Checklists الموحد
