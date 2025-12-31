@@ -609,10 +609,11 @@ function getHomeData() {
   todayLog.forEach(log => {
     // بعد التوحيد، الأسماء موحدة
     const staff = log.Responsible_Role || log.Execution_Responsible || '';
-    const taskId = log.TaskID || '';
+    const taskId = String(log.TaskID || '').trim();
     if (staffMap[staff]) {
       staffMap[staff].todayDone++;
-      const round = staffMap[staff].topRounds.find(r => r.taskId === taskId);
+      // مقارنة مرنة للـ TaskID (string vs number)
+      const round = staffMap[staff].topRounds.find(r => String(r.taskId).trim() === taskId);
       if (round) round.done++;
     }
   });
