@@ -1182,7 +1182,7 @@ function ensureRoundsLogHeaders(sheet) {
   }
 }
 
-function verifyPasscode(staffName, passcode) {
+function verifyPasscode(staffName, passcode, checkResolvePermission = false) {
   const sheet = getSheet('Staff_Passcodes');
   if (!sheet) return { valid: false, error: 'جدول الموظفين غير موجود' };
   
@@ -1192,9 +1192,11 @@ function verifyPasscode(staffName, passcode) {
   // البحث عن أعمدة الاسم والباسكود
   const nameCol = headers.indexOf('Staff_Name');
   const passcodeCol = headers.indexOf('Passcode');
+  const canResolveCol = headers.indexOf('Can_Resolve');
   
   // البحث عن صاحب هذا الرمز السري
   let foundStaff = null;
+  let foundRowIndex = -1;
   for (let i = 1; i < data.length; i++) {
     const rowPasscode = String(data[i][passcodeCol >= 0 ? passcodeCol : 1] || '').trim();
     if (rowPasscode === String(passcode).trim()) {
@@ -1202,6 +1204,7 @@ function verifyPasscode(staffName, passcode) {
         name: data[i][nameCol >= 0 ? nameCol : 0] || 'موظف',
         passcode: rowPasscode
       };
+      foundRowIndex = i;
       break;
     }
   }
@@ -1214,6 +1217,14 @@ function verifyPasscode(staffName, passcode) {
   if (staffName && staffName.trim()) {
     if (foundStaff.name.trim() !== staffName.trim()) {
       return { valid: false, error: 'الرمز السري لا يتطابق مع الاسم المختار' };
+    }
+  }
+  
+  // تحقق من صلاحية إغلاق المخالفات (اختياري)
+  if (checkResolvePermission && canResolveCol >= 0) {
+    const allowed = String(data[foundRowIndex][canResolveCol] || '').toLowerCase();
+    if (allowed !== 'yes' && allowed !== 'true' && allowed !== '1') {
+      return { valid: false, error: 'غير مخوّل لإغلاق المخالفات' };
     }
   }
   
@@ -1290,41 +1301,67 @@ function getChecklist(taskId) {
   
   debugInfo.matchedItems = items.length;
   
+  // Fallback: إذا لم نجد عناصر، جرّب البحث بـ Round_Name
+  if (items.length === 0 && taskIdColIndex >= 0) {
+    const roundNameCols = ['Round_Name', 'Round_Name_AR', 'اسم الجولة'];
+    for (const colName of roundNameCols) {
+      const rnIdx = headers.indexOf(colName);
+      if (rnIdx >= 0 && rnIdx !== taskIdColIndex) {
+        for (let i = 1; i < data.length; i++) {
+          const rowValue = String(data[i][rnIdx] || '').trim().toLowerCase();
+          if (rowValue === searchKey || rowValue.includes(searchKey) || searchKey.includes(rowValue)) {
+            const itemText = textColIndex >= 0 ? data[i][textColIndex] : '';
+            items.push({
+              id: i,
+              text: String(itemText || ''),
+              item: String(itemText || ''),
+              taskId: data[i][taskIdColIndex] || data[i][rnIdx]
+            });
+          }
+        }
+        if (items.length > 0) break;
+      }
+    }
+    debugInfo.fallbackUsed = items.length > 0;
+  }
+  
   // جلب قائمة المسؤولين
   const responsibles = getStaffList();
   
-  return { items, responsibles, debug: debugInfo };
+  // إرجاع debug فقط في وضع الاختبار
+  const isDebug = String(taskId).includes('__DEBUG__');
+  
+  return {
+    items,
+    responsibles,
+    ...(isDebug ? { debug: debugInfo } : {})
+  };
 }
 
-// دالة مساعدة لجلب قائمة الموظفين
+// دالة مساعدة لجلب قائمة الموظفين مع Fallback ذكي
 function getStaffList() {
-  const staffSheet = getSheet('Staff_Passcodes');
-  if (!staffSheet) return [];
-  
-  const data = staffSheet.getDataRange().getValues();
-  if (data.length < 2) return [];
-  
-  const headers = data[0];
-  const nameColNames = ['Staff_Name', 'Name', 'الاسم', 'اسم الموظف', 'Staff'];
-  let nameColIndex = -1;
-  
-  for (const name of nameColNames) {
-    const idx = headers.indexOf(name);
-    if (idx >= 0) {
-      nameColIndex = idx;
-      break;
+  // أولاً: محاولة الجلب من Staff_Passcodes
+  const passcodes = getSheet('Staff_Passcodes');
+  if (passcodes) {
+    const rows = passcodes.getDataRange().getValues();
+    if (rows.length > 1) {
+      const headers = rows[0];
+      const nameColNames = ['Staff_Name', 'Name', 'الاسم', 'اسم الموظف', 'Staff'];
+      let idx = -1;
+      for (const name of nameColNames) {
+        const found = headers.indexOf(name);
+        if (found >= 0) { idx = found; break; }
+      }
+      if (idx === -1) idx = 0;
+      
+      const names = rows.slice(1).map(r => String(r[idx] || '').trim()).filter(Boolean);
+      if (names.length > 0) return names;
     }
   }
-  
-  if (nameColIndex === -1) nameColIndex = 0;
-  
-  const names = [];
-  for (let i = 1; i < data.length; i++) {
-    const name = String(data[i][nameColIndex] || '').trim();
-    if (name) names.push(name);
-  }
-  
-  return names;
+
+  // Fallback: الجلب من MASTER_TASKS → Assigned_To
+  const tasks = sheetToObjects(getSheet('MASTER_TASKS'));
+  return [...new Set(tasks.map(t => t.Assigned_To).filter(Boolean))];
 }
 
 function debugInfo() {
