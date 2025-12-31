@@ -1257,26 +1257,39 @@ function getChecklist(taskId, roundName) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return { items: [], responsibles: getStaffList() };
   
-  const headers = data[0];
+  const headers = data[0].map(h => String(h || '').trim());
   
-  // البحث عن عمود البند
-  const itemColNames = ['Item', 'item', 'البند', 'نص البند', 'Text', 'Description'];
+  // البحث عن عمود البند (Item_Desc أو أي اسم مشابه)
+  const itemColNames = ['Item_Desc_No', 'Item_Desc', 'Item', 'البند', 'نص البند', 'Description', 'Text', 'item'];
   let itemCol = -1;
   for (const name of itemColNames) {
-    const idx = headers.indexOf(name);
+    const idx = headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
     if (idx >= 0) {
       itemCol = idx;
       break;
     }
   }
   
-  // Fallback: استخدم أول عمود إذا لم يوجد
-  if (itemCol === -1) itemCol = 0;
+  // Fallback: ابحث عن أطول نص في الصف الثاني (غالباً البند)
+  if (itemCol === -1 && data.length > 1) {
+    let maxLen = 0;
+    for (let c = 0; c < headers.length; c++) {
+      const val = String(data[1][c] || '');
+      if (val.length > maxLen && isNaN(val)) {
+        maxLen = val.length;
+        itemCol = c;
+      }
+    }
+  }
+  
+  // Fallback أخير: العمود الثالث أو الرابع (غالباً البند)
+  if (itemCol === -1) itemCol = Math.min(3, headers.length - 1);
   
   const items = [];
   for (let i = 1; i < data.length; i++) {
     const text = String(data[i][itemCol] || '').trim();
-    if (text) {
+    // تجاهل الصفوف الفارغة أو الأرقام فقط
+    if (text && text.length > 2 && isNaN(text)) {
       items.push({
         id: i,
         text,
