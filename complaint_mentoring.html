@@ -1306,11 +1306,15 @@
         }
         
         function riskScore(c){
-            const isEsc = (c.escalatedTo || '').trim() !== '';
+            const isClosed = c.status === 'closed' || c.status === 'مغلقة';
+            // المغلقة لا تُحسب كمصعدة نشطة
+            const isEsc = !isClosed && (c.escalatedTo || '').trim() !== '';
             const repeat = Number(c.escalationCount || 0);
             const days = Number(c.daysOpen || 0);
             const pr = (c.priority || '').toLowerCase();
             let score = 0;
+            // الشكاوى المغلقة = منخفضة الخطورة
+            if (isClosed) return 0;
             if (pr === 'high') score += 3;
             else if (pr === 'medium') score += 1;
             if (isEsc) score += 3;
