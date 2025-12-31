@@ -994,3 +994,38 @@ function deescalateComplaint(payload) {
     message: 'تم إنهاء التصعيد بنجاح'
   };
 }
+
+/**
+ * تعبئة Closed_By للشكاوى القديمة المغلقة
+ * يمكن تشغيلها مرة واحدة فقط
+ */
+function fillMissingClosedBy(defaultValue = 'النظام') {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Complaints');
+  if (!sheet) return { success: false, error: 'الشيت غير موجود' };
+  
+  const data = sheetToObjects(sheet);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const statusCol = headers.indexOf('Status');
+  const closedByCol = headers.indexOf('Closed_By');
+  
+  if (closedByCol === -1) {
+    return { success: false, error: 'عمود Closed_By غير موجود' };
+  }
+  
+  let updated = 0;
+  data.forEach(c => {
+    const isClosed = c.Status === 'closed' || c.Status === 'مغلقة';
+    const hasClosedBy = (c.Closed_By || '').trim() !== '';
+    
+    if (isClosed && !hasClosedBy) {
+      sheet.getRange(c._rowIndex, closedByCol + 1).setValue(defaultValue);
+      updated++;
+    }
+  });
+  
+  return { 
+    success: true, 
+    message: `تم تحديث ${updated} شكوى مغلقة بقيمة "${defaultValue}"` 
+  };
+}
