@@ -1568,15 +1568,25 @@
 
             title.innerHTML = `<i class="fas fa-th"></i> ${locationName} – ${bucket} (${items.length})`;
 
-            const rows = items.slice(0, 30).map(c => `
+            const rows = items.slice(0, 30).map(c => {
+                const hasEscalation = (c.escalatedTo || '').trim() !== '';
+                const isClosed = c.status === 'closed' || c.status === 'مغلقة';
+                const wasEscalated = Number(c.escalationCount || 0) > 0 || (c.deescalationDate || '').trim() !== '';
+                let escBadge = '';
+                if (hasEscalation && !isClosed) {
+                    escBadge = ' <span class="badge badge-danger">مصعدة</span>';
+                } else if (wasEscalated && isClosed) {
+                    escBadge = ' <span class="badge" style="background:#ffc107;color:#333;">كانت مصعدة</span>';
+                }
+                return `
                 <tr>
-                    <td><strong>${c.id}</strong>${(c.escalatedTo || '').trim() ? ' <span class="badge badge-danger">مصعدة</span>' : ''}</td>
+                    <td><strong>${c.id}</strong>${escBadge}</td>
                     <td>${c.date || '-'}</td>
                     <td>${c.type || '-'}</td>
                     <td>${c.assignedTo || '-'}</td>
                     <td><button class="btn btn-primary btn-sm" onclick="viewDetails('${c.id}')"><i class="fas fa-eye"></i></button></td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
 
             body.innerHTML = `
                 <div style="margin-bottom:10px;color:#666;">عرض أول 30 شكوى.</div>
@@ -1698,7 +1708,15 @@
             let html = '';
             complaints.forEach(c => {
                 const statusInfo = STATUS[c.status] || { name: c.status, badge: 'secondary' };
-                const escalatedBadge = c.escalatedTo ? `<span class="badge badge-danger" style="margin-right:5px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>` : '';
+                const hasEscalation = (c.escalatedTo || '').trim() !== '';
+                const isClosed = c.status === 'closed' || c.status === 'مغلقة';
+                const wasEscalated = Number(c.escalationCount || 0) > 0 || (c.deescalationDate || '').trim() !== '';
+                let escalatedBadge = '';
+                if (hasEscalation && !isClosed) {
+                    escalatedBadge = '<span class="badge badge-danger" style="margin-right:5px;"><i class="fas fa-arrow-up"></i> مُصعّدة</span>';
+                } else if (wasEscalated && isClosed) {
+                    escalatedBadge = '<span class="badge" style="margin-right:5px;background:#ffc107;color:#333;">كانت مصعدة</span>';
+                }
                 html += `<tr>
                     <td><strong>${c.id}</strong></td>
                     <td>${c.date}</td>
