@@ -1779,7 +1779,8 @@
       try {
         const data = await callApi('getViolations');
         VIOLATIONS_DATA = data;
-        document.getElementById('violationsCount').textContent = (data.violations || []).length;
+        // استخدام المخالفات النشطة فقط (open + followup) للشارة
+        document.getElementById('violationsCount').textContent = data.activeCount || (data.active || []).length || 0;
         renderViolations();
       } catch (err) {
         console.error('Violations error:', err);
@@ -1987,7 +1988,10 @@
     async function startRound(taskId, roundName) {
       showSpinner(true);
       try {
-        const data = await callApi('getChecklist', { taskId });
+        console.log('Fetching checklist for taskId:', taskId, 'roundName:', roundName);
+        const data = await callApi('getChecklist', { taskId, roundName });
+        
+        console.log('Checklist response:', { itemsCount: (data.items || []).length, taskId, roundName });
         
         currentChecklist = { taskId, roundName, task: data.task || {}, items: data.items || [], responsibles: data.responsibles || STAFF_LIST || [] };
         renderChecklistForm();
