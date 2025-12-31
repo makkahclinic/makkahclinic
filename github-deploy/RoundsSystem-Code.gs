@@ -1222,12 +1222,73 @@ function verifyPasscode(staffName, passcode) {
 
 function getChecklist(taskId) {
   const sheet = getSheet('Checklists');
-  if (!sheet) return { items: [] };
+  if (!sheet) {
+    // DEBUG: محاولة إيجاد شيت بأسماء بديلة
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const allSheets = ss.getSheets().map(s => s.getName());
+    return { items: [], debug: { error: 'Checklists sheet not found', availableSheets: allSheets } };
+  }
   
-  const data = sheetToObjects(sheet);
-  const items = data.filter(row => row.TaskID === taskId);
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { items: [], debug: { error: 'No data in Checklists sheet' } };
   
-  return { items };
+  const headers = data[0];
+  
+  // البحث عن عمود TaskID بأسماء مختلفة
+  const taskIdColNames = ['TaskID', 'Task_ID', 'taskId', 'task_id', 'معرف المهمة', 'رقم المهمة', 'Round_ID', 'RoundID'];
+  let taskIdColIndex = -1;
+  for (const name of taskIdColNames) {
+    const idx = headers.indexOf(name);
+    if (idx >= 0) {
+      taskIdColIndex = idx;
+      break;
+    }
+  }
+  
+  // البحث عن عمود النص بأسماء مختلفة
+  const textColNames = ['Item', 'item', 'Text', 'text', 'البند', 'نص البند', 'Description', 'description', 'Checklist_Item'];
+  let textColIndex = -1;
+  for (const name of textColNames) {
+    const idx = headers.indexOf(name);
+    if (idx >= 0) {
+      textColIndex = idx;
+      break;
+    }
+  }
+  
+  // DEBUG info
+  const debugInfo = {
+    headers: headers,
+    taskIdColIndex: taskIdColIndex,
+    textColIndex: textColIndex,
+    searchingFor: String(taskId),
+    rowCount: data.length - 1
+  };
+  
+  if (taskIdColIndex === -1) {
+    return { items: [], debug: { ...debugInfo, error: 'TaskID column not found' } };
+  }
+  
+  // تصفية البيانات مع مقارنة مرنة (تحويل للنص)
+  const items = [];
+  const searchTaskId = String(taskId).trim().toLowerCase();
+  
+  for (let i = 1; i < data.length; i++) {
+    const rowTaskId = String(data[i][taskIdColIndex] || '').trim().toLowerCase();
+    if (rowTaskId === searchTaskId) {
+      const itemText = textColIndex >= 0 ? data[i][textColIndex] : '';
+      items.push({
+        id: i,
+        text: String(itemText || ''),
+        item: String(itemText || ''),
+        taskId: data[i][taskIdColIndex]
+      });
+    }
+  }
+  
+  debugInfo.matchedItems = items.length;
+  
+  return { items, debug: debugInfo };
 }
 
 function debugInfo() {
