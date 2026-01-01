@@ -721,6 +721,40 @@ function doPost(e) {
         case 'getEvidencePack':
           result = getMrisEvidencePack_(payload);
           break;
+        // ===== EOC Emergency Command APIs =====
+        case 'setActiveCommand':
+          result = setActiveCommand(payload);
+          break;
+        case 'closeActiveCommand':
+          result = closeActiveCommand(payload);
+          break;
+        case 'clearActiveCommand':
+          result = clearActiveCommand(payload);
+          break;
+        case 'addTrainingSession':
+          result = addTrainingSession(payload);
+          break;
+        case 'updateTrainingSession':
+          result = updateTrainingSession(payload);
+          break;
+        case 'deleteTrainingSession':
+          result = deleteTrainingSession(payload);
+          break;
+        case 'recordTrainingAttendance':
+          result = recordTrainingAttendance(payload);
+          break;
+        case 'importStaffToRoster':
+          result = importStaffToRoster();
+          break;
+        case 'addTrainee':
+          result = addTrainee(payload);
+          break;
+        case 'updateTrainee':
+          result = updateTrainee(payload);
+          break;
+        case 'deleteTrainee':
+          result = deleteTrainee(payload);
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }

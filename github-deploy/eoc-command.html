@@ -2064,6 +2064,25 @@
     }
 
     /******************************************************
+     * POST API helper (for write operations)
+     * JSONP can't send payload, so we use fetch POST
+     ******************************************************/
+    async function postApi(action, payload = {}) {
+      try {
+        const response = await fetch(WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action, payload })
+        });
+        const data = await response.json();
+        return data;
+      } catch (err) {
+        console.error('postApi error:', action, err);
+        throw err;
+      }
+    }
+
+    /******************************************************
      * UI helpers
      ******************************************************/
     function toast(message, type='info') {
@@ -2410,7 +2429,7 @@
           } catch(e) { console.warn('Failed to close report:', rep.id, e); }
         }
         
-        const res = await jsonp('closeActiveCommand', {
+        const res = await postApi('closeActiveCommand', {
           closedBy: who,
           closeReason: reason
         });
@@ -3269,7 +3288,7 @@
       };
 
       try{
-        const res = await jsonp('setActiveCommand', cmd);
+        const res = await postApi('setActiveCommand', cmd);
         if (!res || !res.ok) throw new Error(res?.error || 'setActiveCommand failed');
 
         // update report status only for real EMR reports
@@ -3388,7 +3407,7 @@
       const reason = closeReason || 'تم إنهاء الأمر';
 
       try{
-        const res = await jsonp('clearActiveCommand', {});
+        const res = await postApi('clearActiveCommand', {});
         if (!res || !res.ok) throw new Error(res?.error || 'clearActiveCommand failed');
 
         // تسجيل البلاغ اليدوي إذا لم يكن له reportId إلكتروني
@@ -4037,7 +4056,7 @@
         trainer: trainer
       };
       try{
-        const r = await jsonp('setActiveCommand', payload);
+        const r = await postApi('setActiveCommand', payload);
         if (!r || !r.ok) throw new Error(r?.error || 'setActiveCommand failed');
         showBigSuccess('تم إرسال التمرين للشاشات بنجاح! 📺');
         setStatusAlert(true, '🎯 تمرين جاري');
@@ -4071,7 +4090,7 @@
           toast('الأمر النشط ليس تمرينًا (لن يتم مسحه هنا)', 'warn');
           return;
         }
-        const r = await jsonp('clearActiveCommand', {});
+        const r = await postApi('clearActiveCommand', {});
         if (!r || !r.ok) throw new Error(r?.error || 'clearActiveCommand failed');
         showBigSuccess('تم إيقاف عرض التمرين! ⏹️');
         setStatusAlert(false);
