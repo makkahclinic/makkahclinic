@@ -25,7 +25,7 @@ function doPost(e) {
         result = getHomeData();
         break;
       case 'getRoundsLog':
-        result = getRoundsLog(payload.limit || 100);
+        result = getRoundsLog(payload.limit || 100, payload.todayOnly || false);
         break;
       case 'logRound':
         result = logRound(payload);
@@ -658,9 +658,19 @@ function getHomeData() {
   };
 }
 
-function getRoundsLog(limit) {
+function getRoundsLog(limit, todayOnly) {
   const roundsLogRaw = sheetToObjects(getSheet('Rounds_Log'));
-  const roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  let roundsLog = roundsLogRaw.map(r => normalizeRoundsLogObject(r));
+  
+  // فلترة بتاريخ اليوم إذا طُلب
+  if (todayOnly) {
+    const today = new Date();
+    const todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    roundsLog = roundsLog.filter(r => {
+      const logDate = formatDate(r.Date);
+      return logDate === todayStr;
+    });
+  }
   
   roundsLog.sort((a, b) => {
     const dateA = new Date((a.Date || '') + ' ' + (a.Actual_Time || ''));
