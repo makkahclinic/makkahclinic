@@ -23,6 +23,10 @@
   const INCIDENTS_SPREADSHEET_ID = MASTER_SHEET_ID;
   const MRIS_SHEET_ID = MASTER_SHEET_ID;
 
+  // ✅ ملفات الأنظمة المنفصلة
+  const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
+  const ROUNDS_SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
+
   // ======== دوال الأمان المتقدمة ========
   
   /**
@@ -2829,10 +2833,75 @@ function doPost(e) {
         }
       } catch(e) {}
       
+      // ✅ جلب إحصائيات الشكاوى من ملف الشكاوى
+      let complaints = { open: 0, new: 0, inProgress: 0, escalated: 0, closed: 0 };
+      try {
+        const complaintSheet = SpreadsheetApp.openById(COMPLAINTS_SPREADSHEET_ID).getSheetByName('Complaints_Log');
+        if (complaintSheet) {
+          const compData = sheetToObjects(complaintSheet);
+          compData.forEach(c => {
+            const status = String(c.Status || '').toLowerCase();
+            if (status === 'new' || status === '') {
+              complaints.new++;
+            } else if (status === 'in_progress') {
+              complaints.inProgress++;
+            } else if (status === 'closed') {
+              complaints.closed++;
+            }
+            // المصعدة النشطة فقط (لها escalatedTo وليست مغلقة)
+            const hasEscalation = (c.Escalated_To || '').trim() !== '';
+            if (hasEscalation && status !== 'closed') {
+              complaints.escalated++;
+            }
+          });
+          complaints.open = complaints.new + complaints.inProgress;
+        }
+      } catch(e) {}
+      
+      // ✅ جلب إحصائيات الجولات من ملف الجولات
+      let rounds = { today: 0, completed: 0, delayed: 0, violations: 0 };
+      try {
+        const roundsSheet = SpreadsheetApp.openById(ROUNDS_SPREADSHEET_ID).getSheetByName('Safety_Rounds');
+        if (roundsSheet) {
+          const roundsData = sheetToObjects(roundsSheet);
+          roundsData.forEach(r => {
+            const roundDate = String(r.Round_Date || r.Date || '');
+            const status = String(r.Status || '').toLowerCase();
+            if (roundDate === today) {
+              rounds.today++;
+              if (status === 'completed' || status === 'مكتملة') rounds.completed++;
+            }
+            if (status === 'delayed' || status === 'متأخرة') rounds.delayed++;
+            if ((r.Violations_Count || 0) > 0) rounds.violations++;
+          });
+        }
+      } catch(e) {}
+      
+      // ✅ جلب إحصائيات المستخدمين
+      let users = { total: 0, active: 0, suspended: 0 };
+      try {
+        const usersSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('AuthorizedUsers');
+        if (usersSheet) {
+          const usersData = sheetToObjects(usersSheet);
+          users.total = usersData.length;
+          usersData.forEach(u => {
+            const status = String(u.Status || u.الحالة || 'active').toLowerCase();
+            if (status === 'suspended' || status === 'معلق') {
+              users.suspended++;
+            } else {
+              users.active++;
+            }
+          });
+        }
+      } catch(e) {}
+      
       // بناء قائمة التنبيهات
       let alerts = [];
       if (emergency.active) {
         alerts.push({ type: 'danger', message: emergency.message, count: null });
+      }
+      if (complaints.escalated > 0) {
+        alerts.push({ type: 'danger', message: 'شكاوى مصعدة تحتاج مراجعة', count: complaints.escalated });
       }
       if (incidents.escalated > 0) {
         alerts.push({ type: 'danger', message: 'حوادث مصعدة تحتاج تدخل', count: incidents.escalated });
@@ -2840,15 +2909,30 @@ function doPost(e) {
       if (risks.high > 0) {
         alerts.push({ type: 'warning', message: 'مخاطر عالية المستوى', count: risks.high });
       }
+      if (rounds.delayed > 0) {
+        alerts.push({ type: 'warning', message: 'جولات متأخرة', count: rounds.delayed });
+      }
       if (incidents.new > 3) {
         alerts.push({ type: 'warning', message: 'حوادث جديدة تنتظر التحقيق', count: incidents.new });
       }
       
       return {
         success: true,
+        stats: {
+          emergency,
+          complaints,
+          incidents,
+          risks,
+          rounds,
+          users,
+          alerts
+        },
         emergency,
+        complaints,
         incidents,
         risks,
+        rounds,
+        users,
         alerts,
         lastUpdate: now.toISOString()
       };
