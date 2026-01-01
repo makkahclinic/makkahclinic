@@ -569,8 +569,10 @@ function getHomeData() {
   });
   
   const staffMap = {};
+  const staffNameIndex = {}; // فهرس للبحث السريع بالأسماء الموحدة
+  
   masterTasks.forEach(task => {
-    const assignee = task.Assigned_To || '';
+    const assignee = String(task.Assigned_To || '').trim();
     if (!assignee) return;
     
     const dayCol = task[dayName];
@@ -585,6 +587,8 @@ function getHomeData() {
         weeklyTotal: 0,
         topRounds: []
       };
+      // إضافة الاسم الموحد للفهرس
+      staffNameIndex[assignee.toLowerCase().replace(/\s+/g, '')] = assignee;
     }
     
     const rpd = parseInt(task.Rounds_Per_Day) || 1;
@@ -607,21 +611,18 @@ function getHomeData() {
   });
   
   todayLog.forEach(log => {
-    // بعد التوحيد، الأسماء موحدة
     const logStaff = String(log.Responsible_Role || log.Execution_Responsible || '').trim();
     const taskId = String(log.TaskID || '').trim();
     
-    // البحث المرن عن الموظف (تطابق جزئي أو تام)
+    // البحث عن الموظف باستخدام الفهرس الموحد
     let matchedStaff = null;
     if (staffMap[logStaff]) {
       matchedStaff = logStaff;
     } else {
-      // بحث جزئي إذا لم يتطابق تماماً
-      for (const name in staffMap) {
-        if (name.includes(logStaff) || logStaff.includes(name)) {
-          matchedStaff = name;
-          break;
-        }
+      // بحث بالاسم الموحد (بدون مسافات، lowercase)
+      const normalizedLogStaff = logStaff.toLowerCase().replace(/\s+/g, '');
+      if (staffNameIndex[normalizedLogStaff]) {
+        matchedStaff = staffNameIndex[normalizedLogStaff];
       }
     }
     
