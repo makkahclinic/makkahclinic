@@ -737,8 +737,7 @@ function getRoundsLog(limit, todayOnly) {
   
   // فلترة بتاريخ اليوم إذا طُلب
   if (todayOnly) {
-    const today = new Date();
-    const todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const todayStr = getTodayString(); // استخدام توقيت السعودية
     roundsLog = roundsLog.filter(r => {
       const logDate = formatDate(r.Date);
       return logDate === todayStr;
