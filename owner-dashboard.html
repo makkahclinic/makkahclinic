@@ -1760,7 +1760,22 @@
         
         async function loadDashboardStats() {
             try {
-                const data = await postToAppsScript(APIs.main, 'getOwnerDashboardStats', {});
+                // ✅ Try local API first (Replit), then fallback to Apps Script
+                let data;
+                try {
+                    const localRes = await fetch('/api/owner/stats');
+                    const localData = await localRes.json();
+                    if (localData.ok) {
+                        data = { success: true, stats: localData };
+                        console.log('✅ Using local API stats:', localData);
+                    }
+                } catch (localErr) {
+                    console.log('Local API not available, using Apps Script');
+                }
+                
+                if (!data) {
+                    data = await postToAppsScript(APIs.main, 'getOwnerDashboardStats', {});
+                }
                 console.log('Dashboard stats:', data);
                 
                 if (data.success || data.ok) {
