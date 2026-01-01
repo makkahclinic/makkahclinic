@@ -599,7 +599,7 @@ function getHomeData() {
     staffMap[assignee].todayTasks += rpd;
     
     staffMap[assignee].topRounds.push({
-      taskId: task.TaskID || '',
+      taskId: String(task.TaskID || '').trim(),
       name: task.Round_Name_AR || task.Round_Name_EN || task.TaskID || 'غير محدد',
       roundsRequired: rpd,
       done: 0,
@@ -1169,6 +1169,9 @@ function logRound(params) {
   // التأكد من وجود الـ Headers الصحيحة
   ensureRoundsLogHeaders(sheet);
   
+  // توحيد TaskID كنص
+  const taskId = String(params.taskId || '').trim();
+  
   const now = getSaudiDate();
   const dateStr = getTodayString();
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -1176,7 +1179,7 @@ function logRound(params) {
   const newRow = [
     dateStr,
     timeStr,
-    params.taskId || '',
+    taskId,
     params.roundName || '',
     params.area || '',
     params.responsibleRole || '',
