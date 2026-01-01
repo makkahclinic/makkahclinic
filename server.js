@@ -1503,6 +1503,46 @@ app.post('/api/eoc/drills', async (req, res) => {
   }
 });
 
+// ============================================
+// Owner Dashboard Stats API - Direct from Sheets
+// ============================================
+app.get('/api/owner/stats', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    
+    // Get complaints stats
+    const complaintsRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: COMPLAINTS_SPREADSHEET_ID,
+      range: 'Complaints_Log!R2:R1000' // Status column
+    });
+    
+    const statuses = (complaintsRes.data.values || []).flat();
+    const openComplaints = statuses.filter(s => 
+      s && s !== 'closed' && s !== 'مغلق' && s !== 'مغلقة'
+    ).length;
+    const totalComplaints = statuses.length;
+    
+    // Get today's date in Saudi timezone
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' });
+    
+    res.json({
+      ok: true,
+      complaints: {
+        open: openComplaints,
+        total: totalComplaints,
+        needsFollowup: openComplaints
+      },
+      incidents: { open: 0, total: 0 },
+      risks: { active: 0, total: 0 },
+      rounds: { today: 0, completed: 0, delayed: 0 },
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Error fetching owner stats:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Static file serving - github-deploy folder first
 app.use(express.static(path.join(__dirname, 'github-deploy'), {
   extensions: ['html'],
