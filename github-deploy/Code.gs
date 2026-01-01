@@ -9,15 +9,17 @@
    * - نظام الطوارئ EOC
    */
   
-  // ✅ ملف الإكسل المعتمد الموحد - جميع الأنظمة تستخدم نفس الملف
+  // ✅ ملف الإكسل المعتمد الموحد
   const MASTER_SHEET_ID = '1aijUPpTqUGUaKmYAyohq0RHmk1CF0CzCm17gfixHKOg';
   
   // توحيد جميع معرفات الشيتات
   const SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
   
+  // ✅ نظام الطوارئ EOC - ملف منفصل
+  const EOC_SPREADSHEET_ID = '1tZeJs7bUELdoGgxxujaeKXSSSXLApPfmis3YrpaAVVA';
+  
   // باقي الأنظمة تستخدم الملف المركزي
   const PATIENTS_SPREADSHEET_ID = MASTER_SHEET_ID;
-  const EOC_SPREADSHEET_ID = MASTER_SHEET_ID;
   const INCIDENTS_SPREADSHEET_ID = MASTER_SHEET_ID;
   const MRIS_SHEET_ID = MASTER_SHEET_ID;
 
