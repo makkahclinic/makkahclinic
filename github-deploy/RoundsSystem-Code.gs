@@ -616,14 +616,28 @@ function getHomeData() {
   
   todayLog.forEach(log => {
     const taskId = String(log.TaskID || '').trim();
+    const logRoundName = String(log.Round_Name || '').trim();
+    const logStaff = String(log.Responsible_Role || log.Execution_Responsible || '').trim();
     
-    // البحث عن الموظف عبر TaskID (الحل الموثوق)
-    const matchedStaff = taskToAssignee[taskId];
+    // البحث عن الموظف: أولاً بـ TaskID، ثم بالاسم
+    let matchedStaff = taskToAssignee[taskId];
+    if (!matchedStaff && logStaff) {
+      // بحث بالاسم (fallback)
+      for (const name in staffMap) {
+        if (name.includes(logStaff) || logStaff.includes(name)) {
+          matchedStaff = name;
+          break;
+        }
+      }
+    }
     
     if (matchedStaff && staffMap[matchedStaff]) {
       staffMap[matchedStaff].todayDone++;
-      // البحث عن الجولة وتحديث العداد
-      const round = staffMap[matchedStaff].topRounds.find(r => String(r.taskId).trim() === taskId);
+      // البحث عن الجولة بـ TaskID أو Round_Name
+      const round = staffMap[matchedStaff].topRounds.find(r =>
+        String(r.taskId).trim() === taskId ||
+        (r.name && r.name === logRoundName)
+      );
       if (round) round.done++;
     }
   });
