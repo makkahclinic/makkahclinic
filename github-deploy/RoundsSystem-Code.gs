@@ -98,16 +98,89 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  const action = e && e.parameter && e.parameter.action;
-  
-  if (action === 'debug') {
-    const result = debugInfo();
+  try {
+    const action = e && e.parameter && e.parameter.action;
+    const dataStr = e && e.parameter && e.parameter.data;
+    const payload = dataStr ? JSON.parse(dataStr) : {};
+    
+    let result;
+    
+    switch (action) {
+      case 'getHomeData':
+        result = getHomeData();
+        break;
+      case 'getRoundsLog':
+        result = getRoundsLog(payload.limit || 100, payload.todayOnly || false);
+        break;
+      case 'logRound':
+        result = logRound(payload);
+        break;
+      case 'getMasterTasks':
+        result = getMasterTasks();
+        break;
+      case 'getStaff':
+        result = getStaff();
+        break;
+      case 'getStaffPasscodes':
+        result = getStaffPasscodes();
+        break;
+      case 'getStaffSummary':
+        result = getStaffSummary();
+        break;
+      case 'getDelayed':
+        result = getDelayed();
+        break;
+      case 'getViolations':
+        result = getViolations();
+        break;
+      case 'getHistory':
+        result = getHistory(payload);
+        break;
+      case 'getMetrics':
+        result = getMetrics(payload.days || 14);
+        break;
+      case 'getChecklist':
+        result = getChecklist(payload.taskId, payload.roundName);
+        break;
+      case 'verifyPasscode':
+        result = verifyPasscode(payload.staffName, payload.passcode);
+        break;
+      case 'resolveViolation':
+        result = resolveViolation(payload);
+        break;
+      case 'addFollowUp':
+        result = addFollowUp(payload);
+        break;
+      case 'getFollowUpsByRound':
+        result = getFollowUpsByRound(payload);
+        break;
+      case 'archiveViolation':
+        result = archiveViolation(payload);
+        break;
+      case 'unarchiveViolation':
+        result = unarchiveViolation(payload);
+        break;
+      case 'archiveOldClosed':
+        result = archiveOldClosedViolations();
+        break;
+      case 'setupArchiveTrigger':
+        result = setupWeeklyArchiveTrigger();
+        break;
+      case 'debug':
+        result = debugInfo();
+        break;
+      default:
+        return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
+          .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
       .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  
-  return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Safety Rounds API is running' }))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ============================================

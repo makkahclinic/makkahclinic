@@ -1291,15 +1291,16 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     // Google Apps Script Web App URL
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbza4EFUnZVh17r2Lm8P7w_zlRXH1LxqgNS-ugbKp_PyP-dAknd46TKDgjj8oX8lqci-/exec';
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzw1L2TqYNhhCD8rNshZS-ay6aBPNc1Z0wrjZ1nW-n8h4JHq8ab6pMZhAhVWSJDfcQ6/exec';
     
-    // API helper function
+    // API helper function - using GET with action and payload as query params
     async function callApi(action, payload = {}) {
-      const res = await fetch(WEB_APP_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action, payload })
-      });
+      // Use GET with query parameters (POST has CORS issues with Apps Script)
+      const url = new URL(WEB_APP_URL);
+      url.searchParams.set('action', action);
+      url.searchParams.set('data', JSON.stringify(payload));
+      
+      const res = await fetch(url.toString());
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'Backend error');
