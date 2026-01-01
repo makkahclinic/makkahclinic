@@ -1165,9 +1165,6 @@ function logRound(params) {
   const sheet = getSheet('Rounds_Log');
   if (!sheet) return { success: false, error: 'Rounds_Log sheet not found' };
   
-  // التأكد من وجود الـ Headers الصحيحة
-  ensureRoundsLogHeaders(sheet);
-  
   // توحيد TaskID كنص
   const taskId = String(params.taskId || '').trim();
   
@@ -1180,19 +1177,37 @@ function logRound(params) {
   const dateStr = getTodayString();
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   
-  const newRow = [
-    dateStr,
-    timeStr,
-    taskId,
-    params.roundName || '',
-    params.area || '',
-    params.responsibleRole || '',
-    params.executionResponsible || '',
-    params.status || 'تم',
-    params.positiveNotes || '',
-    params.negativeNotes || '',
-    params.isViolation || 'No'
-  ];
+  // قراءة أسماء الأعمدة من الشيت
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headerMap = {};
+  headers.forEach((h, i) => { headerMap[String(h).trim()] = i; });
+  
+  // إنشاء صف جديد بناءً على ترتيب الأعمدة الفعلي
+  const newRow = new Array(headers.length).fill('');
+  
+  // ملء البيانات حسب أسماء الأعمدة
+  const data = {
+    'Date': dateStr,
+    'Actual_Time': timeStr,
+    'TaskID': taskId,
+    'Round_Name': params.roundName || '',
+    'Area': params.area || params.roundName || '',
+    'Responsible_Role': params.responsibleRole || '',
+    'Execution_Responsible': params.executionResponsible || '',
+    'Status': params.status || 'تم',
+    'Positive_Notes': params.positiveNotes || '',
+    'Negative_Notes': params.negativeNotes || '',
+    'Is_Violation': params.isViolation || 'No',
+    // أسماء بديلة للتوافق مع الشيت القديم
+    'Domain': params.roundName || '',
+    'RoundNo': '1'
+  };
+  
+  for (const key in data) {
+    if (headerMap[key] !== undefined) {
+      newRow[headerMap[key]] = data[key];
+    }
+  }
   
   appendRowSafe(sheet, newRow);
   
