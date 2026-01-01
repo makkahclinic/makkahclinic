@@ -623,7 +623,22 @@ function getComplaintStats(params) {
   const newCount = filtered.filter(c => c.Status === 'new').length;
   const inProgress = filtered.filter(c => c.Status === 'in_progress').length;
   const closed = filtered.filter(c => c.Status === 'closed').length;
-  const escalated = filtered.filter(c => c.Escalated_To && c.Escalated_To.trim() !== '').length;
+  
+  // ✅ تفريق بين المصعدة النشطة والمنتهية
+  const escalatedActive = filtered.filter(c => 
+    c.Escalated_To && c.Escalated_To.trim() !== '' && c.Status !== 'closed'
+  ).length;
+  
+  const escalatedResolved = filtered.filter(c => {
+    const wasEscalated = (c.Escalation_Count && parseInt(c.Escalation_Count) > 0) || 
+                         (c.Deescalation_Date && c.Deescalation_Date.trim() !== '');
+    const escalatedToEmpty = !c.Escalated_To || c.Escalated_To.trim() === '';
+    const isClosed = c.Status === 'closed';
+    return wasEscalated && (escalatedToEmpty || isClosed);
+  }).length;
+  
+  // للتوافق: escalated = النشطة فقط (لأن لوحة التحكم تستخدمها للتنبيهات)
+  const escalated = escalatedActive;
   
   const closedWithDays = filtered.filter(c => c.Status === 'closed' && c.Days_Open);
   const avgDays = closedWithDays.length > 0 
@@ -641,7 +656,9 @@ function getComplaintStats(params) {
     new: newCount,
     in_progress: inProgress,
     closed,
-    escalated,
+    escalated,           // المصعدة النشطة فقط
+    escalatedActive,     // نفس escalated
+    escalatedResolved,   // المنتهية
     avgResolutionTime: avgDays,
     byType
   };
