@@ -1185,22 +1185,35 @@ function logRound(params) {
   // إنشاء صف جديد بناءً على ترتيب الأعمدة الفعلي
   const newRow = new Array(headers.length).fill('');
   
-  // ملء البيانات حسب أسماء الأعمدة
+  // ملء البيانات حسب أسماء الأعمدة الفعلية في Rounds_Log
   const data = {
     'Date': dateStr,
-    'Actual_Time': timeStr,
     'TaskID': taskId,
-    'Round_Name': params.roundName || '',
+    'RoundNo': '1',
     'Area': params.area || params.roundName || '',
+    'Domain': params.roundName || '',
+    'Planned_Time': '',
+    'Actual_Time': timeStr,
+    'Delay_Min': '',
+    'MaxDelay_Min': '',
+    'Status': params.status || 'في الوقت',
+    'Alert': '',
     'Responsible_Role': params.responsibleRole || '',
     'Execution_Responsible': params.executionResponsible || '',
-    'Status': params.status || 'تم',
     'Positive_Notes': params.positiveNotes || '',
     'Negative_Notes': params.negativeNotes || '',
+    'Actions_Taken': '',
+    'Closed_YN': '',
+    'Closed_Date': '',
     'Is_Violation': params.isViolation || 'No',
-    // أسماء بديلة للتوافق مع الشيت القديم
-    'Domain': params.roundName || '',
-    'RoundNo': '1'
+    'Is_Resolved': '',
+    'Resolved_By': '',
+    'Resolved_Date': '',
+    'FollowUp_Status': '',
+    'FollowUp_By': '',
+    'FollowUp_Notes': '',
+    'FollowUp_At': '',
+    'Is_Archived': ''
   };
   
   for (const key in data) {
