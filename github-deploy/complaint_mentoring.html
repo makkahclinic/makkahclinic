@@ -1021,10 +1021,19 @@
 
         async function apiCall(action, payload = {}) {
             try {
-                const response = await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action, payload }),
+                const url = new URL(SCRIPT_URL);
+                url.searchParams.set('action', action);
+                
+                for (const [key, value] of Object.entries(payload)) {
+                    if (typeof value === 'object') {
+                        url.searchParams.set(key, JSON.stringify(value));
+                    } else {
+                        url.searchParams.set(key, String(value));
+                    }
+                }
+                
+                const response = await fetch(url.toString(), {
+                    method: 'GET',
                     redirect: 'follow'
                 });
                 const text = await response.text();

@@ -83,22 +83,81 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  const action = e && e.parameter && e.parameter.action;
+  const p = e && e.parameter ? e.parameter : {};
+  const action = p.action;
   
-  if (action === 'debug') {
-    const result = debugInfo();
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
+  function output_(obj) {
+    return ContentService.createTextOutput(JSON.stringify(obj))
       .setMimeType(ContentService.MimeType.JSON);
   }
   
-  if (action === 'getLocations') {
-    const result = getLocations();
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, ...result }))
-      .setMimeType(ContentService.MimeType.JSON);
+  try {
+    let result;
+    
+    switch (action) {
+      case 'debug':
+        result = debugInfo();
+        break;
+      case 'getLocations':
+        result = getLocations();
+        break;
+      case 'getComplaintStaff':
+        result = getComplaintStaff();
+        break;
+      case 'verifyComplaintPasscode':
+        result = verifyComplaintPasscode(p.staffName, p.passcode);
+        break;
+      case 'getComplaintStats':
+        result = getComplaintStats(p);
+        break;
+      case 'getComplaints':
+        result = getComplaints(p);
+        break;
+      case 'getComplaintDetails':
+        result = getComplaintDetails(p.complaintId);
+        break;
+      case 'getComplaintHistory':
+        result = getComplaintHistory(p.complaintId);
+        break;
+      case 'getComplaintAssignmentList':
+        result = getComplaintAssignmentList();
+        break;
+      case 'getComplaintEscalationList':
+        result = getComplaintEscalationList();
+        break;
+      case 'updateComplaint':
+        const updatePayload = p.payload ? JSON.parse(p.payload) : p;
+        result = updateComplaint(updatePayload);
+        break;
+      case 'assignComplaint':
+        const assignPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = assignComplaint(assignPayload);
+        break;
+      case 'escalateComplaint':
+        const escPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = escalateComplaint(escPayload);
+        break;
+      case 'deescalateComplaint':
+        const deescPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = deescalateComplaint(deescPayload);
+        break;
+      case 'closeComplaint':
+        const closePayload = p.payload ? JSON.parse(p.payload) : p;
+        result = closeComplaint(closePayload);
+        break;
+      case 'submitComplaint':
+        const submitPayload = p.payload ? JSON.parse(p.payload) : p;
+        result = submitComplaint(submitPayload);
+        break;
+      default:
+        return output_({ ok: true, message: 'Complaints API is running', version: '2.0' });
+    }
+    
+    return output_({ ok: true, ...result });
+    
+  } catch (err) {
+    return output_({ ok: false, error: err.message });
   }
-  
-  return ContentService.createTextOutput(JSON.stringify({ ok: true, message: 'Complaints API is running', version: '1.0' }))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ============================================
