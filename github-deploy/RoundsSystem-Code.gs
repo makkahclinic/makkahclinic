@@ -608,12 +608,27 @@ function getHomeData() {
   
   todayLog.forEach(log => {
     // بعد التوحيد، الأسماء موحدة
-    const staff = log.Responsible_Role || log.Execution_Responsible || '';
+    const logStaff = String(log.Responsible_Role || log.Execution_Responsible || '').trim();
     const taskId = String(log.TaskID || '').trim();
-    if (staffMap[staff]) {
-      staffMap[staff].todayDone++;
+    
+    // البحث المرن عن الموظف (تطابق جزئي أو تام)
+    let matchedStaff = null;
+    if (staffMap[logStaff]) {
+      matchedStaff = logStaff;
+    } else {
+      // بحث جزئي إذا لم يتطابق تماماً
+      for (const name in staffMap) {
+        if (name.includes(logStaff) || logStaff.includes(name)) {
+          matchedStaff = name;
+          break;
+        }
+      }
+    }
+    
+    if (matchedStaff) {
+      staffMap[matchedStaff].todayDone++;
       // مقارنة مرنة للـ TaskID (string vs number)
-      const round = staffMap[staff].topRounds.find(r => String(r.taskId).trim() === taskId);
+      const round = staffMap[matchedStaff].topRounds.find(r => String(r.taskId).trim() === taskId);
       if (round) round.done++;
     }
   });
