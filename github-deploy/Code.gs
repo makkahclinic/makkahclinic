@@ -50,7 +50,10 @@
     'importStaffToRoster',
     'addTrainee',
     'updateTrainee',
-    'deleteTrainee'
+    'deleteTrainee',
+    // ✅ دوال تحديث حالة الطوارئ
+    'updateEmergencyStatus',
+    'updateEmergencyReportStatus'
   ]);
 
   /**
