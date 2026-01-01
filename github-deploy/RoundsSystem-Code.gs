@@ -616,28 +616,15 @@ function getHomeData() {
   
   todayLog.forEach(log => {
     const taskId = String(log.TaskID || '').trim();
-    const logRoundName = String(log.Round_Name || '').trim();
-    const logStaff = String(log.Responsible_Role || log.Execution_Responsible || '').trim();
+    if (!taskId) return; // تجاهل السجلات بدون TaskID
     
-    // البحث عن الموظف: أولاً بـ TaskID، ثم بالاسم
-    let matchedStaff = taskToAssignee[taskId];
-    if (!matchedStaff && logStaff) {
-      // بحث بالاسم (fallback)
-      for (const name in staffMap) {
-        if (name.includes(logStaff) || logStaff.includes(name)) {
-          matchedStaff = name;
-          break;
-        }
-      }
-    }
+    // البحث عن الموظف بـ TaskID فقط
+    const matchedStaff = taskToAssignee[taskId];
     
     if (matchedStaff && staffMap[matchedStaff]) {
       staffMap[matchedStaff].todayDone++;
-      // البحث عن الجولة بـ TaskID أو Round_Name
-      const round = staffMap[matchedStaff].topRounds.find(r =>
-        String(r.taskId).trim() === taskId ||
-        (r.name && r.name === logRoundName)
-      );
+      // البحث عن الجولة بـ TaskID فقط
+      const round = staffMap[matchedStaff].topRounds.find(r => r.taskId === taskId);
       if (round) round.done++;
     }
   });
@@ -1171,6 +1158,11 @@ function logRound(params) {
   
   // توحيد TaskID كنص
   const taskId = String(params.taskId || '').trim();
+  
+  // التحقق من وجود TaskID (إجباري للعد الصحيح)
+  if (!taskId) {
+    return { success: false, error: 'TaskID مطلوب لتسجيل الجولة' };
+  }
   
   const now = getSaudiDate();
   const dateStr = getTodayString();
