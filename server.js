@@ -1503,7 +1503,13 @@ app.post('/api/eoc/drills', async (req, res) => {
   }
 });
 
-// Static file serving
+// Static file serving - github-deploy folder first
+app.use(express.static(path.join(__dirname, 'github-deploy'), {
+  extensions: ['html'],
+  index: 'index.html'
+}));
+
+// Then root folder as fallback
 app.use(express.static(path.join(__dirname), {
   extensions: ['html'],
   index: 'index.html'
