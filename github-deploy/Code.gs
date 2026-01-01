@@ -2861,7 +2861,8 @@ function doPost(e) {
       // ✅ جلب إحصائيات الجولات من ملف الجولات
       let rounds = { today: 0, completed: 0, delayed: 0, violations: 0 };
       try {
-        const roundsSheet = SpreadsheetApp.openById(ROUNDS_SPREADSHEET_ID).getSheetByName('Safety_Rounds');
+        const roundsSheet = SpreadsheetApp.openById(ROUNDS_SPREADSHEET_ID).getSheetByName('Safety_Rounds') || 
+                             SpreadsheetApp.openById(ROUNDS_SPREADSHEET_ID).getSheetByName('Rounds_Log');
         if (roundsSheet) {
           const roundsData = sheetToObjects(roundsSheet);
           roundsData.forEach(r => {
