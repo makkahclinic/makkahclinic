@@ -38,7 +38,19 @@
     'getEmergencyReports',
     'submitEmergencyReport',
     'getTrainingLog',
-    'getEmergencyStatus'
+    'getEmergencyStatus',
+    // ✅ دوال التدريب
+    'getTrainingSessions',
+    'getTrainingRoster',
+    'addTrainingSession',
+    'updateTrainingSession',
+    'deleteTrainingSession',
+    'recordTrainingAttendance',
+    'getTrainingStats',
+    'importStaffToRoster',
+    'addTrainee',
+    'updateTrainee',
+    'deleteTrainee'
   ]);
 
   /**
