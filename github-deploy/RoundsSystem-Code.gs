@@ -568,25 +568,37 @@ function getHomeData() {
     return logStr === todayStr;
   });
   
+  // دالة تطبيع اسم الموظف (حذف البادئات مثل أ/ م/ د/)
+  function normalizeStaffName(name) {
+    return String(name || '').trim()
+      .replace(/^(أ\/|م\/|د\/|أ \/|م \/|د \/)\s*/g, '')
+      .trim();
+  }
+  
   const staffMap = {};
   const taskToAssignee = {}; // ربط TaskID بالموظف المسؤول
+  const normalizedToOriginal = {}; // ربط الاسم الموحد بالأصلي
   
   masterTasks.forEach(task => {
     const assignee = String(task.Assigned_To || '').trim();
+    const normalizedAssignee = normalizeStaffName(assignee);
     const taskId = String(task.TaskID || '').trim();
     if (!assignee) return;
     
     const dayCol = task[dayName];
     if (dayCol !== 'Yes' && dayCol !== true && dayCol !== 'yes') return;
     
-    // ربط TaskID بالموظف
+    // ربط TaskID بالموظف (الاسم الموحد)
     if (taskId) {
-      taskToAssignee[taskId] = assignee;
+      taskToAssignee[taskId] = normalizedAssignee;
     }
     
-    if (!staffMap[assignee]) {
-      staffMap[assignee] = {
-        name: assignee,
+    // ربط الاسم الموحد بالأصلي
+    normalizedToOriginal[normalizedAssignee] = assignee;
+    
+    if (!staffMap[normalizedAssignee]) {
+      staffMap[normalizedAssignee] = {
+        name: assignee, // نحتفظ بالاسم الأصلي للعرض
         todayTasks: 0,
         todayDone: 0,
         todayRemaining: 0,
@@ -596,9 +608,9 @@ function getHomeData() {
     }
     
     const rpd = parseInt(task.Rounds_Per_Day) || 1;
-    staffMap[assignee].todayTasks += rpd;
+    staffMap[normalizedAssignee].todayTasks += rpd;
     
-    staffMap[assignee].topRounds.push({
+    staffMap[normalizedAssignee].topRounds.push({
       taskId: String(task.TaskID || '').trim(),
       name: task.Round_Name_AR || task.Round_Name_EN || task.TaskID || 'غير محدد',
       roundsRequired: rpd,
@@ -609,7 +621,7 @@ function getHomeData() {
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     weekDays.forEach(d => {
       if (task[d] === 'Yes' || task[d] === true || task[d] === 'yes') {
-        staffMap[assignee].weeklyTotal += rpd;
+        staffMap[normalizedAssignee].weeklyTotal += rpd;
       }
     });
   });
