@@ -569,14 +569,20 @@ function getHomeData() {
   });
   
   const staffMap = {};
-  const staffNameIndex = {}; // فهرس للبحث السريع بالأسماء الموحدة
+  const taskToAssignee = {}; // ربط TaskID بالموظف المسؤول
   
   masterTasks.forEach(task => {
     const assignee = String(task.Assigned_To || '').trim();
+    const taskId = String(task.TaskID || '').trim();
     if (!assignee) return;
     
     const dayCol = task[dayName];
     if (dayCol !== 'Yes' && dayCol !== true && dayCol !== 'yes') return;
+    
+    // ربط TaskID بالموظف
+    if (taskId) {
+      taskToAssignee[taskId] = assignee;
+    }
     
     if (!staffMap[assignee]) {
       staffMap[assignee] = {
@@ -587,8 +593,6 @@ function getHomeData() {
         weeklyTotal: 0,
         topRounds: []
       };
-      // إضافة الاسم الموحد للفهرس
-      staffNameIndex[assignee.toLowerCase().replace(/\s+/g, '')] = assignee;
     }
     
     const rpd = parseInt(task.Rounds_Per_Day) || 1;
@@ -611,24 +615,14 @@ function getHomeData() {
   });
   
   todayLog.forEach(log => {
-    const logStaff = String(log.Responsible_Role || log.Execution_Responsible || '').trim();
     const taskId = String(log.TaskID || '').trim();
     
-    // البحث عن الموظف باستخدام الفهرس الموحد
-    let matchedStaff = null;
-    if (staffMap[logStaff]) {
-      matchedStaff = logStaff;
-    } else {
-      // بحث بالاسم الموحد (بدون مسافات، lowercase)
-      const normalizedLogStaff = logStaff.toLowerCase().replace(/\s+/g, '');
-      if (staffNameIndex[normalizedLogStaff]) {
-        matchedStaff = staffNameIndex[normalizedLogStaff];
-      }
-    }
+    // البحث عن الموظف عبر TaskID (الحل الموثوق)
+    const matchedStaff = taskToAssignee[taskId];
     
-    if (matchedStaff) {
+    if (matchedStaff && staffMap[matchedStaff]) {
       staffMap[matchedStaff].todayDone++;
-      // مقارنة مرنة للـ TaskID (string vs number)
+      // البحث عن الجولة وتحديث العداد
       const round = staffMap[matchedStaff].topRounds.find(r => String(r.taskId).trim() === taskId);
       if (round) round.done++;
     }
