@@ -1613,12 +1613,18 @@ app.get('/api/owner/stats', async (req, res) => {
       const todayFormatted = `${parseInt(todayParts[1])}/${parseInt(todayParts[2])}/${todayParts[0]}`; // M/D/YYYY
       roundsToday = roundsDates.filter(r => r[0] && r[0].startsWith(todayFormatted.split(' ')[0])).length;
       
-      // For delayed rounds, we'd need schedule comparison - simplified for now
-      // Check if total rounds today is less than expected (15 tasks * avg rounds = ~30)
-      const expectedToday = 30;
-      if (roundsToday < expectedToday) {
-        roundsDelayed = expectedToday - roundsToday;
+      // Check if it's Friday (off day in Saudi Arabia) - no delayed rounds
+      const todayDate = new Date();
+      const isFriday = todayDate.getDay() === 5;
+      
+      if (!isFriday) {
+        // For delayed rounds, check if total rounds today is less than expected
+        const expectedToday = 30;
+        if (roundsToday < expectedToday) {
+          roundsDelayed = expectedToday - roundsToday;
+        }
       }
+      // On Friday, roundsDelayed stays 0
     } catch (e) { console.log('Rounds fetch error:', e.message); }
     
     res.json({
