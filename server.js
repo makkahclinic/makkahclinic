@@ -1506,6 +1506,8 @@ app.post('/api/eoc/drills', async (req, res) => {
 // ============================================
 // Owner Dashboard Stats API - Direct from Sheets
 // ============================================
+const MASTER_SPREADSHEET_ID = '1aijUPpTqUGUaKmYAyohq0RHmk1CF0CzCm17gfixHKOg';
+
 app.get('/api/owner/stats', async (req, res) => {
   try {
     const sheets = await getGoogleSheetsClient();
@@ -1522,6 +1524,40 @@ app.get('/api/owner/stats', async (req, res) => {
     ).length;
     const totalComplaints = statuses.length;
     
+    // Get incidents stats from Master sheet
+    let incidentsOpen = 0, incidentsTotal = 0;
+    try {
+      const incidentsRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: MASTER_SPREADSHEET_ID,
+        range: 'Incidents_Log!O2:O1000' // Status column (O)
+      });
+      const incidentStatuses = (incidentsRes.data.values || []).flat();
+      incidentsTotal = incidentStatuses.length;
+      incidentsOpen = incidentStatuses.filter(s => 
+        s && s !== 'closed' && s !== 'مغلق' && s !== 'مغلقة'
+      ).length;
+    } catch (e) { console.log('Incidents fetch error:', e.message); }
+    
+    // Get risks stats from Master sheet
+    let risksActive = 0, risksHigh = 0, risksMedium = 0, risksLow = 0;
+    try {
+      const risksRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: MASTER_SPREADSHEET_ID,
+        range: 'Risks_Register!D2:E1000' // Risk_Level (D) and Status (E)
+      });
+      const risksData = risksRes.data.values || [];
+      risksData.forEach(row => {
+        const level = (row[0] || '').toLowerCase();
+        const status = (row[1] || '').toLowerCase();
+        if (status !== 'resolved' && status !== 'closed' && status !== 'مغلق') {
+          risksActive++;
+          if (level === 'high' || level === 'عالي') risksHigh++;
+          else if (level === 'medium' || level === 'متوسط') risksMedium++;
+          else if (level === 'low' || level === 'منخفض') risksLow++;
+        }
+      });
+    } catch (e) { console.log('Risks fetch error:', e.message); }
+    
     // Get today's date in Saudi timezone
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' });
     
@@ -1532,8 +1568,8 @@ app.get('/api/owner/stats', async (req, res) => {
         total: totalComplaints,
         needsFollowup: openComplaints
       },
-      incidents: { open: 0, total: 0 },
-      risks: { active: 0, total: 0 },
+      incidents: { open: incidentsOpen, total: incidentsTotal },
+      risks: { active: risksActive, high: risksHigh, medium: risksMedium, low: risksLow },
       rounds: { today: 0, completed: 0, delayed: 0 },
       timestamp: new Date().toISOString()
     });
