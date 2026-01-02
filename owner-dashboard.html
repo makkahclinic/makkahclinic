@@ -22,6 +22,61 @@
             --sidebar-width: 260px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        /* Emergency Banner Styles */
+        .emergency-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            background: linear-gradient(90deg, #dc3545, #c82333);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 4px 20px rgba(220, 53, 69, 0.5);
+            animation: emergencyPulse 1.5s ease-in-out infinite;
+        }
+        .emergency-banner.dismissed {
+            animation: slideUp 0.5s ease-out forwards;
+        }
+        @keyframes emergencyPulse {
+            0%, 100% { background: linear-gradient(90deg, #dc3545, #c82333); }
+            50% { background: linear-gradient(90deg, #ff4757, #dc3545); }
+        }
+        @keyframes slideUp {
+            to { transform: translateY(-100%); opacity: 0; }
+        }
+        .emergency-banner-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .emergency-text h3 {
+            font-size: 1.3rem;
+            margin-bottom: 3px;
+        }
+        .emergency-text p {
+            font-size: 1rem;
+            opacity: 0.95;
+        }
+        .pulse-icon {
+            animation: iconPulse 0.8s ease-in-out infinite;
+        }
+        @keyframes iconPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        .btn-light {
+            background: white;
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .btn-light:hover {
+            background: #f8f9fa;
+        }
         body {
             font-family: 'Tajawal', sans-serif;
             font-size: 16px;
@@ -1450,10 +1505,19 @@
                         });
                     }
                 } else {
-                    // الوضع طبيعي
-                    kpiEoc.textContent = 'طبيعي';
-                    kpiEoc.style.color = '#10b981';
-                    kpiStatus.textContent = 'الوضع طبيعي ✓';
+                    // الوضع طبيعي - عرض عدد البلاغات من cachedEmergencyStats
+                    const cachedTotal = window.cachedEmergencyStats?.total || 0;
+                    const cachedThisMonth = window.cachedEmergencyStats?.thisMonth || 0;
+                    
+                    if (cachedTotal > 0) {
+                        kpiEoc.textContent = cachedTotal;
+                        kpiEoc.style.color = '';
+                        kpiStatus.textContent = cachedThisMonth + ' هذا الشهر';
+                    } else {
+                        kpiEoc.textContent = 'طبيعي';
+                        kpiEoc.style.color = '#10b981';
+                        kpiStatus.textContent = 'الوضع طبيعي ✓';
+                    }
                     kpiStatus.classList.remove('danger');
                     eocIcon.classList.remove('active');
                     if (eocPulse) eocPulse.style.display = 'none';
@@ -1758,6 +1822,79 @@
             }
         }
         
+        // Emergency Alert System
+        let emergencyAlertPlaying = false;
+        let emergencyAudio = null;
+        
+        function playEmergencyAlert() {
+            if (emergencyAlertPlaying) return;
+            emergencyAlertPlaying = true;
+            
+            // Create audio context for emergency siren
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                function playSiren() {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.5);
+                    oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 1);
+                    
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.5);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 1.5);
+                }
+                
+                // Play siren 3 times
+                playSiren();
+                setTimeout(playSiren, 2000);
+                setTimeout(playSiren, 4000);
+                
+            } catch (e) {
+                console.log('Audio not supported:', e);
+            }
+        }
+        
+        function showEmergencyBanner(emergency) {
+            // Remove existing banner if any
+            const existing = document.getElementById('emergencyBanner');
+            if (existing) existing.remove();
+            
+            const banner = document.createElement('div');
+            banner.id = 'emergencyBanner';
+            banner.className = 'emergency-banner';
+            banner.innerHTML = `
+                <div class="emergency-banner-content">
+                    <i class="fas fa-exclamation-triangle fa-2x pulse-icon"></i>
+                    <div class="emergency-text">
+                        <h3>تنبيه طوارئ!</h3>
+                        <p>${emergency.type || 'حالة طوارئ نشطة'} ${emergency.location ? '- الموقع: ' + emergency.location : ''}</p>
+                    </div>
+                    <button onclick="dismissEmergencyBanner()" class="btn btn-light">
+                        <i class="fas fa-times"></i> إغلاق
+                    </button>
+                </div>
+            `;
+            document.body.insertBefore(banner, document.body.firstChild);
+        }
+        
+        function dismissEmergencyBanner() {
+            const banner = document.getElementById('emergencyBanner');
+            if (banner) {
+                banner.classList.add('dismissed');
+                setTimeout(() => banner.remove(), 500);
+            }
+            emergencyAlertPlaying = false;
+        }
+        
         async function loadDashboardStats() {
             try {
                 // ✅ Try local API first (Replit), then fallback to Apps Script
@@ -1781,11 +1918,33 @@
                 if (data.success || data.ok) {
                     const stats = data.stats || data;
                     
-                    if (stats.emergency && stats.emergency.active) {
-                        document.getElementById('kpi-eoc').textContent = 'طوارئ!';
-                        document.getElementById('kpi-eoc-status').textContent = stats.emergency.type || 'حالة نشطة';
-                        document.getElementById('kpi-eoc-status').classList.add('danger');
-                        document.getElementById('eocIcon').classList.add('active');
+                    // Update EOC stats
+                    if (stats.emergency) {
+                        // Cache emergency stats for use by checkEmergencyStatus
+                        window.cachedEmergencyStats = {
+                            total: stats.emergency.total || 0,
+                            thisMonth: stats.emergency.thisMonth || 0
+                        };
+                        
+                        const eocEl = document.getElementById('kpi-eoc');
+                        const eocStatusEl = document.getElementById('kpi-eoc-status');
+                        
+                        if (stats.emergency.active) {
+                            eocEl.textContent = 'طوارئ!';
+                            eocStatusEl.textContent = stats.emergency.type || 'حالة نشطة';
+                            eocStatusEl.classList.add('danger');
+                            document.getElementById('eocIcon')?.classList.add('active');
+                            playEmergencyAlert();
+                            showEmergencyBanner(stats.emergency);
+                        } else {
+                            // Show total reports count
+                            eocEl.textContent = stats.emergency.total || 0;
+                            if (stats.emergency.thisMonth > 0) {
+                                eocStatusEl.textContent = stats.emergency.thisMonth + ' هذا الشهر';
+                            } else {
+                                eocStatusEl.textContent = 'الوضع طبيعي ✓';
+                            }
+                        }
                     }
                     
                     if (stats.complaints) {
@@ -1820,8 +1979,21 @@
                     }
                     
                     if (stats.rounds) {
+                        // Show today's rounds count (not total)
                         document.getElementById('kpi-rounds').textContent = stats.rounds.today || 0;
-                        document.getElementById('kpi-rounds-sub').textContent = (stats.rounds.delayed || 0) + ' متأخرة';
+                        
+                        // Check if it's Friday (off day)
+                        const today = new Date();
+                        const isFriday = today.getDay() === 5;
+                        
+                        if (isFriday) {
+                            document.getElementById('kpi-rounds-sub').textContent = 'يوم إجازة';
+                        } else if (stats.rounds.delayed > 0) {
+                            document.getElementById('kpi-rounds-sub').textContent = stats.rounds.delayed + ' متأخرة';
+                            document.getElementById('kpi-rounds-sub').classList.add('warning');
+                        } else {
+                            document.getElementById('kpi-rounds-sub').textContent = 'إجمالي: ' + (stats.rounds.total || 0);
+                        }
                     }
                     
                     if (stats.users) {
