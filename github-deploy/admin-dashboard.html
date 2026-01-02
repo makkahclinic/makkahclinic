@@ -1019,7 +1019,13 @@
         let currentUserRole = null;
 
         // API URLs
+        // Replit API - try deployed URL first, then dev URL
+        const REPLIT_DEPLOYED = 'https://makkahclinic.replit.app';
+        const REPLIT_DEV = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev';
+        
         const APIs = {
+            replitDeployed: REPLIT_DEPLOYED + '/api/owner/stats',
+            replitDev: REPLIT_DEV + '/api/owner/stats',
             complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
             incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
             risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
@@ -1178,6 +1184,19 @@
             console.log('Loading dashboard data...');
 
             try {
+                // Try Replit API first for accurate data (deployed, then dev)
+                let replitData = null;
+                try {
+                    let replitRes = await fetch(APIs.replitDeployed).catch(() => null);
+                    if (!replitRes || !replitRes.ok) {
+                        replitRes = await fetch(APIs.replitDev);
+                    }
+                    replitData = await replitRes.json();
+                    console.log('Replit API data:', replitData);
+                } catch (e) {
+                    console.warn('Replit API unavailable:', e.message);
+                }
+                
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
@@ -1187,6 +1206,15 @@
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
                     apiCall(APIs.maintenance, 'getKPIs', {})
                 ]);
+                
+                // Use Replit data for incidents if Apps Script failed
+                if (replitData && replitData.ok && replitData.incidents) {
+                    const inc = replitData.incidents;
+                    document.getElementById('kpi-incidents-open').textContent = inc.open || 0;
+                    document.getElementById('stat-incidents-new').textContent = inc.open || 0;
+                    document.getElementById('stat-incidents-closed').textContent = inc.total - inc.open || 0;
+                    console.log('Using Replit data for incidents:', inc);
+                }
 
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);
@@ -1255,7 +1283,16 @@
                 }
 
                 // الجولات - البيانات ترجع مباشرة
-                if (roundsRes.ok) {
+                // تحقق من يوم الجمعة (يوم إجازة)
+                const today = new Date();
+                const isFriday = today.getDay() === 5;
+                
+                if (isFriday) {
+                    // يوم الجمعة = إجازة، لا يوجد جولات
+                    document.getElementById('kpi-rounds-today').textContent = '0';
+                    document.getElementById('kpi-rounds-delayed').textContent = 'يوم إجازة';
+                    document.getElementById('kpi-rounds-delayed').style.color = '#10b981';
+                } else if (roundsRes.ok) {
                     const rd = roundsRes;
                     // عرض المكتملة في البطاقة الرئيسية
                     document.getElementById('kpi-rounds-today').textContent = rd.completed || 0;
