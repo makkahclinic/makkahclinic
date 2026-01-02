@@ -1563,6 +1563,22 @@ app.get('/api/owner/stats', async (req, res) => {
       });
     } catch (e) { console.log('Risks fetch error:', e.message); }
     
+    // Get EOC emergency status from Master sheet (أوامر_نشطة)
+    let emergencyActive = false, emergencyType = '', emergencyLocation = '', emergencyTimestamp = '';
+    try {
+      const eocRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: MASTER_SPREADSHEET_ID,
+        range: 'أوامر_نشطة!A2:F2' // active, responseType, reportType, location, muster, timestamp
+      });
+      const eocData = eocRes.data.values?.[0] || [];
+      if (eocData[0] && (eocData[0] === 'true' || eocData[0] === true || eocData[0] === '1' || eocData[0] === 'نعم')) {
+        emergencyActive = true;
+        emergencyType = eocData[1] || eocData[2] || 'حالة طوارئ';
+        emergencyLocation = eocData[3] || '';
+        emergencyTimestamp = eocData[5] || '';
+      }
+    } catch (e) { console.log('EOC fetch error:', e.message); }
+    
     // Get today's date in Saudi timezone
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' });
     
@@ -1576,6 +1592,12 @@ app.get('/api/owner/stats', async (req, res) => {
       incidents: { open: incidentsOpen, total: incidentsTotal },
       risks: { active: risksActive, critical: risksCritical, high: risksHigh, medium: risksMedium, low: risksLow },
       rounds: { today: 0, completed: 0, delayed: 0 },
+      emergency: { 
+        active: emergencyActive, 
+        type: emergencyType, 
+        location: emergencyLocation,
+        timestamp: emergencyTimestamp
+      },
       timestamp: new Date().toISOString()
     });
   } catch (err) {
