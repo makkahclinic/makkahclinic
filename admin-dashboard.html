@@ -1239,8 +1239,9 @@
                     console.warn('Complaints API failed:', complaintsRes);
                 }
 
-                // الحوادث - البيانات ترجع مباشرة مع byStatus للتصعيدات
-                if (incidentsRes.ok) {
+                // الحوادث - استخدام Replit API أولاً، ثم Apps Script كـ fallback
+                const usedReplitForIncidents = replitData && replitData.ok && replitData.incidents;
+                if (!usedReplitForIncidents && incidentsRes.ok) {
                     const s = incidentsRes;
                     const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
                     const escalatedCount = s.byStatus?.escalated?.count || s.escalated || 0;
@@ -1258,7 +1259,7 @@
                     document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
                     document.getElementById('stat-incidents-escalated').textContent = escalatedCount;
                     document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
-                } else {
+                } else if (!usedReplitForIncidents) {
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
