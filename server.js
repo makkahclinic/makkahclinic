@@ -8,6 +8,7 @@ import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchU
 
 const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
 const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
+const RISKS_SPREADSHEET_ID = '12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A';
 
 // Initialize Firebase Admin SDK
 let firebaseAdmin = null;
@@ -1539,22 +1540,25 @@ app.get('/api/owner/stats', async (req, res) => {
       ).length;
     } catch (e) { console.log('Incidents fetch error:', e.message); }
     
-    // Get risks stats from Master sheet
-    let risksActive = 0, risksHigh = 0, risksMedium = 0, risksLow = 0;
+    // Get risks stats from SEPARATE Risks file (RiskRegister sheet)
+    // Columns: ID(A), Risk(B), Category(C), Owner(D), Probability(E), Impact(F), Score(G), Level(H), Mitigation(I), Status(J)
+    let risksActive = 0, risksHigh = 0, risksMedium = 0, risksLow = 0, risksCritical = 0;
     try {
       const risksRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: MASTER_SPREADSHEET_ID,
-        range: 'Risks_Register!D2:E1000' // Risk_Level (D) and Status (E)
+        spreadsheetId: RISKS_SPREADSHEET_ID,
+        range: 'RiskRegister!G2:J1000' // Score(G), Level(H), Mitigation(I), Status(J)
       });
       const risksData = risksRes.data.values || [];
       risksData.forEach(row => {
-        const level = (row[0] || '').toLowerCase();
-        const status = (row[1] || '').toLowerCase();
-        if (status !== 'resolved' && status !== 'closed' && status !== 'مغلق') {
+        const score = parseInt(row[0]) || 0;
+        const status = (row[3] || '').toLowerCase(); // J column (Status)
+        if (status !== 'resolved' && status !== 'closed' && status !== 'مغلق' && status !== 'تم الحل') {
           risksActive++;
-          if (level === 'high' || level === 'عالي') risksHigh++;
-          else if (level === 'medium' || level === 'متوسط') risksMedium++;
-          else if (level === 'low' || level === 'منخفض') risksLow++;
+          // Score-based classification matching risk-register.html
+          if (score >= 16) risksCritical++; // حرج (16-25)
+          else if (score >= 12) risksHigh++; // عالي (12-15)
+          else if (score >= 6) risksMedium++; // متوسط (6-11)
+          else if (score >= 1) risksLow++; // منخفض (1-5)
         }
       });
     } catch (e) { console.log('Risks fetch error:', e.message); }
@@ -1570,7 +1574,7 @@ app.get('/api/owner/stats', async (req, res) => {
         needsFollowup: openComplaints
       },
       incidents: { open: incidentsOpen, total: incidentsTotal },
-      risks: { active: risksActive, high: risksHigh, medium: risksMedium, low: risksLow },
+      risks: { active: risksActive, critical: risksCritical, high: risksHigh, medium: risksMedium, low: risksLow },
       rounds: { today: 0, completed: 0, delayed: 0 },
       timestamp: new Date().toISOString()
     });
