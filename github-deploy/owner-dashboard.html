@@ -1909,14 +1909,27 @@
                 if (data.success || data.ok) {
                     const stats = data.stats || data;
                     
-                    if (stats.emergency && stats.emergency.active) {
-                        document.getElementById('kpi-eoc').textContent = 'طوارئ!';
-                        document.getElementById('kpi-eoc-status').textContent = stats.emergency.type || 'حالة نشطة';
-                        document.getElementById('kpi-eoc-status').classList.add('danger');
-                        document.getElementById('eocIcon').classList.add('active');
-                        // Play emergency alert sound
-                        playEmergencyAlert();
-                        showEmergencyBanner(stats.emergency);
+                    // Update EOC stats
+                    if (stats.emergency) {
+                        const eocEl = document.getElementById('kpi-eoc');
+                        const eocStatusEl = document.getElementById('kpi-eoc-status');
+                        
+                        if (stats.emergency.active) {
+                            eocEl.textContent = 'طوارئ!';
+                            eocStatusEl.textContent = stats.emergency.type || 'حالة نشطة';
+                            eocStatusEl.classList.add('danger');
+                            document.getElementById('eocIcon')?.classList.add('active');
+                            playEmergencyAlert();
+                            showEmergencyBanner(stats.emergency);
+                        } else {
+                            // Show total reports count
+                            eocEl.textContent = stats.emergency.total || 0;
+                            if (stats.emergency.thisMonth > 0) {
+                                eocStatusEl.textContent = stats.emergency.thisMonth + ' هذا الشهر';
+                            } else {
+                                eocStatusEl.textContent = 'الوضع طبيعي ✓';
+                            }
+                        }
                     }
                     
                     if (stats.complaints) {
@@ -1951,8 +1964,13 @@
                     }
                     
                     if (stats.rounds) {
-                        document.getElementById('kpi-rounds').textContent = stats.rounds.today || 0;
-                        document.getElementById('kpi-rounds-sub').textContent = (stats.rounds.delayed || 0) + ' متأخرة';
+                        document.getElementById('kpi-rounds').textContent = stats.rounds.total || 0;
+                        if (stats.rounds.delayed > 0) {
+                            document.getElementById('kpi-rounds-sub').textContent = stats.rounds.delayed + ' متأخرة';
+                            document.getElementById('kpi-rounds-sub').classList.add('warning');
+                        } else {
+                            document.getElementById('kpi-rounds-sub').textContent = 'اليوم: ' + (stats.rounds.today || 0);
+                        }
                     }
                     
                     if (stats.users) {

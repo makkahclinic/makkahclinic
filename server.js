@@ -9,6 +9,7 @@ import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchU
 const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
 const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
 const RISKS_SPREADSHEET_ID = '12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A';
+const ROUNDS_SPREADSHEET_ID = '1JB-I7_r6MiafNFkqau4U7ZJFFooFodObSMVLLm8LRRc';
 
 // Initialize Firebase Admin SDK
 let firebaseAdmin = null;
@@ -1563,24 +1564,62 @@ app.get('/api/owner/stats', async (req, res) => {
       });
     } catch (e) { console.log('Risks fetch error:', e.message); }
     
-    // Get EOC emergency status from Master sheet (أوامر_نشطة)
+    // Get EOC emergency status from EOC Plan spreadsheet
     let emergencyActive = false, emergencyType = '', emergencyLocation = '', emergencyTimestamp = '';
+    let emergencyTotal = 0, emergencyThisMonth = 0;
     try {
-      const eocRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: MASTER_SPREADSHEET_ID,
+      // Check active command
+      const activeRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
         range: 'أوامر_نشطة!A2:F2' // active, responseType, reportType, location, muster, timestamp
       });
-      const eocData = eocRes.data.values?.[0] || [];
+      const eocData = activeRes.data.values?.[0] || [];
       if (eocData[0] && (eocData[0] === 'true' || eocData[0] === true || eocData[0] === '1' || eocData[0] === 'نعم')) {
         emergencyActive = true;
         emergencyType = eocData[1] || eocData[2] || 'حالة طوارئ';
         emergencyLocation = eocData[3] || '';
         emergencyTimestamp = eocData[5] || '';
       }
+      
+      // Count emergency reports
+      const reportsRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: EOC_PLAN_SPREADSHEET_ID,
+        range: 'بلاغات_الطوارئ!A2:B1000' // Report ID and Date columns
+      });
+      const reports = reportsRes.data.values || [];
+      emergencyTotal = reports.length;
+      
+      // Count this month's reports
+      const now = new Date();
+      const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      emergencyThisMonth = reports.filter(r => r[1] && r[1].startsWith(thisMonth)).length;
     } catch (e) { console.log('EOC fetch error:', e.message); }
     
     // Get today's date in Saudi timezone
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' });
+    
+    // Get rounds stats from Rounds spreadsheet
+    let roundsToday = 0, roundsTotal = 0, roundsDelayed = 0;
+    try {
+      const roundsRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: ROUNDS_SPREADSHEET_ID,
+        range: 'Rounds_Log!A2:A5000' // Date column
+      });
+      const roundsDates = roundsRes.data.values || [];
+      roundsTotal = roundsDates.length;
+      
+      // Count today's rounds (format: MM/DD/YYYY)
+      const todayParts = today.split('-'); // YYYY-MM-DD
+      const todayFormatted = `${parseInt(todayParts[1])}/${parseInt(todayParts[2])}/${todayParts[0]}`; // M/D/YYYY
+      roundsToday = roundsDates.filter(r => r[0] && r[0].startsWith(todayFormatted.split(' ')[0])).length;
+      
+      // For delayed rounds, we'd need schedule comparison - simplified for now
+      // Check if total rounds today is less than expected (15 tasks * avg rounds = ~30)
+      const expectedToday = 30;
+      if (roundsToday < expectedToday) {
+        roundsDelayed = expectedToday - roundsToday;
+      }
+    } catch (e) { console.log('Rounds fetch error:', e.message); }
     
     res.json({
       ok: true,
@@ -1591,12 +1630,14 @@ app.get('/api/owner/stats', async (req, res) => {
       },
       incidents: { open: incidentsOpen, total: incidentsTotal },
       risks: { active: risksActive, critical: risksCritical, high: risksHigh, medium: risksMedium, low: risksLow },
-      rounds: { today: 0, completed: 0, delayed: 0 },
+      rounds: { today: roundsToday, total: roundsTotal, delayed: roundsDelayed },
       emergency: { 
         active: emergencyActive, 
         type: emergencyType, 
         location: emergencyLocation,
-        timestamp: emergencyTimestamp
+        timestamp: emergencyTimestamp,
+        total: emergencyTotal,
+        thisMonth: emergencyThisMonth
       },
       timestamp: new Date().toISOString()
     });
