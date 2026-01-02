@@ -1278,21 +1278,33 @@
                     console.warn('Risks API failed:', risksRes);
                 }
 
-                // الجولات - البيانات ترجع مباشرة
-                // تحقق من يوم الجمعة (يوم إجازة)
-                const today = new Date();
-                const isFriday = today.getDay() === 5;
+                // الجولات - استخدام Replit API أولاً (يحتوي على today)
+                // تحقق من يوم الجمعة (يوم إجازة) بتوقيت السعودية
+                const saudiTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Riyadh' });
+                const saudiDate = new Date(saudiTime);
+                const isFriday = saudiDate.getDay() === 5;
                 
                 if (isFriday) {
                     // يوم الجمعة = إجازة، لا يوجد جولات
                     document.getElementById('kpi-rounds-today').textContent = '0';
                     document.getElementById('kpi-rounds-delayed').textContent = 'يوم إجازة';
                     document.getElementById('kpi-rounds-delayed').style.color = '#10b981';
+                    console.log('Friday detected - showing 0 rounds');
+                } else if (replitData && replitData.ok && replitData.rounds) {
+                    // استخدام Replit API (يحتوي على today)
+                    const rd = replitData.rounds;
+                    document.getElementById('kpi-rounds-today').textContent = rd.today ?? 0;
+                    if (rd.delayed > 0) {
+                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
+                        document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
+                    } else {
+                        document.getElementById('kpi-rounds-delayed').textContent = '';
+                    }
+                    console.log('Using Replit data for rounds:', rd);
                 } else if (roundsRes.ok) {
                     const rd = roundsRes;
-                    // عرض المكتملة في البطاقة الرئيسية
+                    // fallback to Apps Script
                     document.getElementById('kpi-rounds-today').textContent = rd.completed || 0;
-                    // عرض المتأخرة بوضوح
                     if (rd.delayed > 0) {
                         document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
                         document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
