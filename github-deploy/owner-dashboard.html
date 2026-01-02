@@ -1505,10 +1505,19 @@
                         });
                     }
                 } else {
-                    // الوضع طبيعي
-                    kpiEoc.textContent = 'طبيعي';
-                    kpiEoc.style.color = '#10b981';
-                    kpiStatus.textContent = 'الوضع طبيعي ✓';
+                    // الوضع طبيعي - عرض عدد البلاغات من cachedEmergencyStats
+                    const cachedTotal = window.cachedEmergencyStats?.total || 0;
+                    const cachedThisMonth = window.cachedEmergencyStats?.thisMonth || 0;
+                    
+                    if (cachedTotal > 0) {
+                        kpiEoc.textContent = cachedTotal;
+                        kpiEoc.style.color = '';
+                        kpiStatus.textContent = cachedThisMonth + ' هذا الشهر';
+                    } else {
+                        kpiEoc.textContent = 'طبيعي';
+                        kpiEoc.style.color = '#10b981';
+                        kpiStatus.textContent = 'الوضع طبيعي ✓';
+                    }
                     kpiStatus.classList.remove('danger');
                     eocIcon.classList.remove('active');
                     if (eocPulse) eocPulse.style.display = 'none';
@@ -1911,6 +1920,12 @@
                     
                     // Update EOC stats
                     if (stats.emergency) {
+                        // Cache emergency stats for use by checkEmergencyStatus
+                        window.cachedEmergencyStats = {
+                            total: stats.emergency.total || 0,
+                            thisMonth: stats.emergency.thisMonth || 0
+                        };
+                        
                         const eocEl = document.getElementById('kpi-eoc');
                         const eocStatusEl = document.getElementById('kpi-eoc-status');
                         
