@@ -1895,19 +1895,28 @@
             emergencyAlertPlaying = false;
         }
         
+        // Replit API URLs - try deployed first, then dev
+        const REPLIT_DEPLOYED = 'https://makkahclinic.replit.app';
+        const REPLIT_DEV = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev';
+        
         async function loadDashboardStats() {
             try {
-                // ✅ Try local API first (Replit), then fallback to Apps Script
+                // ✅ Try Replit API first (deployed, then dev), then fallback to Apps Script
                 let data;
                 try {
-                    const localRes = await fetch('/api/owner/stats');
+                    // Try deployed Replit first
+                    let localRes = await fetch(REPLIT_DEPLOYED + '/api/owner/stats').catch(() => null);
+                    if (!localRes || !localRes.ok) {
+                        // Fallback to dev Replit
+                        localRes = await fetch(REPLIT_DEV + '/api/owner/stats');
+                    }
                     const localData = await localRes.json();
                     if (localData.ok) {
                         data = { success: true, stats: localData };
-                        console.log('✅ Using local API stats:', localData);
+                        console.log('✅ Using Replit API stats:', localData);
                     }
                 } catch (localErr) {
-                    console.log('Local API not available, using Apps Script');
+                    console.log('Replit API not available, using Apps Script:', localErr.message);
                 }
                 
                 if (!data) {
