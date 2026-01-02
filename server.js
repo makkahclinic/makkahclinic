@@ -7,6 +7,7 @@ import admin from 'firebase-admin';
 import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow, getGoogleSheetsClient } from './sheets-service.js';
 
 const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
+const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
 
 // Initialize Firebase Admin SDK
 let firebaseAdmin = null;
@@ -1524,11 +1525,11 @@ app.get('/api/owner/stats', async (req, res) => {
     ).length;
     const totalComplaints = statuses.length;
     
-    // Get incidents stats from Master sheet
+    // Get incidents stats from SEPARATE Incidents file
     let incidentsOpen = 0, incidentsTotal = 0;
     try {
       const incidentsRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: MASTER_SPREADSHEET_ID,
+        spreadsheetId: INCIDENTS_SPREADSHEET_ID,
         range: 'Incidents_Log!O2:O1000' // Status column (O)
       });
       const incidentStatuses = (incidentsRes.data.values || []).flat();
