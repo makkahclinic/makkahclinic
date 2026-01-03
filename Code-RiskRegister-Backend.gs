@@ -86,9 +86,10 @@ function getOrCreateSheet(sheetName, headers) {
 }
 
 function getRisks() {
-  const headers = ['id', 'risk', 'category', 'owner', 'probability', 'impact', 'score', 'level', 
-                   'mitigation', 'status', 'sourceEvidence', 'reviewDate', 'negativeImpact', 'lastUpdated'];
-  const sheet = getOrCreateSheet(RISK_SHEET_NAME, headers);
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(RISK_SHEET_NAME);
+  if (!sheet) {
+    return { success: true, data: [] };
+  }
   
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) {
@@ -98,13 +99,22 @@ function getRisks() {
   const headerRow = data[0];
   const risks = [];
   
+  const headerMap = {
+    'ID': 'id', 'Risk': 'risk', 'Category': 'category', 'Owner': 'owner',
+    'Probability': 'probability', 'Impact': 'impact', 'Score': 'score', 'Level': 'level',
+    'Mitigation': 'mitigation', 'Status': 'status', 'SourceEvidence': 'sourceEvidence',
+    'ReviewDate': 'reviewDate', 'NegativeImpact': 'negativeImpact', 'LastUpdated': 'lastUpdated',
+    'UpdatedBy': 'updatedBy'
+  };
+  
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (!row[0]) continue;
     
     const risk = {};
     headerRow.forEach((header, idx) => {
-      risk[header] = row[idx];
+      const key = headerMap[header] || header.toLowerCase();
+      risk[key] = row[idx];
     });
     
     risk.comments = getComments(risk.id).data || [];
