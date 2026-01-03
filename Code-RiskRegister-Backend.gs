@@ -8,6 +8,7 @@ const SPREADSHEET_ID = '12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A';
 const RISK_SHEET_NAME = 'RiskRegister';
 const COMMENTS_SHEET_NAME = 'Comments';
 const DECISIONS_SHEET_NAME = 'Decisions';
+const RISK_LIBRARY_SHEET_NAME = 'RiskLibrary';
 
 function doGet(e) {
   return handleRequest(e);
@@ -55,6 +56,9 @@ function handleRequest(e) {
         break;
       case 'getDecisions':
         result = getDecisions(data.payload?.id || data.id);
+        break;
+      case 'getManagers':
+        result = getManagers();
         break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
@@ -393,6 +397,37 @@ function deleteDecisionsForRisk(riskId) {
       sheet.deleteRow(i + 1);
     }
   }
+}
+
+/**
+ * جلب قائمة المسؤولين/المدراء من ورقة RiskLibrary
+ * يقرأ العمود A (المالك/المسؤول) ويزيل التكرارات
+ */
+function getManagers() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(RISK_LIBRARY_SHEET_NAME);
+  
+  if (!sheet) {
+    return { success: true, data: [] };
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { success: true, data: [] };
+  }
+  
+  const managersSet = new Set();
+  
+  for (let i = 1; i < data.length; i++) {
+    const manager = data[i][0];
+    if (manager && manager.toString().trim()) {
+      managersSet.add(manager.toString().trim());
+    }
+  }
+  
+  const managers = Array.from(managersSet).sort();
+  
+  return { success: true, data: managers };
 }
 
 function testConnection() {

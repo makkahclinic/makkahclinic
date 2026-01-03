@@ -730,8 +730,11 @@
                         <div class="form-group comments-section" id="commentsSection" style="display: none;">
                             <label class="form-label"><i class="fas fa-comments"></i> سجل التعليقات</label>
                             <div id="commentsList" style="max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 8px;"></div>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" class="form-control" id="newComment" placeholder="أضف تعليقاً..." style="flex: 1;">
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <select class="form-control" id="commentAuthor" style="width: 160px;">
+                                    <option value="">من وضع التعليق...</option>
+                                </select>
+                                <input type="text" class="form-control" id="newComment" placeholder="أضف تعليقاً..." style="flex: 1; min-width: 200px;">
                                 <button type="button" class="btn btn-primary btn-sm" onclick="addComment()">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
@@ -917,6 +920,29 @@
                 .replaceAll("'", '&#039;');
         }
         
+        let managersLoaded = false;
+        
+        async function loadManagers() {
+            if (managersLoaded || !WEB_APP_URL) return;
+            try {
+                const res = await fetch(WEB_APP_URL + '?action=getManagers');
+                const data = await res.json();
+                if (data.success && data.data && data.data.length > 0) {
+                    const select = document.getElementById('commentAuthor');
+                    select.innerHTML = '<option value="">من وضع التعليق...</option>';
+                    data.data.forEach(name => {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        select.appendChild(opt);
+                    });
+                    managersLoaded = true;
+                }
+            } catch (e) {
+                console.log('Failed to load managers:', e);
+            }
+        }
+        
         async function init() {
             setupRatingButtons();
             
@@ -925,6 +951,7 @@
             } catch (e) { console.log('Loading master/library failed'); }
             
             await loadRisks();
+            await loadManagers();
         }
         
         function setupRatingButtons() {
@@ -1345,7 +1372,12 @@
             const risk = allRisks.find(r => r.id === currentEditingRiskId);
             if (!risk) return;
             
-            const author = document.getElementById('owner').value || 'مستخدم';
+            const authorSelect = document.getElementById('commentAuthor');
+            const author = authorSelect.value || 'مستخدم';
+            if (!author || author === '') {
+                showToast('الرجاء اختيار من وضع التعليق', 'error');
+                return;
+            }
             const comment = {
                 text: text,
                 author: author,
