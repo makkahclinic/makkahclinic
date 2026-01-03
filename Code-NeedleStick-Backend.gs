@@ -113,13 +113,32 @@ function doPost(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// ===== تحويل الأسماء للأسماء المعيارية =====
+const HEADER_ALIASES = {
+  'القسم/الوحدة': 'القسم / الوحدة',
+  'القسم': 'القسم / الوحدة',
+  'الطابع الزمني': 'تاريخ الحادث',
+  'Timestamp': 'تاريخ الحادث',
+  'تاريخ الحادث الوقت': 'تاريخ الحادث',
+  'هل كانت ملوثه؟': 'هل كانت ملوثة؟',
+  'تم غسل المنطقة؟': 'تم غسل المنطقة',
+  'تم الإبلاغ؟': 'تم الإبلاغ',
+  'تم التقييم الطبي؟': 'تم التقييم الطبي',
+  'تم البدء بالعلاج الوقائي؟': 'تم البدء بالعلاج الوقائي',
+  'ملاحظات إضافية': 'ملاحظات'
+};
+
+function normalizeHeader(header) {
+  return HEADER_ALIASES[header] || header;
+}
+
 // ===== جلب جميع البيانات =====
 function getAllData() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const sheet = ss.getSheetByName(SHEET_NAME);
   
   if (!sheet) {
-    return { status: 'error', message: 'Sheet not found' };
+    return { status: 'error', message: 'Sheet not found: ' + SHEET_NAME };
   }
   
   const data = sheet.getDataRange().getValues();
@@ -127,7 +146,7 @@ function getAllData() {
     return { status: 'success', rows: [] };
   }
   
-  const headers = data[0];
+  const headers = data[0].map(h => normalizeHeader(h.toString().trim()));
   const rows = [];
   
   for (let i = 1; i < data.length; i++) {
