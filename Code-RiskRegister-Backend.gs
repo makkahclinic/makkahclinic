@@ -1,0 +1,333 @@
+/**
+ * Risk Register Backend - Google Apps Script
+ * مجمع مكة الطبي بالزاهر
+ * نظام سجل المخاطر مع التعليقات والقرارات
+ */
+
+const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE'; // ضع معرف جدول البيانات هنا
+const RISK_SHEET_NAME = 'سجل_المخاطر';
+const COMMENTS_SHEET_NAME = 'التعليقات';
+const DECISIONS_SHEET_NAME = 'القرارات';
+
+function doGet(e) {
+  return handleRequest(e);
+}
+
+function doPost(e) {
+  return handleRequest(e);
+}
+
+function handleRequest(e) {
+  try {
+    let data;
+    if (e.postData) {
+      data = JSON.parse(e.postData.contents);
+    } else if (e.parameter && e.parameter.action) {
+      data = e.parameter;
+    } else {
+      data = { action: 'getRisks' };
+    }
+    
+    const action = data.action || 'getRisks';
+    let result;
+    
+    switch (action) {
+      case 'getRisks':
+        result = getRisks();
+        break;
+      case 'saveRisk':
+        result = saveRisk(data.payload || data);
+        break;
+      case 'updateRisk':
+        result = updateRisk(data.payload || data);
+        break;
+      case 'deleteRisk':
+        result = deleteRisk(data.payload?.id || data.id);
+        break;
+      case 'addComment':
+        result = addComment(data.payload);
+        break;
+      case 'addDecision':
+        result = addDecision(data.payload);
+        break;
+      case 'getComments':
+        result = getComments(data.payload?.id || data.id);
+        break;
+      case 'getDecisions':
+        result = getDecisions(data.payload?.id || data.id);
+        break;
+      default:
+        result = { success: false, error: 'Unknown action: ' + action };
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: error.message
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function getOrCreateSheet(sheetName, headers) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  
+  return sheet;
+}
+
+function getRisks() {
+  const headers = ['id', 'risk', 'category', 'owner', 'probability', 'impact', 'score', 'level', 
+                   'mitigation', 'status', 'sourceEvidence', 'reviewDate', 'negativeImpact', 'lastUpdated'];
+  const sheet = getOrCreateSheet(RISK_SHEET_NAME, headers);
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { success: true, data: [] };
+  }
+  
+  const headerRow = data[0];
+  const risks = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue;
+    
+    const risk = {};
+    headerRow.forEach((header, idx) => {
+      risk[header] = row[idx];
+    });
+    
+    risk.comments = getComments(risk.id).data || [];
+    risk.decisions = getDecisions(risk.id).data || [];
+    
+    risks.push(risk);
+  }
+  
+  return { success: true, data: risks };
+}
+
+function saveRisk(riskData) {
+  const headers = ['id', 'risk', 'category', 'owner', 'probability', 'impact', 'score', 'level', 
+                   'mitigation', 'status', 'sourceEvidence', 'reviewDate', 'negativeImpact', 'lastUpdated'];
+  const sheet = getOrCreateSheet(RISK_SHEET_NAME, headers);
+  
+  const id = riskData.id || 'R-' + new Date().getTime();
+  const now = new Date().toISOString();
+  
+  const row = [
+    id,
+    riskData.risk || '',
+    riskData.category || '',
+    riskData.owner || '',
+    riskData.probability || 3,
+    riskData.impact || 3,
+    riskData.score || 9,
+    riskData.level || 'متوسط',
+    riskData.mitigation || '',
+    riskData.status || 'مفتوح',
+    riskData.sourceEvidence || '',
+    riskData.reviewDate || '',
+    riskData.negativeImpact || '',
+    now
+  ];
+  
+  sheet.appendRow(row);
+  
+  return { success: true, id: id, message: 'تم حفظ الخطر بنجاح' };
+}
+
+function updateRisk(riskData) {
+  const sheet = getOrCreateSheet(RISK_SHEET_NAME, []);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  const idIndex = headers.indexOf('id');
+  if (idIndex === -1) {
+    return { success: false, error: 'لم يتم العثور على عمود المعرف' };
+  }
+  
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][idIndex] === riskData.id) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  if (rowIndex === -1) {
+    return saveRisk(riskData);
+  }
+  
+  const now = new Date().toISOString();
+  const updates = {
+    risk: riskData.risk,
+    category: riskData.category,
+    owner: riskData.owner,
+    probability: riskData.probability,
+    impact: riskData.impact,
+    score: riskData.score,
+    level: riskData.level,
+    mitigation: riskData.mitigation,
+    status: riskData.status,
+    sourceEvidence: riskData.sourceEvidence,
+    reviewDate: riskData.reviewDate,
+    negativeImpact: riskData.negativeImpact,
+    lastUpdated: now
+  };
+  
+  headers.forEach((header, colIndex) => {
+    if (updates.hasOwnProperty(header)) {
+      sheet.getRange(rowIndex, colIndex + 1).setValue(updates[header]);
+    }
+  });
+  
+  return { success: true, id: riskData.id, message: 'تم تحديث الخطر بنجاح' };
+}
+
+function deleteRisk(id) {
+  const sheet = getOrCreateSheet(RISK_SHEET_NAME, []);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idIndex = headers.indexOf('id');
+  
+  if (idIndex === -1) {
+    return { success: false, error: 'لم يتم العثور على عمود المعرف' };
+  }
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][idIndex] === id) {
+      sheet.deleteRow(i + 1);
+      deleteCommentsForRisk(id);
+      deleteDecisionsForRisk(id);
+      return { success: true, message: 'تم حذف الخطر بنجاح' };
+    }
+  }
+  
+  return { success: false, error: 'لم يتم العثور على الخطر' };
+}
+
+function addComment(payload) {
+  const headers = ['riskId', 'commentId', 'text', 'author', 'date'];
+  const sheet = getOrCreateSheet(COMMENTS_SHEET_NAME, headers);
+  
+  const commentId = 'C-' + new Date().getTime();
+  const comment = payload.comment;
+  
+  const row = [
+    payload.id,
+    commentId,
+    comment.text || '',
+    comment.author || 'مستخدم',
+    comment.date || new Date().toISOString()
+  ];
+  
+  sheet.appendRow(row);
+  
+  return { success: true, commentId: commentId, message: 'تم إضافة التعليق بنجاح' };
+}
+
+function getComments(riskId) {
+  const headers = ['riskId', 'commentId', 'text', 'author', 'date'];
+  const sheet = getOrCreateSheet(COMMENTS_SHEET_NAME, headers);
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { success: true, data: [] };
+  }
+  
+  const comments = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === riskId) {
+      comments.push({
+        id: data[i][1],
+        text: data[i][2],
+        author: data[i][3],
+        date: data[i][4]
+      });
+    }
+  }
+  
+  return { success: true, data: comments };
+}
+
+function deleteCommentsForRisk(riskId) {
+  const sheet = getOrCreateSheet(COMMENTS_SHEET_NAME, []);
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][0] === riskId) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
+function addDecision(payload) {
+  const headers = ['riskId', 'decisionId', 'text', 'type', 'author', 'date'];
+  const sheet = getOrCreateSheet(DECISIONS_SHEET_NAME, headers);
+  
+  const decisionId = 'D-' + new Date().getTime();
+  const decision = payload.decision;
+  
+  const row = [
+    payload.id,
+    decisionId,
+    decision.text || '',
+    decision.type || 'آخر',
+    decision.author || 'مستخدم',
+    decision.date || new Date().toISOString()
+  ];
+  
+  sheet.appendRow(row);
+  
+  return { success: true, decisionId: decisionId, message: 'تم إضافة القرار بنجاح' };
+}
+
+function getDecisions(riskId) {
+  const headers = ['riskId', 'decisionId', 'text', 'type', 'author', 'date'];
+  const sheet = getOrCreateSheet(DECISIONS_SHEET_NAME, headers);
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { success: true, data: [] };
+  }
+  
+  const decisions = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === riskId) {
+      decisions.push({
+        id: data[i][1],
+        text: data[i][2],
+        type: data[i][3],
+        author: data[i][4],
+        date: data[i][5]
+      });
+    }
+  }
+  
+  return { success: true, data: decisions };
+}
+
+function deleteDecisionsForRisk(riskId) {
+  const sheet = getOrCreateSheet(DECISIONS_SHEET_NAME, []);
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][0] === riskId) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
+function testConnection() {
+  return { success: true, message: 'الاتصال يعمل بنجاح', timestamp: new Date().toISOString() };
+}
