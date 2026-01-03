@@ -717,6 +717,11 @@ function getComplaints(params) {
     priority: c.Priority || 'medium',
     assignedTo: c.Assigned_To || '',
     daysOpen: c.Days_Open || 0,
+    // حقول الإغلاق
+    resolution: c.Resolution || '',
+    resolutionDate: formatDate(c.Resolution_Date),
+    closedBy: c.Closed_By || '',
+    responseSent: c.Response_Sent || 'no',
     // حقول التصعيد
     escalatedTo: c.Escalated_To || '',
     escalatedBy: c.Escalated_By || '',
