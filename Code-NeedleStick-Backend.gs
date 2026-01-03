@@ -32,7 +32,7 @@
  */
 
 // ===== الإعدادات =====
-const SHEET_ID = 'YOUR_SHEET_ID_HERE'; // ضع معرف الشيت هنا
+const SHEET_ID = '11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw';
 const SHEET_NAME = 'بلاغات الوخز';
 const FOLLOWUP_SHEET_NAME = 'سجل المتابعة';
 
