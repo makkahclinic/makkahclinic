@@ -194,11 +194,17 @@ function saveRisk(riskData) {
 }
 
 function updateRisk(riskData) {
-  const sheet = getOrCreateSheet(RISK_SHEET_NAME, []);
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(RISK_SHEET_NAME);
+  if (!sheet) {
+    return saveRisk(riskData);
+  }
+  
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   
-  const idIndex = headers.indexOf('id');
+  let idIndex = headers.indexOf('ID');
+  if (idIndex === -1) idIndex = headers.indexOf('id');
   if (idIndex === -1) {
     return { success: false, error: 'لم يتم العثور على عمود المعرف' };
   }
@@ -216,6 +222,13 @@ function updateRisk(riskData) {
   }
   
   const now = new Date().toISOString();
+  const headerMap = {
+    'ID': 'id', 'Risk': 'risk', 'Category': 'category', 'Owner': 'owner',
+    'Probability': 'probability', 'Impact': 'impact', 'Score': 'score', 'Level': 'level',
+    'Mitigation': 'mitigation', 'Status': 'status', 'SourceEvidence': 'sourceEvidence',
+    'ReviewDate': 'reviewDate', 'NegativeImpact': 'negativeImpact', 'LastUpdated': 'lastUpdated'
+  };
+  
   const updates = {
     risk: riskData.risk,
     category: riskData.category,
@@ -233,8 +246,9 @@ function updateRisk(riskData) {
   };
   
   headers.forEach((header, colIndex) => {
-    if (updates.hasOwnProperty(header)) {
-      sheet.getRange(rowIndex, colIndex + 1).setValue(updates[header]);
+    const key = headerMap[header] || header.toLowerCase();
+    if (updates.hasOwnProperty(key)) {
+      sheet.getRange(rowIndex, colIndex + 1).setValue(updates[key]);
     }
   });
   
@@ -242,11 +256,17 @@ function updateRisk(riskData) {
 }
 
 function deleteRisk(id) {
-  const sheet = getOrCreateSheet(RISK_SHEET_NAME, []);
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(RISK_SHEET_NAME);
+  if (!sheet) {
+    return { success: false, error: 'لم يتم العثور على الورقة' };
+  }
+  
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
-  const idIndex = headers.indexOf('id');
   
+  let idIndex = headers.indexOf('ID');
+  if (idIndex === -1) idIndex = headers.indexOf('id');
   if (idIndex === -1) {
     return { success: false, error: 'لم يتم العثور على عمود المعرف' };
   }
