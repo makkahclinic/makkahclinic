@@ -971,17 +971,20 @@
         async function loadRisks() {
             if (WEB_APP_URL) {
                 try {
-                    const res = await fetch(WEB_APP_URL + '?action=list');
+                    const res = await fetch(WEB_APP_URL + '?action=getRisks');
                     const data = await res.json();
                     
-                    if (data.ok) {
-                        allRisks = data.items || [];
+                    if (data.success) {
+                        allRisks = data.data || [];
                         useLocalStorage = false;
-                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> متصل');
+                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> متصل بـ Google Sheets');
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(allRisks));
+                    } else {
+                        console.log('API error:', data.error);
+                        loadFromLocalStorage();
                     }
                 } catch (err) {
-                    console.log('API unavailable, using localStorage');
+                    console.log('API unavailable, using localStorage:', err);
                     loadFromLocalStorage();
                 }
             } else {
@@ -1200,7 +1203,7 @@
                 
                 if (editId) payload.id = editId;
                 
-                const action = editId ? 'update' : 'add';
+                const action = editId ? 'updateRisk' : 'saveRisk';
                 
                 if (WEB_APP_URL) {
                     const res = await fetch(WEB_APP_URL, {
@@ -1210,9 +1213,9 @@
                     });
                     const data = await res.json();
                     
-                    if (!data.ok) throw new Error(data.error || 'Save failed');
+                    if (!data.success) throw new Error(data.error || 'Save failed');
                     
-                    setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
+                    setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ في Google Sheets ✓');
                     await loadRisks();
                 } else {
                     const existingRisk = editId ? allRisks.find(r => r.id === editId) : null;
@@ -1453,11 +1456,11 @@
                     const res = await fetch(WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'delete', payload: { id } })
+                        body: JSON.stringify({ action: 'deleteRisk', payload: { id } })
                     });
                     const data = await res.json();
-                    if (data.ok) {
-                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحذف ✓');
+                    if (data.success) {
+                        setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحذف من Google Sheets ✓');
                     } else {
                         setSaveBadge('warn', '<i class="fas fa-exclamation-triangle"></i> حذف محلي فقط');
                     }
