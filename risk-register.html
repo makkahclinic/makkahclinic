@@ -407,6 +407,44 @@
         .toast.error { background: var(--danger); color: #fff; }
         
         .risk-text { max-width: 180px; font-size: 0.8rem; }
+        
+        .comment-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 0.6rem 0.8rem;
+            margin-bottom: 0.5rem;
+            border-right: 3px solid var(--gold);
+        }
+        
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.3rem;
+        }
+        
+        .comment-author {
+            font-weight: 700;
+            color: var(--gold);
+            font-size: 0.8rem;
+        }
+        
+        .comment-date {
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+        
+        .comment-text {
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        
+        .no-comments {
+            text-align: center;
+            padding: 1rem;
+            opacity: 0.5;
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -502,12 +540,12 @@
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label">المالك/المسؤول</label>
+                            <label class="form-label">مُقدّم الطلب</label>
                             <select class="form-control" id="owner">
-                                <option value="">اختر المسؤول...</option>
+                                <option value="">اختر مُقدّم الطلب...</option>
                                 <option value="د.خالد الخطاب">د.خالد الخطاب</option>
                                 <option value="صابر عبده">صابر عبده</option>
-                                <option value="بلال نذر">بلال نذر</option>
+                                <option value="بلال نتو">بلال نتو</option>
                                 <option value="عدنان الرفاعي">عدنان الرفاعي</option>
                                 <option value="هيثم">هيثم</option>
                                 <option value="منسق سلامة المرضى">منسق سلامة المرضى</option>
@@ -560,8 +598,13 @@
                         </div>
                         
                         <div class="form-group" style="margin-top: 1rem;">
-                            <label class="form-label">إجراءات التخفيف</label>
-                            <textarea class="form-control" id="mitigation" placeholder="الإجراءات المقترحة..."></textarea>
+                            <label class="form-label">شرح الأثر السلبي</label>
+                            <textarea class="form-control" id="negativeImpact" rows="2" placeholder="وصف الأثر السلبي المحتمل للخطر..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">خطط المعالجة الأولية</label>
+                            <textarea class="form-control" id="mitigation" placeholder="الخطط المقترحة للمعالجة..."></textarea>
                         </div>
                         
                         <div class="form-group">
@@ -576,6 +619,17 @@
                         <div class="form-group">
                             <label class="form-label">تاريخ المراجعة</label>
                             <input type="date" class="form-control" id="reviewDate">
+                        </div>
+                        
+                        <div class="form-group comments-section" id="commentsSection" style="display: none;">
+                            <label class="form-label"><i class="fas fa-comments"></i> سجل التعليقات</label>
+                            <div id="commentsList" style="max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 8px;"></div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" class="form-control" id="newComment" placeholder="أضف تعليقاً..." style="flex: 1;">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="addComment()">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
                         </div>
                         
                         <div style="display: flex; gap: 0.5rem; margin-top: 1.25rem;">
@@ -1009,6 +1063,7 @@
                     owner: document.getElementById('owner').value,
                     probability: probability,
                     impact: impact,
+                    negativeImpact: document.getElementById('negativeImpact').value,
                     mitigation: document.getElementById('mitigation').value,
                     status: document.getElementById('status').value,
                     reviewDate: document.getElementById('reviewDate').value,
@@ -1033,12 +1088,14 @@
                     setSaveBadge('ok', '<i class="fas fa-cloud-check"></i> تم الحفظ ✓');
                     await loadRisks();
                 } else {
+                    const existingRisk = editId ? allRisks.find(r => r.id === editId) : null;
                     const localData = {
                         ...payload,
                         id: editId || 'R-' + Date.now(),
                         score: score,
                         level: getLevel(score),
-                        lastUpdated: new Date().toISOString()
+                        lastUpdated: new Date().toISOString(),
+                        comments: existingRisk?.comments || []
                     };
                     
                     if (editId) {
@@ -1094,6 +1151,7 @@
             
             document.getElementById('category').value = risk.category || '';
             document.getElementById('owner').value = risk.owner || '';
+            document.getElementById('negativeImpact').value = risk.negativeImpact || '';
             document.getElementById('mitigation').value = risk.mitigation || '';
             document.getElementById('status').value = risk.status || 'مفتوح';
             document.getElementById('reviewDate').value = risk.reviewDate || '';
@@ -1111,11 +1169,76 @@
             
             updateScore();
             
+            currentEditingRiskId = id;
+            renderComments(risk.comments || []);
+            document.getElementById('commentsSection').style.display = 'block';
+            
             document.getElementById('formTitle').textContent = 'تعديل الخطر';
             document.getElementById('submitText').textContent = 'تحديث';
             document.getElementById('cancelBtn').style.display = 'block';
             
             document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        let currentEditingRiskId = null;
+        
+        function renderComments(comments) {
+            const container = document.getElementById('commentsList');
+            if (!comments || comments.length === 0) {
+                container.innerHTML = '<div class="no-comments">لا توجد تعليقات بعد</div>';
+                return;
+            }
+            
+            const sorted = [...comments].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            container.innerHTML = sorted.map(c => {
+                const date = new Date(c.date);
+                const dateStr = date.toLocaleDateString('ar-SA') + ' ' + date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+                return '<div class="comment-item">' +
+                    '<div class="comment-header">' +
+                        '<span class="comment-author"><i class="fas fa-user"></i> ' + (c.author || 'مجهول') + '</span>' +
+                        '<span class="comment-date">' + dateStr + '</span>' +
+                    '</div>' +
+                    '<div class="comment-text">' + c.text + '</div>' +
+                '</div>';
+            }).join('');
+        }
+        
+        async function addComment() {
+            const input = document.getElementById('newComment');
+            const text = input.value.trim();
+            if (!text || !currentEditingRiskId) return;
+            
+            const risk = allRisks.find(r => r.id === currentEditingRiskId);
+            if (!risk) return;
+            
+            const author = document.getElementById('owner').value || 'مستخدم';
+            const comment = {
+                text: text,
+                author: author,
+                date: new Date().toISOString()
+            };
+            
+            if (!risk.comments) risk.comments = [];
+            risk.comments.push(comment);
+            
+            saveToLocalStorage();
+            renderComments(risk.comments);
+            input.value = '';
+            
+            if (WEB_APP_URL) {
+                try {
+                    await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'addComment', payload: { id: currentEditingRiskId, comment } })
+                    });
+                } catch (err) {
+                    console.log('Comment saved locally');
+                }
+            }
+            
+            showToast('تم إضافة التعليق', 'success');
         }
         
         async function deleteRisk(id) {
@@ -1159,8 +1282,11 @@
             document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
             document.getElementById('submitText').textContent = 'حفظ';
             document.getElementById('cancelBtn').style.display = 'none';
+            document.getElementById('commentsSection').style.display = 'none';
+            document.getElementById('commentsList').innerHTML = '';
+            document.getElementById('negativeImpact').value = '';
+            currentEditingRiskId = null;
             
-            // إذا تحول riskDesc إلى textarea، أرجعه select
             const riskEl = document.getElementById('riskDesc');
             if (riskEl && riskEl.tagName === 'TEXTAREA') {
                 const sel = document.createElement('select');
@@ -1191,10 +1317,10 @@
             }
             
             let csv = '\uFEFF';
-            csv += 'الخطر,التصنيف,المسؤول,المصدر,الاحتمالية,الأثر,الدرجة,المستوى,الحالة,إجراءات التخفيف\n';
+            csv += 'الخطر,التصنيف,مُقدّم الطلب,المصدر,الاحتمالية,الأثر,الدرجة,المستوى,الحالة,شرح الأثر السلبي,خطط المعالجة الأولية\n';
             
             allRisks.forEach(r => {
-                csv += `"${r.risk || ''}","${r.category || ''}","${r.owner || ''}","${r.sourceEvidence || ''}",${r.probability || ''},${r.impact || ''},${r.score || ''},"${r.level || ''}","${r.status || ''}","${r.mitigation || ''}"\n`;
+                csv += '"' + (r.risk || '') + '","' + (r.category || '') + '","' + (r.owner || '') + '","' + (r.sourceEvidence || '') + '",' + (r.probability || '') + ',' + (r.impact || '') + ',' + (r.score || '') + ',"' + (r.level || '') + '","' + (r.status || '') + '","' + (r.negativeImpact || '') + '","' + (r.mitigation || '') + '"\n';
             });
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
