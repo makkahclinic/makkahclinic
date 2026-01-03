@@ -5,9 +5,9 @@
  */
 
 const SPREADSHEET_ID = '12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A';
-const RISK_SHEET_NAME = 'سجل_المخاطر';
-const COMMENTS_SHEET_NAME = 'التعليقات';
-const DECISIONS_SHEET_NAME = 'القرارات';
+const RISK_SHEET_NAME = 'RiskRegister';
+const COMMENTS_SHEET_NAME = 'Comments';
+const DECISIONS_SHEET_NAME = 'Decisions';
 
 function doGet(e) {
   return handleRequest(e);
