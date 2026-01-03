@@ -1831,23 +1831,77 @@
                     سجل المتابعة
                 </div>
                 <div class="followup-timeline">
-                    <div class="timeline-item completed">
-                        <div class="timeline-date">اليوم 0</div>
-                        <div class="timeline-title">الإبلاغ عن الحادث</div>
-                        <div class="timeline-desc">تم تسجيل البلاغ وبدء الإجراءات</div>
-                    </div>
-                    <div class="timeline-item pending">
-                        <div class="timeline-date">اليوم 3</div>
-                        <div class="timeline-title">المتابعة الأولى</div>
-                        <div class="timeline-desc">تقييم الأعراض الجانبية والالتزام</div>
-                    </div>
-                    <div class="timeline-item pending">
-                        <div class="timeline-date">الأسبوع 4-6</div>
-                        <div class="timeline-title">الفحوصات المؤقتة</div>
-                        <div class="timeline-desc">HIV RNA + HCV RNA</div>
-                    </div>
+                    ${renderFollowupTimeline(row)}
                 </div>
             `;
+            
+            function renderFollowupTimeline(caseRow) {
+                let timeline = '';
+                
+                // إضافة حدث التسجيل الأولي
+                const incidentDate = caseRow['تاريخ الحادث'] || caseRow['الطابع الزمني'] || '';
+                timeline += \`
+                    <div class="timeline-item completed">
+                        <div class="timeline-date">\${formatDate(incidentDate)}</div>
+                        <div class="timeline-title">تسجيل الحادث</div>
+                        <div class="timeline-desc">تم الإبلاغ عن الحادث وبدء الإجراءات</div>
+                    </div>
+                \`;
+                
+                // جلب سجل المتابعة المحفوظ
+                let followupHistory = [];
+                try {
+                    const historyStr = caseRow['سجل المتابعة'];
+                    if (historyStr) followupHistory = JSON.parse(historyStr);
+                } catch(e) {}
+                
+                const followupTypes = {
+                    'day3': 'متابعة اليوم 3 - الأعراض الجانبية',
+                    'week2': 'متابعة الأسبوع 2 - الالتزام',
+                    'week4': 'فحوصات الأسبوع 4-6',
+                    'week12': 'فحص HIV النهائي (الأسبوع 12)',
+                    'month6': 'فحص HCV النهائي (الشهر 6)'
+                };
+                
+                const testResults = {
+                    'negative': 'سلبي ✓',
+                    'positive': 'إيجابي ⚠',
+                    'pending': 'قيد الانتظار'
+                };
+                
+                if (followupHistory.length > 0) {
+                    followupHistory.forEach(f => {
+                        const resultText = f.result ? testResults[f.result] || f.result : '';
+                        timeline += \`
+                            <div class="timeline-item completed" style="border-right-color: var(--emerald);">
+                                <div class="timeline-date">\${formatDate(f.date)}</div>
+                                <div class="timeline-title">\${followupTypes[f.type] || f.type}</div>
+                                <div class="timeline-desc">
+                                    \${resultText ? 'النتيجة: ' + resultText + '<br>' : ''}
+                                    \${f.adherence ? 'الالتزام: ' + f.adherence + '<br>' : ''}
+                                    \${f.notes || ''}
+                                </div>
+                            </div>
+                        \`;
+                    });
+                } else {
+                    // عرض الجدول الزمني المتوقع
+                    timeline += \`
+                        <div class="timeline-item pending">
+                            <div class="timeline-date">اليوم 3</div>
+                            <div class="timeline-title">المتابعة الأولى</div>
+                            <div class="timeline-desc">تقييم الأعراض الجانبية والالتزام</div>
+                        </div>
+                        <div class="timeline-item pending">
+                            <div class="timeline-date">الأسبوع 4-6</div>
+                            <div class="timeline-title">الفحوصات المؤقتة</div>
+                            <div class="timeline-desc">HIV RNA + HCV RNA</div>
+                        </div>
+                    \`;
+                }
+                
+                return timeline;
+            }
             
             document.getElementById('caseModalBody').innerHTML = html;
             document.getElementById('caseModal').classList.add('active');
@@ -1876,8 +1930,47 @@
                 alert('يرجى كتابة الملاحظة');
                 return;
             }
-            alert('تم حفظ الملاحظة بنجاح');
-            closeModal('noteModal');
+            
+            if (!currentCaseId) {
+                alert('خطأ: لم يتم تحديد الحالة');
+                return;
+            }
+            
+            const row = allData.find(r => r._id === currentCaseId);
+            if (!row) {
+                alert('خطأ: الحالة غير موجودة');
+                return;
+            }
+            
+            const params = new URLSearchParams({
+                action: 'addNote',
+                caseId: row._rowNum,
+                noteType: type,
+                noteText: text
+            });
+            
+            const btn = document.querySelector('#noteModal .btn-gold');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            btn.disabled = true;
+            
+            fetch(WEB_APP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString(),
+                mode: 'no-cors'
+            })
+            .then(() => {
+                alert('تم حفظ الملاحظة بنجاح');
+                closeModal('noteModal');
+            })
+            .catch(err => {
+                alert('حدث خطأ: ' + err.message);
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
         }
         
         function saveFollowup() {
@@ -1886,8 +1979,65 @@
             const adherence = document.getElementById('adherence').value;
             const notes = document.getElementById('followupNotes').value;
             
-            alert('تم تسجيل المتابعة بنجاح');
-            closeModal('followupModal');
+            if (!currentCaseId) {
+                alert('خطأ: لم يتم تحديد الحالة');
+                return;
+            }
+            
+            const row = allData.find(r => r._id === currentCaseId);
+            if (!row) {
+                alert('خطأ: الحالة غير موجودة');
+                return;
+            }
+            
+            const params = new URLSearchParams({
+                action: 'addFollowup',
+                caseId: row._rowNum,
+                followupType: type,
+                testResult: result,
+                adherence: adherence,
+                notes: notes
+            });
+            
+            const btn = document.querySelector('#followupModal .btn-emerald');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            btn.disabled = true;
+            
+            fetch(WEB_APP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString(),
+                mode: 'no-cors'
+            })
+            .then(() => {
+                const followupLog = row['سجل المتابعة'] ? JSON.parse(row['سجل المتابعة']) : [];
+                followupLog.push({
+                    date: new Date().toISOString(),
+                    type: type,
+                    result: result,
+                    adherence: adherence,
+                    notes: notes
+                });
+                row['سجل المتابعة'] = JSON.stringify(followupLog);
+                row['تاريخ آخر متابعة'] = new Date().toISOString();
+                if (type === 'month6' && result === 'negative') {
+                    row['حالة المتابعة'] = 'completed';
+                } else {
+                    row['حالة المتابعة'] = 'active';
+                }
+                
+                alert('تم تسجيل المتابعة بنجاح');
+                closeModal('followupModal');
+                refreshData();
+            })
+            .catch(err => {
+                alert('حدث خطأ: ' + err.message);
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
         }
         
         function refreshData() {
