@@ -86,14 +86,51 @@ function getOrCreateSheet(sheetName, headers) {
 }
 
 function getRisks() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(RISK_SHEET_NAME);
-  if (!sheet) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const riskSheet = ss.getSheetByName(RISK_SHEET_NAME);
+  if (!riskSheet) {
     return { success: true, data: [] };
   }
   
-  const data = sheet.getDataRange().getValues();
+  const data = riskSheet.getDataRange().getValues();
   if (data.length <= 1) {
     return { success: true, data: [] };
+  }
+  
+  const commentsMap = {};
+  const decisionsMap = {};
+  
+  const commentsSheet = ss.getSheetByName(COMMENTS_SHEET_NAME);
+  if (commentsSheet && commentsSheet.getLastRow() > 1) {
+    const commentsData = commentsSheet.getDataRange().getValues();
+    for (let i = 1; i < commentsData.length; i++) {
+      const riskId = commentsData[i][0];
+      if (!riskId) continue;
+      if (!commentsMap[riskId]) commentsMap[riskId] = [];
+      commentsMap[riskId].push({
+        id: commentsData[i][1],
+        text: commentsData[i][2],
+        author: commentsData[i][3],
+        date: commentsData[i][4]
+      });
+    }
+  }
+  
+  const decisionsSheet = ss.getSheetByName(DECISIONS_SHEET_NAME);
+  if (decisionsSheet && decisionsSheet.getLastRow() > 1) {
+    const decisionsData = decisionsSheet.getDataRange().getValues();
+    for (let i = 1; i < decisionsData.length; i++) {
+      const riskId = decisionsData[i][0];
+      if (!riskId) continue;
+      if (!decisionsMap[riskId]) decisionsMap[riskId] = [];
+      decisionsMap[riskId].push({
+        id: decisionsData[i][1],
+        text: decisionsData[i][2],
+        type: decisionsData[i][3],
+        author: decisionsData[i][4],
+        date: decisionsData[i][5]
+      });
+    }
   }
   
   const headerRow = data[0];
@@ -117,8 +154,8 @@ function getRisks() {
       risk[key] = row[idx];
     });
     
-    risk.comments = getComments(risk.id).data || [];
-    risk.decisions = getDecisions(risk.id).data || [];
+    risk.comments = commentsMap[risk.id] || [];
+    risk.decisions = decisionsMap[risk.id] || [];
     
     risks.push(risk);
   }
