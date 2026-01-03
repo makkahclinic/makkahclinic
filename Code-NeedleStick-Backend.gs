@@ -38,8 +38,13 @@ const FOLLOWUP_SHEET_NAME = 'سجل المتابعة';
 
 // ===== المعالج الرئيسي =====
 function doGet(e) {
-  const action = e.parameter.action || 'data';
+  let action = e.parameter.action || 'data';
   const callback = e.parameter.callback;
+  
+  // التحقق إذا كان هذا بلاغ جديد (من صفحة البلاغات)
+  if (e.parameter.exposureType || e.parameter.date || e.parameter.department) {
+    action = 'report';
+  }
   
   let result;
   
@@ -56,6 +61,9 @@ function doGet(e) {
         break;
       case 'stats':
         result = getStatistics();
+        break;
+      case 'report':
+        result = submitReport(e.parameter);
         break;
       default:
         result = { status: 'error', message: 'Unknown action' };
@@ -318,21 +326,53 @@ function getStatistics() {
   return { status: 'success', stats: stats };
 }
 
+// ===== تحويل أسماء الحقول من النموذج إلى الشيت =====
+const FORM_TO_SHEET = {
+  'date': 'تاريخ الحادث',
+  'time': 'وقت الحادث',
+  'department': 'القسم / الوحدة',
+  'position': 'المهنة',
+  'exposure_type': 'نوع التعرض',
+  'exposureType': 'نوع التعرض',
+  'instrument': 'الأداة المستخدمة',
+  'wound_depth': 'عمق الجرح',
+  'injury_site': 'موقع الإصابة',
+  'fluid_type': 'نوع السائل',
+  'contact_area': 'منطقة التلامس',
+  'experience_years': 'سنوات الخبرة',
+  'hbv_vaccination': 'حالة تطعيم HBV',
+  'contaminated': 'هل كانت ملوثة؟',
+  'washed': 'تم غسل المنطقة',
+  'reported': 'تم الإبلاغ',
+  'medical_eval': 'تم التقييم الطبي',
+  'pep': 'تم البدء بالعلاج الوقائي',
+  'notes': 'ملاحظات',
+  'fullname': 'الاسم'
+};
+
 // ===== تسجيل بلاغ جديد =====
 function submitReport(params) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const sheet = ss.getSheetByName(SHEET_NAME);
   
+  // تحويل أسماء الحقول
+  const convertedParams = {};
+  for (const key in params) {
+    const sheetKey = FORM_TO_SHEET[key] || key;
+    convertedParams[sheetKey] = params[key];
+  }
+  
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const newRow = [];
   
   for (let i = 0; i < headers.length; i++) {
-    const header = headers[i];
-    newRow.push(params[header] || '');
+    const header = headers[i].toString().trim();
+    const normalizedHeader = normalizeHeader(header);
+    newRow.push(convertedParams[normalizedHeader] || convertedParams[header] || '');
   }
   
   // إضافة حالة المتابعة الافتراضية
-  const statusCol = headers.indexOf('حالة المتابعة');
+  const statusCol = headers.findIndex(h => normalizeHeader(h.toString().trim()) === 'حالة المتابعة');
   if (statusCol >= 0 && !newRow[statusCol]) {
     newRow[statusCol] = 'pending';
   }
@@ -340,9 +380,9 @@ function submitReport(params) {
   sheet.appendRow(newRow);
   
   // حساب توصيات PEP وإرسال تنبيه إذا لزم
-  const contaminated = params['هل كانت ملوثة؟'] || '';
+  const contaminated = convertedParams['هل كانت ملوثة؟'] || params['contaminated'] || '';
   if (contaminated === 'نعم') {
-    sendHighRiskAlert(params);
+    sendHighRiskAlert(convertedParams);
   }
   
   return { 
