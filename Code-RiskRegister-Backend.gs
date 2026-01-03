@@ -4,7 +4,7 @@
  * نظام سجل المخاطر مع التعليقات والقرارات
  */
 
-const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE'; // ضع معرف جدول البيانات هنا
+const SPREADSHEET_ID = '12rii0-wE4jXD2NHS6n_6vutMiPOkTkv-A8WrCqlPo6A';
 const RISK_SHEET_NAME = 'سجل_المخاطر';
 const COMMENTS_SHEET_NAME = 'التعليقات';
 const DECISIONS_SHEET_NAME = 'القرارات';
