@@ -481,6 +481,69 @@
             opacity: 0.8;
             color: #fff;
         }
+        
+        .decision-input-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .decision-item {
+            background: rgba(245,158,11,0.1);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.6rem;
+            border-right: 4px solid var(--warning);
+            position: relative;
+        }
+        
+        .decision-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.4rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .decision-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+        
+        .decision-type.إداري { background: rgba(59,130,246,0.3); color: #93c5fd; }
+        .decision-type.إجرائي { background: rgba(16,185,129,0.3); color: #86efac; }
+        .decision-type.تصحيحي { background: rgba(239,68,68,0.3); color: #fca5a5; }
+        .decision-type.وقائي { background: rgba(168,85,247,0.3); color: #d8b4fe; }
+        .decision-type.تدريبي { background: rgba(245,158,11,0.3); color: #fcd34d; }
+        .decision-type.مالي { background: rgba(201,169,98,0.3); color: var(--gold); }
+        .decision-type.فني { background: rgba(99,102,241,0.3); color: #a5b4fc; }
+        .decision-type.آخر { background: rgba(156,163,175,0.3); color: #d1d5db; }
+        
+        .decision-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+        
+        .decision-text {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #fff;
+        }
+        
+        .no-decisions {
+            text-align: center;
+            padding: 1.5rem;
+            opacity: 0.5;
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -671,6 +734,27 @@
                                 <input type="text" class="form-control" id="newComment" placeholder="أضف تعليقاً..." style="flex: 1;">
                                 <button type="button" class="btn btn-primary btn-sm" onclick="addComment()">
                                     <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group decisions-section" id="decisionsSection" style="display: none;">
+                            <label class="form-label"><i class="fas fa-gavel"></i> القرارات المنبثقة</label>
+                            <div id="decisionsList" style="max-height: 250px; overflow-y: auto; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 8px;"></div>
+                            <div class="decision-input-group">
+                                <select class="form-control" id="decisionType" style="width: 140px;">
+                                    <option value="إداري">إداري</option>
+                                    <option value="إجرائي">إجرائي</option>
+                                    <option value="تصحيحي">تصحيحي</option>
+                                    <option value="وقائي">وقائي</option>
+                                    <option value="تدريبي">تدريبي</option>
+                                    <option value="مالي">مالي</option>
+                                    <option value="فني">فني</option>
+                                    <option value="آخر">آخر</option>
+                                </select>
+                                <input type="text" class="form-control" id="newDecision" placeholder="نص القرار..." style="flex: 1;">
+                                <button type="button" class="btn btn-warning btn-sm" onclick="addDecision()">
+                                    <i class="fas fa-plus"></i> إضافة
                                 </button>
                             </div>
                         </div>
@@ -1138,7 +1222,8 @@
                         score: score,
                         level: getLevel(score),
                         lastUpdated: new Date().toISOString(),
-                        comments: existingRisk?.comments || []
+                        comments: existingRisk?.comments || [],
+                        decisions: existingRisk?.decisions || []
                     };
                     
                     if (editId) {
@@ -1214,7 +1299,9 @@
             
             currentEditingRiskId = id;
             renderComments(risk.comments || []);
+            renderDecisions(risk.decisions || []);
             document.getElementById('commentsSection').style.display = 'block';
+            document.getElementById('decisionsSection').style.display = 'block';
             
             document.getElementById('formTitle').textContent = 'تعديل الخطر';
             document.getElementById('submitText').textContent = 'تحديث';
@@ -1284,6 +1371,75 @@
             showToast('تم إضافة التعليق', 'success');
         }
         
+        function renderDecisions(decisions) {
+            const container = document.getElementById('decisionsList');
+            if (!decisions || decisions.length === 0) {
+                container.innerHTML = '<div class="no-decisions"><i class="fas fa-gavel"></i><br>لا توجد قرارات مسجلة</div>';
+                return;
+            }
+            
+            const sorted = [...decisions].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            container.innerHTML = sorted.map(d => {
+                const date = new Date(d.date);
+                const dateStr = date.toLocaleDateString('ar-SA') + ' ' + date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+                return '<div class="decision-item">' +
+                    '<div class="decision-header">' +
+                        '<span class="decision-type ' + d.type + '"><i class="fas fa-tag"></i> ' + d.type + '</span>' +
+                        '<div class="decision-meta">' +
+                            '<span><i class="fas fa-user"></i> ' + (d.author || 'مجهول') + '</span>' +
+                            '<span><i class="fas fa-clock"></i> ' + dateStr + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="decision-text">' + d.text + '</div>' +
+                '</div>';
+            }).join('');
+        }
+        
+        async function addDecision() {
+            const typeSelect = document.getElementById('decisionType');
+            const textInput = document.getElementById('newDecision');
+            const text = textInput.value.trim();
+            const type = typeSelect.value;
+            
+            if (!text || !currentEditingRiskId) {
+                showToast('الرجاء كتابة نص القرار', 'error');
+                return;
+            }
+            
+            const risk = allRisks.find(r => r.id === currentEditingRiskId);
+            if (!risk) return;
+            
+            const author = document.getElementById('owner').value || 'مستخدم';
+            const decision = {
+                text: text,
+                type: type,
+                author: author,
+                date: new Date().toISOString()
+            };
+            
+            if (!risk.decisions) risk.decisions = [];
+            risk.decisions.push(decision);
+            
+            saveToLocalStorage();
+            renderDecisions(risk.decisions);
+            textInput.value = '';
+            
+            if (WEB_APP_URL) {
+                try {
+                    await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'addDecision', payload: { id: currentEditingRiskId, decision } })
+                    });
+                } catch (err) {
+                    console.log('Decision saved locally');
+                }
+            }
+            
+            showToast('تم إضافة القرار بنجاح', 'success');
+        }
+        
         async function deleteRisk(id) {
             if (!confirm('هل أنت متأكد من حذف هذا الخطر؟')) return;
             
@@ -1327,7 +1483,10 @@
             document.getElementById('cancelBtn').style.display = 'none';
             document.getElementById('commentsSection').style.display = 'none';
             document.getElementById('commentsList').innerHTML = '';
+            document.getElementById('decisionsSection').style.display = 'none';
+            document.getElementById('decisionsList').innerHTML = '';
             document.getElementById('negativeImpact').value = '';
+            document.getElementById('newDecision').value = '';
             currentEditingRiskId = null;
             
             const riskEl = document.getElementById('riskDesc');
