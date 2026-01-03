@@ -33,7 +33,7 @@
 
 // ===== الإعدادات =====
 const SHEET_ID = '11ASpiUe6GTW4siaoPGnjqG3xKMeUdCmxPsTSbPTu9xw';
-const SHEET_NAME = 'بلاغات الوخز';
+const SHEET_NAME = 'NEEDEL';
 const FOLLOWUP_SHEET_NAME = 'سجل المتابعة';
 
 // ===== المعالج الرئيسي =====
