@@ -173,20 +173,35 @@ function getRisks() {
   return { success: true, data: risks };
 }
 
+function ensureColumnsExist(sheet, requiredHeaders) {
+  const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const missingHeaders = requiredHeaders.filter(h => !existingHeaders.includes(h));
+  
+  if (missingHeaders.length > 0) {
+    const lastCol = sheet.getLastColumn();
+    missingHeaders.forEach((header, idx) => {
+      sheet.getRange(1, lastCol + idx + 1).setValue(header).setFontWeight('bold');
+    });
+  }
+  
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+}
+
 function saveRisk(riskData) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(RISK_SHEET_NAME);
   
+  const requiredHeaders = ['ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level', 
+                   'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'LastUpdated', 'UpdatedBy'];
+  
   if (!sheet) {
-    const headers = ['ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level', 
-                     'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'LastUpdated', 'UpdatedBy'];
     sheet = ss.insertSheet(RISK_SHEET_NAME);
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
   
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = ensureColumnsExist(sheet, requiredHeaders);
   const id = riskData.id || 'R-' + new Date().getTime();
   const now = new Date().toISOString();
   
@@ -226,8 +241,11 @@ function updateRisk(riskData) {
     return saveRisk(riskData);
   }
   
+  const requiredHeaders = ['ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level', 
+                   'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'LastUpdated', 'UpdatedBy'];
+  const headers = ensureColumnsExist(sheet, requiredHeaders);
+  
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
   
   let idIndex = headers.indexOf('ID');
   if (idIndex === -1) idIndex = headers.indexOf('id');
