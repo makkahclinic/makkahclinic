@@ -8,7 +8,7 @@ const ai = new GoogleGenAI({
   },
 });
 
-const MEDICAL_AUDIT_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
+const SINGLE_CASE_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
 
 مهمتك: تحليل الملفات الطبية المرفقة (وصفات، تحاليل، أشعة، تقارير) وتقييم مدى التزام الطبيب بالبروتوكولات الطبية المعتمدة.
 
@@ -41,31 +41,81 @@ const MEDICAL_AUDIT_PROMPT = `أنت خبير طبي متخصص في مراجع�
 أعط التقرير بتنسيق HTML جميل مع ألوان وأيقونات واضحة.
 استخدم اللون الأخضر للصحيح، الأحمر للخطأ، الأصفر للتحذيرات.`;
 
+const MULTI_CASE_PROMPT = `أنت خبير تأمين طبي متخصص في مراجعة الحالات الطبية وتقييمها من منظور التأمين.
+
+مهمتك: تحليل جدول الحالات الطبية المرفق وتقييم كل حالة من حيث:
+- مطابقة الإجراءات للبروتوكولات الطبية
+- صحة الترميز (ICD codes)
+- توثيق الأدوية والإجراءات
+- احتمالية قبول أو رفض المطالبة
+
+**المطلوب إخراجه:**
+جدول HTML يحتوي على كل الحالات مع الأعمدة التالية:
+1. رقم الحالة/المريض
+2. التشخيص
+3. الإجراءات/الأدوية
+4. الترميز
+5. **الحالة** (مع لون):
+   - 🟢 **مقبول** (أخضر) - الحالة موثقة بشكل صحيح وقابلة للقبول
+   - 🔴 **مرفوض** (أحمر) - الحالة بها مشاكل جوهرية تؤدي للرفض
+   - 🟡 **يحتاج تصحيح** (أصفر) - الحالة قابلة للقبول بعد التصحيح
+6. **الملاحظات** - شرح موجز للمشكلة
+7. **التصحيح المطلوب** (إذا كانت صفراء) - ماذا يجب عمله بالضبط
+
+**قواعد التقييم:**
+- 🟢 مقبول: توثيق كامل، ترميز صحيح، إجراءات مطابقة للتشخيص
+- 🔴 مرفوض: ترميز خاطئ، إجراءات غير مبررة، توثيق ناقص بشكل جوهري
+- 🟡 يحتاج تصحيح: مشاكل بسيطة قابلة للإصلاح (ترميز يحتاج تحديث، توثيق ناقص)
+
+**التنسيق:**
+- استخدم جدول HTML بتنسيق جميل
+- لون خلفية الصف حسب الحالة: #dcfce7 (أخضر)، #fee2e2 (أحمر)، #fef9c3 (أصفر)
+- في النهاية أضف ملخص: عدد المقبول/المرفوض/يحتاج تصحيح
+
+**بيانات الحالات:**
+`;
+
 export async function analyzeMedicalCase(files, lang = 'ar') {
   try {
-    const contents = [];
+    const imageFiles = files.filter(f => !f.isExcel);
+    const excelFiles = files.filter(f => f.isExcel);
     
-    contents.push({
-      role: 'user',
-      parts: [
-        { text: lang === 'ar' ? MEDICAL_AUDIT_PROMPT : MEDICAL_AUDIT_PROMPT.replace(/[\u0600-\u06FF]/g, '') }
-      ]
-    });
-
-    const imageParts = files.map(file => {
-      const base64Data = file.data.replace(/^data:[^;]+;base64,/, '');
-      return {
-        inlineData: {
-          mimeType: file.mimeType || 'image/jpeg',
-          data: base64Data
-        }
-      };
-    });
-
-    if (imageParts.length > 0) {
-      contents[0].parts.push(...imageParts);
-      contents[0].parts.push({ text: '\n\nقم بتحليل الملفات الطبية أعلاه وأعط تقريراً شاملاً بتنسيق HTML.' });
+    const isMultiCase = excelFiles.length > 0;
+    const prompt = isMultiCase ? MULTI_CASE_PROMPT : SINGLE_CASE_PROMPT;
+    
+    const parts = [{ text: prompt }];
+    
+    if (imageFiles.length > 0) {
+      for (const file of imageFiles) {
+        const base64Data = file.data.replace(/^data:[^;]+;base64,/, '');
+        parts.push({
+          inlineData: {
+            mimeType: file.mimeType || 'image/jpeg',
+            data: base64Data
+          }
+        });
+      }
     }
+    
+    if (excelFiles.length > 0) {
+      let excelText = '\n\n--- بيانات الحالات من Excel ---\n';
+      for (const file of excelFiles) {
+        excelText += `\nملف: ${file.name}\n`;
+        if (file.textContent) {
+          excelText += file.textContent;
+        } else if (file.data && !file.data.startsWith('data:')) {
+          excelText += file.data;
+        }
+      }
+      parts.push({ text: excelText });
+    }
+    
+    parts.push({ text: '\n\nقم بتحليل البيانات أعلاه وأعط تقريراً شاملاً بتنسيق HTML.' });
+
+    const contents = [{
+      role: 'user',
+      parts: parts
+    }];
 
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -75,8 +125,8 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
     let htmlResponse = '';
     
     if (result.candidates && result.candidates[0] && result.candidates[0].content) {
-      const parts = result.candidates[0].content.parts || [];
-      htmlResponse = parts.map(p => p.text || '').join('');
+      const resultParts = result.candidates[0].content.parts || [];
+      htmlResponse = resultParts.map(p => p.text || '').join('');
     } else if (result.text) {
       htmlResponse = result.text;
     } else if (typeof result.response?.text === 'function') {
@@ -94,12 +144,13 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
       htmlResponse = htmlResponse.replace(/```\n?/g, '');
     }
 
-    const styledHtml = wrapWithStyles(htmlResponse);
+    const styledHtml = wrapWithStyles(htmlResponse, isMultiCase);
 
     return {
       success: true,
       html: styledHtml,
-      raw: htmlResponse
+      raw: htmlResponse,
+      isMultiCase: isMultiCase
     };
 
   } catch (error) {
@@ -115,7 +166,7 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
   }
 }
 
-function wrapWithStyles(html) {
+function wrapWithStyles(html, isMultiCase = false) {
   const today = new Date().toLocaleDateString('ar-SA', { 
     year: 'numeric', 
     month: 'long', 
@@ -127,6 +178,28 @@ function wrapWithStyles(html) {
     month: 'long', 
     day: 'numeric'
   });
+  
+  const multiCaseStyles = isMultiCase ? `
+    .status-accepted { background: #dcfce7 !important; }
+    .status-rejected { background: #fee2e2 !important; }
+    .status-needs-fix { background: #fef9c3 !important; }
+    .status-badge { 
+      display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px; 
+      font-weight: bold; font-size: 0.85rem; 
+    }
+    .badge-green { background: #22c55e; color: white; }
+    .badge-red { background: #ef4444; color: white; }
+    .badge-yellow { background: #eab308; color: #1f2937; }
+    .summary-box { 
+      display: flex; gap: 1rem; justify-content: center; 
+      margin: 1.5rem 0; padding: 1rem; background: #f8fafc; border-radius: 12px; 
+    }
+    .summary-item { text-align: center; padding: 1rem 2rem; border-radius: 8px; }
+    .summary-item.accepted { background: #dcfce7; }
+    .summary-item.rejected { background: #fee2e2; }
+    .summary-item.needs-fix { background: #fef9c3; }
+    .summary-item .count { font-size: 2rem; font-weight: bold; }
+  ` : '';
   
   return `
     <style>
@@ -168,6 +241,7 @@ function wrapWithStyles(html) {
       }
       .error-box { background: #fee2e2; border: 2px solid #ef4444; padding: 1.5rem; border-radius: 12px; text-align: center; }
       .error-box h3 { color: #dc2626; margin: 0 0 1rem; }
+      ${multiCaseStyles}
       @media print {
         .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
