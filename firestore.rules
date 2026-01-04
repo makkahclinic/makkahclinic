@@ -26,8 +26,9 @@ service cloud.firestore {
     }
 
     // 🔐 صلاحية نظام محدد (RBAC)
+    // المالك فقط يتجاوز - الأدمن يخضع لـ permissions
     function hasPermission(key) {
-      return isOwner() || isAdmin() ||
+      return isOwner() ||
         (isAuthenticated() &&
          exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data.permissions[key] == true);
@@ -43,9 +44,7 @@ service cloud.firestore {
         (request.resource.data.role != 'owner' || isOwner());
 
       allow update: if isPrivileged() &&
-        // لا أحد يعيّن owner إلا owner
         (request.resource.data.role != 'owner' || isOwner()) &&
-        // لا أحد يغيّر owner إلا owner
         (resource.data.role != 'owner' || isOwner());
 
       allow delete: if isOwner();
@@ -81,30 +80,58 @@ service cloud.firestore {
       allow update, delete: if isPrivileged();
     }
 
-    // ===== System-specific collections (examples) =====
+    // ===== System-specific collections =====
+    // read, create, update = حسب الصلاحية
+    // delete = المالك فقط
     
     match /complaints/{docId} {
-      allow read, write: if hasPermission('complaints');
+      allow read, create, update: if hasPermission('complaints');
+      allow delete: if isOwner();
     }
     
     match /incidents/{docId} {
-      allow read, write: if hasPermission('incidents');
+      allow read, create, update: if hasPermission('incidents');
+      allow delete: if isOwner();
     }
     
     match /risks/{docId} {
-      allow read, write: if hasPermission('risks');
+      allow read, create, update: if hasPermission('risks');
+      allow delete: if isOwner();
     }
     
     match /rounds/{docId} {
-      allow read, write: if hasPermission('rounds');
+      allow read, create, update: if hasPermission('rounds');
+      allow delete: if isOwner();
     }
     
     match /calibration/{docId} {
-      allow read, write: if hasPermission('calibration');
+      allow read, create, update: if hasPermission('calibration');
+      allow delete: if isOwner();
     }
     
     match /maintenance/{docId} {
-      allow read, write: if hasPermission('maintenance');
+      allow read, create, update: if hasPermission('maintenance');
+      allow delete: if isOwner();
+    }
+    
+    match /needlestick/{docId} {
+      allow read, create, update: if hasPermission('needlestick');
+      allow delete: if isOwner();
+    }
+    
+    match /insurance/{docId} {
+      allow read, create, update: if hasPermission('insurance');
+      allow delete: if isOwner();
+    }
+    
+    match /eoc/{docId} {
+      allow read, create, update: if hasPermission('eoc');
+      allow delete: if isOwner();
+    }
+    
+    match /cbahi/{docId} {
+      allow read, create, update: if hasPermission('cbahi');
+      allow delete: if isOwner();
     }
 
     // ===== Default deny =====
