@@ -141,12 +141,15 @@
     .doctor-input label {
       display: block; color: var(--gold); margin-bottom: 0.5rem; font-weight: 600;
     }
-    .doctor-input input {
+    .doctor-input input, .doctor-input select {
       width: 100%; padding: 0.75rem 1rem; border-radius: 10px;
       border: 1px solid var(--border); background: rgba(255,255,255,0.05);
       color: var(--text); font-family: inherit; font-size: 1rem;
     }
-    .doctor-input input:focus {
+    .doctor-input select option {
+      background: var(--card-bg); color: var(--text);
+    }
+    .doctor-input input:focus, .doctor-input select:focus {
       outline: none; border-color: var(--gold);
     }
 
@@ -473,7 +476,9 @@
           
           <div class="doctor-input">
             <label for="doctorName"><i class="fas fa-user-md"></i> اسم الطبيب المعالج</label>
-            <input type="text" id="doctorName" placeholder="أدخل اسم الطبيب..." required>
+            <select id="doctorName" required>
+              <option value="">-- اختر الطبيب --</option>
+            </select>
           </div>
           
           <label class="uploader" for="fileInput" id="dropZone">
@@ -731,6 +736,33 @@ function showMainApp() {
   mainApp.classList.remove('hidden');
   logoutBtn.classList.remove('hidden');
   userInfo.innerHTML = `<i class="fas fa-user"></i> ${currentUser.name}`;
+  loadDoctorsList(); // تحميل قائمة الأطباء
+}
+
+async function loadDoctorsList() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDoctorsList' })
+    });
+    const data = await response.json();
+    
+    const select = document.getElementById('doctorName');
+    select.innerHTML = '<option value="">-- اختر الطبيب --</option>';
+    
+    if (data.success && data.doctors) {
+      data.doctors.forEach(doc => {
+        const option = document.createElement('option');
+        option.value = doc.name;
+        option.textContent = `${doc.name}${doc.specialty ? ' - ' + doc.specialty : ''}`;
+        select.appendChild(option);
+      });
+      console.log('Loaded', data.doctors.length, 'doctors');
+    }
+  } catch(e) {
+    console.error('Failed to load doctors:', e);
+  }
 }
 
 function loginWithGoogle() {
