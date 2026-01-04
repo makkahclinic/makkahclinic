@@ -1,0 +1,163 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function hasStaffRole() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid));
+    }
+
+    function staff() {
+      return get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data;
+    }
+
+    function isOwner() {
+      return hasStaffRole() && staff().role == 'owner';
+    }
+
+    function isAdmin() {
+      return hasStaffRole() && staff().role == 'admin';
+    }
+
+    function isPrivileged() {
+      return isOwner() || isAdmin();
+    }
+
+    function isActiveUser() {
+      return hasStaffRole() && staff().status == 'active';
+    }
+
+    function hasPermission(key) {
+      return isOwner() ||
+        (isActiveUser() && staff().permissions[key] == true);
+    }
+
+    match /staff_roles/{userId} {
+      allow read: if isAuthenticated() &&
+        (request.auth.uid == userId || isPrivileged());
+      allow create: if isPrivileged() &&
+        (request.resource.data.role != 'owner' || isOwner());
+      allow update: if isPrivileged() &&
+        (request.resource.data.role != 'owner' || isOwner()) &&
+        (resource.data.role != 'owner' || isOwner());
+      allow delete: if isOwner();
+    }
+
+    match /deleted_staff/{userId} {
+      allow read, create, update, delete: if isOwner();
+    }
+
+    match /audit_log/{logId} {
+      allow read: if isPrivileged();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /alerts/{alertId} {
+      allow read, write: if isPrivileged();
+    }
+
+    match /membershipRequests/{requestId} {
+      allow create: if isAuthenticated() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow read: if isAuthenticated() &&
+        (resource.data.uid == request.auth.uid || isPrivileged());
+      allow update, delete: if isPrivileged();
+    }
+
+    match /complaints/{docId} {
+      allow read: if hasPermission('complaints');
+      allow create: if hasPermission('complaints') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('complaints') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /incidents/{docId} {
+      allow read: if hasPermission('incidents');
+      allow create: if hasPermission('incidents') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('incidents') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /risks/{docId} {
+      allow read: if hasPermission('risks');
+      allow create: if hasPermission('risks') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('risks') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /rounds/{docId} {
+      allow read: if hasPermission('rounds');
+      allow create: if hasPermission('rounds') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('rounds') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /calibration/{docId} {
+      allow read: if hasPermission('calibration');
+      allow create: if hasPermission('calibration') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('calibration') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /maintenance/{docId} {
+      allow read: if hasPermission('maintenance');
+      allow create: if hasPermission('maintenance') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('maintenance') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /needlestick/{docId} {
+      allow read: if hasPermission('needlestick');
+      allow create: if hasPermission('needlestick') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('needlestick') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /insurance/{docId} {
+      allow read: if hasPermission('insurance');
+      allow create: if hasPermission('insurance') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('insurance') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /eoc/{docId} {
+      allow read: if hasPermission('eoc');
+      allow create: if hasPermission('eoc') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('eoc') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+    
+    match /cbahi/{docId} {
+      allow read: if hasPermission('cbahi');
+      allow create: if hasPermission('cbahi') &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('cbahi') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
+      allow delete: if isOwner();
+    }
+  }
+}
