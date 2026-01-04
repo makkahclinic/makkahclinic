@@ -899,9 +899,65 @@
                     <div id="modalDecisions" class="modal-list-content">لا توجد قرارات</div>
                 </div>
             </div>
-            <div class="risk-modal-footer">
-                <button class="btn btn-primary" onclick="editFromModal()"><i class="fas fa-edit"></i> تعديل</button>
+            <!-- Edit Mode Form (hidden by default) -->
+            <div id="modalEditMode" style="display:none;">
+                <div class="risk-modal-body">
+                    <div class="risk-modal-section full-width">
+                        <h4><i class="fas fa-exclamation-triangle"></i> الأثر السلبي المحتمل</h4>
+                        <textarea id="modalEditNegativeImpact" class="form-control" rows="3" placeholder="وصف الأثر السلبي المحتمل..."></textarea>
+                    </div>
+                    <div class="risk-modal-section full-width">
+                        <h4><i class="fas fa-tools"></i> خطط المعالجة</h4>
+                        <textarea id="modalEditMitigation" class="form-control" rows="3" placeholder="خطط المعالجة المقترحة..."></textarea>
+                    </div>
+                    <div class="risk-modal-grid">
+                        <div class="risk-modal-section">
+                            <h4><i class="fas fa-user"></i> المسؤول</h4>
+                            <select id="modalEditOwner" class="form-control"></select>
+                        </div>
+                        <div class="risk-modal-section">
+                            <h4><i class="fas fa-flag"></i> الحالة</h4>
+                            <select id="modalEditStatus" class="form-control">
+                                <option value="مفتوح">مفتوح</option>
+                                <option value="قيد المعالجة">قيد المعالجة</option>
+                                <option value="مغلق">مغلق</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="risk-modal-grid">
+                        <div class="risk-modal-section">
+                            <h4><i class="fas fa-calendar"></i> الموعد النهائي</h4>
+                            <input type="date" id="modalEditDueDate" class="form-control">
+                        </div>
+                        <div class="risk-modal-section">
+                            <h4><i class="fas fa-chart-bar"></i> الاحتمالية × الأثر</h4>
+                            <div style="display:flex;gap:1rem;align-items:center;">
+                                <select id="modalEditProb" class="form-control" style="width:80px;">
+                                    <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                                </select>
+                                <span style="color:var(--gold);font-size:1.2rem;">×</span>
+                                <select id="modalEditImpact" class="form-control" style="width:80px;">
+                                    <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="risk-modal-section full-width">
+                        <h4><i class="fas fa-comments"></i> إضافة تعليق جديد</h4>
+                        <div style="display:flex;gap:0.5rem;">
+                            <input type="text" id="modalNewComment" class="form-control" placeholder="اكتب تعليقك...">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="addCommentFromModal()"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="risk-modal-footer" id="modalViewFooter">
+                <button class="btn btn-primary" onclick="switchToEditMode()"><i class="fas fa-edit"></i> تعديل</button>
                 <button class="btn btn-secondary" onclick="closeRiskModal()">إغلاق</button>
+            </div>
+            <div class="risk-modal-footer" id="modalEditFooter" style="display:none;">
+                <button class="btn btn-success" onclick="saveFromModal()"><i class="fas fa-save"></i> حفظ التعديلات</button>
+                <button class="btn btn-secondary" onclick="switchToViewMode()">إلغاء</button>
             </div>
         </div>
     </div>
@@ -1992,23 +2048,145 @@
             document.getElementById('riskModalOverlay').classList.remove('show');
             document.body.style.overflow = '';
             currentModalRiskId = null;
+            switchToViewMode();
+        }
+        
+        function switchToEditMode() {
+            if (!currentModalRiskId) return;
+            const risk = allRisks.find(r => r.id === currentModalRiskId);
+            if (!risk) return;
+            
+            document.querySelector('.risk-modal-body').style.display = 'none';
+            document.getElementById('modalEditMode').style.display = 'block';
+            document.getElementById('modalViewFooter').style.display = 'none';
+            document.getElementById('modalEditFooter').style.display = 'flex';
+            
+            document.getElementById('modalEditNegativeImpact').value = risk.negativeImpact || '';
+            document.getElementById('modalEditMitigation').value = risk.mitigation || '';
+            document.getElementById('modalEditStatus').value = risk.status || 'مفتوح';
+            document.getElementById('modalEditDueDate').value = risk.reviewDate || '';
+            document.getElementById('modalEditProb').value = risk.probability || 3;
+            document.getElementById('modalEditImpact').value = risk.impact || 3;
+            
+            const ownerSelect = document.getElementById('modalEditOwner');
+            ownerSelect.innerHTML = '';
+            if (MASTER && MASTER.owners) {
+                MASTER.owners.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o;
+                    opt.textContent = o;
+                    ownerSelect.appendChild(opt);
+                });
+            }
+            ownerSelect.value = risk.owner || '';
+        }
+        
+        function switchToViewMode() {
+            document.querySelector('.risk-modal-body').style.display = 'block';
+            document.getElementById('modalEditMode').style.display = 'none';
+            document.getElementById('modalViewFooter').style.display = 'flex';
+            document.getElementById('modalEditFooter').style.display = 'none';
+        }
+        
+        async function saveFromModal() {
+            if (!currentModalRiskId) return;
+            const risk = allRisks.find(r => r.id === currentModalRiskId);
+            if (!risk) return;
+            
+            const saveBtn = document.querySelector('#modalEditFooter .btn-success');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            }
+            
+            const prob = parseInt(document.getElementById('modalEditProb').value) || 3;
+            const imp = parseInt(document.getElementById('modalEditImpact').value) || 3;
+            const score = prob * imp;
+            const level = score >= 20 ? 'حرج' : score >= 12 ? 'عالي' : score >= 6 ? 'متوسط' : 'منخفض';
+            
+            const payload = {
+                id: currentModalRiskId,
+                risk: risk.risk,
+                category: risk.category,
+                owner: document.getElementById('modalEditOwner').value,
+                probability: prob,
+                impact: imp,
+                negativeImpact: document.getElementById('modalEditNegativeImpact').value,
+                mitigation: document.getElementById('modalEditMitigation').value,
+                status: document.getElementById('modalEditStatus').value,
+                reviewDate: document.getElementById('modalEditDueDate').value,
+                sourceEvidence: risk.sourceEvidence
+            };
+            
+            try {
+                if (WEB_APP_URL) {
+                    const res = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'updateRisk', payload })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('تم حفظ التعديلات بنجاح', 'success');
+                        await loadRisks();
+                    } else {
+                        throw new Error(data.error);
+                    }
+                } else {
+                    Object.assign(risk, payload, { score, level, lastUpdated: new Date().toISOString() });
+                    saveToLocalStorage();
+                    updateStats();
+                    applyFilters();
+                    showToast('تم حفظ التعديلات', 'success');
+                }
+                
+                closeRiskModal();
+                
+            } catch (err) {
+                console.error('Save error:', err);
+                showToast('فشل الحفظ', 'error');
+            } finally {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التعديلات';
+                }
+            }
+        }
+        
+        async function addCommentFromModal() {
+            const input = document.getElementById('modalNewComment');
+            const text = input.value.trim();
+            if (!text || !currentModalRiskId) return;
+            
+            const risk = allRisks.find(r => r.id === currentModalRiskId);
+            if (!risk) return;
+            
+            const comment = {
+                text: text,
+                author: document.getElementById('modalEditOwner').value || 'مستخدم',
+                date: new Date().toISOString()
+            };
+            
+            if (!risk.comments) risk.comments = [];
+            risk.comments.push(comment);
+            saveToLocalStorage();
+            input.value = '';
+            
+            if (WEB_APP_URL) {
+                try {
+                    await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'addComment', payload: { id: currentModalRiskId, comment } })
+                    });
+                } catch (err) {}
+            }
+            
+            showToast('تم إضافة التعليق', 'success');
         }
         
         function editFromModal() {
-            if (currentModalRiskId) {
-                closeRiskModal();
-                editRisk(currentModalRiskId);
-                setTimeout(() => {
-                    const formCard = document.querySelector('.card');
-                    if (formCard) {
-                        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        formCard.style.boxShadow = '0 0 30px rgba(201,169,98,0.5)';
-                        setTimeout(() => {
-                            formCard.style.boxShadow = '';
-                        }, 2000);
-                    }
-                }, 100);
-            }
+            switchToEditMode();
         }
         
         document.addEventListener('keydown', function(e) {
