@@ -55,6 +55,14 @@ service cloud.firestore {
 
       allow delete: if isOwner();
     }
+    
+    // ===== staff (by email - للتوافق مع الأنظمة القديمة) =====
+    match /staff/{email} {
+      // أي مستخدم مصادق يقرأ سجله الخاص
+      allow read: if isAuthenticated() && request.auth.token.email == email;
+      // المالك والمدير يقرأون ويعدلون الكل
+      allow read, write: if isPrivileged();
+    }
 
     // ===== Deleted staff (أرشيف) =====
     match /deleted_staff/{userId} {
