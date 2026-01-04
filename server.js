@@ -4,6 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import admin from 'firebase-admin';
+import cors from 'cors';
 import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow, getGoogleSheetsClient } from './sheets-service.js';
 import { registerMedicalAuditRoutes } from './medical-audit-api.js';
 
@@ -39,38 +40,14 @@ const HOST = '0.0.0.0';
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// CORS middleware - allow requests from m2020m.org and GitHub Pages
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    'https://m2020m.org',
-    'https://www.m2020m.org',
-    'http://www.m2020m.org',
-    'http://m2020m.org',
-    'https://makkahclinic.github.io',
-    'http://localhost:5000',
-    'https://makkahclinic.replit.app'
-  ];
-  const origin = req.headers.origin;
-  
-  // Allow all origins for API endpoints (for cross-origin requests)
-  if (req.path.startsWith('/api/')) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  } else if (allowedOrigins.includes(origin) || !origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
+// CORS middleware - allow all origins for API
+app.use(cors({
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  maxAge: 86400
+}));
 
 app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
