@@ -1118,16 +1118,29 @@
         let userPermissions = {};
         
         function applySystemsFilter(role, permissions = {}) {
-            // المالك والمدير يشوفون كل شيء
-            if (role === 'owner' || role === 'admin') return;
+            // المالك يشوف كل شيء (bypass كامل)
+            if (role === 'owner') return;
             
-            // إخفاء العناصر حسب الصلاحيات
+            // المدير يشوف كل شيء إلا إذا حددت صلاحيات معينة
+            if (role === 'admin' && Object.keys(permissions).length === 0) return;
+            
+            // إخفاء العناصر حسب الصلاحيات (data-system أو data-permission)
+            document.querySelectorAll('[data-system]').forEach(el => {
+                const system = el.dataset.system;
+                // إذا المستخدم ليس له صلاحية على هذا النظام
+                if (permissions[system] !== true) {
+                    el.style.display = 'none';
+                }
+            });
+            
             document.querySelectorAll('[data-permission]').forEach(el => {
                 const permission = el.dataset.permission;
                 if (permissions[permission] !== true) {
                     el.style.display = 'none';
                 }
             });
+            
+            console.log('Applied RBAC filter. Role:', role, 'Permissions:', permissions);
         }
 
         async function apiCall(url, action, payload = {}) {
@@ -1169,7 +1182,7 @@
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
-                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
+                    fetch(APIs.risks + '?action=getRisks').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
                     fetchJsonp(APIs.needlestick + '?action=data').catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
@@ -1227,13 +1240,27 @@
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
-                // سجل المخاطر - يستخدم ok وليس success
-                if (risksRes.ok) {
+                // سجل المخاطر - getRisks يرجع array من المخاطر
+                const risksData = risksRes.data || risksRes.risks || risksRes;
+                if (Array.isArray(risksData)) {
+                    const risks = risksData;
+                    const high = risks.filter(r => r.severity === 'عالي' || r.severity === 'high' || r.riskLevel === 'high').length;
+                    const medium = risks.filter(r => r.severity === 'متوسط' || r.severity === 'medium' || r.riskLevel === 'medium').length;
+                    const low = risks.filter(r => r.severity === 'منخفض' || r.severity === 'low' || r.riskLevel === 'low').length;
+                    const resolved = risks.filter(r => r.status === 'مغلق' || r.status === 'closed' || r.status === 'resolved').length;
+                    const active = risks.filter(r => r.status !== 'مغلق' && r.status !== 'closed' && r.status !== 'resolved').length;
+                    
+                    document.getElementById('kpi-risks-active').textContent = active || risks.length;
+                    document.getElementById('kpi-risks-high').textContent = high > 0 ? `${high} عالي` : '';
+                    document.getElementById('stat-risks-high').textContent = high;
+                    document.getElementById('stat-risks-medium').textContent = medium;
+                    document.getElementById('stat-risks-low').textContent = low;
+                    document.getElementById('stat-risks-resolved').textContent = resolved;
+                } else if (risksRes.ok || risksRes.success) {
                     const r = risksRes;
-                    // ext = خارجي، total = الإجمالي، high/med/low = المستويات
                     const activeRisks = r.total || (r.high || 0) + (r.med || 0) + (r.low || 0);
                     document.getElementById('kpi-risks-active').textContent = activeRisks;
-                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : (r.ext ? `${r.ext} خارجي` : '');
+                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : '';
                     document.getElementById('stat-risks-high').textContent = r.high || 0;
                     document.getElementById('stat-risks-medium').textContent = r.med || r.medium || 0;
                     document.getElementById('stat-risks-low').textContent = r.low || 0;
