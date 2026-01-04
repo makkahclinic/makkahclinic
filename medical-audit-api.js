@@ -116,20 +116,43 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 }
 
 function wrapWithStyles(html) {
+  const today = new Date().toLocaleDateString('ar-SA', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    calendar: 'islamic-umalqura'
+  });
+  const gregorian = new Date().toLocaleDateString('ar-EG', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric'
+  });
+  
   return `
     <style>
       .audit-report { font-family: 'Tajawal', sans-serif; direction: rtl; }
+      .report-header { 
+        display: flex; align-items: center; justify-content: space-between; 
+        padding: 1.5rem; background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); 
+        border-radius: 12px; margin-bottom: 1.5rem; color: white;
+      }
+      .report-header .logo-area { display: flex; align-items: center; gap: 1rem; }
+      .report-header img { width: 70px; height: 70px; border-radius: 50%; border: 3px solid #c9a962; background: white; }
+      .report-header .clinic-info h2 { font-size: 1.3rem; color: #c9a962; margin: 0; }
+      .report-header .clinic-info p { font-size: 0.85rem; margin: 0.25rem 0 0; opacity: 0.9; }
+      .report-header .date-area { text-align: left; font-size: 0.85rem; }
+      .report-header .date-area .hijri { color: #c9a962; font-weight: bold; }
       .audit-report h1, .audit-report h2, .audit-report h3 { color: #1e3a5f; margin-top: 1.5rem; }
-      .audit-report h1 { font-size: 1.8rem; text-align: center; padding-bottom: 1rem; border-bottom: 3px solid #c9a962; }
-      .audit-report h2 { font-size: 1.4rem; display: flex; align-items: center; gap: 0.5rem; }
+      .audit-report h1 { font-size: 1.6rem; text-align: center; padding: 1rem; border-bottom: 3px solid #c9a962; background: #f8fafc; border-radius: 8px; margin-top: 0; }
+      .audit-report h2 { font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
       .audit-report h3 { font-size: 1.1rem; }
       .audit-report p, .audit-report li { line-height: 1.8; color: #334155; }
       .audit-report ul { list-style: none; padding: 0; }
-      .audit-report li { padding: 0.5rem 1rem; margin: 0.5rem 0; border-radius: 8px; }
-      .audit-report .success, .audit-report li:has(.success), .audit-report li:contains("✅") { background: #dcfce7; border-right: 4px solid #22c55e; }
-      .audit-report .error, .audit-report li:has(.error), .audit-report li:contains("❌") { background: #fee2e2; border-right: 4px solid #ef4444; }
-      .audit-report .warning, .audit-report li:has(.warning), .audit-report li:contains("⚠️") { background: #fef9c3; border-right: 4px solid #eab308; }
-      .audit-report .info, .audit-report li:has(.info), .audit-report li:contains("💡") { background: #dbeafe; border-right: 4px solid #3b82f6; }
+      .audit-report li { padding: 0.75rem 1rem; margin: 0.5rem 0; border-radius: 8px; border-right: 4px solid #cbd5e1; background: #f8fafc; }
+      .audit-report .success, .audit-report li:has(.success) { background: #dcfce7 !important; border-right-color: #22c55e !important; }
+      .audit-report .error, .audit-report li:has(.error) { background: #fee2e2 !important; border-right-color: #ef4444 !important; }
+      .audit-report .warning, .audit-report li:has(.warning) { background: #fef9c3 !important; border-right-color: #eab308 !important; }
+      .audit-report .info, .audit-report li:has(.info) { background: #dbeafe !important; border-right-color: #3b82f6 !important; }
       .audit-report table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
       .audit-report th, .audit-report td { padding: 0.75rem; text-align: right; border: 1px solid #e2e8f0; }
       .audit-report th { background: #1e3a5f; color: white; }
@@ -139,11 +162,35 @@ function wrapWithStyles(html) {
       .audit-report .score-medium { background: linear-gradient(135deg, #eab308, #ca8a04); color: white; }
       .audit-report .score-low { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
       .audit-report .score-value { font-size: 3rem; font-weight: bold; }
+      .report-footer { 
+        margin-top: 2rem; padding: 1rem; background: #f8fafc; border-radius: 8px; 
+        text-align: center; font-size: 0.8rem; color: #64748b; border-top: 2px solid #c9a962;
+      }
       .error-box { background: #fee2e2; border: 2px solid #ef4444; padding: 1.5rem; border-radius: 12px; text-align: center; }
       .error-box h3 { color: #dc2626; margin: 0 0 1rem; }
+      @media print {
+        .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
     </style>
     <div class="audit-report">
+      <div class="report-header">
+        <div class="logo-area">
+          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
+          <div class="clinic-info">
+            <h2>مجمع مكة الطبي بالزاهر</h2>
+            <p>قسم إدارة الجودة وسلامة المرضى</p>
+          </div>
+        </div>
+        <div class="date-area">
+          <div class="hijri">${today}</div>
+          <div>${gregorian}</div>
+        </div>
+      </div>
       ${html}
+      <div class="report-footer">
+        <p>تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر</p>
+        <p>هذا التقرير للأغراض الاستشارية فقط ولا يغني عن الرأي الطبي المتخصص</p>
+      </div>
     </div>
   `;
 }
