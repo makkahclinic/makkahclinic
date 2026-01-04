@@ -832,7 +832,7 @@
 
             <!-- إحصائيات تفصيلية -->
             <div class="stats-grid-detailed">
-                <div class="stats-box" data-system="complaints">
+                <div class="stats-box">
                     <h4><i class="fas fa-comment-dots"></i> الشكاوى</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
@@ -851,7 +851,7 @@
                         <span class="value success" id="stat-complaints-closed">-</span>
                     </div>
                 </div>
-                <div class="stats-box" data-system="incidents">
+                <div class="stats-box">
                     <h4><i class="fas fa-exclamation-triangle"></i> الحوادث</h4>
                     <div class="stats-row">
                         <span class="label">جديدة</span>
@@ -870,7 +870,7 @@
                         <span class="value success" id="stat-incidents-closed">-</span>
                     </div>
                 </div>
-                <div class="stats-box" data-system="risks">
+                <div class="stats-box">
                     <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
                     <div class="stats-row">
                         <span class="label">خطر عالي</span>
@@ -895,19 +895,19 @@
             <div class="stats-box">
                 <h4><i class="fas fa-rocket"></i> الوصول السريع</h4>
                 <div class="quick-links-grid">
-                    <a href="report.html" class="quick-link" data-system="complaints" target="_blank">
+                    <a href="report.html" class="quick-link" target="_blank">
                         <i class="fas fa-comment-alt"></i>
                         <span>رفع شكوى</span>
                     </a>
-                    <a href="incident-report.html" class="quick-link" data-system="incidents" target="_blank">
+                    <a href="incident-report.html" class="quick-link" target="_blank">
                         <i class="fas fa-exclamation-circle"></i>
                         <span>بلاغ حادثة</span>
                     </a>
-                    <a href="risk-register.html?action=new" class="quick-link" data-system="risks" target="_blank">
+                    <a href="risk-register.html?action=new" class="quick-link" target="_blank">
                         <i class="fas fa-shield-virus"></i>
                         <span>تسجيل خطر</span>
                     </a>
-                    <a href="ipc/incidents/report-needlestick.html" class="quick-link" data-system="needlestick" target="_blank">
+                    <a href="ipc/incidents/report-needlestick.html" class="quick-link" target="_blank">
                         <i class="fas fa-syringe"></i>
                         <span>بلاغ وخز</span>
                     </a>
@@ -915,7 +915,7 @@
                         <i class="fas fa-th-large"></i>
                         <span>المركز الرقمي</span>
                     </a>
-                    <a href="cbahi-portal.html" class="quick-link" data-system="cbahi" target="_blank">
+                    <a href="cbahi-portal.html" class="quick-link" target="_blank">
                         <i class="fas fa-award"></i>
                         <span>بوابة سباهي</span>
                     </a>
@@ -1019,11 +1019,7 @@
         let currentUserRole = null;
 
         // API URLs
-        // Replit API - use dev URL (deployed not available yet)
-        const REPLIT_API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev';
-        
         const APIs = {
-            replit: REPLIT_API_URL + '/api/owner/stats',
             complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
             incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
             risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
@@ -1119,31 +1115,9 @@
         let userAllowedSystems = [];
         
         function applySystemsFilter(role, allowedSystems) {
-            const privilegedRoles = ['owner', 'admin'];
-            if (privilegedRoles.includes(role)) {
-                console.log('Privileged role - all systems visible');
-                return;
-            }
-            
-            console.log('Applying systems filter. Allowed:', allowedSystems);
-            
-            document.querySelectorAll('[data-system]').forEach(el => {
-                const systemId = el.dataset.system;
-                if (!allowedSystems.includes(systemId)) {
-                    el.style.display = 'none';
-                } else {
-                    el.style.display = '';
-                }
-            });
-            
-            document.querySelectorAll('.stats-box[data-system]').forEach(el => {
-                const systemId = el.dataset.system;
-                if (!allowedSystems.includes(systemId)) {
-                    el.style.display = 'none';
-                }
-            });
-            
-            console.log('Systems filter applied');
+            // القائمة الجانبية ثابتة للجميع - لا يتم إخفاء أي روابط
+            console.log('Sidebar is fixed for all users - no filtering applied');
+            // لا نخفي أي روابط من السايد بار
         }
 
         async function apiCall(url, action, payload = {}) {
@@ -1182,16 +1156,6 @@
             console.log('Loading dashboard data...');
 
             try {
-                // Try Replit API first for accurate data
-                let replitData = null;
-                try {
-                    const replitRes = await fetch(APIs.replit);
-                    replitData = await replitRes.json();
-                    console.log('Replit API data:', replitData);
-                } catch (e) {
-                    console.warn('Replit API unavailable:', e.message);
-                }
-                
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
@@ -1201,15 +1165,6 @@
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
                     apiCall(APIs.maintenance, 'getKPIs', {})
                 ]);
-                
-                // Use Replit data for incidents if Apps Script failed
-                if (replitData && replitData.ok && replitData.incidents) {
-                    const inc = replitData.incidents;
-                    document.getElementById('kpi-incidents-open').textContent = inc.open || 0;
-                    document.getElementById('stat-incidents-new').textContent = inc.open || 0;
-                    document.getElementById('stat-incidents-closed').textContent = inc.total - inc.open || 0;
-                    console.log('Using Replit data for incidents:', inc);
-                }
 
                 console.log('Complaints:', complaintsRes);
                 console.log('Incidents:', incidentsRes);
@@ -1239,9 +1194,8 @@
                     console.warn('Complaints API failed:', complaintsRes);
                 }
 
-                // الحوادث - استخدام Replit API أولاً، ثم Apps Script كـ fallback
-                const usedReplitForIncidents = replitData && replitData.ok && replitData.incidents;
-                if (!usedReplitForIncidents && incidentsRes.ok) {
+                // الحوادث - البيانات ترجع مباشرة مع byStatus للتصعيدات
+                if (incidentsRes.ok) {
                     const s = incidentsRes;
                     const openIncidents = s.open || ((s.new || 0) + (s.in_progress || 0) + (s.under_review || 0));
                     const escalatedCount = s.byStatus?.escalated?.count || s.escalated || 0;
@@ -1259,7 +1213,7 @@
                     document.getElementById('stat-incidents-progress').textContent = s.in_progress || 0;
                     document.getElementById('stat-incidents-escalated').textContent = escalatedCount;
                     document.getElementById('stat-incidents-closed').textContent = s.closed || 0;
-                } else if (!usedReplitForIncidents) {
+                } else {
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
@@ -1278,33 +1232,12 @@
                     console.warn('Risks API failed:', risksRes);
                 }
 
-                // الجولات - استخدام Replit API أولاً (يحتوي على today)
-                // تحقق من يوم الجمعة (يوم إجازة) بتوقيت السعودية
-                const saudiTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Riyadh' });
-                const saudiDate = new Date(saudiTime);
-                const isFriday = saudiDate.getDay() === 5;
-                
-                if (isFriday) {
-                    // يوم الجمعة = إجازة، لا يوجد جولات
-                    document.getElementById('kpi-rounds-today').textContent = '0';
-                    document.getElementById('kpi-rounds-delayed').textContent = 'يوم إجازة';
-                    document.getElementById('kpi-rounds-delayed').style.color = '#10b981';
-                    console.log('Friday detected - showing 0 rounds');
-                } else if (replitData && replitData.ok && replitData.rounds) {
-                    // استخدام Replit API (يحتوي على today)
-                    const rd = replitData.rounds;
-                    document.getElementById('kpi-rounds-today').textContent = rd.today ?? 0;
-                    if (rd.delayed > 0) {
-                        document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
-                        document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
-                    } else {
-                        document.getElementById('kpi-rounds-delayed').textContent = '';
-                    }
-                    console.log('Using Replit data for rounds:', rd);
-                } else if (roundsRes.ok) {
+                // الجولات - البيانات ترجع مباشرة
+                if (roundsRes.ok) {
                     const rd = roundsRes;
-                    // fallback to Apps Script
+                    // عرض المكتملة في البطاقة الرئيسية
                     document.getElementById('kpi-rounds-today').textContent = rd.completed || 0;
+                    // عرض المتأخرة بوضوح
                     if (rd.delayed > 0) {
                         document.getElementById('kpi-rounds-delayed').textContent = `${rd.delayed} متأخرة`;
                         document.getElementById('kpi-rounds-delayed').style.color = '#DC143C';
@@ -1850,7 +1783,8 @@
             const roleData = await getUserRole(user.uid);
             console.log('Role data found:', roleData);
             
-            if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+            // المالك والمدير يدخلون admin-dashboard
+            if (!roleData || !roleData.role || !['owner', 'admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                 console.log('Role rejected! Signing out...');
                 alert('لم يتم العثور على صلاحيات. الدور: ' + (roleData ? roleData.role : 'غير موجود'));
                 await signOut(auth);
@@ -1862,6 +1796,7 @@
             userAllowedSystems = roleData.allowedSystems || [];
             
             const roleLabels = { 
+                owner: 'المالك',
                 admin: 'مدير النظام', 
                 chair: 'رئيس لجنة',
                 member: 'عضو',
@@ -1872,7 +1807,8 @@
             document.getElementById('staffName').textContent = user.email.split('@')[0];
             document.getElementById('roleBadge').textContent = roleLabels[roleData.role] || roleData.role;
             
-            if (roleData.role === 'admin') document.body.classList.add('is-admin');
+            // المالك والمدير لديهم صلاحيات إدارية
+            if (roleData.role === 'owner' || roleData.role === 'admin') document.body.classList.add('is-admin');
             
             // تطبيق فلتر الأنظمة المسموحة
             applySystemsFilter(roleData.role, roleData.allowedSystems);
@@ -2313,7 +2249,7 @@
             { id: 'incidents', name: 'نظام الحوادث', icon: 'exclamation-triangle' },
             { id: 'risks', name: 'سجل المخاطر', icon: 'shield-alt' },
             { id: 'rounds', name: 'نظام الجولات', icon: 'clipboard-check' },
-            { id: 'calibration', name: 'المعايرة', icon: 'star-and-crescent' },
+            { id: 'calibration', name: 'المعايرة', icon: 'tools' },
             { id: 'maintenance', name: 'الصيانة', icon: 'wrench' },
             { id: 'needlestick', name: 'التعرض الوخزي', icon: 'syringe' },
             { id: 'cbahi', name: 'بوابة سباهي', icon: 'award' },
