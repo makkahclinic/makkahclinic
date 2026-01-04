@@ -842,10 +842,6 @@
                 <i class="fas fa-user-shield"></i>
                 <span>إدارة الصلاحيات</span>
             </a>
-            <a class="nav-item" data-section="insurance">
-                <i class="fas fa-file-medical-alt"></i>
-                <span>صلاحيات التأمين</span>
-            </a>
             <div class="nav-divider"></div>
             <a class="nav-item" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i>
@@ -1231,41 +1227,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- قسم صلاحيات التأمين -->
-        <section class="content-section" id="section-insurance">
-            <div class="stats-box">
-                <h4><i class="fas fa-file-medical-alt"></i> إدارة صلاحيات خدمة التأمين</h4>
-                <p style="color:#666; margin-bottom:20px;">إضافة وإزالة الموظفين المصرح لهم باستخدام خدمة مراجعة التأمين الطبي</p>
-                
-                <!-- نموذج إضافة موظف -->
-                <div style="background:#f8fafc; border-radius:12px; padding:20px; margin-bottom:20px;">
-                    <h5 style="margin-bottom:15px; color:var(--primary);"><i class="fas fa-user-plus"></i> إضافة موظف جديد</h5>
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px;">
-                        <input type="email" id="insNewEmail" placeholder="البريد الإلكتروني" style="padding:12px; border:1px solid #ddd; border-radius:8px;">
-                        <input type="text" id="insNewName" placeholder="اسم الموظف" style="padding:12px; border:1px solid #ddd; border-radius:8px;">
-                        <input type="text" id="insNewDept" placeholder="القسم" style="padding:12px; border:1px solid #ddd; border-radius:8px;">
-                        <button onclick="addInsurancePermission()" class="btn btn-success" style="padding:12px;"><i class="fas fa-plus"></i> إضافة</button>
-                    </div>
-                </div>
-
-                <!-- قائمة الموظفين المصرح لهم -->
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h5 style="color:var(--primary);"><i class="fas fa-users"></i> الموظفون المصرح لهم</h5>
-                    <button onclick="loadInsurancePermissions()" class="btn btn-outline"><i class="fas fa-sync-alt"></i> تحديث</button>
-                </div>
-                <div id="insurancePermissionsList" style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-
-                <!-- رابط خدمة التأمين -->
-                <div style="margin-top:20px; padding:15px; background:linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius:10px; text-align:center;">
-                    <a href="insurance-check.html" target="_blank" style="color:white; text-decoration:none; font-weight:bold; font-size:1.1rem;">
-                        <i class="fas fa-external-link-alt"></i> فتح خدمة مراجعة التأمين
-                    </a>
-                </div>
-            </div>
-        </section>
     </main>
 
     <div class="toast" id="toast">
@@ -1439,7 +1400,6 @@
                 else if (sectionName === 'users') loadUsers();
                 else if (sectionName === 'permissions') loadPermissions();
                 else if (sectionName === 'eoc') loadEocData();
-                else if (sectionName === 'insurance') loadInsurancePermissions();
             }
         }
         
@@ -2944,112 +2904,6 @@
             window.open('complaint_analysis.html?id=' + id, '_blank');
         }
         
-        // ========= دوال إدارة صلاحيات التأمين =========
-        const INSURANCE_API_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
-        
-        async function loadInsurancePermissions() {
-            const container = document.getElementById('insurancePermissionsList');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            try {
-                const response = await fetch(INSURANCE_API_URL + '?action=getPermissions&callerEmail=' + encodeURIComponent(currentUser.email));
-                const data = await response.json();
-                
-                if (data.success && data.permissions && data.permissions.length > 0) {
-                    let html = '<table class="data-table" style="font-size:0.9rem;"><thead><tr><th>الاسم</th><th>البريد</th><th>القسم</th><th>تاريخ الإضافة</th><th>الإجراء</th></tr></thead><tbody>';
-                    data.permissions.forEach(p => {
-                        html += `<tr>
-                            <td>${p.name || '-'}</td>
-                            <td>${p.email}</td>
-                            <td>${p.department || '-'}</td>
-                            <td>${p.addedDate || '-'}</td>
-                            <td><button onclick="removeInsurancePermission('${p.email}')" class="btn btn-danger" style="padding:5px 10px; font-size:0.8rem;"><i class="fas fa-trash"></i></button></td>
-                        </tr>`;
-                    });
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا يوجد موظفين مصرح لهم حالياً</div>';
-                }
-            } catch (error) {
-                console.error('Error loading insurance permissions:', error);
-                container.innerHTML = '<div class="no-alerts" style="color:var(--danger);">خطأ في تحميل البيانات</div>';
-            }
-        }
-        
-        async function addInsurancePermission() {
-            const email = document.getElementById('insNewEmail').value.trim();
-            const name = document.getElementById('insNewName').value.trim();
-            const dept = document.getElementById('insNewDept').value.trim();
-            
-            if (!email) {
-                showToast('الرجاء إدخال البريد الإلكتروني', true);
-                return;
-            }
-            
-            try {
-                const response = await fetch(INSURANCE_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({
-                        action: 'addPermission',
-                        callerEmail: currentUser.email,
-                        email: email,
-                        name: name,
-                        department: dept
-                    })
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showToast('تمت إضافة الموظف بنجاح');
-                    document.getElementById('insNewEmail').value = '';
-                    document.getElementById('insNewName').value = '';
-                    document.getElementById('insNewDept').value = '';
-                    loadInsurancePermissions();
-                } else {
-                    showToast(data.error || 'فشل في إضافة الموظف', true);
-                }
-            } catch (error) {
-                console.error('Error adding permission:', error);
-                showToast('خطأ في الاتصال', true);
-            }
-        }
-        
-        async function removeInsurancePermission(email) {
-            const confirmed = await showConfirmModal({
-                type: 'danger',
-                title: 'تأكيد الحذف',
-                message: `هل تريد إزالة صلاحية التأمين للموظف:\n${email}`,
-                confirmText: 'حذف'
-            });
-            
-            if (!confirmed) return;
-            
-            try {
-                const response = await fetch(INSURANCE_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({
-                        action: 'removePermission',
-                        callerEmail: currentUser.email,
-                        email: email
-                    })
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showToast('تم إزالة الصلاحية بنجاح');
-                    loadInsurancePermissions();
-                } else {
-                    showToast(data.error || 'فشل في إزالة الصلاحية', true);
-                }
-            } catch (error) {
-                console.error('Error removing permission:', error);
-                showToast('خطأ في الاتصال', true);
-            }
-        }
-
         auth.onAuthStateChanged(async (user) => {
             const loadingOverlay = document.getElementById('loadingOverlay');
             const accessDenied = document.getElementById('accessDenied');
