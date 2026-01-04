@@ -1,0 +1,250 @@
+تمام 👍
+بما أنك قلت «كلهم مرة واحدة بشكل مرتب ومنظم»
+فهذا الرد هو الدليل التنفيذي النهائي (Playbook) لبناء النظام كامل بدون لخبطة، وبدون اجتهاد، وبدون رجوع للخلف.
+
+اقرأه كأنك تنفّذ مشروع رسمي، خطوة خطوة.
+
+🏗️ النظام النهائي – التنفيذ الكامل من A إلى Z
+🎯 الهدف النهائي (نثبّته مرة واحدة)
+
+👑 المالك يرى كل شيء ويتحكم في كل شيء
+
+🛠️ الأدمن مدير تشغيلي
+
+👤 الموظف يرى فقط ما أُعطي له
+
+🔐 لا صفحة، لا زر، لا نظام بدون صلاحية
+
+🧠 مصدر واحد للصلاحيات (Firestore)
+
+المرحلة (0) — التثبيت الذهني 🔒
+قواعد لا تُكسر
+
+المالك خارج نظام الصلاحيات (Bypass كامل)
+
+الجميع غير المالك يخضع لـ RBAC
+
+Firestore هو المصدر الوحيد
+
+❌ لا Email
+
+❌ لا Trial Mode
+
+❌ لا LocalStorage للصلاحيات
+
+المرحلة (1) — توحيد قاعدة البيانات (أهم خطوة)
+1️⃣ تعديل هيكل staff_roles
+📄 staff_roles/{uid} (الشكل النهائي)
+{
+  uid: "abc123",
+  email: "user@makkahclinic.com",
+  fullName: "الاسم الكامل",
+
+  role: "owner | admin | chair | member | staff | viewer",
+  status: "active | suspended",
+
+  permissions: {
+    dashboard: true,
+    eoc: true,
+    complaints: true,
+    incidents: true,
+    risks: true,
+    rounds: true,
+    calibration: true,
+    maintenance: true,
+    needlestick: true,
+    insurance: true
+  },
+
+  committee: "FMS | IPC | PSC | RM | null",
+
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  updatedBy: "admin@email.com"
+}
+
+🔴 ألغِ نهائيًا:
+
+allowedSystems
+
+أي صلاحية داخل LocalStorage
+
+أي منطق يعتمد على email
+
+2️⃣ سكربت تحويل (Migration) – مرة واحدة فقط
+
+ينقل allowedSystems[] إلى permissions{}
+
+// run once in Firebase console or Node script
+const map = {
+  complaints: true,
+  incidents: true,
+  risks: true,
+  rounds: true,
+  calibration: true,
+  maintenance: true,
+  needlestick: true,
+  insurance: true
+};
+
+const snap = await getDocs(collection(db, "staff_roles"));
+
+for (const d of snap.docs) {
+  const data = d.data();
+  if (!data.permissions) {
+    const perms = {};
+    (data.allowedSystems || []).forEach(k => perms[k] = true);
+
+    await updateDoc(doc(db, "staff_roles", d.id), {
+      permissions: perms,
+      updatedAt: new Date()
+    });
+  }
+}
+
+
+بعدها:
+❌ احذف allowedSystems من كل مكان
+
+المرحلة (2) — محرك الصلاحيات المركزي (RBAC Engine)
+📁 core/rbac.js
+export class RBAC {
+  constructor(userData) {
+    this.role = userData.role;
+    this.permissions = userData.permissions || {};
+  }
+
+  isOwner() {
+    return this.role === 'owner';
+  }
+
+  isAdmin() {
+    return this.role === 'admin';
+  }
+
+  can(permission) {
+    // 👑 المالك يرى كل شيء
+    if (this.isOwner()) return true;
+    return this.permissions[permission] === true;
+  }
+
+  guardPage(permission) {
+    if (!this.can(permission)) {
+      window.location.href = 'access-denied.html';
+    }
+  }
+
+  applyUI() {
+    // 👑 المالك لا يُخفى عنه شيء
+    if (this.isOwner()) return;
+
+    document.querySelectorAll('[data-permission]').forEach(el => {
+      const key = el.dataset.permission;
+      if (!this.can(key)) el.remove();
+    });
+  }
+}
+
+المرحلة (3) — ربط كل الواجهة بالصلاحيات
+1️⃣ HTML (إجباري)
+
+أي عنصر:
+
+Sidebar
+
+KPI
+
+زر
+
+Card
+
+مثال:
+<a data-permission="insurance">تحليل التأمين</a>
+<div class="kpi-card" data-permission="maintenance"></div>
+<button data-permission="incidents">إضافة حادثة</button>
+
+2️⃣ بعد تسجيل الدخول (مرة واحدة)
+const rbac = new RBAC(userData);
+rbac.applyUI();
+
+المرحلة (4) — حماية الصفحات (أمن حقيقي)
+
+في أعلى كل صفحة نظام:
+
+rbac.guardPage('insurance');
+
+الصفحة	permission
+insurance-check.html	insurance
+risk-register.html	risks
+Round.html	rounds
+calibration.html	calibration
+maintenance.html	maintenance
+eoc-command.html	eoc
+
+❌ لا تعتمد على إخفاء زر فقط
+
+المرحلة (5) — فصل الداشبوردات (بدون تداخل)
+الصفحات النهائية
+الصفحة	من يدخل
+owner-dashboard.html	owner فقط
+admin-dashboard.html	admin فقط
+staff-dashboard.html	staff / chair / member
+portal.html	عامة
+admin-login.html	دخول
+منطق التوجيه بعد Login
+if (role === 'owner') {
+  location.href = 'owner-dashboard.html';
+} else if (role === 'admin') {
+  location.href = 'admin-dashboard.html';
+} else {
+  location.href = 'staff-dashboard.html';
+}
+
+المرحلة (6) — من يوزّع الصلاحيات؟
+🔐 القاعدة النهائية
+من	ماذا يفعل
+👑 Owner	يعيّن Admin + يرى كل شيء
+🛠️ Admin	يوزّع permissions
+👤 Staff	❌
+UI:
+
+صفحة إدارة الصلاحيات → Admin
+
+صفحة إدارة الأدمن → Owner فقط
+
+المرحلة (7) — مسار المستخدم (واضح)
+
+1️⃣ user يسجل → membershipRequests
+2️⃣ Admin يوافق → يحدد:
+
+role
+
+permissions
+
+committee
+3️⃣ يتم إنشاء staff_roles/{uid}
+4️⃣ المستخدم يدخل → يرى فقط ما له
+
+المرحلة (8) — تنظيف نهائي (مهم جدًا)
+
+❌ احذف:
+
+isTrialPeriod
+
+developerEmail
+
+أي شرط email ===
+
+أي صلاحيات من LocalStorage
+
+أي تعريف SYSTEMS مكرر
+
+✅ النتيجة النهائية
+
+✔️ نظام مؤسسي حقيقي
+✔️ المالك يتحكم في كل شيء
+✔️ الأدمن مدير تشغيلي
+✔️ الموظف محدود
+✔️ لا لخبطة
+✔️ قابل للتوسع
+✔️ جاهز للاعتماد والحوكمة
