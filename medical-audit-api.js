@@ -67,15 +67,31 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
       contents[0].parts.push({ text: '\n\nقم بتحليل الملفات الطبية أعلاه وأعط تقريراً شاملاً بتنسيق HTML.' });
     }
 
-    const response = await ai.models.generateContent({
+    const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
     });
 
-    let htmlResponse = response.text || '';
+    let htmlResponse = '';
+    
+    if (result.candidates && result.candidates[0] && result.candidates[0].content) {
+      const parts = result.candidates[0].content.parts || [];
+      htmlResponse = parts.map(p => p.text || '').join('');
+    } else if (result.text) {
+      htmlResponse = result.text;
+    } else if (typeof result.response?.text === 'function') {
+      htmlResponse = result.response.text();
+    }
+    
+    if (!htmlResponse) {
+      throw new Error('لم يتم الحصول على استجابة من النموذج');
+    }
     
     if (htmlResponse.includes('```html')) {
       htmlResponse = htmlResponse.replace(/```html\n?/g, '').replace(/```\n?/g, '');
+    }
+    if (htmlResponse.includes('```')) {
+      htmlResponse = htmlResponse.replace(/```\n?/g, '');
     }
 
     const styledHtml = wrapWithStyles(htmlResponse);
@@ -83,7 +99,7 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
     return {
       success: true,
       html: styledHtml,
-      raw: response.text
+      raw: htmlResponse
     };
 
   } catch (error) {
