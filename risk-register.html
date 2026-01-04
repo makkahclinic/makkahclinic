@@ -1696,17 +1696,25 @@
             
             if (WEB_APP_URL) {
                 try {
-                    await fetch(WEB_APP_URL, {
+                    const res = await fetch(WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action: 'addComment', payload: { id: currentEditingRiskId, comment } })
                     });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('تم حفظ التعليق في Google Sheets', 'success');
+                    } else {
+                        console.log('Comment save failed:', data.error);
+                        showToast('تم حفظ التعليق محلياً', 'success');
+                    }
                 } catch (err) {
-                    console.log('Comment saved locally');
+                    console.log('Comment saved locally:', err);
+                    showToast('تم حفظ التعليق محلياً', 'success');
                 }
+            } else {
+                showToast('تم إضافة التعليق', 'success');
             }
-            
-            showToast('تم إضافة التعليق', 'success');
         }
         
         function renderDecisions(decisions) {
@@ -1765,17 +1773,25 @@
             
             if (WEB_APP_URL) {
                 try {
-                    await fetch(WEB_APP_URL, {
+                    const res = await fetch(WEB_APP_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action: 'addDecision', payload: { id: currentEditingRiskId, decision } })
                     });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('تم حفظ القرار في Google Sheets', 'success');
+                    } else {
+                        console.log('Decision save failed:', data.error);
+                        showToast('تم حفظ القرار محلياً', 'success');
+                    }
                 } catch (err) {
-                    console.log('Decision saved locally');
+                    console.log('Decision saved locally:', err);
+                    showToast('تم حفظ القرار محلياً', 'success');
                 }
+            } else {
+                showToast('تم إضافة القرار', 'success');
             }
-            
-            showToast('تم إضافة القرار بنجاح', 'success');
         }
         
         async function deleteRisk(id) {
@@ -1817,7 +1833,12 @@
             document.getElementById('riskForm').reset();
             document.getElementById('editId').value = '';
             document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
-            document.getElementById('submitText').textContent = 'حفظ';
+            const submitBtn = document.querySelector('#riskForm button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fas fa-save"></i> <span id="submitText">حفظ</span>';
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('btn-saving');
+            }
             document.getElementById('cancelBtn').style.display = 'none';
             document.getElementById('newRiskBtn').style.display = 'none';
             document.getElementById('commentsSection').style.display = 'none';
