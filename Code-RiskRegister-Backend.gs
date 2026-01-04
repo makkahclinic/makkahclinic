@@ -190,15 +190,20 @@ function saveRisk(riskData) {
   const id = riskData.id || 'R-' + new Date().getTime();
   const now = new Date().toISOString();
   
+  const prob = parseInt(riskData.probability) || 3;
+  const imp = parseInt(riskData.impact) || 3;
+  const score = prob * imp;
+  const level = score >= 20 ? 'حرج' : score >= 12 ? 'عالي' : score >= 6 ? 'متوسط' : 'منخفض';
+  
   const dataMap = {
     'ID': id,
     'Risk': riskData.risk || '',
     'Category': riskData.category || '',
     'Owner': riskData.owner || '',
-    'Probability': riskData.probability || 3,
-    'Impact': riskData.impact || 3,
-    'Score': riskData.score || 9,
-    'Level': riskData.level || 'متوسط',
+    'Probability': prob,
+    'Impact': imp,
+    'Score': score,
+    'Level': level,
     'Mitigation': riskData.mitigation || '',
     'Status': riskData.status || 'مفتوح',
     'ReviewDate': riskData.reviewDate || '',
@@ -243,6 +248,11 @@ function updateRisk(riskData) {
   }
   
   const now = new Date().toISOString();
+  const prob = parseInt(riskData.probability) || 3;
+  const imp = parseInt(riskData.impact) || 3;
+  const score = prob * imp;
+  const level = score >= 20 ? 'حرج' : score >= 12 ? 'عالي' : score >= 6 ? 'متوسط' : 'منخفض';
+  
   const headerMap = {
     'ID': 'id', 'Risk': 'risk', 'Category': 'category', 'Owner': 'owner',
     'Probability': 'probability', 'Impact': 'impact', 'Score': 'score', 'Level': 'level',
@@ -254,10 +264,10 @@ function updateRisk(riskData) {
     risk: riskData.risk,
     category: riskData.category,
     owner: riskData.owner,
-    probability: riskData.probability,
-    impact: riskData.impact,
-    score: riskData.score,
-    level: riskData.level,
+    probability: prob,
+    impact: imp,
+    score: score,
+    level: level,
     mitigation: riskData.mitigation,
     status: riskData.status,
     sourceEvidence: riskData.sourceEvidence,
