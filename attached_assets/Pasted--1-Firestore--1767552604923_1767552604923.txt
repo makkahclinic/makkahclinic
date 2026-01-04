@@ -1,0 +1,144 @@
+ثانيًا: التصميم الصحيح (المعماري) الذي يناسب كودك الحالي 🧠
+1️⃣ شكل الصلاحيات في Firestore (أنت قريب جدًا منه)
+
+في staff_roles لكل مستخدم:
+
+{
+  uid: "abc123",
+  email: "user@clinic.com",
+  role: "staff",
+  status: "active",
+  allowedSystems: [
+    "complaints",
+    "incidents",
+    "insurance"
+  ]
+}
+
+
+✔️ هذا التصميم صحيح 100%
+ولا تحتاج تغييره.
+
+ثالثًا: كيف تُطبق الصلاحيات فعليًا (المهم) 🔥
+🔴 المشكلة الحالية
+
+الصلاحيات مخزنة
+
+لكنها غير مستخدمة في:
+
+Sidebar
+
+تحميل الصفحات
+
+منع الوصول المباشر
+
+رابعًا: التطبيق الصحيح خطوة بخطوة
+🟢 (1) تعريف الأنظمة بشكل مركزي (مهم جدًا)
+
+أضف هذا الكائن (مرة واحدة فقط):
+
+const SYSTEMS = {
+  eoc: 'الطوارئ',
+  complaints: 'الشكاوى',
+  incidents: 'الحوادث',
+  risks: 'سجل المخاطر',
+  rounds: 'جولات اليوم',
+  calibration: 'المعايرة',
+  maintenance: 'الصيانة',
+  needlestick: 'الوخز الإبري',
+  insurance: 'تحليل التأمين'
+};
+
+🟢 (2) ربط كل عنصر في الـ Sidebar بنظامه
+
+مثال (هذا السبب الأساسي للمشكلة عندك):
+
+<a class="nav-item" data-section="eoc" data-system="eoc">
+<a class="nav-item" data-section="complaints" data-system="complaints">
+<a class="nav-item" data-section="incidents" data-system="incidents">
+<a class="nav-item" data-section="risks" data-system="risks">
+<a class="nav-item" data-section="rounds" data-system="rounds">
+<a class="nav-item" data-system="calibration">
+<a class="nav-item" data-system="maintenance">
+<a class="nav-item" data-system="needlestick">
+<a class="nav-item" data-system="insurance">
+
+
+❗ بدون data-system
+لا يمكن التحكم بالصلاحيات.
+
+🟢 (3) فلترة الـ Sidebar حسب الصلاحيات (الكود الحاسم)
+function applySystemPermissions(role, allowedSystems = []) {
+  // المالك والمدير يشوفون كل شيء
+  if (role === 'owner' || role === 'admin') return;
+
+  document.querySelectorAll('.nav-item[data-system]').forEach(item => {
+    const system = item.dataset.system;
+    if (!allowedSystems.includes(system)) {
+      item.style.display = 'none';
+    }
+  });
+}
+
+
+واستدعِها بعد تسجيل الدخول:
+
+const userData = roleDoc.data();
+applySystemPermissions(userData.role, userData.allowedSystems);
+
+
+✅ الآن:
+
+السايدبار يعرض فقط الأنظمة المصرح بها
+
+بدون اجتهاد
+
+بدون تكرار كود
+
+خامسًا: منع الدخول المباشر (مهم أمنيًا ⚠️)
+
+حتى لو أخفيت السايدبار
+❌ المستخدم يستطيع فتح الرابط مباشرة
+
+الحل الإجباري لكل صفحة نظام:
+function guardSystemAccess(requiredSystem) {
+  if (
+    currentUserRole !== 'owner' &&
+    currentUserRole !== 'admin' &&
+    !currentUserAllowedSystems.includes(requiredSystem)
+  ) {
+    window.location.href = 'access-denied.html';
+  }
+}
+
+
+مثال في صفحة تحليل التأمين:
+
+guardSystemAccess('insurance');
+
+سادسًا: لوحة الصلاحيات (عندك ممتازة 👌)
+
+الجزء هذا عندك قريب جدًا من المثالي:
+
+allowedSystems: ['complaints', 'insurance']
+
+
+كل ما تحتاجه:
+
+تأكد أن المفاتيح (insurance) مطابقة تمامًا
+
+لا تستخدم أسماء عربية في الكود
+
+العرض بالعربي فقط
+
+الخلاصة النهائية 🎯
+
+✔️ نعم، فاهم الصلاحيات التي تريدها
+✔️ تصميمك الأساسي صحيح
+❌ المشكلة فقط أن الصلاحيات غير مطبقة على الواجهة
+
+ما تريده بالضبط هو:
+
+تحكم دقيق لكل مستخدم في كل نظام بشكل مستقل
+
+وهذا تم حله بالكامل بالخطوات أعلاه.
