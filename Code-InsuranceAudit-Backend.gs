@@ -14,6 +14,12 @@
 const SHEET_ID = '1rTGa4WOw1q0IQE7KCS8TtRJ58J0guTbfgcP30cE-EWk';
 const DRIVE_FOLDER_ID = '18NsJAyzWXEuopa-ZfSyYXRWSFxENV9g4';
 
+// قائمة المالكين المصرح لهم بإدارة الصلاحيات
+const OWNER_EMAILS = [
+  'dr.mansour2012@hotmail.com',
+  'owner@m2020m.org'
+];
+
 function doGet(e) {
   return handleRequest(e);
 }
@@ -43,13 +49,28 @@ function handleRequest(e) {
         result = checkInsurancePermission(params.email);
         break;
       case 'getPermissions':
-        result = getAllInsurancePermissions();
+        // التحقق من صلاحية المالك
+        if (!isOwnerEmail(params.callerEmail)) {
+          result = { success: false, error: 'غير مصرح لك بهذا الإجراء' };
+        } else {
+          result = getAllInsurancePermissions();
+        }
         break;
       case 'addPermission':
-        result = addInsurancePermission(params.email, params.name, params.department);
+        // التحقق من صلاحية المالك
+        if (!isOwnerEmail(params.callerEmail)) {
+          result = { success: false, error: 'غير مصرح لك بهذا الإجراء' };
+        } else {
+          result = addInsurancePermission(params.email, params.name, params.department);
+        }
         break;
       case 'removePermission':
-        result = removeInsurancePermission(params.email);
+        // التحقق من صلاحية المالك
+        if (!isOwnerEmail(params.callerEmail)) {
+          result = { success: false, error: 'غير مصرح لك بهذا الإجراء' };
+        } else {
+          result = removeInsurancePermission(params.email);
+        }
         break;
       case 'logUsage':
         result = logInsuranceUsage(params);
@@ -83,6 +104,14 @@ function handleRequest(e) {
   }
   
   return output;
+}
+
+/**
+ * التحقق من أن البريد الإلكتروني هو مالك
+ */
+function isOwnerEmail(email) {
+  if (!email) return false;
+  return OWNER_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
 }
 
 /**
