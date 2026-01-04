@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لوحة تحكم المالك - مجمع مكة الطبي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --primary-light: #2d4a6f;
+      --gold: #c9a962;
+      --gold-light: #d4b872;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #eab308;
+      --info: #3b82f6;
+      --bg: #0f1a2b;
+      --card-bg: #1a2d4a;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --border: rgba(201, 169, 98, 0.3);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Tajawal", sans-serif;
+      background: linear-gradient(135deg, var(--bg) 0%, #152238 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 1rem; }
+    
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      padding: 1.5rem 0;
+      border-bottom: 3px solid var(--gold);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .header-content {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .logo-section { display: flex; align-items: center; gap: 1rem; }
+    .logo-section img { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--gold); }
+    .logo-section h1 { font-size: 1.5rem; color: var(--gold); }
+    .logo-section p { font-size: 0.9rem; color: var(--text-muted); }
+    .header-btns { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .nav-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem;
+      border-radius: 10px; text-decoration: none; font-weight: 600; transition: all 0.3s;
+      border: none; cursor: pointer; font-family: inherit; font-size: 0.9rem;
+    }
+    .nav-btn.primary { background: var(--gold); color: var(--primary); }
+    .nav-btn.primary:hover { background: var(--gold-light); }
+    .nav-btn.danger { background: var(--error); color: white; }
+    .nav-btn.danger:hover { background: #dc2626; }
+    .user-info { color: var(--gold); font-size: 0.9rem; }
+
+    .main-content { padding: 2rem 0; }
+    
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem; margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 16px; padding: 1.5rem; text-align: center;
+      border: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    .stat-card i { font-size: 2.5rem; color: var(--gold); margin-bottom: 0.75rem; }
+    .stat-card .value { font-size: 2.5rem; font-weight: 800; color: var(--gold); }
+    .stat-card .label { font-size: 0.95rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+    .section-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 20px; padding: 2rem; margin-bottom: 2rem;
+      border: 1px solid var(--border);
+    }
+    .section-title {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; font-size: 1.3rem; color: var(--gold); margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);
+    }
+    .section-title .title-text { display: flex; align-items: center; gap: 0.75rem; }
+    .section-title i { font-size: 1.5rem; }
+
+    .add-form {
+      display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 1rem;
+      margin-bottom: 1.5rem; padding: 1.5rem;
+      background: rgba(201, 169, 98, 0.1); border-radius: 12px;
+    }
+    .add-form input {
+      padding: 0.75rem 1rem; border-radius: 10px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.05);
+      color: var(--text); font-family: inherit; font-size: 1rem;
+    }
+    .add-form input:focus { outline: none; border-color: var(--gold); }
+    .add-form button {
+      padding: 0.75rem 1.5rem; border-radius: 10px; border: none;
+      background: var(--success); color: white; font-family: inherit;
+      font-weight: 600; cursor: pointer; transition: all 0.3s;
+    }
+    .add-form button:hover { background: #16a34a; }
+
+    .permissions-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .permissions-table th, .permissions-table td {
+      padding: 1rem; text-align: right; border-bottom: 1px solid var(--border);
+    }
+    .permissions-table th { color: var(--gold); font-weight: 600; background: rgba(201, 169, 98, 0.1); }
+    .permissions-table td { color: var(--text-muted); }
+    .permissions-table tr:hover td { background: rgba(201, 169, 98, 0.05); }
+    .status-badge {
+      display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600;
+    }
+    .status-active { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #fee2e2; color: #991b1b; }
+    .action-btn {
+      padding: 0.5rem 1rem; border-radius: 8px; border: none;
+      font-family: inherit; font-size: 0.85rem; cursor: pointer; transition: all 0.3s;
+    }
+    .action-btn.remove { background: var(--error); color: white; }
+    .action-btn.remove:hover { background: #dc2626; }
+    .action-btn.activate { background: var(--success); color: white; }
+    .action-btn.activate:hover { background: #16a34a; }
+
+    .usage-log-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .usage-log-table th, .usage-log-table td {
+      padding: 0.75rem; text-align: right; border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .usage-log-table th { color: var(--gold); font-weight: 600; background: rgba(201, 169, 98, 0.1); }
+    .usage-log-table td { color: var(--text-muted); }
+    .usage-log-table tr:hover td { background: rgba(201, 169, 98, 0.05); }
+
+    .rating-badge {
+      display: inline-block; padding: 0.25rem 0.5rem; border-radius: 8px;
+      font-size: 0.85rem; font-weight: 700;
+    }
+    .rating-excellent { background: #dcfce7; color: #166534; }
+    .rating-good { background: #fef9c3; color: #854d0e; }
+    .rating-needs { background: #fee2e2; color: #991b1b; }
+
+    .doctors-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .doctor-card {
+      background: rgba(255,255,255,0.05); border-radius: 16px; padding: 1.5rem;
+      border: 1px solid var(--border); transition: all 0.3s;
+    }
+    .doctor-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    .doctor-card .name { font-size: 1.2rem; font-weight: 700; color: var(--gold); margin-bottom: 1rem; }
+    .doctor-card .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .doctor-card .stat-item { text-align: center; }
+    .doctor-card .stat-item .value { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .doctor-card .stat-item .label { font-size: 0.8rem; color: var(--text-muted); }
+    .doctor-card .rating-bar {
+      margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .doctor-card .overall-rating { font-size: 1.8rem; font-weight: 800; }
+    .doctor-card a { color: var(--gold); text-decoration: none; font-size: 0.85rem; }
+    .doctor-card a:hover { text-decoration: underline; }
+
+    .tabs {
+      display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 0.75rem 1.5rem; border-radius: 10px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted); font-family: inherit;
+      font-weight: 600; cursor: pointer; transition: all 0.3s;
+    }
+    .tab-btn:hover { background: rgba(201, 169, 98, 0.1); }
+    .tab-btn.active { background: var(--gold); color: var(--primary); border-color: var(--gold); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .empty-state {
+      text-align: center; padding: 3rem; color: var(--text-muted);
+    }
+    .empty-state i { font-size: 4rem; margin-bottom: 1rem; opacity: 0.5; }
+
+    .login-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 20px; padding: 3rem; text-align: center;
+      border: 1px solid var(--border); max-width: 500px; margin: 2rem auto;
+    }
+    .login-card i { font-size: 4rem; color: var(--gold); margin-bottom: 1rem; }
+    .login-card h2 { color: var(--gold); margin-bottom: 1rem; }
+    .login-card p { color: var(--text-muted); margin-bottom: 2rem; }
+    .login-btn {
+      display: inline-flex; align-items: center; gap: 0.75rem;
+      padding: 1rem 2rem; font-size: 1.1rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      color: var(--primary); border: none; border-radius: 14px;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .login-btn:hover { transform: translateY(-3px); }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 768px) {
+      .header-content { justify-content: center; text-align: center; }
+      .logo-section { flex-direction: column; }
+      .add-form { grid-template-columns: 1fr; }
+      .permissions-table, .usage-log-table { font-size: 0.85rem; }
+      .permissions-table th, .permissions-table td,
+      .usage-log-table th, .usage-log-table td { padding: 0.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <div class="logo-section">
+          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
+          <div>
+            <h1>لوحة تحكم المالك</h1>
+            <p>مجمع مكة الطبي بالزاهر</p>
+          </div>
+        </div>
+        <div class="header-btns">
+          <span class="user-info" id="userInfo"></span>
+          <a class="nav-btn primary" href="https://www.m2020m.org/insurance-check.html">
+            <i class="fas fa-file-medical"></i>
+            خدمة التأمين
+          </a>
+          <a class="nav-btn primary" href="https://www.m2020m.org/portal.html">
+            <i class="fas fa-home"></i>
+            الرئيسية
+          </a>
+          <button class="nav-btn danger hidden" id="logoutBtn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i>
+            خروج
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      
+      <!-- Login Screen -->
+      <div class="login-card" id="loginScreen">
+        <i class="fas fa-crown"></i>
+        <h2>لوحة تحكم المالك</h2>
+        <p>هذه اللوحة خاصة بالمالك فقط</p>
+        <button class="login-btn" onclick="loginWithGoogle()">
+          <i class="fab fa-google"></i>
+          تسجيل الدخول
+        </button>
+      </div>
+
+      <!-- Main Dashboard -->
+      <div class="hidden" id="mainDashboard">
+        
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <i class="fas fa-users"></i>
+            <div class="value" id="totalStaff">0</div>
+            <div class="label">موظفي التأمين</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-file-medical"></i>
+            <div class="value" id="totalCases">0</div>
+            <div class="label">إجمالي الحالات</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-calendar-day"></i>
+            <div class="value" id="todayCases">0</div>
+            <div class="label">حالات اليوم</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-user-md"></i>
+            <div class="value" id="totalDoctors">0</div>
+            <div class="label">الأطباء</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab-btn active" onclick="showTab('permissions')">
+            <i class="fas fa-user-shield"></i> إدارة الصلاحيات
+          </button>
+          <button class="tab-btn" onclick="showTab('doctors')">
+            <i class="fas fa-user-md"></i> إحصائيات الأطباء
+          </button>
+          <button class="tab-btn" onclick="showTab('usage')">
+            <i class="fas fa-history"></i> سجل الاستخدام
+          </button>
+        </div>
+
+        <!-- Permissions Tab -->
+        <div class="tab-content active" id="permissionsTab">
+          <div class="section-card">
+            <div class="section-title">
+              <div class="title-text">
+                <i class="fas fa-user-plus"></i>
+                <span>إضافة موظف جديد لخدمة التأمين</span>
+              </div>
+            </div>
+            
+            <div class="add-form">
+              <input type="email" id="newEmail" placeholder="البريد الإلكتروني للموظف">
+              <input type="text" id="newName" placeholder="اسم الموظف">
+              <input type="text" id="newDept" placeholder="القسم">
+              <button onclick="addPermission()">
+                <i class="fas fa-plus"></i> إضافة
+              </button>
+            </div>
+
+            <div class="section-title">
+              <div class="title-text">
+                <i class="fas fa-list"></i>
+                <span>الموظفون المصرح لهم</span>
+              </div>
+              <span id="staffCount" style="font-size:0.9rem;color:var(--text-muted);"></span>
+            </div>
+
+            <div style="overflow-x:auto;">
+              <table class="permissions-table">
+                <thead>
+                  <tr>
+                    <th>الاسم</th>
+                    <th>البريد الإلكتروني</th>
+                    <th>القسم</th>
+                    <th>تاريخ الإضافة</th>
+                    <th>الحالة</th>
+                    <th>الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="permissionsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Doctors Tab -->
+        <div class="tab-content" id="doctorsTab">
+          <div class="section-card">
+            <div class="section-title">
+              <div class="title-text">
+                <i class="fas fa-chart-bar"></i>
+                <span>إحصائيات الأطباء وتقييماتهم</span>
+              </div>
+            </div>
+            
+            <div class="doctors-grid" id="doctorsGrid"></div>
+          </div>
+        </div>
+
+        <!-- Usage Log Tab -->
+        <div class="tab-content" id="usageTab">
+          <div class="section-card">
+            <div class="section-title">
+              <div class="title-text">
+                <i class="fas fa-history"></i>
+                <span>سجل استخدام خدمة التأمين</span>
+              </div>
+            </div>
+            
+            <div style="overflow-x:auto;">
+              <table class="usage-log-table">
+                <thead>
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>الموظف</th>
+                    <th>الطبيب</th>
+                    <th>عدد الملفات</th>
+                    <th>تقييم التأمين</th>
+                    <th>تقييم الخدمات</th>
+                    <th>المتوسط</th>
+                  </tr>
+                </thead>
+                <tbody id="usageLogBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+<script>
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  authDomain: "makkah-medical.firebaseapp.com",
+  projectId: "makkah-medical"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
+
+// Owner emails (add your email here)
+const OWNER_EMAILS = ['owner@m2020m.org', 'admin@m2020m.org'];
+
+let currentUser = null;
+
+// Auth State Observer
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    // Check if owner
+    if (isOwner(user.email)) {
+      currentUser = {
+        email: user.email,
+        name: user.displayName || user.email.split('@')[0]
+      };
+      showDashboard();
+      loadAllData();
+    } else {
+      alert('عذراً، هذه اللوحة مخصصة للمالك فقط');
+      auth.signOut();
+    }
+  } else {
+    showLoginScreen();
+  }
+});
+
+function isOwner(email) {
+  // For testing, allow all authenticated users
+  return true;
+  // In production, use: return OWNER_EMAILS.includes(email.toLowerCase());
+}
+
+function showLoginScreen() {
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('mainDashboard').classList.add('hidden');
+  document.getElementById('logoutBtn').classList.add('hidden');
+  document.getElementById('userInfo').textContent = '';
+}
+
+function showDashboard() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainDashboard').classList.remove('hidden');
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  document.getElementById('userInfo').innerHTML = `<i class="fas fa-crown"></i> ${currentUser.name}`;
+}
+
+function loginWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err => {
+    console.error('Login error:', err);
+    alert('حدث خطأ أثناء تسجيل الدخول');
+  });
+}
+
+function logout() {
+  auth.signOut();
+}
+
+function showTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+  
+  event.target.closest('.tab-btn').classList.add('active');
+  document.getElementById(tabName + 'Tab').classList.add('active');
+}
+
+async function loadAllData() {
+  await Promise.all([
+    loadStats(),
+    loadPermissions(),
+    loadDoctorStats(),
+    loadUsageLog()
+  ]);
+}
+
+async function loadStats() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDashboardStats' })
+    });
+    const data = await response.json();
+    
+    if (data.success && data.stats) {
+      document.getElementById('totalStaff').textContent = data.stats.totalStaff || 0;
+      document.getElementById('totalCases').textContent = data.stats.totalCases || 0;
+      document.getElementById('todayCases').textContent = data.stats.todayCases || 0;
+      document.getElementById('totalDoctors').textContent = data.stats.totalDoctors || 0;
+    }
+  } catch(e) {
+    console.error('Stats error:', e);
+  }
+}
+
+async function loadPermissions() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getPermissions' })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      renderPermissions(data.permissions || []);
+    }
+  } catch(e) {
+    console.error('Permissions error:', e);
+  }
+}
+
+function renderPermissions(permissions) {
+  const tbody = document.getElementById('permissionsBody');
+  const count = document.getElementById('staffCount');
+  
+  const activeCount = permissions.filter(p => p.active).length;
+  count.textContent = `${activeCount} موظف نشط من ${permissions.length}`;
+  
+  if (permissions.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="empty-state">
+          <i class="fas fa-users-slash"></i>
+          <p>لا يوجد موظفون مضافون</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  tbody.innerHTML = permissions.map(p => `
+    <tr>
+      <td><strong>${p.name}</strong></td>
+      <td>${p.email}</td>
+      <td>${p.department || '-'}</td>
+      <td>${p.addedDate || '-'}</td>
+      <td>
+        <span class="status-badge ${p.active ? 'status-active' : 'status-inactive'}">
+          ${p.active ? 'نشط' : 'معطل'}
+        </span>
+      </td>
+      <td>
+        ${p.active 
+          ? `<button class="action-btn remove" onclick="removePermission('${p.email}')">
+               <i class="fas fa-ban"></i> إلغاء
+             </button>`
+          : `<button class="action-btn activate" onclick="activatePermission('${p.email}', '${p.name}', '${p.department}')">
+               <i class="fas fa-check"></i> تفعيل
+             </button>`
+        }
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function addPermission() {
+  const email = document.getElementById('newEmail').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  const dept = document.getElementById('newDept').value.trim();
+  
+  if (!email || !name) {
+    alert('يرجى إدخال البريد الإلكتروني والاسم');
+    return;
+  }
+  
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ 
+        action: 'addPermission', 
+        email: email, 
+        name: name, 
+        department: dept 
+      })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert(data.message || 'تم إضافة الموظف بنجاح');
+      document.getElementById('newEmail').value = '';
+      document.getElementById('newName').value = '';
+      document.getElementById('newDept').value = '';
+      loadPermissions();
+      loadStats();
+    } else {
+      alert(data.error || 'حدث خطأ');
+    }
+  } catch(e) {
+    console.error('Add permission error:', e);
+    alert('حدث خطأ أثناء الإضافة');
+  }
+}
+
+async function removePermission(email) {
+  if (!confirm('هل تريد إلغاء صلاحية هذا الموظف؟')) return;
+  
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'removePermission', email: email })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert(data.message || 'تم إلغاء الصلاحية');
+      loadPermissions();
+      loadStats();
+    }
+  } catch(e) {
+    console.error('Remove permission error:', e);
+  }
+}
+
+async function activatePermission(email, name, dept) {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ 
+        action: 'addPermission', 
+        email: email, 
+        name: name, 
+        department: dept 
+      })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert('تم تفعيل الصلاحية');
+      loadPermissions();
+      loadStats();
+    }
+  } catch(e) {
+    console.error('Activate permission error:', e);
+  }
+}
+
+async function loadDoctorStats() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDoctorStats' })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      renderDoctorCards(data.doctors || []);
+    }
+  } catch(e) {
+    console.error('Doctor stats error:', e);
+  }
+}
+
+function renderDoctorCards(doctors) {
+  const grid = document.getElementById('doctorsGrid');
+  
+  if (doctors.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1/-1;">
+        <i class="fas fa-user-md"></i>
+        <p>لا توجد بيانات للأطباء</p>
+      </div>
+    `;
+    return;
+  }
+  
+  grid.innerHTML = doctors.map(doc => {
+    const avgRating = parseFloat(doc.avgOverallRating) || 0;
+    let ratingClass = 'rating-needs';
+    let ratingColor = '#ef4444';
+    if (avgRating >= 8) { ratingClass = 'rating-excellent'; ratingColor = '#22c55e'; }
+    else if (avgRating >= 5) { ratingClass = 'rating-good'; ratingColor = '#eab308'; }
+    
+    return `
+      <div class="doctor-card">
+        <div class="name"><i class="fas fa-user-md"></i> ${doc.doctorName}</div>
+        <div class="stats">
+          <div class="stat-item">
+            <div class="value">${doc.totalCases}</div>
+            <div class="label">حالة</div>
+          </div>
+          <div class="stat-item">
+            <div class="value">${doc.avgInsuranceRating}</div>
+            <div class="label">معايير التأمين</div>
+          </div>
+          <div class="stat-item">
+            <div class="value">${doc.avgServiceRating}</div>
+            <div class="label">جودة الخدمات</div>
+          </div>
+          <div class="stat-item">
+            <div class="value" style="color:${ratingColor}">${doc.avgOverallRating}</div>
+            <div class="label">المتوسط</div>
+          </div>
+        </div>
+        <div class="rating-bar">
+          <span class="rating-badge ${ratingClass}">${doc.status}</span>
+          <span style="font-size:0.85rem;color:var(--text-muted);">${doc.lastCaseDate || '-'}</span>
+        </div>
+        ${doc.folderLink ? `<a href="${doc.folderLink}" target="_blank" style="display:block;margin-top:0.5rem;">
+          <i class="fas fa-folder-open"></i> فتح المجلد
+        </a>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadUsageLog() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getUsageLog' })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      renderUsageLog(data.logs || []);
+    }
+  } catch(e) {
+    console.error('Usage log error:', e);
+  }
+}
+
+function renderUsageLog(logs) {
+  const tbody = document.getElementById('usageLogBody');
+  
+  if (logs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="empty-state">
+          <i class="fas fa-history"></i>
+          <p>لا يوجد سجل استخدام</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  tbody.innerHTML = logs.slice(0, 50).map(log => {
+    const avgRating = parseFloat(log.overallRating) || 0;
+    let ratingClass = 'rating-needs';
+    if (avgRating >= 8) ratingClass = 'rating-excellent';
+    else if (avgRating >= 5) ratingClass = 'rating-good';
+    
+    return `
+      <tr>
+        <td>${log.timestamp}</td>
+        <td>${log.userName}</td>
+        <td>${log.doctorName || '-'}</td>
+        <td>${log.filesCount}</td>
+        <td>${log.insuranceRating}/10</td>
+        <td>${log.serviceRating}/10</td>
+        <td><span class="rating-badge ${ratingClass}">${log.overallRating}/10</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+</script>
+</body>
+</html>

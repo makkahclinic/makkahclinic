@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
   <style>
     :root {
@@ -50,14 +52,57 @@
     .logo-section img { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--gold); }
     .logo-section h1 { font-size: 1.5rem; color: var(--gold); }
     .logo-section p { font-size: 0.9rem; color: var(--text-muted); }
-    .home-btn {
+    .header-btns { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .home-btn, .logout-btn {
       display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem;
-      background: var(--gold); color: var(--primary); border-radius: 12px; text-decoration: none;
-      font-weight: 700; transition: all 0.3s;
+      border-radius: 12px; text-decoration: none; font-weight: 700; transition: all 0.3s;
+      border: none; cursor: pointer; font-family: inherit;
     }
+    .home-btn { background: var(--gold); color: var(--primary); }
     .home-btn:hover { background: var(--gold-light); transform: translateY(-2px); }
+    .logout-btn { background: var(--error); color: white; }
+    .logout-btn:hover { background: #dc2626; }
+    .user-info { color: var(--gold); font-size: 0.9rem; }
 
     .main-content { padding: 2rem 0; }
+    
+    .access-denied {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 20px; padding: 3rem; text-align: center;
+      border: 2px solid var(--error);
+    }
+    .access-denied i { font-size: 4rem; color: var(--error); margin-bottom: 1rem; }
+    .access-denied h2 { color: var(--error); margin-bottom: 1rem; }
+    .access-denied p { color: var(--text-muted); margin-bottom: 2rem; }
+    
+    .login-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 20px; padding: 3rem; text-align: center;
+      border: 1px solid var(--border); max-width: 500px; margin: 0 auto;
+    }
+    .login-card h2 { color: var(--gold); margin-bottom: 1rem; }
+    .login-card p { color: var(--text-muted); margin-bottom: 2rem; }
+    .login-btn {
+      display: inline-flex; align-items: center; gap: 0.75rem;
+      padding: 1rem 2rem; font-size: 1.1rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      color: var(--primary); border: none; border-radius: 14px;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .login-btn:hover { transform: translateY(-3px); }
+
+    .stats-bar {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem; margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 12px; padding: 1.25rem; text-align: center;
+      border: 1px solid var(--border);
+    }
+    .stat-card i { font-size: 1.5rem; color: var(--gold); margin-bottom: 0.5rem; }
+    .stat-card .value { font-size: 1.8rem; font-weight: 800; color: var(--gold); }
+    .stat-card .label { font-size: 0.8rem; color: var(--text-muted); }
     
     .hero-card {
       background: linear-gradient(145deg, var(--card-bg), #152238);
@@ -88,6 +133,21 @@
       padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);
     }
     .section-title i { font-size: 1.5rem; }
+
+    .doctor-input {
+      margin-bottom: 1.5rem;
+    }
+    .doctor-input label {
+      display: block; color: var(--gold); margin-bottom: 0.5rem; font-weight: 600;
+    }
+    .doctor-input input {
+      width: 100%; padding: 0.75rem 1rem; border-radius: 10px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.05);
+      color: var(--text); font-family: inherit; font-size: 1rem;
+    }
+    .doctor-input input:focus {
+      outline: none; border-color: var(--gold);
+    }
 
     .uploader {
       border: 2px dashed var(--gold);
@@ -187,6 +247,22 @@
     .report-section.show { display: block; animation: fadeIn 0.5s ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
+    .rating-section {
+      background: rgba(201, 169, 98, 0.1);
+      border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;
+      border: 1px solid var(--border);
+    }
+    .rating-section h4 { color: var(--gold); margin-bottom: 1rem; text-align: center; }
+    .rating-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .rating-item { text-align: center; }
+    .rating-item label { display: block; color: var(--text); margin-bottom: 0.5rem; font-weight: 600; }
+    .rating-stars { display: flex; justify-content: center; gap: 0.25rem; }
+    .rating-stars i {
+      font-size: 1.5rem; color: #475569; cursor: pointer; transition: all 0.2s;
+    }
+    .rating-stars i:hover, .rating-stars i.active { color: var(--gold); transform: scale(1.1); }
+    .rating-value { color: var(--gold); font-weight: 700; margin-top: 0.5rem; }
+
     .report-content {
       background: #ffffff;
       color: #1e293b;
@@ -213,12 +289,36 @@
       padding: 0.75rem 1.5rem; border-radius: 10px; border: none;
       cursor: pointer; font-family: inherit; font-weight: 600; transition: all 0.3s;
     }
+    .btn-save { background: var(--success); color: white; }
+    .btn-save:hover { background: #16a34a; }
     .btn-print { background: var(--info); color: white; }
     .btn-print:hover { background: #2563eb; }
     .btn-translate { background: #8b5cf6; color: white; }
     .btn-translate:hover { background: #7c3aed; }
-    .btn-new { background: var(--success); color: white; }
-    .btn-new:hover { background: #16a34a; }
+    .btn-new { background: var(--warning); color: var(--primary); }
+    .btn-new:hover { background: #ca8a04; }
+
+    .doctors-stats {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 20px; padding: 2rem; margin-top: 2rem;
+      border: 1px solid var(--border);
+    }
+    .doctors-table {
+      width: 100%; border-collapse: collapse; margin-top: 1rem;
+    }
+    .doctors-table th, .doctors-table td {
+      padding: 0.75rem; text-align: right; border-bottom: 1px solid var(--border);
+    }
+    .doctors-table th { color: var(--gold); font-weight: 600; }
+    .doctors-table td { color: var(--text-muted); }
+    .doctors-table tr:hover td { background: rgba(201, 169, 98, 0.1); }
+    .rating-badge {
+      display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 700;
+    }
+    .rating-excellent { background: #dcfce7; color: #166534; }
+    .rating-good { background: #fef9c3; color: #854d0e; }
+    .rating-needs { background: #fee2e2; color: #991b1b; }
 
     .powered-by {
       text-align: center; margin-top: 2rem; padding: 1rem;
@@ -232,110 +332,35 @@
       .hero-card h2 { font-size: 1.5rem; }
       .uploader { padding: 2rem 1rem; }
       .analyze-btn { width: 100%; justify-content: center; }
+      .rating-grid { grid-template-columns: 1fr; }
     }
 
     @media print {
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      body { 
-        background: white !important; 
-        margin: 0; padding: 0;
-        font-size: 11pt;
-      }
-      .header, .upload-section, .analyze-section, .report-actions, .powered-by, .hero-card { 
-        display: none !important; 
-      }
-      .report-section { 
-        margin: 0 !important; padding: 0 !important; 
-        border: none !important; box-shadow: none !important;
-        background: white !important;
-        display: block !important;
-      }
-      .report-content { 
-        padding: 0 !important; 
-        box-shadow: none !important;
-        border-radius: 0 !important;
-      }
+      body { background: white !important; margin: 0; padding: 0; font-size: 11pt; }
+      .header, .upload-section, .analyze-section, .report-actions, .powered-by, .hero-card, 
+      .stats-bar, .rating-section, .doctors-stats { display: none !important; }
+      .report-section { margin: 0 !important; padding: 0 !important; border: none !important; background: white !important; display: block !important; }
+      .report-content { padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
       .print-header {
-        display: flex !important;
-        align-items: center;
-        justify-content: space-between;
-        padding: 15px 20px;
-        border-bottom: 3px solid #c9a962;
-        margin-bottom: 20px;
+        display: flex !important; align-items: center; justify-content: space-between;
+        padding: 15px 20px; border-bottom: 3px solid #c9a962; margin-bottom: 20px;
         background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%) !important;
       }
-      .print-header img {
-        width: 70px;
-        height: 70px;
-        border-radius: 50%;
-        border: 2px solid #c9a962;
-      }
-      .print-header-text {
-        text-align: center;
-        flex: 1;
-        padding: 0 20px;
-      }
-      .print-header-text h1 {
-        color: #c9a962 !important;
-        font-size: 18pt;
-        margin: 0 0 5px 0;
-        border: none !important;
-        padding: 0 !important;
-      }
-      .print-header-text p {
-        color: white !important;
-        font-size: 11pt;
-        margin: 0;
-      }
-      .print-header-dates {
-        text-align: left;
-        font-size: 9pt;
-        color: white !important;
-      }
-      .print-footer {
-        display: block !important;
-        text-align: center;
-        padding: 15px;
-        border-top: 2px solid #c9a962;
-        margin-top: 30px;
-        font-size: 9pt;
-        color: #64748b;
-      }
-      .print-footer strong {
-        color: #1e3a5f;
-      }
+      .print-header img { width: 70px; height: 70px; border-radius: 50%; border: 2px solid #c9a962; }
+      .print-header-text { text-align: center; flex: 1; padding: 0 20px; }
+      .print-header-text h1 { color: #c9a962 !important; font-size: 18pt; margin: 0 0 5px 0; border: none !important; padding: 0 !important; }
+      .print-header-text p { color: white !important; font-size: 11pt; margin: 0; }
+      .print-header-dates { text-align: left; font-size: 9pt; color: white !important; }
+      .print-footer { display: block !important; text-align: center; padding: 15px; border-top: 2px solid #c9a962; margin-top: 30px; font-size: 9pt; color: #64748b; }
+      .print-footer strong { color: #1e3a5f; }
       .report-content h1 { display: none !important; }
-      .report-content h2 { 
-        font-size: 13pt; 
-        color: #1e3a5f !important;
-        background: #f1f5f9;
-        padding: 8px 12px;
-        border-radius: 6px;
-        border-right: 4px solid #c9a962;
-        page-break-after: avoid;
-      }
-      .report-content h3 { font-size: 11pt; page-break-after: avoid; }
-      .report-content p { font-size: 10pt; }
-      .report-content li { 
-        font-size: 10pt; 
-        page-break-inside: avoid;
-        padding: 6px 10px;
-      }
-      .report-content table { 
-        font-size: 9pt; 
-        page-break-inside: avoid;
-      }
-      .report-content th { 
-        background: #1e3a5f !important; 
-        color: white !important; 
-        font-size: 9pt;
-      }
-      @page {
-        size: A4;
-        margin: 15mm;
-      }
+      .report-content h2 { font-size: 13pt; color: #1e3a5f !important; background: #f1f5f9; padding: 8px 12px; border-radius: 6px; border-right: 4px solid #c9a962; page-break-after: avoid; }
+      @page { size: A4; margin: 15mm; }
     }
     .print-header, .print-footer { display: none; }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -350,10 +375,17 @@
             <p>مجمع مكة الطبي بالزاهر</p>
           </div>
         </div>
-        <a class="home-btn" href="https://www.m2020m.org/portal.html">
-          <i class="fas fa-home"></i>
-          <span>الرئيسية</span>
-        </a>
+        <div class="header-btns">
+          <span class="user-info" id="userInfo"></span>
+          <a class="home-btn" href="https://www.m2020m.org/portal.html">
+            <i class="fas fa-home"></i>
+            <span>الرئيسية</span>
+          </a>
+          <button class="logout-btn hidden" id="logoutBtn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>خروج</span>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -361,99 +393,238 @@
   <main class="main-content">
     <div class="container">
       
-      <div class="hero-card">
-        <h2><i class="fas fa-user-tie"></i> مراجعة الحالات الطبية - خبراء التأمين الطبي</h2>
-        <p>ارفع ملفات الحالة الطبية (وصفات، تحاليل، أشعة، ملفات Excel) واحصل على تقرير شامل لمراجعة جودة العلاج ومطابقة البروتوكولات الطبية</p>
-        <div class="hero-icons">
-          <div class="hero-icon">
-            <i class="fas fa-prescription-bottle"></i>
-            <span>الوصفات</span>
-          </div>
-          <div class="hero-icon">
-            <i class="fas fa-vial"></i>
-            <span>التحاليل</span>
-          </div>
-          <div class="hero-icon">
-            <i class="fas fa-x-ray"></i>
-            <span>الأشعة</span>
-          </div>
-          <div class="hero-icon">
-            <i class="fas fa-file-excel"></i>
-            <span>Excel</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="upload-section">
-        <h3 class="section-title">
-          <i class="fas fa-cloud-upload-alt"></i>
-          رفع ملفات الحالة الطبية
-        </h3>
-        
-        <label class="uploader" for="fileInput" id="dropZone">
-          <i class="fas fa-file-upload"></i>
-          <h3>اسحب وأفلت الملفات هنا</h3>
-          <p>أو انقر للاختيار من جهازك</p>
-          <input id="fileInput" type="file" multiple accept="image/*,application/pdf,.xlsx,.xls,.csv" />
-          <div class="file-types">
-            <span class="file-type"><i class="fas fa-image"></i> صور</span>
-            <span class="file-type"><i class="fas fa-file-pdf"></i> PDF</span>
-            <span class="file-type"><i class="fas fa-file-excel"></i> Excel</span>
-            <span class="file-type"><i class="fas fa-file-csv"></i> CSV</span>
-          </div>
-        </label>
-
-        <div id="filesGrid" class="files-grid"></div>
-      </div>
-
-      <div class="analyze-section">
-        <button class="analyze-btn" id="analyzeBtn" disabled>
-          <i class="fas fa-search-dollar"></i>
-          <span>مراجعة الحالة</span>
+      <!-- Login Screen -->
+      <div class="login-card" id="loginScreen">
+        <i class="fas fa-user-shield" style="font-size:4rem;color:var(--gold);margin-bottom:1rem;"></i>
+        <h2>تسجيل الدخول مطلوب</h2>
+        <p>هذه الخدمة متاحة فقط للموظفين المصرح لهم</p>
+        <button class="login-btn" onclick="loginWithGoogle()">
+          <i class="fab fa-google"></i>
+          تسجيل الدخول بـ Google
         </button>
-        <div class="status-msg" id="statusMsg" style="display:none;">
-          <i class="fas fa-spinner"></i>
-          <span id="statusText">جاري التحليل...</span>
-        </div>
       </div>
 
-      <div class="report-section" id="reportSection">
-        <h3 class="section-title">
-          <i class="fas fa-clipboard-check"></i>
-          تقرير مراجعة جودة الرعاية الطبية
-        </h3>
-        <div class="report-content" id="reportContent"></div>
-        <div class="report-actions">
-          <button class="btn-print" onclick="window.print()">
-            <i class="fas fa-print"></i> طباعة التقرير
-          </button>
-          <button class="btn-translate" id="translateBtn" onclick="translateReport()">
-            <i class="fas fa-language"></i> <span id="translateText">ترجمة إلى English</span>
-          </button>
-          <button class="btn-new" onclick="resetAnalysis()">
-            <i class="fas fa-plus"></i> تحليل جديد
-          </button>
-        </div>
+      <!-- Access Denied Screen -->
+      <div class="access-denied hidden" id="accessDenied">
+        <i class="fas fa-ban"></i>
+        <h2>غير مصرح لك بالوصول</h2>
+        <p>عذراً، ليس لديك صلاحية لاستخدام هذه الخدمة.<br>يرجى التواصل مع الإدارة للحصول على الصلاحية.</p>
+        <button class="login-btn" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i>
+          تسجيل الخروج
+        </button>
       </div>
 
-      <div class="powered-by">
-        <i class="fas fa-shield-alt"></i> خبراء التأمين الطبي - نظام المراجعة الذكي
+      <!-- Main Content (only for authorized users) -->
+      <div class="hidden" id="mainApp">
+        
+        <div class="stats-bar">
+          <div class="stat-card">
+            <i class="fas fa-file-medical"></i>
+            <div class="value" id="todayCases">0</div>
+            <div class="label">حالاتي اليوم</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-chart-line"></i>
+            <div class="value" id="totalCases">0</div>
+            <div class="label">إجمالي حالاتي</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-user-md"></i>
+            <div class="value" id="totalDoctors">0</div>
+            <div class="label">الأطباء</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-calendar-day"></i>
+            <div class="value" id="allTodayCases">0</div>
+            <div class="label">حالات اليوم</div>
+          </div>
+        </div>
+        
+        <div class="hero-card">
+          <h2><i class="fas fa-user-tie"></i> مراجعة الحالات الطبية - خبراء التأمين الطبي</h2>
+          <p>ارفع ملفات الحالة الطبية (وصفات، تحاليل، أشعة، ملفات Excel) واحصل على تقرير شامل لمراجعة جودة العلاج</p>
+          <div class="hero-icons">
+            <div class="hero-icon">
+              <i class="fas fa-prescription-bottle"></i>
+              <span>الوصفات</span>
+            </div>
+            <div class="hero-icon">
+              <i class="fas fa-vial"></i>
+              <span>التحاليل</span>
+            </div>
+            <div class="hero-icon">
+              <i class="fas fa-x-ray"></i>
+              <span>الأشعة</span>
+            </div>
+            <div class="hero-icon">
+              <i class="fas fa-file-excel"></i>
+              <span>Excel</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="upload-section">
+          <h3 class="section-title">
+            <i class="fas fa-cloud-upload-alt"></i>
+            رفع ملفات الحالة الطبية
+          </h3>
+          
+          <div class="doctor-input">
+            <label for="doctorName"><i class="fas fa-user-md"></i> اسم الطبيب المعالج</label>
+            <input type="text" id="doctorName" placeholder="أدخل اسم الطبيب..." required>
+          </div>
+          
+          <label class="uploader" for="fileInput" id="dropZone">
+            <i class="fas fa-file-upload"></i>
+            <h3>اسحب وأفلت الملفات هنا</h3>
+            <p>أو انقر للاختيار من جهازك</p>
+            <input id="fileInput" type="file" multiple accept="image/*,application/pdf,.xlsx,.xls,.csv" />
+            <div class="file-types">
+              <span class="file-type"><i class="fas fa-image"></i> صور</span>
+              <span class="file-type"><i class="fas fa-file-pdf"></i> PDF</span>
+              <span class="file-type"><i class="fas fa-file-excel"></i> Excel</span>
+            </div>
+          </label>
+
+          <div id="filesGrid" class="files-grid"></div>
+        </div>
+
+        <div class="analyze-section">
+          <button class="analyze-btn" id="analyzeBtn" disabled>
+            <i class="fas fa-search-dollar"></i>
+            <span>مراجعة الحالة</span>
+          </button>
+          <div class="status-msg" id="statusMsg" style="display:none;">
+            <i class="fas fa-spinner"></i>
+            <span id="statusText">جاري التحليل...</span>
+          </div>
+        </div>
+
+        <div class="report-section" id="reportSection">
+          <h3 class="section-title">
+            <i class="fas fa-clipboard-check"></i>
+            تقرير مراجعة جودة الرعاية الطبية
+          </h3>
+          
+          <div class="rating-section" id="ratingSection">
+            <h4><i class="fas fa-star"></i> تقييم الحالة</h4>
+            <div class="rating-grid">
+              <div class="rating-item">
+                <label>الالتزام بمعايير التأمين</label>
+                <div class="rating-stars" id="insuranceRating">
+                  <i class="far fa-star" data-value="1"></i>
+                  <i class="far fa-star" data-value="2"></i>
+                  <i class="far fa-star" data-value="3"></i>
+                  <i class="far fa-star" data-value="4"></i>
+                  <i class="far fa-star" data-value="5"></i>
+                  <i class="far fa-star" data-value="6"></i>
+                  <i class="far fa-star" data-value="7"></i>
+                  <i class="far fa-star" data-value="8"></i>
+                  <i class="far fa-star" data-value="9"></i>
+                  <i class="far fa-star" data-value="10"></i>
+                </div>
+                <div class="rating-value" id="insuranceValue">0 / 10</div>
+              </div>
+              <div class="rating-item">
+                <label>جودة الخدمات الطبية المقدمة</label>
+                <div class="rating-stars" id="serviceRating">
+                  <i class="far fa-star" data-value="1"></i>
+                  <i class="far fa-star" data-value="2"></i>
+                  <i class="far fa-star" data-value="3"></i>
+                  <i class="far fa-star" data-value="4"></i>
+                  <i class="far fa-star" data-value="5"></i>
+                  <i class="far fa-star" data-value="6"></i>
+                  <i class="far fa-star" data-value="7"></i>
+                  <i class="far fa-star" data-value="8"></i>
+                  <i class="far fa-star" data-value="9"></i>
+                  <i class="far fa-star" data-value="10"></i>
+                </div>
+                <div class="rating-value" id="serviceValue">0 / 10</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="report-content" id="reportContent"></div>
+          <div class="report-actions">
+            <button class="btn-save" id="saveBtn" onclick="saveAndLog()">
+              <i class="fas fa-save"></i> حفظ وتسجيل
+            </button>
+            <button class="btn-print" onclick="window.print()">
+              <i class="fas fa-print"></i> طباعة
+            </button>
+            <button class="btn-translate" id="translateBtn" onclick="translateReport()">
+              <i class="fas fa-language"></i> <span id="translateText">English</span>
+            </button>
+            <button class="btn-new" onclick="resetAnalysis()">
+              <i class="fas fa-plus"></i> تحليل جديد
+            </button>
+          </div>
+        </div>
+
+        <div class="doctors-stats" id="doctorsStats">
+          <h3 class="section-title">
+            <i class="fas fa-chart-bar"></i>
+            إحصائيات الأطباء
+          </h3>
+          <table class="doctors-table">
+            <thead>
+              <tr>
+                <th>الطبيب</th>
+                <th>عدد الحالات</th>
+                <th>معايير التأمين</th>
+                <th>جودة الخدمات</th>
+                <th>المتوسط</th>
+                <th>الحالة</th>
+                <th>آخر مراجعة</th>
+              </tr>
+            </thead>
+            <tbody id="doctorsTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="powered-by">
+          <i class="fas fa-shield-alt"></i> خبراء التأمين الطبي - نظام المراجعة الذكي
+        </div>
       </div>
     </div>
   </main>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  authDomain: "makkah-medical.firebaseapp.com",
+  projectId: "makkah-medical"
+};
 
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+// URLs
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
 const API_URL = window.location.hostname.includes('m2020m.org') 
   ? 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/medical-audit'
   : '/api/medical-audit';
 
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+
+// State
 const filesState = [];
+let currentUser = null;
 let currentLang = 'ar';
 let originalReport = '';
 let translatedReport = '';
+let insuranceRatingValue = 0;
+let serviceRatingValue = 0;
 
+// DOM Elements
+const loginScreen = document.getElementById('loginScreen');
+const accessDenied = document.getElementById('accessDenied');
+const mainApp = document.getElementById('mainApp');
+const userInfo = document.getElementById('userInfo');
+const logoutBtn = document.getElementById('logoutBtn');
 const fileInput = document.getElementById('fileInput');
 const dropZone = document.getElementById('dropZone');
 const filesGrid = document.getElementById('filesGrid');
@@ -462,24 +633,182 @@ const statusMsg = document.getElementById('statusMsg');
 const statusText = document.getElementById('statusText');
 const reportSection = document.getElementById('reportSection');
 const reportContent = document.getElementById('reportContent');
-const translateBtn = document.getElementById('translateBtn');
-const translateText = document.getElementById('translateText');
+const doctorNameInput = document.getElementById('doctorName');
 
-function getHijriDate() {
-  const today = new Date();
-  const options = { calendar: 'islamic-umalqura', day: 'numeric', month: 'long', year: 'numeric' };
+// Auth State Observer
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    // Check permission
+    const hasPermission = await checkPermission(user.email);
+    
+    if (hasPermission) {
+      currentUser = {
+        email: user.email,
+        name: user.displayName || user.email.split('@')[0],
+        photo: user.photoURL
+      };
+      
+      showMainApp();
+      loadStats();
+      loadDoctorStats();
+    } else {
+      showAccessDenied();
+    }
+  } else {
+    showLoginScreen();
+  }
+});
+
+async function checkPermission(email) {
   try {
-    return today.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', options);
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'checkPermission', email: email })
+    });
+    const data = await response.json();
+    return data.hasPermission === true;
   } catch(e) {
-    return '';
+    console.error('Permission check error:', e);
+    // For testing, allow access
+    return true;
   }
 }
 
-function getGregorianDate() {
-  const today = new Date();
-  return today.toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' });
+function showLoginScreen() {
+  loginScreen.classList.remove('hidden');
+  accessDenied.classList.add('hidden');
+  mainApp.classList.add('hidden');
+  logoutBtn.classList.add('hidden');
+  userInfo.textContent = '';
 }
 
+function showAccessDenied() {
+  loginScreen.classList.add('hidden');
+  accessDenied.classList.remove('hidden');
+  mainApp.classList.add('hidden');
+  logoutBtn.classList.remove('hidden');
+}
+
+function showMainApp() {
+  loginScreen.classList.add('hidden');
+  accessDenied.classList.add('hidden');
+  mainApp.classList.remove('hidden');
+  logoutBtn.classList.remove('hidden');
+  userInfo.innerHTML = `<i class="fas fa-user"></i> ${currentUser.name}`;
+}
+
+function loginWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err => {
+    console.error('Login error:', err);
+    alert('حدث خطأ أثناء تسجيل الدخول');
+  });
+}
+
+function logout() {
+  auth.signOut();
+}
+
+async function loadStats() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDashboardStats', email: currentUser.email })
+    });
+    const data = await response.json();
+    
+    if (data.success && data.stats) {
+      document.getElementById('todayCases').textContent = data.stats.userTodayCases || 0;
+      document.getElementById('totalCases').textContent = data.stats.userCases || 0;
+      document.getElementById('totalDoctors').textContent = data.stats.totalDoctors || 0;
+      document.getElementById('allTodayCases').textContent = data.stats.todayCases || 0;
+    }
+  } catch(e) {
+    console.error('Stats load error:', e);
+  }
+}
+
+async function loadDoctorStats() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDoctorStats' })
+    });
+    const data = await response.json();
+    
+    if (data.success && data.doctors) {
+      renderDoctorStats(data.doctors);
+    }
+  } catch(e) {
+    console.error('Doctor stats error:', e);
+  }
+}
+
+function renderDoctorStats(doctors) {
+  const tbody = document.getElementById('doctorsTableBody');
+  tbody.innerHTML = '';
+  
+  doctors.forEach(doc => {
+    const avgRating = parseFloat(doc.avgOverallRating) || 0;
+    let badgeClass = 'rating-needs';
+    if (avgRating >= 8) badgeClass = 'rating-excellent';
+    else if (avgRating >= 5) badgeClass = 'rating-good';
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><strong>${doc.doctorName}</strong></td>
+      <td>${doc.totalCases}</td>
+      <td>${doc.avgInsuranceRating}/10</td>
+      <td>${doc.avgServiceRating}/10</td>
+      <td><strong>${doc.avgOverallRating}/10</strong></td>
+      <td><span class="rating-badge ${badgeClass}">${doc.status}</span></td>
+      <td>${doc.lastCaseDate || '-'}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+// Rating Stars Setup
+function setupRatingStars() {
+  const insuranceStars = document.querySelectorAll('#insuranceRating i');
+  const serviceStars = document.querySelectorAll('#serviceRating i');
+  
+  insuranceStars.forEach(star => {
+    star.addEventListener('click', () => {
+      insuranceRatingValue = parseInt(star.dataset.value);
+      updateStars(insuranceStars, insuranceRatingValue);
+      document.getElementById('insuranceValue').textContent = `${insuranceRatingValue} / 10`;
+    });
+  });
+  
+  serviceStars.forEach(star => {
+    star.addEventListener('click', () => {
+      serviceRatingValue = parseInt(star.dataset.value);
+      updateStars(serviceStars, serviceRatingValue);
+      document.getElementById('serviceValue').textContent = `${serviceRatingValue} / 10`;
+    });
+  });
+}
+
+function updateStars(stars, value) {
+  stars.forEach(star => {
+    const starValue = parseInt(star.dataset.value);
+    if (starValue <= value) {
+      star.classList.remove('far');
+      star.classList.add('fas', 'active');
+    } else {
+      star.classList.remove('fas', 'active');
+      star.classList.add('far');
+    }
+  });
+}
+
+setupRatingStars();
+
+// File Handling
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
   dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
 });
@@ -610,15 +939,41 @@ function renderFiles() {
   analyzeBtn.disabled = filesState.length === 0;
 }
 
+function getHijriDate() {
+  try {
+    return new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', 
+      { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch(e) { return ''; }
+}
+
+function getGregorianDate() {
+  return new Date().toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 analyzeBtn.addEventListener('click', async () => {
   if (filesState.length === 0) return;
+  
+  const doctorName = doctorNameInput.value.trim();
+  if (!doctorName) {
+    alert('يرجى إدخال اسم الطبيب المعالج');
+    doctorNameInput.focus();
+    return;
+  }
   
   analyzeBtn.disabled = true;
   statusText.textContent = 'جاري مراجعة الحالة بواسطة خبراء التأمين...';
   statusMsg.style.display = 'flex';
   reportSection.classList.remove('show');
   currentLang = 'ar';
-  translateText.textContent = 'ترجمة إلى English';
+  document.getElementById('translateText').textContent = 'English';
+  
+  // Reset ratings
+  insuranceRatingValue = 0;
+  serviceRatingValue = 0;
+  updateStars(document.querySelectorAll('#insuranceRating i'), 0);
+  updateStars(document.querySelectorAll('#serviceRating i'), 0);
+  document.getElementById('insuranceValue').textContent = '0 / 10';
+  document.getElementById('serviceValue').textContent = '0 / 10';
 
   try {
     const resp = await fetch(API_URL, {
@@ -626,7 +981,8 @@ analyzeBtn.addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         files: filesState, 
-        lang: 'ar' 
+        lang: 'ar',
+        doctorName: doctorName
       })
     });
 
@@ -639,6 +995,7 @@ analyzeBtn.addEventListener('click', async () => {
           <div class="print-header-text">
             <h1>تقرير مراجعة جودة الرعاية الطبية</h1>
             <p>مجمع مكة الطبي بالزاهر - خبراء التأمين الطبي</p>
+            <p>الطبيب: ${doctorName}</p>
           </div>
           <div class="print-header-dates">
             <div>${getHijriDate()}</div>
@@ -650,7 +1007,7 @@ analyzeBtn.addEventListener('click', async () => {
       const printFooter = `
         <div class="print-footer">
           <strong>مجمع مكة الطبي بالزاهر</strong> - جميع الحقوق محفوظة<br>
-          www.m2020m.org | هذا التقرير تم إعداده بواسطة نظام مراجعة جودة الرعاية الطبية
+          www.m2020m.org | المراجع: ${currentUser.name}
         </div>
       `;
       
@@ -678,17 +1035,74 @@ analyzeBtn.addEventListener('click', async () => {
   }
 });
 
+async function saveAndLog() {
+  const doctorName = doctorNameInput.value.trim();
+  
+  if (insuranceRatingValue === 0 || serviceRatingValue === 0) {
+    alert('يرجى تقييم الحالة قبل الحفظ');
+    return;
+  }
+  
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+  
+  try {
+    // Log usage
+    await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'logUsage',
+        userEmail: currentUser.email,
+        userName: currentUser.name,
+        doctorName: doctorName,
+        caseType: 'مراجعة تأمين',
+        filesCount: filesState.length,
+        insuranceRating: insuranceRatingValue,
+        serviceRating: serviceRatingValue,
+        notes: ''
+      })
+    });
+    
+    // Save report to Drive
+    await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'saveReport',
+        doctorName: doctorName,
+        reportHtml: reportContent.innerHTML
+      })
+    });
+    
+    alert('تم حفظ التقرير وتسجيل الحالة بنجاح');
+    loadStats();
+    loadDoctorStats();
+    
+  } catch(err) {
+    console.error('Save error:', err);
+    alert('حدث خطأ أثناء الحفظ');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ وتسجيل';
+  }
+}
+
 async function translateReport() {
+  const translateBtn = document.getElementById('translateBtn');
+  const translateText = document.getElementById('translateText');
+  
   if (currentLang === 'ar') {
     if (translatedReport) {
       reportContent.innerHTML = translatedReport;
       currentLang = 'en';
-      translateText.textContent = 'ترجمة إلى العربية';
+      translateText.textContent = 'العربية';
       return;
     }
     
     translateBtn.disabled = true;
-    translateText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الترجمة...';
+    translateText.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     
     try {
       const resp = await fetch(API_URL, {
@@ -703,12 +1117,14 @@ async function translateReport() {
       const data = await resp.json();
       
       if (data.success) {
+        const doctorName = doctorNameInput.value.trim();
         const printHeader = `
           <div class="print-header" style="direction: ltr;">
             <img src="https://www.m2020m.org/logo-transparent.png" alt="Logo">
             <div class="print-header-text">
               <h1 style="font-family: Arial, sans-serif;">Medical Care Quality Review Report</h1>
-              <p style="font-family: Arial, sans-serif;">Makkah Medical Complex Al-Zaher - Medical Insurance Experts</p>
+              <p style="font-family: Arial, sans-serif;">Makkah Medical Complex - Insurance Experts</p>
+              <p style="font-family: Arial, sans-serif;">Doctor: ${doctorName}</p>
             </div>
             <div class="print-header-dates">
               <div>${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
@@ -719,14 +1135,14 @@ async function translateReport() {
         const printFooter = `
           <div class="print-footer" style="direction: ltr; font-family: Arial, sans-serif;">
             <strong>Makkah Medical Complex Al-Zaher</strong> - All Rights Reserved<br>
-            www.m2020m.org | This report was prepared by the Medical Care Quality Review System
+            www.m2020m.org | Reviewer: ${currentUser.name}
           </div>
         `;
         
         translatedReport = printHeader + data.html + printFooter;
         reportContent.innerHTML = translatedReport;
         currentLang = 'en';
-        translateText.textContent = 'ترجمة إلى العربية';
+        translateText.textContent = 'العربية';
       }
     } catch(err) {
       console.error('Translation error:', err);
@@ -737,7 +1153,7 @@ async function translateReport() {
   } else {
     reportContent.innerHTML = originalReport;
     currentLang = 'ar';
-    translateText.textContent = 'ترجمة إلى English';
+    translateText.textContent = 'English';
   }
 }
 
@@ -749,7 +1165,14 @@ function resetAnalysis() {
   originalReport = '';
   translatedReport = '';
   currentLang = 'ar';
-  translateText.textContent = 'ترجمة إلى English';
+  doctorNameInput.value = '';
+  insuranceRatingValue = 0;
+  serviceRatingValue = 0;
+  updateStars(document.querySelectorAll('#insuranceRating i'), 0);
+  updateStars(document.querySelectorAll('#serviceRating i'), 0);
+  document.getElementById('insuranceValue').textContent = '0 / 10';
+  document.getElementById('serviceValue').textContent = '0 / 10';
+  document.getElementById('translateText').textContent = 'English';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 </script>
