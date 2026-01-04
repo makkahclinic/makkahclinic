@@ -412,8 +412,11 @@ const auth = firebase.auth();
 
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
 
-// Owner emails (add your email here)
-const OWNER_EMAILS = ['owner@m2020m.org', 'admin@m2020m.org'];
+// Owner emails - ضع بريدك الإلكتروني هنا
+const OWNER_EMAILS = [
+  'dr.mansour2012@hotmail.com',
+  'owner@m2020m.org'
+];
 
 let currentUser = null;
 
@@ -438,9 +441,7 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 function isOwner(email) {
-  // For testing, allow all authenticated users
-  return true;
-  // In production, use: return OWNER_EMAILS.includes(email.toLowerCase());
+  return OWNER_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
 }
 
 function showLoginScreen() {
@@ -511,7 +512,7 @@ async function loadPermissions() {
     const response = await fetch(BACKEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'getPermissions' })
+      body: JSON.stringify({ action: 'getPermissions', callerEmail: currentUser.email })
     });
     const data = await response.json();
     
@@ -585,7 +586,8 @@ async function addPermission() {
         action: 'addPermission', 
         email: email, 
         name: name, 
-        department: dept 
+        department: dept,
+        callerEmail: currentUser.email
       })
     });
     const data = await response.json();
@@ -613,7 +615,7 @@ async function removePermission(email) {
     const response = await fetch(BACKEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'removePermission', email: email })
+      body: JSON.stringify({ action: 'removePermission', email: email, callerEmail: currentUser.email })
     });
     const data = await response.json();
     
@@ -636,7 +638,8 @@ async function activatePermission(email, name, dept) {
         action: 'addPermission', 
         email: email, 
         name: name, 
-        department: dept 
+        department: dept,
+        callerEmail: currentUser.email
       })
     });
     const data = await response.json();
