@@ -60,6 +60,12 @@ function handleRequest(e) {
       case 'getManagers':
         result = getManagers();
         break;
+      case 'master':
+        result = getMasterData();
+        break;
+      case 'library':
+        result = getLibraryData();
+        break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
     }
@@ -428,6 +434,60 @@ function getManagers() {
   const managers = Array.from(managersSet).sort();
   
   return { success: true, data: managers };
+}
+
+/**
+ * جلب البيانات الرئيسية للنظام (الأقسام والمسؤولين)
+ */
+function getMasterData() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ownersSet = new Set();
+  const categoriesSet = new Set(['FMS', 'PSC', 'IPC', 'EOC', 'RM', 'QI', 'LD', 'PSC/FMS', 'EOC/FMS', 'PSC/LB', 'PSC/PH', 'RM/PH']);
+  
+  const libSheet = ss.getSheetByName(RISK_LIBRARY_SHEET_NAME);
+  if (libSheet && libSheet.getLastRow() > 1) {
+    const data = libSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const owner = data[i][0];
+      const cat = data[i][3];
+      if (owner && owner.toString().trim()) ownersSet.add(owner.toString().trim());
+      if (cat && cat.toString().trim()) categoriesSet.add(cat.toString().trim());
+    }
+  }
+  
+  return {
+    ok: true,
+    owners: Array.from(ownersSet).sort(),
+    categories: Array.from(categoriesSet).sort()
+  };
+}
+
+/**
+ * جلب مكتبة المخاطر
+ */
+function getLibraryData() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(RISK_LIBRARY_SHEET_NAME);
+  
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return { ok: true, items: [] };
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  const items = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[2]) continue;
+    items.push({
+      risk: row[2] || '',
+      category: row[3] || '',
+      defaultOwner: row[4] || row[0] || '',
+      defaultMitigation: row[5] || ''
+    });
+  }
+  
+  return { ok: true, items: items };
 }
 
 function testConnection() {
