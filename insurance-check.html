@@ -12,6 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
   <style>
     :root {
@@ -601,6 +602,7 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const db = firebase.firestore();
 
 // URLs
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
@@ -661,6 +663,37 @@ auth.onAuthStateChanged(async (user) => {
 
 async function checkPermission(email) {
   try {
+    // التحقق من Firestore RBAC أولاً
+    const userDoc = await db.collection('staff').doc(email).get();
+    
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      const role = userData.role || '';
+      const permissions = userData.permissions || {};
+      const status = userData.status || 'active';
+      
+      // تحقق من الحالة النشطة
+      if (status !== 'active') {
+        console.log('User account is not active:', status);
+        return false;
+      }
+      
+      // المالك والمدير لهم صلاحية كاملة
+      if (role === 'owner' || role === 'admin') {
+        console.log('Access granted: owner/admin role');
+        return true;
+      }
+      
+      // تحقق من صلاحية insurance
+      const hasInsurance = permissions.insurance === true || 
+                          (permissions.insurance && permissions.insurance.view === true);
+      if (hasInsurance) {
+        console.log('Access granted: insurance permission');
+        return true;
+      }
+    }
+    
+    // Fallback للنظام القديم (Google Sheets)
     const response = await fetch(BACKEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -670,8 +703,7 @@ async function checkPermission(email) {
     return data.hasPermission === true;
   } catch(e) {
     console.error('Permission check error:', e);
-    // For testing, allow access
-    return true;
+    return false;
   }
 }
 
