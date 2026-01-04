@@ -1,0 +1,238 @@
+🧠 أولًا: تشخيص اللخبطة الحالية (بصراحة)
+عندك حاليًا 5 مصادر صلاحيات ❌
+
+OWNER_EMAIL (Hard-coded)
+
+role في staff_roles
+
+allowedSystems[]
+
+Custom Claims (doctor / pharmacist / patient)
+
+منطق UI متكرر (is-admin / admin-only / hidden)
+
+🔴 هذا أخطر شيء
+لأنه يسمح بتناقض:
+
+المستخدم يظهر له زر
+
+لكن الصفحة ترفض
+
+أو العكس
+
+🎯 الهدف النهائي (واضح جدًا)
+نريد 3 مستويات فقط:
+1️⃣ Owner (المالك)
+
+يرى كل شيء
+
+يدخل Dashboard خاص
+
+يوزع الصلاحيات على الأدمن فقط
+
+لا يتعامل مع الموظفين مباشرة
+
+2️⃣ Admin (مدير)
+
+يرى Dashboard إداري
+
+يدير:
+
+الموظفين
+
+اللجان
+
+الصلاحيات التشغيلية
+
+لا يستطيع ترقية أحد إلى Owner
+
+3️⃣ Staff / Chair / Member / Viewer
+
+لا يرى Dashboard إداري
+
+يرى فقط الأنظمة المسموح بها له
+
+🧩 القاعدة الذهبية (احفظها)
+
+❝ الصلاحيات تُحدد من Firestore فقط
+ولا يوجد أي if (email === …) داخل الواجهة ❞
+
+🏗️ الخطة المعمارية النهائية (واضحة وقابلة للتنفيذ)
+🔹 1. توحيد مصدر الصلاحيات (أهم خطوة)
+المرجع الوحيد للصلاحيات
+
+📄 staff_roles/{uid}
+
+{
+  uid: "...",
+  email: "...",
+  role: "owner | admin | staff | chair | member | viewer",
+  status: "active | suspended",
+
+  permissions: {
+    dashboard: true,
+    eoc: true,
+    complaints: false,
+    incidents: true,
+    risks: false,
+    rounds: true,
+    calibration: false,
+    maintenance: false,
+    needlestick: true,
+    insurance: false
+  }
+}
+
+
+❌ ألغِ:
+
+allowedSystems[]
+
+منطق is-admin
+
+منطق الإيميل الثابت داخل الواجهات
+
+🔹 2. تقسيم الصفحات بوضوح (بدون تداخل)
+الصفحات الرسمية تصبح:
+الصفحة	من يدخل
+owner-dashboard.html	owner فقط
+admin-dashboard.html	admin فقط
+staff-dashboard.html	staff / chair / member
+portal.html	بوابة عامة
+admin-login.html	دخول الموظفين
+
+❌ ممنوع:
+
+owner يدخل admin-dashboard
+
+admin يدخل owner-dashboard
+
+🔹 3. محرك RBAC واحد (بدل عشرات if)
+
+📁 core/rbac.js
+
+export class RBAC {
+  constructor(userData) {
+    this.role = userData.role;
+    this.permissions = userData.permissions || {};
+  }
+
+  isOwner() {
+    return this.role === 'owner';
+  }
+
+  isAdmin() {
+    return this.role === 'admin';
+  }
+
+  can(key) {
+    if (this.isOwner()) return true;
+    return this.permissions[key] === true;
+  }
+
+  guardPage(requiredKey) {
+    if (!this.can(requiredKey)) {
+      window.location.href = 'access-denied.html';
+    }
+  }
+
+  applyUI() {
+    document.querySelectorAll('[data-permission]').forEach(el => {
+      const key = el.dataset.permission;
+      if (!this.can(key)) el.remove();
+    });
+  }
+}
+
+🔹 4. كل عنصر UI مرتبط بصلاحية (بدون استثناء)
+مثال Sidebar
+<a data-permission="complaints">الشكاوى</a>
+<a data-permission="insurance">تحليل التأمين</a>
+
+مثال KPI
+<div class="kpi-card" data-permission="maintenance"></div>
+
+بعد تسجيل الدخول:
+const rbac = new RBAC(userData);
+rbac.applyUI();
+
+🔹 5. حماية الصفحات (إجباري أمنيًا)
+في أعلى كل صفحة نظام:
+rbac.guardPage('complaints');
+
+
+أمثلة:
+
+insurance.html → insurance
+
+risk-register.html → risks
+
+Round.html → rounds
+
+🔹 6. من يغيّر الصلاحيات؟
+🔐 قاعدة حديدية:
+من	ماذا يفعل
+owner	يعيّن admin فقط
+admin	يوزع permissions
+admin	لا يغيّر owner
+staff	لا يغيّر أحد
+UI:
+
+صفحة إدارة الصلاحيات تظهر فقط لـ admin
+
+owner يرى إدارة الأدمن فقط
+
+🔹 7. تبسيط بوابة الدخول (login)
+بعد تسجيل الدخول:
+if (role === 'owner') redirect('owner-dashboard.html');
+else if (role === 'admin') redirect('admin-dashboard.html');
+else redirect('staff-dashboard.html');
+
+
+❌ لا منطق إضافي
+❌ لا فحص claims
+❌ لا فحص email
+
+🔹 8. تنظيف ما يجب حذفه الآن (مهم)
+
+❌ احذف أو عطّل:
+
+isTrialPeriod
+
+developerEmail
+
+Custom Claims للأدوار الإدارية
+
+allowedSystems[]
+
+تكرار SYSTEMS في أكثر من ملف
+
+🧪 كيف تنفّذ بدون كسر النظام؟
+المرحلة 1 (آمنة – يوم واحد)
+
+إضافة permissions جنب allowedSystems
+
+قراءة الاثنين مؤقتًا
+
+المرحلة 2
+
+نقل UI لـ data-permission
+
+تفعيل RBAC.applyUI()
+
+المرحلة 3
+
+حذف allowedSystems
+
+حذف منطق الإيميل الثابت
+
+فصل owner / admin dashboards
+
+🏁 النتيجة النهائية
+
+✔️ مالك واضح
+✔️ مدير واضح
+✔️ موظف واضح
+✔️ لا زر يظهر بالغلط
+✔️ لا صفحة تُفتح بدون صلاحية
+✔️ جاهز للاعتماد والحوكمة
