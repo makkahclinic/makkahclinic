@@ -1,2945 +1,777 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مركز القيادة والسيطرة - المالك</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <style>
-        :root {
-            --primary: #1e3a5f;
-            --primary-dark: #152a45;
-            --gold: #c9a962;
-            --success: #10b981;
-            --danger: #dc3545;
-            --warning: #f59e0b;
-            --info: #17a2b8;
-            --bg-light: #f8f9fa;
-            --sidebar-width: 260px;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
-        /* Emergency Banner Styles */
-        .emergency-banner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 9999;
-            background: linear-gradient(90deg, #dc3545, #c82333);
-            color: white;
-            padding: 15px 20px;
-            box-shadow: 0 4px 20px rgba(220, 53, 69, 0.5);
-            animation: emergencyPulse 1.5s ease-in-out infinite;
-        }
-        .emergency-banner.dismissed {
-            animation: slideUp 0.5s ease-out forwards;
-        }
-        @keyframes emergencyPulse {
-            0%, 100% { background: linear-gradient(90deg, #dc3545, #c82333); }
-            50% { background: linear-gradient(90deg, #ff4757, #dc3545); }
-        }
-        @keyframes slideUp {
-            to { transform: translateY(-100%); opacity: 0; }
-        }
-        .emergency-banner-content {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .emergency-text h3 {
-            font-size: 1.3rem;
-            margin-bottom: 3px;
-        }
-        .emergency-text p {
-            font-size: 1rem;
-            opacity: 0.95;
-        }
-        .pulse-icon {
-            animation: iconPulse 0.8s ease-in-out infinite;
-        }
-        @keyframes iconPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-        }
-        .btn-light {
-            background: white;
-            color: #dc3545;
-            font-weight: 600;
-        }
-        .btn-light:hover {
-            background: #f8f9fa;
-        }
-        body {
-            font-family: 'Tajawal', sans-serif;
-            font-size: 16px;
-            background: var(--bg-light);
-            min-height: 100vh;
-            display: flex;
-        }
-        .sidebar, .main-content { visibility: hidden; opacity: 0; transition: opacity 0.3s; }
-        body.authenticated .sidebar, body.authenticated .main-content { visibility: visible; opacity: 1; }
-        
-        .sidebar {
-            width: var(--sidebar-width);
-            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
-            min-height: 100vh;
-            position: fixed;
-            right: 0;
-            top: 0;
-            z-index: 100;
-            transition: transform 0.3s;
-            overflow-y: auto;
-        }
-        .sidebar-header {
-            padding: 1.2rem;
-            text-align: center;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .sidebar-header img {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: white;
-            padding: 5px;
-        }
-        .sidebar-header h3 {
-            color: white;
-            margin-top: 0.6rem;
-            font-size: 1.1rem;
-        }
-        .sidebar-header .role-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-            color: var(--primary-dark);
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            margin-top: 0.4rem;
-            font-weight: 700;
-        }
-        .nav-menu { padding: 0.8rem 0; }
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 20px;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            transition: all 0.3s;
-            border-right: 4px solid transparent;
-            cursor: pointer;
-            font-size: 1.05rem;
-        }
-        .nav-item:hover, .nav-item.active {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            border-right-color: var(--gold);
-        }
-        .nav-item i { width: 22px; text-align: center; }
-        .nav-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.8rem 0; }
-        
-        .main-content {
-            margin-right: var(--sidebar-width);
-            flex: 1;
-            padding: 1.2rem;
-            min-height: 100vh;
-        }
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.8rem 1.2rem;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            margin-bottom: 1.2rem;
-        }
-        .welcome-text h2 { color: var(--primary); font-size: 1.5rem; }
-        .welcome-text p { color: #666; font-size: 1rem; }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 14px;
-            border: none;
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.85rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-decoration: none;
-        }
-        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
-        .btn-outline:hover { background: var(--primary); color: white; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-success { background: var(--success); color: white; }
-        
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.2rem;
-        }
-        .kpi-card {
-            background: white;
-            border-radius: 14px;
-            padding: 1.2rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            color: inherit;
-            border: 1px solid rgba(0,0,0,0.04);
-            position: relative;
-            overflow: hidden;
-        }
-        .kpi-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 4px;
-            height: 100%;
-            background: var(--gold);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .kpi-card:hover { 
-            transform: translateY(-4px); 
-            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-        }
-        .kpi-card:hover::before { opacity: 1; }
-        .kpi-icon {
-            width: 55px;
-            height: 55px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4rem;
-            color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        .kpi-icon.eoc { background: linear-gradient(135deg, #10b981, #059669); }
-        .kpi-icon.eoc.active { background: linear-gradient(135deg, #dc2626, #991b1b); animation: pulse 1s infinite; }
-        .kpi-icon.complaints { background: linear-gradient(135deg, #667eea, #764ba2); }
-        .kpi-icon.incidents { background: linear-gradient(135deg, #f093fb, #f5576c); }
-        .kpi-icon.risks { background: linear-gradient(135deg, #4facfe, #00f2fe); }
-        .kpi-icon.rounds { background: linear-gradient(135deg, #43e97b, #38f9d7); }
-        .kpi-icon.calibration { background: linear-gradient(135deg, #fa709a, #fee140); }
-        .kpi-icon.maintenance { background: linear-gradient(135deg, #667eea, #764ba2); }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-        .kpi-info h3 { font-size: 1.6rem; color: var(--primary); line-height: 1; font-weight: 700; }
-        .kpi-info p { font-size: 0.8rem; color: #555; margin-top: 4px; font-weight: 500; }
-        .kpi-info .sub { font-size: 0.75rem; color: #999; display: block; margin-top: 2px; }
-        .kpi-info .sub.danger { color: var(--danger) !important; font-weight: 700; }
-        
-        .alerts-section {
-            background: white;
-            border-radius: 10px;
-            padding: 1rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.8rem;
-            padding-bottom: 0.6rem;
-            border-bottom: 1px solid #eee;
-        }
-        .section-header h3 { font-size: 1rem; color: var(--primary); display: flex; align-items: center; gap: 8px; }
-        .alert-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            font-size: 0.85rem;
-        }
-        .alert-item.danger { background: #fff5f5; border-right: 4px solid var(--danger); }
-        .alert-item.warning { background: #fffbeb; border-right: 4px solid var(--warning); }
-        .alert-item.info { background: #f0f9ff; border-right: 4px solid var(--info); }
-        .no-alerts { text-align: center; padding: 1.5rem; color: #999; font-size: 0.9rem; }
-        
-        .stats-grid-detailed {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.2rem;
-        }
-        .stats-box {
-            background: white;
-            border-radius: 10px;
-            padding: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .stats-box h4 {
-            font-size: 0.9rem;
-            color: var(--primary);
-            margin-bottom: 0.8rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .stats-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 0.85rem;
-        }
-        .stats-row:last-child { border-bottom: none; }
-        .stats-row .label { color: #666; }
-        .stats-row .value { font-weight: 700; color: var(--primary); }
-        .stats-row .value.danger { color: var(--danger); }
-        .stats-row .value.warning { color: var(--warning); }
-        .stats-row .value.success { color: var(--success); }
-        
-        .content-section { display: none; }
-        .content-section.active { display: block; }
-        
-        .loading-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(255,255,255,0.95);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid #e2e8f0;
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .refresh-btn {
-            background: none;
-            border: none;
-            color: var(--primary);
-            cursor: pointer;
-            padding: 5px;
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
-        .refresh-btn:hover { background: #f0f0f0; }
-        .refresh-btn.loading i { animation: spin 1s linear infinite; }
-        
-        .users-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .users-table th {
-            background: var(--bg-light);
-            padding: 12px;
-            text-align: right;
-            font-weight: 600;
-            color: var(--primary);
-            border-bottom: 2px solid #e2e8f0;
-        }
-        .users-table td {
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .users-table tr:hover { background: #f8fafc; }
-        .role-badge-small {
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .role-owner { background: #fef3c7; color: #92400e; }
-        .role-admin { background: #dbeafe; color: #1e40af; }
-        .role-staff { background: #e5e7eb; color: #374151; }
-        
-        .action-btns { display: flex; gap: 5px; }
-        .action-btns button {
-            padding: 5px 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: all 0.3s;
-        }
-        
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-            font-size: 1rem;
-        }
-        .data-table th {
-            background: var(--primary);
-            color: white;
-            padding: 14px;
-            text-align: right;
-            font-weight: 600;
-            font-size: 1.05rem;
-        }
-        .data-table td {
-            padding: 14px;
-            border-bottom: 1px solid #e2e8f0;
-            font-size: 1rem;
-        }
-        .data-table tr:hover { background: #f1f5f9; }
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .status-new { background: #dbeafe; color: #1e40af; }
-        .status-progress { background: #fef3c7; color: #92400e; }
-        .status-escalated { background: #fee2e2; color: #991b1b; }
-        .status-closed { background: #d1fae5; color: #065f46; }
-        .status-high { background: #fee2e2; color: #991b1b; }
-        .status-medium { background: #fef3c7; color: #92400e; }
-        .status-low { background: #d1fae5; color: #065f46; }
-        
-        .filter-bar {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-        .filter-bar input, .filter-bar select {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-family: inherit;
-        }
-        .filter-bar input { flex: 1; min-width: 200px; }
-        
-        @media (max-width: 992px) {
-            .sidebar { transform: translateX(100%); }
-            .sidebar.open { transform: translateX(0); }
-            .main-content { margin-right: 0; padding: 1rem; }
-            .menu-toggle { display: block !important; }
-        }
-        .menu-toggle {
-            display: none;
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        
-        .access-denied {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-            text-align: center;
-            padding: 20px;
-        }
-        .access-denied i { font-size: 80px; margin-bottom: 20px; color: var(--danger); }
-        .access-denied h1 { font-size: 2rem; margin-bottom: 10px; }
-        .access-denied .btn-back {
-            background: var(--gold);
-            color: var(--primary);
-            padding: 12px 30px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 700;
-            margin-top: 20px;
-        }
-        
-        .toast {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--success);
-            color: white;
-            padding: 15px 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            display: none;
-            z-index: 9999;
-            font-weight: 600;
-        }
-        .toast.error { background: var(--danger); }
-        .toast.show { display: block; animation: slideUp 0.3s ease; }
-        @keyframes slideUp {
-            from { transform: translate(-50%, 100px); opacity: 0; }
-            to { transform: translate(-50%, 0); opacity: 1; }
-        }
-        
-        .confirm-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-        }
-        .confirm-modal-overlay.show {
-            opacity: 1;
-            visibility: visible;
-        }
-        .confirm-modal {
-            background: white;
-            border-radius: 16px;
-            padding: 30px;
-            max-width: 420px;
-            width: 90%;
-            text-align: center;
-            transform: scale(0.8);
-            transition: transform 0.3s ease;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        .confirm-modal-overlay.show .confirm-modal {
-            transform: scale(1);
-        }
-        .confirm-modal-icon {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 32px;
-        }
-        .confirm-modal-icon.warning {
-            background: #fef3c7;
-            color: #f59e0b;
-        }
-        .confirm-modal-icon.danger {
-            background: #fee2e2;
-            color: #dc3545;
-        }
-        .confirm-modal-icon.info {
-            background: #dbeafe;
-            color: #3b82f6;
-        }
-        .confirm-modal-icon.success {
-            background: #d1fae5;
-            color: #10b981;
-        }
-        .confirm-modal h3 {
-            color: var(--primary);
-            margin-bottom: 10px;
-            font-size: 1.3rem;
-        }
-        .confirm-modal p {
-            color: #666;
-            margin-bottom: 25px;
-            line-height: 1.6;
-            white-space: pre-line;
-        }
-        .confirm-modal-btns {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-        }
-        .confirm-modal-btns button {
-            padding: 12px 28px;
-            border: none;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .confirm-modal-btns .btn-cancel {
-            background: #e5e7eb;
-            color: #374151;
-        }
-        .confirm-modal-btns .btn-cancel:hover {
-            background: #d1d5db;
-        }
-        .confirm-modal-btns .btn-confirm {
-            background: var(--primary);
-            color: white;
-        }
-        .confirm-modal-btns .btn-confirm:hover {
-            background: var(--primary-dark);
-        }
-        .confirm-modal-btns .btn-confirm.danger {
-            background: var(--danger);
-        }
-        .confirm-modal-btns .btn-confirm.danger:hover {
-            background: #b91c1c;
-        }
-        
-        /* ✅ نافذة روابط الطوارئ QR */
-        .qr-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.85);
-            z-index: 9998;
-            display: none;
-            justify-content: center;
-            align-items: center;
-        }
-        .qr-modal-overlay.show { display: flex; }
-        .qr-modal {
-            background: linear-gradient(135deg, #1e3a5f 0%, #0f1f33 100%);
-            border-radius: 20px;
-            padding: 2rem;
-            max-width: 800px;
-            width: 95%;
-            position: relative;
-            border: 2px solid rgba(201,169,98,0.3);
-        }
-        .qr-modal h2 { color: white !important; text-align: center; margin-bottom: 1.5rem; }
-        .qr-modal-close {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: white;
-            font-size: 2rem;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .qr-modal-close:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
-        .qr-cards-container {
-            display: flex;
-            justify-content: center;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-        .qr-card {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 1.5rem;
-            border-radius: 15px;
-            text-decoration: none;
-            color: white;
-            transition: all 0.3s;
-            min-width: 180px;
-        }
-        .qr-card:hover { transform: translateY(-5px); }
-        .qr-card.qr-red { background: rgba(220,38,38,0.5); border: 2px solid rgba(220,38,38,0.8); }
-        .qr-card.qr-green { background: rgba(16,185,129,0.5); border: 2px solid rgba(16,185,129,0.8); }
-        .qr-card img {
-            width: 150px;
-            height: 150px;
-            border-radius: 10px;
-            background: white;
-            padding: 8px;
-            margin-bottom: 1rem;
-        }
-        .qr-label {
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-bottom: 0.3rem;
-        }
-        .qr-card small { opacity: 0.8; font-size: 0.85rem; }
-        
-        /* ✅ تنبيه الطوارئ المنبثق */
-        .emergency-popup-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.9);
-            z-index: 99999;
-            display: none;
-            justify-content: center;
-            align-items: center;
-        }
-        .emergency-popup-overlay.show { display: flex; }
-        .emergency-popup {
-            background: linear-gradient(135deg, #dc2626, #991b1b);
-            border-radius: 20px;
-            padding: 2rem;
-            text-align: center;
-            color: white;
-            max-width: 400px;
-            animation: shakePopup 0.5s ease-in-out infinite;
-        }
-        @keyframes shakePopup {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-        .emergency-popup-icon { font-size: 4rem; margin-bottom: 1rem; }
-        .emergency-popup h2 { font-size: 1.8rem; margin-bottom: 0.5rem; }
-        .emergency-popup-details { margin: 1rem 0; font-size: 1rem; }
-        .emergency-popup-btn {
-            background: white;
-            color: #dc2626;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 10px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            cursor: pointer;
-            margin: 5px;
-            font-family: inherit;
-        }
-        .emergency-popup-btn.secondary {
-            background: transparent;
-            color: white;
-            border: 2px solid white;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لوحة تحكم المالك - مجمع مكة الطبي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --primary-light: #2d4a6f;
+      --gold: #c9a962;
+      --gold-light: #d4b872;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #eab308;
+      --info: #3b82f6;
+      --bg: #0f1a2b;
+      --card-bg: #1a2d4a;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --border: rgba(201, 169, 98, 0.3);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Tajawal", sans-serif;
+      background: linear-gradient(135deg, var(--bg) 0%, #152238 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 1rem; }
+    
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      padding: 1.5rem 0;
+      border-bottom: 3px solid var(--gold);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .header-content {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .logo-section { display: flex; align-items: center; gap: 1rem; }
+    .logo-section img { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--gold); }
+    .logo-section h1 { font-size: 1.5rem; color: var(--gold); }
+    .logo-section p { font-size: 0.9rem; color: var(--text-muted); }
+    .header-btns { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .nav-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem;
+      border-radius: 10px; text-decoration: none; font-weight: 600; transition: all 0.3s;
+      border: none; cursor: pointer; font-family: inherit; font-size: 0.9rem;
+    }
+    .nav-btn.primary { background: var(--gold); color: var(--primary); }
+    .nav-btn.primary:hover { background: var(--gold-light); }
+    .nav-btn.danger { background: var(--error); color: white; }
+    .nav-btn.danger:hover { background: #dc2626; }
+    .user-info { color: var(--gold); font-size: 0.9rem; }
+
+    .main-content { padding: 2rem 0; }
+    
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem; margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 16px; padding: 1.5rem; text-align: center;
+      border: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    .stat-card i { font-size: 2.5rem; color: var(--gold); margin-bottom: 0.75rem; }
+    .stat-card .value { font-size: 2.5rem; font-weight: 800; color: var(--gold); }
+    .stat-card .label { font-size: 0.95rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+    .section-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 20px; padding: 2rem; margin-bottom: 2rem;
+      border: 1px solid var(--border);
+    }
+    .section-title {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 0.75rem; font-size: 1.3rem; color: var(--gold); margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);
+    }
+    .section-title .title-text { display: flex; align-items: center; gap: 0.75rem; }
+    .section-title i { font-size: 1.5rem; }
+
+    .add-form {
+      display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 1rem;
+      margin-bottom: 1.5rem; padding: 1.5rem;
+      background: rgba(201, 169, 98, 0.1); border-radius: 12px;
+    }
+    .add-form input {
+      padding: 0.75rem 1rem; border-radius: 10px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.05);
+      color: var(--text); font-family: inherit; font-size: 1rem;
+    }
+    .add-form input:focus { outline: none; border-color: var(--gold); }
+    .add-form button {
+      padding: 0.75rem 1.5rem; border-radius: 10px; border: none;
+      background: var(--success); color: white; font-family: inherit;
+      font-weight: 600; cursor: pointer; transition: all 0.3s;
+    }
+    .add-form button:hover { background: #16a34a; }
+
+    .permissions-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .permissions-table th, .permissions-table td {
+      padding: 1rem; text-align: right; border-bottom: 1px solid var(--border);
+    }
+    .permissions-table th { color: var(--gold); font-weight: 600; background: rgba(201, 169, 98, 0.1); }
+    .permissions-table td { color: var(--text-muted); }
+    .permissions-table tr:hover td { background: rgba(201, 169, 98, 0.05); }
+    .status-badge {
+      display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600;
+    }
+    .status-active { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #fee2e2; color: #991b1b; }
+    .action-btn {
+      padding: 0.5rem 1rem; border-radius: 8px; border: none;
+      font-family: inherit; font-size: 0.85rem; cursor: pointer; transition: all 0.3s;
+    }
+    .action-btn.remove { background: var(--error); color: white; }
+    .action-btn.remove:hover { background: #dc2626; }
+    .action-btn.activate { background: var(--success); color: white; }
+    .action-btn.activate:hover { background: #16a34a; }
+
+    .usage-log-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .usage-log-table th, .usage-log-table td {
+      padding: 0.75rem; text-align: right; border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .usage-log-table th { color: var(--gold); font-weight: 600; background: rgba(201, 169, 98, 0.1); }
+    .usage-log-table td { color: var(--text-muted); }
+    .usage-log-table tr:hover td { background: rgba(201, 169, 98, 0.05); }
+
+    .rating-badge {
+      display: inline-block; padding: 0.25rem 0.5rem; border-radius: 8px;
+      font-size: 0.85rem; font-weight: 700;
+    }
+    .rating-excellent { background: #dcfce7; color: #166534; }
+    .rating-good { background: #fef9c3; color: #854d0e; }
+    .rating-needs { background: #fee2e2; color: #991b1b; }
+
+    .doctors-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .doctor-card {
+      background: rgba(255,255,255,0.05); border-radius: 16px; padding: 1.5rem;
+      border: 1px solid var(--border); transition: all 0.3s;
+    }
+    .doctor-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    .doctor-card .name { font-size: 1.2rem; font-weight: 700; color: var(--gold); margin-bottom: 1rem; }
+    .doctor-card .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .doctor-card .stat-item { text-align: center; }
+    .doctor-card .stat-item .value { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .doctor-card .stat-item .label { font-size: 0.8rem; color: var(--text-muted); }
+    .doctor-card .rating-bar {
+      margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .doctor-card .overall-rating { font-size: 1.8rem; font-weight: 800; }
+    .doctor-card a { color: var(--gold); text-decoration: none; font-size: 0.85rem; }
+    .doctor-card a:hover { text-decoration: underline; }
+
+    .tabs {
+      display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 0.75rem 1.5rem; border-radius: 10px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted); font-family: inherit;
+      font-weight: 600; cursor: pointer; transition: all 0.3s;
+    }
+    .tab-btn:hover { background: rgba(201, 169, 98, 0.1); }
+    .tab-btn.active { background: var(--gold); color: var(--primary); border-color: var(--gold); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .empty-state {
+      text-align: center; padding: 3rem; color: var(--text-muted);
+    }
+    .empty-state i { font-size: 4rem; margin-bottom: 1rem; opacity: 0.5; }
+
+    .login-card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 20px; padding: 3rem; text-align: center;
+      border: 1px solid var(--border); max-width: 500px; margin: 2rem auto;
+    }
+    .login-card i { font-size: 4rem; color: var(--gold); margin-bottom: 1rem; }
+    .login-card h2 { color: var(--gold); margin-bottom: 1rem; }
+    .login-card p { color: var(--text-muted); margin-bottom: 2rem; }
+    .login-btn {
+      display: inline-flex; align-items: center; gap: 0.75rem;
+      padding: 1rem 2rem; font-size: 1.1rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      color: var(--primary); border: none; border-radius: 14px;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .login-btn:hover { transform: translateY(-3px); }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 768px) {
+      .header-content { justify-content: center; text-align: center; }
+      .logo-section { flex-direction: column; }
+      .add-form { grid-template-columns: 1fr; }
+      .permissions-table, .usage-log-table { font-size: 0.85rem; }
+      .permissions-table th, .permissions-table td,
+      .usage-log-table th, .usage-log-table td { padding: 0.5rem; }
+    }
+  </style>
 </head>
 <body>
-    <!-- ✅ نافذة روابط الطوارئ QR -->
-    <div class="qr-modal-overlay" id="qrCodesModal">
-        <div class="qr-modal">
-            <button class="qr-modal-close" onclick="closeQrCodesModal()">&times;</button>
-            <h2><i class="fas fa-qrcode"></i> روابط الطوارئ</h2>
-            <div class="qr-cards-container">
-                <a href="emergency-report.html" target="_blank" class="qr-card qr-red">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/emergency-report.html" alt="QR">
-                    <div class="qr-label"><i class="fas fa-exclamation-triangle"></i> إبلاغ طوارئ</div>
-                    <small>نموذج البلاغ</small>
-                </a>
-                <a href="Emergency.html" target="_blank" class="qr-card qr-green">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/Emergency.html" alt="QR">
-                    <div class="qr-label"><i class="fas fa-tv"></i> الشاشات</div>
-                    <small>عرض التنبيه</small>
-                </a>
-                <a href="emergency-poster.html" target="_blank" class="qr-card qr-green">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://m2020m.org/emergency-poster.html" alt="QR">
-                    <div class="qr-label"><i class="fas fa-image"></i> البوستر</div>
-                    <small>للطباعة</small>
-                </a>
-            </div>
-        </div>
-    </div>
 
-    <!-- ✅ تنبيه الطوارئ المنبثق -->
-    <div class="emergency-popup-overlay" id="emergencyPopup">
-        <div class="emergency-popup">
-            <div class="emergency-popup-icon">🚨</div>
-            <h2>تنبيه طوارئ!</h2>
-            <p id="emergencyPopupMessage">تم استلام بلاغ طوارئ جديد</p>
-            <div class="emergency-popup-details">
-                <div><strong>النوع:</strong> <span id="popupType">-</span></div>
-                <div><strong>الموقع:</strong> <span id="popupLocation">-</span></div>
-                <div><strong>الوقت:</strong> <span id="popupTime">-</span></div>
-            </div>
-            <button class="emergency-popup-btn" onclick="openEocCommand()">
-                <i class="fas fa-external-link-alt"></i> ادخل الآن
-            </button>
-            <button class="emergency-popup-btn secondary" onclick="closeEmergencyPopup()">
-                <i class="fas fa-times"></i> إغلاق
-            </button>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <div class="logo-section">
+          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
+          <div>
+            <h1>لوحة تحكم المالك</h1>
+            <p>مجمع مكة الطبي بالزاهر</p>
+          </div>
         </div>
-        <audio id="emergencySound" preload="auto" loop>
-            <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
-        </audio>
-    </div>
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-spinner"></div>
-        <p style="margin-top: 15px; color: var(--primary);">جاري تحميل مركز القيادة...</p>
-    </div>
-    
-    <div class="confirm-modal-overlay" id="confirmModal">
-        <div class="confirm-modal">
-            <div class="confirm-modal-icon warning" id="confirmIcon">
-                <i class="fas fa-exclamation-triangle"></i>
-            </div>
-            <h3 id="confirmTitle">تأكيد</h3>
-            <p id="confirmMessage">هل أنت متأكد؟</p>
-            <div class="confirm-modal-btns">
-                <button class="btn-cancel" onclick="closeConfirmModal()">إلغاء</button>
-                <button class="btn-confirm" id="confirmBtn" onclick="confirmAction()">تأكيد</button>
-            </div>
+        <div class="header-btns">
+          <span class="user-info" id="userInfo"></span>
+          <a class="nav-btn primary" href="https://www.m2020m.org/insurance-check.html">
+            <i class="fas fa-file-medical"></i>
+            خدمة التأمين
+          </a>
+          <a class="nav-btn primary" href="https://www.m2020m.org/portal.html">
+            <i class="fas fa-home"></i>
+            الرئيسية
+          </a>
+          <button class="nav-btn danger hidden" id="logoutBtn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i>
+            خروج
+          </button>
         </div>
+      </div>
     </div>
-    
-    <div class="access-denied" id="accessDenied" style="display: none;">
-        <i class="fas fa-lock"></i>
-        <h1>الوصول مرفوض</h1>
-        <p>عذراً، هذه الصفحة مخصصة للمالك فقط</p>
-        <a href="portal.html" class="btn-back"><i class="fas fa-arrow-right"></i> العودة للبوابة</a>
-    </div>
+  </header>
 
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <img src="logo-transparent.png" alt="Logo" onerror="this.style.display='none'">
-            <h3 id="ownerName">المالك</h3>
-            <span class="role-badge"><i class="fas fa-crown"></i> المالك</span>
+  <main class="main-content">
+    <div class="container">
+      
+      <!-- Login Screen -->
+      <div class="login-card" id="loginScreen">
+        <i class="fas fa-crown"></i>
+        <h2>لوحة تحكم المالك</h2>
+        <p>هذه اللوحة خاصة بالمالك فقط</p>
+        <button class="login-btn" onclick="loginWithGoogle()">
+          <i class="fab fa-google"></i>
+          تسجيل الدخول
+        </button>
+      </div>
+
+      <!-- Main Dashboard -->
+      <div class="hidden" id="mainDashboard">
+        
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <i class="fas fa-users"></i>
+            <div class="value" id="totalStaff">0</div>
+            <div class="label">موظفي التأمين</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-file-medical"></i>
+            <div class="value" id="totalCases">0</div>
+            <div class="label">إجمالي الحالات</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-calendar-day"></i>
+            <div class="value" id="todayCases">0</div>
+            <div class="label">حالات اليوم</div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-user-md"></i>
+            <div class="value" id="totalDoctors">0</div>
+            <div class="label">الأطباء</div>
+          </div>
         </div>
-        <nav class="nav-menu">
-            <a class="nav-item active" data-section="dashboard">
-                <i class="fas fa-tachometer-alt"></i>
-                <span>مركز القيادة</span>
-            </a>
-            <a class="nav-item" data-section="eoc">
-                <i class="fas fa-broadcast-tower"></i>
-                <span>مركز EOC</span>
-            </a>
-            <a class="nav-item" href="cbahi-portal.html" target="_blank">
-                <i class="fas fa-award"></i>
-                <span>بوابة سباهي</span>
-            </a>
-            <div class="nav-divider"></div>
-            <a class="nav-item" data-section="complaints">
-                <i class="fas fa-comment-dots"></i>
-                <span>الشكاوى</span>
-            </a>
-            <a class="nav-item" data-section="incidents">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>الحوادث</span>
-            </a>
-            <a class="nav-item" data-section="risks">
-                <i class="fas fa-shield-alt"></i>
-                <span>سجل المخاطر</span>
-            </a>
-            <a class="nav-item" data-section="rounds">
-                <i class="fas fa-clipboard-check"></i>
-                <span>جولات السلامة</span>
-            </a>
-            <div class="nav-divider"></div>
-            <a class="nav-item" data-section="requests">
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab-btn active" onclick="showTab('permissions')">
+            <i class="fas fa-user-shield"></i> إدارة الصلاحيات
+          </button>
+          <button class="tab-btn" onclick="showTab('doctors')">
+            <i class="fas fa-user-md"></i> إحصائيات الأطباء
+          </button>
+          <button class="tab-btn" onclick="showTab('usage')">
+            <i class="fas fa-history"></i> سجل الاستخدام
+          </button>
+        </div>
+
+        <!-- Permissions Tab -->
+        <div class="tab-content active" id="permissionsTab">
+          <div class="section-card">
+            <div class="section-title">
+              <div class="title-text">
                 <i class="fas fa-user-plus"></i>
-                <span>طلبات العضوية</span>
-                <span id="requestsBadge" style="background:#ef4444; color:white; font-size:0.7rem; padding:2px 8px; border-radius:10px; margin-right:auto; display:none;">0</span>
-            </a>
-            <a class="nav-item" data-section="users">
-                <i class="fas fa-users-cog"></i>
-                <span>إدارة المستخدمين</span>
-            </a>
-            <a class="nav-item" data-section="permissions">
-                <i class="fas fa-user-shield"></i>
-                <span>إدارة الصلاحيات</span>
-            </a>
-            <div class="nav-divider"></div>
-            <a class="nav-item" id="logoutBtn">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>تسجيل الخروج</span>
-            </a>
-        </nav>
-    </aside>
+                <span>إضافة موظف جديد لخدمة التأمين</span>
+              </div>
+            </div>
+            
+            <div class="add-form">
+              <input type="email" id="newEmail" placeholder="البريد الإلكتروني للموظف">
+              <input type="text" id="newName" placeholder="اسم الموظف">
+              <input type="text" id="newDept" placeholder="القسم">
+              <button onclick="addPermission()">
+                <i class="fas fa-plus"></i> إضافة
+              </button>
+            </div>
 
-    <main class="main-content">
-        <div class="top-bar">
-            <button class="menu-toggle" id="menuToggle">
-                <i class="fas fa-bars"></i>
-            </button>
-            <div class="welcome-text">
-                <h2>مركز القيادة والسيطرة</h2>
-                <p id="dateDisplay">مجمع مكة الطبي بالزاهر</p>
+            <div class="section-title">
+              <div class="title-text">
+                <i class="fas fa-list"></i>
+                <span>الموظفون المصرح لهم</span>
+              </div>
+              <span id="staffCount" style="font-size:0.9rem;color:var(--text-muted);"></span>
             </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button class="refresh-btn" id="refreshBtn" title="تحديث البيانات" onclick="loadAllData()">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-                <a href="index.html" class="btn btn-outline">
-                    <i class="fas fa-external-link-alt"></i>
-                    الموقع
-                </a>
-                <button id="topLogoutBtn" class="btn btn-outline" style="color:#ef4444; border-color:#ef4444;" title="تسجيل الخروج">
-                    <i class="fas fa-sign-out-alt"></i>
-                    خروج
-                </button>
+
+            <div style="overflow-x:auto;">
+              <table class="permissions-table">
+                <thead>
+                  <tr>
+                    <th>الاسم</th>
+                    <th>البريد الإلكتروني</th>
+                    <th>القسم</th>
+                    <th>تاريخ الإضافة</th>
+                    <th>الحالة</th>
+                    <th>الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="permissionsBody"></tbody>
+              </table>
             </div>
+          </div>
         </div>
 
-        <!-- قسم لوحة القيادة الرئيسية -->
-        <section class="content-section active" id="section-dashboard">
-            <!-- ✅ شريط أوامر سريعة للمالك -->
-            <div style="display:flex; gap:12px; margin-bottom:1rem; flex-wrap:wrap;">
-                <a href="eoc-command.html" target="_blank" class="btn btn-danger" style="padding:12px 20px; font-size:1rem;">
-                    <i class="fas fa-broadcast-tower"></i> مركز القيادة EOC
-                </a>
-                <button onclick="openQrCodesModal()" class="btn btn-outline" style="padding:12px 20px;">
-                    <i class="fas fa-qrcode"></i> روابط الطوارئ
-                </button>
-                <a href="incident-report.html" target="_blank" class="btn btn-outline" style="padding:12px 20px;">
-                    <i class="fas fa-exclamation-triangle"></i> تبليغ حادثة
-                </a>
-                <a href="report.html" target="_blank" class="btn btn-outline" style="padding:12px 20px;">
-                    <i class="fas fa-comment-dots"></i> تبليغ شكوى
-                </a>
+        <!-- Doctors Tab -->
+        <div class="tab-content" id="doctorsTab">
+          <div class="section-card">
+            <div class="section-title">
+              <div class="title-text">
+                <i class="fas fa-chart-bar"></i>
+                <span>إحصائيات الأطباء وتقييماتهم</span>
+              </div>
             </div>
+            
+            <div class="doctors-grid" id="doctorsGrid"></div>
+          </div>
+        </div>
 
-            <div class="kpi-grid">
-                <!-- ✅ كرت الطوارئ المحسّن -->
-                <a href="eoc-command.html" target="_blank" class="kpi-card" id="eocSmartCard" style="position:relative;">
-                    <div class="kpi-icon eoc" id="eocIcon"><i class="fas fa-broadcast-tower"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-eoc">طبيعي</h3>
-                        <p>حالة الطوارئ</p>
-                        <span class="sub" id="kpi-eoc-status">الوضع طبيعي ✓</span>
-                    </div>
-                    <div id="eocPulse" style="display:none; position:absolute; top:10px; left:10px;">
-                        <span style="display:inline-block; width:12px; height:12px; background:#dc3545; border-radius:50%; animation: pulse 1s infinite;"></span>
-                    </div>
-                </a>
-                <a href="complaint_mentoring.html" target="_blank" class="kpi-card">
-                    <div class="kpi-icon complaints"><i class="fas fa-comment-dots"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-complaints">0</h3>
-                        <p>شكوى مفتوحة</p>
-                        <span class="sub" id="kpi-complaints-sub">قيد المعالجة</span>
-                    </div>
-                </a>
-                <a href="incident-report-analysis.html" target="_blank" class="kpi-card">
-                    <div class="kpi-icon incidents"><i class="fas fa-exclamation-triangle"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-incidents">0</h3>
-                        <p>حادثة مفتوحة</p>
-                        <span class="sub" id="kpi-incidents-sub">تحتاج متابعة</span>
-                    </div>
-                </a>
-                <a href="risk-register.html" target="_blank" class="kpi-card">
-                    <div class="kpi-icon risks"><i class="fas fa-shield-alt"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-risks">0</h3>
-                        <p>خطر نشط</p>
-                        <span class="sub danger" id="kpi-risks-sub">يحتاج تقييم</span>
-                    </div>
-                </a>
-                <a href="Round.html" target="_blank" class="kpi-card">
-                    <div class="kpi-icon rounds"><i class="fas fa-clipboard-check"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-rounds">0</h3>
-                        <p>جولة اليوم</p>
-                        <span class="sub" id="kpi-rounds-sub">مكتملة</span>
-                    </div>
-                </a>
-                <a href="calibration.html" target="_blank" class="kpi-card">
-                    <div class="kpi-icon calibration"><i class="fas fa-cogs"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-calibration">-</h3>
-                        <p>نسبة المعايرة</p>
-                        <span class="sub" id="kpi-calibration-sub"></span>
-                    </div>
-                </a>
-                <a href="maintenance.html" target="_blank" class="kpi-card">
-                    <div class="kpi-icon maintenance"><i class="fas fa-wrench"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-maintenance">-</h3>
-                        <p>أجهزة بدون صيانة</p>
-                        <span class="sub" id="kpi-maintenance-sub" style="color:#28a745"></span>
-                    </div>
-                </a>
-                <a href="pages/needle_stick_analysis.html" target="_blank" class="kpi-card">
-                    <div class="kpi-icon" style="background: linear-gradient(135deg, #a8edea, #fed6e3);"><i class="fas fa-syringe" style="color:#333;"></i></div>
-                    <div class="kpi-info">
-                        <h3 id="kpi-needlestick">-</h3>
-                        <p>حالة وخز إبري</p>
-                        <span class="sub" id="kpi-needlestick-sub"></span>
-                    </div>
-                </a>
+        <!-- Usage Log Tab -->
+        <div class="tab-content" id="usageTab">
+          <div class="section-card">
+            <div class="section-title">
+              <div class="title-text">
+                <i class="fas fa-history"></i>
+                <span>سجل استخدام خدمة التأمين</span>
+              </div>
             </div>
-
-            <div class="alerts-section">
-                <div class="section-header">
-                    <h3><i class="fas fa-bell"></i> التنبيهات والتصعيدات</h3>
-                    <button class="refresh-btn" onclick="loadAlerts()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                </div>
-                <div id="alertsContainer">
-                    <div class="no-alerts">
-                        <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
-                        <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
-                    </div>
-                </div>
+            
+            <div style="overflow-x:auto;">
+              <table class="usage-log-table">
+                <thead>
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>الموظف</th>
+                    <th>الطبيب</th>
+                    <th>عدد الملفات</th>
+                    <th>تقييم التأمين</th>
+                    <th>تقييم الخدمات</th>
+                    <th>المتوسط</th>
+                  </tr>
+                </thead>
+                <tbody id="usageLogBody"></tbody>
+              </table>
             </div>
+          </div>
+        </div>
 
-            <div class="stats-grid-detailed">
-                <div class="stats-box">
-                    <h4><i class="fas fa-comment-dots"></i> الشكاوى</h4>
-                    <div class="stats-row">
-                        <span class="label">جديدة</span>
-                        <span class="value" id="stat-complaints-new">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">قيد المعالجة</span>
-                        <span class="value warning" id="stat-complaints-progress">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">مصعّدة</span>
-                        <span class="value danger" id="stat-complaints-escalated">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">مغلقة</span>
-                        <span class="value success" id="stat-complaints-closed">0</span>
-                    </div>
-                </div>
-                <div class="stats-box">
-                    <h4><i class="fas fa-exclamation-triangle"></i> الحوادث</h4>
-                    <div class="stats-row">
-                        <span class="label">جديدة</span>
-                        <span class="value" id="stat-incidents-new">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">قيد التحقيق</span>
-                        <span class="value warning" id="stat-incidents-progress">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">مصعّدة</span>
-                        <span class="value danger" id="stat-incidents-escalated">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">مغلقة</span>
-                        <span class="value success" id="stat-incidents-closed">0</span>
-                    </div>
-                </div>
-                <div class="stats-box">
-                    <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
-                    <div class="stats-row">
-                        <span class="label">خطر عالي</span>
-                        <span class="value danger" id="stat-risks-high">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">خطر متوسط</span>
-                        <span class="value warning" id="stat-risks-medium">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">خطر منخفض</span>
-                        <span class="value" id="stat-risks-low">0</span>
-                    </div>
-                    <div class="stats-row">
-                        <span class="label">مُعالجة</span>
-                        <span class="value success" id="stat-risks-resolved">0</span>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم مركز EOC -->
-        <section class="content-section" id="section-eoc">
-            <div class="stats-box">
-                <h4><i class="fas fa-broadcast-tower"></i> مركز القيادة EOC - التحكم في الطوارئ</h4>
-                <div id="eocStatusCard" style="padding: 20px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 10px; color: white; text-align: center; margin-bottom: 20px;">
-                    <i class="fas fa-check-circle" style="font-size: 3rem; margin-bottom: 10px;"></i>
-                    <h3 style="font-size: 1.5rem;">الوضع طبيعي</h3>
-                    <p>لا توجد حالات طوارئ نشطة</p>
-                </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
-                    <a href="eoc-command.html" target="_blank" class="btn btn-primary"><i class="fas fa-external-link-alt"></i> فتح EOC كامل</a>
-                    <a href="emergency-report.html" target="_blank" class="btn btn-danger"><i class="fas fa-exclamation-circle"></i> إبلاغ طوارئ</a>
-                    <a href="Emergency.html" target="_blank" class="btn btn-outline"><i class="fas fa-tv"></i> شاشة العرض</a>
-                </div>
-                <h4 style="margin-top: 20px;"><i class="fas fa-history"></i> آخر البلاغات</h4>
-                <div id="eocReportsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم الشكاوى -->
-        <section class="content-section" id="section-complaints">
-            <div class="stats-box">
-                <h4><i class="fas fa-comment-dots"></i> إدارة الشكاوى</h4>
-                <div class="filter-bar">
-                    <input type="text" id="complaintsSearch" placeholder="🔍 بحث في الشكاوى...">
-                    <select id="complaintsFilter">
-                        <option value="">جميع الحالات</option>
-                        <option value="new">جديدة</option>
-                        <option value="in_progress">قيد المعالجة</option>
-                        <option value="escalated">مصعّدة</option>
-                        <option value="closed">مغلقة</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadComplaints()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="complaint_analysis.html" target="_blank" class="btn btn-outline"><i class="fas fa-chart-bar"></i> التحليل</a>
-                </div>
-                <div id="complaintsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم الحوادث -->
-        <section class="content-section" id="section-incidents">
-            <div class="stats-box">
-                <h4><i class="fas fa-exclamation-triangle"></i> إدارة الحوادث</h4>
-                <div class="filter-bar">
-                    <input type="text" id="incidentsSearch" placeholder="🔍 بحث في الحوادث...">
-                    <select id="incidentsFilter">
-                        <option value="">جميع الحالات</option>
-                        <option value="new">جديدة</option>
-                        <option value="under_investigation">قيد التحقيق</option>
-                        <option value="escalated">مصعّدة</option>
-                        <option value="closed">مغلقة</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadIncidents()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="incident-report-analysis.html" target="_blank" class="btn btn-outline"><i class="fas fa-chart-bar"></i> التحليل</a>
-                </div>
-                <div id="incidentsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم المخاطر -->
-        <section class="content-section" id="section-risks">
-            <div class="stats-box">
-                <h4><i class="fas fa-shield-alt"></i> سجل المخاطر</h4>
-                <div class="filter-bar">
-                    <input type="text" id="risksSearch" placeholder="🔍 بحث في المخاطر...">
-                    <select id="risksFilter">
-                        <option value="">جميع المستويات</option>
-                        <option value="high">خطر عالي</option>
-                        <option value="medium">خطر متوسط</option>
-                        <option value="low">خطر منخفض</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadRisks()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="risk-register.html" target="_blank" class="btn btn-outline"><i class="fas fa-plus"></i> تسجيل خطر</a>
-                </div>
-                <div id="risksContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم الجولات -->
-        <section class="content-section" id="section-rounds">
-            <div class="stats-box">
-                <h4><i class="fas fa-clipboard-check"></i> جولات السلامة</h4>
-                <div class="filter-bar">
-                    <input type="date" id="roundsDate">
-                    <button class="btn btn-primary" onclick="loadRounds()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <a href="Round.html" target="_blank" class="btn btn-outline"><i class="fas fa-external-link-alt"></i> نظام الجولات</a>
-                </div>
-                <div id="roundsContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم طلبات العضوية -->
-        <section class="content-section" id="section-requests">
-            <div class="stats-box">
-                <h4><i class="fas fa-user-plus"></i> طلبات العضوية الجديدة</h4>
-                <p style="color:#666; margin-bottom:20px;">مراجعة والموافقة على طلبات الانضمام الجديدة</p>
-                
-                <div id="requestsContainer">
-                    <div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم إدارة المستخدمين -->
-        <section class="content-section" id="section-users">
-            <div class="stats-box">
-                <h4><i class="fas fa-users-cog"></i> إدارة المستخدمين - تحكم كامل</h4>
-                <div id="usersStats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:20px; padding:15px; background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius:12px;">
-                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #10b981;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:#10b981;" id="usersActiveCount">0</div>
-                        <div style="font-size:0.8rem; color:#666;">نشط</div>
-                    </div>
-                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #f59e0b;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:#f59e0b;" id="usersSuspendedCount">0</div>
-                        <div style="font-size:0.8rem; color:#666;">معلق</div>
-                    </div>
-                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #ef4444; cursor:pointer;" onclick="toggleDeletedUsers()">
-                        <div style="font-size:1.5rem; font-weight:bold; color:#ef4444;" id="usersDeletedCount">0</div>
-                        <div style="font-size:0.8rem; color:#666;">محذوف <i class="fas fa-filter"></i></div>
-                    </div>
-                    <div style="flex:1; min-width:100px; text-align:center; padding:10px; background:#fff; border-radius:8px; border-right:3px solid #1e3a5f;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:#1e3a5f;" id="usersTotalCount">0</div>
-                        <div style="font-size:0.8rem; color:#666;">الإجمالي</div>
-                    </div>
-                </div>
-                <div class="filter-bar">
-                    <input type="text" id="usersSearch" placeholder="🔍 بحث بالاسم أو البريد...">
-                    <select id="usersRoleFilter">
-                        <option value="">جميع الأدوار</option>
-                        <option value="owner">مالك</option>
-                        <option value="admin">مدير</option>
-                        <option value="staff">موظف</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <button class="btn" onclick="syncAuthUsers()" style="background:#10b981; color:white;"><i class="fas fa-cloud-download-alt"></i> مزامنة من Firebase</button>
-                </div>
-                <div id="usersContainer">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-                
-                <!-- قسم المستخدمين المحذوفين -->
-                <div id="deletedUsersSection" style="display:none; margin-top:20px; padding:15px; background:#fef2f2; border-radius:10px; border:2px solid #ef4444;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h5 style="color:#dc2626; margin:0;"><i class="fas fa-trash-alt"></i> المستخدمين المحذوفين</h5>
-                        <button onclick="toggleDeletedUsers()" style="background:#ef4444; color:white; border:none; padding:5px 10px; border-radius:6px; cursor:pointer;">
-                            <i class="fas fa-times"></i> إغلاق
-                        </button>
-                    </div>
-                    <div id="deletedUsersContainer">
-                        <div class="no-alerts">جاري التحميل...</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم إدارة الصلاحيات -->
-        <section class="content-section" id="section-permissions">
-            <div class="stats-box">
-                <h4><i class="fas fa-user-shield"></i> إدارة الصلاحيات والأنظمة</h4>
-                <p style="color:#666; margin-bottom:15px;">تعيين الأدوار والصلاحيات وتحديد الأنظمة المتاحة لكل موظف</p>
-                
-                <div style="display:grid; grid-template-columns: 300px 1fr; gap:20px; margin-top:20px;">
-                    <!-- قائمة المستخدمين -->
-                    <div style="background:#f8fafc; border-radius:12px; padding:15px; max-height:500px; overflow-y:auto;">
-                        <input type="text" id="permUsersSearch" placeholder="🔍 بحث..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-bottom:10px;">
-                        <div id="permUsersList" style="display:flex; flex-direction:column; gap:8px;">
-                            <div class="no-alerts">جاري التحميل...</div>
-                        </div>
-                    </div>
-                    
-                    <!-- تفاصيل الصلاحيات -->
-                    <div id="permDetailsPanel" style="background:#fff; border:2px solid #e2e8f0; border-radius:12px; padding:20px;">
-                        <div style="text-align:center; color:#999; padding:40px;">
-                            <i class="fas fa-user-cog" style="font-size:3rem; margin-bottom:15px;"></i>
-                            <p>اختر مستخدماً من القائمة لإدارة صلاحياته</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <div class="toast" id="toast">
-        <i class="fas fa-check-circle"></i>
-        <span id="toastMessage">تم الحفظ بنجاح</span>
+      </div>
     </div>
+  </main>
 
-    <script>
-        const OWNER_EMAIL = 'husseinbabsail@gmail.com';
-        const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
-        
-        const APIs = {
-            main: API_URL,
-            complaints: "https://script.google.com/macros/s/AKfycbyE0nbyfYrDZeOHr6TuEQP7ivpOLF1pLmBFoF7fkDmNjQp5g6dW4i0xkcSBJJRaoOCVAw/exec",
-            incidents: "https://script.google.com/macros/s/AKfycbxHW20iOESJdvDuGBjKBVGZ7ZVlNy-PfRY8tJvmsIvtdcSxhbiBYL0CXLVwCjIJz-y8/exec",
-            risks: "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec",
-            rounds: "https://script.google.com/macros/s/AKfycbwjoTetIgrjnESeW3gJlezUbm4ReK3nF1nS5xbs1oItrHMsfTlMfkWCfn45S9sSjf3y/exec",
-            calibration: "https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec",
-            maintenance: "https://script.google.com/macros/s/AKfycbxw6oWSHKDjeZI6dsspS3PVVwbO9KO5UnjKGqDa_yP9cYAVjNHh6WMfQrdlpkF_A25--A/exec",
-            needlestick: "https://script.google.com/macros/s/AKfycbyWPna2RXgl_P8xYfnIxG634pS8fVoAtW6X8Ch8-fzM0ASZNz49OIORmYwxjbiVapHEyg/exec"
-        };
-        
-        const firebaseConfig = {
-            apiKey: "AIzaSyDhrkTwtV3Zwbj2k-PCUeXFqaFvtf_UT7s",
-            authDomain: "insurance-check-6cec9.firebaseapp.com",
-            projectId: "insurance-check-6cec9",
-            storageBucket: "insurance-check-6cec9.appspot.com",
-            messagingSenderId: "992769471393",
-            appId: "1:992769471393:web:c8a9400210a0e7901011e0"
-        };
-        
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        
-        let currentUser = null;
-        let idToken = null;
-        
-        const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        }).format(new Date());
-        document.getElementById('dateDisplay').textContent = hijriDate;
-        
-        // ========= POST Calls (موحّد مع admin-dashboard) =========
-        async function getFreshIdToken() {
-            if (!auth.currentUser) return null;
-            return await auth.currentUser.getIdToken(true);
-        }
+<script>
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  authDomain: "makkah-medical.firebaseapp.com",
+  projectId: "makkah-medical"
+};
 
-        async function postToAppsScript(url, action, payload = {}) {
-            const user = auth.currentUser;
-            const idToken = await getFreshIdToken();
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 
-            // للتوافق: نرسل التوكن في URL أيضًا (للسكربتات القديمة)
-            const qs = new URLSearchParams({
-                action,
-                idToken: idToken || "",
-                staffEmail: user?.email || "",
-                staffId: user?.uid || ""
-            });
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
 
-            const urlWithQs = url + (url.includes("?") ? "&" : "?") + qs.toString();
+// Owner emails (add your email here)
+const OWNER_EMAILS = ['owner@m2020m.org', 'admin@m2020m.org'];
 
-            const body = {
-                action,
-                payload: {
-                    ...payload,
-                    idToken,
-                    staffEmail: user?.email || "",
-                    staffId: user?.uid || ""
-                }
-            };
+let currentUser = null;
 
-            const res = await fetch(urlWithQs, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(body),
-                redirect: "follow"
-            });
+// Auth State Observer
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    // Check if owner
+    if (isOwner(user.email)) {
+      currentUser = {
+        email: user.email,
+        name: user.displayName || user.email.split('@')[0]
+      };
+      showDashboard();
+      loadAllData();
+    } else {
+      alert('عذراً، هذه اللوحة مخصصة للمالك فقط');
+      auth.signOut();
+    }
+  } else {
+    showLoginScreen();
+  }
+});
 
-            const text = await res.text();
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.error("Invalid JSON response:", text.substring(0, 200));
-                return { ok: false, success: false, error: "Invalid response" };
-            }
-        }
+function isOwner(email) {
+  // For testing, allow all authenticated users
+  return true;
+  // In production, use: return OWNER_EMAILS.includes(email.toLowerCase());
+}
 
-        async function fetchJsonp(url) {
-            const r = await fetch(url, { redirect: 'follow' });
-            const text = await r.text();
-            const m = text.match(/^[a-zA-Z_$][\w$]*\s*\((.*)\)\s*;?\s*$/s);
-            if (m && m[1]) return JSON.parse(m[1]);
-            return JSON.parse(text);
+function showLoginScreen() {
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('mainDashboard').classList.add('hidden');
+  document.getElementById('logoutBtn').classList.add('hidden');
+  document.getElementById('userInfo').textContent = '';
+}
+
+function showDashboard() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainDashboard').classList.remove('hidden');
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  document.getElementById('userInfo').innerHTML = `<i class="fas fa-crown"></i> ${currentUser.name}`;
+}
+
+function loginWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err => {
+    console.error('Login error:', err);
+    alert('حدث خطأ أثناء تسجيل الدخول');
+  });
+}
+
+function logout() {
+  auth.signOut();
+}
+
+function showTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+  
+  event.target.closest('.tab-btn').classList.add('active');
+  document.getElementById(tabName + 'Tab').classList.add('active');
+}
+
+async function loadAllData() {
+  await Promise.all([
+    loadStats(),
+    loadPermissions(),
+    loadDoctorStats(),
+    loadUsageLog()
+  ]);
+}
+
+async function loadStats() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDashboardStats' })
+    });
+    const data = await response.json();
+    
+    if (data.success && data.stats) {
+      document.getElementById('totalStaff').textContent = data.stats.totalStaff || 0;
+      document.getElementById('totalCases').textContent = data.stats.totalCases || 0;
+      document.getElementById('todayCases').textContent = data.stats.todayCases || 0;
+      document.getElementById('totalDoctors').textContent = data.stats.totalDoctors || 0;
+    }
+  } catch(e) {
+    console.error('Stats error:', e);
+  }
+}
+
+async function loadPermissions() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getPermissions' })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      renderPermissions(data.permissions || []);
+    }
+  } catch(e) {
+    console.error('Permissions error:', e);
+  }
+}
+
+function renderPermissions(permissions) {
+  const tbody = document.getElementById('permissionsBody');
+  const count = document.getElementById('staffCount');
+  
+  const activeCount = permissions.filter(p => p.active).length;
+  count.textContent = `${activeCount} موظف نشط من ${permissions.length}`;
+  
+  if (permissions.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="empty-state">
+          <i class="fas fa-users-slash"></i>
+          <p>لا يوجد موظفون مضافون</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  tbody.innerHTML = permissions.map(p => `
+    <tr>
+      <td><strong>${p.name}</strong></td>
+      <td>${p.email}</td>
+      <td>${p.department || '-'}</td>
+      <td>${p.addedDate || '-'}</td>
+      <td>
+        <span class="status-badge ${p.active ? 'status-active' : 'status-inactive'}">
+          ${p.active ? 'نشط' : 'معطل'}
+        </span>
+      </td>
+      <td>
+        ${p.active 
+          ? `<button class="action-btn remove" onclick="removePermission('${p.email}')">
+               <i class="fas fa-ban"></i> إلغاء
+             </button>`
+          : `<button class="action-btn activate" onclick="activatePermission('${p.email}', '${p.name}', '${p.department}')">
+               <i class="fas fa-check"></i> تفعيل
+             </button>`
         }
-        
-        function showToast(message, isError = false) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastMessage').textContent = message;
-            toast.classList.toggle('error', isError);
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        }
-        
-        let confirmCallback = null;
-        
-        function showConfirmModal(options) {
-            return new Promise((resolve) => {
-                const modal = document.getElementById('confirmModal');
-                const icon = document.getElementById('confirmIcon');
-                const title = document.getElementById('confirmTitle');
-                const message = document.getElementById('confirmMessage');
-                const confirmBtn = document.getElementById('confirmBtn');
-                
-                title.textContent = options.title || 'تأكيد';
-                message.textContent = options.message || 'هل أنت متأكد؟';
-                confirmBtn.textContent = options.confirmText || 'تأكيد';
-                
-                icon.className = 'confirm-modal-icon ' + (options.type || 'warning');
-                confirmBtn.className = 'btn-confirm ' + (options.type === 'danger' ? 'danger' : '');
-                
-                const iconClass = {
-                    'warning': 'fa-exclamation-triangle',
-                    'danger': 'fa-trash-alt',
-                    'info': 'fa-info-circle',
-                    'success': 'fa-check-circle'
-                };
-                icon.innerHTML = `<i class="fas ${iconClass[options.type] || iconClass.warning}"></i>`;
-                
-                confirmCallback = resolve;
-                modal.classList.add('show');
-            });
-        }
-        
-        function closeConfirmModal() {
-            document.getElementById('confirmModal').classList.remove('show');
-            if (confirmCallback) {
-                confirmCallback(false);
-                confirmCallback = null;
-            }
-        }
-        
-        function confirmAction() {
-            document.getElementById('confirmModal').classList.remove('show');
-            if (confirmCallback) {
-                confirmCallback(true);
-                confirmCallback = null;
-            }
-        }
-        
-        function switchSection(sectionName) {
-            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            
-            const section = document.getElementById('section-' + sectionName);
-            if (section) {
-                section.classList.add('active');
-                const navItem = document.querySelector(`.nav-item[data-section="${sectionName}"]`);
-                if (navItem) navItem.classList.add('active');
-                
-                if (sectionName === 'complaints') loadComplaints();
-                else if (sectionName === 'incidents') loadIncidents();
-                else if (sectionName === 'risks') loadRisks();
-                else if (sectionName === 'rounds') loadRounds();
-                else if (sectionName === 'users') loadUsers();
-                else if (sectionName === 'permissions') loadPermissions();
-                else if (sectionName === 'eoc') loadEocData();
-            }
-        }
-        
-        document.querySelectorAll('.nav-item[data-section]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = item.dataset.section;
-                if (section) switchSection(section);
-            });
-        });
-        
-        document.getElementById('menuToggle').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-        
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            auth.signOut().then(() => {
-                window.location.href = 'portal.html';
-            });
-        });
-        
-        // زر الخروج في الشريط العلوي
-        document.getElementById('topLogoutBtn').addEventListener('click', () => {
-            auth.signOut().then(() => {
-                window.location.href = 'portal.html';
-            });
-        });
-        
-        // ✅ دوال نافذة روابط الطوارئ QR
-        window.openQrCodesModal = function() {
-            document.getElementById('qrCodesModal').classList.add('show');
-        };
-        
-        window.closeQrCodesModal = function() {
-            document.getElementById('qrCodesModal').classList.remove('show');
-        };
-        
-        // تأجيل binding الـ QR modal للـ DOM load
-        document.addEventListener('DOMContentLoaded', function() {
-            const qrModal = document.getElementById('qrCodesModal');
-            if (qrModal) {
-                qrModal.addEventListener('click', function(e) {
-                    if (e.target === this) window.closeQrCodesModal();
-                });
-            }
-        });
-        
-        // ✅ دوال تنبيهات الطوارئ
-        window.openEocCommand = function() {
-            closeEmergencyPopup();
-            window.open('eoc-command.html', '_blank');
-        };
-        
-        window.closeEmergencyPopup = function() {
-            document.getElementById('emergencyPopup').classList.remove('show');
-            const sound = document.getElementById('emergencySound');
-            if (sound) { sound.pause(); sound.currentTime = 0; }
-        };
-        
-        function showEmergencyPopup(type, message, details) {
-            document.getElementById('emergencyPopupMessage').textContent = message;
-            document.getElementById('popupType').textContent = details.type || '-';
-            document.getElementById('popupLocation').textContent = details.location || '-';
-            document.getElementById('popupTime').textContent = details.time || new Date().toLocaleTimeString('ar-SA');
-            document.getElementById('emergencyPopup').classList.add('show');
-            
-            // تشغيل صوت الإنذار
-            const sound = document.getElementById('emergencySound');
-            if (sound) sound.play().catch(e => console.log('Audio play blocked'));
-        }
-        
-        // ✅ فحص حالة الطوارئ كل 15 ثانية
-        let lastKnownActiveSession = localStorage.getItem('lastKnownActiveSession') || null;
-        
-        async function checkEmergencyStatus() {
-            try {
-                const res = await fetchJsonp(APIs.main + '?action=getActiveCommand&callback=_');
-                const eocCard = document.getElementById('eocSmartCard');
-                const eocIcon = document.getElementById('eocIcon');
-                const eocPulse = document.getElementById('eocPulse');
-                const kpiEoc = document.getElementById('kpi-eoc');
-                const kpiStatus = document.getElementById('kpi-eoc-status');
-                
-                if (res.ok && res.command?.active) {
-                    // حالة طوارئ نشطة
-                    kpiEoc.textContent = 'طوارئ!';
-                    kpiEoc.style.color = '#dc3545';
-                    kpiStatus.textContent = res.command.responseType || 'حالة نشطة';
-                    kpiStatus.classList.add('danger');
-                    eocIcon.classList.add('active');
-                    if (eocPulse) eocPulse.style.display = 'block';
-                    eocCard.style.background = 'linear-gradient(135deg, rgba(220,38,38,0.15), rgba(153,27,27,0.1))';
-                    eocCard.style.border = '2px solid #dc3545';
-                    
-                    // إظهار التنبيه إذا كانت جلسة جديدة
-                    if (res.command.sessionId && res.command.sessionId !== lastKnownActiveSession) {
-                        lastKnownActiveSession = res.command.sessionId;
-                        localStorage.setItem('lastKnownActiveSession', res.command.sessionId);
-                        showEmergencyPopup('command', 'حالة طوارئ نشطة!', {
-                            type: res.command.responseType || 'طوارئ',
-                            location: res.command.floor || 'المبنى كاملاً',
-                            time: new Date().toLocaleTimeString('ar-SA')
-                        });
-                    }
-                } else {
-                    // الوضع طبيعي - عرض عدد البلاغات من cachedEmergencyStats
-                    const cachedTotal = window.cachedEmergencyStats?.total || 0;
-                    const cachedThisMonth = window.cachedEmergencyStats?.thisMonth || 0;
-                    
-                    if (cachedTotal > 0) {
-                        kpiEoc.textContent = cachedTotal;
-                        kpiEoc.style.color = '';
-                        kpiStatus.textContent = cachedThisMonth + ' هذا الشهر';
-                    } else {
-                        kpiEoc.textContent = 'طبيعي';
-                        kpiEoc.style.color = '#10b981';
-                        kpiStatus.textContent = 'الوضع طبيعي ✓';
-                    }
-                    kpiStatus.classList.remove('danger');
-                    eocIcon.classList.remove('active');
-                    if (eocPulse) eocPulse.style.display = 'none';
-                    eocCard.style.background = '';
-                    eocCard.style.border = '';
-                    lastKnownActiveSession = null;
-                    localStorage.removeItem('lastKnownActiveSession');
-                }
-            } catch (e) {
-                console.error('Error checking emergency:', e);
-            }
-        }
-        
-        // ✅ فحص الطوارئ سيُفعّل بعد تحميل البيانات الأولية (في loadAllData)
-        let emergencyCheckInterval = null;
-        
-        async function loadAllData() {
-            const refreshBtn = document.getElementById('refreshBtn');
-            refreshBtn.classList.add('loading');
-            
-            try {
-                await Promise.all([
-                    loadDashboardStats(),
-                    loadAlerts(),
-                    loadExtraKPIs(),
-                    loadMembershipRequests(),
-                    checkEmergencyStatus()  // ✅ فحص حالة الطوارئ
-                ]);
-            } catch (e) {
-                console.error('Error loading data:', e);
-            } finally {
-                refreshBtn.classList.remove('loading');
-                // ✅ تفعيل فحص الطوارئ الدوري بعد التحميل الأول
-                if (!emergencyCheckInterval) {
-                    emergencyCheckInterval = setInterval(checkEmergencyStatus, 15000);
-                }
-            }
-        }
-        
-        async function loadMembershipRequests() {
-            const container = document.getElementById('requestsContainer');
-            const badge = document.getElementById('requestsBadge');
-            
-            try {
-                const snapshot = await db.collection('membershipRequests')
-                    .where('status', '==', 'pending')
-                    .orderBy('requestedAt', 'desc')
-                    .get();
-                
-                const requests = [];
-                snapshot.forEach(doc => {
-                    requests.push({ id: doc.id, ...doc.data() });
-                });
-                
-                if (requests.length > 0) {
-                    badge.textContent = requests.length;
-                    badge.style.display = 'inline';
-                } else {
-                    badge.style.display = 'none';
-                }
-                
-                if (requests.length === 0) {
-                    container.innerHTML = `
-                        <div class="no-alerts" style="background:#f0fdf4; border:2px dashed #86efac;">
-                            <i class="fas fa-check-circle" style="color:#22c55e; font-size:2rem; margin-bottom:10px;"></i>
-                            <p style="color:#166534;">لا توجد طلبات معلقة حالياً</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                let html = `
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>الاسم</th>
-                                <th>البريد</th>
-                                <th>الجوال</th>
-                                <th>القسم</th>
-                                <th>المسمى</th>
-                                <th>تاريخ الطلب</th>
-                                <th>إجراءات</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                
-                requests.forEach(r => {
-                    const date = r.requestedAt?.toDate ? r.requestedAt.toDate().toLocaleDateString('ar-SA') : '-';
-                    html += `
-                        <tr>
-                            <td><strong>${r.fullName || '-'}</strong></td>
-                            <td style="font-size:0.85rem;">${r.email || '-'}</td>
-                            <td>${r.phone || '-'}</td>
-                            <td>${r.department || '-'}</td>
-                            <td>${r.jobTitle || '-'}</td>
-                            <td>${date}</td>
-                            <td style="display:flex; gap:8px;">
-                                <button onclick="approveRequest('${r.id}', '${r.uid}', '${r.email}', '${r.fullName}')" 
-                                        style="background:#10b981; color:white; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-family:inherit;">
-                                    <i class="fas fa-check"></i> موافقة
-                                </button>
-                                <button onclick="rejectRequest('${r.id}', '${r.email}')" 
-                                        style="background:#ef4444; color:white; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-family:inherit;">
-                                    <i class="fas fa-times"></i> رفض
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                });
-                
-                html += '</tbody></table>';
-                container.innerHTML = html;
-                
-            } catch(e) {
-                console.error('Error loading membership requests:', e);
-                container.innerHTML = `<div class="no-alerts">خطأ في تحميل الطلبات: ${e.message}</div>`;
-            }
-        }
-        
-        async function approveRequest(requestId, uid, email, fullName) {
-            const confirmed = await showConfirmModal({
-                title: 'الموافقة على الطلب',
-                message: `سيتم قبول طلب:\n${fullName}\n${email}\n\nوإضافته كموظف في النظام.`,
-                type: 'success',
-                confirmText: 'موافقة'
-            });
-            if (!confirmed) return;
-            
-            try {
-                await db.collection('staff_roles').doc(uid).set({
-                    email: email,
-                    fullName: fullName,
-                    name: fullName,
-                    role: 'staff',
-                    status: 'active',
-                    allowedSystems: [],
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    approvedBy: currentUser.email,
-                    approvedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                await db.collection('membershipRequests').doc(requestId).update({
-                    status: 'approved',
-                    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    reviewedBy: currentUser.email
-                });
-                
-                showToast('تمت الموافقة على الطلب بنجاح');
-                loadMembershipRequests();
-                loadUsers();
-                loadPermissions();
-                
-            } catch(e) {
-                console.error('Approve error:', e);
-                showToast('خطأ في الموافقة: ' + e.message, true);
-            }
-        }
-        
-        async function rejectRequest(requestId, email) {
-            const confirmed = await showConfirmModal({
-                title: 'رفض الطلب',
-                message: `سيتم رفض طلب:\n${email}\n\nوحذف حسابه من النظام.`,
-                type: 'danger',
-                confirmText: 'رفض'
-            });
-            if (!confirmed) return;
-            
-            try {
-                const reqDoc = await db.collection('membershipRequests').doc(requestId).get();
-                const uid = reqDoc.data()?.uid;
-                
-                await db.collection('membershipRequests').doc(requestId).update({
-                    status: 'rejected',
-                    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    reviewedBy: currentUser.email
-                });
-                
-                if (uid) {
-                    try {
-                        const token = await auth.currentUser.getIdToken();
-                        await fetch(`/api/admin/users/${uid}`, {
-                            method: 'DELETE',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            }
-                        });
-                    } catch(deleteErr) {
-                        console.warn('Could not delete from Auth:', deleteErr);
-                    }
-                }
-                
-                showToast('تم رفض الطلب');
-                loadMembershipRequests();
-                
-            } catch(e) {
-                console.error('Reject error:', e);
-                showToast('خطأ في الرفض: ' + e.message, true);
-            }
-        }
-        
-        async function loadExtraKPIs() {
-            try {
-                const [calRes, maintRes, needleRes] = await Promise.all([
-                    fetch(APIs.calibration).then(r => r.json()).catch(e => ({ status: 'error' })),
-                    fetchPost(APIs.maintenance, 'getKPIs', {}),
-                    fetch(APIs.needlestick + '?action=data').then(r => r.text()).then(t => {
-                        const m = t.match(/^[a-zA-Z_$][\w$]*\s*\((.*)\)\s*;?\s*$/s);
-                        return m && m[1] ? JSON.parse(m[1]) : JSON.parse(t);
-                    }).catch(e => ({ success: false }))
-                ]);
-                
-                console.log('Calibration:', calRes);
-                console.log('Maintenance:', maintRes);
-                console.log('Needlestick:', needleRes);
-                
-                if (calRes && calRes.status === 'success' && calRes.data) {
-                    const stats = calculateCalibrationStats(calRes);
-                    const compEl = document.getElementById('kpi-calibration');
-                    compEl.textContent = stats.compliance + '%';
-                    if (stats.compliance >= 80) compEl.style.color = '#28a745';
-                    else if (stats.compliance >= 70) compEl.style.color = '#ff9800';
-                    else compEl.style.color = '#DC143C';
-                    if (stats.overdue > 0) {
-                        document.getElementById('kpi-calibration-sub').textContent = stats.overdue + ' جهاز متأخر';
-                        document.getElementById('kpi-calibration-sub').classList.add('danger');
-                    } else {
-                        document.getElementById('kpi-calibration-sub').textContent = stats.total + ' جهاز مُصان';
-                        document.getElementById('kpi-calibration-sub').style.color = '#28a745';
-                    }
-                }
-                
-                if (maintRes && (maintRes.success || maintRes.ok || maintRes.notServiced !== undefined)) {
-                    const m = maintRes.data || maintRes;
-                    const notServiced = m.notServiced ?? m.notServicedDevices ?? 0;
-                    const completed = m.completed ?? m.servicedDevices ?? 0;
-                    document.getElementById('kpi-maintenance').textContent = notServiced;
-                    document.getElementById('kpi-maintenance-sub').textContent = 'مكتملة ' + completed;
-                }
-                
-                const needleData = needleRes.rows || needleRes.data;
-                if ((needleRes.success || needleRes.status === 'success') && Array.isArray(needleData)) {
-                    document.getElementById('kpi-needlestick').textContent = needleData.length;
-                    const now = new Date();
-                    const thisMonth = needleData.filter(r => {
-                        const d = new Date(r.date || r.timestamp);
-                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                    }).length;
-                    if (thisMonth > 0) {
-                        document.getElementById('kpi-needlestick-sub').textContent = thisMonth + ' هذا الشهر';
-                    }
-                } else if (needleRes.total !== undefined) {
-                    document.getElementById('kpi-needlestick').textContent = needleRes.total || 0;
-                }
-            } catch (e) {
-                console.error('Error loading extra KPIs:', e);
-            }
-        }
-        
-        function calculateCalibrationStats(data) {
-            if (!data || data.status !== 'success' || !data.data) {
-                return { compliance: 0, overdue: 0, pass: 0, fail: 0, total: 0 };
-            }
-            const assetsMap = data.data.assetsMap || {};
-            const records = data.data.records || [];
-            let totalTasks = 0;
-            Object.values(assetsMap).forEach(arr => totalTasks += arr.length);
-            let pass = 0, overdue = 0;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const latestRecords = {};
-            records.forEach(r => {
-                const assetID = r.AssetID || r.assetID;
-                const recordDate = r.TestDate || r.Timestamp;
-                if (!assetID) return;
-                if (!latestRecords[assetID] || new Date(recordDate) > new Date(latestRecords[assetID].recordDate)) {
-                    latestRecords[assetID] = { ...r, recordDate };
-                }
-            });
-            Object.values(latestRecords).forEach(r => {
-                if ((r.Result || r.result) === 'Pass') pass++;
-                const nd = r.NextDue || r.nextDue;
-                if (nd && new Date(nd) < today) overdue++;
-            });
-            const compliance = totalTasks > 0 ? Math.round((pass / totalTasks) * 100) : 0;
-            return { compliance, overdue, pass, total: totalTasks };
-        }
-        
-        async function fetchPost(url, action, payload = {}) {
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action, payload }),
-                    redirect: 'follow'
-                });
-                return await response.json();
-            } catch (e) {
-                console.error('fetchPost error:', e);
-                return { ok: false, error: e.message };
-            }
-        }
-        
-        // Emergency Alert System
-        let emergencyAlertPlaying = false;
-        let emergencyAudio = null;
-        
-        function playEmergencyAlert() {
-            if (emergencyAlertPlaying) return;
-            emergencyAlertPlaying = true;
-            
-            // Create audio context for emergency siren
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                function playSiren() {
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
-                    
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
-                    
-                    oscillator.type = 'sawtooth';
-                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-                    oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.5);
-                    oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 1);
-                    
-                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.5);
-                    
-                    oscillator.start(audioContext.currentTime);
-                    oscillator.stop(audioContext.currentTime + 1.5);
-                }
-                
-                // Play siren 3 times
-                playSiren();
-                setTimeout(playSiren, 2000);
-                setTimeout(playSiren, 4000);
-                
-            } catch (e) {
-                console.log('Audio not supported:', e);
-            }
-        }
-        
-        function showEmergencyBanner(emergency) {
-            // Remove existing banner if any
-            const existing = document.getElementById('emergencyBanner');
-            if (existing) existing.remove();
-            
-            const banner = document.createElement('div');
-            banner.id = 'emergencyBanner';
-            banner.className = 'emergency-banner';
-            banner.innerHTML = `
-                <div class="emergency-banner-content">
-                    <i class="fas fa-exclamation-triangle fa-2x pulse-icon"></i>
-                    <div class="emergency-text">
-                        <h3>تنبيه طوارئ!</h3>
-                        <p>${emergency.type || 'حالة طوارئ نشطة'} ${emergency.location ? '- الموقع: ' + emergency.location : ''}</p>
-                    </div>
-                    <button onclick="dismissEmergencyBanner()" class="btn btn-light">
-                        <i class="fas fa-times"></i> إغلاق
-                    </button>
-                </div>
-            `;
-            document.body.insertBefore(banner, document.body.firstChild);
-        }
-        
-        function dismissEmergencyBanner() {
-            const banner = document.getElementById('emergencyBanner');
-            if (banner) {
-                banner.classList.add('dismissed');
-                setTimeout(() => banner.remove(), 500);
-            }
-            emergencyAlertPlaying = false;
-        }
-        
-        // Replit API URL (use dev URL until deployed)
-        const REPLIT_API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev';
-        
-        async function loadDashboardStats() {
-            try {
-                // ✅ Try Replit API first, then fallback to Apps Script
-                let data;
-                try {
-                    const localRes = await fetch(REPLIT_API_URL + '/api/owner/stats');
-                    const localData = await localRes.json();
-                    if (localData.ok) {
-                        data = { success: true, stats: localData };
-                        console.log('✅ Using Replit API stats:', localData);
-                    }
-                } catch (localErr) {
-                    console.log('Replit API not available, using Apps Script:', localErr.message);
-                }
-                
-                if (!data) {
-                    data = await postToAppsScript(APIs.main, 'getOwnerDashboardStats', {});
-                }
-                console.log('Dashboard stats:', data);
-                
-                if (data.success || data.ok) {
-                    const stats = data.stats || data;
-                    
-                    // Update EOC stats
-                    if (stats.emergency) {
-                        // Cache emergency stats for use by checkEmergencyStatus
-                        window.cachedEmergencyStats = {
-                            total: stats.emergency.total || 0,
-                            thisMonth: stats.emergency.thisMonth || 0
-                        };
-                        
-                        const eocEl = document.getElementById('kpi-eoc');
-                        const eocStatusEl = document.getElementById('kpi-eoc-status');
-                        
-                        if (stats.emergency.active) {
-                            eocEl.textContent = 'طوارئ!';
-                            eocStatusEl.textContent = stats.emergency.type || 'حالة نشطة';
-                            eocStatusEl.classList.add('danger');
-                            document.getElementById('eocIcon')?.classList.add('active');
-                            playEmergencyAlert();
-                            showEmergencyBanner(stats.emergency);
-                        } else {
-                            // Show total reports count
-                            eocEl.textContent = stats.emergency.total || 0;
-                            if (stats.emergency.thisMonth > 0) {
-                                eocStatusEl.textContent = stats.emergency.thisMonth + ' هذا الشهر';
-                            } else {
-                                eocStatusEl.textContent = 'الوضع طبيعي ✓';
-                            }
-                        }
-                    }
-                    
-                    if (stats.complaints) {
-                        document.getElementById('kpi-complaints').textContent = stats.complaints.open || 0;
-                        document.getElementById('stat-complaints-new').textContent = stats.complaints.new || 0;
-                        document.getElementById('stat-complaints-progress').textContent = stats.complaints.inProgress || 0;
-                        document.getElementById('stat-complaints-escalated').textContent = stats.complaints.escalated || 0;
-                        document.getElementById('stat-complaints-closed').textContent = stats.complaints.closed || 0;
-                        if (stats.complaints.escalated > 0) {
-                            document.getElementById('kpi-complaints-sub').textContent = stats.complaints.escalated + ' مصعّدة';
-                            document.getElementById('kpi-complaints-sub').classList.add('danger');
-                        }
-                    }
-                    
-                    if (stats.incidents) {
-                        document.getElementById('kpi-incidents').textContent = stats.incidents.open || 0;
-                        document.getElementById('stat-incidents-new').textContent = stats.incidents.new || 0;
-                        document.getElementById('stat-incidents-progress').textContent = stats.incidents.investigation || 0;
-                        document.getElementById('stat-incidents-escalated').textContent = stats.incidents.escalated || 0;
-                        document.getElementById('stat-incidents-closed').textContent = stats.incidents.closed || 0;
-                    }
-                    
-                    if (stats.risks) {
-                        document.getElementById('kpi-risks').textContent = stats.risks.active || 0;
-                        document.getElementById('stat-risks-high').textContent = stats.risks.high || 0;
-                        document.getElementById('stat-risks-medium').textContent = stats.risks.medium || 0;
-                        document.getElementById('stat-risks-low').textContent = stats.risks.low || 0;
-                        document.getElementById('stat-risks-resolved').textContent = stats.risks.resolved || 0;
-                        if (stats.risks.high > 0) {
-                            document.getElementById('kpi-risks-sub').textContent = stats.risks.high + ' خطر عالي';
-                        }
-                    }
-                    
-                    if (stats.rounds) {
-                        // Show today's rounds count (not total)
-                        document.getElementById('kpi-rounds').textContent = stats.rounds.today || 0;
-                        
-                        // Check if it's Friday (off day)
-                        const today = new Date();
-                        const isFriday = today.getDay() === 5;
-                        
-                        if (isFriday) {
-                            document.getElementById('kpi-rounds-sub').textContent = 'يوم إجازة';
-                        } else if (stats.rounds.delayed > 0) {
-                            document.getElementById('kpi-rounds-sub').textContent = stats.rounds.delayed + ' متأخرة';
-                            document.getElementById('kpi-rounds-sub').classList.add('warning');
-                        } else {
-                            document.getElementById('kpi-rounds-sub').textContent = 'إجمالي: ' + (stats.rounds.total || 0);
-                        }
-                    }
-                    
-                    if (stats.users) {
-                        document.getElementById('usersActiveCount').textContent = stats.users.active || 0;
-                        document.getElementById('usersSuspendedCount').textContent = stats.users.suspended || 0;
-                        document.getElementById('usersTotalCount').textContent = stats.users.total || 0;
-                    }
-                }
-            } catch (e) {
-                console.error('Error loading dashboard stats:', e);
-            }
-        }
-        
-        function loadAlerts() {
-            const container = document.getElementById('alertsContainer');
-            postToAppsScript(APIs.main, 'getOwnerDashboardStats', {}).then(data => {
-                if (data.success || data.ok) {
-                    const alerts = [];
-                    const stats = data.stats || data;
-                    
-                    if (stats.complaints && stats.complaints.escalated > 0) {
-                        alerts.push({ type: 'danger', icon: 'fas fa-comment-dots', text: `${stats.complaints.escalated} شكوى مصعّدة تحتاج مراجعة`, count: stats.complaints.escalated });
-                    }
-                    if (stats.incidents && stats.incidents.escalated > 0) {
-                        alerts.push({ type: 'danger', icon: 'fas fa-exclamation-triangle', text: `${stats.incidents.escalated} حادثة مصعّدة تحتاج تدخل`, count: stats.incidents.escalated });
-                    }
-                    if (stats.risks && stats.risks.high > 0) {
-                        alerts.push({ type: 'warning', icon: 'fas fa-shield-alt', text: `${stats.risks.high} مخاطر عالية المستوى`, count: stats.risks.high });
-                    }
-                    if (stats.rounds && stats.rounds.delayed > 0) {
-                        alerts.push({ type: 'warning', icon: 'fas fa-clipboard-check', text: `${stats.rounds.delayed} جولات متأخرة`, count: stats.rounds.delayed });
-                    }
-                    
-                    if (alerts.length > 0) {
-                        container.innerHTML = alerts.map(a => `
-                            <div class="alert-item ${a.type}">
-                                <i class="${a.icon}"></i>
-                                <span class="alert-text">${a.text}</span>
-                                <span class="alert-count">${a.count}</span>
-                            </div>
-                        `).join('');
-                    } else {
-                        container.innerHTML = `
-                            <div class="no-alerts">
-                                <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--success);"></i>
-                                <p>لا توجد تنبيهات عاجلة - كل شيء تحت السيطرة</p>
-                            </div>
-                        `;
-                    }
-                }
-            }).catch(e => {
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل التنبيهات</div>';
-            });
-        }
-        
-        async function loadEocData() {
-            const container = document.getElementById('eocReportsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            try {
-                const reportsRes = await fetchJsonp(APIs.main + '?action=getEmergencyReports&limit=10&callback=_');
-                const activeRes = await fetchJsonp(APIs.main + '?action=getActiveCommand&callback=_');
-                
-                const statusCard = document.getElementById('eocStatusCard');
-                const cmd = activeRes?.command;
-                if (activeRes?.ok && cmd?.active) {
-                    statusCard.style.background = 'linear-gradient(135deg, #dc2626, #991b1b)';
-                    statusCard.innerHTML = `
-                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 10px; animation: pulse 1s infinite;"></i>
-                        <h3 style="font-size: 1.5rem;">حالة طوارئ نشطة!</h3>
-                        <p>${cmd.responseType || ''} - ${cmd.location || ''}</p>
-                    `;
-                }
-                
-                const reports = reportsRes?.reports || [];
-                if (reports.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    reports.slice(0, 10).forEach(r => {
-                        const status = r.status || r.Status || r.الحالة || 'جديد';
-                        const statusClass = String(status).includes('مغلق') || String(status).includes('closed') ? 'status-closed' : 'status-escalated';
-                        html += `<tr>
-                            <td>${r.date || r.Timestamp || r.التاريخ || '-'} ${r.time || ''}</td>
-                            <td>${r.type || r.Type || r.النوع || '-'}</td>
-                            <td>${r.location || r.Location || r.الموقع || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد بلاغات طوارئ سابقة</div>';
-                }
-            } catch(e) {
-                console.error('EOC load error:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل بيانات الطوارئ</div>';
-            }
-        }
-        
-        function loadComplaints() {
-            const container = document.getElementById('complaintsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            postToAppsScript(APIs.complaints, 'getComplaints', {}).then(data => {
-                console.log('Complaints data:', data);
-                if ((data.ok || data.success) && data.complaints && data.complaints.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>الرقم</th><th>التاريخ</th><th>الشاكي</th><th>القسم</th><th>الحالة</th><th>إجراء</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.complaints.forEach(c => {
-                        const status = c.Status || c.الحالة || 'جديد';
-                        let statusClass = 'status-new';
-                        if (status.includes('progress') || status.includes('معالجة')) statusClass = 'status-progress';
-                        else if (status.includes('escalat') || status.includes('مصعد')) statusClass = 'status-escalated';
-                        else if (status.includes('closed') || status.includes('مغلق')) statusClass = 'status-closed';
-                        
-                        html += `<tr>
-                            <td>${c.ID || c.الرقم || '-'}</td>
-                            <td>${c.Date || c.التاريخ || '-'}</td>
-                            <td>${c.Name || c.الاسم || '-'}</td>
-                            <td>${c.Department || c.القسم || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                            <td>
-                                <button class="btn btn-primary" style="padding:5px 10px; font-size:0.75rem;" onclick="viewComplaint('${c.ID || c.الرقم}')">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد شكاوى</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading complaints:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الشكاوى</div>';
-            });
-        }
-        
-        function loadIncidents() {
-            const container = document.getElementById('incidentsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            postToAppsScript(APIs.incidents, 'getIncidents', {}).then(data => {
-                if (data.success && data.incidents && data.incidents.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموقع</th><th>الحالة</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.incidents.forEach(i => {
-                        const status = i.Status || i.الحالة || 'جديد';
-                        let statusClass = 'status-new';
-                        if (status.includes('investigation') || status.includes('تحقيق')) statusClass = 'status-progress';
-                        else if (status.includes('escalat') || status.includes('مصعد')) statusClass = 'status-escalated';
-                        else if (status.includes('closed') || status.includes('مغلق')) statusClass = 'status-closed';
-                        
-                        html += `<tr>
-                            <td>${i.ID || i.الرقم || '-'}</td>
-                            <td>${i.Date || i.التاريخ || '-'}</td>
-                            <td>${i.Type || i.النوع || '-'}</td>
-                            <td>${i.Location || i.الموقع || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد حوادث</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading incidents:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الحوادث</div>';
-            });
-        }
-        
-        async function loadRisks() {
-            const container = document.getElementById('risksContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            try {
-                const res = await fetch(APIs.risks + '?action=metrics', { redirect: 'follow' });
-                const data = await res.json();
-                
-                if (data?.ok && (data.high > 0 || data.medium > 0 || data.low > 0)) {
-                    let html = '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-bottom:20px;">';
-                    html += `<div style="background:#fee2e2; padding:15px; border-radius:10px; text-align:center;">
-                        <div style="font-size:2rem; font-weight:bold; color:#dc2626;">${data.high || 0}</div>
-                        <div style="color:#991b1b;">مخاطر عالية</div>
-                    </div>`;
-                    html += `<div style="background:#fef3c7; padding:15px; border-radius:10px; text-align:center;">
-                        <div style="font-size:2rem; font-weight:bold; color:#d97706;">${data.medium || 0}</div>
-                        <div style="color:#92400e;">مخاطر متوسطة</div>
-                    </div>`;
-                    html += `<div style="background:#d1fae5; padding:15px; border-radius:10px; text-align:center;">
-                        <div style="font-size:2rem; font-weight:bold; color:#059669;">${data.low || 0}</div>
-                        <div style="color:#065f46;">مخاطر منخفضة</div>
-                    </div>`;
-                    html += '</div>';
-                    
-                    if (data.risks && data.risks.length > 0) {
-                        html += '<table class="data-table"><thead><tr>';
-                        html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
-                        html += '</tr></thead><tbody>';
-                        
-                        data.risks.forEach(r => {
-                            const level = r.Level || r.المستوى || r.level || 'medium';
-                            let levelClass = 'status-medium';
-                            if (String(level).includes('high') || String(level).includes('عالي')) levelClass = 'status-high';
-                            else if (String(level).includes('low') || String(level).includes('منخفض')) levelClass = 'status-low';
-                            
-                            html += `<tr>
-                                <td>${r.Description || r.الوصف || r.description || '-'}</td>
-                                <td>${r.Department || r.القسم || r.department || '-'}</td>
-                                <td><span class="status-badge ${levelClass}">${level}</span></td>
-                                <td>${r.Status || r.الحالة || r.status || '-'}</td>
-                            </tr>`;
-                        });
-                        
-                        html += '</tbody></table>';
-                    }
-                    
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد مخاطر مسجلة</div>';
-                }
-            } catch(e) {
-                console.error('Error loading risks:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المخاطر</div>';
-            }
-        }
-        
-        function loadRounds() {
-            const container = document.getElementById('roundsContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            postToAppsScript(APIs.rounds, 'getRounds', {}).then(data => {
-                if (data.success && data.rounds && data.rounds.length > 0) {
-                    let html = '<table class="data-table"><thead><tr>';
-                    html += '<th>التاريخ</th><th>المسؤول</th><th>القسم</th><th>الحالة</th><th>الملاحظات</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    data.rounds.forEach(r => {
-                        const status = r.Status || r.الحالة || 'مكتمل';
-                        let statusClass = status.includes('delayed') || status.includes('متأخر') ? 'status-escalated' : 'status-closed';
-                        
-                        html += `<tr>
-                            <td>${r.Date || r.التاريخ || '-'}</td>
-                            <td>${r.Inspector || r.المسؤول || '-'}</td>
-                            <td>${r.Department || r.القسم || '-'}</td>
-                            <td><span class="status-badge ${statusClass}">${status}</span></td>
-                            <td>${r.Notes || r.الملاحظات || '-'}</td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا توجد جولات مسجلة</div>';
-                }
-            }).catch(e => {
-                console.error('Error loading rounds:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل الجولات</div>';
-            });
-        }
-        
-        async function loadUsers() {
-            const container = document.getElementById('usersContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            try {
-                const snapshot = await db.collection('staff_roles').get();
-                const users = [];
-                snapshot.forEach(doc => {
-                    users.push({ uid: doc.id, ...doc.data() });
-                });
-                
-                if (users.length > 0) {
-                    let active = 0, suspended = 0;
-                    users.forEach(u => {
-                        if (u.status === 'suspended') suspended++;
-                        else active++;
-                    });
-                    
-                    document.getElementById('usersActiveCount').textContent = active;
-                    document.getElementById('usersSuspendedCount').textContent = suspended;
-                    document.getElementById('usersTotalCount').textContent = users.length;
-                    
-                    try {
-                        const deletedSnapshot = await db.collection('deleted_staff').get();
-                        document.getElementById('usersDeletedCount').textContent = deletedSnapshot.size;
-                    } catch(e) {
-                        document.getElementById('usersDeletedCount').textContent = '0';
-                    }
-                    
-                    let html = '<table class="users-table"><thead><tr>';
-                    html += '<th>الاسم</th><th>البريد</th><th>الدور</th><th>الحالة</th><th>إجراءات</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    const roleLabels = {
-                        'owner': { class: 'role-owner', text: 'مالك' },
-                        'admin': { class: 'role-admin', text: 'مدير' },
-                        'chair': { class: 'role-admin', text: 'رئيس لجنة' },
-                        'member': { class: 'role-staff', text: 'عضو' },
-                        'staff': { class: 'role-staff', text: 'موظف' },
-                        'viewer': { class: 'role-staff', text: 'مشاهد' },
-                        'pending': { class: 'role-staff', text: 'قيد المراجعة' }
-                    };
-                    
-                    users.forEach(u => {
-                        const role = u.role || 'staff';
-                        const roleInfo = roleLabels[role] || { class: 'role-staff', text: role };
-                        
-                        const status = u.status || 'active';
-                        const statusText = status === 'suspended' ? 'معلق' : 'نشط';
-                        const statusColor = status === 'suspended' ? '#f59e0b' : '#10b981';
-                        const isOwner = u.email === OWNER_EMAIL;
-                        
-                        html += `<tr>
-                            <td>${u.fullName || u.name || '-'}</td>
-                            <td style="font-size:0.85rem;">${u.email || '-'}</td>
-                            <td>
-                                <select onchange="changeUserRole('${u.uid}', this.value)" style="padding:5px 10px; border-radius:6px; border:1px solid #ddd; background:white; font-family:inherit;" ${isOwner ? 'disabled' : ''}>
-                                    <option value="owner" ${role === 'owner' ? 'selected' : ''}>مالك</option>
-                                    <option value="admin" ${role === 'admin' ? 'selected' : ''}>مدير</option>
-                                    <option value="chair" ${role === 'chair' ? 'selected' : ''}>رئيس لجنة</option>
-                                    <option value="member" ${role === 'member' ? 'selected' : ''}>عضو</option>
-                                    <option value="staff" ${role === 'staff' ? 'selected' : ''}>موظف</option>
-                                    <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>مشاهد</option>
-                                </select>
-                            </td>
-                            <td>
-                                <button onclick="toggleUserStatus('${u.uid}', '${status}')" 
-                                    style="padding:5px 12px; border:none; border-radius:6px; cursor:pointer; font-family:inherit; background:${statusColor}; color:white;" 
-                                    ${isOwner ? 'disabled' : ''}>
-                                    ${statusText}
-                                </button>
-                            </td>
-                            <td class="action-btns" style="display:flex; gap:5px;">
-                                <button onclick="resetUserPassword('${u.uid}')" style="background:#3b82f6; color:white; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;" title="إعادة كلمة السر">
-                                    <i class="fas fa-key"></i>
-                                </button>
-                                <button onclick="deleteUser('${u.uid}', '${u.email}')" style="background:#ef4444; color:white; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;" title="حذف" ${isOwner ? 'disabled' : ''}>
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا يوجد مستخدمين في staff_roles</div>';
-                }
-            } catch(e) {
-                console.error('Error loading users:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في تحميل المستخدمين: ' + e.message + '</div>';
-            }
-        }
-        
-        const SYSTEMS_CONFIG = {
-            'complaints': { name: 'الشكاوى', icon: 'comment-dots', color: '#667eea' },
-            'incidents': { name: 'الحوادث', icon: 'exclamation-triangle', color: '#f5576c' },
-            'risks': { name: 'سجل المخاطر', icon: 'shield-alt', color: '#4facfe' },
-            'rounds': { name: 'الجولات', icon: 'clipboard-check', color: '#43e97b' },
-            'calibration': { name: 'المعايرة', icon: 'star-and-crescent', color: '#f093fb' },
-            'maintenance': { name: 'الصيانة', icon: 'wrench', color: '#ffecd2' },
-            'needlestick': { name: 'وخز الإبر', icon: 'syringe', color: '#ef4444' },
-            'eoc': { name: 'مركز الطوارئ', icon: 'bell', color: '#dc2626' },
-            'cbahi': { name: 'بوابة سباهي', icon: 'award', color: '#1e3a5f' }
-        };
-        
-        let permUsersData = [];
-        let selectedPermUser = null;
-        
-        async function loadPermissions() {
-            const listContainer = document.getElementById('permUsersList');
-            listContainer.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i></div>';
-            
-            try {
-                const snapshot = await db.collection('staff_roles').get();
-                permUsersData = [];
-                snapshot.forEach(doc => {
-                    permUsersData.push({ uid: doc.id, ...doc.data() });
-                });
-                
-                renderPermUsersList();
-                
-                document.getElementById('permUsersSearch').oninput = function() {
-                    renderPermUsersList(this.value);
-                };
-            } catch(e) {
-                console.error('Error loading permissions:', e);
-                listContainer.innerHTML = '<div class="no-alerts">خطأ في التحميل</div>';
-            }
-        }
-        
-        function renderPermUsersList(searchTerm = '') {
-            const listContainer = document.getElementById('permUsersList');
-            const filtered = permUsersData.filter(u => {
-                if (!searchTerm) return true;
-                const s = searchTerm.toLowerCase();
-                return (u.email || '').toLowerCase().includes(s) || 
-                       (u.fullName || u.name || '').toLowerCase().includes(s);
-            });
-            
-            if (filtered.length === 0) {
-                listContainer.innerHTML = '<div class="no-alerts">لا يوجد نتائج</div>';
-                return;
-            }
-            
-            const roleColors = { owner: '#dc2626', admin: '#2563eb', chair: '#7c3aed', member: '#059669', staff: '#6b7280', viewer: '#9ca3af' };
-            
-            listContainer.innerHTML = filtered.map(u => {
-                const role = u.role || 'staff';
-                const isSelected = selectedPermUser?.uid === u.uid;
-                const statusDot = u.status === 'suspended' ? '🟡' : '🟢';
-                return `
-                    <div onclick="selectPermUser('${u.uid}')" 
-                         style="padding:12px; background:${isSelected ? '#e0e7ff' : '#fff'}; border-radius:8px; cursor:pointer; border:2px solid ${isSelected ? '#4f46e5' : '#e2e8f0'}; transition:all 0.2s;">
-                        <div style="font-weight:600; display:flex; align-items:center; gap:6px;">
-                            ${statusDot} ${u.fullName || u.name || 'بدون اسم'}
-                        </div>
-                        <div style="font-size:0.8rem; color:#666; margin-top:4px;">${u.email || ''}</div>
-                        <span style="display:inline-block; margin-top:6px; padding:2px 8px; font-size:0.7rem; background:${roleColors[role] || '#6b7280'}; color:white; border-radius:4px;">${role}</span>
-                    </div>
-                `;
-            }).join('');
-        }
-        
-        function selectPermUser(uid) {
-            selectedPermUser = permUsersData.find(u => u.uid === uid);
-            renderPermUsersList(document.getElementById('permUsersSearch').value);
-            renderPermDetails();
-        }
-        
-        function renderPermDetails() {
-            const panel = document.getElementById('permDetailsPanel');
-            if (!selectedPermUser) {
-                panel.innerHTML = `<div style="text-align:center; color:#999; padding:40px;">
-                    <i class="fas fa-user-cog" style="font-size:3rem; margin-bottom:15px;"></i>
-                    <p>اختر مستخدماً من القائمة</p>
-                </div>`;
-                return;
-            }
-            
-            const u = selectedPermUser;
-            const role = u.role || 'staff';
-            const status = u.status || 'active';
-            const allowedSystems = u.allowedSystems || [];
-            const isOwner = u.email === OWNER_EMAIL;
-            const isPrivileged = ['owner', 'admin'].includes(role);
-            
-            // Only show owner option if current user IS the owner
-            const roleOptions = [
-                ...(isOwner ? [{ val: 'owner', label: 'مالك - صلاحيات كاملة' }] : []),
-                { val: 'admin', label: 'مدير - إدارة كاملة' },
-                { val: 'chair', label: 'رئيس لجنة' },
-                { val: 'member', label: 'عضو لجنة' },
-                { val: 'staff', label: 'موظف' },
-                { val: 'viewer', label: 'مشاهد فقط' }
-            ];
-            
-            const statusOptions = [
-                { val: 'active', label: 'نشط', color: '#10b981', icon: 'check-circle' },
-                { val: 'suspended', label: 'معلق', color: '#f59e0b', icon: 'pause-circle' },
-                { val: 'pending', label: 'قيد المراجعة', color: '#6b7280', icon: 'clock' }
-            ];
-            
-            let systemsHtml = '';
-            Object.entries(SYSTEMS_CONFIG).forEach(([key, cfg]) => {
-                const isAllowed = isPrivileged || allowedSystems.includes(key);
-                const disabled = isPrivileged ? 'disabled' : '';
-                systemsHtml += `
-                    <label style="display:flex; align-items:center; gap:10px; padding:10px 15px; background:${isAllowed ? '#f0fdf4' : '#fafafa'}; border:2px solid ${isAllowed ? '#22c55e' : '#e5e7eb'}; border-radius:8px; cursor:${isPrivileged ? 'not-allowed' : 'pointer'}; transition:all 0.2s;">
-                        <input type="checkbox" id="sys_${key}" ${isAllowed ? 'checked' : ''} ${disabled} 
-                               onchange="toggleSystem('${key}', this.checked)"
-                               style="width:18px; height:18px; accent-color:#22c55e;">
-                        <i class="fas fa-${cfg.icon}" style="color:${cfg.color}; font-size:1.2rem;"></i>
-                        <span style="font-weight:500;">${cfg.name}</span>
-                    </label>
-                `;
-            });
-            
-            panel.innerHTML = `
-                <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px; padding-bottom:15px; border-bottom:2px solid #e2e8f0;">
-                    <div style="width:60px; height:60px; background:linear-gradient(135deg, #4f46e5, #7c3aed); border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1.5rem; font-weight:bold;">
-                        ${(u.fullName || u.name || u.email || 'U').charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                        <h3 style="margin:0; font-size:1.3rem;">${u.fullName || u.name || 'بدون اسم'}</h3>
-                        <p style="margin:5px 0 0; color:#666; font-size:0.9rem;">${u.email || ''}</p>
-                    </div>
-                </div>
-                
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
-                    <div>
-                        <label style="font-weight:600; color:#374151; display:block; margin-bottom:8px;">
-                            <i class="fas fa-user-tag"></i> الدور
-                        </label>
-                        <select id="permRoleSelect" onchange="updatePermRole(this.value)" ${isOwner ? 'disabled' : ''}
-                                style="width:100%; padding:12px; border:2px solid #e5e7eb; border-radius:10px; font-family:inherit; font-size:1rem; background:white;">
-                            ${roleOptions.map(r => `<option value="${r.val}" ${role === r.val ? 'selected' : ''}>${r.label}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label style="font-weight:600; color:#374151; display:block; margin-bottom:8px;">
-                            <i class="fas fa-toggle-on"></i> الحالة
-                        </label>
-                        <div style="display:flex; gap:8px;">
-                            ${statusOptions.map(s => `
-                                <button onclick="updatePermStatus('${s.val}')" ${isOwner ? 'disabled' : ''}
-                                        style="flex:1; padding:10px; border:2px solid ${status === s.val ? s.color : '#e5e7eb'}; background:${status === s.val ? s.color + '20' : 'white'}; color:${status === s.val ? s.color : '#6b7280'}; border-radius:8px; cursor:${isOwner ? 'not-allowed' : 'pointer'}; font-family:inherit; font-weight:${status === s.val ? '600' : '400'}; transition:all 0.2s;">
-                                    <i class="fas fa-${s.icon}"></i><br>
-                                    <span style="font-size:0.8rem;">${s.label}</span>
-                                </button>
-                            `).join('')}
-                        </div>
-                    </div>
-                </div>
-                
-                <div>
-                    <label style="font-weight:600; color:#374151; display:block; margin-bottom:12px;">
-                        <i class="fas fa-key"></i> الأنظمة المتاحة
-                        ${isPrivileged ? '<span style="font-size:0.8rem; color:#10b981; margin-right:10px;">(المالك/المدير لديه وصول كامل)</span>' : ''}
-                    </label>
-                    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:10px;">
-                        ${systemsHtml}
-                    </div>
-                </div>
-            `;
-        }
-        
-        async function updatePermRole(newRole) {
-            if (!selectedPermUser) return;
-            
-            // Prevent assigning owner role to anyone except the canonical owner
-            if (newRole === 'owner' && selectedPermUser.email !== OWNER_EMAIL) {
-                showToast('لا يمكن تعيين دور المالك لغير المالك الأصلي', true);
-                renderPermDetails();
-                return;
-            }
-            
-            // Prevent changing owner's role
-            if (selectedPermUser.email === OWNER_EMAIL) {
-                showToast('لا يمكن تغيير دور المالك', true);
-                renderPermDetails();
-                return;
-            }
-            
-            try {
-                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ role: newRole });
-                selectedPermUser.role = newRole;
-                const idx = permUsersData.findIndex(u => u.uid === selectedPermUser.uid);
-                if (idx !== -1) permUsersData[idx].role = newRole;
-                renderPermUsersList(document.getElementById('permUsersSearch').value);
-                renderPermDetails();
-                showToast('تم تغيير الدور بنجاح');
-            } catch(e) {
-                console.error(e);
-                showToast('فشل تغيير الدور', true);
-            }
-        }
-        
-        async function updatePermStatus(newStatus) {
-            if (!selectedPermUser || selectedPermUser.email === OWNER_EMAIL) return;
-            try {
-                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ status: newStatus });
-                selectedPermUser.status = newStatus;
-                const idx = permUsersData.findIndex(u => u.uid === selectedPermUser.uid);
-                if (idx !== -1) permUsersData[idx].status = newStatus;
-                renderPermUsersList(document.getElementById('permUsersSearch').value);
-                renderPermDetails();
-                showToast('تم تغيير الحالة بنجاح');
-            } catch(e) {
-                console.error(e);
-                showToast('فشل تغيير الحالة', true);
-            }
-        }
-        
-        async function toggleSystem(systemKey, isEnabled) {
-            if (!selectedPermUser || ['owner', 'admin'].includes(selectedPermUser.role)) return;
-            try {
-                let systems = selectedPermUser.allowedSystems || [];
-                if (isEnabled && !systems.includes(systemKey)) {
-                    systems.push(systemKey);
-                } else if (!isEnabled) {
-                    systems = systems.filter(s => s !== systemKey);
-                }
-                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ allowedSystems: systems });
-                selectedPermUser.allowedSystems = systems;
-                const idx = permUsersData.findIndex(u => u.uid === selectedPermUser.uid);
-                if (idx !== -1) permUsersData[idx].allowedSystems = systems;
-                showToast('تم تحديث الصلاحيات');
-            } catch(e) {
-                console.error(e);
-                showToast('فشل تحديث الصلاحيات', true);
-                renderPermDetails();
-            }
-        }
-        
-        async function syncAuthUsers() {
-            const confirmed = await showConfirmModal({
-                title: 'مزامنة المستخدمين',
-                message: 'سيتم مزامنة جميع المستخدمين من Firebase Auth إلى قاعدة البيانات.',
-                type: 'info',
-                confirmText: 'مزامنة'
-            });
-            if (!confirmed) return;
-            
-            const container = document.getElementById('usersContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري المزامنة...</div>';
-            
-            try {
-                const response = await fetch('/api/admin/sync-users', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-                
-                if (data.ok) {
-                    showToast(`${data.message} (إجمالي: ${data.total})`);
-                    loadUsers();
-                } else {
-                    showToast('فشلت المزامنة: ' + data.error, true);
-                    container.innerHTML = '<div class="no-alerts">فشلت المزامنة</div>';
-                }
-            } catch(e) {
-                console.error('Sync error:', e);
-                showToast('خطأ في الاتصال', true);
-                container.innerHTML = '<div class="no-alerts">خطأ في الاتصال</div>';
-            }
-        }
-        
-        async function toggleUserStatus(uid, currentStatus) {
-            const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
-            const confirmed = await showConfirmModal({
-                title: 'تغيير حالة المستخدم',
-                message: newStatus === 'active' ? 'سيتم تفعيل هذا المستخدم' : 'سيتم تعليق هذا المستخدم',
-                type: newStatus === 'active' ? 'success' : 'warning',
-                confirmText: newStatus === 'active' ? 'تفعيل' : 'تعليق'
-            });
-            if (!confirmed) return;
-            
-            try {
-                await db.collection('staff_roles').doc(uid).update({
-                    status: newStatus
-                });
-                showToast('تم تغيير الحالة بنجاح');
-                loadUsers();
-            } catch(e) {
-                console.error('Error toggling status:', e);
-                showToast('فشل تغيير الحالة: ' + e.message, true);
-            }
-        }
-        
-        async function changeUserRole(uid, newRole) {
-            if (!['owner', 'admin', 'chair', 'member', 'staff', 'viewer'].includes(newRole)) {
-                showToast('دور غير صالح', true);
-                return;
-            }
-            try {
-                await db.collection('staff_roles').doc(uid).update({ role: newRole });
-                showToast('تم تغيير الدور بنجاح');
-            } catch(e) {
-                console.error('Error changing role:', e);
-                showToast('فشل تغيير الدور: ' + e.message, true);
-                loadUsers();
-            }
-        }
-        
-        async function resetUserPassword(uid) {
-            const confirmed = await showConfirmModal({
-                title: 'إعادة تعيين كلمة السر',
-                message: 'سيتم إنشاء رابط إعادة تعيين كلمة السر وإرساله للمستخدم.',
-                type: 'info',
-                confirmText: 'إنشاء الرابط'
-            });
-            if (!confirmed) return;
-            
-            try {
-                const token = await auth.currentUser.getIdToken();
-                const response = await fetch(`/api/admin/users/${uid}/reset-password`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                const data = await response.json();
-                
-                if (data.ok) {
-                    if (data.resetLink) {
-                        const copyConfirm = await showConfirmModal({
-                            title: 'تم إنشاء الرابط',
-                            message: `تم إنشاء رابط إعادة تعيين كلمة السر للبريد:\n${data.email}`,
-                            type: 'success',
-                            confirmText: 'نسخ الرابط'
-                        });
-                        if (copyConfirm) {
-                            navigator.clipboard.writeText(data.resetLink);
-                            showToast('تم نسخ الرابط');
-                        }
-                    } else {
-                        showToast('تم إنشاء الرابط بنجاح');
-                    }
-                } else {
-                    showToast('فشل إنشاء الرابط: ' + data.error, true);
-                }
-            } catch(e) {
-                console.error('Reset password error:', e);
-                showToast('خطأ في الاتصال', true);
-            }
-        }
-        
-        let showingDeleted = false;
-        
-        async function toggleDeletedUsers() {
-            const section = document.getElementById('deletedUsersSection');
-            showingDeleted = !showingDeleted;
-            section.style.display = showingDeleted ? 'block' : 'none';
-            if (showingDeleted) {
-                loadDeletedUsers();
-            }
-        }
-        
-        async function loadDeletedUsers() {
-            const container = document.getElementById('deletedUsersContainer');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            try {
-                const snapshot = await db.collection('deleted_staff').orderBy('deletedAt', 'desc').get();
-                const deletedUsers = [];
-                snapshot.forEach(doc => {
-                    deletedUsers.push({ docId: doc.id, ...doc.data() });
-                });
-                
-                document.getElementById('usersDeletedCount').textContent = deletedUsers.length;
-                
-                if (deletedUsers.length > 0) {
-                    let html = '<table class="users-table" style="font-size:0.85rem;"><thead><tr>';
-                    html += '<th>الاسم</th><th>البريد</th><th>حذف بواسطة</th><th>تاريخ الحذف</th><th>السبب</th><th>إجراءات</th>';
-                    html += '</tr></thead><tbody>';
-                    
-                    deletedUsers.forEach(u => {
-                        const deletedDate = u.deletedAt ? new Date(u.deletedAt.toDate()).toLocaleDateString('ar-SA') : '-';
-                        html += `<tr style="background:#fff5f5;">
-                            <td>${u.fullName || u.name || '-'}</td>
-                            <td style="font-size:0.8rem;">${u.email || '-'}</td>
-                            <td style="color:#dc2626; font-weight:bold;">${u.deletedBy || 'غير معروف'}</td>
-                            <td>${deletedDate}</td>
-                            <td style="font-size:0.8rem;">${u.deleteReason || '-'}</td>
-                            <td style="display:flex; gap:5px;">
-                                <button onclick="restoreUser('${u.docId}')" style="background:#10b981; color:white; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;" title="استعادة">
-                                    <i class="fas fa-undo"></i>
-                                </button>
-                                <button onclick="permanentDeleteUser('${u.docId}', '${u.email}')" style="background:#7f1d1d; color:white; padding:6px 10px; border:none; border-radius:6px; cursor:pointer;" title="حذف نهائي">
-                                    <i class="fas fa-skull-crossbones"></i>
-                                </button>
-                            </td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts" style="background:#fff;">لا يوجد مستخدمين محذوفين</div>';
-                }
-            } catch(e) {
-                console.error('Error loading deleted users:', e);
-                if (e.code === 'permission-denied') {
-                    container.innerHTML = '<div class="no-alerts">لا يوجد مستخدمين محذوفين</div>';
-                    document.getElementById('usersDeletedCount').textContent = '0';
-                } else {
-                    container.innerHTML = '<div class="no-alerts">خطأ في التحميل: ' + e.message + '</div>';
-                }
-            }
-        }
-        
-        async function deleteUser(uid, email) {
-            if (email === OWNER_EMAIL) {
-                showToast('لا يمكن حذف المالك', true);
-                return;
-            }
-            
-            const confirmed = await showConfirmModal({
-                title: 'نقل للأرشيف',
-                message: `سيتم نقل المستخدم للأرشيف:\n${email}\n\nيمكنك استعادته لاحقاً من قسم المحذوفين.`,
-                type: 'warning',
-                confirmText: 'نقل للأرشيف'
-            });
-            if (!confirmed) return;
-            
-            const reason = '';
-            
-            try {
-                const userDoc = await db.collection('staff_roles').doc(uid).get();
-                if (!userDoc.exists) {
-                    showToast('المستخدم غير موجود', true);
-                    return;
-                }
-                
-                const userData = userDoc.data();
-                await db.collection('deleted_staff').doc(uid).set({
-                    ...userData,
-                    originalUid: uid,
-                    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    deletedBy: currentUser.email,
-                    deleteReason: reason || ''
-                });
-                
-                await db.collection('staff_roles').doc(uid).delete();
-                
-                showToast('تم نقل المستخدم للأرشيف');
-                loadUsers();
-                loadPermissions();
-                if (showingDeleted) loadDeletedUsers();
-            } catch(e) {
-                console.error('Delete user error:', e);
-                showToast('خطأ في حذف المستخدم: ' + e.message, true);
-            }
-        }
-        
-        async function restoreUser(docId) {
-            const confirmed = await showConfirmModal({
-                title: 'استعادة المستخدم',
-                message: 'سيتم استعادة هذا المستخدم وإعادة تفعيل حسابه.',
-                type: 'success',
-                confirmText: 'استعادة'
-            });
-            if (!confirmed) return;
-            
-            try {
-                const deletedDoc = await db.collection('deleted_staff').doc(docId).get();
-                if (!deletedDoc.exists) {
-                    showToast('السجل غير موجود', true);
-                    return;
-                }
-                
-                const data = deletedDoc.data();
-                const { deletedAt, deletedBy, deleteReason, docId: _, ...userData } = data;
-                
-                await db.collection('staff_roles').doc(docId).set({
-                    ...userData,
-                    restoredAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    restoredBy: currentUser.email
-                });
-                
-                await db.collection('deleted_staff').doc(docId).delete();
-                
-                showToast('تم استعادة المستخدم بنجاح');
-                loadUsers();
-                loadDeletedUsers();
-                loadPermissions();
-            } catch(e) {
-                console.error('Restore user error:', e);
-                showToast('خطأ في الاستعادة: ' + e.message, true);
-            }
-        }
-        
-        async function permanentDeleteUser(docId, email) {
-            const confirmed = await showConfirmModal({
-                title: 'حذف نهائي',
-                message: `⚠️ تحذير!\n\nسيتم حذف "${email}" نهائياً من:\n• قاعدة البيانات\n• Firebase Authentication\n\nسيتمكن من إعادة التسجيل كمستخدم جديد.\n\nهذا الإجراء لا يمكن التراجع عنه!`,
-                type: 'danger',
-                confirmText: 'حذف نهائي'
-            });
-            if (!confirmed) return;
-            
-            try {
-                const token = await auth.currentUser.getIdToken();
-                
-                const authRes = await fetch(`/api/admin/users/${docId}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                const authData = await authRes.json();
-                
-                if (authData.ok) {
-                    console.log('User deleted from Firebase Auth:', authData);
-                } else {
-                    console.warn('Firebase Auth delete warning:', authData.error);
-                }
-                
-                await db.collection('deleted_staff').doc(docId).delete();
-                
-                showToast('تم الحذف النهائي - يمكن للمستخدم إعادة التسجيل الآن');
-                loadDeletedUsers();
-            } catch(e) {
-                console.error('Permanent delete error:', e);
-                showToast('خطأ في الحذف: ' + e.message, true);
-            }
-        }
-        
-        function viewComplaint(id) {
-            window.open('complaint_analysis.html?id=' + id, '_blank');
-        }
-        
-        auth.onAuthStateChanged(async (user) => {
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const accessDenied = document.getElementById('accessDenied');
-            
-            if (user) {
-                currentUser = user;
-                
-                try {
-                    idToken = await user.getIdToken();
-                    
-                    if (user.email === OWNER_EMAIL) {
-                        document.getElementById('ownerName').textContent = user.displayName || user.email.split('@')[0];
-                        document.body.classList.add('authenticated');
-                        loadingOverlay.style.display = 'none';
-                        loadAllData();
-                    } else {
-                        const roleDoc = await db.collection('staff_roles').doc(user.uid).get();
-                        if (roleDoc.exists && roleDoc.data().role === 'owner') {
-                            document.getElementById('ownerName').textContent = user.displayName || roleDoc.data().name || user.email.split('@')[0];
-                            document.body.classList.add('authenticated');
-                            loadingOverlay.style.display = 'none';
-                            loadAllData();
-                        } else {
-                            loadingOverlay.style.display = 'none';
-                            accessDenied.style.display = 'flex';
-                        }
-                    }
-                } catch (e) {
-                    console.error('Auth error:', e);
-                    loadingOverlay.style.display = 'none';
-                    accessDenied.style.display = 'flex';
-                }
-            } else {
-                window.location.href = 'admin-login.html?redirect=owner-dashboard.html';
-            }
-        });
-    </script>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function addPermission() {
+  const email = document.getElementById('newEmail').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  const dept = document.getElementById('newDept').value.trim();
+  
+  if (!email || !name) {
+    alert('يرجى إدخال البريد الإلكتروني والاسم');
+    return;
+  }
+  
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ 
+        action: 'addPermission', 
+        email: email, 
+        name: name, 
+        department: dept 
+      })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert(data.message || 'تم إضافة الموظف بنجاح');
+      document.getElementById('newEmail').value = '';
+      document.getElementById('newName').value = '';
+      document.getElementById('newDept').value = '';
+      loadPermissions();
+      loadStats();
+    } else {
+      alert(data.error || 'حدث خطأ');
+    }
+  } catch(e) {
+    console.error('Add permission error:', e);
+    alert('حدث خطأ أثناء الإضافة');
+  }
+}
+
+async function removePermission(email) {
+  if (!confirm('هل تريد إلغاء صلاحية هذا الموظف؟')) return;
+  
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'removePermission', email: email })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert(data.message || 'تم إلغاء الصلاحية');
+      loadPermissions();
+      loadStats();
+    }
+  } catch(e) {
+    console.error('Remove permission error:', e);
+  }
+}
+
+async function activatePermission(email, name, dept) {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ 
+        action: 'addPermission', 
+        email: email, 
+        name: name, 
+        department: dept 
+      })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert('تم تفعيل الصلاحية');
+      loadPermissions();
+      loadStats();
+    }
+  } catch(e) {
+    console.error('Activate permission error:', e);
+  }
+}
+
+async function loadDoctorStats() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getDoctorStats' })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      renderDoctorCards(data.doctors || []);
+    }
+  } catch(e) {
+    console.error('Doctor stats error:', e);
+  }
+}
+
+function renderDoctorCards(doctors) {
+  const grid = document.getElementById('doctorsGrid');
+  
+  if (doctors.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1/-1;">
+        <i class="fas fa-user-md"></i>
+        <p>لا توجد بيانات للأطباء</p>
+      </div>
+    `;
+    return;
+  }
+  
+  grid.innerHTML = doctors.map(doc => {
+    const avgRating = parseFloat(doc.avgOverallRating) || 0;
+    let ratingClass = 'rating-needs';
+    let ratingColor = '#ef4444';
+    if (avgRating >= 8) { ratingClass = 'rating-excellent'; ratingColor = '#22c55e'; }
+    else if (avgRating >= 5) { ratingClass = 'rating-good'; ratingColor = '#eab308'; }
+    
+    return `
+      <div class="doctor-card">
+        <div class="name"><i class="fas fa-user-md"></i> ${doc.doctorName}</div>
+        <div class="stats">
+          <div class="stat-item">
+            <div class="value">${doc.totalCases}</div>
+            <div class="label">حالة</div>
+          </div>
+          <div class="stat-item">
+            <div class="value">${doc.avgInsuranceRating}</div>
+            <div class="label">معايير التأمين</div>
+          </div>
+          <div class="stat-item">
+            <div class="value">${doc.avgServiceRating}</div>
+            <div class="label">جودة الخدمات</div>
+          </div>
+          <div class="stat-item">
+            <div class="value" style="color:${ratingColor}">${doc.avgOverallRating}</div>
+            <div class="label">المتوسط</div>
+          </div>
+        </div>
+        <div class="rating-bar">
+          <span class="rating-badge ${ratingClass}">${doc.status}</span>
+          <span style="font-size:0.85rem;color:var(--text-muted);">${doc.lastCaseDate || '-'}</span>
+        </div>
+        ${doc.folderLink ? `<a href="${doc.folderLink}" target="_blank" style="display:block;margin-top:0.5rem;">
+          <i class="fas fa-folder-open"></i> فتح المجلد
+        </a>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadUsageLog() {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getUsageLog' })
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      renderUsageLog(data.logs || []);
+    }
+  } catch(e) {
+    console.error('Usage log error:', e);
+  }
+}
+
+function renderUsageLog(logs) {
+  const tbody = document.getElementById('usageLogBody');
+  
+  if (logs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="empty-state">
+          <i class="fas fa-history"></i>
+          <p>لا يوجد سجل استخدام</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  tbody.innerHTML = logs.slice(0, 50).map(log => {
+    const avgRating = parseFloat(log.overallRating) || 0;
+    let ratingClass = 'rating-needs';
+    if (avgRating >= 8) ratingClass = 'rating-excellent';
+    else if (avgRating >= 5) ratingClass = 'rating-good';
+    
+    return `
+      <tr>
+        <td>${log.timestamp}</td>
+        <td>${log.userName}</td>
+        <td>${log.doctorName || '-'}</td>
+        <td>${log.filesCount}</td>
+        <td>${log.insuranceRating}/10</td>
+        <td>${log.serviceRating}/10</td>
+        <td><span class="rating-badge ${ratingClass}">${log.overallRating}/10</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+</script>
 </body>
 </html>
