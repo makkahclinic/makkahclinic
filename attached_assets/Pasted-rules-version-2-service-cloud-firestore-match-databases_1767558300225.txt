@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Owner email - only this user can have owner role
+    function isOwner() {
+      return request.auth != null && request.auth.token.email == 'husseinbabsail@gmail.com';
+    }
+    
+    // Check if user has admin or owner role
+    function isPrivileged() {
+      return isOwner() || 
+        (request.auth != null && 
+         exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data.role in ['owner', 'admin']);
+    }
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user has access to a specific system
+    function hasSystemAccess(systemName) {
+      return isPrivileged() || 
+        (isAuthenticated() && 
+         exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid)) &&
+         systemName in get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data.allowedSystems);
+    }
+    
+    // Staff roles collection - critical security
+    match /staff_roles/{userId} {
+      // Anyone can read their own role, privileged can read all
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isPrivileged());
+      
+      // Only privileged users can create new staff records
+      allow create: if isPrivileged() && 
+        // Prevent creating owner role for non-owner
+        (request.resource.data.role != 'owner' || isOwner());
+      
+      // Update rules with owner role protection
+      allow update: if isPrivileged() && 
+        // CRITICAL: Only actual owner can assign owner role
+        (request.resource.data.role != 'owner' || isOwner()) &&
+        // CRITICAL: Cannot change owner's document unless you ARE the owner
+        (resource.data.role != 'owner' || isOwner());
+      
+      // Only owner can delete staff records
+      allow delete: if isOwner();
+    }
+    
+    // Deleted staff archive - owner only
+    match /deleted_staff/{userId} {
+      allow read: if isOwner();
+      allow create: if isOwner();
+      allow update: if isOwner();
+      allow delete: if isOwner();
+    }
+    
+    // Audit log - create only, no updates/deletes
+    match /audit_log/{logId} {
+      allow read: if isPrivileged();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+    
+    // Alerts - privileged access only
+    match /alerts/{alertId} {
+      allow read: if isPrivileged();
+      allow write: if isPrivileged();
+    }
+    
+    // Membership requests - any authenticated user can create their own request
+    match /membershipRequests/{requestId} {
+      // Any authenticated user can create a request (for registration)
+      allow create: if isAuthenticated() && 
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      
+      // Users can read their own requests, privileged can read all
+      allow read: if isAuthenticated() && 
+        (resource.data.uid == request.auth.uid || isPrivileged());
+      
+      // Only privileged users can update/delete requests
+      allow update, delete: if isPrivileged();
+    }
+    
+    // Default deny - no catch-all rule
+    // All other collections must be explicitly defined
+  }
+}

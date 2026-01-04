@@ -1,0 +1,200 @@
+الجزء (1) — تعديل الداشبورد سطر-بسطر (دمج RBAC فعليًا)
+1️⃣ أضف ملفات RBAC (مرة واحدة)
+
+ضع الملفات كما هي (إن لم تكن أضفتها بعد):
+
+/core/rbac/
+  permissions-map.js
+  rbac.js
+  guard.js
+  bootstrap.js
+
+
+(الملفات أعطيتك إياها سابقًا — لا تغيّر أسماء المفاتيح)
+
+2️⃣ عدّل HTML: اربط كل عنصر بصلاحية
+
+ابحث في owner / admin / staff dashboards عن:
+
+عناصر Sidebar
+
+KPI Cards
+
+Buttons
+
+Cards
+
+وأضف data-permission حرفيًا بالمفتاح المناسب.
+
+أمثلة صحيحة:
+
+<a class="nav-item" data-permission="complaints">الشكاوى</a>
+<a class="nav-item" data-permission="insurance">تحليل التأمين</a>
+
+<div class="kpi-card" data-permission="maintenance"></div>
+
+<button data-permission="incidents">إضافة حادثة</button>
+
+
+ملاحظات:
+
+ما لا تريد تقييده → اتركه بدون data-permission
+
+المالك سيرى كل شيء تلقائيًا
+
+3️⃣ عدّل JS بعد جلب userData (نقطة واحدة فقط)
+
+في كل Dashboard، بعد:
+
+const userData = await getUserRole(user.uid);
+
+
+أضف:
+
+import { initRBAC } from './core/rbac/bootstrap.js';
+
+const rbac = initRBAC(userData);
+
+
+النتيجة الفورية:
+
+إخفاء Sidebar/KPI/Buttons غير المسموح بها
+
+المالك لا يُخفى عنه شيء
+
+4️⃣ حماية الصفحات من الدخول المباشر (أمنيًا)
+
+في أعلى كل صفحة نظام (insurance / risks / rounds…)، بعد جلب userData:
+
+import { guardSystemPage } from './core/rbac/guard.js';
+
+guardSystemPage(userData, 'insurance'); // غيّر المفتاح حسب الصفحة
+
+
+خريطة سريعة:
+
+الصفحة	المفتاح
+insurance-check.html	insurance
+risk-register.html	risks
+Round.html	rounds
+calibration.html	calibration
+maintenance.html	maintenance
+eoc-command.html	eoc
+5️⃣ توجيه الدخول (نهائي وبسيط)
+
+في صفحة تسجيل الدخول بعد التحقق من الدور:
+
+if (userData.role === 'owner') {
+  location.href = 'owner-dashboard.html';
+} else if (userData.role === 'admin') {
+  location.href = 'admin-dashboard.html';
+} else {
+  location.href = 'staff-dashboard.html';
+}
+
+
+احذف أي منطق يعتمد على email / claims / localStorage.
+
+6️⃣ ما يجب حذفه الآن (ضروري)
+
+❌ allowedSystems من الواجهة
+
+❌ isTrialPeriod
+
+❌ developerEmail
+
+❌ أي if (email === ...)
+
+❌ صلاحيات في localStorage
+
+الجزء (2) — سكربت Migration (من allowedSystems → permissions)
+الهدف
+
+تحويل كل مستخدم لديه:
+
+allowedSystems: ['complaints','incidents']
+
+
+إلى:
+
+permissions: { complaints:true, incidents:true }
+
+سكربت (تشغيل مرة واحدة)
+
+شغّله من Node أو Firebase Console.
+
+import { initializeApp } from "firebase/app";
+import {
+  getFirestore, collection, getDocs, doc, updateDoc
+} from "firebase/firestore";
+
+const app = initializeApp({
+  apiKey: "YOUR_KEY",
+  authDomain: "YOUR_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+});
+
+const db = getFirestore(app);
+
+const ALL_KEYS = [
+  'dashboard','eoc','complaints','incidents','risks',
+  'rounds','calibration','maintenance','needlestick','insurance'
+];
+
+(async () => {
+  const snap = await getDocs(collection(db, "staff_roles"));
+  let migrated = 0;
+
+  for (const d of snap.docs) {
+    const data = d.data();
+
+    // تجاهل المالك (Bypass)
+    if (data.role === 'owner') continue;
+
+    // إن كان لديه permissions بالفعل → تجاهل
+    if (data.permissions && Object.keys(data.permissions).length) continue;
+
+    const perms = {};
+    (data.allowedSystems || []).forEach(k => {
+      if (ALL_KEYS.includes(k)) perms[k] = true;
+    });
+
+    // إن لم يكن لديه شيء، أنشئ permissions فارغة
+    await updateDoc(doc(db, "staff_roles", d.id), {
+      permissions: perms,
+      updatedAt: new Date(),
+    });
+
+    migrated++;
+  }
+
+  console.log(`Migration done. Users updated: ${migrated}`);
+})();
+
+بعد النجاح
+
+❌ احذف allowedSystems من:
+
+Firestore
+
+كود الواجهة
+
+❌ لا تستخدمه مرة أخرى
+
+Checklist سريعة (قبل الإطلاق)
+
+ كل عنصر مقيد لديه data-permission
+
+ initRBAC(userData) موجود في كل Dashboard
+
+ guardSystemPage موجود في كل صفحة نظام
+
+ لا يوجد if email ===
+
+ لا يوجد allowedSystems
+
+ المالك يرى كل شيء
+
+ الأدمن يرى حسب ما تعطيه
+
+ الموظف لا يرى إلا المسموح
