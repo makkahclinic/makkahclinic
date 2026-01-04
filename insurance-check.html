@@ -139,48 +139,91 @@
       margin-bottom: 1.5rem;
       position: relative;
     }
-    .doctor-input label {
+    .doctor-input > label {
       display: block; color: var(--gold); margin-bottom: 0.5rem; font-weight: 600;
     }
-    .custom-select-wrapper {
+    
+    /* Custom Dropdown */
+    .custom-dropdown {
       position: relative;
+      width: 100%;
     }
-    .custom-select-wrapper::after {
-      content: '\f078';
-      font-family: 'Font Awesome 5 Free';
-      font-weight: 900;
-      position: absolute;
-      left: 1rem;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--gold);
-      pointer-events: none;
-    }
-    .doctor-input input, .doctor-input select {
+    .custom-dropdown-selected {
       width: 100%; padding: 1rem 1.25rem; border-radius: 12px;
       border: 2px solid var(--border); background: var(--card-bg);
       color: var(--text); font-family: inherit; font-size: 1rem;
-      appearance: none; -webkit-appearance: none; -moz-appearance: none;
       cursor: pointer; transition: all 0.3s ease;
+      display: flex; justify-content: space-between; align-items: center;
     }
-    .doctor-input select {
-      padding-left: 2.5rem;
-    }
-    .doctor-input select option {
-      background: #1e3a5f; color: white; padding: 12px;
-      font-size: 1rem;
-    }
-    .doctor-input select option:hover,
-    .doctor-input select option:checked {
-      background: var(--gold) !important;
-      color: #1e3a5f !important;
-    }
-    .doctor-input input:focus, .doctor-input select:focus {
-      outline: none; border-color: var(--gold);
-      box-shadow: 0 0 0 3px rgba(201, 169, 98, 0.2);
-    }
-    .doctor-input select:hover {
+    .custom-dropdown-selected:hover {
       border-color: var(--gold);
+    }
+    .custom-dropdown-selected.active {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(201, 169, 98, 0.2);
+      border-radius: 12px 12px 0 0;
+    }
+    .custom-dropdown-selected i {
+      color: var(--gold);
+      transition: transform 0.3s;
+    }
+    .custom-dropdown-selected.active i {
+      transform: rotate(180deg);
+    }
+    .custom-dropdown-options {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #1e3a5f;
+      border: 2px solid var(--gold);
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .custom-dropdown-options.show {
+      display: block;
+    }
+    .custom-dropdown-option {
+      padding: 0.875rem 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-bottom: 1px solid rgba(201, 169, 98, 0.2);
+      color: white;
+      font-size: 0.95rem;
+    }
+    .custom-dropdown-option:last-child {
+      border-bottom: none;
+      border-radius: 0 0 10px 10px;
+    }
+    .custom-dropdown-option:hover {
+      background: var(--gold);
+      color: #1e3a5f;
+    }
+    .custom-dropdown-option.selected {
+      background: rgba(201, 169, 98, 0.3);
+      color: var(--gold);
+      font-weight: 600;
+    }
+    .custom-dropdown-option .specialty {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-right: 0.5rem;
+    }
+    .custom-dropdown-options::-webkit-scrollbar {
+      width: 8px;
+    }
+    .custom-dropdown-options::-webkit-scrollbar-track {
+      background: #152238;
+      border-radius: 4px;
+    }
+    .custom-dropdown-options::-webkit-scrollbar-thumb {
+      background: var(--gold);
+      border-radius: 4px;
     }
 
     .uploader {
@@ -505,12 +548,17 @@
           </h3>
           
           <div class="doctor-input">
-            <label for="doctorName"><i class="fas fa-user-md"></i> اسم الطبيب المعالج</label>
-            <div class="custom-select-wrapper">
-              <select id="doctorName" required>
-                <option value="">-- اختر الطبيب --</option>
-              </select>
+            <label><i class="fas fa-user-md"></i> اسم الطبيب المعالج</label>
+            <div class="custom-dropdown" id="doctorDropdown">
+              <div class="custom-dropdown-selected" id="doctorSelected">
+                <span>-- اختر الطبيب --</span>
+                <i class="fas fa-chevron-down"></i>
+              </div>
+              <div class="custom-dropdown-options" id="doctorOptions">
+                <!-- Options will be loaded dynamically -->
+              </div>
             </div>
+            <input type="hidden" id="doctorName" value="">
           </div>
           
           <label class="uploader" for="fileInput" id="dropZone">
@@ -780,15 +828,17 @@ async function loadDoctorsList() {
     });
     const data = await response.json();
     
-    const select = document.getElementById('doctorName');
-    select.innerHTML = '<option value="">-- اختر الطبيب --</option>';
+    const optionsContainer = document.getElementById('doctorOptions');
+    optionsContainer.innerHTML = '';
     
     if (data.success && data.doctors) {
       data.doctors.forEach(doc => {
-        const option = document.createElement('option');
-        option.value = doc.name;
-        option.textContent = `${doc.name}${doc.specialty ? ' - ' + doc.specialty : ''}`;
-        select.appendChild(option);
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'custom-dropdown-option';
+        optionDiv.dataset.value = doc.name;
+        optionDiv.innerHTML = `<span>${doc.name}</span>${doc.specialty ? `<span class="specialty">(${doc.specialty})</span>` : ''}`;
+        optionDiv.addEventListener('click', () => selectDoctor(doc.name, doc.specialty));
+        optionsContainer.appendChild(optionDiv);
       });
       console.log('Loaded', data.doctors.length, 'doctors');
     }
@@ -796,6 +846,44 @@ async function loadDoctorsList() {
     console.error('Failed to load doctors:', e);
   }
 }
+
+function selectDoctor(name, specialty) {
+  const hiddenInput = document.getElementById('doctorName');
+  const selectedDiv = document.getElementById('doctorSelected');
+  const optionsDiv = document.getElementById('doctorOptions');
+  
+  hiddenInput.value = name;
+  selectedDiv.querySelector('span').textContent = name + (specialty ? ` - ${specialty}` : '');
+  selectedDiv.classList.remove('active');
+  optionsDiv.classList.remove('show');
+  
+  // Mark selected option
+  optionsDiv.querySelectorAll('.custom-dropdown-option').forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.value === name);
+  });
+}
+
+// Initialize custom dropdown
+document.addEventListener('DOMContentLoaded', () => {
+  const selectedDiv = document.getElementById('doctorSelected');
+  const optionsDiv = document.getElementById('doctorOptions');
+  
+  if (selectedDiv) {
+    selectedDiv.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedDiv.classList.toggle('active');
+      optionsDiv.classList.toggle('show');
+    });
+  }
+  
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-dropdown')) {
+      selectedDiv?.classList.remove('active');
+      optionsDiv?.classList.remove('show');
+    }
+  });
+});
 
 function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -1266,6 +1354,8 @@ function resetAnalysis() {
   translatedReport = '';
   currentLang = 'ar';
   doctorNameInput.value = '';
+  document.getElementById('doctorSelected').querySelector('span').textContent = '-- اختر الطبيب --';
+  document.querySelectorAll('.custom-dropdown-option').forEach(opt => opt.classList.remove('selected'));
   insuranceRatingValue = 0;
   serviceRatingValue = 0;
   updateStars(document.querySelectorAll('#insuranceRating i'), 0);
