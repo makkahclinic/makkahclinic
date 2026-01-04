@@ -8,30 +8,38 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasStaffRole() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid));
+    }
+
+    function getStaffData() {
+      return get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data;
+    }
+
     // 👑 Owner (bypass كامل)
     function isOwner() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data.role == 'owner';
+      return hasStaffRole() && getStaffData().role == 'owner';
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data.role == 'admin';
+      return hasStaffRole() && getStaffData().role == 'admin';
     }
 
     function isPrivileged() {
       return isOwner() || isAdmin();
     }
 
+    // ✅ التحقق من أن الحساب نشط (غير معلق)
+    function isActiveUser() {
+      return hasStaffRole() && getStaffData().status == 'active';
+    }
+
     // 🔐 صلاحية نظام محدد (RBAC)
-    // المالك فقط يتجاوز - الأدمن يخضع لـ permissions
+    // المالك يتجاوز - الباقي يخضع للصلاحيات + الحساب نشط
     function hasPermission(key) {
       return isOwner() ||
-        (isAuthenticated() &&
-         exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data.permissions[key] == true);
+        (isActiveUser() && getStaffData().permissions[key] == true);
     }
 
     // ===== staff_roles (أهم Collection) =====
@@ -81,56 +89,77 @@ service cloud.firestore {
     }
 
     // ===== System-specific collections =====
-    // read, create, update = حسب الصلاحية
+    // read/update = حسب الصلاحية
+    // create = حسب الصلاحية + createdBy = المنشئ
     // delete = المالك فقط
     
     match /complaints/{docId} {
-      allow read, create, update: if hasPermission('complaints');
+      allow read, update: if hasPermission('complaints');
+      allow create: if hasPermission('complaints') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /incidents/{docId} {
-      allow read, create, update: if hasPermission('incidents');
+      allow read, update: if hasPermission('incidents');
+      allow create: if hasPermission('incidents') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /risks/{docId} {
-      allow read, create, update: if hasPermission('risks');
+      allow read, update: if hasPermission('risks');
+      allow create: if hasPermission('risks') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /rounds/{docId} {
-      allow read, create, update: if hasPermission('rounds');
+      allow read, update: if hasPermission('rounds');
+      allow create: if hasPermission('rounds') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /calibration/{docId} {
-      allow read, create, update: if hasPermission('calibration');
+      allow read, update: if hasPermission('calibration');
+      allow create: if hasPermission('calibration') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /maintenance/{docId} {
-      allow read, create, update: if hasPermission('maintenance');
+      allow read, update: if hasPermission('maintenance');
+      allow create: if hasPermission('maintenance') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /needlestick/{docId} {
-      allow read, create, update: if hasPermission('needlestick');
+      allow read, update: if hasPermission('needlestick');
+      allow create: if hasPermission('needlestick') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /insurance/{docId} {
-      allow read, create, update: if hasPermission('insurance');
+      allow read, update: if hasPermission('insurance');
+      allow create: if hasPermission('insurance') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /eoc/{docId} {
-      allow read, create, update: if hasPermission('eoc');
+      allow read, update: if hasPermission('eoc');
+      allow create: if hasPermission('eoc') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
     
     match /cbahi/{docId} {
-      allow read, create, update: if hasPermission('cbahi');
+      allow read, update: if hasPermission('cbahi');
+      allow create: if hasPermission('cbahi') &&
+        request.resource.data.createdBy == request.auth.uid;
       allow delete: if isOwner();
     }
 
