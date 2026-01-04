@@ -467,9 +467,11 @@ function getMasterData() {
   }
   
   return {
-    ok: true,
-    owners: Array.from(ownersSet).sort(),
-    categories: Array.from(categoriesSet).sort()
+    success: true,
+    data: {
+      owners: Array.from(ownersSet).sort(),
+      categories: Array.from(categoriesSet).sort()
+    }
   };
 }
 
@@ -481,7 +483,7 @@ function getLibraryData() {
   const sheet = ss.getSheetByName(RISK_LIBRARY_SHEET_NAME);
   
   if (!sheet || sheet.getLastRow() <= 1) {
-    return { ok: true, items: [] };
+    return { success: true, data: [] };
   }
   
   const data = sheet.getDataRange().getValues();
@@ -498,7 +500,7 @@ function getLibraryData() {
     });
   }
   
-  return { ok: true, items: items };
+  return { success: true, data: items };
 }
 
 function testConnection() {
