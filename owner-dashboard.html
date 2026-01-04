@@ -1294,10 +1294,8 @@
     </div>
 
     <script>
-        const OWNER_EMAIL = 'husseinbabsail@gmail.com';
-        function isOwnerEmail(email) {
-            return email.toLowerCase() === OWNER_EMAIL.toLowerCase();
-        }
+        // الصلاحيات تُجلب من Firestore فقط - لا يوجد إيميل ثابت
+        // role === 'owner' في staff_roles هو المصدر الوحيد للتحقق من المالك
         const INSURANCE_API_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
         const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
         
@@ -2330,6 +2328,8 @@
             });
         }
         
+        let usersData = [];
+        
         async function loadUsers() {
             const container = document.getElementById('usersContainer');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
@@ -2340,6 +2340,7 @@
                 snapshot.forEach(doc => {
                     users.push({ uid: doc.id, ...doc.data() });
                 });
+                usersData = users; // حفظ البيانات للاستخدام في deleteUser
                 
                 if (users.length > 0) {
                     let active = 0, suspended = 0;
@@ -2380,7 +2381,7 @@
                         const status = u.status || 'active';
                         const statusText = status === 'suspended' ? 'معلق' : 'نشط';
                         const statusColor = status === 'suspended' ? '#f59e0b' : '#10b981';
-                        const isOwner = u.email === OWNER_EMAIL;
+                        const isOwner = u.role === 'owner';
                         
                         html += `<tr>
                             <td>${u.fullName || u.name || '-'}</td>
@@ -2637,7 +2638,7 @@
             const role = u.role || 'staff';
             const status = u.status || 'active';
             const allowedSystems = u.allowedSystems || [];
-            const isOwner = u.email === OWNER_EMAIL;
+            const isOwner = u.role === 'owner';
             const isPrivileged = ['owner', 'admin'].includes(role);
             
             // Only show owner option if current user IS the owner
@@ -2723,15 +2724,15 @@
         async function updatePermRole(newRole) {
             if (!selectedPermUser) return;
             
-            // Prevent assigning owner role to anyone except the canonical owner
-            if (newRole === 'owner' && selectedPermUser.email !== OWNER_EMAIL) {
+            // Prevent assigning owner role to non-owners
+            if (newRole === 'owner' && selectedPermUser.role !== 'owner') {
                 showToast('لا يمكن تعيين دور المالك لغير المالك الأصلي', true);
                 renderPermDetails();
                 return;
             }
             
             // Prevent changing owner's role
-            if (selectedPermUser.email === OWNER_EMAIL) {
+            if (selectedPermUser.role === 'owner') {
                 showToast('لا يمكن تغيير دور المالك', true);
                 renderPermDetails();
                 return;
@@ -2752,7 +2753,7 @@
         }
         
         async function updatePermStatus(newStatus) {
-            if (!selectedPermUser || selectedPermUser.email === OWNER_EMAIL) return;
+            if (!selectedPermUser || selectedPermUser.role === 'owner') return;
             try {
                 await db.collection('staff_roles').doc(selectedPermUser.uid).update({ status: newStatus });
                 selectedPermUser.status = newStatus;
@@ -2967,7 +2968,8 @@
         }
         
         async function deleteUser(uid, email) {
-            if (email === OWNER_EMAIL) {
+            const userToDelete = usersData?.find(u => u.uid === uid);
+            if (userToDelete && userToDelete.role === 'owner') {
                 showToast('لا يمكن حذف المالك', true);
                 return;
             }
@@ -3098,24 +3100,20 @@
                 try {
                     idToken = await user.getIdToken();
                     
-                    if (isOwnerEmail(user.email)) {
-                        document.getElementById('ownerName').textContent = user.displayName || user.email.split('@')[0];
+                    // جلب بيانات المستخدم من Firestore - المصدر الوحيد للصلاحيات
+                    const roleDoc = await db.collection('staff_roles').doc(user.uid).get();
+                    
+                    if (roleDoc.exists && roleDoc.data().role === 'owner') {
+                        const userData = roleDoc.data();
+                        document.getElementById('ownerName').textContent = user.displayName || userData.fullName || userData.name || user.email.split('@')[0];
                         document.body.classList.add('authenticated');
                         loadingOverlay.style.display = 'none';
                         applySystemPermissions('owner', []); // المالك يرى كل شيء
                         loadAllData();
                     } else {
-                        const roleDoc = await db.collection('staff_roles').doc(user.uid).get();
-                        if (roleDoc.exists && roleDoc.data().role === 'owner') {
-                            document.getElementById('ownerName').textContent = user.displayName || roleDoc.data().name || user.email.split('@')[0];
-                            document.body.classList.add('authenticated');
-                            loadingOverlay.style.display = 'none';
-                            applySystemPermissions('owner', []); // المالك يرى كل شيء
-                            loadAllData();
-                        } else {
-                            loadingOverlay.style.display = 'none';
-                            accessDenied.style.display = 'flex';
-                        }
+                        // ليس مالك - رفض الوصول
+                        loadingOverlay.style.display = 'none';
+                        window.location.href = 'access-denied.html?reason=owner-only';
                     }
                 } catch (e) {
                     console.error('Auth error:', e);
