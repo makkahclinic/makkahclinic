@@ -49,21 +49,24 @@ class RBAC {
 
     can(permission) {
         if (!this.isActive()) return false;
-        if (this.isOwner()) return true;
+        // المالك والمدير لديهم كل الصلاحيات
+        if (this.isOwner() || this.isAdmin()) return true;
         return this.permissions[permission] === true;
     }
 
     canAccessDashboard(type) {
         if (!this.isActive()) return false;
+        
+        // المالك يدخل أي لوحة تحكم
         if (this.isOwner()) return true;
         
         switch(type) {
             case 'owner':
-                return false;
+                return false; // فقط المالك
             case 'admin':
-                return this.isAdmin();
+                return this.isAdmin(); // المدير فقط (المالك مر من فوق)
             case 'staff':
-                return true;
+                return true; // الجميع
             default:
                 return false;
         }
@@ -86,7 +89,8 @@ class RBAC {
     }
 
     applyUI() {
-        if (this.isOwner()) return;
+        // المالك والمدير يرون كل شيء
+        if (this.isOwner() || this.isAdmin()) return;
 
         document.querySelectorAll('[data-permission]').forEach(el => {
             const permission = el.dataset.permission;
@@ -110,7 +114,8 @@ class RBAC {
     }
 
     getAvailableSystems() {
-        if (this.isOwner()) {
+        // المالك والمدير لديهم كل الأنظمة
+        if (this.isOwner() || this.isAdmin()) {
             return Object.keys(SYSTEMS_CONFIG);
         }
         
