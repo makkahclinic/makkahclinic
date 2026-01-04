@@ -1,0 +1,144 @@
+1️⃣ التقييم السريع
+✅ أشياء صحيحة 100%
+
+✔️ لا يوجد اعتماد على email
+
+✔️ Owner مأخوذ من staff_roles.role
+
+✔️ RBAC مبني على permissions{}
+
+✔️ حماية قوية لـ staff_roles
+
+✔️ فصل واضح بين Owner / Admin / Staff
+
+✔️ لا يوجد allowedSystems
+
+✔️ Default deny implicit (شيء ممتاز)
+
+👉 هذا يعني: الاتجاه صحيح تمامًا.
+
+2️⃣ ملاحظات مهمة قبل النشر (ضرورية)
+🔴 الملاحظة (1): Admin الآن له وصول كامل مثل Owner
+
+في دالة hasPermission:
+
+function hasPermission(key) {
+  return isOwner() || isAdmin() ||
+    (isAuthenticated() &&
+     exists(...) &&
+     get(...).data.permissions[key] == true);
+}
+
+ماذا يعني هذا؟
+
+أي Admin يستطيع:
+
+قراءة/كتابة كل الأنظمة
+
+حتى لو permissions.insurance = false
+
+لكن أنت قلت سابقًا بوضوح:
+
+المالك يتحكم في كل شيء
+الأدمن قد يُعطى كل شيء أو يُقيَّد
+
+🔐 إذن:
+
+Owner = bypass كامل
+
+Admin = يخضع لـ permissions (إلا صفحات الإدارة)
+
+🔴 الملاحظة (2): write = create + update + delete
+
+هنا:
+
+allow read, write: if hasPermission('complaints');
+
+
+write تشمل:
+
+create
+
+update
+
+delete
+
+⚠️ هذا يعني:
+
+أي شخص لديه permission يستطيع الحذف
+
+غالبًا في أنظمة طبية:
+
+الحذف يكون Owner فقط أو مقيّد
+
+3️⃣ النسخة النهائية المُوصى بها (انسخها كما هي)
+✅ تعديل (A): تصحيح hasPermission
+function hasPermission(key) {
+  return isOwner() ||
+    (isAuthenticated() &&
+     exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid)) &&
+     get(/databases/$(database)/documents/staff_roles/$(request.auth.uid))
+       .data.permissions[key] == true);
+}
+
+
+❌ أزل isAdmin() من هنا
+✔️ Admin يخضع لما يعطيه له Owner
+
+✅ تعديل (B): فصل delete عن read/write
+الشكاوى (مثال نموذجي)
+match /complaints/{docId} {
+  allow read, create, update: if hasPermission('complaints');
+  allow delete: if isOwner();
+}
+
+الحوادث
+match /incidents/{docId} {
+  allow read, create, update: if hasPermission('incidents');
+  allow delete: if isOwner();
+}
+
+بقية الأنظمة (نفس النمط)
+match /risks/{docId} {
+  allow read, create, update: if hasPermission('risks');
+  allow delete: if isOwner();
+}
+
+match /rounds/{docId} {
+  allow read, create, update: if hasPermission('rounds');
+  allow delete: if isOwner();
+}
+
+match /calibration/{docId} {
+  allow read, create, update: if hasPermission('calibration');
+  allow delete: if isOwner();
+}
+
+match /maintenance/{docId} {
+  allow read, create, update: if hasPermission('maintenance');
+  allow delete: if isOwner();
+}
+
+4️⃣ النسخة النهائية المختصرة (جاهزة للنشر)
+
+إذا طبّقت التعديلين أعلاه فقط:
+
+👑 Owner:
+
+يرى كل شيء
+
+يكتب ويحذف كل شيء
+
+🛠 Admin:
+
+لا يرى إلا ما في permissions{}
+
+لا يحذف
+
+👤 Staff:
+
+محدود بدقة
+
+🔐 لا تجاوز
+
+🔐 لا ثغرات واضحة
