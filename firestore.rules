@@ -13,38 +13,36 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/staff_roles/$(request.auth.uid));
     }
 
-    function getStaffData() {
+    function staff() {
       return get(/databases/$(database)/documents/staff_roles/$(request.auth.uid)).data;
     }
 
     // 👑 Owner (bypass كامل)
     function isOwner() {
-      return hasStaffRole() && getStaffData().role == 'owner';
+      return hasStaffRole() && staff().role == 'owner';
     }
 
     function isAdmin() {
-      return hasStaffRole() && getStaffData().role == 'admin';
+      return hasStaffRole() && staff().role == 'admin';
     }
 
     function isPrivileged() {
       return isOwner() || isAdmin();
     }
 
-    // ✅ التحقق من أن الحساب نشط (غير معلق)
+    // ✅ التحقق من أن الحساب نشط
     function isActiveUser() {
-      return hasStaffRole() && getStaffData().status == 'active';
+      return hasStaffRole() && staff().status == 'active';
     }
 
     // 🔐 صلاحية نظام محدد (RBAC)
-    // المالك يتجاوز - الباقي يخضع للصلاحيات + الحساب نشط
     function hasPermission(key) {
       return isOwner() ||
-        (isActiveUser() && getStaffData().permissions[key] == true);
+        (isActiveUser() && staff().permissions[key] == true);
     }
 
     // ===== staff_roles (أهم Collection) =====
     match /staff_roles/{userId} {
-
       allow read: if isAuthenticated() &&
         (request.auth.uid == userId || isPrivileged());
 
@@ -77,7 +75,6 @@ service cloud.firestore {
 
     // ===== Membership Requests =====
     match /membershipRequests/{requestId} {
-
       allow create: if isAuthenticated() &&
         request.resource.data.uid == request.auth.uid &&
         request.resource.data.status == 'pending';
@@ -89,77 +86,98 @@ service cloud.firestore {
     }
 
     // ===== System-specific collections =====
-    // read/update = حسب الصلاحية
+    // read = حسب الصلاحية
     // create = حسب الصلاحية + createdBy = المنشئ
+    // update = حسب الصلاحية + صاحب السجل فقط (أو المالك)
     // delete = المالك فقط
     
     match /complaints/{docId} {
-      allow read, update: if hasPermission('complaints');
+      allow read: if hasPermission('complaints');
       allow create: if hasPermission('complaints') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('complaints') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /incidents/{docId} {
-      allow read, update: if hasPermission('incidents');
+      allow read: if hasPermission('incidents');
       allow create: if hasPermission('incidents') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('incidents') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /risks/{docId} {
-      allow read, update: if hasPermission('risks');
+      allow read: if hasPermission('risks');
       allow create: if hasPermission('risks') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('risks') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /rounds/{docId} {
-      allow read, update: if hasPermission('rounds');
+      allow read: if hasPermission('rounds');
       allow create: if hasPermission('rounds') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('rounds') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /calibration/{docId} {
-      allow read, update: if hasPermission('calibration');
+      allow read: if hasPermission('calibration');
       allow create: if hasPermission('calibration') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('calibration') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /maintenance/{docId} {
-      allow read, update: if hasPermission('maintenance');
+      allow read: if hasPermission('maintenance');
       allow create: if hasPermission('maintenance') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('maintenance') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /needlestick/{docId} {
-      allow read, update: if hasPermission('needlestick');
+      allow read: if hasPermission('needlestick');
       allow create: if hasPermission('needlestick') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('needlestick') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /insurance/{docId} {
-      allow read, update: if hasPermission('insurance');
+      allow read: if hasPermission('insurance');
       allow create: if hasPermission('insurance') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('insurance') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /eoc/{docId} {
-      allow read, update: if hasPermission('eoc');
+      allow read: if hasPermission('eoc');
       allow create: if hasPermission('eoc') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('eoc') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
     
     match /cbahi/{docId} {
-      allow read, update: if hasPermission('cbahi');
+      allow read: if hasPermission('cbahi');
       allow create: if hasPermission('cbahi') &&
         request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('cbahi') &&
+        (resource.data.createdBy == request.auth.uid || isOwner());
       allow delete: if isOwner();
     }
 
