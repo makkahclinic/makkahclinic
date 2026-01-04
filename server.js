@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import admin from 'firebase-admin';
 import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow, getGoogleSheetsClient } from './sheets-service.js';
+import { registerMedicalAuditRoutes } from './medical-audit-api.js';
 
 const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
 const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
@@ -1675,6 +1676,9 @@ app.get('/api/owner/stats', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+// Register Medical Audit API routes
+registerMedicalAuditRoutes(app);
 
 // Static file serving - github-deploy folder first
 app.use(express.static(path.join(__dirname, 'github-deploy'), {
