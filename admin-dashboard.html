@@ -1783,7 +1783,8 @@
             const roleData = await getUserRole(user.uid);
             console.log('Role data found:', roleData);
             
-            if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+            // المالك والمدير يدخلون admin-dashboard
+            if (!roleData || !roleData.role || !['owner', 'admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                 console.log('Role rejected! Signing out...');
                 alert('لم يتم العثور على صلاحيات. الدور: ' + (roleData ? roleData.role : 'غير موجود'));
                 await signOut(auth);
@@ -1795,6 +1796,7 @@
             userAllowedSystems = roleData.allowedSystems || [];
             
             const roleLabels = { 
+                owner: 'المالك',
                 admin: 'مدير النظام', 
                 chair: 'رئيس لجنة',
                 member: 'عضو',
@@ -1805,7 +1807,8 @@
             document.getElementById('staffName').textContent = user.email.split('@')[0];
             document.getElementById('roleBadge').textContent = roleLabels[roleData.role] || roleData.role;
             
-            if (roleData.role === 'admin') document.body.classList.add('is-admin');
+            // المالك والمدير لديهم صلاحيات إدارية
+            if (roleData.role === 'owner' || roleData.role === 'admin') document.body.classList.add('is-admin');
             
             // تطبيق فلتر الأنظمة المسموحة
             applySystemsFilter(roleData.role, roleData.allowedSystems);

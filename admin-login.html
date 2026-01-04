@@ -273,9 +273,16 @@
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const roleData = await getUserRole(user.uid);
-                if (roleData && roleData.role && ['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+                if (roleData && roleData.role && ['owner', 'admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                     if (roleData.status !== 'suspended') {
-                        window.location.href = 'admin-dashboard.html';
+                        // التوجيه حسب الدور
+                        if (roleData.role === 'owner') {
+                            window.location.href = 'owner-dashboard.html';
+                        } else if (roleData.role === 'admin') {
+                            window.location.href = 'admin-dashboard.html';
+                        } else {
+                            window.location.href = 'admin-dashboard.html'; // staff-dashboard.html لاحقاً
+                        }
                     }
                 }
             }
@@ -316,7 +323,7 @@
                 // تحقق من الصلاحيات أولاً - الموظفين المقبولين لا يحتاجون تأكيد البريد
                 const roleData = await getUserRole(user.uid);
                 
-                if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+                if (!roleData || !roleData.role || !['owner', 'admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                     showMessage('طلبك قيد المراجعة. سيتم إخطارك عند الاعتماد.', 'error');
                     await auth.signOut();
                     setLoading(false);
@@ -337,8 +344,14 @@
                 localStorage.setItem('staffEmail', email);
                 localStorage.setItem('staffUid', user.uid);
                 
+                // التوجيه حسب الدور
+                let redirectUrl = 'admin-dashboard.html';
+                if (roleData.role === 'owner') {
+                    redirectUrl = 'owner-dashboard.html';
+                }
+                
                 setTimeout(() => {
-                    window.location.href = 'admin-dashboard.html';
+                    window.location.href = redirectUrl;
                 }, 800);
 
             } catch (error) {
