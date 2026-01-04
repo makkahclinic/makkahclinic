@@ -769,6 +769,9 @@
                             <button type="button" class="btn btn-light" onclick="resetForm()" id="cancelBtn" style="display: none;">
                                 <i class="fas fa-times"></i> إلغاء
                             </button>
+                            <button type="button" class="btn btn-primary" onclick="startNewRisk()" id="newRiskBtn" style="display: none;">
+                                <i class="fas fa-plus"></i> سجل جديد
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -920,27 +923,17 @@
                 .replaceAll("'", '&#039;');
         }
         
-        let managersLoaded = false;
-        
-        async function loadManagers() {
-            if (managersLoaded || !WEB_APP_URL) return;
-            try {
-                const res = await fetch(WEB_APP_URL + '?action=getManagers');
-                const data = await res.json();
-                if (data.success && data.data && data.data.length > 0) {
-                    const select = document.getElementById('commentAuthor');
-                    select.innerHTML = '<option value="">من وضع التعليق...</option>';
-                    data.data.forEach(name => {
-                        const opt = document.createElement('option');
-                        opt.value = name;
-                        opt.textContent = name;
-                        select.appendChild(opt);
-                    });
-                    managersLoaded = true;
-                }
-            } catch (e) {
-                console.log('Failed to load managers:', e);
-            }
+        function fillCommentAuthors() {
+            if (!MASTER || !MASTER.owners) return;
+            const select = document.getElementById('commentAuthor');
+            if (!select) return;
+            select.innerHTML = '<option value="">من وضع التعليق...</option>';
+            MASTER.owners.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                select.appendChild(opt);
+            });
         }
         
         async function init() {
@@ -948,10 +941,10 @@
             
             try {
                 await loadMasterAndLibrary();
+                fillCommentAuthors();
             } catch (e) { console.log('Loading master/library failed'); }
             
             await loadRisks();
-            await loadManagers();
         }
         
         function setupRatingButtons() {
@@ -1336,6 +1329,7 @@
             document.getElementById('formTitle').textContent = 'تعديل الخطر';
             document.getElementById('submitText').textContent = 'تحديث';
             document.getElementById('cancelBtn').style.display = 'block';
+            document.getElementById('newRiskBtn').style.display = 'block';
             
             document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
         }
@@ -1516,6 +1510,7 @@
             document.getElementById('formTitle').textContent = 'إضافة خطر جديد';
             document.getElementById('submitText').textContent = 'حفظ';
             document.getElementById('cancelBtn').style.display = 'none';
+            document.getElementById('newRiskBtn').style.display = 'none';
             document.getElementById('commentsSection').style.display = 'none';
             document.getElementById('commentsList').innerHTML = '';
             document.getElementById('decisionsSection').style.display = 'none';
@@ -1545,6 +1540,12 @@
             });
             
             updateScore();
+        }
+        
+        function startNewRisk() {
+            resetForm();
+            showToast('جاهز لإدخال سجل جديد', 'info');
+            document.getElementById('riskForm').scrollIntoView({ behavior: 'smooth' });
         }
         
         function exportExcel() {
