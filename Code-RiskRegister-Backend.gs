@@ -174,30 +174,41 @@ function getRisks() {
 }
 
 function saveRisk(riskData) {
-  const headers = ['id', 'risk', 'category', 'owner', 'probability', 'impact', 'score', 'level', 
-                   'mitigation', 'status', 'sourceEvidence', 'reviewDate', 'negativeImpact', 'lastUpdated'];
-  const sheet = getOrCreateSheet(RISK_SHEET_NAME, headers);
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(RISK_SHEET_NAME);
   
+  if (!sheet) {
+    const headers = ['ID', 'Risk', 'Category', 'Owner', 'Probability', 'Impact', 'Score', 'Level', 
+                     'Mitigation', 'Status', 'ReviewDate', 'SourceEvidence', 'NegativeImpact', 'LastUpdated', 'UpdatedBy'];
+    sheet = ss.insertSheet(RISK_SHEET_NAME);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const id = riskData.id || 'R-' + new Date().getTime();
   const now = new Date().toISOString();
   
-  const row = [
-    id,
-    riskData.risk || '',
-    riskData.category || '',
-    riskData.owner || '',
-    riskData.probability || 3,
-    riskData.impact || 3,
-    riskData.score || 9,
-    riskData.level || 'متوسط',
-    riskData.mitigation || '',
-    riskData.status || 'مفتوح',
-    riskData.sourceEvidence || '',
-    riskData.reviewDate || '',
-    riskData.negativeImpact || '',
-    now
-  ];
+  const dataMap = {
+    'ID': id,
+    'Risk': riskData.risk || '',
+    'Category': riskData.category || '',
+    'Owner': riskData.owner || '',
+    'Probability': riskData.probability || 3,
+    'Impact': riskData.impact || 3,
+    'Score': riskData.score || 9,
+    'Level': riskData.level || 'متوسط',
+    'Mitigation': riskData.mitigation || '',
+    'Status': riskData.status || 'مفتوح',
+    'ReviewDate': riskData.reviewDate || '',
+    'SourceEvidence': riskData.sourceEvidence || '',
+    'NegativeImpact': riskData.negativeImpact || '',
+    'LastUpdated': now,
+    'UpdatedBy': 'user'
+  };
   
+  const row = headers.map(h => dataMap[h] || '');
   sheet.appendRow(row);
   
   return { success: true, id: id, message: 'تم حفظ الخطر بنجاح' };
