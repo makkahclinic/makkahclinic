@@ -270,8 +270,14 @@
             btnText.textContent = loading ? 'جاري التحقق...' : 'دخول';
         }
 
+        const OWNER_EMAILS = ['husseinbabsail@gmail.com', 'owner@m2020m.org', 'dr.mansour2012@hotmail.com'];
+        
         onAuthStateChanged(auth, async (user) => {
             if (user) {
+                if (OWNER_EMAILS.includes(user.email.toLowerCase())) {
+                    window.location.href = 'owner-dashboard.html';
+                    return;
+                }
                 const roleData = await getUserRole(user.uid);
                 if (roleData && roleData.role && ['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                     if (roleData.status !== 'suspended') {
@@ -315,6 +321,14 @@
 
                 // تحقق من الصلاحيات أولاً - الموظفين المقبولين لا يحتاجون تأكيد البريد
                 const roleData = await getUserRole(user.uid);
+                
+                if (OWNER_EMAILS.includes(email.toLowerCase())) {
+                    showMessage('مرحباً بك! جاري التوجيه للوحة المالك...', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'owner-dashboard.html';
+                    }, 800);
+                    return;
+                }
                 
                 if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                     showMessage('طلبك قيد المراجعة. سيتم إخطارك عند الاعتماد.', 'error');
