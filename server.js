@@ -44,17 +44,27 @@ app.use((req, res, next) => {
   const allowedOrigins = [
     'https://m2020m.org',
     'https://www.m2020m.org',
+    'http://www.m2020m.org',
+    'http://m2020m.org',
     'https://makkahclinic.github.io',
     'http://localhost:5000',
     'https://makkahclinic.replit.app'
   ];
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || !origin) {
+  
+  // Allow all origins for API endpoints (for cross-origin requests)
+  if (req.path.startsWith('/api/')) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  } else if (allowedOrigins.includes(origin) || !origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
