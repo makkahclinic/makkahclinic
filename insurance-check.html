@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
     :root {
@@ -132,6 +133,12 @@
       width: 100%; height: 140px; object-fit: cover;
       border-bottom: 1px solid var(--border);
     }
+    .file-card .excel-preview {
+      width: 100%; height: 140px; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #217346 0%, #185c37 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .file-card .excel-preview i { font-size: 3rem; color: white; }
     .file-card .meta {
       padding: 0.75rem; font-size: 0.8rem; color: var(--text-muted);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -208,6 +215,8 @@
     }
     .btn-print { background: var(--info); color: white; }
     .btn-print:hover { background: #2563eb; }
+    .btn-translate { background: #8b5cf6; color: white; }
+    .btn-translate:hover { background: #7c3aed; }
     .btn-new { background: var(--success); color: white; }
     .btn-new:hover { background: #16a34a; }
 
@@ -215,7 +224,7 @@
       text-align: center; margin-top: 2rem; padding: 1rem;
       color: var(--text-muted); font-size: 0.85rem;
     }
-    .powered-by img { height: 24px; vertical-align: middle; margin-right: 0.5rem; }
+    .powered-by i { color: var(--gold); }
 
     @media (max-width: 768px) {
       .header-content { justify-content: center; text-align: center; }
@@ -226,11 +235,107 @@
     }
 
     @media print {
-      body { background: white; }
-      .header, .upload-section, .analyze-section, .report-actions, .powered-by { display: none !important; }
-      .report-section { margin: 0; padding: 0; border: none; box-shadow: none; }
-      .report-content { padding: 0; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { 
+        background: white !important; 
+        margin: 0; padding: 0;
+        font-size: 11pt;
+      }
+      .header, .upload-section, .analyze-section, .report-actions, .powered-by, .hero-card { 
+        display: none !important; 
+      }
+      .report-section { 
+        margin: 0 !important; padding: 0 !important; 
+        border: none !important; box-shadow: none !important;
+        background: white !important;
+        display: block !important;
+      }
+      .report-content { 
+        padding: 0 !important; 
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+      .print-header {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        padding: 15px 20px;
+        border-bottom: 3px solid #c9a962;
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%) !important;
+      }
+      .print-header img {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        border: 2px solid #c9a962;
+      }
+      .print-header-text {
+        text-align: center;
+        flex: 1;
+        padding: 0 20px;
+      }
+      .print-header-text h1 {
+        color: #c9a962 !important;
+        font-size: 18pt;
+        margin: 0 0 5px 0;
+        border: none !important;
+        padding: 0 !important;
+      }
+      .print-header-text p {
+        color: white !important;
+        font-size: 11pt;
+        margin: 0;
+      }
+      .print-header-dates {
+        text-align: left;
+        font-size: 9pt;
+        color: white !important;
+      }
+      .print-footer {
+        display: block !important;
+        text-align: center;
+        padding: 15px;
+        border-top: 2px solid #c9a962;
+        margin-top: 30px;
+        font-size: 9pt;
+        color: #64748b;
+      }
+      .print-footer strong {
+        color: #1e3a5f;
+      }
+      .report-content h1 { display: none !important; }
+      .report-content h2 { 
+        font-size: 13pt; 
+        color: #1e3a5f !important;
+        background: #f1f5f9;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border-right: 4px solid #c9a962;
+        page-break-after: avoid;
+      }
+      .report-content h3 { font-size: 11pt; page-break-after: avoid; }
+      .report-content p { font-size: 10pt; }
+      .report-content li { 
+        font-size: 10pt; 
+        page-break-inside: avoid;
+        padding: 6px 10px;
+      }
+      .report-content table { 
+        font-size: 9pt; 
+        page-break-inside: avoid;
+      }
+      .report-content th { 
+        background: #1e3a5f !important; 
+        color: white !important; 
+        font-size: 9pt;
+      }
+      @page {
+        size: A4;
+        margin: 15mm;
+      }
     }
+    .print-header, .print-footer { display: none; }
   </style>
 </head>
 <body>
@@ -257,8 +362,8 @@
     <div class="container">
       
       <div class="hero-card">
-        <h2><i class="fas fa-stethoscope"></i> تحليل الحالات الطبية بالذكاء الاصطناعي</h2>
-        <p>ارفع ملفات الحالة الطبية (وصفات، تحاليل، أشعة) واحصل على تقرير شامل لمراجعة جودة العلاج ومطابقة البروتوكولات الطبية</p>
+        <h2><i class="fas fa-user-tie"></i> مراجعة الحالات الطبية - خبراء التأمين الطبي</h2>
+        <p>ارفع ملفات الحالة الطبية (وصفات، تحاليل، أشعة، ملفات Excel) واحصل على تقرير شامل لمراجعة جودة العلاج ومطابقة البروتوكولات الطبية</p>
         <div class="hero-icons">
           <div class="hero-icon">
             <i class="fas fa-prescription-bottle"></i>
@@ -273,8 +378,8 @@
             <span>الأشعة</span>
           </div>
           <div class="hero-icon">
-            <i class="fas fa-clipboard-list"></i>
-            <span>التقارير</span>
+            <i class="fas fa-file-excel"></i>
+            <span>Excel</span>
           </div>
         </div>
       </div>
@@ -289,11 +394,12 @@
           <i class="fas fa-file-upload"></i>
           <h3>اسحب وأفلت الملفات هنا</h3>
           <p>أو انقر للاختيار من جهازك</p>
-          <input id="fileInput" type="file" multiple accept="image/*,application/pdf" />
+          <input id="fileInput" type="file" multiple accept="image/*,application/pdf,.xlsx,.xls,.csv" />
           <div class="file-types">
             <span class="file-type"><i class="fas fa-image"></i> صور</span>
             <span class="file-type"><i class="fas fa-file-pdf"></i> PDF</span>
-            <span class="file-type"><i class="fas fa-camera"></i> كاميرا</span>
+            <span class="file-type"><i class="fas fa-file-excel"></i> Excel</span>
+            <span class="file-type"><i class="fas fa-file-csv"></i> CSV</span>
           </div>
         </label>
 
@@ -302,8 +408,8 @@
 
       <div class="analyze-section">
         <button class="analyze-btn" id="analyzeBtn" disabled>
-          <i class="fas fa-brain"></i>
-          <span>تحليل الحالة</span>
+          <i class="fas fa-search-dollar"></i>
+          <span>مراجعة الحالة</span>
         </button>
         <div class="status-msg" id="statusMsg" style="display:none;">
           <i class="fas fa-spinner"></i>
@@ -321,6 +427,9 @@
           <button class="btn-print" onclick="window.print()">
             <i class="fas fa-print"></i> طباعة التقرير
           </button>
+          <button class="btn-translate" id="translateBtn" onclick="translateReport()">
+            <i class="fas fa-language"></i> <span id="translateText">ترجمة إلى English</span>
+          </button>
           <button class="btn-new" onclick="resetAnalysis()">
             <i class="fas fa-plus"></i> تحليل جديد
           </button>
@@ -328,7 +437,7 @@
       </div>
 
       <div class="powered-by">
-        <i class="fas fa-robot"></i> مدعوم بالذكاء الاصطناعي Gemini 2.5 Flash
+        <i class="fas fa-shield-alt"></i> خبراء التأمين الطبي - نظام المراجعة الذكي
       </div>
     </div>
   </main>
@@ -341,6 +450,10 @@ const API_URL = window.location.hostname.includes('m2020m.org')
   : '/api/medical-audit';
 
 const filesState = [];
+let currentLang = 'ar';
+let originalReport = '';
+let translatedReport = '';
+
 const fileInput = document.getElementById('fileInput');
 const dropZone = document.getElementById('dropZone');
 const filesGrid = document.getElementById('filesGrid');
@@ -349,6 +462,23 @@ const statusMsg = document.getElementById('statusMsg');
 const statusText = document.getElementById('statusText');
 const reportSection = document.getElementById('reportSection');
 const reportContent = document.getElementById('reportContent');
+const translateBtn = document.getElementById('translateBtn');
+const translateText = document.getElementById('translateText');
+
+function getHijriDate() {
+  const today = new Date();
+  const options = { calendar: 'islamic-umalqura', day: 'numeric', month: 'long', year: 'numeric' };
+  try {
+    return today.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', options);
+  } catch(e) {
+    return '';
+  }
+}
+
+function getGregorianDate() {
+  const today = new Date();
+  return today.toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
   dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
@@ -366,6 +496,8 @@ async function handleFiles(files) {
   statusMsg.style.display = 'flex';
 
   for (const f of files) {
+    const ext = f.name.split('.').pop().toLowerCase();
+    
     if (f.type === 'application/pdf') {
       try {
         const arrayBuffer = await f.arrayBuffer();
@@ -386,13 +518,42 @@ async function handleFiles(files) {
           filesState.push({ 
             name: `${f.name} - صفحة ${i}`, 
             mimeType: 'image/jpeg', 
-            data: base64Url 
+            data: base64Url,
+            isExcel: false
           });
           renderFiles();
         }
       } catch(err) {
         console.error("PDF error:", err);
         alert(`خطأ في معالجة PDF: ${err.message}`);
+      }
+    } else if (['xlsx', 'xls', 'csv'].includes(ext)) {
+      try {
+        statusText.textContent = `جاري معالجة ملف Excel: ${f.name}...`;
+        const arrayBuffer = await f.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        
+        let allData = [];
+        workbook.SheetNames.forEach(sheetName => {
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+          allData.push({ sheet: sheetName, data: jsonData });
+        });
+        
+        const textContent = allData.map(s => {
+          return `=== ${s.sheet} ===\n` + s.data.map(row => row.join(' | ')).join('\n');
+        }).join('\n\n');
+        
+        filesState.push({ 
+          name: f.name, 
+          mimeType: 'text/plain', 
+          data: textContent,
+          isExcel: true
+        });
+        renderFiles();
+      } catch(err) {
+        console.error("Excel error:", err);
+        alert(`خطأ في معالجة Excel: ${err.message}`);
       }
     } else {
       const base64Url = await new Promise((resolve, reject) => {
@@ -404,7 +565,8 @@ async function handleFiles(files) {
       filesState.push({ 
         name: f.name, 
         mimeType: f.type || 'image/jpeg', 
-        data: base64Url 
+        data: base64Url,
+        isExcel: false
       });
     }
   }
@@ -419,11 +581,20 @@ function renderFiles() {
   filesState.forEach((f, i) => {
     const el = document.createElement('div');
     el.className = 'file-card';
-    el.innerHTML = `
-      <button class="remove" data-index="${i}" title="إزالة"><i class="fas fa-times"></i></button>
-      <img src="${f.data}" alt="${f.name}">
-      <div class="meta">${f.name}</div>
-    `;
+    
+    if (f.isExcel) {
+      el.innerHTML = `
+        <button class="remove" data-index="${i}" title="إزالة"><i class="fas fa-times"></i></button>
+        <div class="excel-preview"><i class="fas fa-file-excel"></i></div>
+        <div class="meta">${f.name}</div>
+      `;
+    } else {
+      el.innerHTML = `
+        <button class="remove" data-index="${i}" title="إزالة"><i class="fas fa-times"></i></button>
+        <img src="${f.data}" alt="${f.name}">
+        <div class="meta">${f.name}</div>
+      `;
+    }
     filesGrid.appendChild(el);
   });
   
@@ -443,9 +614,11 @@ analyzeBtn.addEventListener('click', async () => {
   if (filesState.length === 0) return;
   
   analyzeBtn.disabled = true;
-  statusText.textContent = 'جاري تحليل الحالة بالذكاء الاصطناعي...';
+  statusText.textContent = 'جاري مراجعة الحالة بواسطة خبراء التأمين...';
   statusMsg.style.display = 'flex';
   reportSection.classList.remove('show');
+  currentLang = 'ar';
+  translateText.textContent = 'ترجمة إلى English';
 
   try {
     const resp = await fetch(API_URL, {
@@ -460,7 +633,30 @@ analyzeBtn.addEventListener('click', async () => {
     const data = await resp.json();
     
     if (data.success) {
-      reportContent.innerHTML = data.html;
+      const printHeader = `
+        <div class="print-header">
+          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
+          <div class="print-header-text">
+            <h1>تقرير مراجعة جودة الرعاية الطبية</h1>
+            <p>مجمع مكة الطبي بالزاهر - خبراء التأمين الطبي</p>
+          </div>
+          <div class="print-header-dates">
+            <div>${getHijriDate()}</div>
+            <div>${getGregorianDate()}</div>
+          </div>
+        </div>
+      `;
+      
+      const printFooter = `
+        <div class="print-footer">
+          <strong>مجمع مكة الطبي بالزاهر</strong> - جميع الحقوق محفوظة<br>
+          www.m2020m.org | هذا التقرير تم إعداده بواسطة نظام مراجعة جودة الرعاية الطبية
+        </div>
+      `;
+      
+      originalReport = printHeader + data.html + printFooter;
+      translatedReport = '';
+      reportContent.innerHTML = originalReport;
       reportSection.classList.add('show');
       reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
@@ -482,11 +678,78 @@ analyzeBtn.addEventListener('click', async () => {
   }
 });
 
+async function translateReport() {
+  if (currentLang === 'ar') {
+    if (translatedReport) {
+      reportContent.innerHTML = translatedReport;
+      currentLang = 'en';
+      translateText.textContent = 'ترجمة إلى العربية';
+      return;
+    }
+    
+    translateBtn.disabled = true;
+    translateText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الترجمة...';
+    
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          files: filesState, 
+          lang: 'en' 
+        })
+      });
+
+      const data = await resp.json();
+      
+      if (data.success) {
+        const printHeader = `
+          <div class="print-header" style="direction: ltr;">
+            <img src="https://www.m2020m.org/logo-transparent.png" alt="Logo">
+            <div class="print-header-text">
+              <h1 style="font-family: Arial, sans-serif;">Medical Care Quality Review Report</h1>
+              <p style="font-family: Arial, sans-serif;">Makkah Medical Complex Al-Zaher - Medical Insurance Experts</p>
+            </div>
+            <div class="print-header-dates">
+              <div>${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            </div>
+          </div>
+        `;
+        
+        const printFooter = `
+          <div class="print-footer" style="direction: ltr; font-family: Arial, sans-serif;">
+            <strong>Makkah Medical Complex Al-Zaher</strong> - All Rights Reserved<br>
+            www.m2020m.org | This report was prepared by the Medical Care Quality Review System
+          </div>
+        `;
+        
+        translatedReport = printHeader + data.html + printFooter;
+        reportContent.innerHTML = translatedReport;
+        currentLang = 'en';
+        translateText.textContent = 'ترجمة إلى العربية';
+      }
+    } catch(err) {
+      console.error('Translation error:', err);
+      alert('حدث خطأ أثناء الترجمة');
+    } finally {
+      translateBtn.disabled = false;
+    }
+  } else {
+    reportContent.innerHTML = originalReport;
+    currentLang = 'ar';
+    translateText.textContent = 'ترجمة إلى English';
+  }
+}
+
 function resetAnalysis() {
   filesState.length = 0;
   renderFiles();
   reportSection.classList.remove('show');
   reportContent.innerHTML = '';
+  originalReport = '';
+  translatedReport = '';
+  currentLang = 'ar';
+  translateText.textContent = 'ترجمة إلى English';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 </script>
