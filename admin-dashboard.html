@@ -1124,18 +1124,25 @@
             // المدير يشوف كل شيء إلا إذا حددت صلاحيات معينة
             if (role === 'admin' && Object.keys(permissions).length === 0) return;
             
+            // دالة للتحقق من الصلاحية (تدعم true أو {view: true})
+            function hasPermission(key) {
+                const perm = permissions[key];
+                if (perm === true) return true;
+                if (perm && typeof perm === 'object' && perm.view === true) return true;
+                return false;
+            }
+            
             // إخفاء العناصر حسب الصلاحيات (data-system أو data-permission)
             document.querySelectorAll('[data-system]').forEach(el => {
                 const system = el.dataset.system;
-                // إذا المستخدم ليس له صلاحية على هذا النظام
-                if (permissions[system] !== true) {
+                if (!hasPermission(system)) {
                     el.style.display = 'none';
                 }
             });
             
             document.querySelectorAll('[data-permission]').forEach(el => {
                 const permission = el.dataset.permission;
-                if (permissions[permission] !== true) {
+                if (!hasPermission(permission)) {
                     el.style.display = 'none';
                 }
             });
@@ -1240,17 +1247,29 @@
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
-                // سجل المخاطر - getRisks يرجع array من المخاطر
-                const risksData = risksRes.data || risksRes.risks || risksRes;
-                if (Array.isArray(risksData)) {
-                    const risks = risksData;
-                    const high = risks.filter(r => r.severity === 'عالي' || r.severity === 'high' || r.riskLevel === 'high').length;
-                    const medium = risks.filter(r => r.severity === 'متوسط' || r.severity === 'medium' || r.riskLevel === 'medium').length;
-                    const low = risks.filter(r => r.severity === 'منخفض' || r.severity === 'low' || r.riskLevel === 'low').length;
-                    const resolved = risks.filter(r => r.status === 'مغلق' || r.status === 'closed' || r.status === 'resolved').length;
-                    const active = risks.filter(r => r.status !== 'مغلق' && r.status !== 'closed' && r.status !== 'resolved').length;
+                // سجل المخاطر - getRisks يرجع array من المخاطر بأشكال مختلفة
+                let risksArr = [];
+                if (Array.isArray(risksRes)) {
+                    risksArr = risksRes;
+                } else if (risksRes?.data?.risks && Array.isArray(risksRes.data.risks)) {
+                    risksArr = risksRes.data.risks;
+                } else if (risksRes?.data && Array.isArray(risksRes.data)) {
+                    risksArr = risksRes.data;
+                } else if (risksRes?.risks && Array.isArray(risksRes.risks)) {
+                    risksArr = risksRes.risks;
+                }
+                
+                if (risksArr.length > 0) {
+                    const getSeverity = r => ((r.severity || r.riskLevel || r.Severity || r.Level || r.المستوى || '') + '').toLowerCase();
+                    const getStatus = r => ((r.status || r.Status || r.الحالة || '') + '').toLowerCase();
                     
-                    document.getElementById('kpi-risks-active').textContent = active || risks.length;
+                    const high = risksArr.filter(r => getSeverity(r).includes('عالي') || getSeverity(r).includes('high')).length;
+                    const medium = risksArr.filter(r => getSeverity(r).includes('متوسط') || getSeverity(r).includes('medium')).length;
+                    const low = risksArr.filter(r => getSeverity(r).includes('منخفض') || getSeverity(r).includes('low')).length;
+                    const resolved = risksArr.filter(r => getStatus(r).includes('مغلق') || getStatus(r).includes('closed') || getStatus(r).includes('resolved')).length;
+                    const active = risksArr.length - resolved;
+                    
+                    document.getElementById('kpi-risks-active').textContent = active || risksArr.length;
                     document.getElementById('kpi-risks-high').textContent = high > 0 ? `${high} عالي` : '';
                     document.getElementById('stat-risks-high').textContent = high;
                     document.getElementById('stat-risks-medium').textContent = medium;
