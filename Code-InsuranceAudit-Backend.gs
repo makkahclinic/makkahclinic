@@ -17,7 +17,8 @@ const DRIVE_FOLDER_ID = '18NsJAyzWXEuopa-ZfSyYXRWSFxENV9g4';
 // قائمة المالكين المصرح لهم بإدارة الصلاحيات
 const OWNER_EMAILS = [
   'dr.mansour2012@hotmail.com',
-  'owner@m2020m.org'
+  'owner@m2020m.org',
+  'hussseinbabsail@gmail.com'
 ];
 
 function doGet(e) {
