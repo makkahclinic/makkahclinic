@@ -18,7 +18,7 @@ const DRIVE_FOLDER_ID = '18NsJAyzWXEuopa-ZfSyYXRWSFxENV9g4';
 const OWNER_EMAILS = [
   'dr.mansour2012@hotmail.com',
   'owner@m2020m.org',
-  'hussseinbabsail@gmail.com'
+  'husseinbabsail@gmail.com'
 ];
 
 function doGet(e) {
@@ -90,6 +90,9 @@ function handleRequest(e) {
         break;
       case 'getDashboardStats':
         result = getDashboardStats(params.email);
+        break;
+      case 'getDoctorsList':
+        result = getDoctorsList();
         break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
@@ -610,6 +613,38 @@ function getDashboardStats(email) {
       userTodayCases: userTodayCases
     }
   };
+}
+
+/**
+ * الحصول على قائمة الأطباء من شيت Staff
+ */
+function getDoctorsList() {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const sheet = ss.getSheetByName('Staff');
+    
+    if (!sheet) {
+      return { success: true, doctors: [] };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    const doctors = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const name = data[i][0]; // العمود A - الاسم
+      const specialty = data[i][1]; // العمود B - التخصص
+      if (name && name.toString().trim()) {
+        doctors.push({ 
+          name: name.toString().trim(), 
+          specialty: specialty ? specialty.toString().trim() : '' 
+        });
+      }
+    }
+    
+    return { success: true, doctors: doctors };
+  } catch(e) {
+    return { success: false, error: e.toString(), doctors: [] };
+  }
 }
 
 /**
