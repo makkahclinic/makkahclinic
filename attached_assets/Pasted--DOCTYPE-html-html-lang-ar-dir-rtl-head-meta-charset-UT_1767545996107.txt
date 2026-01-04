@@ -842,10 +842,6 @@
                 <i class="fas fa-user-shield"></i>
                 <span>إدارة الصلاحيات</span>
             </a>
-            <a class="nav-item" data-section="insurance" style="background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(5,150,105,0.1));">
-                <i class="fas fa-file-medical" style="color:#10b981;"></i>
-                <span>صلاحيات التأمين</span>
-            </a>
             <div class="nav-divider"></div>
             <a class="nav-item" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i>
@@ -1231,41 +1227,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- قسم صلاحيات التأمين -->
-        <section class="content-section" id="section-insurance">
-            <div class="stats-box">
-                <h4 style="color:#10b981;"><i class="fas fa-file-medical"></i> إدارة صلاحيات خدمة التأمين</h4>
-                <p style="color:#666; margin-bottom:20px;">إضافة وإزالة الموظفين المصرح لهم باستخدام خدمة مراجعة التأمين</p>
-                
-                <!-- إضافة موظف جديد -->
-                <div style="background:linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border:2px solid #10b981; border-radius:12px; padding:20px; margin-bottom:20px;">
-                    <h5 style="color:#059669; margin-bottom:15px;"><i class="fas fa-user-plus"></i> إضافة موظف جديد لخدمة التأمين</h5>
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; align-items:end;">
-                        <input type="email" id="insNewEmail" placeholder="البريد الإلكتروني للموظف" style="padding:12px; border:1px solid #ddd; border-radius:8px;">
-                        <input type="text" id="insNewName" placeholder="اسم الموظف" style="padding:12px; border:1px solid #ddd; border-radius:8px;">
-                        <input type="text" id="insNewDept" placeholder="القسم" style="padding:12px; border:1px solid #ddd; border-radius:8px;">
-                        <button onclick="addInsurancePermission()" class="btn btn-success" style="padding:12px;"><i class="fas fa-plus"></i> إضافة</button>
-                    </div>
-                </div>
-
-                <!-- قائمة الموظفين المصرح لهم -->
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h5 style="color:var(--primary);"><i class="fas fa-users"></i> الموظفون المصرح لهم</h5>
-                    <button onclick="loadInsurancePermissions()" class="btn btn-outline"><i class="fas fa-sync-alt"></i> تحديث</button>
-                </div>
-                <div id="insurancePermissionsList" style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
-                    <div class="no-alerts">جاري التحميل...</div>
-                </div>
-
-                <!-- رابط خدمة التأمين -->
-                <div style="margin-top:20px; padding:15px; background:linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius:10px; text-align:center;">
-                    <a href="insurance-check.html" target="_blank" style="color:white; text-decoration:none; font-weight:bold; font-size:1.1rem;">
-                        <i class="fas fa-external-link-alt"></i> فتح خدمة مراجعة التأمين
-                    </a>
-                </div>
-            </div>
-        </section>
     </main>
 
     <div class="toast" id="toast">
@@ -1274,12 +1235,7 @@
     </div>
 
     <script>
-        const OWNER_EMAILS = ['husseinbabsail@gmail.com', 'hbabsail@hotmail.com'];
-        const OWNER_EMAIL = OWNER_EMAILS[0];
-        function isOwnerEmail(email) {
-            return OWNER_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
-        }
-        const INSURANCE_API_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
+        const OWNER_EMAIL = 'husseinbabsail@gmail.com';
         const API_URL = 'https://script.google.com/macros/s/AKfycbytslZrI7jIgUY0iavZPfgOiEPZKgkjFaNgTBCcWByHLARdEFb4Qkzi4Ecad0v_Q7SL1w/exec';
         
         const APIs = {
@@ -1443,7 +1399,6 @@
                 else if (sectionName === 'rounds') loadRounds();
                 else if (sectionName === 'users') loadUsers();
                 else if (sectionName === 'permissions') loadPermissions();
-                else if (sectionName === 'insurance') loadInsurancePermissions();
                 else if (sectionName === 'eoc') loadEocData();
             }
         }
@@ -2405,105 +2360,6 @@
             }
         }
         
-        // ========= دوال صلاحيات التأمين =========
-        async function loadInsurancePermissions() {
-            const container = document.getElementById('insurancePermissionsList');
-            container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-            
-            try {
-                const response = await fetch(INSURANCE_API_URL + '?action=getAuthorizedUsers');
-                const result = await response.json();
-                
-                if (result.success && result.users && result.users.length > 0) {
-                    let html = '<table style="width:100%; border-collapse:collapse;">';
-                    html += '<thead><tr style="background:#f8fafc;"><th style="padding:12px; text-align:right;">البريد</th><th style="padding:12px; text-align:right;">الاسم</th><th style="padding:12px; text-align:right;">القسم</th><th style="padding:12px; text-align:right;">تاريخ الإضافة</th><th style="padding:12px; text-align:center;">إجراء</th></tr></thead><tbody>';
-                    
-                    result.users.forEach(user => {
-                        html += `<tr style="border-bottom:1px solid #e2e8f0;">
-                            <td style="padding:10px;">${user.email || ''}</td>
-                            <td style="padding:10px;">${user.name || ''}</td>
-                            <td style="padding:10px;">${user.department || ''}</td>
-                            <td style="padding:10px;">${user.addedDate || ''}</td>
-                            <td style="padding:10px; text-align:center;">
-                                <button onclick="removeInsurancePermission('${user.email}')" style="background:#ef4444; color:white; padding:6px 12px; border:none; border-radius:6px; cursor:pointer;"><i class="fas fa-trash"></i></button>
-                            </td>
-                        </tr>`;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="no-alerts">لا يوجد موظفين مصرح لهم بعد</div>';
-                }
-            } catch(e) {
-                console.error('Error loading insurance permissions:', e);
-                container.innerHTML = '<div class="no-alerts">خطأ في التحميل: ' + e.message + '</div>';
-            }
-        }
-        
-        async function addInsurancePermission() {
-            const email = document.getElementById('insNewEmail').value.trim();
-            const name = document.getElementById('insNewName').value.trim();
-            const dept = document.getElementById('insNewDept').value.trim();
-            
-            if (!email) {
-                showToast('الرجاء إدخال البريد الإلكتروني', false);
-                return;
-            }
-            
-            try {
-                const response = await fetch(INSURANCE_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        action: 'addAuthorizedUser',
-                        email: email,
-                        name: name,
-                        department: dept,
-                        addedBy: currentUser?.email || 'owner'
-                    })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    showToast('تمت إضافة الموظف بنجاح', true);
-                    document.getElementById('insNewEmail').value = '';
-                    document.getElementById('insNewName').value = '';
-                    document.getElementById('insNewDept').value = '';
-                    loadInsurancePermissions();
-                } else {
-                    showToast(result.error || 'خطأ في الإضافة', false);
-                }
-            } catch(e) {
-                showToast('خطأ في الاتصال: ' + e.message, false);
-            }
-        }
-        
-        async function removeInsurancePermission(email) {
-            if (!confirm('هل تريد إزالة صلاحية التأمين لـ ' + email + '؟')) return;
-            
-            try {
-                const response = await fetch(INSURANCE_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        action: 'removeAuthorizedUser',
-                        email: email
-                    })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    showToast('تمت إزالة الصلاحية', true);
-                    loadInsurancePermissions();
-                } else {
-                    showToast(result.error || 'خطأ', false);
-                }
-            } catch(e) {
-                showToast('خطأ: ' + e.message, false);
-            }
-        }
-        
         const SYSTEMS_CONFIG = {
             'complaints': { name: 'الشكاوى', icon: 'comment-dots', color: '#667eea' },
             'incidents': { name: 'الحوادث', icon: 'exclamation-triangle', color: '#f5576c' },
@@ -3055,7 +2911,7 @@
                 try {
                     idToken = await user.getIdToken();
                     
-                    if (isOwnerEmail(user.email)) {
+                    if (user.email === OWNER_EMAIL) {
                         document.getElementById('ownerName').textContent = user.displayName || user.email.split('@')[0];
                         document.body.classList.add('authenticated');
                         loadingOverlay.style.display = 'none';
