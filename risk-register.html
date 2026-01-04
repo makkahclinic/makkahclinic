@@ -832,6 +832,291 @@
     
     <div class="toast" id="toast"></div>
 
+    <!-- Risk Details Modal -->
+    <div class="risk-modal-overlay" id="riskModalOverlay" onclick="closeRiskModal()">
+        <div class="risk-modal" onclick="event.stopPropagation()">
+            <button class="risk-modal-close" onclick="closeRiskModal()"><i class="fas fa-times"></i></button>
+            <div class="risk-modal-header" id="riskModalHeader">
+                <div class="risk-modal-badge" id="modalBadge">FMS</div>
+                <h2 id="modalRiskTitle">عنوان الخطر</h2>
+            </div>
+            <div class="risk-modal-body">
+                <div class="risk-modal-grid">
+                    <div class="risk-modal-section">
+                        <h4><i class="fas fa-info-circle"></i> المعلومات الأساسية</h4>
+                        <div class="risk-info-row">
+                            <span class="info-label">المسؤول:</span>
+                            <span class="info-value" id="modalOwner">-</span>
+                        </div>
+                        <div class="risk-info-row">
+                            <span class="info-label">مصدر الخطر:</span>
+                            <span class="info-value" id="modalSource">-</span>
+                        </div>
+                        <div class="risk-info-row">
+                            <span class="info-label">الحالة:</span>
+                            <span class="info-value" id="modalStatus">-</span>
+                        </div>
+                        <div class="risk-info-row">
+                            <span class="info-label">الموعد النهائي:</span>
+                            <span class="info-value" id="modalDueDate">-</span>
+                        </div>
+                    </div>
+                    <div class="risk-modal-section">
+                        <h4><i class="fas fa-chart-line"></i> مؤشرات الخطورة</h4>
+                        <div class="risk-metrics">
+                            <div class="metric-box">
+                                <span class="metric-label">الاحتمالية</span>
+                                <span class="metric-value" id="modalProb">3</span>
+                            </div>
+                            <div class="metric-operator">×</div>
+                            <div class="metric-box">
+                                <span class="metric-label">الأثر</span>
+                                <span class="metric-value" id="modalImpact">3</span>
+                            </div>
+                            <div class="metric-operator">=</div>
+                            <div class="metric-box metric-score" id="modalScoreBox">
+                                <span class="metric-label">الدرجة</span>
+                                <span class="metric-value" id="modalScore">9</span>
+                            </div>
+                        </div>
+                        <div class="risk-level-display" id="modalLevelDisplay">متوسط</div>
+                    </div>
+                </div>
+                <div class="risk-modal-section full-width">
+                    <h4><i class="fas fa-exclamation-triangle"></i> الأثر السلبي المحتمل</h4>
+                    <p id="modalNegativeImpact" class="modal-text-content">-</p>
+                </div>
+                <div class="risk-modal-section full-width">
+                    <h4><i class="fas fa-tools"></i> خطط المعالجة</h4>
+                    <p id="modalMitigation" class="modal-text-content">-</p>
+                </div>
+                <div class="risk-modal-section full-width">
+                    <h4><i class="fas fa-comments"></i> التعليقات</h4>
+                    <div id="modalComments" class="modal-list-content">لا توجد تعليقات</div>
+                </div>
+                <div class="risk-modal-section full-width">
+                    <h4><i class="fas fa-gavel"></i> القرارات الإدارية</h4>
+                    <div id="modalDecisions" class="modal-list-content">لا توجد قرارات</div>
+                </div>
+            </div>
+            <div class="risk-modal-footer">
+                <button class="btn btn-primary" onclick="editFromModal()"><i class="fas fa-edit"></i> تعديل</button>
+                <button class="btn btn-secondary" onclick="closeRiskModal()">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .risk-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            padding: 1rem;
+        }
+        .risk-modal-overlay.show {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .risk-modal {
+            background: linear-gradient(145deg, #1a2d4a, #152238);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,169,98,0.2);
+            position: relative;
+            animation: slideUp 0.4s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .risk-modal-close {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+        .risk-modal-close:hover {
+            background: rgba(220,20,60,0.8);
+            transform: rotate(90deg);
+        }
+        .risk-modal-header {
+            background: linear-gradient(135deg, var(--dark-blue), #0d1929);
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 2px solid var(--gold);
+        }
+        .risk-modal-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--gold), #b8962e);
+            color: var(--dark-blue);
+            padding: 0.5rem 1.5rem;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .risk-modal-header h2 {
+            color: #fff;
+            font-size: 1.3rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+        .risk-modal-body {
+            padding: 1.5rem;
+            max-height: 55vh;
+            overflow-y: auto;
+        }
+        .risk-modal-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        @media (max-width: 600px) {
+            .risk-modal-grid { grid-template-columns: 1fr; }
+        }
+        .risk-modal-section {
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid rgba(201,169,98,0.15);
+        }
+        .risk-modal-section.full-width {
+            margin-bottom: 1rem;
+        }
+        .risk-modal-section h4 {
+            color: var(--gold);
+            margin: 0 0 1rem 0;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .risk-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .risk-info-row:last-child { border-bottom: none; }
+        .info-label { color: rgba(255,255,255,0.6); font-size: 0.85rem; }
+        .info-value { color: #fff; font-weight: 600; font-size: 0.9rem; }
+        .risk-metrics {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .metric-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            text-align: center;
+            min-width: 60px;
+        }
+        .metric-label { display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem; }
+        .metric-value { display: block; font-size: 1.5rem; font-weight: 800; color: #fff; }
+        .metric-operator { font-size: 1.5rem; font-weight: 300; color: var(--gold); }
+        .metric-score { border: 2px solid var(--gold); }
+        .metric-score.critical { border-color: #ef4444; background: rgba(239,68,68,0.2); }
+        .metric-score.high { border-color: #f97316; background: rgba(249,115,22,0.2); }
+        .metric-score.medium { border-color: #eab308; background: rgba(234,179,8,0.2); }
+        .metric-score.low { border-color: #22c55e; background: rgba(34,197,94,0.2); }
+        .risk-level-display {
+            text-align: center;
+            padding: 0.75rem;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        .risk-level-display.critical { background: linear-gradient(135deg, #dc2626, #991b1b); color: #fff; }
+        .risk-level-display.high { background: linear-gradient(135deg, #ea580c, #c2410c); color: #fff; }
+        .risk-level-display.medium { background: linear-gradient(135deg, #ca8a04, #a16207); color: #fff; }
+        .risk-level-display.low { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; }
+        .modal-text-content {
+            color: rgba(255,255,255,0.85);
+            line-height: 1.7;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+        }
+        .modal-list-content {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.85rem;
+        }
+        .modal-comment, .modal-decision {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-right: 3px solid var(--gold);
+        }
+        .modal-decision { border-right-color: #3b82f6; }
+        .modal-item-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 0.25rem;
+        }
+        .modal-item-text { color: #fff; }
+        .decision-type-badge {
+            display: inline-block;
+            background: rgba(59,130,246,0.2);
+            color: #93c5fd;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
+        }
+        .risk-modal-footer {
+            padding: 1.25rem;
+            background: rgba(0,0,0,0.2);
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            border-top: 1px solid rgba(201,169,98,0.15);
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        tr.clickable-row {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        tr.clickable-row:hover {
+            background: rgba(201,169,98,0.1) !important;
+        }
+    </style>
+
     <script>
         const STORAGE_KEY = 'makkah_risk_register';
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyDLVS-KI6_EEVE68f9O9ubgUhZtA9LBVofWJ4l6cEDnYTuDvvyQf4cEwQxDFC532Pf/exec";
@@ -1116,7 +1401,7 @@
                         </thead>
                         <tbody>
                             ${risks.map(r => `
-                                <tr>
+                                <tr class="clickable-row" onclick="openRiskModal('${r.id}')">
                                     <td class="risk-text">${r.risk || '-'}${r.localOnly ? ' <span class="badge" style="margin-right:6px;background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;font-size:0.65rem;">محلي</span>' : ''}</td>
                                     <td><span class="badge" style="background: rgba(201,169,98,0.2); color: var(--gold);">${r.category || '-'}</span></td>
                                     <td style="font-size: 0.8rem;">${r.owner || '-'}</td>
@@ -1125,7 +1410,7 @@
                                     <td><span class="badge badge-${getLevelClass(r.level)}">${r.level || '-'}</span></td>
                                     <td><span class="badge badge-${getStatusClass(r.status)}">${r.status || '-'}</span></td>
                                     <td>
-                                        <div class="action-btns">
+                                        <div class="action-btns" onclick="event.stopPropagation()">
                                             <button class="btn btn-sm btn-primary" onclick="editRisk('${r.id}')">
                                                 <i class="fas fa-edit"></i>
                                             </button>
@@ -1577,6 +1862,104 @@
             toast.className = 'toast ' + type + ' show';
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
+        
+        let currentModalRiskId = null;
+        
+        function openRiskModal(id) {
+            const risk = allRisks.find(r => r.id === id);
+            if (!risk) return;
+            
+            currentModalRiskId = id;
+            
+            document.getElementById('modalBadge').textContent = risk.category || 'غير محدد';
+            document.getElementById('modalRiskTitle').textContent = risk.risk || '-';
+            document.getElementById('modalOwner').textContent = risk.owner || '-';
+            document.getElementById('modalSource').textContent = risk.sourceEvidence || '-';
+            document.getElementById('modalStatus').innerHTML = `<span class="badge badge-${getStatusClass(risk.status)}">${risk.status || '-'}</span>`;
+            document.getElementById('modalDueDate').textContent = risk.reviewDate ? new Date(risk.reviewDate).toLocaleDateString('ar-SA') : '-';
+            
+            document.getElementById('modalProb').textContent = risk.probability || '-';
+            document.getElementById('modalImpact').textContent = risk.impact || '-';
+            document.getElementById('modalScore').textContent = risk.score || '-';
+            
+            const score = risk.score || 0;
+            const scoreBox = document.getElementById('modalScoreBox');
+            const levelDisplay = document.getElementById('modalLevelDisplay');
+            
+            scoreBox.className = 'metric-box metric-score';
+            levelDisplay.className = 'risk-level-display';
+            
+            if (score >= 20) {
+                scoreBox.classList.add('critical');
+                levelDisplay.classList.add('critical');
+                levelDisplay.textContent = 'حرج';
+            } else if (score >= 12) {
+                scoreBox.classList.add('high');
+                levelDisplay.classList.add('high');
+                levelDisplay.textContent = 'عالي';
+            } else if (score >= 6) {
+                scoreBox.classList.add('medium');
+                levelDisplay.classList.add('medium');
+                levelDisplay.textContent = 'متوسط';
+            } else {
+                scoreBox.classList.add('low');
+                levelDisplay.classList.add('low');
+                levelDisplay.textContent = 'منخفض';
+            }
+            
+            document.getElementById('modalNegativeImpact').textContent = risk.negativeImpact || 'لم يتم تحديد الأثر السلبي';
+            document.getElementById('modalMitigation').textContent = risk.mitigation || 'لم يتم تحديد خطط المعالجة';
+            
+            const comments = risk.comments || [];
+            if (comments.length > 0) {
+                document.getElementById('modalComments').innerHTML = comments.map(c => `
+                    <div class="modal-comment">
+                        <div class="modal-item-header">
+                            <span>${c.author || 'مجهول'}</span>
+                            <span>${c.date ? new Date(c.date).toLocaleDateString('ar-SA') : ''}</span>
+                        </div>
+                        <div class="modal-item-text">${escapeHtml(c.text)}</div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('modalComments').innerHTML = '<p style="opacity:0.5;text-align:center;">لا توجد تعليقات</p>';
+            }
+            
+            const decisions = risk.decisions || [];
+            if (decisions.length > 0) {
+                document.getElementById('modalDecisions').innerHTML = decisions.map(d => `
+                    <div class="modal-decision">
+                        <div class="modal-item-header">
+                            <span>${d.author || 'مجهول'}<span class="decision-type-badge">${d.type || 'عام'}</span></span>
+                            <span>${d.date ? new Date(d.date).toLocaleDateString('ar-SA') : ''}</span>
+                        </div>
+                        <div class="modal-item-text">${escapeHtml(d.text)}</div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('modalDecisions').innerHTML = '<p style="opacity:0.5;text-align:center;">لا توجد قرارات</p>';
+            }
+            
+            document.getElementById('riskModalOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeRiskModal() {
+            document.getElementById('riskModalOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+            currentModalRiskId = null;
+        }
+        
+        function editFromModal() {
+            if (currentModalRiskId) {
+                closeRiskModal();
+                editRisk(currentModalRiskId);
+            }
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeRiskModal();
+        });
         
         init();
     </script>
