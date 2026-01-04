@@ -1112,12 +1112,19 @@
             }
         }
         
-        let userAllowedSystems = [];
+        let userPermissions = {};
         
-        function applySystemsFilter(role, allowedSystems) {
-            // القائمة الجانبية ثابتة للجميع - لا يتم إخفاء أي روابط
-            console.log('Sidebar is fixed for all users - no filtering applied');
-            // لا نخفي أي روابط من السايد بار
+        function applySystemsFilter(role, permissions = {}) {
+            // المالك والمدير يشوفون كل شيء
+            if (role === 'owner' || role === 'admin') return;
+            
+            // إخفاء العناصر حسب الصلاحيات
+            document.querySelectorAll('[data-permission]').forEach(el => {
+                const permission = el.dataset.permission;
+                if (permissions[permission] !== true) {
+                    el.style.display = 'none';
+                }
+            });
         }
 
         async function apiCall(url, action, payload = {}) {
@@ -1793,7 +1800,7 @@
             }
 
             currentUserRole = roleData.role;
-            userAllowedSystems = roleData.allowedSystems || [];
+            userPermissions = roleData.permissions || {};
             
             const roleLabels = { 
                 owner: 'المالك',
@@ -1811,7 +1818,7 @@
             if (roleData.role === 'owner' || roleData.role === 'admin') document.body.classList.add('is-admin');
             
             // تطبيق فلتر الأنظمة المسموحة
-            applySystemsFilter(roleData.role, roleData.allowedSystems);
+            applySystemsFilter(roleData.role, roleData.permissions);
 
             document.body.classList.add('authenticated');
             loadingOverlay.classList.add('hidden');
@@ -2296,12 +2303,13 @@
                 
                 container.innerHTML = users.map(u => {
                     const currentRole = ROLES.find(r => r.id === u.role) || ROLES[3];
-                    const allowedSystems = u.allowedSystems || [];
+                    const permissions = u.permissions || {};
                     const committee = u.committee || '';
                     const isSuspended = u.status === 'suspended';
                     const statusColor = isSuspended ? '#f59e0b' : '#10b981';
                     const statusText = isSuspended ? 'معلق' : 'فعال';
                     const statusBg = isSuspended ? '#fef3c7' : '#d1fae5';
+                    const isPrivileged = ['owner', 'admin'].includes(u.role);
                     
                     return `
                         <div class="permission-card" style="background:#fff; border-radius:12px; padding:20px; margin-bottom:15px; border-right:4px solid ${isSuspended ? '#f59e0b' : currentRole.color}; box-shadow:0 2px 8px rgba(0,0,0,0.08); ${isSuspended ? 'opacity:0.7;' : ''}">
@@ -2351,16 +2359,18 @@
                             
                             <div>
                                 <label style="font-weight:600; color:var(--primary); display:block; margin-bottom:10px;">
-                                    <i class="fas fa-th-large"></i> الأنظمة المسموحة (اختر ما تريد)
+                                    <i class="fas fa-th-large"></i> الأنظمة المسموحة ${isPrivileged ? '(المالك/المدير لديهم كل الصلاحيات)' : '(اختر ما تريد)'}
                                 </label>
                                 <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                                    ${SYSTEMS.map(s => `
-                                        <label style="display:flex; align-items:center; gap:6px; background:${allowedSystems.includes(s.id) ? '#d1fae5' : '#f3f4f6'}; padding:8px 12px; border-radius:8px; cursor:pointer; transition:all 0.2s;">
-                                            <input type="checkbox" ${allowedSystems.includes(s.id) ? 'checked' : ''} onchange="toggleSystem('${u.uid}', '${s.id}', this.checked)" style="cursor:pointer;">
-                                            <i class="fas fa-${s.icon}" style="color:${allowedSystems.includes(s.id) ? '#10b981' : '#9ca3af'};"></i>
+                                    ${SYSTEMS.map(s => {
+                                        const isAllowed = isPrivileged || permissions[s.id] === true;
+                                        return `
+                                        <label style="display:flex; align-items:center; gap:6px; background:${isAllowed ? '#d1fae5' : '#f3f4f6'}; padding:8px 12px; border-radius:8px; cursor:${isPrivileged ? 'not-allowed' : 'pointer'}; transition:all 0.2s; opacity:${isPrivileged ? '0.7' : '1'};">
+                                            <input type="checkbox" ${isAllowed ? 'checked' : ''} ${isPrivileged ? 'disabled' : ''} onchange="toggleSystem('${u.uid}', '${s.id}', this.checked)" style="cursor:${isPrivileged ? 'not-allowed' : 'pointer'};">
+                                            <i class="fas fa-${s.icon}" style="color:${isAllowed ? '#10b981' : '#9ca3af'};"></i>
                                             <span style="font-size:0.85rem;">${s.name}</span>
                                         </label>
-                                    `).join('')}
+                                    `}).join('')}
                                 </div>
                             </div>
                         </div>
@@ -2425,23 +2435,19 @@
         };
         
         window.toggleSystem = async function(uid, systemId, checked) {
-            if (currentUserRole !== 'admin') {
+            if (currentUserRole !== 'admin' && currentUserRole !== 'owner') {
                 showToast('ليس لديك صلاحية لهذا الإجراء', true);
                 return;
             }
             try {
                 const docRef = doc(db, "staff_roles", uid);
                 const docSnap = await getDoc(docRef);
-                let allowedSystems = docSnap.exists() ? (docSnap.data().allowedSystems || []) : [];
+                let permissions = docSnap.exists() ? (docSnap.data().permissions || {}) : {};
                 
-                if (checked && !allowedSystems.includes(systemId)) {
-                    allowedSystems.push(systemId);
-                } else if (!checked) {
-                    allowedSystems = allowedSystems.filter(s => s !== systemId);
-                }
+                permissions[systemId] = checked;
                 
                 await updateDoc(docRef, {
-                    allowedSystems: allowedSystems,
+                    permissions: permissions,
                     updatedAt: new Date().toISOString(),
                     updatedBy: auth.currentUser.email
                 });
