@@ -1118,16 +1118,36 @@
         let userPermissions = {};
         
         function applySystemsFilter(role, permissions = {}) {
-            // المالك والمدير يشوفون كل شيء
-            if (role === 'owner' || role === 'admin') return;
+            // المالك يشوف كل شيء (bypass كامل)
+            if (role === 'owner') return;
             
-            // إخفاء العناصر حسب الصلاحيات
-            document.querySelectorAll('[data-permission]').forEach(el => {
-                const permission = el.dataset.permission;
-                if (permissions[permission] !== true) {
+            // المدير يشوف كل شيء إلا إذا حددت صلاحيات معينة
+            if (role === 'admin' && Object.keys(permissions).length === 0) return;
+            
+            // دالة للتحقق من الصلاحية (تدعم true أو {view: true})
+            function hasPermission(key) {
+                const perm = permissions[key];
+                if (perm === true) return true;
+                if (perm && typeof perm === 'object' && perm.view === true) return true;
+                return false;
+            }
+            
+            // إخفاء العناصر حسب الصلاحيات (data-system أو data-permission)
+            document.querySelectorAll('[data-system]').forEach(el => {
+                const system = el.dataset.system;
+                if (!hasPermission(system)) {
                     el.style.display = 'none';
                 }
             });
+            
+            document.querySelectorAll('[data-permission]').forEach(el => {
+                const permission = el.dataset.permission;
+                if (!hasPermission(permission)) {
+                    el.style.display = 'none';
+                }
+            });
+            
+            console.log('Applied RBAC filter. Role:', role, 'Permissions:', permissions);
         }
 
         async function apiCall(url, action, payload = {}) {
@@ -1169,7 +1189,7 @@
                 const [complaintsRes, incidentsRes, risksRes, roundsRes, needlestickRes, calibrationRes, maintenanceRes] = await Promise.all([
                     apiCall(APIs.complaints, 'getComplaintStats', {}),
                     apiCall(APIs.incidents, 'getIncidentStats', {}),
-                    fetch(APIs.risks + '?action=metrics').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
+                    fetch(APIs.risks + '?action=getRisks').then(r => r.json()).catch(e => { console.error('Risks error:', e); return { success: false }; }),
                     apiCall(APIs.rounds, 'getMetrics', {}),
                     fetchJsonp(APIs.needlestick + '?action=data').catch(e => { console.error('Needlestick error:', e); return { success: false }; }),
                     fetch(APIs.calibration).then(r => r.json()).catch(e => { console.error('Calibration error:', e); return { status: 'error' }; }),
@@ -1227,13 +1247,39 @@
                     console.warn('Incidents API failed:', incidentsRes);
                 }
 
-                // سجل المخاطر - يستخدم ok وليس success
-                if (risksRes.ok) {
+                // سجل المخاطر - getRisks يرجع array من المخاطر بأشكال مختلفة
+                let risksArr = [];
+                if (Array.isArray(risksRes)) {
+                    risksArr = risksRes;
+                } else if (risksRes?.data?.risks && Array.isArray(risksRes.data.risks)) {
+                    risksArr = risksRes.data.risks;
+                } else if (risksRes?.data && Array.isArray(risksRes.data)) {
+                    risksArr = risksRes.data;
+                } else if (risksRes?.risks && Array.isArray(risksRes.risks)) {
+                    risksArr = risksRes.risks;
+                }
+                
+                if (risksArr.length > 0) {
+                    const getSeverity = r => ((r.severity || r.riskLevel || r.Severity || r.Level || r.المستوى || '') + '').toLowerCase();
+                    const getStatus = r => ((r.status || r.Status || r.الحالة || '') + '').toLowerCase();
+                    
+                    const high = risksArr.filter(r => getSeverity(r).includes('عالي') || getSeverity(r).includes('high')).length;
+                    const medium = risksArr.filter(r => getSeverity(r).includes('متوسط') || getSeverity(r).includes('medium')).length;
+                    const low = risksArr.filter(r => getSeverity(r).includes('منخفض') || getSeverity(r).includes('low')).length;
+                    const resolved = risksArr.filter(r => getStatus(r).includes('مغلق') || getStatus(r).includes('closed') || getStatus(r).includes('resolved')).length;
+                    const active = risksArr.length - resolved;
+                    
+                    document.getElementById('kpi-risks-active').textContent = active || risksArr.length;
+                    document.getElementById('kpi-risks-high').textContent = high > 0 ? `${high} عالي` : '';
+                    document.getElementById('stat-risks-high').textContent = high;
+                    document.getElementById('stat-risks-medium').textContent = medium;
+                    document.getElementById('stat-risks-low').textContent = low;
+                    document.getElementById('stat-risks-resolved').textContent = resolved;
+                } else if (risksRes.ok || risksRes.success) {
                     const r = risksRes;
-                    // ext = خارجي، total = الإجمالي، high/med/low = المستويات
                     const activeRisks = r.total || (r.high || 0) + (r.med || 0) + (r.low || 0);
                     document.getElementById('kpi-risks-active').textContent = activeRisks;
-                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : (r.ext ? `${r.ext} خارجي` : '');
+                    document.getElementById('kpi-risks-high').textContent = r.high ? `${r.high} عالي` : '';
                     document.getElementById('stat-risks-high').textContent = r.high || 0;
                     document.getElementById('stat-risks-medium').textContent = r.med || r.medium || 0;
                     document.getElementById('stat-risks-low').textContent = r.low || 0;

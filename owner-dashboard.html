@@ -2245,47 +2245,52 @@
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
             try {
-                const res = await fetch(APIs.risks + '?action=metrics', { redirect: 'follow' });
+                const res = await fetch(APIs.risks + '?action=getRisks', { redirect: 'follow' });
                 const data = await res.json();
                 
-                if (data?.ok && (data.high > 0 || data.medium > 0 || data.low > 0)) {
+                // getRisks يرجع array من المخاطر
+                const risksArr = data.data || data.risks || (Array.isArray(data) ? data : []);
+                
+                if (risksArr.length > 0) {
+                    // حساب الإحصائيات
+                    const high = risksArr.filter(r => (r.severity || r.riskLevel || '').toLowerCase().includes('عالي') || (r.severity || r.riskLevel || '').toLowerCase().includes('high')).length;
+                    const medium = risksArr.filter(r => (r.severity || r.riskLevel || '').toLowerCase().includes('متوسط') || (r.severity || r.riskLevel || '').toLowerCase().includes('medium')).length;
+                    const low = risksArr.filter(r => (r.severity || r.riskLevel || '').toLowerCase().includes('منخفض') || (r.severity || r.riskLevel || '').toLowerCase().includes('low')).length;
+                    
                     let html = '<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-bottom:20px;">';
                     html += `<div style="background:#fee2e2; padding:15px; border-radius:10px; text-align:center;">
-                        <div style="font-size:2rem; font-weight:bold; color:#dc2626;">${data.high || 0}</div>
+                        <div style="font-size:2rem; font-weight:bold; color:#dc2626;">${high}</div>
                         <div style="color:#991b1b;">مخاطر عالية</div>
                     </div>`;
                     html += `<div style="background:#fef3c7; padding:15px; border-radius:10px; text-align:center;">
-                        <div style="font-size:2rem; font-weight:bold; color:#d97706;">${data.medium || 0}</div>
+                        <div style="font-size:2rem; font-weight:bold; color:#d97706;">${medium}</div>
                         <div style="color:#92400e;">مخاطر متوسطة</div>
                     </div>`;
                     html += `<div style="background:#d1fae5; padding:15px; border-radius:10px; text-align:center;">
-                        <div style="font-size:2rem; font-weight:bold; color:#059669;">${data.low || 0}</div>
+                        <div style="font-size:2rem; font-weight:bold; color:#059669;">${low}</div>
                         <div style="color:#065f46;">مخاطر منخفضة</div>
                     </div>`;
                     html += '</div>';
                     
-                    if (data.risks && data.risks.length > 0) {
-                        html += '<table class="data-table"><thead><tr>';
-                        html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
-                        html += '</tr></thead><tbody>';
-                        
-                        data.risks.forEach(r => {
-                            const level = r.Level || r.المستوى || r.level || 'medium';
-                            let levelClass = 'status-medium';
-                            if (String(level).includes('high') || String(level).includes('عالي')) levelClass = 'status-high';
-                            else if (String(level).includes('low') || String(level).includes('منخفض')) levelClass = 'status-low';
-                            
-                            html += `<tr>
-                                <td>${r.Description || r.الوصف || r.description || '-'}</td>
-                                <td>${r.Department || r.القسم || r.department || '-'}</td>
-                                <td><span class="status-badge ${levelClass}">${level}</span></td>
-                                <td>${r.Status || r.الحالة || r.status || '-'}</td>
-                            </tr>`;
-                        });
-                        
-                        html += '</tbody></table>';
-                    }
+                    html += '<table class="data-table"><thead><tr>';
+                    html += '<th>الخطر</th><th>القسم</th><th>المستوى</th><th>الحالة</th>';
+                    html += '</tr></thead><tbody>';
                     
+                    risksArr.forEach(r => {
+                        const level = r.severity || r.riskLevel || r.Level || r.المستوى || 'medium';
+                        let levelClass = 'status-medium';
+                        if (String(level).toLowerCase().includes('high') || String(level).includes('عالي')) levelClass = 'status-high';
+                        else if (String(level).toLowerCase().includes('low') || String(level).includes('منخفض')) levelClass = 'status-low';
+                        
+                        html += `<tr>
+                            <td>${r.description || r.Description || r.الوصف || r.riskName || '-'}</td>
+                            <td>${r.department || r.Department || r.القسم || '-'}</td>
+                            <td><span class="status-badge ${levelClass}">${level}</span></td>
+                            <td>${r.status || r.Status || r.الحالة || '-'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
                     container.innerHTML = html;
                 } else {
                     container.innerHTML = '<div class="no-alerts">لا توجد مخاطر مسجلة</div>';
