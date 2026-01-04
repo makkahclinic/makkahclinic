@@ -270,22 +270,19 @@
             btnText.textContent = loading ? 'جاري التحقق...' : 'دخول';
         }
 
-        // التحقق من redirect parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const redirectTo = urlParams.get('redirect') || 'admin-dashboard.html';
-        const OWNER_EMAIL = 'husseinbabsail@gmail.com';
-        
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                // المالك يتوجه للوحته مباشرة - دائماً
-                if (user.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
-                    window.location.href = 'owner-dashboard.html';
-                    return;
-                }
                 const roleData = await getUserRole(user.uid);
-                if (roleData && roleData.role && ['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+                if (roleData && roleData.role && ['owner', 'admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                     if (roleData.status !== 'suspended') {
-                        window.location.href = redirectTo;
+                        // التوجيه حسب الدور
+                        if (roleData.role === 'owner') {
+                            window.location.href = 'owner-dashboard.html';
+                        } else if (roleData.role === 'admin') {
+                            window.location.href = 'admin-dashboard.html';
+                        } else {
+                            window.location.href = 'admin-dashboard.html'; // staff-dashboard.html لاحقاً
+                        }
                     }
                 }
             }
@@ -323,22 +320,10 @@
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // المالك له صلاحيات كاملة دائماً
-                if (email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
-                    showMessage('تم التحقق! جاري التوجيه...', 'success');
-                    localStorage.setItem('staffRole', 'owner');
-                    localStorage.setItem('staffEmail', email);
-                    localStorage.setItem('staffUid', user.uid);
-                    setTimeout(() => {
-                        window.location.href = 'owner-dashboard.html';
-                    }, 800);
-                    return;
-                }
-                
                 // تحقق من الصلاحيات أولاً - الموظفين المقبولين لا يحتاجون تأكيد البريد
                 const roleData = await getUserRole(user.uid);
                 
-                if (!roleData || !roleData.role || !['admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
+                if (!roleData || !roleData.role || !['owner', 'admin', 'chair', 'member', 'viewer', 'staff'].includes(roleData.role)) {
                     showMessage('طلبك قيد المراجعة. سيتم إخطارك عند الاعتماد.', 'error');
                     await auth.signOut();
                     setLoading(false);
@@ -359,13 +344,14 @@
                 localStorage.setItem('staffEmail', email);
                 localStorage.setItem('staffUid', user.uid);
                 
+                // التوجيه حسب الدور
+                let redirectUrl = 'admin-dashboard.html';
+                if (roleData.role === 'owner') {
+                    redirectUrl = 'owner-dashboard.html';
+                }
+                
                 setTimeout(() => {
-                    // المالك يتوجه للوحته
-                    if (email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
-                        window.location.href = 'owner-dashboard.html';
-                    } else {
-                        window.location.href = redirectTo;
-                    }
+                    window.location.href = redirectUrl;
                 }, 800);
 
             } catch (error) {
