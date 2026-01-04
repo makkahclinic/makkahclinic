@@ -2538,22 +2538,22 @@
         };
         
         // ========= دالة تطبيق صلاحيات السايدبار =========
-        function applySystemPermissions(role, allowedSystems = []) {
+        function applySystemPermissions(role, permissions = {}) {
             // المالك والمدير يشوفون كل شيء
             if (role === 'owner' || role === 'admin') return;
             
             document.querySelectorAll('.nav-item[data-system]').forEach(item => {
                 const system = item.dataset.system;
-                if (!allowedSystems.includes(system)) {
+                if (permissions[system] !== true) {
                     item.style.display = 'none';
                 }
             });
         }
         
         // ========= دالة حماية الوصول للأنظمة =========
-        function guardSystemAccess(requiredSystem, userRole, allowedSystems = []) {
+        function guardSystemAccess(requiredSystem, userRole, permissions = {}) {
             if (userRole === 'owner' || userRole === 'admin') return true;
-            if (!allowedSystems.includes(requiredSystem)) {
+            if (permissions[requiredSystem] !== true) {
                 showToast('ليس لديك صلاحية للوصول لهذا النظام', false);
                 return false;
             }
@@ -2637,7 +2637,7 @@
             const u = selectedPermUser;
             const role = u.role || 'staff';
             const status = u.status || 'active';
-            const allowedSystems = u.allowedSystems || [];
+            const permissions = u.permissions || {};
             const isOwner = u.role === 'owner';
             const isPrivileged = ['owner', 'admin'].includes(role);
             
@@ -2659,7 +2659,7 @@
             
             let systemsHtml = '';
             Object.entries(SYSTEMS_CONFIG).forEach(([key, cfg]) => {
-                const isAllowed = isPrivileged || allowedSystems.includes(key);
+                const isAllowed = isPrivileged || permissions[key] === true;
                 const disabled = isPrivileged ? 'disabled' : '';
                 systemsHtml += `
                     <label style="display:flex; align-items:center; gap:10px; padding:10px 15px; background:${isAllowed ? '#f0fdf4' : '#fafafa'}; border:2px solid ${isAllowed ? '#22c55e' : '#e5e7eb'}; border-radius:8px; cursor:${isPrivileged ? 'not-allowed' : 'pointer'}; transition:all 0.2s;">
@@ -2771,16 +2771,16 @@
         async function toggleSystem(systemKey, isEnabled) {
             if (!selectedPermUser || ['owner', 'admin'].includes(selectedPermUser.role)) return;
             try {
-                let systems = selectedPermUser.allowedSystems || [];
-                if (isEnabled && !systems.includes(systemKey)) {
-                    systems.push(systemKey);
-                } else if (!isEnabled) {
-                    systems = systems.filter(s => s !== systemKey);
-                }
-                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ allowedSystems: systems });
-                selectedPermUser.allowedSystems = systems;
+                let permissions = selectedPermUser.permissions || {};
+                permissions[systemKey] = isEnabled;
+                
+                await db.collection('staff_roles').doc(selectedPermUser.uid).update({ 
+                    permissions: permissions,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                selectedPermUser.permissions = permissions;
                 const idx = permUsersData.findIndex(u => u.uid === selectedPermUser.uid);
-                if (idx !== -1) permUsersData[idx].allowedSystems = systems;
+                if (idx !== -1) permUsersData[idx].permissions = permissions;
                 showToast('تم تحديث الصلاحيات');
             } catch(e) {
                 console.error(e);
