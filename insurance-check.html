@@ -651,27 +651,13 @@
             إحصائيات الأطباء
           </h3>
           
-          <!-- Heatmap for Doctor Performance -->
-          <div class="chart-container" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
-            <h4 style="color: #c9a962; margin: 0 0 15px 0; font-size: 1.1rem; text-align: center;">
-              <i class="fas fa-th" style="margin-left: 8px;"></i>
-              خريطة أداء الأطباء الحرارية
+          <!-- Bar Chart for Doctor Performance -->
+          <div class="chart-container" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; padding: 25px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+            <h4 style="color: #c9a962; margin: 0 0 20px 0; font-size: 1.2rem; text-align: center;">
+              <i class="fas fa-chart-bar" style="margin-left: 8px;"></i>
+              مخطط أداء الأطباء
             </h4>
-            <div id="doctorsHeatmap" style="overflow-x: auto;"></div>
-            <div class="heatmap-legend" style="display: flex; justify-content: center; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
-              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
-                <span style="width: 20px; height: 20px; background: #ef4444; border-radius: 4px;"></span> ضعيف (0-3)
-              </span>
-              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
-                <span style="width: 20px; height: 20px; background: #f97316; border-radius: 4px;"></span> مقبول (4-5)
-              </span>
-              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
-                <span style="width: 20px; height: 20px; background: #eab308; border-radius: 4px;"></span> جيد (6-7)
-              </span>
-              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
-                <span style="width: 20px; height: 20px; background: #22c55e; border-radius: 4px;"></span> ممتاز (8-10)
-              </span>
-            </div>
+            <canvas id="doctorsChart" style="max-height: 350px;"></canvas>
           </div>
           
           <table class="doctors-table">
@@ -1052,58 +1038,109 @@ function renderDoctorStats(doctors) {
   renderDoctorsChart(doctors);
 }
 
+let doctorsChartInstance = null;
+
 function renderDoctorsChart(doctors) {
-  const container = document.getElementById('doctorsHeatmap');
-  if (!container) return;
+  const ctx = document.getElementById('doctorsChart');
+  if (!ctx) return;
   
-  const metrics = [
-    { key: 'avgInsuranceRating', label: 'معايير التأمين' },
-    { key: 'avgServiceRating', label: 'جودة الخدمات' },
-    { key: 'avgOverallRating', label: 'المتوسط العام' }
-  ];
-  
-  function getHeatColor(value) {
-    const v = parseFloat(value) || 0;
-    if (v >= 8) return { bg: '#22c55e', text: '#fff' };
-    if (v >= 6) return { bg: '#eab308', text: '#000' };
-    if (v >= 4) return { bg: '#f97316', text: '#fff' };
-    return { bg: '#ef4444', text: '#fff' };
+  if (typeof Chart === 'undefined') {
+    setTimeout(() => renderDoctorsChart(doctors), 500);
+    return;
   }
   
-  const maxCases = Math.max(...doctors.map(d => parseInt(d.totalCases) || 1));
+  if (doctorsChartInstance) {
+    doctorsChartInstance.destroy();
+  }
   
-  let html = `
-    <table style="width: 100%; border-collapse: separate; border-spacing: 6px; direction: rtl;">
-      <thead>
-        <tr>
-          <th style="padding: 14px 12px; color: #c9a962; font-weight: bold; text-align: right; font-size: 1rem; background: rgba(30,58,95,0.3); border-radius: 8px;">الطبيب</th>
-          <th style="padding: 14px 12px; color: #c9a962; font-weight: bold; text-align: center; font-size: 1rem; background: rgba(30,58,95,0.3); border-radius: 8px;">الحالات</th>
-          ${metrics.map(m => `<th style="padding: 14px 12px; color: #c9a962; font-weight: bold; text-align: center; font-size: 1rem; background: rgba(30,58,95,0.3); border-radius: 8px;">${m.label}</th>`).join('')}
-        </tr>
-      </thead>
-      <tbody>
-  `;
+  const labels = doctors.map(d => d.doctorName);
   
-  doctors.forEach(doc => {
-    const cases = parseInt(doc.totalCases) || 0;
-    const casesRatio = (cases / maxCases) * 10;
-    const casesColor = getHeatColor(casesRatio);
-    
-    html += `<tr>`;
-    html += `<td style="padding: 14px 12px; background: rgba(30, 58, 95, 0.6); border-radius: 10px; color: #e2e8f0; font-weight: bold; font-size: 1rem;">${doc.doctorName}</td>`;
-    html += `<td style="padding: 14px 12px; background: ${casesColor.bg}; border-radius: 10px; color: ${casesColor.text}; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s;" onmouseover="this.style.transform='scale(1.08)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)'">${cases}</td>`;
-    
-    metrics.forEach(m => {
-      const value = parseFloat(doc[m.key]) || 0;
-      const color = getHeatColor(value);
-      html += `<td style="padding: 14px 12px; background: ${color.bg}; border-radius: 10px; color: ${color.text}; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s;" onmouseover="this.style.transform='scale(1.08)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)'">${value.toFixed(1)}</td>`;
-    });
-    
-    html += `</tr>`;
+  doctorsChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'معايير التأمين',
+          data: doctors.map(d => parseFloat(d.avgInsuranceRating) || 0),
+          backgroundColor: 'rgba(34, 197, 94, 0.85)',
+          borderColor: '#22c55e',
+          borderWidth: 2,
+          borderRadius: 8,
+          borderSkipped: false
+        },
+        {
+          label: 'جودة الخدمات',
+          data: doctors.map(d => parseFloat(d.avgServiceRating) || 0),
+          backgroundColor: 'rgba(59, 130, 246, 0.85)',
+          borderColor: '#3b82f6',
+          borderWidth: 2,
+          borderRadius: 8,
+          borderSkipped: false
+        },
+        {
+          label: 'المتوسط العام',
+          data: doctors.map(d => parseFloat(d.avgOverallRating) || 0),
+          backgroundColor: 'rgba(201, 169, 98, 0.85)',
+          borderColor: '#c9a962',
+          borderWidth: 2,
+          borderRadius: 8,
+          borderSkipped: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          position: 'top',
+          rtl: true,
+          labels: {
+            color: '#e2e8f0',
+            font: { family: 'Tajawal', size: 13, weight: 'bold' },
+            padding: 20,
+            usePointStyle: true,
+            pointStyle: 'rectRounded'
+          }
+        },
+        tooltip: {
+          rtl: true,
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          titleFont: { family: 'Tajawal', size: 14, weight: 'bold' },
+          bodyFont: { family: 'Tajawal', size: 13 },
+          padding: 15,
+          cornerRadius: 10,
+          borderColor: '#c9a962',
+          borderWidth: 1,
+          callbacks: {
+            label: function(context) {
+              return `${context.dataset.label}: ${context.raw.toFixed(1)}/10`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#c9a962',
+            font: { family: 'Tajawal', size: 12, weight: 'bold' }
+          },
+          grid: { display: false }
+        },
+        y: {
+          min: 0,
+          max: 10,
+          ticks: {
+            color: '#94a3b8',
+            font: { family: 'Tajawal', size: 11 },
+            stepSize: 2
+          },
+          grid: { color: 'rgba(148, 163, 184, 0.15)' }
+        }
+      }
+    }
   });
-  
-  html += `</tbody></table>`;
-  container.innerHTML = html;
 }
 
 
