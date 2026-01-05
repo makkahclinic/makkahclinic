@@ -150,10 +150,30 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
       parts: parts
     }];
 
-    const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contents,
-    });
+    // Retry logic for API stability
+    let result;
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`Gemini API attempt ${attempt}/3...`);
+        result = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: contents,
+        });
+        break; // Success, exit retry loop
+      } catch (retryErr) {
+        lastError = retryErr;
+        console.error(`Attempt ${attempt} failed:`, retryErr.message);
+        if (attempt < 3) {
+          console.log(`Waiting 2 seconds before retry...`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+    }
+    
+    if (!result) {
+      throw new Error(`فشل الاتصال بعد 3 محاولات: ${lastError?.message || 'خطأ غير معروف'}`);
+    }
 
     let htmlResponse = '';
     
