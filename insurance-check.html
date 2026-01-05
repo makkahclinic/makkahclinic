@@ -721,20 +721,20 @@ auth.onAuthStateChanged(async (user) => {
 async function checkPermission(email) {
   console.log('Checking permission for:', email);
   try {
-    // التحقق من Firestore RBAC أولاً
-    console.log('Fetching from Firestore staff collection...');
-    const userDoc = await db.collection('staff').doc(email).get();
-    console.log('Firestore result - exists:', userDoc.exists);
+    // التحقق من Firestore staff_roles بالإيميل
+    console.log('Fetching from Firestore staff_roles collection...');
+    const snapshot = await db.collection('staff_roles').where('email', '==', email).get();
+    console.log('Firestore result - found:', !snapshot.empty);
     
-    if (userDoc.exists) {
-      const userData = userDoc.data();
+    if (!snapshot.empty) {
+      const userData = snapshot.docs[0].data();
       const role = userData.role || '';
       const permissions = userData.permissions || {};
       const status = userData.status || 'active';
       
       // تحقق من الحالة النشطة
-      if (status !== 'active') {
-        console.log('User account is not active:', status);
+      if (status === 'suspended') {
+        console.log('User account is suspended');
         return false;
       }
       
@@ -745,22 +745,15 @@ async function checkPermission(email) {
       }
       
       // تحقق من صلاحية insurance
-      const hasInsurance = permissions.insurance === true || 
-                          (permissions.insurance && permissions.insurance.view === true);
+      const hasInsurance = permissions.insurance === true;
       if (hasInsurance) {
         console.log('Access granted: insurance permission');
         return true;
       }
     }
     
-    // Fallback للنظام القديم (Google Sheets)
-    const response = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'checkPermission', email: email })
-    });
-    const data = await response.json();
-    return data.hasPermission === true;
+    console.log('Access denied: no permission found');
+    return false;
   } catch(e) {
     console.error('Permission check error:', e);
     return false;

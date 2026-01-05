@@ -2432,14 +2432,14 @@
             }
         }
         
-        // ========= دوال صلاحيات التأمين (Firestore) =========
+        // ========= دوال صلاحيات التأمين (Firestore - staff_roles) =========
         async function loadInsurancePermissions() {
             const container = document.getElementById('insurancePermissionsList');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
             try {
-                // جلب الموظفين من Firestore الذين لديهم صلاحية insurance
-                const snapshot = await db.collection('staff').get();
+                // جلب الموظفين من staff_roles الذين لديهم صلاحية insurance
+                const snapshot = await db.collection('staff_roles').get();
                 const users = [];
                 
                 snapshot.forEach(doc => {
@@ -2449,10 +2449,11 @@
                                         (data.role === 'owner') || 
                                         (data.role === 'admin');
                     
-                    if (hasInsurance && data.status !== 'inactive') {
+                    if (hasInsurance && data.status !== 'suspended') {
                         users.push({
-                            email: doc.id,
-                            name: data.name || data.fullName || doc.id.split('@')[0],
+                            uid: doc.id,
+                            email: data.email || doc.id,
+                            name: data.name || data.displayName || (data.email ? data.email.split('@')[0] : ''),
                             department: data.department || '',
                             role: data.role || 'staff',
                             addedDate: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('ar-SA') : ''
@@ -2474,7 +2475,7 @@
                             <td style="padding:10px;"><span style="background:${isOwnerOrAdmin ? '#c9a962' : '#10b981'}; color:white; padding:3px 10px; border-radius:10px; font-size:0.8rem;">${roleLabel}</span></td>
                             <td style="padding:10px; text-align:center;">
                                 ${isOwnerOrAdmin ? '<span style="color:#999; font-size:0.8rem;">تلقائي</span>' : 
-                                `<button onclick="removeInsurancePermission('${user.email}')" style="background:#ef4444; color:white; padding:6px 12px; border:none; border-radius:6px; cursor:pointer;"><i class="fas fa-trash"></i></button>`}
+                                `<button onclick="removeInsurancePermission('${user.uid}')" style="background:#ef4444; color:white; padding:6px 12px; border:none; border-radius:6px; cursor:pointer;"><i class="fas fa-trash"></i></button>`}
                             </td>
                         </tr>`;
                     });
@@ -2501,30 +2502,21 @@
             }
             
             try {
-                // تحقق إذا الموظف موجود
-                const docRef = db.collection('staff').doc(email);
-                const doc = await docRef.get();
+                // البحث عن الموظف بالإيميل في staff_roles
+                const snapshot = await db.collection('staff_roles').where('email', '==', email).get();
                 
-                if (doc.exists) {
+                if (!snapshot.empty) {
                     // تحديث صلاحية insurance
+                    const docRef = snapshot.docs[0].ref;
                     await docRef.update({
                         'permissions.insurance': true,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     showToast('تم تفعيل صلاحية التأمين للموظف', true);
                 } else {
-                    // إنشاء موظف جديد مع صلاحية insurance
-                    await docRef.set({
-                        name: name || email.split('@')[0],
-                        email: email,
-                        department: dept || '',
-                        role: 'staff',
-                        status: 'active',
-                        permissions: { insurance: true },
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        createdBy: currentUser?.email || 'owner'
-                    });
-                    showToast('تم إضافة الموظف بنجاح مع صلاحية التأمين', true);
+                    // الموظف غير موجود - يجب إضافته من إدارة المستخدمين أولاً
+                    showToast('الموظف غير موجود. أضفه أولاً من قسم إدارة المستخدمين', false);
+                    return;
                 }
                 
                 document.getElementById('insNewEmail').value = '';
@@ -2538,12 +2530,12 @@
             }
         }
         
-        async function removeInsurancePermission(email) {
-            if (!confirm('هل تريد إزالة صلاحية التأمين لـ ' + email + '؟')) return;
+        async function removeInsurancePermission(uid) {
+            if (!confirm('هل تريد إزالة صلاحية التأمين لهذا الموظف؟')) return;
             
             try {
-                // إزالة صلاحية insurance من Firestore
-                const docRef = db.collection('staff').doc(email);
+                // إزالة صلاحية insurance من staff_roles
+                const docRef = db.collection('staff_roles').doc(uid);
                 await docRef.update({
                     'permissions.insurance': false,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
