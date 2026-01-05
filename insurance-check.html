@@ -1381,23 +1381,33 @@ analyzeBtn.addEventListener('click', async () => {
     
     if (data.success) {
       const printHeader = `
-        <div class="print-header">
-          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
-          <div class="print-header-text">
-            <h1>تقرير مراجعة جودة الرعاية الطبية</h1>
-            <p>مجمع مكة الطبي بالزاهر - خبراء التأمين الطبي</p>
-            <p>الطبيب: ${doctorName}</p>
+        <div class="print-header" style="border-bottom:3px solid #1e3a5f;padding-bottom:15px;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:40px;height:40px;border:2px solid #1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#1e3a5f;font-size:12px;">MCC</div>
+              <div>
+                <div style="font-weight:bold;color:#1e3a5f;font-size:14px;">مجمع مكة الطبي بالزاهر</div>
+                <div style="font-size:11px;color:#666;">قسم متابعة الجودة والتدقيق الطبي</div>
+              </div>
+            </div>
+            <div style="text-align:left;font-size:12px;color:#666;">
+              <div>${getHijriDate()}</div>
+              <div>${getGregorianDate()}</div>
+            </div>
           </div>
-          <div class="print-header-dates">
-            <div>${getHijriDate()}</div>
-            <div>${getGregorianDate()}</div>
-          </div>
+          <h1 style="text-align:center;color:#1e3a5f;margin:15px 0 10px;font-size:18px;border:none;padding:0;">تقرير مراجعة جودة الرعاية الطبية</h1>
+          <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${doctorName}</strong></p>
+        </div>
+        <div style="background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:12px;margin-bottom:20px;text-align:center;font-size:13px;color:#0369a1;">
+          <strong>تقرير صادر عن قسم متابعة الجودة والتدقيق الطبي</strong><br>
+          موافق مع حوكمة المجمع ومتطلبات CBAHI<br>
+          <span style="color:#dc2626;font-weight:bold;">يجب معالجة القضايا المرصودة والمحددة في هذا التقرير من قبل الطبيب المعالج</span>
         </div>
       `;
       
       const printFooter = `
-        <div class="print-footer">
-          <strong>مجمع مكة الطبي بالزاهر</strong> - جميع الحقوق محفوظة<br>
+        <div class="print-footer" style="margin-top:30px;padding-top:15px;border-top:2px solid #1e3a5f;text-align:center;font-size:11px;color:#666;">
+          <strong>مجمع مكة الطبي بالزاهر</strong> - قسم إدارة الجودة وسلامة المرضى<br>
           www.m2020m.org | المراجع: ${currentUser.name}
         </div>
       `;
@@ -1440,38 +1450,64 @@ async function downloadPDF() {
     const dateStr = today.toISOString().split('T')[0];
     const fileName = `تقرير_${doctorName}_${dateStr}.pdf`;
     
+    // Create clean content for PDF (remove problematic elements)
     const pdfContainer = document.createElement('div');
-    pdfContainer.style.cssText = 'font-family: Tajawal, Arial, sans-serif; direction: rtl; padding: 20px; background: white; color: #1e293b; line-height: 1.8;';
+    pdfContainer.style.cssText = 'position:absolute;left:-9999px;font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:20px;background:white;color:#1e293b;line-height:1.8;width:800px;';
+    
+    // Get report content and clean it
+    let cleanContent = reportContent.innerHTML;
+    // Remove hidden rating divs
+    cleanContent = cleanContent.replace(/<div id="ai-ratings"[^>]*>[\s\S]*?<\/div>/gi, '');
+    // Remove any script tags
+    cleanContent = cleanContent.replace(/<script[\s\S]*?<\/script>/gi, '');
     
     pdfContainer.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); border-radius: 12px; margin-bottom: 20px; color: white;">
-        <div style="display: flex; align-items: center; gap: 15px;">
-          <img src="https://www.m2020m.org/logo-transparent.png" style="width: 70px; height: 70px; border-radius: 50%; background: white; padding: 5px;">
-          <div>
-            <h2 style="color: #c9a962; margin: 0; font-size: 18px;">مجمع مكة الطبي بالزاهر</h2>
-            <p style="margin: 5px 0 0; font-size: 14px;">قسم إدارة الجودة وسلامة المرضى</p>
+      <div style="border-bottom:3px solid #1e3a5f;padding-bottom:15px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:40px;height:40px;border:2px solid #1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#1e3a5f;font-size:12px;">MCC</div>
+            <div>
+              <div style="font-weight:bold;color:#1e3a5f;font-size:14px;">مجمع مكة الطبي بالزاهر</div>
+              <div style="font-size:11px;color:#666;">قسم متابعة الجودة والتدقيق الطبي</div>
+            </div>
+          </div>
+          <div style="text-align:left;font-size:12px;color:#666;">
+            <div>${getHijriDate()}</div>
+            <div>${getGregorianDate()}</div>
           </div>
         </div>
-        <div style="text-align: left; font-size: 14px;">
-          <div style="color: #c9a962; font-weight: bold;">${dateStr}</div>
-          <div>الطبيب: ${doctorName}</div>
-        </div>
+        <h1 style="text-align:center;color:#1e3a5f;margin:15px 0 10px;font-size:18px;">تقرير مراجعة جودة الرعاية الطبية</h1>
+        <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${doctorName}</strong></p>
       </div>
-      <h1 style="text-align: center; color: #1e3a5f; padding: 15px; border-bottom: 3px solid #c9a962; margin-bottom: 20px;">تقرير مراجعة جودة الرعاية الطبية</h1>
-      ${reportContent.innerHTML}
-      <div style="margin-top: 30px; padding: 15px; text-align: center; border-top: 2px solid #c9a962; font-size: 12px; color: #64748b;">
-        تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر<br>
+      <div style="background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:12px;margin-bottom:20px;text-align:center;font-size:13px;color:#0369a1;">
+        <strong>تقرير صادر عن قسم متابعة الجودة والتدقيق الطبي</strong><br>
+        موافق مع حوكمة المجمع ومتطلبات CBAHI<br>
+        <span style="color:#dc2626;font-weight:bold;">يجب معالجة القضايا المرصودة والمحددة في هذا التقرير من قبل الطبيب المعالج</span>
+      </div>
+      ${cleanContent}
+      <div style="margin-top:30px;padding:15px;text-align:center;border-top:2px solid #1e3a5f;font-size:11px;color:#666;">
+        <strong>مجمع مكة الطبي بالزاهر</strong> - قسم إدارة الجودة وسلامة المرضى<br>
         www.m2020m.org
       </div>
     `;
     
     document.body.appendChild(pdfContainer);
     
+    // Wait for fonts and styles to load
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     const opt = {
-      margin: 10,
+      margin: [10, 10, 10, 10],
       filename: fileName,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { 
+        scale: 1.5, 
+        useCORS: true, 
+        letterRendering: true,
+        logging: false,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
@@ -1482,7 +1518,7 @@ async function downloadPDF() {
     
   } catch (error) {
     console.error('PDF Error:', error);
-    alert('حدث خطأ أثناء إنشاء PDF');
+    alert('حدث خطأ أثناء إنشاء PDF: ' + error.message);
   } finally {
     pdfBtn.disabled = false;
     pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> تحميل PDF';
@@ -1500,34 +1536,66 @@ async function saveAndLog() {
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
     const timeStr = today.toTimeString().split(' ')[0].replace(/:/g, '');
-    const fileNamePDF = `تقرير_${doctorName}_${dateStr}_${timeStr}.pdf`;
-    const fileNameHTML = `تقرير_${doctorName}_${dateStr}_${timeStr}.html`;
+    const fileName = `تقرير_${doctorName}_${dateStr}_${timeStr}.html`;
     
-    // إنشاء محتوى التقرير
-    const reportHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); border-radius: 12px; margin-bottom: 20px; color: white;">
-        <div style="display: flex; align-items: center; gap: 15px;">
-          <img src="https://www.m2020m.org/logo-transparent.png" style="width: 70px; height: 70px; border-radius: 50%; background: white; padding: 5px;">
-          <div>
-            <h2 style="color: #c9a962; margin: 0; font-size: 18px;">مجمع مكة الطبي بالزاهر</h2>
-            <p style="margin: 5px 0 0; font-size: 14px;">قسم إدارة الجودة وسلامة المرضى</p>
-          </div>
-        </div>
-        <div style="text-align: left; font-size: 14px;">
-          <div style="color: #c9a962; font-weight: bold;">${dateStr}</div>
-          <div>الطبيب: ${doctorName}</div>
+    // Get clean content
+    let cleanContent = reportContent.innerHTML;
+    cleanContent = cleanContent.replace(/<div id="ai-ratings"[^>]*>[\s\S]*?<\/div>/gi, '');
+    cleanContent = cleanContent.replace(/<script[\s\S]*?<\/script>/gi, '');
+    
+    // Create full HTML document for saving
+    const htmlContent = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${fileName}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Tajawal', Arial, sans-serif; direction: rtl; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.8; }
+    @media print { body { background: white; padding: 10mm; } }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { padding: 10px; border: 1px solid #e2e8f0; text-align: right; }
+    th { background: #1e3a5f; color: white; }
+    .status-accepted { background: #dcfce7; }
+    .status-rejected { background: #fee2e2; }
+    .status-needs-correction { background: #fef9c3; }
+  </style>
+</head>
+<body>
+  <div style="border-bottom:3px solid #1e3a5f;padding-bottom:15px;margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:40px;height:40px;border:2px solid #1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#1e3a5f;font-size:12px;">MCC</div>
+        <div>
+          <div style="font-weight:bold;color:#1e3a5f;font-size:14px;">مجمع مكة الطبي بالزاهر</div>
+          <div style="font-size:11px;color:#666;">قسم متابعة الجودة والتدقيق الطبي</div>
         </div>
       </div>
-      <h1 style="text-align: center; color: #1e3a5f; padding: 15px; border-bottom: 3px solid #c9a962; margin-bottom: 20px;">تقرير مراجعة جودة الرعاية الطبية</h1>
-      ${reportContent.innerHTML}
-      <div style="margin-top: 30px; padding: 15px; text-align: center; border-top: 2px solid #c9a962; font-size: 12px; color: #64748b;">
-        تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر<br>
-        www.m2020m.org
+      <div style="text-align:left;font-size:12px;color:#666;">
+        <div>${getHijriDate()}</div>
+        <div>${getGregorianDate()}</div>
       </div>
-    `;
+    </div>
+    <h1 style="text-align:center;color:#1e3a5f;margin:15px 0 10px;font-size:18px;">تقرير مراجعة جودة الرعاية الطبية</h1>
+    <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${doctorName}</strong></p>
+  </div>
+  <div style="background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:12px;margin-bottom:20px;text-align:center;font-size:13px;color:#0369a1;">
+    <strong>تقرير صادر عن قسم متابعة الجودة والتدقيق الطبي</strong><br>
+    موافق مع حوكمة المجمع ومتطلبات CBAHI<br>
+    <span style="color:#dc2626;font-weight:bold;">يجب معالجة القضايا المرصودة والمحددة في هذا التقرير من قبل الطبيب المعالج</span>
+  </div>
+  ${cleanContent}
+  <div style="margin-top:30px;padding:15px;text-align:center;border-top:2px solid #1e3a5f;font-size:11px;color:#666;">
+    <strong>مجمع مكة الطبي بالزاهر</strong> - قسم إدارة الجودة وسلامة المرضى<br>
+    www.m2020m.org | المراجع: ${currentUser.name}
+  </div>
+</body>
+</html>`;
     
-    // 1. حفظ في Drive كـ HTML (أصغر وأضمن)
-    console.log('📤 Sending HTML to Google Drive...');
+    // Save HTML to Drive
+    console.log('📤 Sending save request to Google Apps Script...');
     const saveData = {
       action: 'logUsageAndSaveHTML',
       userEmail: currentUser.email,
@@ -1538,8 +1606,8 @@ async function saveAndLog() {
       insuranceRating: insuranceRatingValue,
       serviceRating: serviceRatingValue,
       notes: '',
-      htmlContent: reportHTML,
-      fileName: fileNameHTML
+      htmlContent: htmlContent,
+      fileName: fileName
     };
     
     const response = await fetch(BACKEND_URL, {
@@ -1556,33 +1624,25 @@ async function saveAndLog() {
       result = { success: false, error: resultText };
     }
     
-    console.log('📥 Save result:', result);
-    
-    // 2. تحميل PDF على الجهاز
-    const pdfContainer = document.createElement('div');
-    pdfContainer.style.cssText = 'font-family: Tajawal, Arial, sans-serif; direction: rtl; padding: 20px; background: white; color: #1e293b; line-height: 1.8;';
-    pdfContainer.innerHTML = reportHTML;
-    document.body.appendChild(pdfContainer);
-    
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const opt = {
-      margin: 10,
-      filename: fileNamePDF,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    
-    await html2pdf().set(opt).from(pdfContainer).save();
-    document.body.removeChild(pdfContainer);
-    
-    if (result.success && result.reportLink) {
-      alert('✅ تم حفظ التقرير في Drive وتحميل PDF على جهازك!\n\nرابط التقرير في Drive:\n' + result.reportLink);
-    } else if (result.success) {
-      alert('✅ تم التسجيل وتحميل PDF على جهازك!');
+    if (result.success) {
+      // Download HTML locally
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(blob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
+      
+      alert('تم حفظ التقرير في Google Drive وتحميله على جهازك بنجاح ✅');
     } else {
-      alert('⚠️ تم تحميل PDF على جهازك\n(لم يتم الحفظ في Drive: ' + (result.error || 'خطأ غير معروف') + ')');
+      // Fallback: just download locally
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
+      
+      alert('تم تحميل التقرير على جهازك (لم يتم الحفظ في Drive)');
     }
     
     loadStats();
@@ -1590,7 +1650,7 @@ async function saveAndLog() {
     
   } catch(err) {
     console.error('Save error:', err);
-    alert('حدث خطأ: ' + err.message);
+    alert('حدث خطأ أثناء الحفظ: ' + err.message);
   } finally {
     saveBtn.disabled = false;
     saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ وتسجيل';
