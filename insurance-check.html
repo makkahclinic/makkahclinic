@@ -1497,16 +1497,14 @@ async function saveAndLog() {
   saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
   
   try {
-    // Create PDF content
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
     const timeStr = today.toTimeString().split(' ')[0].replace(/:/g, '');
-    const fileName = `تقرير_${doctorName}_${dateStr}_${timeStr}.pdf`;
+    const fileNamePDF = `تقرير_${doctorName}_${dateStr}_${timeStr}.pdf`;
+    const fileNameHTML = `تقرير_${doctorName}_${dateStr}_${timeStr}.html`;
     
-    const pdfContainer = document.createElement('div');
-    pdfContainer.style.cssText = 'font-family: Tajawal, Arial, sans-serif; direction: rtl; padding: 20px; background: white; color: #1e293b; line-height: 1.8;';
-    
-    pdfContainer.innerHTML = `
+    // إنشاء محتوى التقرير
+    const reportHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); border-radius: 12px; margin-bottom: 20px; color: white;">
         <div style="display: flex; align-items: center; gap: 15px;">
           <img src="https://www.m2020m.org/logo-transparent.png" style="width: 70px; height: 70px; border-radius: 50%; background: white; padding: 5px;">
@@ -1528,50 +1526,10 @@ async function saveAndLog() {
       </div>
     `;
     
-    document.body.appendChild(pdfContainer);
-    
-    // انتظار تحميل الصور قبل إنشاء PDF
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const opt = {
-      margin: 10,
-      filename: fileName,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
-        letterRendering: true,
-        logging: false,
-        allowTaint: true
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-    
-    // التأكد من وجود محتوى
-    console.log('📄 PDF Container content length:', pdfContainer.innerHTML.length);
-    
-    // Generate PDF as blob and convert to base64
-    const pdfBlob = await html2pdf().set(opt).from(pdfContainer).output('blob');
-    console.log('📄 PDF Blob size:', pdfBlob.size);
-    
-    // Convert blob to base64
-    const reader = new FileReader();
-    const pdfBase64 = await new Promise((resolve, reject) => {
-      reader.onloadend = () => {
-        const base64 = reader.result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(pdfBlob);
-    });
-    
-    document.body.removeChild(pdfContainer);
-    
-    // Log usage and save PDF to Drive
-    console.log('📤 Sending save request to Google Apps Script...');
+    // 1. حفظ في Drive كـ HTML (أصغر وأضمن)
+    console.log('📤 Sending HTML to Google Drive...');
     const saveData = {
-      action: 'logUsageAndSavePDF',
+      action: 'logUsageAndSaveHTML',
       userEmail: currentUser.email,
       userName: currentUser.name,
       doctorName: doctorName,
@@ -1580,10 +1538,9 @@ async function saveAndLog() {
       insuranceRating: insuranceRatingValue,
       serviceRating: serviceRatingValue,
       notes: '',
-      pdfBase64: pdfBase64,
-      fileName: fileName
+      htmlContent: reportHTML,
+      fileName: fileNameHTML
     };
-    console.log('📦 Save data (without PDF):', { ...saveData, pdfBase64: '[BASE64_DATA]' });
     
     const response = await fetch(BACKEND_URL, {
       method: 'POST',
@@ -1591,38 +1548,41 @@ async function saveAndLog() {
       body: JSON.stringify(saveData)
     });
     
-    console.log('📥 Response status:', response.status);
     const resultText = await response.text();
-    console.log('📥 Response text:', resultText);
-    
     let result;
     try {
       result = JSON.parse(resultText);
     } catch(e) {
-      console.error('❌ Failed to parse response:', e);
       result = { success: false, error: resultText };
     }
     
-    console.log('📥 Parsed result:', result);
+    console.log('📥 Save result:', result);
     
-    if (result.success) {
-      // Also download locally
-      const downloadLink = document.createElement('a');
-      downloadLink.href = URL.createObjectURL(pdfBlob);
-      downloadLink.download = fileName;
-      downloadLink.click();
-      URL.revokeObjectURL(downloadLink.href);
-      
-      alert('تم حفظ التقرير في Google Drive وتحميله على جهازك بنجاح ✅');
+    // 2. تحميل PDF على الجهاز
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.cssText = 'font-family: Tajawal, Arial, sans-serif; direction: rtl; padding: 20px; background: white; color: #1e293b; line-height: 1.8;';
+    pdfContainer.innerHTML = reportHTML;
+    document.body.appendChild(pdfContainer);
+    
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    const opt = {
+      margin: 10,
+      filename: fileNamePDF,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    
+    await html2pdf().set(opt).from(pdfContainer).save();
+    document.body.removeChild(pdfContainer);
+    
+    if (result.success && result.reportLink) {
+      alert('✅ تم حفظ التقرير في Drive وتحميل PDF على جهازك!\n\nرابط التقرير في Drive:\n' + result.reportLink);
+    } else if (result.success) {
+      alert('✅ تم التسجيل وتحميل PDF على جهازك!');
     } else {
-      // Fallback: just download locally
-      const downloadLink = document.createElement('a');
-      downloadLink.href = URL.createObjectURL(pdfBlob);
-      downloadLink.download = fileName;
-      downloadLink.click();
-      URL.revokeObjectURL(downloadLink.href);
-      
-      alert('تم تحميل التقرير على جهازك (لم يتم الحفظ في Drive)');
+      alert('⚠️ تم تحميل PDF على جهازك\n(لم يتم الحفظ في Drive: ' + (result.error || 'خطأ غير معروف') + ')');
     }
     
     loadStats();
@@ -1630,7 +1590,7 @@ async function saveAndLog() {
     
   } catch(err) {
     console.error('Save error:', err);
-    alert('حدث خطأ أثناء الحفظ: ' + err.message);
+    alert('حدث خطأ: ' + err.message);
   } finally {
     saveBtn.disabled = false;
     saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ وتسجيل';
