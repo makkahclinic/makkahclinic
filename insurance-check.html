@@ -1556,25 +1556,41 @@ async function saveAndLog() {
     document.body.removeChild(pdfContainer);
     
     // Log usage and save PDF to Drive
+    console.log('📤 Sending save request to Google Apps Script...');
+    const saveData = {
+      action: 'logUsageAndSavePDF',
+      userEmail: currentUser.email,
+      userName: currentUser.name,
+      doctorName: doctorName,
+      caseType: 'مراجعة تأمين',
+      filesCount: filesState.length,
+      insuranceRating: insuranceRatingValue,
+      serviceRating: serviceRatingValue,
+      notes: '',
+      pdfBase64: pdfBase64,
+      fileName: fileName
+    };
+    console.log('📦 Save data (without PDF):', { ...saveData, pdfBase64: '[BASE64_DATA]' });
+    
     const response = await fetch(BACKEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({
-        action: 'logUsageAndSavePDF',
-        userEmail: currentUser.email,
-        userName: currentUser.name,
-        doctorName: doctorName,
-        caseType: 'مراجعة تأمين',
-        filesCount: filesState.length,
-        insuranceRating: insuranceRatingValue,
-        serviceRating: serviceRatingValue,
-        notes: '',
-        pdfBase64: pdfBase64,
-        fileName: fileName
-      })
+      body: JSON.stringify(saveData)
     });
     
-    const result = await response.json();
+    console.log('📥 Response status:', response.status);
+    const resultText = await response.text();
+    console.log('📥 Response text:', resultText);
+    
+    let result;
+    try {
+      result = JSON.parse(resultText);
+    } catch(e) {
+      console.error('❌ Failed to parse response:', e);
+      result = { success: false, error: resultText };
+    }
+    
+    console.log('📥 Parsed result:', result);
     
     if (result.success) {
       // Also download locally
