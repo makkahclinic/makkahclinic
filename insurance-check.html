@@ -651,13 +651,27 @@
             إحصائيات الأطباء
           </h3>
           
-          <!-- Bar Chart for Doctor Performance -->
+          <!-- Heatmap for Doctor Performance -->
           <div class="chart-container" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
             <h4 style="color: #c9a962; margin: 0 0 15px 0; font-size: 1.1rem; text-align: center;">
-              <i class="fas fa-chart-column" style="margin-left: 8px;"></i>
-              مخطط أداء الأطباء
+              <i class="fas fa-th" style="margin-left: 8px;"></i>
+              خريطة أداء الأطباء الحرارية
             </h4>
-            <canvas id="doctorsChart" style="max-height: 300px;"></canvas>
+            <div id="doctorsHeatmap" style="overflow-x: auto;"></div>
+            <div class="heatmap-legend" style="display: flex; justify-content: center; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
+              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
+                <span style="width: 20px; height: 20px; background: #ef4444; border-radius: 4px;"></span> ضعيف (0-3)
+              </span>
+              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
+                <span style="width: 20px; height: 20px; background: #f97316; border-radius: 4px;"></span> مقبول (4-5)
+              </span>
+              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
+                <span style="width: 20px; height: 20px; background: #eab308; border-radius: 4px;"></span> جيد (6-7)
+              </span>
+              <span style="display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 0.85rem;">
+                <span style="width: 20px; height: 20px; background: #22c55e; border-radius: 4px;"></span> ممتاز (8-10)
+              </span>
+            </div>
           </div>
           
           <table class="doctors-table">
@@ -1010,8 +1024,6 @@ async function loadDoctorStats() {
   }
 }
 
-let doctorsChartInstance = null;
-
 function renderDoctorStats(doctors) {
   const tbody = document.getElementById('doctorsTableBody');
   tbody.innerHTML = '';
@@ -1041,134 +1053,57 @@ function renderDoctorStats(doctors) {
 }
 
 function renderDoctorsChart(doctors) {
-  const ctx = document.getElementById('doctorsChart');
-  if (!ctx) return;
+  const container = document.getElementById('doctorsHeatmap');
+  if (!container) return;
   
-  // Wait for Chart.js to load
-  if (typeof Chart === 'undefined') {
-    console.log('Chart.js not loaded yet, retrying in 500ms...');
-    setTimeout(() => renderDoctorsChart(doctors), 500);
-    return;
-  }
-  
-  // Destroy existing chart if any
-  if (doctorsChartInstance) {
-    doctorsChartInstance.destroy();
-  }
-  
-  // Radar Chart labels (metrics)
-  const radarLabels = ['عدد الحالات', 'معايير التأمين', 'جودة الخدمات', 'المتوسط العام'];
-  
-  // Prepare datasets - each doctor is a dataset
-  const colors = [
-    { bg: 'rgba(201, 169, 98, 0.3)', border: '#c9a962' },
-    { bg: 'rgba(34, 197, 94, 0.3)', border: '#22c55e' },
-    { bg: 'rgba(59, 130, 246, 0.3)', border: '#3b82f6' },
-    { bg: 'rgba(239, 68, 68, 0.3)', border: '#ef4444' },
-    { bg: 'rgba(168, 85, 247, 0.3)', border: '#a855f7' },
-    { bg: 'rgba(236, 72, 153, 0.3)', border: '#ec4899' }
+  const metrics = [
+    { key: 'avgInsuranceRating', label: 'معايير التأمين' },
+    { key: 'avgServiceRating', label: 'جودة الخدمات' },
+    { key: 'avgOverallRating', label: 'المتوسط العام' }
   ];
   
-  // Normalize cases to 0-10 scale for radar
-  const maxCases = Math.max(...doctors.map(d => parseInt(d.totalCases) || 1), 1);
+  function getHeatColor(value) {
+    const v = parseFloat(value) || 0;
+    if (v >= 8) return { bg: '#22c55e', text: '#fff' };
+    if (v >= 6) return { bg: '#eab308', text: '#000' };
+    if (v >= 4) return { bg: '#f97316', text: '#fff' };
+    return { bg: '#ef4444', text: '#fff' };
+  }
   
-  const datasets = doctors.map((doc, index) => {
-    const colorSet = colors[index % colors.length];
+  const maxCases = Math.max(...doctors.map(d => parseInt(d.totalCases) || 1));
+  
+  let html = `
+    <table style="width: 100%; border-collapse: separate; border-spacing: 6px; direction: rtl;">
+      <thead>
+        <tr>
+          <th style="padding: 14px 12px; color: #c9a962; font-weight: bold; text-align: right; font-size: 1rem; background: rgba(30,58,95,0.3); border-radius: 8px;">الطبيب</th>
+          <th style="padding: 14px 12px; color: #c9a962; font-weight: bold; text-align: center; font-size: 1rem; background: rgba(30,58,95,0.3); border-radius: 8px;">الحالات</th>
+          ${metrics.map(m => `<th style="padding: 14px 12px; color: #c9a962; font-weight: bold; text-align: center; font-size: 1rem; background: rgba(30,58,95,0.3); border-radius: 8px;">${m.label}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  doctors.forEach(doc => {
     const cases = parseInt(doc.totalCases) || 0;
-    const normalizedCases = (cases / maxCases) * 10;
-    const insurance = parseFloat(doc.avgInsuranceRating) || 0;
-    const service = parseFloat(doc.avgServiceRating) || 0;
-    const overall = parseFloat(doc.avgOverallRating) || 0;
+    const casesRatio = (cases / maxCases) * 10;
+    const casesColor = getHeatColor(casesRatio);
     
-    return {
-      label: doc.doctorName,
-      data: [normalizedCases, insurance, service, overall],
-      backgroundColor: colorSet.bg,
-      borderColor: colorSet.border,
-      borderWidth: 3,
-      pointBackgroundColor: colorSet.border,
-      pointBorderColor: '#fff',
-      pointBorderWidth: 2,
-      pointRadius: 6,
-      pointHoverRadius: 8
-    };
+    html += `<tr>`;
+    html += `<td style="padding: 14px 12px; background: rgba(30, 58, 95, 0.6); border-radius: 10px; color: #e2e8f0; font-weight: bold; font-size: 1rem;">${doc.doctorName}</td>`;
+    html += `<td style="padding: 14px 12px; background: ${casesColor.bg}; border-radius: 10px; color: ${casesColor.text}; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s;" onmouseover="this.style.transform='scale(1.08)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)'">${cases}</td>`;
+    
+    metrics.forEach(m => {
+      const value = parseFloat(doc[m.key]) || 0;
+      const color = getHeatColor(value);
+      html += `<td style="padding: 14px 12px; background: ${color.bg}; border-radius: 10px; color: ${color.text}; text-align: center; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; transition: all 0.3s;" onmouseover="this.style.transform='scale(1.08)';this.style.boxShadow='0 6px 20px rgba(0,0,0,0.4)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)'">${value.toFixed(1)}</td>`;
+    });
+    
+    html += `</tr>`;
   });
   
-  doctorsChartInstance = new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: radarLabels,
-      datasets: datasets
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: {
-          position: 'top',
-          rtl: true,
-          labels: {
-            color: '#e2e8f0',
-            font: { family: 'Tajawal', size: 13, weight: 'bold' },
-            padding: 20,
-            usePointStyle: true,
-            pointStyle: 'circle'
-          }
-        },
-        tooltip: {
-          rtl: true,
-          backgroundColor: 'rgba(30, 58, 95, 0.95)',
-          titleFont: { family: 'Tajawal', size: 14, weight: 'bold' },
-          bodyFont: { family: 'Tajawal', size: 12 },
-          padding: 15,
-          cornerRadius: 10,
-          callbacks: {
-            label: function(context) {
-              const label = context.dataset.label || '';
-              const value = context.raw.toFixed(1);
-              const metric = context.label;
-              if (metric === 'عدد الحالات') {
-                const doc = doctors[context.datasetIndex];
-                return `${label}: ${doc.totalCases} حالة`;
-              }
-              return `${label}: ${value}/10`;
-            }
-          }
-        }
-      },
-      scales: {
-        r: {
-          min: 0,
-          max: 10,
-          beginAtZero: true,
-          angleLines: {
-            color: 'rgba(201, 169, 98, 0.3)',
-            lineWidth: 1
-          },
-          grid: {
-            color: 'rgba(148, 163, 184, 0.2)',
-            circular: true
-          },
-          pointLabels: {
-            color: '#c9a962',
-            font: { family: 'Tajawal', size: 13, weight: 'bold' },
-            padding: 15
-          },
-          ticks: {
-            color: '#94a3b8',
-            backdropColor: 'transparent',
-            font: { family: 'Tajawal', size: 10 },
-            stepSize: 2
-          }
-        }
-      },
-      elements: {
-        line: {
-          tension: 0.1
-        }
-      }
-    }
-  });
+  html += `</tbody></table>`;
+  container.innerHTML = html;
 }
 
 
