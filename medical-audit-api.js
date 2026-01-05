@@ -4,72 +4,74 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
 });
 
-const SINGLE_CASE_PROMPT = `## تعليمات مهمة:
-- لا تكتب أي مقدمة أو عبارات تمهيدية
-- لا تقل "بصفتي خبير..." أو "قمت بمراجعة..."
-- ابدأ مباشرة بملخص الحالة
+const SINGLE_CASE_PROMPT = `أنت مدقق جودة طبية. أخرج HTML فقط بدون أي Markdown (بدون ### أو ** أو -).
 
-## مهمتك:
-تحليل الملفات الطبية وتقييم مدى الالتزام بالبروتوكولات.
+اتبع هذا الهيكل بالضبط:
 
-## هيكل التقرير:
+<section class="case-summary">
+<h2>📋 ملخص الحالة</h2>
+<p>[وصف موجز للحالة والتشخيص]</p>
+</section>
 
-### 1️⃣ ملخص الحالة
-وصف موجز للحالة والتشخيص
+<section class="evaluation">
+<h2>📊 تقييم الإجراءات</h2>
 
-### 2️⃣ تقييم الإجراءات (استخدم الألوان بوضوح):
-
-<div style="background:#dcfce7;border:2px solid #22c55e;padding:15px;border-radius:8px;margin:10px 0;">
-  <h4 style="color:#15803d;margin:0 0 10px;">✅ مقبول - إجراءات صحيحة</h4>
-  <ul>
-    <li>الإجراء الصحيح 1</li>
-    <li>الإجراء الصحيح 2</li>
-  </ul>
+<div class="status-box accepted">
+<h3>✅ مقبول - إجراءات صحيحة</h3>
+<ul>
+<li>[الإجراء الصحيح 1]</li>
+<li>[الإجراء الصحيح 2]</li>
+</ul>
 </div>
 
-<div style="background:#fee2e2;border:2px solid #ef4444;padding:15px;border-radius:8px;margin:10px 0;">
-  <h4 style="color:#dc2626;margin:0 0 10px;">❌ مرفوض - أخطاء ومخالفات</h4>
-  <ul>
-    <li>الخطأ 1 + السبب</li>
-    <li>الخطأ 2 + السبب</li>
-  </ul>
+<div class="status-box rejected">
+<h3>❌ مرفوض - أخطاء ومخالفات</h3>
+<ul>
+<li>[الخطأ 1 + السبب]</li>
+<li>[الخطأ 2 + السبب]</li>
+</ul>
 </div>
 
-<div style="background:#fef9c3;border:2px solid #eab308;padding:15px;border-radius:8px;margin:10px 0;">
-  <h4 style="color:#a16207;margin:0 0 10px;">⚠️ يحتاج مراجعة - إجراءات ناقصة</h4>
-  <ul>
-    <li>الإجراء الناقص 1 + ما يجب فعله</li>
-    <li>الإجراء الناقص 2 + ما يجب فعله</li>
-  </ul>
+<div class="status-box warning">
+<h3>⚠️ يحتاج مراجعة</h3>
+<ul>
+<li>[الإجراء الناقص 1 + ما يجب فعله]</li>
+</ul>
 </div>
+</section>
 
-### 3️⃣ التحاليل والفحوصات
-- هل التحاليل المطلوبة كافية؟
-- هل هناك تحاليل ناقصة؟
-- تقييم النتائج
+<section class="tests">
+<h2>🔬 التحاليل والفحوصات</h2>
+<ul>
+<li>[تقييم التحاليل]</li>
+</ul>
+</section>
 
-### 4️⃣ الأدوية الموصوفة
-- هل الأدوية مناسبة؟
-- هل الجرعات صحيحة؟
-- هل هناك تداخلات دوائية؟
+<section class="medications">
+<h2>💊 الأدوية الموصوفة</h2>
+<ul>
+<li>[تقييم الأدوية]</li>
+</ul>
+</section>
 
-### 5️⃣ التوصيات
-اقتراحات للتحسين والمتابعة
+<section class="recommendations">
+<h2>📝 التوصيات</h2>
+<ul>
+<li>[التوصية 1]</li>
+<li>[التوصية 2]</li>
+</ul>
+</section>
 
-## المراجع:
-- بروتوكولات CDC الأمريكية
-- بروتوكولات وزارة الصحة السعودية
-- المبادئ التوجيهية لـ WHO
-
-## ⭐ التقييم النهائي (مهم جداً):
 <div id="ai-ratings" style="display:none;">
-  <span data-insurance-rating="X"></span>
-  <span data-service-rating="Y"></span>
+<span data-insurance-rating="X"></span>
+<span data-service-rating="Y"></span>
 </div>
 
-حيث X و Y أرقام من 1-10.
-
-**استخدم التنسيق أعلاه بالضبط مع الألوان المحددة!**`;
+⚠️ مهم جداً:
+- أخرج HTML فقط - بدون Markdown
+- استخدم class="status-box accepted/rejected/warning" للتلوين
+- لا تضف أي headers أو footers
+- X و Y أرقام من 1-10`;
 
 const MULTI_CASE_PROMPT = `## تعليمات مهمة للإخراج:
 - لا تكتب أي مقدمة أو عبارات تمهيدية مثل "بصفتي خبير..." أو "قمت بمراجعة..."
@@ -191,104 +193,46 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 }
 
 function wrapWithStyles(html, isMultiCase = false) {
-  const today = new Date().toLocaleDateString('ar-SA', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric',
-    calendar: 'islamic-umalqura'
-  });
-  const gregorian = new Date().toLocaleDateString('ar-EG', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric'
-  });
-  
   const multiCaseStyles = isMultiCase ? `
     .status-accepted { background: #dcfce7 !important; }
     .status-rejected { background: #fee2e2 !important; }
-    .status-needs-fix { background: #fef9c3 !important; }
-    .status-badge { 
-      display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px; 
-      font-weight: bold; font-size: 0.85rem; 
-    }
-    .badge-green { background: #22c55e; color: white; }
-    .badge-red { background: #ef4444; color: white; }
-    .badge-yellow { background: #eab308; color: #1f2937; }
-    .summary-box { 
-      display: flex; gap: 1rem; justify-content: center; 
-      margin: 1.5rem 0; padding: 1rem; background: #f8fafc; border-radius: 12px; 
-    }
-    .summary-item { text-align: center; padding: 1rem 2rem; border-radius: 8px; }
-    .summary-item.accepted { background: #dcfce7; }
-    .summary-item.rejected { background: #fee2e2; }
-    .summary-item.needs-fix { background: #fef9c3; }
-    .summary-item .count { font-size: 2rem; font-weight: bold; }
+    .status-needs-correction, .status-needs-fix { background: #fef9c3 !important; }
   ` : '';
   
   return `
     <style>
-      .audit-report { font-family: 'Tajawal', sans-serif; direction: rtl; }
-      .report-header { 
-        display: flex; align-items: center; justify-content: space-between; 
-        padding: 1.5rem; background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); 
-        border-radius: 12px; margin-bottom: 1.5rem; color: white;
-      }
-      .report-header .logo-area { display: flex; align-items: center; gap: 1rem; }
-      .report-header img { width: 70px; height: 70px; border-radius: 50%; border: 3px solid #c9a962; background: white; }
-      .report-header .clinic-info h2 { font-size: 1.3rem; color: #c9a962; margin: 0; }
-      .report-header .clinic-info p { font-size: 0.85rem; margin: 0.25rem 0 0; opacity: 0.9; }
-      .report-header .date-area { text-align: left; font-size: 0.85rem; }
-      .report-header .date-area .hijri { color: #c9a962; font-weight: bold; }
-      .audit-report h1, .audit-report h2, .audit-report h3 { color: #1e3a5f; margin-top: 1.5rem; }
-      .audit-report h1 { font-size: 1.6rem; text-align: center; padding: 1rem; border-bottom: 3px solid #c9a962; background: #f8fafc; border-radius: 8px; margin-top: 0; }
-      .audit-report h2 { font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
-      .audit-report h3 { font-size: 1.1rem; }
-      .audit-report p, .audit-report li { line-height: 1.8; color: #334155; }
-      .audit-report ul { list-style: none; padding: 0; }
-      .audit-report li { padding: 0.75rem 1rem; margin: 0.5rem 0; border-radius: 8px; border-right: 4px solid #cbd5e1; background: #f8fafc; }
-      .audit-report .success, .audit-report li:has(.success) { background: #dcfce7 !important; border-right-color: #22c55e !important; }
-      .audit-report .error, .audit-report li:has(.error) { background: #fee2e2 !important; border-right-color: #ef4444 !important; }
-      .audit-report .warning, .audit-report li:has(.warning) { background: #fef9c3 !important; border-right-color: #eab308 !important; }
-      .audit-report .info, .audit-report li:has(.info) { background: #dbeafe !important; border-right-color: #3b82f6 !important; }
-      .audit-report table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-      .audit-report th, .audit-report td { padding: 0.75rem; text-align: right; border: 1px solid #e2e8f0; }
-      .audit-report th { background: #1e3a5f; color: white; }
-      .audit-report tr:nth-child(even) { background: #f8fafc; }
-      .audit-report .score-box { text-align: center; padding: 1.5rem; border-radius: 12px; margin: 1rem 0; }
-      .audit-report .score-high { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
-      .audit-report .score-medium { background: linear-gradient(135deg, #eab308, #ca8a04); color: white; }
-      .audit-report .score-low { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
-      .audit-report .score-value { font-size: 3rem; font-weight: bold; }
-      .report-footer { 
-        margin-top: 2rem; padding: 1rem; background: #f8fafc; border-radius: 8px; 
-        text-align: center; font-size: 0.8rem; color: #64748b; border-top: 2px solid #c9a962;
-      }
+      .audit-body { font-family: 'Tajawal', sans-serif; direction: rtl; line-height: 1.8; }
+      .audit-body section { margin-bottom: 1.5rem; }
+      .audit-body h2 { color: #1e3a5f; font-size: 1.2rem; border-bottom: 2px solid #c9a962; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+      .audit-body h3 { color: #1e3a5f; font-size: 1rem; margin: 0 0 0.5rem; }
+      .audit-body p { color: #334155; margin-bottom: 1rem; }
+      .audit-body ul { list-style: none; padding: 0; margin: 0; }
+      .audit-body li { padding: 0.6rem 1rem; margin: 0.4rem 0; border-radius: 6px; background: #f8fafc; border-right: 3px solid #cbd5e1; }
+      
+      .status-box { padding: 1rem; border-radius: 10px; margin: 1rem 0; }
+      .status-box.accepted { background: #dcfce7; border: 2px solid #22c55e; }
+      .status-box.accepted h3 { color: #15803d; }
+      .status-box.accepted li { background: #bbf7d0; border-right-color: #22c55e; }
+      
+      .status-box.rejected { background: #fee2e2; border: 2px solid #ef4444; }
+      .status-box.rejected h3 { color: #dc2626; }
+      .status-box.rejected li { background: #fecaca; border-right-color: #ef4444; }
+      
+      .status-box.warning { background: #fef9c3; border: 2px solid #eab308; }
+      .status-box.warning h3 { color: #a16207; }
+      .status-box.warning li { background: #fef08a; border-right-color: #eab308; }
+      
+      .audit-body table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+      .audit-body th, .audit-body td { padding: 0.6rem; text-align: right; border: 1px solid #e2e8f0; }
+      .audit-body th { background: #1e3a5f; color: white; }
+      .audit-body tr:nth-child(even) { background: #f8fafc; }
+      
       .error-box { background: #fee2e2; border: 2px solid #ef4444; padding: 1.5rem; border-radius: 12px; text-align: center; }
       .error-box h3 { color: #dc2626; margin: 0 0 1rem; }
       ${multiCaseStyles}
-      @media print {
-        .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      }
     </style>
-    <div class="audit-report">
-      <div class="report-header">
-        <div class="logo-area">
-          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
-          <div class="clinic-info">
-            <h2>مجمع مكة الطبي بالزاهر</h2>
-            <p>قسم إدارة الجودة وسلامة المرضى</p>
-          </div>
-        </div>
-        <div class="date-area">
-          <div class="hijri">${today}</div>
-          <div>${gregorian}</div>
-        </div>
-      </div>
+    <div class="audit-body">
       ${html}
-      <div class="report-footer">
-        <p>تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر</p>
-        <p>هذا التقرير للأغراض الاستشارية فقط ولا يغني عن الرأي الطبي المتخصص</p>
-      </div>
     </div>
   `;
 }
