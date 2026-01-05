@@ -1056,111 +1056,115 @@ function renderDoctorsChart(doctors) {
     doctorsChartInstance.destroy();
   }
   
-  // Prepare data
-  const labels = doctors.map(d => d.doctorName);
-  const casesData = doctors.map(d => parseInt(d.totalCases) || 0);
-  const insuranceData = doctors.map(d => parseFloat(d.avgInsuranceRating) || 0);
-  const serviceData = doctors.map(d => parseFloat(d.avgServiceRating) || 0);
+  // Radar Chart labels (metrics)
+  const radarLabels = ['عدد الحالات', 'معايير التأمين', 'جودة الخدمات', 'المتوسط العام'];
+  
+  // Prepare datasets - each doctor is a dataset
+  const colors = [
+    { bg: 'rgba(201, 169, 98, 0.3)', border: '#c9a962' },
+    { bg: 'rgba(34, 197, 94, 0.3)', border: '#22c55e' },
+    { bg: 'rgba(59, 130, 246, 0.3)', border: '#3b82f6' },
+    { bg: 'rgba(239, 68, 68, 0.3)', border: '#ef4444' },
+    { bg: 'rgba(168, 85, 247, 0.3)', border: '#a855f7' },
+    { bg: 'rgba(236, 72, 153, 0.3)', border: '#ec4899' }
+  ];
+  
+  // Normalize cases to 0-10 scale for radar
+  const maxCases = Math.max(...doctors.map(d => parseInt(d.totalCases) || 1), 1);
+  
+  const datasets = doctors.map((doc, index) => {
+    const colorSet = colors[index % colors.length];
+    const cases = parseInt(doc.totalCases) || 0;
+    const normalizedCases = (cases / maxCases) * 10;
+    const insurance = parseFloat(doc.avgInsuranceRating) || 0;
+    const service = parseFloat(doc.avgServiceRating) || 0;
+    const overall = parseFloat(doc.avgOverallRating) || 0;
+    
+    return {
+      label: doc.doctorName,
+      data: [normalizedCases, insurance, service, overall],
+      backgroundColor: colorSet.bg,
+      borderColor: colorSet.border,
+      borderWidth: 3,
+      pointBackgroundColor: colorSet.border,
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 6,
+      pointHoverRadius: 8
+    };
+  });
   
   doctorsChartInstance = new Chart(ctx, {
-    type: 'bar',
+    type: 'radar',
     data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'عدد الحالات',
-          data: casesData,
-          backgroundColor: 'rgba(201, 169, 98, 0.8)',
-          borderColor: '#c9a962',
-          borderWidth: 2,
-          borderRadius: 6,
-          yAxisID: 'y1'
-        },
-        {
-          label: 'معايير التأمين',
-          data: insuranceData,
-          backgroundColor: 'rgba(34, 197, 94, 0.8)',
-          borderColor: '#22c55e',
-          borderWidth: 2,
-          borderRadius: 6,
-          yAxisID: 'y'
-        },
-        {
-          label: 'جودة الخدمات',
-          data: serviceData,
-          backgroundColor: 'rgba(59, 130, 246, 0.8)',
-          borderColor: '#3b82f6',
-          borderWidth: 2,
-          borderRadius: 6,
-          yAxisID: 'y'
-        }
-      ]
+      labels: radarLabels,
+      datasets: datasets
     },
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      interaction: {
-        mode: 'index',
-        intersect: false
-      },
       plugins: {
         legend: {
           position: 'top',
           rtl: true,
           labels: {
             color: '#e2e8f0',
-            font: { family: 'Tajawal', size: 12 },
-            padding: 15
+            font: { family: 'Tajawal', size: 13, weight: 'bold' },
+            padding: 20,
+            usePointStyle: true,
+            pointStyle: 'circle'
           }
         },
         tooltip: {
           rtl: true,
           backgroundColor: 'rgba(30, 58, 95, 0.95)',
-          titleFont: { family: 'Tajawal', size: 14 },
+          titleFont: { family: 'Tajawal', size: 14, weight: 'bold' },
           bodyFont: { family: 'Tajawal', size: 12 },
-          padding: 12,
-          cornerRadius: 8
+          padding: 15,
+          cornerRadius: 10,
+          callbacks: {
+            label: function(context) {
+              const label = context.dataset.label || '';
+              const value = context.raw.toFixed(1);
+              const metric = context.label;
+              if (metric === 'عدد الحالات') {
+                const doc = doctors[context.datasetIndex];
+                return `${label}: ${doc.totalCases} حالة`;
+              }
+              return `${label}: ${value}/10`;
+            }
+          }
         }
       },
       scales: {
-        x: {
-          ticks: {
-            color: '#94a3b8',
-            font: { family: 'Tajawal', size: 11 }
-          },
-          grid: { color: 'rgba(148, 163, 184, 0.1)' }
-        },
-        y: {
-          type: 'linear',
-          position: 'right',
+        r: {
           min: 0,
           max: 10,
-          title: {
-            display: true,
-            text: 'التقييم (من 10)',
-            color: '#94a3b8',
-            font: { family: 'Tajawal', size: 12 }
+          beginAtZero: true,
+          angleLines: {
+            color: 'rgba(201, 169, 98, 0.3)',
+            lineWidth: 1
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.2)',
+            circular: true
+          },
+          pointLabels: {
+            color: '#c9a962',
+            font: { family: 'Tajawal', size: 13, weight: 'bold' },
+            padding: 15
           },
           ticks: {
             color: '#94a3b8',
-            font: { family: 'Tajawal' }
-          },
-          grid: { color: 'rgba(148, 163, 184, 0.1)' }
-        },
-        y1: {
-          type: 'linear',
-          position: 'left',
-          title: {
-            display: true,
-            text: 'عدد الحالات',
-            color: '#94a3b8',
-            font: { family: 'Tajawal', size: 12 }
-          },
-          ticks: {
-            color: '#94a3b8',
-            font: { family: 'Tajawal' }
-          },
-          grid: { display: false }
+            backdropColor: 'transparent',
+            font: { family: 'Tajawal', size: 10 },
+            stepSize: 2
+          }
+        }
+      },
+      elements: {
+        line: {
+          tension: 0.1
         }
       }
     }
