@@ -690,6 +690,10 @@ function getDoctorsList() {
  */
 function logUsageAndSavePDF(params) {
   try {
+    Logger.log('📥 logUsageAndSavePDF called');
+    Logger.log('📥 pdfBase64 length: ' + (params.pdfBase64 ? params.pdfBase64.length : 0));
+    Logger.log('📥 fileName: ' + params.fileName);
+    
     // 1. تسجيل الاستخدام في الشيت
     const logResult = logInsuranceUsage({
       userEmail: params.userEmail,
@@ -708,10 +712,24 @@ function logUsageAndSavePDF(params) {
     
     // 2. حفظ PDF في Drive
     let reportLink = '';
-    if (params.pdfBase64 && params.fileName) {
+    let pdfSize = 0;
+    
+    if (params.pdfBase64 && params.fileName && params.pdfBase64.length > 100) {
       try {
+        // تنظيف الـ base64 من أي بادئة
+        let cleanBase64 = params.pdfBase64;
+        if (cleanBase64.includes(',')) {
+          cleanBase64 = cleanBase64.split(',')[1];
+        }
+        
+        Logger.log('📥 Clean base64 length: ' + cleanBase64.length);
+        
+        const decodedBytes = Utilities.base64Decode(cleanBase64);
+        pdfSize = decodedBytes.length;
+        Logger.log('📥 Decoded bytes length: ' + pdfSize);
+        
         const pdfBlob = Utilities.newBlob(
-          Utilities.base64Decode(params.pdfBase64),
+          decodedBytes,
           'application/pdf',
           params.fileName
         );
@@ -721,23 +739,33 @@ function logUsageAndSavePDF(params) {
         const file = folder.createFile(pdfBlob);
         reportLink = file.getUrl();
         
+        Logger.log('✅ PDF saved: ' + reportLink + ' (size: ' + pdfSize + ' bytes)');
+        
         // تحديث رابط التقرير في سجل الاستخدام
         updateLastLogReportLink(reportLink);
         
       } catch(pdfError) {
-        Logger.log('خطأ في حفظ PDF: ' + pdfError);
-        // نستمر حتى لو فشل حفظ PDF
+        Logger.log('❌ خطأ في حفظ PDF: ' + pdfError.toString());
+        return { 
+          success: true, 
+          message: 'تم التسجيل لكن فشل حفظ PDF: ' + pdfError.toString(),
+          reportLink: '',
+          pdfError: pdfError.toString()
+        };
       }
+    } else {
+      Logger.log('⚠️ No valid pdfBase64 received');
     }
     
     return { 
       success: true, 
       message: 'تم التسجيل والحفظ بنجاح',
-      reportLink: reportLink
+      reportLink: reportLink,
+      pdfSize: pdfSize
     };
     
   } catch(error) {
-    Logger.log('خطأ في logUsageAndSavePDF: ' + error);
+    Logger.log('❌ خطأ في logUsageAndSavePDF: ' + error.toString());
     return { success: false, error: error.toString() };
   }
 }
