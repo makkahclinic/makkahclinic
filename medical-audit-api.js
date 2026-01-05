@@ -96,6 +96,23 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
     const imageFiles = files.filter(f => !f.isExcel);
     const excelFiles = files.filter(f => f.isExcel);
     
+    // Check total data size (limit to 10MB for API stability)
+    let totalSize = 0;
+    for (const file of files) {
+      if (file.data) {
+        totalSize += file.data.length;
+      }
+      if (file.textContent) {
+        totalSize += file.textContent.length;
+      }
+    }
+    const sizeMB = totalSize / (1024 * 1024);
+    console.log(`Total data size: ${sizeMB.toFixed(2)} MB`);
+    
+    if (sizeMB > 15) {
+      throw new Error(`حجم البيانات كبير جداً (${sizeMB.toFixed(1)} MB). الحد الأقصى 15 MB. يرجى تقليل عدد الملفات أو ضغط الصور.`);
+    }
+    
     const isMultiCase = excelFiles.length > 0;
     const prompt = isMultiCase ? MULTI_CASE_PROMPT : SINGLE_CASE_PROMPT;
     
