@@ -1,9 +1,8 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize OpenAI with direct API key (stable for heavy medical reports)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize Gemini with direct API key (supports medical image analysis)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
 // System role - defines WHO the AI is
 const SYSTEM_ROLE = `أنت خبير طبي وتأميني متخصص بخبرة 20 عامًا في:
@@ -214,27 +213,47 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 
 ابدأ التحليل الآن:` });
     
-    messages.push({ role: 'user', content: userContent });
+    // Build Gemini content parts
+    const parts = [];
+    
+    // Add system instructions as text
+    parts.push({ text: SYSTEM_ROLE + '\n\n' + DEVELOPER_INSTRUCTIONS + '\n\n' + EXAMPLE_OUTPUT });
+    
+    // Add user content
+    for (const content of userContent) {
+      if (content.type === 'text') {
+        parts.push({ text: content.text });
+      } else if (content.type === 'image_url') {
+        // Convert image URL to Gemini format
+        const imageData = content.image_url.url;
+        if (imageData.startsWith('data:')) {
+          const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
+          const mimeMatch = imageData.match(/^data:([^;]+);/);
+          const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          parts.push({
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Data
+            }
+          });
+        }
+      }
+    }
 
     // Retry logic for API stability
     let result;
     let lastError;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        console.log(`OpenAI API attempt ${attempt}/3...`);
-        result = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: messages,
-          max_tokens: 16000,
-          temperature: 0.15
-        });
+        console.log(`Gemini API attempt ${attempt}/3...`);
+        result = await model.generateContent(parts);
         break; // Success, exit retry loop
       } catch (retryErr) {
         lastError = retryErr;
         console.error(`Attempt ${attempt} failed:`, retryErr.message);
         if (attempt < 3) {
-          console.log(`Waiting 3 seconds before retry...`);
-          await new Promise(r => setTimeout(r, 3000));
+          console.log(`Waiting 5 seconds before retry...`);
+          await new Promise(r => setTimeout(r, 5000));
         }
       }
     }
@@ -245,9 +264,10 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 
     let htmlResponse = '';
     
-    // OpenAI response format
-    if (result.choices && result.choices[0] && result.choices[0].message) {
-      htmlResponse = result.choices[0].message.content || '';
+    // Gemini response format
+    const response = result.response;
+    if (response && typeof response.text === 'function') {
+      htmlResponse = response.text();
     }
     
     if (!htmlResponse) {
