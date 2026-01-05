@@ -481,14 +481,26 @@
         <i class="fas fa-user-shield" style="font-size:4rem;color:var(--gold);margin-bottom:1rem;"></i>
         <h2>تسجيل الدخول مطلوب</h2>
         <p>هذه الخدمة متاحة فقط للموظفين المصرح لهم</p>
-        <div style="display:flex; flex-direction:column; gap:12px; width:100%;">
+        
+        <div id="emailLoginForm" style="display:flex; flex-direction:column; gap:12px; width:100%;">
+          <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" style="padding:12px 15px; border:2px solid #e2e8f0; border-radius:8px; font-size:1rem; direction:ltr; text-align:left;">
+          <input type="password" id="loginPassword" placeholder="كلمة المرور" style="padding:12px 15px; border:2px solid #e2e8f0; border-radius:8px; font-size:1rem; direction:ltr; text-align:left;">
+          <button class="login-btn" onclick="loginWithEmail()" style="background:linear-gradient(135deg, #10b981, #059669);">
+            <i class="fas fa-sign-in-alt"></i>
+            تسجيل الدخول
+          </button>
+          <button class="login-btn" onclick="registerWithEmail()" style="background:linear-gradient(135deg, #3b82f6, #2563eb);">
+            <i class="fas fa-user-plus"></i>
+            تسجيل جديد
+          </button>
+          <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+            <hr style="flex:1; border:none; border-top:1px solid #e2e8f0;">
+            <span style="color:#666; font-size:0.9rem;">أو</span>
+            <hr style="flex:1; border:none; border-top:1px solid #e2e8f0;">
+          </div>
           <button class="login-btn" onclick="loginWithGoogle()">
             <i class="fab fa-google"></i>
             تسجيل الدخول بـ Google
-          </button>
-          <button class="login-btn" onclick="loginWithMicrosoft()" style="background:linear-gradient(135deg, #00a4ef, #0078d4);">
-            <i class="fab fa-microsoft"></i>
-            تسجيل الدخول بـ Microsoft
           </button>
         </div>
       </div>
@@ -864,15 +876,56 @@ function loginWithGoogle() {
   });
 }
 
-function loginWithMicrosoft() {
-  const provider = new firebase.auth.OAuthProvider('microsoft.com');
-  provider.setCustomParameters({
-    prompt: 'select_account'
-  });
-  auth.signInWithPopup(provider).catch(err => {
-    console.error('Microsoft login error:', err);
-    alert('حدث خطأ أثناء تسجيل الدخول بـ Microsoft');
-  });
+function loginWithEmail() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  
+  if (!email || !password) {
+    alert('الرجاء إدخال البريد وكلمة المرور');
+    return;
+  }
+  
+  auth.signInWithEmailAndPassword(email, password)
+    .catch(err => {
+      console.error('Email login error:', err);
+      if (err.code === 'auth/user-not-found') {
+        alert('المستخدم غير موجود. استخدم "تسجيل جديد" للتسجيل أولاً');
+      } else if (err.code === 'auth/wrong-password') {
+        alert('كلمة المرور غير صحيحة');
+      } else {
+        alert('خطأ في تسجيل الدخول: ' + err.message);
+      }
+    });
+}
+
+function registerWithEmail() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  
+  if (!email || !password) {
+    alert('الرجاء إدخال البريد وكلمة المرور');
+    return;
+  }
+  
+  if (password.length < 6) {
+    alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+    return;
+  }
+  
+  auth.createUserWithEmailAndPassword(email, password)
+    .then(() => {
+      alert('تم التسجيل بنجاح! سيتم التحقق من صلاحياتك...');
+    })
+    .catch(err => {
+      console.error('Registration error:', err);
+      if (err.code === 'auth/email-already-in-use') {
+        alert('هذا البريد مسجل مسبقاً. استخدم "تسجيل الدخول"');
+      } else if (err.code === 'auth/weak-password') {
+        alert('كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل');
+      } else {
+        alert('خطأ في التسجيل: ' + err.message);
+      }
+    });
 }
 
 function logout() {
