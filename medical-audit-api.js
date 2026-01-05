@@ -1,11 +1,9 @@
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 
 // Initialize with Replit AI Integrations (auto-configured)
-const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
 const SINGLE_CASE_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
@@ -150,15 +148,51 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
       parts: parts
     }];
 
+    // Build messages for OpenAI
+    const messages = [];
+    
+    // System message with prompt
+    messages.push({
+      role: 'system',
+      content: prompt
+    });
+    
+    // User content with data
+    let userContent = '';
+    
+    if (excelFiles.length > 0) {
+      userContent = '\n\n--- بيانات الحالات من Excel ---\n';
+      for (const file of excelFiles) {
+        userContent += `\nملف: ${file.name}\n`;
+        if (file.textContent) {
+          userContent += file.textContent;
+        } else if (file.data && !file.data.startsWith('data:')) {
+          userContent += file.data;
+        }
+      }
+    }
+    
+    if (imageFiles.length > 0) {
+      userContent += '\n\nتم رفع صور طبية للتحليل. قم بتحليل البيانات المتوفرة.';
+    }
+    
+    userContent += '\n\nقم بتحليل البيانات أعلاه وأعط تقريراً شاملاً بتنسيق HTML.';
+    
+    messages.push({
+      role: 'user',
+      content: userContent
+    });
+
     // Retry logic for API stability
     let result;
     let lastError;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        console.log(`Gemini API attempt ${attempt}/3...`);
-        result = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
-          contents: contents,
+        console.log(`OpenAI API attempt ${attempt}/3...`);
+        result = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: messages,
+          max_tokens: 8192,
         });
         break; // Success, exit retry loop
       } catch (retryErr) {
@@ -177,14 +211,9 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 
     let htmlResponse = '';
     
-    // @google/genai SDK response format
-    if (result.candidates && result.candidates[0] && result.candidates[0].content) {
-      const resultParts = result.candidates[0].content.parts || [];
-      htmlResponse = resultParts.map(p => p.text || '').join('');
-    } else if (result.text) {
-      htmlResponse = result.text;
-    } else if (typeof result.response?.text === 'function') {
-      htmlResponse = result.response.text();
+    // OpenAI response format
+    if (result.choices && result.choices[0] && result.choices[0].message) {
+      htmlResponse = result.choices[0].message.content || '';
     }
     
     if (!htmlResponse) {
