@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize with Replit's Gemini API key
-const genAI = new GoogleGenerativeAI(process.env.AI_INTEGRATIONS_GEMINI_API_KEY);
+// Initialize with direct Google Gemini API key
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 const SINGLE_CASE_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
