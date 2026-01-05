@@ -1457,81 +1457,90 @@ async function downloadPDF() {
     const doctorName = doctorNameInput.value.trim() || 'تقرير';
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
-    const fileName = `تقرير_${doctorName}_${dateStr}.pdf`;
+    const pdfFileName = `تقرير_${doctorName}_${dateStr}.pdf`;
     
-    // Create clean content for PDF (remove problematic elements)
-    const pdfContainer = document.createElement('div');
-    pdfContainer.style.cssText = 'position:absolute;left:-9999px;font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:20px;background:white;color:#1e293b;line-height:1.8;width:800px;';
-    
-    // Get report content and clean it
+    // Get report content and clean it - remove existing headers/footers to avoid duplication
     let cleanContent = reportContent.innerHTML;
     // Remove hidden rating divs
     cleanContent = cleanContent.replace(/<div id="ai-ratings"[^>]*>[\s\S]*?<\/div>/gi, '');
     // Remove any script tags
     cleanContent = cleanContent.replace(/<script[\s\S]*?<\/script>/gi, '');
+    // Remove existing print-header blocks (avoid duplication)
+    cleanContent = cleanContent.replace(/<div class="print-header"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi, '');
+    // Remove existing header with MCC logo
+    cleanContent = cleanContent.replace(/<div[^>]*style="[^"]*border-bottom:3px solid #1e3a5f[^"]*"[^>]*>[\s\S]*?تقرير مراجعة جودة الرعاية الطبية[\s\S]*?<\/div>\s*<\/div>/gi, '');
+    // Remove CBAHI info box
+    cleanContent = cleanContent.replace(/<div[^>]*style="[^"]*background:#f0f9ff[^"]*"[^>]*>[\s\S]*?CBAHI[\s\S]*?<\/div>/gi, '');
+    // Remove footer boxes
+    cleanContent = cleanContent.replace(/<div class="report-footer-box"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi, '');
+    
+    // Create PDF container
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.cssText = 'position:absolute;left:-9999px;font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:20px;background:white;color:#1e293b;line-height:1.6;width:780px;';
     
     pdfContainer.innerHTML = `
-      <div style="border-bottom:3px solid #1e3a5f;padding-bottom:15px;margin-bottom:20px;">
+      <div style="border-bottom:2px solid #1e3a5f;padding-bottom:10px;margin-bottom:15px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:40px;height:40px;border:2px solid #1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#1e3a5f;font-size:12px;">MCC</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:35px;height:35px;border:2px solid #1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#1e3a5f;font-size:10px;">MCC</div>
             <div>
-              <div style="font-weight:bold;color:#1e3a5f;font-size:14px;">مجمع مكة الطبي بالزاهر</div>
-              <div style="font-size:11px;color:#666;">قسم متابعة الجودة والتدقيق الطبي</div>
+              <div style="font-weight:bold;color:#1e3a5f;font-size:13px;">مجمع مكة الطبي بالزاهر</div>
+              <div style="font-size:10px;color:#666;">قسم متابعة الجودة والتدقيق الطبي</div>
             </div>
           </div>
-          <div style="text-align:left;font-size:12px;color:#666;">
+          <div style="text-align:left;font-size:10px;color:#666;">
             <div>${getHijriDate()}</div>
             <div>${getGregorianDate()}</div>
           </div>
         </div>
-        <h1 style="text-align:center;color:#1e3a5f;margin:15px 0 10px;font-size:18px;">تقرير مراجعة جودة الرعاية الطبية</h1>
-        <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${doctorName}</strong></p>
+        <h1 style="text-align:center;color:#1e3a5f;margin:10px 0 5px;font-size:16px;">تقرير مراجعة جودة الرعاية الطبية</h1>
+        <p style="text-align:center;color:#666;font-size:11px;margin:0;">الطبيب المعالج: <strong>${doctorName}</strong></p>
       </div>
-      <div style="background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:12px;margin-bottom:20px;text-align:center;font-size:13px;color:#0369a1;">
-        <strong>تقرير صادر عن قسم متابعة الجودة والتدقيق الطبي</strong><br>
-        موافق مع حوكمة المجمع ومتطلبات CBAHI<br>
-        <span style="color:#dc2626;font-weight:bold;">يجب معالجة القضايا المرصودة والمحددة في هذا التقرير من قبل الطبيب المعالج</span>
+      <div style="background:#f0f9ff;border:1px solid #0ea5e9;border-radius:6px;padding:8px;margin-bottom:15px;text-align:center;font-size:11px;color:#0369a1;">
+        <strong>تقرير صادر عن قسم متابعة الجودة والتدقيق الطبي</strong> - موافق مع حوكمة المجمع ومتطلبات CBAHI<br>
+        <span style="color:#dc2626;font-weight:bold;">يجب معالجة القضايا المرصودة في هذا التقرير من قبل الطبيب المعالج</span>
       </div>
       ${cleanContent}
-      <div style="margin-top:30px;padding:20px;border:2px solid #1e3a5f;border-radius:10px;background:#f8fafc;">
-        <div style="text-align:center;margin-bottom:10px;">
-          <strong style="color:#1e3a5f;font-size:14px;">مجمع مكة الطبي بالزاهر</strong>
-        </div>
-        <div style="background:#e0f2fe;padding:12px;border-radius:6px;text-align:center;font-size:12px;color:#0369a1;line-height:1.8;">
-          هذا التقرير صادر من <strong>قسم متابعة الجودة ومراقبة مستوى تقديم الخدمات الطبية</strong><br>
-          ويُعد وثيقة رسمية لتحسين جودة الرعاية الصحية المقدمة
-        </div>
-        <div style="margin-top:15px;display:flex;justify-content:space-between;font-size:11px;color:#666;">
-          <span>www.m2020m.org</span>
-        </div>
+      <div style="margin-top:20px;padding:12px;border:1px solid #1e3a5f;border-radius:6px;background:#f8fafc;text-align:center;">
+        <strong style="color:#1e3a5f;font-size:12px;">مجمع مكة الطبي بالزاهر</strong><br>
+        <span style="font-size:10px;color:#0369a1;">هذا التقرير صادر من قسم متابعة الجودة ومراقبة مستوى تقديم الخدمات الطبية - وثيقة رسمية</span><br>
+        <span style="font-size:9px;color:#666;">www.m2020m.org</span>
       </div>
     `;
     
     document.body.appendChild(pdfContainer);
     
-    // Wait for fonts and styles to load
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Wait for rendering
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     const opt = {
-      margin: [10, 10, 10, 10],
-      filename: fileName,
-      image: { type: 'jpeg', quality: 0.95 },
+      margin: [8, 8, 8, 8],
+      filename: pdfFileName,
+      image: { type: 'jpeg', quality: 0.92 },
       html2canvas: { 
-        scale: 1.5, 
+        scale: 2, 
         useCORS: true, 
-        letterRendering: true,
         logging: false,
         allowTaint: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: 780
       },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
     
-    await html2pdf().set(opt).from(pdfContainer).save();
+    // Generate and download PDF
+    const pdfBlob = await html2pdf().set(opt).from(pdfContainer).output('blob');
     
     document.body.removeChild(pdfContainer);
+    
+    // Download the PDF file
+    const downloadUrl = URL.createObjectURL(pdfBlob);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = downloadUrl;
+    downloadLink.download = pdfFileName;
+    downloadLink.click();
+    URL.revokeObjectURL(downloadUrl);
     
   } catch (error) {
     console.error('PDF Error:', error);
