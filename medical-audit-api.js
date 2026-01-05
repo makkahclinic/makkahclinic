@@ -1,8 +1,12 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
-// Use the standard SDK instead of genai with custom httpOptions
-const genAI = new GoogleGenerativeAI(process.env.AI_INTEGRATIONS_GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+// Initialize with Replit AI Integrations (auto-configured)
+const ai = new GoogleGenAI({
+  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+  httpOptions: {
+    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+  },
+});
 
 const SINGLE_CASE_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
 
@@ -152,14 +156,17 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         console.log(`Gemini API attempt ${attempt}/3...`);
-        result = await model.generateContent(parts);
+        result = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: contents,
+        });
         break; // Success, exit retry loop
       } catch (retryErr) {
         lastError = retryErr;
         console.error(`Attempt ${attempt} failed:`, retryErr.message);
         if (attempt < 3) {
-          console.log(`Waiting 2 seconds before retry...`);
-          await new Promise(r => setTimeout(r, 2000));
+          console.log(`Waiting 3 seconds before retry...`);
+          await new Promise(r => setTimeout(r, 3000));
         }
       }
     }
@@ -170,15 +177,14 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 
     let htmlResponse = '';
     
-    // Standard SDK response format
-    const response = result.response;
-    if (response && typeof response.text === 'function') {
-      htmlResponse = response.text();
-    } else if (result.candidates && result.candidates[0] && result.candidates[0].content) {
+    // @google/genai SDK response format
+    if (result.candidates && result.candidates[0] && result.candidates[0].content) {
       const resultParts = result.candidates[0].content.parts || [];
       htmlResponse = resultParts.map(p => p.text || '').join('');
     } else if (result.text) {
       htmlResponse = result.text;
+    } else if (typeof result.response?.text === 'function') {
+      htmlResponse = result.response.text();
     }
     
     if (!htmlResponse) {
