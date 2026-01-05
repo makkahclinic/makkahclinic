@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -1296,94 +1297,53 @@ analyzeBtn.addEventListener('click', async () => {
 async function downloadPDF() {
   const pdfBtn = document.getElementById('pdfBtn');
   pdfBtn.disabled = true;
-  pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+  pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إنشاء PDF...';
   
   try {
-    const reportContent = document.getElementById('reportContent');
     const doctorName = doctorNameInput.value.trim() || 'تقرير';
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
     const fileName = `تقرير_${doctorName}_${dateStr}.pdf`;
     
-    const printContent = `
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="UTF-8">
-        <title>${fileName}</title>
-        <style>
-          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { 
-            font-family: 'Tajawal', Arial, sans-serif; 
-            direction: rtl; 
-            padding: 20px;
-            line-height: 1.8;
-            color: #1e293b;
-          }
-          .print-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px;
-            background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
-            border-radius: 12px;
-            margin-bottom: 20px;
-            color: white;
-          }
-          .print-header img { width: 80px; height: 80px; border-radius: 50%; background: white; padding: 5px; }
-          .print-header-text { flex: 1; text-align: center; }
-          .print-header-text h1 { font-size: 24px; color: #c9a962; margin-bottom: 5px; }
-          .print-header-text p { font-size: 14px; }
-          .print-header-dates { text-align: left; font-size: 14px; }
-          h2, h3 { color: #1e3a5f; margin: 20px 0 10px; }
-          p { margin: 10px 0; }
-          ul { padding-right: 25px; }
-          li { margin: 8px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-          th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: right; }
-          th { background: #1e3a5f; color: white; }
-          .section { margin: 20px 0; padding: 15px; border-radius: 8px; }
-          .success { background: #dcfce7; border-right: 4px solid #22c55e; }
-          .error { background: #fee2e2; border-right: 4px solid #ef4444; }
-          .warning { background: #fef9c3; border-right: 4px solid #eab308; }
-          .footer { 
-            margin-top: 30px; 
-            padding: 15px; 
-            text-align: center; 
-            border-top: 2px solid #c9a962;
-            font-size: 12px;
-            color: #64748b;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-header">
-          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
-          <div class="print-header-text">
-            <h1>تقرير مراجعة جودة الرعاية الطبية</h1>
-            <p>مجمع مكة الطبي بالزاهر - قسم إدارة الجودة</p>
-            <p>الطبيب: ${doctorName}</p>
-          </div>
-          <div class="print-header-dates">
-            <div>${dateStr}</div>
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.cssText = 'font-family: Tajawal, Arial, sans-serif; direction: rtl; padding: 20px; background: white; color: #1e293b; line-height: 1.8;';
+    
+    pdfContainer.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); border-radius: 12px; margin-bottom: 20px; color: white;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+          <img src="https://www.m2020m.org/logo-transparent.png" style="width: 70px; height: 70px; border-radius: 50%; background: white; padding: 5px;">
+          <div>
+            <h2 style="color: #c9a962; margin: 0; font-size: 18px;">مجمع مكة الطبي بالزاهر</h2>
+            <p style="margin: 5px 0 0; font-size: 14px;">قسم إدارة الجودة وسلامة المرضى</p>
           </div>
         </div>
-        ${reportContent.innerHTML}
-        <div class="footer">
-          تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر
+        <div style="text-align: left; font-size: 14px;">
+          <div style="color: #c9a962; font-weight: bold;">${dateStr}</div>
+          <div>الطبيب: ${doctorName}</div>
         </div>
-      </body>
-      </html>
+      </div>
+      <h1 style="text-align: center; color: #1e3a5f; padding: 15px; border-bottom: 3px solid #c9a962; margin-bottom: 20px;">تقرير مراجعة جودة الرعاية الطبية</h1>
+      ${reportContent.innerHTML}
+      <div style="margin-top: 30px; padding: 15px; text-align: center; border-top: 2px solid #c9a962; font-size: 12px; color: #64748b;">
+        تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر<br>
+        www.m2020m.org
+      </div>
     `;
     
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(printContent);
-    printWindow.document.close();
+    document.body.appendChild(pdfContainer);
     
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
+    const opt = {
+      margin: 10,
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+    
+    await html2pdf().set(opt).from(pdfContainer).save();
+    
+    document.body.removeChild(pdfContainer);
     
   } catch (error) {
     console.error('PDF Error:', error);
