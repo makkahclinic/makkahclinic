@@ -85,6 +85,9 @@ function handleRequest(e) {
       case 'logUsageAndSavePDF':
         result = logUsageAndSavePDF(params);
         break;
+      case 'logUsageAndSaveHTML':
+        result = logUsageAndSaveHTML(params);
+        break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
     }
@@ -799,6 +802,86 @@ function updateLastLogReportLink(reportLink) {
     }
   } catch(e) {
     Logger.log('خطأ في تحديث رابط التقرير: ' + e);
+  }
+}
+
+/**
+ * تسجيل الاستخدام وحفظ التقرير كـ HTML في Drive
+ * أكثر موثوقية من PDF لأن HTML أصغر حجماً
+ */
+function logUsageAndSaveHTML(params) {
+  try {
+    Logger.log('📥 logUsageAndSaveHTML called');
+    Logger.log('📥 htmlContent length: ' + (params.htmlContent ? params.htmlContent.length : 0));
+    
+    // 1. تسجيل الاستخدام
+    const logResult = logInsuranceUsage({
+      userEmail: params.userEmail,
+      userName: params.userName,
+      doctorName: params.doctorName,
+      caseType: params.caseType || 'مراجعة تأمين',
+      filesCount: params.filesCount || 1,
+      insuranceRating: params.insuranceRating,
+      serviceRating: params.serviceRating,
+      notes: params.notes || ''
+    });
+    
+    if (!logResult.success) {
+      return { success: false, error: 'فشل تسجيل الاستخدام: ' + logResult.error };
+    }
+    
+    // 2. حفظ HTML في Drive
+    let reportLink = '';
+    
+    if (params.htmlContent && params.fileName) {
+      try {
+        // إنشاء صفحة HTML كاملة
+        const fullHTML = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${params.fileName}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Tajawal', Arial, sans-serif; direction: rtl; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.8; }
+    @media print { body { background: white; padding: 10mm; } }
+  </style>
+</head>
+<body>
+${params.htmlContent}
+</body>
+</html>`;
+        
+        const folder = getOrCreateDoctorFolder(params.doctorName);
+        const file = folder.createFile(params.fileName, fullHTML, MimeType.HTML);
+        reportLink = file.getUrl();
+        
+        Logger.log('✅ HTML saved: ' + reportLink);
+        
+        updateLastLogReportLink(reportLink);
+        
+      } catch(htmlError) {
+        Logger.log('❌ خطأ في حفظ HTML: ' + htmlError.toString());
+        return { 
+          success: true, 
+          message: 'تم التسجيل لكن فشل الحفظ في Drive',
+          reportLink: '',
+          error: htmlError.toString()
+        };
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: 'تم التسجيل والحفظ بنجاح',
+      reportLink: reportLink
+    };
+    
+  } catch(error) {
+    Logger.log('❌ خطأ في logUsageAndSaveHTML: ' + error.toString());
+    return { success: false, error: error.toString() };
   }
 }
 
