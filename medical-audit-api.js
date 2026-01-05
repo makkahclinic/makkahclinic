@@ -1,12 +1,8 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
-});
+// Use the standard SDK instead of genai with custom httpOptions
+const genAI = new GoogleGenerativeAI(process.env.AI_INTEGRATIONS_GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 const SINGLE_CASE_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
 
@@ -156,10 +152,7 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         console.log(`Gemini API attempt ${attempt}/3...`);
-        result = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: contents,
-        });
+        result = await model.generateContent(parts);
         break; // Success, exit retry loop
       } catch (retryErr) {
         lastError = retryErr;
@@ -177,13 +170,15 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 
     let htmlResponse = '';
     
-    if (result.candidates && result.candidates[0] && result.candidates[0].content) {
+    // Standard SDK response format
+    const response = result.response;
+    if (response && typeof response.text === 'function') {
+      htmlResponse = response.text();
+    } else if (result.candidates && result.candidates[0] && result.candidates[0].content) {
       const resultParts = result.candidates[0].content.parts || [];
       htmlResponse = resultParts.map(p => p.text || '').join('');
     } else if (result.text) {
       htmlResponse = result.text;
-    } else if (typeof result.response?.text === 'function') {
-      htmlResponse = result.response.text();
     }
     
     if (!htmlResponse) {
