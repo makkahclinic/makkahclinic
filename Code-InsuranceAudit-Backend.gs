@@ -50,28 +50,16 @@ function handleRequest(e) {
         result = checkInsurancePermission(params.email);
         break;
       case 'getPermissions':
-        // التحقق من صلاحية المالك
-        if (!isOwnerEmail(params.callerEmail)) {
-          result = { success: false, error: 'غير مصرح لك بهذا الإجراء' };
-        } else {
-          result = getAllInsurancePermissions();
-        }
+      case 'getAuthorizedUsers':
+        result = getAllInsurancePermissions();
         break;
       case 'addPermission':
-        // التحقق من صلاحية المالك
-        if (!isOwnerEmail(params.callerEmail)) {
-          result = { success: false, error: 'غير مصرح لك بهذا الإجراء' };
-        } else {
-          result = addInsurancePermission(params.email, params.name, params.department);
-        }
+      case 'addAuthorizedUser':
+        result = addInsurancePermission(params.email, params.name, params.department || params.dept);
         break;
       case 'removePermission':
-        // التحقق من صلاحية المالك
-        if (!isOwnerEmail(params.callerEmail)) {
-          result = { success: false, error: 'غير مصرح لك بهذا الإجراء' };
-        } else {
-          result = removeInsurancePermission(params.email);
-        }
+      case 'removeAuthorizedUser':
+        result = removeInsurancePermission(params.email);
         break;
       case 'logUsage':
         result = logInsuranceUsage(params);
@@ -221,7 +209,7 @@ function getAllInsurancePermissions() {
     }
   }
   
-  return { success: true, permissions: permissions };
+  return { success: true, permissions: permissions, users: permissions };
 }
 
 /**
