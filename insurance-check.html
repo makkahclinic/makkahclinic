@@ -376,6 +376,8 @@
     .btn-save:hover { background: #16a34a; }
     .btn-print { background: var(--info); color: white; }
     .btn-print:hover { background: #2563eb; }
+    .btn-pdf { background: #dc2626; color: white; }
+    .btn-pdf:hover { background: #b91c1c; }
     .btn-translate { background: #8b5cf6; color: white; }
     .btn-translate:hover { background: #7c3aed; }
     .btn-new { background: var(--warning); color: var(--primary); }
@@ -625,6 +627,9 @@
           <div class="report-actions">
             <button class="btn-save" id="saveBtn" onclick="saveAndLog()">
               <i class="fas fa-save"></i> حفظ وتسجيل
+            </button>
+            <button class="btn-pdf" id="pdfBtn" onclick="downloadPDF()">
+              <i class="fas fa-file-pdf"></i> تحميل PDF
             </button>
             <button class="btn-print" onclick="window.print()">
               <i class="fas fa-print"></i> طباعة
@@ -1287,6 +1292,107 @@ analyzeBtn.addEventListener('click', async () => {
     statusMsg.style.display = 'none';
   }
 });
+
+async function downloadPDF() {
+  const pdfBtn = document.getElementById('pdfBtn');
+  pdfBtn.disabled = true;
+  pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+  
+  try {
+    const reportContent = document.getElementById('reportContent');
+    const doctorName = doctorNameInput.value.trim() || 'تقرير';
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const fileName = `تقرير_${doctorName}_${dateStr}.pdf`;
+    
+    const printContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>${fileName}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { 
+            font-family: 'Tajawal', Arial, sans-serif; 
+            direction: rtl; 
+            padding: 20px;
+            line-height: 1.8;
+            color: #1e293b;
+          }
+          .print-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            color: white;
+          }
+          .print-header img { width: 80px; height: 80px; border-radius: 50%; background: white; padding: 5px; }
+          .print-header-text { flex: 1; text-align: center; }
+          .print-header-text h1 { font-size: 24px; color: #c9a962; margin-bottom: 5px; }
+          .print-header-text p { font-size: 14px; }
+          .print-header-dates { text-align: left; font-size: 14px; }
+          h2, h3 { color: #1e3a5f; margin: 20px 0 10px; }
+          p { margin: 10px 0; }
+          ul { padding-right: 25px; }
+          li { margin: 8px 0; }
+          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+          th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: right; }
+          th { background: #1e3a5f; color: white; }
+          .section { margin: 20px 0; padding: 15px; border-radius: 8px; }
+          .success { background: #dcfce7; border-right: 4px solid #22c55e; }
+          .error { background: #fee2e2; border-right: 4px solid #ef4444; }
+          .warning { background: #fef9c3; border-right: 4px solid #eab308; }
+          .footer { 
+            margin-top: 30px; 
+            padding: 15px; 
+            text-align: center; 
+            border-top: 2px solid #c9a962;
+            font-size: 12px;
+            color: #64748b;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-header">
+          <img src="https://www.m2020m.org/logo-transparent.png" alt="شعار المجمع">
+          <div class="print-header-text">
+            <h1>تقرير مراجعة جودة الرعاية الطبية</h1>
+            <p>مجمع مكة الطبي بالزاهر - قسم إدارة الجودة</p>
+            <p>الطبيب: ${doctorName}</p>
+          </div>
+          <div class="print-header-dates">
+            <div>${dateStr}</div>
+          </div>
+        </div>
+        ${reportContent.innerHTML}
+        <div class="footer">
+          تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+    
+  } catch (error) {
+    console.error('PDF Error:', error);
+    alert('حدث خطأ أثناء إنشاء PDF');
+  } finally {
+    pdfBtn.disabled = false;
+    pdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> تحميل PDF';
+  }
+}
 
 async function saveAndLog() {
   const doctorName = doctorNameInput.value.trim();
