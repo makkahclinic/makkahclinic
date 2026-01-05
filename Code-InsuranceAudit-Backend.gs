@@ -525,12 +525,58 @@ function saveReportToDrive(params) {
       doctorFolder = parentFolder.createFolder(doctorFolderName);
     }
     
-    // حفظ التقرير كملف HTML
+    // حفظ التقرير كملف HTML مع بنية كاملة
     const timestamp = Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd_HHmm');
     const fileName = 'تقرير_' + timestamp + '.html';
     
-    const htmlContent = params.reportHtml || '<html><body>No content</body></html>';
-    const file = doctorFolder.createFile(fileName, htmlContent, MimeType.HTML);
+    const reportBody = params.reportHtml || '<p>No content</p>';
+    
+    // إنشاء HTML كامل مع CSS
+    const fullHtml = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تقرير مراجعة جودة الرعاية الطبية - ${params.doctorName || 'غير محدد'}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Tajawal', sans-serif; background: #f8fafc; padding: 20px; direction: rtl; }
+    .print-header { display: flex; align-items: center; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, #1e3a5f, #2d4a6f); border-radius: 12px; margin-bottom: 20px; color: white; }
+    .print-header img { width: 80px; height: 80px; border-radius: 50%; border: 3px solid #c9a962; background: white; }
+    .print-header-text h1 { color: #c9a962; font-size: 1.4rem; margin-bottom: 5px; }
+    .print-header-text p { font-size: 0.9rem; opacity: 0.9; }
+    .print-header-dates { text-align: left; font-size: 0.85rem; }
+    .print-footer { margin-top: 30px; padding: 15px; background: #f1f5f9; border-radius: 8px; text-align: center; font-size: 0.8rem; color: #64748b; border-top: 3px solid #c9a962; }
+    .audit-report { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .audit-report h1 { color: #1e3a5f; font-size: 1.5rem; text-align: center; padding: 15px; border-bottom: 3px solid #c9a962; margin-bottom: 20px; }
+    .audit-report h2 { color: #1e3a5f; font-size: 1.2rem; margin-top: 25px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+    .audit-report h3 { color: #334155; font-size: 1rem; margin-top: 15px; }
+    .audit-report p, .audit-report li { line-height: 1.9; color: #334155; }
+    .audit-report ul { list-style: none; padding: 0; }
+    .audit-report li { padding: 12px 15px; margin: 8px 0; border-radius: 8px; border-right: 4px solid #cbd5e1; background: #f8fafc; }
+    .success, li:has(.success) { background: #dcfce7 !important; border-right-color: #22c55e !important; }
+    .error, li:has(.error) { background: #fee2e2 !important; border-right-color: #ef4444 !important; }
+    .warning, li:has(.warning) { background: #fef9c3 !important; border-right-color: #eab308 !important; }
+    .info, li:has(.info) { background: #dbeafe !important; border-right-color: #3b82f6 !important; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { padding: 12px; text-align: right; border: 1px solid #e2e8f0; }
+    th { background: #1e3a5f; color: white; }
+    tr:nth-child(even) { background: #f8fafc; }
+    .score-box { text-align: center; padding: 20px; border-radius: 12px; margin: 15px 0; }
+    .score-high { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
+    .score-medium { background: linear-gradient(135deg, #eab308, #ca8a04); color: white; }
+    .score-low { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+    .score-value { font-size: 2.5rem; font-weight: bold; }
+    @media print { body { background: white; padding: 0; } .audit-report { box-shadow: none; } }
+  </style>
+</head>
+<body>
+  ${reportBody}
+</body>
+</html>`;
+    
+    const file = doctorFolder.createFile(fileName, fullHtml, MimeType.HTML);
     
     return { 
       success: true, 
