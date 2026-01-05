@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize Gemini with direct API key (proven to work for medical analysis)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
 // System role - defines WHO the AI is
 const SYSTEM_ROLE = `أنت خبير طبي وتأميني متخصص بخبرة 20 عامًا في:
