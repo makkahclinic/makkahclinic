@@ -2432,28 +2432,49 @@
             }
         }
         
-        // ========= دوال صلاحيات التأمين =========
+        // ========= دوال صلاحيات التأمين (Firestore) =========
         async function loadInsurancePermissions() {
             const container = document.getElementById('insurancePermissionsList');
             container.innerHTML = '<div class="no-alerts"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
             
             try {
-                const response = await fetch(INSURANCE_API_URL + '?action=getAuthorizedUsers');
-                const result = await response.json();
+                // جلب الموظفين من Firestore الذين لديهم صلاحية insurance
+                const snapshot = await db.collection('staff').get();
+                const users = [];
                 
-                const users = result.users || result.permissions || [];
-                if (result.success && users.length > 0) {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const permissions = data.permissions || {};
+                    const hasInsurance = permissions.insurance === true || 
+                                        (data.role === 'owner') || 
+                                        (data.role === 'admin');
+                    
+                    if (hasInsurance && data.status !== 'inactive') {
+                        users.push({
+                            email: doc.id,
+                            name: data.name || data.fullName || doc.id.split('@')[0],
+                            department: data.department || '',
+                            role: data.role || 'staff',
+                            addedDate: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('ar-SA') : ''
+                        });
+                    }
+                });
+                
+                if (users.length > 0) {
                     let html = '<table style="width:100%; border-collapse:collapse;">';
-                    html += '<thead><tr style="background:#f8fafc;"><th style="padding:12px; text-align:right;">البريد</th><th style="padding:12px; text-align:right;">الاسم</th><th style="padding:12px; text-align:right;">القسم</th><th style="padding:12px; text-align:right;">تاريخ الإضافة</th><th style="padding:12px; text-align:center;">إجراء</th></tr></thead><tbody>';
+                    html += '<thead><tr style="background:#f8fafc;"><th style="padding:12px; text-align:right;">البريد</th><th style="padding:12px; text-align:right;">الاسم</th><th style="padding:12px; text-align:right;">القسم</th><th style="padding:12px; text-align:right;">الدور</th><th style="padding:12px; text-align:center;">إجراء</th></tr></thead><tbody>';
                     
                     users.forEach(user => {
+                        const isOwnerOrAdmin = user.role === 'owner' || user.role === 'admin';
+                        const roleLabel = user.role === 'owner' ? 'مالك' : user.role === 'admin' ? 'مدير' : 'موظف';
                         html += `<tr style="border-bottom:1px solid #e2e8f0;">
-                            <td style="padding:10px;">${user.email || ''}</td>
-                            <td style="padding:10px;">${user.name || ''}</td>
-                            <td style="padding:10px;">${user.department || ''}</td>
-                            <td style="padding:10px;">${user.addedDate || ''}</td>
+                            <td style="padding:10px;">${user.email}</td>
+                            <td style="padding:10px;">${user.name}</td>
+                            <td style="padding:10px;">${user.department}</td>
+                            <td style="padding:10px;"><span style="background:${isOwnerOrAdmin ? '#c9a962' : '#10b981'}; color:white; padding:3px 10px; border-radius:10px; font-size:0.8rem;">${roleLabel}</span></td>
                             <td style="padding:10px; text-align:center;">
-                                <button onclick="removeInsurancePermission('${user.email}')" style="background:#ef4444; color:white; padding:6px 12px; border:none; border-radius:6px; cursor:pointer;"><i class="fas fa-trash"></i></button>
+                                ${isOwnerOrAdmin ? '<span style="color:#999; font-size:0.8rem;">تلقائي</span>' : 
+                                `<button onclick="removeInsurancePermission('${user.email}')" style="background:#ef4444; color:white; padding:6px 12px; border:none; border-radius:6px; cursor:pointer;"><i class="fas fa-trash"></i></button>`}
                             </td>
                         </tr>`;
                     });
@@ -2470,7 +2491,7 @@
         }
         
         async function addInsurancePermission() {
-            const email = document.getElementById('insNewEmail').value.trim();
+            const email = document.getElementById('insNewEmail').value.trim().toLowerCase();
             const name = document.getElementById('insNewName').value.trim();
             const dept = document.getElementById('insNewDept').value.trim();
             
@@ -2480,30 +2501,40 @@
             }
             
             try {
-                const response = await fetch(INSURANCE_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        action: 'addAuthorizedUser',
-                        email: email,
-                        name: name,
-                        department: dept,
-                        addedBy: currentUser?.email || 'owner'
-                    })
-                });
+                // تحقق إذا الموظف موجود
+                const docRef = db.collection('staff').doc(email);
+                const doc = await docRef.get();
                 
-                const result = await response.json();
-                if (result.success) {
-                    showToast('تمت إضافة الموظف بنجاح', true);
-                    document.getElementById('insNewEmail').value = '';
-                    document.getElementById('insNewName').value = '';
-                    document.getElementById('insNewDept').value = '';
-                    loadInsurancePermissions();
+                if (doc.exists) {
+                    // تحديث صلاحية insurance
+                    await docRef.update({
+                        'permissions.insurance': true,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    showToast('تم تفعيل صلاحية التأمين للموظف', true);
                 } else {
-                    showToast(result.error || 'خطأ في الإضافة', false);
+                    // إنشاء موظف جديد مع صلاحية insurance
+                    await docRef.set({
+                        name: name || email.split('@')[0],
+                        email: email,
+                        department: dept || '',
+                        role: 'staff',
+                        status: 'active',
+                        permissions: { insurance: true },
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        createdBy: currentUser?.email || 'owner'
+                    });
+                    showToast('تم إضافة الموظف بنجاح مع صلاحية التأمين', true);
                 }
+                
+                document.getElementById('insNewEmail').value = '';
+                document.getElementById('insNewName').value = '';
+                document.getElementById('insNewDept').value = '';
+                loadInsurancePermissions();
+                
             } catch(e) {
-                showToast('خطأ في الاتصال: ' + e.message, false);
+                console.error('Add permission error:', e);
+                showToast('خطأ: ' + e.message, false);
             }
         }
         
@@ -2511,23 +2542,17 @@
             if (!confirm('هل تريد إزالة صلاحية التأمين لـ ' + email + '؟')) return;
             
             try {
-                const response = await fetch(INSURANCE_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        action: 'removeAuthorizedUser',
-                        email: email
-                    })
+                // إزالة صلاحية insurance من Firestore
+                const docRef = db.collection('staff').doc(email);
+                await docRef.update({
+                    'permissions.insurance': false,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 
-                const result = await response.json();
-                if (result.success) {
-                    showToast('تمت إزالة الصلاحية', true);
-                    loadInsurancePermissions();
-                } else {
-                    showToast(result.error || 'خطأ', false);
-                }
+                showToast('تمت إزالة صلاحية التأمين', true);
+                loadInsurancePermissions();
             } catch(e) {
+                console.error('Remove permission error:', e);
                 showToast('خطأ: ' + e.message, false);
             }
         }
