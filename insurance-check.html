@@ -1357,7 +1357,6 @@ async function downloadPDF() {
 async function saveAndLog() {
   const doctorName = doctorNameInput.value.trim();
   
-  
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
   saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
@@ -1380,18 +1379,52 @@ async function saveAndLog() {
       })
     });
     
-    // Save report to Drive
-    await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({
-        action: 'saveReport',
-        doctorName: doctorName,
-        reportHtml: reportContent.innerHTML
-      })
-    });
+    // Create PDF and save
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const fileName = `تقرير_${doctorName}_${dateStr}.pdf`;
     
-    alert('تم حفظ التقرير وتسجيل الحالة بنجاح');
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.cssText = 'font-family: Tajawal, Arial, sans-serif; direction: rtl; padding: 20px; background: white; color: #1e293b; line-height: 1.8;';
+    
+    pdfContainer.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); border-radius: 12px; margin-bottom: 20px; color: white;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+          <img src="https://www.m2020m.org/logo-transparent.png" style="width: 70px; height: 70px; border-radius: 50%; background: white; padding: 5px;">
+          <div>
+            <h2 style="color: #c9a962; margin: 0; font-size: 18px;">مجمع مكة الطبي بالزاهر</h2>
+            <p style="margin: 5px 0 0; font-size: 14px;">قسم إدارة الجودة وسلامة المرضى</p>
+          </div>
+        </div>
+        <div style="text-align: left; font-size: 14px;">
+          <div style="color: #c9a962; font-weight: bold;">${dateStr}</div>
+          <div>الطبيب: ${doctorName}</div>
+        </div>
+      </div>
+      <h1 style="text-align: center; color: #1e3a5f; padding: 15px; border-bottom: 3px solid #c9a962; margin-bottom: 20px;">تقرير مراجعة جودة الرعاية الطبية</h1>
+      ${reportContent.innerHTML}
+      <div style="margin-top: 30px; padding: 15px; text-align: center; border-top: 2px solid #c9a962; font-size: 12px; color: #64748b;">
+        تم إنشاء هذا التقرير بواسطة نظام مراجعة جودة الرعاية الطبية - مجمع مكة الطبي بالزاهر<br>
+        www.m2020m.org
+      </div>
+    `;
+    
+    document.body.appendChild(pdfContainer);
+    
+    const opt = {
+      margin: 10,
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+    
+    await html2pdf().set(opt).from(pdfContainer).save();
+    
+    document.body.removeChild(pdfContainer);
+    
+    alert('تم حفظ التقرير كـ PDF وتسجيل الحالة بنجاح');
     loadStats();
     loadDoctorStats();
     
