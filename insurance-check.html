@@ -1044,6 +1044,13 @@ function renderDoctorsChart(doctors) {
   const ctx = document.getElementById('doctorsChart');
   if (!ctx) return;
   
+  // Wait for Chart.js to load
+  if (typeof Chart === 'undefined') {
+    console.log('Chart.js not loaded yet, retrying in 500ms...');
+    setTimeout(() => renderDoctorsChart(doctors), 500);
+    return;
+  }
+  
   // Destroy existing chart if any
   if (doctorsChartInstance) {
     doctorsChartInstance.destroy();
@@ -1499,27 +1506,11 @@ async function saveAndLog() {
   saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
   
   try {
-    // Log usage
-    await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({
-        action: 'logUsage',
-        userEmail: currentUser.email,
-        userName: currentUser.name,
-        doctorName: doctorName,
-        caseType: 'مراجعة تأمين',
-        filesCount: filesState.length,
-        insuranceRating: insuranceRatingValue,
-        serviceRating: serviceRatingValue,
-        notes: ''
-      })
-    });
-    
-    // Create PDF and save
+    // Create PDF content
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
-    const fileName = `تقرير_${doctorName}_${dateStr}.pdf`;
+    const timeStr = today.toTimeString().split(' ')[0].replace(/:/g, '');
+    const fileName = `تقرير_${doctorName}_${dateStr}_${timeStr}.pdf`;
     
     const pdfContainer = document.createElement('div');
     pdfContainer.style.cssText = 'font-family: Tajawal, Arial, sans-serif; direction: rtl; padding: 20px; background: white; color: #1e293b; line-height: 1.8;';
@@ -1557,17 +1548,69 @@ async function saveAndLog() {
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
     
-    await html2pdf().set(opt).from(pdfContainer).save();
+    // Generate PDF as blob and convert to base64
+    const pdfBlob = await html2pdf().set(opt).from(pdfContainer).output('blob');
+    
+    // Convert blob to base64
+    const reader = new FileReader();
+    const pdfBase64 = await new Promise((resolve, reject) => {
+      reader.onloadend = () => {
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(pdfBlob);
+    });
     
     document.body.removeChild(pdfContainer);
     
-    alert('تم حفظ التقرير كـ PDF وتسجيل الحالة بنجاح');
+    // Log usage and save PDF to Drive
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'logUsageAndSavePDF',
+        userEmail: currentUser.email,
+        userName: currentUser.name,
+        doctorName: doctorName,
+        caseType: 'مراجعة تأمين',
+        filesCount: filesState.length,
+        insuranceRating: insuranceRatingValue,
+        serviceRating: serviceRatingValue,
+        notes: '',
+        pdfBase64: pdfBase64,
+        fileName: fileName
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Also download locally
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
+      
+      alert('تم حفظ التقرير في Google Drive وتحميله على جهازك بنجاح ✅');
+    } else {
+      // Fallback: just download locally
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(pdfBlob);
+      downloadLink.download = fileName;
+      downloadLink.click();
+      URL.revokeObjectURL(downloadLink.href);
+      
+      alert('تم تحميل التقرير على جهازك (لم يتم الحفظ في Drive)');
+    }
+    
     loadStats();
     loadDoctorStats();
     
   } catch(err) {
     console.error('Save error:', err);
-    alert('حدث خطأ أثناء الحفظ');
+    alert('حدث خطأ أثناء الحفظ: ' + err.message);
   } finally {
     saveBtn.disabled = false;
     saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ وتسجيل';
