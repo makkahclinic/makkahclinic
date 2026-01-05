@@ -1,10 +1,8 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize with Replit AI Integrations (auto-configured)
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+// Initialize with direct Google API key
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 const SINGLE_CASE_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
 
@@ -148,52 +146,45 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
       parts: parts
     }];
 
-    // Build messages for OpenAI
-    const messages = [];
+    // Build content parts for Gemini
+    const contentParts = [{ text: prompt }];
     
-    // System message with prompt
-    messages.push({
-      role: 'system',
-      content: prompt
-    });
-    
-    // User content with data
-    let userContent = '';
-    
-    if (excelFiles.length > 0) {
-      userContent = '\n\n--- بيانات الحالات من Excel ---\n';
-      for (const file of excelFiles) {
-        userContent += `\nملف: ${file.name}\n`;
-        if (file.textContent) {
-          userContent += file.textContent;
-        } else if (file.data && !file.data.startsWith('data:')) {
-          userContent += file.data;
-        }
+    // Add images
+    if (imageFiles.length > 0) {
+      for (const file of imageFiles) {
+        const base64Data = file.data.replace(/^data:[^;]+;base64,/, '');
+        contentParts.push({
+          inlineData: {
+            mimeType: file.mimeType || 'image/jpeg',
+            data: base64Data
+          }
+        });
       }
     }
     
-    if (imageFiles.length > 0) {
-      userContent += '\n\nتم رفع صور طبية للتحليل. قم بتحليل البيانات المتوفرة.';
+    // Add Excel data as text
+    if (excelFiles.length > 0) {
+      let excelText = '\n\n--- بيانات الحالات من Excel ---\n';
+      for (const file of excelFiles) {
+        excelText += `\nملف: ${file.name}\n`;
+        if (file.textContent) {
+          excelText += file.textContent;
+        } else if (file.data && !file.data.startsWith('data:')) {
+          excelText += file.data;
+        }
+      }
+      contentParts.push({ text: excelText });
     }
     
-    userContent += '\n\nقم بتحليل البيانات أعلاه وأعط تقريراً شاملاً بتنسيق HTML.';
-    
-    messages.push({
-      role: 'user',
-      content: userContent
-    });
+    contentParts.push({ text: '\n\nقم بتحليل البيانات أعلاه وأعط تقريراً شاملاً بتنسيق HTML.' });
 
     // Retry logic for API stability
     let result;
     let lastError;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        console.log(`OpenAI API attempt ${attempt}/3...`);
-        result = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: messages,
-          max_tokens: 8192,
-        });
+        console.log(`Gemini API attempt ${attempt}/3...`);
+        result = await model.generateContent(contentParts);
         break; // Success, exit retry loop
       } catch (retryErr) {
         lastError = retryErr;
@@ -211,9 +202,10 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 
     let htmlResponse = '';
     
-    // OpenAI response format
-    if (result.choices && result.choices[0] && result.choices[0].message) {
-      htmlResponse = result.choices[0].message.content || '';
+    // Gemini SDK response format
+    const response = result.response;
+    if (response && typeof response.text === 'function') {
+      htmlResponse = response.text();
     }
     
     if (!htmlResponse) {
