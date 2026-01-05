@@ -715,8 +715,8 @@ const doctorNameInput = document.getElementById('doctorName');
 // Auth State Observer
 auth.onAuthStateChanged(async (user) => {
   if (user) {
-    // Check permission
-    const hasPermission = await checkPermission(user.email);
+    // Check permission using UID first, then email
+    const hasPermission = await checkPermission(user.uid, user.email);
     
     if (hasPermission) {
       currentUser = {
@@ -737,38 +737,34 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 
-async function checkPermission(email) {
-  console.log('Checking permission for:', email);
+async function checkPermission(uid, email) {
+  console.log('Checking permission for:', email, 'UID:', uid);
   try {
-    // التحقق من Firestore staff_roles بالإيميل
-    console.log('Fetching from Firestore staff_roles collection...');
-    const snapshot = await db.collection('staff_roles').where('email', '==', email).get();
-    console.log('Firestore result - found:', !snapshot.empty);
+    // 1. أولاً: البحث بـ UID (الطريقة الصحيحة)
+    const uidDoc = await db.collection('staff_roles').doc(uid).get();
+    if (uidDoc.exists) {
+      const result = evaluatePermission(uidDoc.data());
+      if (result !== null) return result;
+    }
+    
+    // 2. ثانياً: البحث بالإيميل (للسجلات القديمة)
+    console.log('Searching by email...');
+    const snapshot = await db.collection('staff_roles').where('email', '==', email.toLowerCase()).get();
+    console.log('Found', snapshot.size, 'records for email');
     
     if (!snapshot.empty) {
-      const userData = snapshot.docs[0].data();
-      const role = userData.role || '';
-      const permissions = userData.permissions || {};
-      const status = userData.status || 'active';
+      // فحص جميع السجلات وأخذ أعلى صلاحية
+      let bestResult = false;
       
-      // تحقق من الحالة النشطة
-      if (status === 'suspended') {
-        console.log('User account is suspended');
-        return false;
+      for (const doc of snapshot.docs) {
+        const result = evaluatePermission(doc.data());
+        if (result === true) {
+          bestResult = true;
+          break; // وجدنا صلاحية، نتوقف
+        }
       }
       
-      // المالك والمدير لهم صلاحية كاملة
-      if (role === 'owner' || role === 'admin') {
-        console.log('Access granted: owner/admin role');
-        return true;
-      }
-      
-      // تحقق من صلاحية insurance
-      const hasInsurance = permissions.insurance === true;
-      if (hasInsurance) {
-        console.log('Access granted: insurance permission');
-        return true;
-      }
+      return bestResult;
     }
     
     console.log('Access denied: no permission found');
@@ -777,6 +773,33 @@ async function checkPermission(email) {
     console.error('Permission check error:', e);
     return false;
   }
+}
+
+// تقييم صلاحية سجل واحد
+function evaluatePermission(userData) {
+  const role = userData.role || '';
+  const permissions = userData.permissions || {};
+  const status = userData.status || 'active';
+  
+  // تحقق من الحالة النشطة
+  if (status === 'suspended') {
+    console.log('User account is suspended');
+    return false;
+  }
+  
+  // المالك والمدير لهم صلاحية كاملة
+  if (role === 'owner' || role === 'admin') {
+    console.log('Access granted: owner/admin role');
+    return true;
+  }
+  
+  // تحقق من صلاحية insurance
+  if (permissions.insurance === true) {
+    console.log('Access granted: insurance permission');
+    return true;
+  }
+  
+  return null; // لم يتم تحديد الصلاحية من هذا السجل
 }
 
 function showLoginScreen() {
