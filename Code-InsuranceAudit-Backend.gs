@@ -82,6 +82,9 @@ function handleRequest(e) {
       case 'getDoctorsList':
         result = getDoctorsList();
         break;
+      case 'logUsageAndSavePDF':
+        result = logUsageAndSavePDF(params);
+        break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
     }
@@ -678,6 +681,96 @@ function getDoctorsList() {
     return { success: true, doctors: doctors };
   } catch(e) {
     return { success: false, error: e.toString(), doctors: [] };
+  }
+}
+
+/**
+ * تسجيل الاستخدام وحفظ التقرير PDF في Drive
+ * هذه الدالة تجمع بين logInsuranceUsage و saveReportToDrive
+ */
+function logUsageAndSavePDF(params) {
+  try {
+    // 1. تسجيل الاستخدام في الشيت
+    const logResult = logInsuranceUsage({
+      userEmail: params.userEmail,
+      userName: params.userName,
+      doctorName: params.doctorName,
+      caseType: params.caseType || 'مراجعة تأمين',
+      filesCount: params.filesCount || 1,
+      insuranceRating: params.insuranceRating,
+      serviceRating: params.serviceRating,
+      notes: params.notes || ''
+    });
+    
+    if (!logResult.success) {
+      return { success: false, error: 'فشل تسجيل الاستخدام: ' + logResult.error };
+    }
+    
+    // 2. حفظ PDF في Drive
+    let reportLink = '';
+    if (params.pdfBase64 && params.fileName) {
+      try {
+        const pdfBlob = Utilities.newBlob(
+          Utilities.base64Decode(params.pdfBase64),
+          'application/pdf',
+          params.fileName
+        );
+        
+        // الحصول على مجلد الطبيب أو إنشاؤه
+        const folder = getOrCreateDoctorFolder(params.doctorName);
+        const file = folder.createFile(pdfBlob);
+        reportLink = file.getUrl();
+        
+        // تحديث رابط التقرير في سجل الاستخدام
+        updateLastLogReportLink(reportLink);
+        
+      } catch(pdfError) {
+        Logger.log('خطأ في حفظ PDF: ' + pdfError);
+        // نستمر حتى لو فشل حفظ PDF
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: 'تم التسجيل والحفظ بنجاح',
+      reportLink: reportLink
+    };
+    
+  } catch(error) {
+    Logger.log('خطأ في logUsageAndSavePDF: ' + error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+/**
+ * الحصول على مجلد الطبيب أو إنشاؤه
+ */
+function getOrCreateDoctorFolder(doctorName) {
+  const parentFolder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const folders = parentFolder.getFoldersByName(doctorName);
+  
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  
+  return parentFolder.createFolder(doctorName);
+}
+
+/**
+ * تحديث رابط التقرير في آخر سجل
+ */
+function updateLastLogReportLink(reportLink) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const logSheet = ss.getSheetByName('InsuranceUsageLog');
+    if (!logSheet) return;
+    
+    const lastRow = logSheet.getLastRow();
+    if (lastRow > 1) {
+      logSheet.getRange(lastRow, 10).setValue(reportLink); // عمود reportLink
+    }
+  } catch(e) {
+    Logger.log('خطأ في تحديث رابط التقرير: ' + e);
   }
 }
 
