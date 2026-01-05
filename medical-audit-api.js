@@ -157,7 +157,7 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
       try {
         console.log(`Gemini API attempt ${attempt}/3...`);
         result = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-preview-05-20',
+          model: 'gemini-2.5-pro',
           contents: contents,
         });
         break; // Success, exit retry loop
