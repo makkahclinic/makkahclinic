@@ -1,9 +1,8 @@
 import OpenAI from 'openai';
 
-// Initialize OpenAI with Replit AI Integrations
+// Initialize OpenAI with direct API key (stable for heavy medical reports)
 const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+  apiKey: process.env.OPENAI_API_KEY
 });
 
 const SINGLE_CASE_PROMPT = `أنت خبير طبي متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.

@@ -1,0 +1,222 @@
+ذه خطة تنفيذ كاملة + كود جاهز لاستبدال Gemini بـ OpenAI نهائيًا وتشغيل نظام التأمين للتسليم بدون صداع.
+
+اقرأها مرة وحدة، ثم نفّذ بالترتيب حرفيًا.
+
+🎯 الفكرة العامة (الخلاصة الذهنية)
+
+❌ حذف Gemini بالكامل من backend
+
+✅ استخدام OpenAI فقط
+
+✅ الاعتماد على OPENAI_API_KEY
+
+✅ نموذج ثابت: gpt-4.1
+
+✅ نفس الـ prompt الطبي
+
+✅ نفس الواجهة بدون أي تغيير
+
+✅ حل نهائي لمشاكل 404 / 429 / limits
+
+🧠 الهيكل النهائي بعد الإصلاح
+Frontend (HTML/JS)
+        |
+        v
+Backend API (/api/medical-audit)
+        |
+        v
+OpenAI (gpt-4.1)
+
+
+❌ لا Gemini
+❌ لا SDK مزدوج
+❌ لا Base URL
+❌ لا apiVersion
+
+✅ الخطوة 1: تأكيد الـ Secrets (انتهت)
+
+أنت سويت:
+
+OPENAI_API_KEY = sk-xxxxxxxx
+
+
+✔️ ممتاز
+✔️ لا نلمس الباقي الآن
+
+✅ الخطوة 2: تنظيف Gemini (إجباري)
+افتح الملف:
+medical-audit-api.js
+
+❌ احذف / علّق أي شيء فيه:
+GoogleGenerativeAI
+@generative-ai
+gemini
+GEMINI_API_KEY
+AI_INTEGRATIONS_GEMINI
+
+
+لو تركت سطر واحد = خطر ❌
+
+✅ الخطوة 3: تثبيت OpenAI SDK (لو غير مثبت)
+
+في Replit Shell:
+
+npm install openai
+
+✅ الخطوة 4: كود OpenAI النهائي (انسخه كما هو)
+🔹 أعلى الملف
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+🔹 دالة التحليل (البديل الكامل لـ Gemini)
+
+هذه أهم قطعة – انسخها كما هي
+
+export async function analyzeMedicalCase(files, lang = "ar") {
+  try {
+    const imageFiles = files.filter(f => !f.isExcel);
+    const excelFiles = files.filter(f => f.isExcel);
+
+    let excelText = "";
+    if (excelFiles.length > 0) {
+      excelText = excelFiles.map(f =>
+        `ملف Excel: ${f.name}\n${f.textContent || ""}`
+      ).join("\n\n");
+    }
+
+    const prompt = `
+أنت خبير طبي وتأميني متخصص في مراجعة جودة الرعاية الصحية ومطابقة البروتوكولات الطبية.
+
+المطلوب:
+- تحليل الملفات الطبية
+- مراجعة الالتزام بالبروتوكولات
+- كشف الأخطاء والمخالفات
+- إعطاء توصيات واضحة
+- إخراج التقرير بصيغة HTML احترافية
+
+في نهاية التقرير أضف:
+<div id="ai-ratings" style="display:none;">
+  <span data-insurance-rating="X"></span>
+  <span data-service-rating="Y"></span>
+</div>
+`;
+
+    const response = await openai.responses.create({
+      model: "gpt-4.1",
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+
+            ...imageFiles.map(f => ({
+              type: "input_image",
+              image_base64: f.data.replace(/^data:[^;]+;base64,/, "")
+            })),
+
+            { type: "text", text: excelText }
+          ]
+        }
+      ]
+    });
+
+    const html = response.output_text;
+
+    if (!html) {
+      throw new Error("لم يتم الحصول على تقرير من الذكاء الاصطناعي");
+    }
+
+    return {
+      success: true,
+      html
+    };
+
+  } catch (err) {
+    console.error("OpenAI medical audit error:", err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+}
+
+✅ الخطوة 5: API Route (لو عندك Express)
+
+تأكد أن endpoint كذا:
+
+app.post("/api/medical-audit", async (req, res) => {
+  const { files, lang } = req.body;
+
+  if (!files || files.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: "لم يتم رفع أي ملفات"
+    });
+  }
+
+  const result = await analyzeMedicalCase(files, lang);
+  res.json(result);
+});
+
+🔄 الخطوة 6: Restart Replit
+
+إجباري:
+
+Stop
+
+Run
+
+🧪 الخطوة 7: اختبار التسليم
+
+افتح صفحة التأمين
+
+سجل دخول
+
+ارفع:
+
+ملف Excel (حتى بسيط)
+
+اضغط:
+مراجعة الحالة
+
+المتوقع:
+
+✅ لا 404
+
+✅ لا 429
+
+✅ لا auth error
+
+✅ تقرير HTML يظهر
+
+✅ التقييمات تُقرأ
+
+✅ الحفظ يعمل
+
+🧹 ماذا نفعل بعد التسليم؟ (ليس الآن)
+
+حذف Gemini Secrets
+
+توحيد naming في كل مشاريعك
+
+إضافة Rate Guard
+
+Logging احترافي
+
+🏁 الخلاصة النهائية
+عنصر	الحالة
+Gemini	❌ انتهى
+OpenAI	✅ أساسي
+المفتاح	✅ OPENAI_API_KEY
+النموذج	✅ gpt-4.1
+الواجهة	✅ بدون تغيير
+جاهز للتسليم	🎉
+🚀 الآن نفّذ
+
+طبّق الخطوات 3 → 7
+وبعدها قلّي:
+
+اشتغل / أو طلع لي هذا الخطأ
