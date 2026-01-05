@@ -11,6 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -649,6 +650,16 @@
             <i class="fas fa-chart-bar"></i>
             إحصائيات الأطباء
           </h3>
+          
+          <!-- Bar Chart for Doctor Performance -->
+          <div class="chart-container" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+            <h4 style="color: #c9a962; margin: 0 0 15px 0; font-size: 1.1rem; text-align: center;">
+              <i class="fas fa-chart-column" style="margin-left: 8px;"></i>
+              مخطط أداء الأطباء
+            </h4>
+            <canvas id="doctorsChart" style="max-height: 300px;"></canvas>
+          </div>
+          
           <table class="doctors-table">
             <thead>
               <tr>
@@ -999,10 +1010,13 @@ async function loadDoctorStats() {
   }
 }
 
+let doctorsChartInstance = null;
+
 function renderDoctorStats(doctors) {
   const tbody = document.getElementById('doctorsTableBody');
   tbody.innerHTML = '';
   
+  // Render table
   doctors.forEach(doc => {
     const avgRating = parseFloat(doc.avgOverallRating) || 0;
     let badgeClass = 'rating-needs';
@@ -1020,6 +1034,129 @@ function renderDoctorStats(doctors) {
       <td>${doc.lastCaseDate || '-'}</td>
     `;
     tbody.appendChild(row);
+  });
+  
+  // Render Bar Chart
+  renderDoctorsChart(doctors);
+}
+
+function renderDoctorsChart(doctors) {
+  const ctx = document.getElementById('doctorsChart');
+  if (!ctx) return;
+  
+  // Destroy existing chart if any
+  if (doctorsChartInstance) {
+    doctorsChartInstance.destroy();
+  }
+  
+  // Prepare data
+  const labels = doctors.map(d => d.doctorName);
+  const casesData = doctors.map(d => parseInt(d.totalCases) || 0);
+  const insuranceData = doctors.map(d => parseFloat(d.avgInsuranceRating) || 0);
+  const serviceData = doctors.map(d => parseFloat(d.avgServiceRating) || 0);
+  
+  doctorsChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'عدد الحالات',
+          data: casesData,
+          backgroundColor: 'rgba(201, 169, 98, 0.8)',
+          borderColor: '#c9a962',
+          borderWidth: 2,
+          borderRadius: 6,
+          yAxisID: 'y1'
+        },
+        {
+          label: 'معايير التأمين',
+          data: insuranceData,
+          backgroundColor: 'rgba(34, 197, 94, 0.8)',
+          borderColor: '#22c55e',
+          borderWidth: 2,
+          borderRadius: 6,
+          yAxisID: 'y'
+        },
+        {
+          label: 'جودة الخدمات',
+          data: serviceData,
+          backgroundColor: 'rgba(59, 130, 246, 0.8)',
+          borderColor: '#3b82f6',
+          borderWidth: 2,
+          borderRadius: 6,
+          yAxisID: 'y'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          rtl: true,
+          labels: {
+            color: '#e2e8f0',
+            font: { family: 'Tajawal', size: 12 },
+            padding: 15
+          }
+        },
+        tooltip: {
+          rtl: true,
+          backgroundColor: 'rgba(30, 58, 95, 0.95)',
+          titleFont: { family: 'Tajawal', size: 14 },
+          bodyFont: { family: 'Tajawal', size: 12 },
+          padding: 12,
+          cornerRadius: 8
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#94a3b8',
+            font: { family: 'Tajawal', size: 11 }
+          },
+          grid: { color: 'rgba(148, 163, 184, 0.1)' }
+        },
+        y: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          max: 10,
+          title: {
+            display: true,
+            text: 'التقييم (من 10)',
+            color: '#94a3b8',
+            font: { family: 'Tajawal', size: 12 }
+          },
+          ticks: {
+            color: '#94a3b8',
+            font: { family: 'Tajawal' }
+          },
+          grid: { color: 'rgba(148, 163, 184, 0.1)' }
+        },
+        y1: {
+          type: 'linear',
+          position: 'left',
+          title: {
+            display: true,
+            text: 'عدد الحالات',
+            color: '#94a3b8',
+            font: { family: 'Tajawal', size: 12 }
+          },
+          ticks: {
+            color: '#94a3b8',
+            font: { family: 'Tajawal' }
+          },
+          grid: { display: false }
+        }
+      }
+    }
   });
 }
 
