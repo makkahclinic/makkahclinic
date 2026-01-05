@@ -602,43 +602,6 @@
             تقرير مراجعة جودة الرعاية الطبية
           </h3>
           
-          <div class="rating-section" id="ratingSection">
-            <h4><i class="fas fa-star"></i> تقييم الحالة</h4>
-            <div class="rating-grid">
-              <div class="rating-item">
-                <label>الالتزام بمعايير التأمين</label>
-                <div class="rating-stars" id="insuranceRating">
-                  <i class="far fa-star" data-value="1"></i>
-                  <i class="far fa-star" data-value="2"></i>
-                  <i class="far fa-star" data-value="3"></i>
-                  <i class="far fa-star" data-value="4"></i>
-                  <i class="far fa-star" data-value="5"></i>
-                  <i class="far fa-star" data-value="6"></i>
-                  <i class="far fa-star" data-value="7"></i>
-                  <i class="far fa-star" data-value="8"></i>
-                  <i class="far fa-star" data-value="9"></i>
-                  <i class="far fa-star" data-value="10"></i>
-                </div>
-                <div class="rating-value" id="insuranceValue">0 / 10</div>
-              </div>
-              <div class="rating-item">
-                <label>جودة الخدمات الطبية المقدمة</label>
-                <div class="rating-stars" id="serviceRating">
-                  <i class="far fa-star" data-value="1"></i>
-                  <i class="far fa-star" data-value="2"></i>
-                  <i class="far fa-star" data-value="3"></i>
-                  <i class="far fa-star" data-value="4"></i>
-                  <i class="far fa-star" data-value="5"></i>
-                  <i class="far fa-star" data-value="6"></i>
-                  <i class="far fa-star" data-value="7"></i>
-                  <i class="far fa-star" data-value="8"></i>
-                  <i class="far fa-star" data-value="9"></i>
-                  <i class="far fa-star" data-value="10"></i>
-                </div>
-                <div class="rating-value" id="serviceValue">0 / 10</div>
-              </div>
-            </div>
-          </div>
           
           <div class="report-content" id="reportContent"></div>
           <div class="report-actions">
@@ -967,101 +930,35 @@ function renderDoctorStats(doctors) {
   });
 }
 
-// Rating Stars Setup
-function setupRatingStars() {
-  const insuranceStars = document.querySelectorAll('#insuranceRating i');
-  const serviceStars = document.querySelectorAll('#serviceRating i');
-  
-  insuranceStars.forEach(star => {
-    star.addEventListener('click', () => {
-      insuranceRatingValue = parseInt(star.dataset.value);
-      updateStars(insuranceStars, insuranceRatingValue);
-      document.getElementById('insuranceValue').textContent = `${insuranceRatingValue} / 10`;
-    });
-  });
-  
-  serviceStars.forEach(star => {
-    star.addEventListener('click', () => {
-      serviceRatingValue = parseInt(star.dataset.value);
-      updateStars(serviceStars, serviceRatingValue);
-      document.getElementById('serviceValue').textContent = `${serviceRatingValue} / 10`;
-    });
-  });
-}
-
-function updateStars(stars, value) {
-  stars.forEach(star => {
-    const starValue = parseInt(star.dataset.value);
-    if (starValue <= value) {
-      star.classList.remove('far');
-      star.classList.add('fas', 'active');
-    } else {
-      star.classList.remove('fas', 'active');
-      star.classList.add('far');
-    }
-  });
-}
 
 function extractAndApplyAIRatings(html) {
   try {
-    // Create temp element to parse HTML
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     
-    // Look for AI ratings in hidden div
     const ratingsDiv = tempDiv.querySelector('#ai-ratings');
     if (ratingsDiv) {
       const insuranceSpan = ratingsDiv.querySelector('[data-insurance-rating]');
       const serviceSpan = ratingsDiv.querySelector('[data-service-rating]');
       
       if (insuranceSpan) {
-        const rating = parseInt(insuranceSpan.getAttribute('data-insurance-rating')) || 0;
-        if (rating >= 1 && rating <= 10) {
-          insuranceRatingValue = rating;
-          updateStars(document.querySelectorAll('#insuranceRating i'), rating);
-          document.getElementById('insuranceValue').textContent = `${rating} / 10`;
-        }
+        insuranceRatingValue = parseInt(insuranceSpan.getAttribute('data-insurance-rating')) || 0;
       }
-      
       if (serviceSpan) {
-        const rating = parseInt(serviceSpan.getAttribute('data-service-rating')) || 0;
-        if (rating >= 1 && rating <= 10) {
-          serviceRatingValue = rating;
-          updateStars(document.querySelectorAll('#serviceRating i'), rating);
-          document.getElementById('serviceValue').textContent = `${rating} / 10`;
-        }
+        serviceRatingValue = parseInt(serviceSpan.getAttribute('data-service-rating')) || 0;
       }
-      
-      console.log('AI Ratings applied:', { insurance: insuranceRatingValue, service: serviceRatingValue });
     } else {
-      // Fallback: try to extract from text patterns
       const insuranceMatch = html.match(/data-insurance-rating="(\d+)"/);
       const serviceMatch = html.match(/data-service-rating="(\d+)"/);
-      
-      if (insuranceMatch) {
-        const rating = parseInt(insuranceMatch[1]);
-        if (rating >= 1 && rating <= 10) {
-          insuranceRatingValue = rating;
-          updateStars(document.querySelectorAll('#insuranceRating i'), rating);
-          document.getElementById('insuranceValue').textContent = `${rating} / 10`;
-        }
-      }
-      
-      if (serviceMatch) {
-        const rating = parseInt(serviceMatch[1]);
-        if (rating >= 1 && rating <= 10) {
-          serviceRatingValue = rating;
-          updateStars(document.querySelectorAll('#serviceRating i'), rating);
-          document.getElementById('serviceValue').textContent = `${rating} / 10`;
-        }
-      }
+      if (insuranceMatch) insuranceRatingValue = parseInt(insuranceMatch[1]) || 0;
+      if (serviceMatch) serviceRatingValue = parseInt(serviceMatch[1]) || 0;
     }
+    console.log('AI Ratings extracted:', { insurance: insuranceRatingValue, service: serviceRatingValue });
   } catch(e) {
     console.error('Error extracting AI ratings:', e);
   }
 }
 
-setupRatingStars();
 
 // File Handling
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -1311,10 +1208,6 @@ analyzeBtn.addEventListener('click', async () => {
 async function saveAndLog() {
   const doctorName = doctorNameInput.value.trim();
   
-  if (insuranceRatingValue === 0 || serviceRatingValue === 0) {
-    alert('يرجى تقييم الحالة قبل الحفظ');
-    return;
-  }
   
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
