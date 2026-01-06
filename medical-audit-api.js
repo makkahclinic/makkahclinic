@@ -440,43 +440,134 @@ export async function analyzeMedicalCase(files, lang = 'ar') {
 }
 
 function wrapWithStyles(html, isMultiCase = false) {
-  const multiCaseStyles = isMultiCase ? `
-    .status-accepted { background: #dcfce7 !important; }
-    .status-rejected { background: #fee2e2 !important; }
-    .status-needs-correction, .status-needs-fix { background: #fef9c3 !important; }
-  ` : '';
-  
   return `
     <style>
-      .audit-body { font-family: 'Tajawal', sans-serif; direction: rtl; line-height: 1.8; }
-      .audit-body section { margin-bottom: 1.5rem; }
-      .audit-body h2 { color: #1e3a5f; font-size: 1.2rem; border-bottom: 2px solid #c9a962; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-      .audit-body h3 { color: #1e3a5f; font-size: 1rem; margin: 0 0 0.5rem; }
-      .audit-body p { color: #334155; margin-bottom: 1rem; }
-      .audit-body ul { list-style: none; padding: 0; margin: 0; }
-      .audit-body li { padding: 0.6rem 1rem; margin: 0.4rem 0; border-radius: 6px; background: #f8fafc; border-right: 3px solid #cbd5e1; }
+      .audit-body { 
+        font-family: 'Tajawal', sans-serif; 
+        direction: rtl; 
+        line-height: 1.9; 
+        color: #1e293b;
+      }
+      .audit-body section { 
+        margin-bottom: 2rem; 
+        background: #fff;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      }
+      .audit-body h2 { 
+        color: #1e3a5f; 
+        font-size: 1.4rem; 
+        border-bottom: 3px solid #c9a962; 
+        padding-bottom: 0.75rem; 
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .audit-body h3 { 
+        color: #1e3a5f; 
+        font-size: 1.15rem; 
+        margin: 1.25rem 0 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .audit-body h4 {
+        color: #334155;
+        font-size: 1rem;
+        margin: 0.75rem 0 0.5rem;
+      }
+      .audit-body p { color: #475569; margin-bottom: 1rem; font-size: 1rem; }
+      .audit-body ul { list-style: none; padding: 0; margin: 0.5rem 0; }
+      .audit-body li { 
+        padding: 1rem 1.25rem; 
+        margin: 0.5rem 0; 
+        border-radius: 10px; 
+        background: #f8fafc; 
+        border-right: 4px solid #cbd5e1;
+        line-height: 1.8;
+      }
+      .audit-body li strong { color: #1e3a5f; font-size: 1.05rem; }
+      .audit-body li em { color: #64748b; }
       
-      .status-box { padding: 1rem; border-radius: 10px; margin: 1rem 0; }
-      .status-box.accepted { background: #dcfce7; border: 2px solid #22c55e; }
-      .status-box.accepted h3 { color: #15803d; }
-      .status-box.accepted li { background: #bbf7d0; border-right-color: #22c55e; }
+      .status-box { 
+        padding: 1.25rem 1.5rem; 
+        border-radius: 12px; 
+        margin: 1.25rem 0;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      }
+      .status-box h3, .status-box h4 { margin-top: 0; }
       
-      .status-box.rejected { background: #fee2e2; border: 2px solid #ef4444; }
-      .status-box.rejected h3 { color: #dc2626; }
-      .status-box.rejected li { background: #fecaca; border-right-color: #ef4444; }
+      .status-box.accepted { 
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); 
+        border: 2px solid #22c55e; 
+      }
+      .status-box.accepted h3, .status-box.accepted h4 { color: #15803d; }
+      .status-box.accepted li { background: rgba(255,255,255,0.7); border-right-color: #22c55e; }
       
-      .status-box.warning { background: #fef9c3; border: 2px solid #eab308; }
-      .status-box.warning h3 { color: #a16207; }
-      .status-box.warning li { background: #fef08a; border-right-color: #eab308; }
+      .status-box.rejected { 
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
+        border: 2px solid #ef4444; 
+      }
+      .status-box.rejected h3, .status-box.rejected h4 { color: #dc2626; }
+      .status-box.rejected li { background: rgba(255,255,255,0.7); border-right-color: #ef4444; }
       
-      .audit-body table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
-      .audit-body th, .audit-body td { padding: 0.6rem; text-align: right; border: 1px solid #e2e8f0; }
-      .audit-body th { background: #1e3a5f; color: white; }
+      .status-box.warning { 
+        background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%); 
+        border: 2px solid #eab308; 
+      }
+      .status-box.warning h3, .status-box.warning h4 { color: #a16207; }
+      .status-box.warning li { background: rgba(255,255,255,0.7); border-right-color: #eab308; }
+      
+      .audit-body table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin: 1rem 0; 
+        font-size: 0.95rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .audit-body th { 
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%); 
+        color: white; 
+        padding: 1rem 0.75rem;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+      .audit-body td { 
+        padding: 0.85rem 0.75rem; 
+        text-align: right; 
+        border: 1px solid #e2e8f0;
+        vertical-align: top;
+      }
       .audit-body tr:nth-child(even) { background: #f8fafc; }
+      .audit-body tr:hover { background: #f1f5f9; }
       
-      .error-box { background: #fee2e2; border: 2px solid #ef4444; padding: 1.5rem; border-radius: 12px; text-align: center; }
+      .case-detail {
+        background: #fafafa !important;
+        border: 3px solid #c9a962 !important;
+        margin: 2rem 0 !important;
+      }
+      .portfolio-summary {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%) !important;
+      }
+      
+      .error-box { 
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
+        border: 2px solid #ef4444; 
+        padding: 2rem; 
+        border-radius: 12px; 
+        text-align: center; 
+      }
       .error-box h3 { color: #dc2626; margin: 0 0 1rem; }
-      ${multiCaseStyles}
+      
+      @media print {
+        .audit-body section { box-shadow: none; border: 1px solid #e2e8f0; }
+        .status-box { box-shadow: none; }
+        .audit-body table { box-shadow: none; }
+      }
     </style>
     <div class="audit-body">
       ${html}
