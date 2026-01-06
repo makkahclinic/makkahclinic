@@ -770,18 +770,34 @@ export async function analyzeMedicalCase(files, lang = 'ar', doctorName = '') {
 
     let acceptedCount = 0, rejectedCount = 0, warningCount = 0;
 
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i];
-      console.log(`🔄 Processing batch ${i + 1}/${batches.length} (${batch.length} cases)`);
+    // 🚀 معالجة متوازية - 5 دفعات في نفس الوقت
+    const PARALLEL_LIMIT = 5;
+    const pLimit = (await import('p-limit')).default;
+    const limit = pLimit(PARALLEL_LIMIT);
+    
+    console.log(`🚀 Processing ${batches.length} batches in PARALLEL (${PARALLEL_LIMIT} at a time)`);
+    
+    const batchPromises = batches.map((batch, i) => 
+      limit(async () => {
+        console.log(`🔄 Processing batch ${i + 1}/${batches.length} (${batch.length} cases)`);
+        const batchPrompt = createBatchPrompt(headers, batch, i + 1, batches.length, doctorName);
+        const batchHtml = await callGemini(batchPrompt, i === 0 ? imageFiles : []);
+        console.log(`✅ Batch ${i + 1} completed`);
+        return { index: i, html: batchHtml };
+      })
+    );
+    
+    const batchResults = await Promise.all(batchPromises);
+    
+    // ترتيب النتائج حسب الفهرس
+    batchResults.sort((a, b) => a.index - b.index);
+    
+    for (const result of batchResults) {
+      combinedHtml += `\n<!-- === الدفعة ${result.index + 1} === -->\n${result.html}\n`;
       
-      const batchPrompt = createBatchPrompt(headers, batch, i + 1, batches.length, doctorName);
-      const batchHtml = await callGemini(batchPrompt, i === 0 ? imageFiles : []);
-      
-      combinedHtml += `\n<!-- === الدفعة ${i + 1} === -->\n${batchHtml}\n`;
-
-      const acceptedMatches = (batchHtml.match(/status-box accepted/g) || []).length;
-      const rejectedMatches = (batchHtml.match(/status-box rejected/g) || []).length;
-      const warningMatches = (batchHtml.match(/status-box warning/g) || []).length;
+      const acceptedMatches = (result.html.match(/status-box accepted/g) || []).length;
+      const rejectedMatches = (result.html.match(/status-box rejected/g) || []).length;
+      const warningMatches = (result.html.match(/status-box warning/g) || []).length;
       
       acceptedCount += acceptedMatches;
       rejectedCount += rejectedMatches;
