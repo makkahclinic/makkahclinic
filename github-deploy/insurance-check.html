@@ -551,17 +551,35 @@
             <input type="hidden" id="doctorName" value="">
           </div>
           
-          <label class="uploader" for="fileInput" id="dropZone" style="max-width:600px;margin:0 auto;padding:4rem 2rem;">
-            <i class="fas fa-cloud-upload-alt" style="font-size:4rem;margin-bottom:1rem;"></i>
-            <h3 style="font-size:1.4rem;margin-bottom:0.75rem;">اسحب وأفلت الملفات هنا</h3>
-            <p style="margin-bottom:1rem;">أو انقر للاختيار من جهازك</p>
-            <input id="fileInput" type="file" multiple accept="image/*,application/pdf,.xlsx,.xls,.csv" />
-            <div class="file-types" style="justify-content:center;">
-              <span class="file-type"><i class="fas fa-image"></i> صور/وصفات</span>
-              <span class="file-type"><i class="fas fa-file-pdf"></i> PDF</span>
-              <span class="file-type"><i class="fas fa-file-excel"></i> Excel</span>
+          <div style="display:flex;gap:20px;max-width:900px;margin:0 auto;flex-wrap:wrap;">
+            <div style="flex:1;min-width:280px;">
+              <label class="uploader" for="fileInput" id="dropZone" style="padding:2.5rem 1.5rem;height:100%;display:flex;flex-direction:column;justify-content:center;">
+                <i class="fas fa-cloud-upload-alt" style="font-size:3rem;margin-bottom:0.75rem;"></i>
+                <h3 style="font-size:1.2rem;margin-bottom:0.5rem;">رفع ملفات</h3>
+                <p style="margin-bottom:0.75rem;font-size:0.9rem;">اسحب أو انقر للاختيار</p>
+                <input id="fileInput" type="file" multiple accept="image/*,application/pdf,.xlsx,.xls,.csv" />
+                <div class="file-types" style="justify-content:center;gap:0.5rem;">
+                  <span class="file-type" style="padding:0.3rem 0.6rem;font-size:0.75rem;"><i class="fas fa-image"></i> صور</span>
+                  <span class="file-type" style="padding:0.3rem 0.6rem;font-size:0.75rem;"><i class="fas fa-file-excel"></i> Excel</span>
+                </div>
+              </label>
             </div>
-          </label>
+            
+            <div style="flex:1;min-width:280px;">
+              <div style="border:2px dashed var(--gold);border-radius:16px;padding:1.5rem;background:rgba(201,169,98,0.05);height:100%;">
+                <h3 style="color:var(--gold);margin:0 0 0.75rem;font-size:1.1rem;text-align:center;">
+                  <i class="fas fa-keyboard"></i> أو اكتب الحالة يدوياً
+                </h3>
+                <textarea id="manualCaseInput" placeholder="اكتب بيانات الحالة هنا...
+مثال:
+التشخيص: التهاب الحلق J06.9
+الأدوية: Augmentin 1g, Panadol 500mg
+التحاليل: CBC, CRP
+الإجراءات: كشف عيادة" 
+                  style="width:100%;height:140px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-family:inherit;font-size:0.95rem;resize:none;"></textarea>
+              </div>
+            </div>
+          </div>
 
           <div id="filesGrid" class="files-grid"></div>
         </div>
@@ -1305,8 +1323,11 @@ function renderFiles() {
     });
   });
   
-  analyzeBtn.disabled = filesState.length === 0;
+  const manualText = document.getElementById('manualCaseInput')?.value?.trim() || '';
+  analyzeBtn.disabled = filesState.length === 0 && manualText.length === 0;
 }
+
+document.getElementById('manualCaseInput')?.addEventListener('input', renderFiles);
 
 function getHijriDate() {
   try {
@@ -1320,7 +1341,9 @@ function getGregorianDate() {
 }
 
 analyzeBtn.addEventListener('click', async () => {
-  if (filesState.length === 0) return;
+  const manualText = document.getElementById('manualCaseInput')?.value?.trim() || '';
+  
+  if (filesState.length === 0 && manualText.length === 0) return;
   
   const doctorName = doctorNameInput.value.trim();
   if (!doctorName) {
@@ -1340,12 +1363,23 @@ analyzeBtn.addEventListener('click', async () => {
   insuranceRatingValue = 0;
   serviceRatingValue = 0;
 
+  // إضافة النص المكتوب يدوياً كملف نصي
+  let filesToSend = [...filesState];
+  if (manualText.length > 0) {
+    filesToSend.push({
+      name: 'manual-input.txt',
+      isExcel: true,
+      textContent: manualText,
+      data: manualText
+    });
+  }
+
   try {
     const resp = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        files: filesState, 
+        files: filesToSend, 
         lang: 'ar',
         doctorName: doctorName
       })
