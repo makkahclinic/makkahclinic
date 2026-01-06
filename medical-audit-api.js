@@ -1012,7 +1012,7 @@ function wrapWithStyles(html, isMultiCase = false) {
 export function registerMedicalAuditRoutes(app) {
   app.post('/api/medical-audit', async (req, res) => {
     try {
-      const { files, lang } = req.body;
+      const { files, lang, doctorName } = req.body;
       
       if (!files || files.length === 0) {
         return res.status(400).json({ 
@@ -1021,7 +1021,8 @@ export function registerMedicalAuditRoutes(app) {
         });
       }
 
-      const result = await analyzeMedicalCase(files, lang);
+      console.log(`📋 Analyzing for doctor: ${doctorName || 'Not specified'}`);
+      const result = await analyzeMedicalCase(files, lang, doctorName);
       res.json(result);
       
     } catch (error) {
