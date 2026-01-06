@@ -277,12 +277,23 @@ const MULTI_CASE_PROMPT = `# ⚠️ تعليمات صارمة - اقرأها ب�
 </ul>
 </div>
 
-<!-- 2. التشخيص والترميز ICD-10 -->
-<h3 style="color:#1e3a5f;border-bottom:2px solid #c9a962;padding-bottom:8px;">🏷️ تقييم التشخيص والترميز (ICD-10)</h3>
+<!-- 2. التشخيص والترميز ICD-10 - قسم مهم جداً! -->
+<h3 style="color:#1e3a5f;border-bottom:2px solid #c9a962;padding-bottom:8px;">🏷️ تقييم التشخيص والترميز (ICD-10) - إلزامي!</h3>
+<div style="background:#fff3cd;padding:10px;border-radius:8px;margin-bottom:10px;border-right:4px solid #ffc107;">
+<strong>⚠️ تنبيه:</strong> التكويد الصحيح ضروري لقبول التأمين - أي خطأ = رفض المطالبة
+</div>
 <table style="width:100%;border-collapse:collapse;margin:10px 0;">
-<tr style="background:#1e3a5f;color:#fff;"><th style="padding:12px;">التشخيص</th><th>الكود المستخدم</th><th>التقييم</th><th>الحالة</th></tr>
-<tr><td style="padding:10px;border:1px solid #ddd;">[التشخيص]</td><td style="border:1px solid #ddd;">[ICD-10]</td><td style="border:1px solid #ddd;">[صحيح/خاطئ - إن خاطئ: الكود الصحيح هو X.XX لأن...]</td><td style="border:1px solid #ddd;text-align:center;">✅/❌</td></tr>
+<tr style="background:#1e3a5f;color:#fff;"><th style="padding:12px;">التشخيص</th><th>الكود المستخدم</th><th>صحة الكود</th><th>الكود الصحيح (إن اختلف)</th><th>التأثير التأميني</th></tr>
+<tr><td style="padding:10px;border:1px solid #ddd;">[التشخيص من البيانات]</td><td style="border:1px solid #ddd;font-family:monospace;font-weight:bold;">[الكود المستخدم]</td><td style="border:1px solid #ddd;text-align:center;">✅ صحيح / ❌ خاطئ / ⚠️ غير محدد</td><td style="border:1px solid #ddd;font-family:monospace;">[الكود الصحيح إن كان مختلفاً]</td><td style="border:1px solid #ddd;">[مقبول تأمينياً / يحتاج تصحيح / سيُرفض]</td></tr>
 </table>
+<div class="status-box warning" style="margin:10px 0;">
+<h4>📋 ملاحظات التكويد:</h4>
+<ul>
+<li><strong>مستوى الدقة:</strong> [هل الكود محدد بدقة (4-5 أحرف) أم عام (3 أحرف)؟]</li>
+<li><strong>التوافق مع الإجراءات:</strong> [هل التشخيص يبرر جميع الإجراءات المطلوبة؟]</li>
+<li><strong>التشخيصات المفقودة:</strong> [هل هناك تشخيصات يجب إضافتها لتبرير الإجراءات؟]</li>
+</ul>
+</div>
 
 <!-- 3. الأدوية الموصوفة - جميعها -->
 <h3 style="color:#1e3a5f;border-bottom:2px solid #c9a962;padding-bottom:8px;">💊 الأدوية الموصوفة (جميعها)</h3>
@@ -374,9 +385,55 @@ const MULTI_CASE_PROMPT = `# ⚠️ تعليمات صارمة - اقرأها ب�
 </table>
 </section>
 
+<!-- تقييم الطبيب الشامل - قسم مهم! -->
+<section class="doctor-evaluation" style="margin-top:30px;border:3px solid #1e3a5f;border-radius:12px;overflow:hidden;">
+<h2 style="background:#1e3a5f;color:#c9a962;padding:15px;margin:0;text-align:center;font-size:1.4rem;">👨‍⚕️ تقييم أداء الطبيب المعالج</h2>
+
+<div style="padding:20px;">
+<!-- جدول التقييم التفصيلي -->
+<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+<tr style="background:#e8f4fd;"><th style="padding:12px;text-align:right;width:40%;border:1px solid #ddd;">معيار التقييم</th><th style="width:15%;border:1px solid #ddd;">الدرجة</th><th style="border:1px solid #ddd;">الملاحظات</th></tr>
+<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">🏷️ دقة التكويد (ICD-10)</td><td style="border:1px solid #ddd;text-align:center;font-size:1.2rem;font-weight:bold;">[X]/10</td><td style="border:1px solid #ddd;font-size:0.9rem;">[هل الأكواد صحيحة ودقيقة؟ نسبة الأكواد الصحيحة]</td></tr>
+<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">📋 التوثيق الطبي</td><td style="border:1px solid #ddd;text-align:center;font-size:1.2rem;font-weight:bold;">[X]/10</td><td style="border:1px solid #ddd;font-size:0.9rem;">[هل التشخيصات موثقة بالأدلة؟ هل المبررات واضحة؟]</td></tr>
+<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">💊 ملاءمة الوصفات</td><td style="border:1px solid #ddd;text-align:center;font-size:1.2rem;font-weight:bold;">[X]/10</td><td style="border:1px solid #ddd;font-size:0.9rem;">[هل الأدوية متوافقة مع التشخيص؟ جرعات صحيحة؟]</td></tr>
+<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">🔬 طلب التحاليل</td><td style="border:1px solid #ddd;text-align:center;font-size:1.2rem;font-weight:bold;">[X]/10</td><td style="border:1px solid #ddd;font-size:0.9rem;">[هل التحاليل مبررة؟ ناقصة؟ زائدة؟]</td></tr>
+<tr><td style="padding:10px;border:1px solid #ddd;font-weight:bold;">📑 الالتزام بمعايير التأمين</td><td style="border:1px solid #ddd;text-align:center;font-size:1.2rem;font-weight:bold;">[X]/10</td><td style="border:1px solid #ddd;font-size:0.9rem;">[هل الحالات ستُقبل تأمينياً؟ نسبة المتوقع رفضها]</td></tr>
+<tr style="background:#f8f9fa;"><td style="padding:12px;border:2px solid #1e3a5f;font-weight:bold;font-size:1.1rem;">📊 المعدل العام</td><td style="border:2px solid #1e3a5f;text-align:center;font-size:1.5rem;font-weight:bold;color:#1e3a5f;">[X]/10</td><td style="border:2px solid #1e3a5f;font-weight:bold;">[ممتاز/جيد جداً/جيد/مقبول/ضعيف]</td></tr>
+</table>
+
+<!-- نقاط القوة والضعف -->
+<div style="display:flex;gap:15px;flex-wrap:wrap;">
+<div style="flex:1;min-width:250px;background:#d4edda;padding:15px;border-radius:8px;border-right:5px solid #28a745;">
+<h4 style="color:#155724;margin:0 0 10px;">✅ نقاط القوة</h4>
+<ul style="margin:0;padding-right:20px;color:#155724;font-size:0.95rem;">
+<li>[نقطة قوة 1]</li>
+<li>[نقطة قوة 2]</li>
+</ul>
+</div>
+<div style="flex:1;min-width:250px;background:#f8d7da;padding:15px;border-radius:8px;border-right:5px solid #dc3545;">
+<h4 style="color:#721c24;margin:0 0 10px;">❌ نقاط تحتاج تحسين</h4>
+<ul style="margin:0;padding-right:20px;color:#721c24;font-size:0.95rem;">
+<li>[نقطة ضعف 1]</li>
+<li>[نقطة ضعف 2]</li>
+</ul>
+</div>
+</div>
+
+<!-- توصيات للطبيب -->
+<div style="background:#e3f2fd;padding:15px;border-radius:8px;margin-top:15px;border-right:5px solid #2196f3;">
+<h4 style="color:#1565c0;margin:0 0 10px;">💡 توصيات لتحسين الأداء</h4>
+<ol style="margin:0;padding-right:25px;color:#1565c0;font-size:0.95rem;">
+<li>[توصية 1 - مثل: استخدام أكواد ICD-10 أكثر تحديداً]</li>
+<li>[توصية 2 - مثل: توثيق المبرر الإكلينيكي قبل طلب التحاليل]</li>
+<li>[توصية 3 - مثل: مراجعة بروتوكولات صرف المضادات الحيوية]</li>
+</ol>
+</div>
+</div>
+</section>
+
 <!-- التقييم النهائي -->
 <section class="final-rating" style="background:linear-gradient(135deg,#1e3a5f,#2d4a6f);padding:25px;border-radius:12px;margin-top:30px;">
-<h2 style="color:#c9a962;text-align:center;margin:0 0 20px;font-size:1.5rem;">⭐ التقييم النهائي</h2>
+<h2 style="color:#c9a962;text-align:center;margin:0 0 20px;font-size:1.5rem;">⭐ التقييم النهائي للحالات</h2>
 <div style="display:flex;gap:25px;justify-content:center;flex-wrap:wrap;">
 <div style="text-align:center;background:#fff;padding:20px 40px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
 <div style="font-size:2.5rem;font-weight:bold;color:#1e3a5f;">[X]/10</div>
