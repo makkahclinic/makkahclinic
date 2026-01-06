@@ -236,6 +236,21 @@ const MULTI_CASE_PROMPT = `# ⚠️ تعليمات صارمة - اقرأها ب�
 
 # 📊 هيكل التقرير
 
+<!-- رسالة للطبيب المعالج - في أعلى التقرير -->
+<section class="doctor-greeting" style="background:linear-gradient(135deg,#1e3a5f,#2d5a8f);padding:25px;border-radius:12px;margin-bottom:20px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+<h2 style="color:#c9a962;margin:0 0 10px;font-size:1.6rem;">🏥 قسم الجودة الطبية - مجمع مكة الطبي بالزاهر</h2>
+<p style="color:#fff;font-size:1.2rem;margin:10px 0;">
+سعادة الدكتور / <strong style="color:#c9a962;font-size:1.4rem;">[اسم الطبيب من البيانات]</strong>
+</p>
+<p style="color:#e0e0e0;font-size:1.1rem;margin:15px 0;line-height:1.8;">
+تُشكر لكم جهودكم في خدمة مراجعي المجمع. نود التكرم بمراجعة النقاط الواردة في هذا التقرير<br>
+لتقليص نسبة رفض المطالبات التأمينية، والحد من الهدر المالي، ورفع مستوى الخدمات الطبية.
+</p>
+<p style="color:#90caf9;font-size:0.95rem;margin-top:10px;">
+📅 تاريخ التقرير: [التاريخ] | 📋 رقم التقرير: [رقم تلقائي]
+</p>
+</section>
+
 <section class="portfolio-summary">
 <h2>📊 الملخص الإجمالي للحالات</h2>
 <p style="text-align:center;font-size:1.3rem;margin:15px 0;"><strong>إجمالي الحالات المراجعة: [العدد الفعلي من البيانات]</strong></p>
@@ -258,9 +273,50 @@ const MULTI_CASE_PROMPT = `# ⚠️ تعليمات صارمة - اقرأها ب�
 </div>
 </section>
 
-<section class="doctor-info" style="background:#1e3a5f;padding:20px;border-radius:10px;margin:20px 0;">
-<h2 style="color:#c9a962;margin:0;font-size:1.5rem;">👨‍⚕️ الطبيب المعالج: [اسم الطبيب من البيانات]</h2>
-<p style="color:#fff;margin:10px 0 0;">التخصص: [إن وجد] | عدد الحالات: [العدد]</p>
+<!-- قسم تقييم أداء الطبيب - التأميني والطبي -->
+<section class="doctor-performance" style="background:#fff;border:2px solid #1e3a5f;border-radius:12px;padding:20px;margin:20px 0;">
+<h2 style="color:#1e3a5f;border-bottom:3px solid #c9a962;padding-bottom:10px;margin-bottom:15px;">📊 تقييم الأداء الشامل للطبيب</h2>
+
+<div style="display:flex;gap:20px;flex-wrap:wrap;">
+<!-- التقييم التأميني -->
+<div style="flex:1;min-width:280px;background:#fff3e0;padding:15px;border-radius:10px;border-right:4px solid #ff9800;">
+<h3 style="color:#e65100;margin:0 0 10px;">💰 التقييم التأميني</h3>
+<table style="width:100%;font-size:0.95rem;">
+<tr><td style="padding:5px;"><strong>الالتزام بالتكويد (ICD-10):</strong></td><td style="text-align:left;">[ممتاز/جيد/يحتاج تحسين] [X/10]</td></tr>
+<tr><td style="padding:5px;"><strong>دقة ربط التشخيص بالإجراءات:</strong></td><td style="text-align:left;">[ممتاز/جيد/يحتاج تحسين] [X/10]</td></tr>
+<tr><td style="padding:5px;"><strong>توثيق المبررات الإكلينيكية:</strong></td><td style="text-align:left;">[ممتاز/جيد/يحتاج تحسين] [X/10]</td></tr>
+<tr><td style="padding:5px;"><strong>نسبة الحالات المعرضة للرفض:</strong></td><td style="text-align:left;">[X]% من إجمالي الحالات</td></tr>
+</table>
+<div style="margin-top:10px;padding:10px;background:#ffecb3;border-radius:6px;">
+<strong>📌 التقييم التأميني الإجمالي: <span style="font-size:1.3rem;color:#e65100;">[X/10]</span></strong>
+</div>
+</div>
+
+<!-- التقييم الطبي -->
+<div style="flex:1;min-width:280px;background:#e8f5e9;padding:15px;border-radius:10px;border-right:4px solid #4caf50;">
+<h3 style="color:#2e7d32;margin:0 0 10px;">🩺 التقييم الطبي</h3>
+<table style="width:100%;font-size:0.95rem;">
+<tr><td style="padding:5px;"><strong>دقة التشخيص:</strong></td><td style="text-align:left;">[ممتاز/جيد/يحتاج تحسين] [X/10]</td></tr>
+<tr><td style="padding:5px;"><strong>ملاءمة الإجراءات للتشخيص:</strong></td><td style="text-align:left;">[ممتاز/جيد/يحتاج تحسين] [X/10]</td></tr>
+<tr><td style="padding:5px;"><strong>الالتزام بالبروتوكولات الطبية:</strong></td><td style="text-align:left;">[ممتاز/جيد/يحتاج تحسين] [X/10]</td></tr>
+<tr><td style="padding:5px;"><strong>توثيق العلامات الحيوية:</strong></td><td style="text-align:left;">[مكتمل/ناقص] [X/10]</td></tr>
+<tr><td style="padding:5px;"><strong>مراعاة الطب الوقائي:</strong></td><td style="text-align:left;">[ممتاز/جيد/يحتاج تحسين] [X/10]</td></tr>
+</table>
+<div style="margin-top:10px;padding:10px;background:#c8e6c9;border-radius:6px;">
+<strong>📌 التقييم الطبي الإجمالي: <span style="font-size:1.3rem;color:#2e7d32;">[X/10]</span></strong>
+</div>
+</div>
+</div>
+
+<!-- ملاحظات عامة للطبيب -->
+<div style="margin-top:15px;padding:15px;background:#e3f2fd;border-radius:8px;border-right:4px solid #1976d2;">
+<h4 style="color:#1565c0;margin:0 0 10px;">📝 ملاحظات وتوصيات للتحسين:</h4>
+<ul style="margin:0;padding-right:20px;line-height:1.8;">
+<li>[نقطة تحسين 1 - الأهم]</li>
+<li>[نقطة تحسين 2]</li>
+<li>[نقطة إيجابية - نقاط القوة]</li>
+</ul>
+</div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
