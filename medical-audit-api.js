@@ -348,82 +348,201 @@ const MULTI_CASE_PROMPT = `# ⚠️ تعليمات صارمة - اقرأها ب�
 5. هل التقرير **مفصل وشامل** أم مختصر؟ المختصر مرفوض!
 6. لا تترك أي حقل فارغاً أو تكتب [template] - استبدل الكل ببيانات حقيقية`;
 
-export async function analyzeMedicalCase(files, lang = 'ar') {
+const CASES_PER_BATCH = 15;
+
+function parseExcelRows(textContent) {
+  const lines = textContent.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return { headers: '', rows: [] };
+  const headers = lines[0];
+  const rows = lines.slice(1);
+  return { headers, rows };
+}
+
+function createBatchPrompt(headers, rows, batchNum, totalBatches, doctorName) {
+  return `# ⚠️ تعليمات صارمة - الدفعة ${batchNum} من ${totalBatches}
+
+أنت **رئيس وحدة التدقيق التأميني** - حلل الحالات التالية بالتفصيل الكامل.
+
+# ⛔ قواعد ملزِمة
+1. أخرج **HTML فقط** - ممنوع Markdown
+2. استخدم class="status-box accepted/rejected/warning" للتلوين
+3. **حلل كل حالة** في البيانات - لا تتجاهل أي صف
+4. لكل حالة: اذكر جميع الأدوية + التحاليل + التشخيصات
+5. إذا غابت معلومة اكتب: "⚠️ غير متوفر"
+
+# 📊 الطبيب: ${doctorName || 'غير محدد'}
+
+# البيانات (${rows.length} حالة):
+${headers}
+${rows.join('\n')}
+
+# المطلوب لكل حالة:
+<section class="case-detail" style="border:3px solid #c9a962;border-radius:12px;padding:20px;margin:25px 0;background:#fafafa;">
+<h2 style="background:linear-gradient(135deg,#1e3a5f,#2d4a6f);color:#fff;padding:15px;border-radius:8px;margin:-20px -20px 20px -20px;">
+🔍 الحالة رقم [X] | التشخيص: [من البيانات]
+</h2>
+
+<div style="background:#e8f4fd;padding:15px;border-radius:8px;margin-bottom:15px;">
+<h3 style="color:#1e3a5f;margin:0 0 10px;">📌 بيانات الحالة</h3>
+<table style="width:100%;"><tr><td style="font-weight:bold;">التشخيص:</td><td>[مع ICD-10]</td></tr></table>
+</div>
+
+<h3 style="color:#1e3a5f;border-bottom:2px solid #c9a962;">💊 الأدوية</h3>
+<table style="width:100%;border-collapse:collapse;">
+<tr style="background:#1e3a5f;color:#fff;"><th>الدواء</th><th>الجرعة</th><th>التقييم</th><th>الحالة</th></tr>
+<!-- كل دواء في صف -->
+</table>
+
+<div class="status-box rejected">
+<h3>❌ إجراءات زائدة</h3>
+<ul><li><strong>[الإجراء]</strong><br>🔑 يُقبل مع: [تشخيصات ICD-10]</li></ul>
+</div>
+
+<div class="status-box warning">
+<h3>⚠️ إجراءات ناقصة</h3>
+<ul><li><strong>[الإجراء]</strong><br>📋 التصحيح: [خطوات]</li></ul>
+</div>
+
+<div style="display:flex;gap:15px;flex-wrap:wrap;">
+<div style="flex:1;background:#d4edda;padding:15px;border-radius:8px;border-right:5px solid #28a745;">
+<h4 style="color:#155724;">✅ صحيح</h4><ul style="color:#155724;"><li>[...]</li></ul>
+</div>
+<div style="flex:1;background:#f8d7da;padding:15px;border-radius:8px;border-right:5px solid #dc3545;">
+<h4 style="color:#721c24;">❌ يحتاج تصحيح</h4><ul style="color:#721c24;"><li>[...]</li></ul>
+</div>
+</div>
+</section>
+
+⚠️ تذكير: حلل كل الـ ${rows.length} حالة أعلاه بالتفصيل!`;
+}
+
+async function callGemini(promptText, images = []) {
+  const parts = [{ text: promptText }];
+  
+  for (const img of images) {
+    const base64Data = img.data.replace(/^data:[^;]+;base64,/, '');
+    parts.push({
+      inlineData: {
+        mimeType: img.mimeType || 'image/jpeg',
+        data: base64Data
+      }
+    });
+  }
+
+  const result = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: [{ role: 'user', parts }],
+  });
+
+  let html = '';
+  if (result.candidates?.[0]?.content?.parts) {
+    html = result.candidates[0].content.parts.map(p => p.text || '').join('');
+  } else if (result.text) {
+    html = result.text;
+  } else if (typeof result.response?.text === 'function') {
+    html = result.response.text();
+  }
+  
+  return html.replace(/```html\n?/g, '').replace(/```\n?/g, '');
+}
+
+export async function analyzeMedicalCase(files, lang = 'ar', doctorName = '') {
   try {
     const imageFiles = files.filter(f => !f.isExcel);
     const excelFiles = files.filter(f => f.isExcel);
-    
     const isMultiCase = excelFiles.length > 0;
-    const prompt = isMultiCase ? MULTI_CASE_PROMPT : SINGLE_CASE_PROMPT;
-    
-    const parts = [{ text: prompt }];
-    
-    if (imageFiles.length > 0) {
-      for (const file of imageFiles) {
-        const base64Data = file.data.replace(/^data:[^;]+;base64,/, '');
-        parts.push({
-          inlineData: {
-            mimeType: file.mimeType || 'image/jpeg',
-            data: base64Data
-          }
-        });
-      }
-    }
-    
-    if (excelFiles.length > 0) {
-      let excelText = '\n\n--- بيانات الحالات من Excel ---\n';
-      for (const file of excelFiles) {
-        excelText += `\nملف: ${file.name}\n`;
-        if (file.textContent) {
-          excelText += file.textContent;
-        } else if (file.data && !file.data.startsWith('data:')) {
-          excelText += file.data;
-        }
-      }
-      parts.push({ text: excelText });
-    }
-    
-    parts.push({ text: '\n\nقم بتحليل البيانات أعلاه وأعط تقريراً شاملاً بتنسيق HTML.' });
 
-    const contents = [{
-      role: 'user',
-      parts: parts
-    }];
-
-    const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contents,
-    });
-
-    let htmlResponse = '';
-    
-    if (result.candidates && result.candidates[0] && result.candidates[0].content) {
-      const resultParts = result.candidates[0].content.parts || [];
-      htmlResponse = resultParts.map(p => p.text || '').join('');
-    } else if (result.text) {
-      htmlResponse = result.text;
-    } else if (typeof result.response?.text === 'function') {
-      htmlResponse = result.response.text();
-    }
-    
-    if (!htmlResponse) {
-      throw new Error('لم يتم الحصول على استجابة من النموذج');
-    }
-    
-    if (htmlResponse.includes('```html')) {
-      htmlResponse = htmlResponse.replace(/```html\n?/g, '').replace(/```\n?/g, '');
-    }
-    if (htmlResponse.includes('```')) {
-      htmlResponse = htmlResponse.replace(/```\n?/g, '');
+    if (!isMultiCase) {
+      const prompt = SINGLE_CASE_PROMPT;
+      const html = await callGemini(prompt + '\n\nحلل الصور المرفقة:', imageFiles);
+      return { success: true, html: wrapWithStyles(html, false), raw: html, isMultiCase: false };
     }
 
-    const styledHtml = wrapWithStyles(htmlResponse, isMultiCase);
+    let allExcelText = '';
+    for (const file of excelFiles) {
+      if (file.textContent) allExcelText += file.textContent + '\n';
+      else if (file.data && !file.data.startsWith('data:')) allExcelText += file.data + '\n';
+    }
+
+    const { headers, rows } = parseExcelRows(allExcelText);
+    const totalCases = rows.length;
+    
+    console.log(`📊 Processing ${totalCases} cases in batches of ${CASES_PER_BATCH}`);
+
+    if (totalCases <= CASES_PER_BATCH) {
+      const fullPrompt = MULTI_CASE_PROMPT + `\n\n--- بيانات الحالات ---\n${allExcelText}\n\nقم بتحليل جميع الحالات بالتفصيل.`;
+      const html = await callGemini(fullPrompt, imageFiles);
+      return { success: true, html: wrapWithStyles(html, true), raw: html, isMultiCase: true };
+    }
+
+    const batches = [];
+    for (let i = 0; i < rows.length; i += CASES_PER_BATCH) {
+      batches.push(rows.slice(i, i + CASES_PER_BATCH));
+    }
+
+    console.log(`📦 Created ${batches.length} batches`);
+
+    let combinedHtml = `
+<section class="portfolio-summary">
+<h2>📊 الملخص الإجمالي للحالات</h2>
+<p style="text-align:center;font-size:1.5rem;margin:20px 0;"><strong>إجمالي الحالات: ${totalCases}</strong></p>
+<p style="text-align:center;color:#666;">تم تحليل الحالات على ${batches.length} دفعات</p>
+</section>
+
+<section class="doctor-info" style="background:#1e3a5f;padding:20px;border-radius:10px;margin:20px 0;">
+<h2 style="color:#c9a962;margin:0;">👨‍⚕️ الطبيب: ${doctorName || 'غير محدد'}</h2>
+</section>
+`;
+
+    let acceptedCount = 0, rejectedCount = 0, warningCount = 0;
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      console.log(`🔄 Processing batch ${i + 1}/${batches.length} (${batch.length} cases)`);
+      
+      const batchPrompt = createBatchPrompt(headers, batch, i + 1, batches.length, doctorName);
+      const batchHtml = await callGemini(batchPrompt, i === 0 ? imageFiles : []);
+      
+      combinedHtml += `\n<!-- === الدفعة ${i + 1} === -->\n${batchHtml}\n`;
+
+      const acceptedMatches = (batchHtml.match(/status-box accepted/g) || []).length;
+      const rejectedMatches = (batchHtml.match(/status-box rejected/g) || []).length;
+      const warningMatches = (batchHtml.match(/status-box warning/g) || []).length;
+      
+      acceptedCount += acceptedMatches;
+      rejectedCount += rejectedMatches;
+      warningCount += warningMatches;
+    }
+
+    const summaryUpdate = `
+<section class="final-summary" style="background:linear-gradient(135deg,#1e3a5f,#2d4a6f);padding:25px;border-radius:12px;margin-top:30px;">
+<h2 style="color:#c9a962;text-align:center;">📈 ملخص التحليل الكامل</h2>
+<div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-top:15px;">
+<div style="background:#d4edda;padding:20px 40px;border-radius:10px;text-align:center;">
+<div style="font-size:2.5rem;font-weight:bold;color:#155724;">${acceptedCount}</div>
+<div style="color:#155724;">✅ مقبول</div>
+</div>
+<div style="background:#f8d7da;padding:20px 40px;border-radius:10px;text-align:center;">
+<div style="font-size:2.5rem;font-weight:bold;color:#721c24;">${rejectedCount}</div>
+<div style="color:#721c24;">❌ مرفوض</div>
+</div>
+<div style="background:#fff3cd;padding:20px 40px;border-radius:10px;text-align:center;">
+<div style="font-size:2.5rem;font-weight:bold;color:#856404;">${warningCount}</div>
+<div style="color:#856404;">⚠️ يحتاج مراجعة</div>
+</div>
+</div>
+</section>
+`;
+
+    combinedHtml += summaryUpdate;
 
     return {
       success: true,
-      html: styledHtml,
-      raw: htmlResponse,
-      isMultiCase: isMultiCase
+      html: wrapWithStyles(combinedHtml, true),
+      raw: combinedHtml,
+      isMultiCase: true,
+      totalCases,
+      batchCount: batches.length
     };
 
   } catch (error) {
