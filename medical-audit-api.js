@@ -126,14 +126,6 @@ const SINGLE_CASE_PROMPT = `# الدور والصلاحية
 </table>
 </section>
 
-<section class="final-verdict">
-<h2>📌 القرار النهائي</h2>
-<div class="status-box [accepted/rejected/warning]">
-<h3>[✅ مقبول / ❌ مرفوض / ⚠️ يحتاج تصحيح]</h3>
-<p><strong>ملخص:</strong> [سطر واحد يلخص القرار]</p>
-</div>
-</section>
-
 <div id="ai-ratings" style="display:none;">
 <span data-insurance-rating="[1-10]"></span>
 <span data-service-rating="[1-10]"></span>
