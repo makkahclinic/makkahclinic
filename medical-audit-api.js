@@ -769,6 +769,7 @@ export async function analyzeMedicalCase(files, lang = 'ar', doctorName = '') {
 `;
 
     let acceptedCount = 0, rejectedCount = 0, warningCount = 0;
+    let totalInsuranceRating = 0, totalServiceRating = 0, ratingCount = 0;
 
     // 🚀 معالجة متوازية - 5 دفعات في نفس الوقت
     const PARALLEL_LIMIT = 5;
@@ -802,7 +803,25 @@ export async function analyzeMedicalCase(files, lang = 'ar', doctorName = '') {
       acceptedCount += acceptedMatches;
       rejectedCount += rejectedMatches;
       warningCount += warningMatches;
+      
+      // استخراج التقييمات من كل دفعة
+      const insMatch = result.html.match(/data-insurance-rating="(\d+)"/);
+      const srvMatch = result.html.match(/data-service-rating="(\d+)"/);
+      if (insMatch) { totalInsuranceRating += parseInt(insMatch[1]); ratingCount++; }
+      if (srvMatch) totalServiceRating += parseInt(srvMatch[1]);
     }
+    
+    // حساب متوسط التقييمات
+    const avgInsurance = ratingCount > 0 ? Math.round(totalInsuranceRating / ratingCount) : 5;
+    const avgService = ratingCount > 0 ? Math.round(totalServiceRating / ratingCount) : 5;
+    
+    // حساب التقييم بناءً على نسبة القبول إذا لم يُرسل Gemini تقييمات
+    const totalAnalyzed = acceptedCount + rejectedCount + warningCount;
+    const acceptRate = totalAnalyzed > 0 ? acceptedCount / totalAnalyzed : 0.5;
+    const calculatedInsurance = ratingCount > 0 ? avgInsurance : Math.round(acceptRate * 10);
+    const calculatedService = ratingCount > 0 ? avgService : Math.round((acceptRate * 0.7 + 0.3) * 10);
+    
+    console.log(`📊 Ratings: Insurance=${calculatedInsurance}, Service=${calculatedService}`)
 
     const summaryUpdate = `
 <section class="final-summary" style="background:linear-gradient(135deg,#1e3a5f,#2d4a6f);padding:25px;border-radius:12px;margin-top:30px;">
@@ -822,6 +841,12 @@ export async function analyzeMedicalCase(files, lang = 'ar', doctorName = '') {
 </div>
 </div>
 </section>
+
+<!-- AI Ratings للاستخراج في الـ Frontend -->
+<div id="ai-ratings" style="display:none;">
+<span data-insurance-rating="${calculatedInsurance}"></span>
+<span data-service-rating="${calculatedService}"></span>
+</div>
 `;
 
     combinedHtml += summaryUpdate;
