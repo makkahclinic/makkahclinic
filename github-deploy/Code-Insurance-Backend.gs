@@ -1020,33 +1020,13 @@ function confirmDelivery_(data) {
         tasksSheet.getRange(i + 1, 7).setValue('delivered');
         tasksSheet.getRange(i + 1, 10).setValue(Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm'));
         
-        // حفظ التوقيع في Drive (لأنه كبير جداً للخلية)
-        let signatureUrl = '';
-        if (data.signature && data.signature.length > 100) {
-          try {
-            // استخراج البيانات من data URL
-            const base64Match = data.signature.match(/^data:image\/png;base64,(.+)$/);
-            if (base64Match && base64Match[1]) {
-              const folder = DriveApp.getFolderById(TASKS_FOLDER_ID);
-              const signatureBlob = Utilities.newBlob(
-                Utilities.base64Decode(base64Match[1]),
-                'image/png',
-                'signature_' + data.taskId + '.png'
-              );
-              const signatureFile = folder.createFile(signatureBlob);
-              signatureUrl = signatureFile.getDownloadUrl();
-              Logger.log('Signature saved to Drive: ' + signatureUrl);
-            }
-          } catch(signErr) {
-            Logger.log('Error saving signature: ' + signErr);
-            // حفظ التوقيع كاملاً في الخلية كـ fallback
-            signatureUrl = data.signature;
-          }
-        }
+        // حفظ التوقيع كاملاً - base64 يعمل مباشرة في img src
+        let signatureToSave = data.signature || '';
+        Logger.log('Signature length: ' + signatureToSave.length);
         
-        tasksSheet.getRange(i + 1, 11).setValue(signatureUrl);
+        tasksSheet.getRange(i + 1, 11).setValue(signatureToSave);
         
-        return { success: true, signatureUrl: signatureUrl };
+        return { success: true };
       }
     }
     
