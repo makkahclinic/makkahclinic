@@ -146,10 +146,50 @@
     .time-filter-btn.active { background: #1e3a5f; color: white; border-color: #1e3a5f; }
     .date-range-container { display: none; gap: 8px; align-items: center; }
     .date-range-container.show { display: flex; }
+    
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast {
+      padding: 1rem 1.5rem;
+      border-radius: 10px;
+      color: white;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.25);
+      animation: toastIn 0.4s ease, toastOut 0.4s ease 3.5s forwards;
+      min-width: 280px;
+    }
+    .toast.success { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
+    .toast.error { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    .toast.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .toast.info { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+    .toast i { font-size: 1.25rem; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(-30px) scale(0.9); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateY(0) scale(1); }
+      to { opacity: 0; transform: translateY(-20px) scale(0.9); }
+    }
   </style>
 </head>
 
 <body class="bg-gray-100 font-sans antialiased">
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
   <!-- Print Header - يظهر فقط عند الطباعة -->
   <div class="print-header">
     <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع">
@@ -682,8 +722,29 @@
         : '<i class="fas fa-save ml-2"></i> حفظ السجل ورفع التقرير';
     }
 
+    // ================ Toast Notification ================
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+      };
+      
+      toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i> <span>${message}</span>`;
+      container.appendChild(toast);
+      
+      setTimeout(() => toast.remove(), 4000);
+    }
+    
     function showNotification(message, type = 'success') {
-      alert((type === 'success' ? '✅ نجاح: ' : '❌ خطأ: ') + message);
+      showToast(message, type);
     }
 
     // ================= التهيئة =================
@@ -1468,7 +1529,7 @@
       customDateFrom = elements.dateFrom.value;
       customDateTo = elements.dateTo.value;
       if (!customDateFrom || !customDateTo) {
-        alert('الرجاء تحديد تاريخ البداية والنهاية');
+        showToast('الرجاء تحديد تاريخ البداية والنهاية', 'warning');
         return;
       }
       filterTable();
