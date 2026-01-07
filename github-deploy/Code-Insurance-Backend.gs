@@ -752,7 +752,7 @@ function createTask_(data) {
     const taskId = Utilities.getUuid();
     const uploadDate = Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm');
     
-    // حفظ الملف في Drive
+    // حفظ الملف في Drive - هذا إلزامي للحصول على البيانات الكاملة
     let fileUrl = '';
     try {
       const folder = DriveApp.getFolderById(TASKS_FOLDER_ID);
@@ -763,11 +763,19 @@ function createTask_(data) {
       );
       const file = folder.createFile(fileBlob);
       fileUrl = file.getUrl();
+      Logger.log('File saved to Drive: ' + fileUrl);
     } catch(e) {
-      Logger.log('Could not save to Drive, storing in sheet: ' + e.message);
+      Logger.log('CRITICAL: Could not save to Drive: ' + e.message);
+      return { success: false, error: 'فشل في حفظ الملف في Drive: ' + e.message };
     }
     
-    // إضافة المهمة للشيت
+    // تأكد من أن الملف حُفظ في Drive
+    if (!fileUrl || fileUrl.length < 10) {
+      return { success: false, error: 'فشل في الحصول على رابط الملف من Drive' };
+    }
+    
+    // إضافة المهمة للشيت - لا نحفظ بيانات الملف في الخلية لأنها تُقطع!
+    // الملف يُحفظ في Drive فقط ويُقرأ من هناك
     tasksSheet.appendRow([
       taskId,
       data.doctorName || '',
@@ -781,7 +789,7 @@ function createTask_(data) {
       '',
       '',
       fileUrl,
-      data.fileData || ''
+      'FILE_IN_DRIVE' // علامة أن الملف في Drive وليس هنا
     ]);
     
     return { success: true, taskId: taskId };
@@ -832,7 +840,7 @@ function getTasks_() {
 }
 
 /**
- * جلب ملف المهمة
+ * جلب ملف المهمة - يجب أن يُقرأ من Drive فقط للحصول على البيانات الكاملة
  */
 function getTaskFile_(data) {
   try {
@@ -848,45 +856,59 @@ function getTaskFile_(data) {
     for (let i = 1; i < allData.length; i++) {
       if (allData[i][0] === data.taskId) {
         const fileUrl = allData[i][11]; // رابط الملف في Drive
-        const cellData = allData[i][12]; // بيانات الملف في الخلية
         const fileName = allData[i][2];
         
-        // أولاً: محاولة قراءة الملف من Drive
+        Logger.log('Getting file for task: ' + data.taskId);
+        Logger.log('File URL: ' + fileUrl);
+        Logger.log('File name: ' + fileName);
+        
+        // يجب قراءة الملف من Drive للحصول على البيانات الكاملة (بما فيها الأسعار)
         if (fileUrl && fileUrl.length > 10) {
           try {
             // استخراج File ID من الرابط
+            let fileId = null;
+            
+            // محاولة استخراج ID من رابط Google Drive
             const fileIdMatch = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
             if (fileIdMatch && fileIdMatch[1]) {
-              const fileId = fileIdMatch[1];
+              fileId = fileIdMatch[1];
+            } else {
+              // محاولة استخراج من رابط open?id=
+              const openIdMatch = fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+              if (openIdMatch && openIdMatch[1]) {
+                fileId = openIdMatch[1];
+              }
+            }
+            
+            if (fileId) {
               const file = DriveApp.getFileById(fileId);
               const blob = file.getBlob();
-              const base64Data = Utilities.base64Encode(blob.getBytes());
+              const bytes = blob.getBytes();
+              const base64Data = Utilities.base64Encode(bytes);
               
-              Logger.log('File loaded from Drive: ' + fileName + ' (' + base64Data.length + ' chars)');
+              Logger.log('SUCCESS: File loaded from Drive: ' + fileName);
+              Logger.log('File size: ' + bytes.length + ' bytes');
+              Logger.log('Base64 length: ' + base64Data.length + ' chars');
               
               return { 
                 success: true, 
                 fileData: base64Data,
                 fileName: fileName,
+                fileSize: bytes.length,
                 source: 'drive'
               };
+            } else {
+              Logger.log('ERROR: Could not extract file ID from URL: ' + fileUrl);
             }
           } catch(driveError) {
-            Logger.log('Drive read error, falling back to cell: ' + driveError);
+            Logger.log('ERROR: Drive read failed: ' + driveError.toString());
+            return { success: false, error: 'فشل في قراءة الملف من Drive: ' + driveError.message };
           }
         }
         
-        // ثانياً: إذا فشل Drive، استخدم بيانات الخلية
-        if (cellData && cellData.length > 100) {
-          return { 
-            success: true, 
-            fileData: cellData,
-            fileName: fileName,
-            source: 'cell'
-          };
-        }
-        
-        return { success: false, error: 'File data not found' };
+        // لا نستخدم بيانات الخلية أبداً - الملفات يجب أن تُقرأ من Drive فقط
+        Logger.log('ERROR: No valid Drive URL found for task');
+        return { success: false, error: 'لم يتم العثور على رابط الملف في Drive. يرجى إعادة رفع الملف.' };
       }
     }
     
