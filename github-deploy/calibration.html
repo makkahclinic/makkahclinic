@@ -1593,15 +1593,20 @@
       const assetDisplay = record.assetName || record.assetID || 'غير محدد';
       const certId = `CAL-${Date.now().toString(36).toUpperCase()}`;
       
-      const qrData = JSON.stringify({
-        id: certId,
-        device: assetDisplay,
-        department: record.department,
-        testDate: record.testDate,
-        nextDue: record.nextDue,
-        result: record.result,
-        staff: record.staff
-      });
+      // استخدام رابط الشهادة/التقرير المرفق إذا وُجد
+      const attachmentLink = record.CertificateLink || record.FileLink || null;
+      const qrData = attachmentLink && attachmentLink !== 'N/A' 
+        ? attachmentLink 
+        : JSON.stringify({
+            id: certId,
+            device: assetDisplay,
+            department: record.department,
+            testDate: record.testDate,
+            nextDue: record.nextDue,
+            result: record.result
+          });
+      
+      const hasAttachment = attachmentLink && attachmentLink !== 'N/A';
       
       const html = `
         <!DOCTYPE html>
@@ -1681,8 +1686,9 @@
             <div class="qr-section">
               <div>
                 <canvas id="qrcode" class="qr-code"></canvas>
-                <p class="qr-text">امسح للتحقق من صحة الشهادة</p>
+                <p class="qr-text">${hasAttachment ? '📄 امسح لفتح شهادة المعايرة المرفقة' : '🔍 امسح للتحقق من بيانات الشهادة'}</p>
               </div>
+              ${hasAttachment ? '<p style="font-size: 10px; color: #28a745; margin-top: 5px;">✅ يحتوي على رابط الشهادة الأصلية</p>' : '<p style="font-size: 10px; color: #999; margin-top: 5px;">⚠️ لا يوجد ملف مرفق - QR يحتوي البيانات فقط</p>'}
             </div>
             
             <div class="footer">
