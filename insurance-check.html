@@ -2525,13 +2525,27 @@ function initSignatureCanvas() {
   signatureCanvas = document.getElementById('signatureCanvas');
   signatureCtx = signatureCanvas.getContext('2d');
   
-  // Set canvas size
-  signatureCanvas.width = signatureCanvas.offsetWidth;
-  signatureCanvas.height = 200;
+  // Set FIXED canvas size (don't rely on offsetWidth which is 0 when hidden)
+  const CANVAS_WIDTH = 500;
+  const CANVAS_HEIGHT = 200;
   
-  // Clear canvas
+  signatureCanvas.width = CANVAS_WIDTH;
+  signatureCanvas.height = CANVAS_HEIGHT;
+  signatureCanvas.style.width = '100%';
+  signatureCanvas.style.maxWidth = CANVAS_WIDTH + 'px';
+  
+  // Clear canvas with white background
   signatureCtx.fillStyle = 'white';
-  signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+  signatureCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  
+  // Remove old listeners to avoid duplicates
+  signatureCanvas.removeEventListener('mousedown', startDrawing);
+  signatureCanvas.removeEventListener('mousemove', draw);
+  signatureCanvas.removeEventListener('mouseup', stopDrawing);
+  signatureCanvas.removeEventListener('mouseout', stopDrawing);
+  signatureCanvas.removeEventListener('touchstart', handleTouchStart);
+  signatureCanvas.removeEventListener('touchmove', handleTouchMove);
+  signatureCanvas.removeEventListener('touchend', stopDrawing);
   
   // Drawing events
   signatureCanvas.addEventListener('mousedown', startDrawing);
@@ -2540,9 +2554,11 @@ function initSignatureCanvas() {
   signatureCanvas.addEventListener('mouseout', stopDrawing);
   
   // Touch events
-  signatureCanvas.addEventListener('touchstart', handleTouchStart);
-  signatureCanvas.addEventListener('touchmove', handleTouchMove);
+  signatureCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  signatureCanvas.addEventListener('touchmove', handleTouchMove, { passive: false });
   signatureCanvas.addEventListener('touchend', stopDrawing);
+  
+  console.log('Canvas initialized:', CANVAS_WIDTH, 'x', CANVAS_HEIGHT);
 }
 
 function startDrawing(e) {
@@ -2606,9 +2622,12 @@ function openDeliveryModal(taskIndex) {
   
   document.getElementById('signatureModal').classList.remove('hidden');
   
-  setTimeout(() => {
-    initSignatureCanvas();
-  }, 100);
+  // Use requestAnimationFrame to ensure modal is visible before initializing canvas
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      initSignatureCanvas();
+    });
+  });
 }
 
 function closeSignatureModal() {
