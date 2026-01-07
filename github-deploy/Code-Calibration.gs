@@ -412,6 +412,11 @@ function getCalibrationLog_(ss) {
    h.forEach((col, i) => {
      obj[col] = r[i];
    });
+   
+   // قراءة File و Certificate بالـ index (العمود J=9, K=10) كـ fallback
+   const fileByIndex = r[9] || '';
+   const certByIndex = r[10] || '';
+   
    return {
      Timestamp: obj.Timestamp || '',
      Department: obj.Department || '',
@@ -422,8 +427,8 @@ function getCalibrationLog_(ss) {
      Frequency: obj.Frequency || '',
      NextDue: normalizeYMD_(obj.NextDue),
      Result: normalizeResult_(obj.Result),
-     File: obj.File || '',
-     Certificate: obj.CertificateLink || obj.Certificate || ''
+     File: obj.File || fileByIndex || '',
+     Certificate: obj.CertificateLink || obj.Certificate || certByIndex || ''
    };
  });
 }
