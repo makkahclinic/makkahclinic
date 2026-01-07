@@ -77,11 +77,48 @@
     .schedule-table tr:nth-child(even) { background-color: #f9fafb; }
     .schedule-table tr:hover { background-color: #f3f4f6; }
 
+    /* Print Header */
+    .print-header {
+      display: none;
+    }
+    
     @media print {
       body { background-color: white; -webkit-print-color-adjust: exact; color-adjust: exact; }
       header, #smart-alert-banner, #dashboard-kpis, #compliance-indicators,
       #form-container, #table-controls, #pagination-controls, .shadow-md, .shadow-lg, #filter-stats, #table-stats {
         display: none !important;
+      }
+      .print-header {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 20px;
+        border-bottom: 3px solid #1e3a5f;
+        margin-bottom: 15px;
+      }
+      .print-header img {
+        height: 60px;
+        width: 60px;
+      }
+      .print-header .print-title {
+        text-align: center;
+        flex: 1;
+      }
+      .print-header h1 {
+        font-size: 16pt;
+        color: #1e3a5f;
+        margin: 0;
+        font-weight: bold;
+      }
+      .print-header p {
+        font-size: 10pt;
+        color: #666;
+        margin: 5px 0 0 0;
+      }
+      .print-date {
+        font-size: 9pt;
+        color: #666;
+        text-align: left;
       }
       #table-container { display: block !important; box-shadow: none;
                          width: 100%; margin: 0; padding: 0; }
@@ -113,6 +150,19 @@
 </head>
 
 <body class="bg-gray-100 font-sans antialiased">
+  <!-- Print Header - يظهر فقط عند الطباعة -->
+  <div class="print-header">
+    <img src="https://raw.githubusercontent.com/makkahclinic/makkahclinic/main/logo-new.png" alt="شعار المجمع">
+    <div class="print-title">
+      <h1>سجل معايرة الأجهزة الطبية (CAL Log)</h1>
+      <p>مجمع مكة الطبي بالزاهر - نظام إدارة المرافق FMS</p>
+    </div>
+    <div class="print-date">
+      <p>تاريخ الطباعة:</p>
+      <p id="print-date-value"></p>
+    </div>
+  </div>
+
   <section id="fms-calibration" class="container mx-auto p-4 md:p-8">
 
     <!-- =================== الهيدر =================== -->
@@ -398,7 +448,7 @@
                         class="px-3 py-2 bg-secondary text-white rounded-md hover:bg-accent transition text-sm flex items-center">
                   <i class="fas fa-sync-alt ml-1"></i> تحديث
                 </button>
-                <button id="print-btn" onclick="window.print()"
+                <button id="print-btn" onclick="printReport()"
                         class="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition text-sm flex items-center">
                   <i class="fas fa-print ml-1"></i> طباعة
                 </button>
@@ -1422,6 +1472,23 @@
         return;
       }
       filterTable();
+    }
+    
+    // ================ طباعة التقرير ================
+    function printReport() {
+      // تحديث تاريخ الطباعة
+      const now = new Date();
+      const dateStr = now.toLocaleString('ar-SA', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      document.getElementById('print-date-value').textContent = dateStr;
+      
+      // طباعة
+      window.print();
     }
     
     // ================ تعبئة قائمة الأجهزة ================
