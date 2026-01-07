@@ -106,6 +106,9 @@ function handleRequest(e) {
       case 'updateTaskStatus':
         result = updateTaskStatus_(params);
         break;
+      case 'saveTaskReport':
+        result = saveTaskReport_(params);
+        break;
       case 'confirmDelivery':
         result = confirmDelivery_(params);
         break;
@@ -815,6 +818,7 @@ function getTasks_() {
           status: data[i][6],
           analyzedBy: data[i][7],
           fileUrl: data[i][11],
+          reportHtml: data[i][13] || '', // Column 14 (index 13) - saved report
           rowIndex: i + 1
         });
       }
@@ -890,6 +894,52 @@ function updateTaskStatus_(data) {
     return { success: false, error: 'Task not found' };
   } catch(e) {
     Logger.log('updateTaskStatus error: ' + e);
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * حفظ التقرير بعد التحليل
+ */
+function saveTaskReport_(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const tasksSheet = ss.getSheetByName('Tasks');
+    
+    if (!tasksSheet) {
+      return { success: false, error: 'Tasks sheet not found' };
+    }
+    
+    const allData = tasksSheet.getDataRange().getValues();
+    
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][0] === data.taskId) {
+        // Update status to analyzed
+        tasksSheet.getRange(i + 1, 7).setValue('analyzed');
+        
+        // Save analyzed by and date
+        if (data.analyzedBy) {
+          tasksSheet.getRange(i + 1, 8).setValue(data.analyzedBy);
+          tasksSheet.getRange(i + 1, 9).setValue(Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm'));
+        }
+        
+        // Save report HTML in column 14 (index 13)
+        if (data.reportHtml) {
+          // Compress report if too large (Google Sheets cell limit is ~50000 chars)
+          let reportToSave = data.reportHtml;
+          if (reportToSave.length > 45000) {
+            reportToSave = reportToSave.substring(0, 45000) + '<!-- تم اقتطاع التقرير -->';
+          }
+          tasksSheet.getRange(i + 1, 14).setValue(reportToSave);
+        }
+        
+        return { success: true };
+      }
+    }
+    
+    return { success: false, error: 'Task not found' };
+  } catch(e) {
+    Logger.log('saveTaskReport error: ' + e);
     return { success: false, error: e.toString() };
   }
 }

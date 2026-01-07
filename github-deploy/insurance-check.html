@@ -524,6 +524,8 @@
     }
     .task-status.pending { background: var(--warning); color: #000; }
     .task-status.analyzing { background: var(--info); color: white; }
+    .task-status.analyzed { background: #8b5cf6; color: white; }
+    .task-status.printed { background: #f59e0b; color: #000; }
     .task-status.delivered { background: var(--success); color: white; }
     .task-card .task-info {
       font-size: 0.85rem;
@@ -550,6 +552,7 @@
       gap: 0.4rem;
     }
     .task-btn.analyze { background: var(--info); color: white; }
+    .task-btn.view { background: #8b5cf6; color: white; }
     .task-btn.deliver { background: var(--success); color: white; }
     .task-btn:hover { opacity: 0.9; transform: scale(1.02); }
     
@@ -926,7 +929,7 @@
             <button class="btn-save" id="saveBtn" onclick="saveAndLog()">
               <i class="fas fa-save"></i> حفظ وتسجيل
             </button>
-            <button class="btn-print" onclick="window.print()">
+            <button class="btn-print" onclick="printAndTrack()">
               <i class="fas fa-print"></i> طباعة
             </button>
             <button class="btn-translate" id="translateBtn" onclick="translateReport()">
@@ -1882,6 +1885,11 @@ analyzeBtn.addEventListener('click', async () => {
       
       // Extract AI ratings automatically
       extractAndApplyAIRatings(data.html);
+      
+      // Save report to task if analyzing from task
+      if (currentAnalyzingTaskId) {
+        await saveReportToTask(currentAnalyzingTaskId, originalReport);
+      }
     } else {
       throw new Error(data.error || 'فشل في التحليل');
     }
@@ -2128,6 +2136,7 @@ function resetAnalysis() {
 // ============================================
 
 let tasksData = [];
+let currentAnalyzingTaskId = null;
 let currentDeliveryTask = null;
 let signatureCanvas, signatureCtx;
 let isDrawing = false;
@@ -2263,6 +2272,7 @@ async function loadTasks() {
             <p><i class="fas fa-file-excel"></i> ${task.fileName}</p>
             <p><i class="fas fa-user"></i> رُفع بواسطة: ${task.uploadedBy}</p>
             <p><i class="fas fa-calendar"></i> ${task.uploadDate}</p>
+            ${task.analyzedBy ? `<p><i class="fas fa-user-check"></i> حُلل بواسطة: ${task.analyzedBy}</p>` : ''}
           </div>
           <div class="task-actions">
             ${task.status === 'pending' ? `
@@ -2270,7 +2280,20 @@ async function loadTasks() {
                 <i class="fas fa-microscope"></i> بدء التحليل
               </button>
             ` : ''}
-            ${task.status === 'analyzed' ? `
+            ${task.status === 'analyzing' ? `
+              <button class="task-btn analyze" onclick="startAnalysis(${index})">
+                <i class="fas fa-redo"></i> استئناف التحليل
+              </button>
+              ${task.reportHtml ? `
+                <button class="task-btn view" onclick="viewSavedReport(${index})">
+                  <i class="fas fa-file-alt"></i> عرض التقرير
+                </button>
+              ` : ''}
+            ` : ''}
+            ${task.status === 'analyzed' || task.status === 'printed' ? `
+              <button class="task-btn view" onclick="viewSavedReport(${index})">
+                <i class="fas fa-file-alt"></i> عرض التقرير
+              </button>
               <button class="task-btn deliver" onclick="openDeliveryModal(${index})">
                 <i class="fas fa-signature"></i> تسليم للطبيب
               </button>
@@ -2298,9 +2321,40 @@ function getStatusLabel(status) {
     'pending': 'في الانتظار',
     'analyzing': 'قيد التحليل',
     'analyzed': 'تم التحليل',
+    'printed': 'تمت الطباعة',
     'delivered': 'تم التسليم'
   };
   return labels[status] || status;
+}
+
+// View saved report from task
+async function viewSavedReport(taskIndex) {
+  const task = tasksData[taskIndex];
+  
+  if (!task.reportHtml) {
+    alert('لم يتم حفظ التقرير بعد. قم بالتحليل أولاً.');
+    return;
+  }
+  
+  // Switch to analysis tab
+  switchTab('analysis');
+  
+  // Set doctor name
+  document.getElementById('doctorName').value = task.doctorName;
+  document.getElementById('doctorSelected').querySelector('span').textContent = task.doctorName;
+  
+  // Display the saved report
+  const reportSection = document.getElementById('reportSection');
+  const reportContent = document.getElementById('reportContent');
+  
+  originalReport = task.reportHtml;
+  translatedReport = '';
+  reportContent.innerHTML = task.reportHtml;
+  reportSection.classList.add('show');
+  reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  
+  // Store current task for tracking
+  currentAnalyzingTaskId = task.id;
 }
 
 function updateTasksBadge() {
@@ -2323,6 +2377,9 @@ function updateTasksBadge() {
 // Start analysis from task
 async function startAnalysis(taskIndex) {
   const task = tasksData[taskIndex];
+  
+  // Store task ID for tracking
+  currentAnalyzingTaskId = task.id;
   
   // Switch to analysis tab
   switchTab('analysis');
@@ -2384,6 +2441,60 @@ async function updateTaskStatus(taskId, status) {
   } catch(e) {
     console.error('Error updating task status:', e);
   }
+}
+
+// Save report to task after analysis
+async function saveReportToTask(taskId, reportHtml) {
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'saveTaskReport',
+        taskId: taskId,
+        reportHtml: reportHtml,
+        analyzedBy: currentUser.name,
+        analysisDate: new Date().toISOString()
+      })
+    });
+    const result = await response.json();
+    if (result.success) {
+      console.log('Report saved to task successfully');
+      loadTasks(); // Refresh tasks list
+    }
+  } catch(e) {
+    console.error('Error saving report to task:', e);
+  }
+}
+
+// Mark task as printed
+async function markTaskAsPrinted(taskId) {
+  try {
+    await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'updateTaskStatus',
+        taskId: taskId,
+        status: 'printed',
+        printedBy: currentUser.name,
+        printDate: new Date().toISOString()
+      })
+    });
+    loadTasks();
+  } catch(e) {
+    console.error('Error marking task as printed:', e);
+  }
+}
+
+// Print and track
+function printAndTrack() {
+  // Mark as printed if analyzing from task
+  if (currentAnalyzingTaskId) {
+    markTaskAsPrinted(currentAnalyzingTaskId);
+  }
+  // Trigger print
+  window.print();
 }
 
 // ============================================
