@@ -1226,11 +1226,13 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// URLs
+// URLs - Use local API for tasks/signatures when on Replit, fallback to Apps Script for production
+const REPLIT_API_BASE = window.location.hostname.includes('m2020m.org') 
+  ? 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev'
+  : '';
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
-const API_URL = window.location.hostname.includes('m2020m.org') 
-  ? 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/medical-audit'
-  : '/api/medical-audit';
+const TASKS_API_URL = REPLIT_API_BASE + '/api/insurance';
+const API_URL = REPLIT_API_BASE + '/api/medical-audit';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
@@ -2276,10 +2278,9 @@ function switchTab(tabName) {
 // Load doctors for task dropdown (from Staff sheet)
 async function loadTasksDoctorDropdown() {
   try {
-    const response = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'getDoctorsList' })
+    const response = await fetch(TASKS_API_URL + '/doctors', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
     const data = await response.json();
     
@@ -2349,16 +2350,14 @@ async function uploadTask() {
     reader.onload = async function(e) {
       const base64Data = e.target.result.split(',')[1];
       
-      const response = await fetch(BACKEND_URL, {
+      const response = await fetch(TASKS_API_URL + '/tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'createTask',
           doctorName: doctor,
           fileName: file.name,
           fileData: base64Data,
-          uploadedBy: currentUser.name,
-          uploadedByEmail: currentUser.email
+          uploadedBy: currentUser.name
         })
       });
       
@@ -2395,10 +2394,9 @@ async function uploadTask() {
 // Load pending tasks
 async function loadTasks() {
   try {
-    const response = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'getTasks' })
+    const response = await fetch(TASKS_API_URL + '/tasks', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
     const data = await response.json();
     
@@ -2592,12 +2590,10 @@ async function startAnalysis(taskIndex) {
 
 async function updateTaskStatus(taskId, status) {
   try {
-    await fetch(BACKEND_URL, {
+    await fetch(TASKS_API_URL + '/tasks/' + taskId + '/status', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'updateTaskStatus',
-        taskId: taskId,
         status: status,
         analyzedBy: currentUser.name
       })
@@ -2610,15 +2606,12 @@ async function updateTaskStatus(taskId, status) {
 // Save report to task after analysis
 async function saveReportToTask(taskId, reportHtml) {
   try {
-    const response = await fetch(BACKEND_URL, {
+    const response = await fetch(TASKS_API_URL + '/tasks/' + taskId + '/report', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'saveTaskReport',
-        taskId: taskId,
         reportHtml: reportHtml,
-        analyzedBy: currentUser.name,
-        analysisDate: new Date().toISOString()
+        analyzedBy: currentUser.name
       })
     });
     const result = await response.json();
@@ -2634,15 +2627,12 @@ async function saveReportToTask(taskId, reportHtml) {
 // Mark task as printed
 async function markTaskAsPrinted(taskId) {
   try {
-    await fetch(BACKEND_URL, {
+    await fetch(TASKS_API_URL + '/tasks/' + taskId + '/status', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'updateTaskStatus',
-        taskId: taskId,
         status: 'printed',
-        printedBy: currentUser.name,
-        printDate: new Date().toISOString()
+        printedBy: currentUser.name
       })
     });
     loadTasks();
@@ -2801,15 +2791,12 @@ async function confirmDelivery() {
   const signatureData = signatureCanvas.toDataURL('image/png');
   
   try {
-    const response = await fetch(BACKEND_URL, {
+    const response = await fetch(TASKS_API_URL + '/tasks/' + currentDeliveryTask.id + '/deliver', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'confirmDelivery',
-        taskId: currentDeliveryTask.id,
         signature: signatureData,
-        deliveredBy: currentUser.name,
-        deliveryDate: new Date().toISOString()
+        deliveredBy: currentUser.name
       })
     });
     
@@ -2832,10 +2819,9 @@ async function confirmDelivery() {
 // Load delivery log
 async function loadDeliveryLog() {
   try {
-    const response = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'getDeliveryLog' })
+    const response = await fetch(TASKS_API_URL + '/delivery-log', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
     const data = await response.json();
     

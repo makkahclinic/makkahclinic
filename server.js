@@ -1664,6 +1664,259 @@ app.get('/api/owner/stats', async (req, res) => {
   }
 });
 
+// ============================================
+// Insurance Audit Tasks API
+// ============================================
+const INSURANCE_TASKS_SPREADSHEET_ID = process.env.INSURANCE_TASKS_SPREADSHEET_ID || MASTER_SPREADSHEET_ID;
+
+// Get all tasks
+app.get('/api/insurance/tasks', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A2:N1000'
+    });
+    
+    const rows = response.data.values || [];
+    const tasks = rows.map(row => ({
+      id: row[0] || '',
+      doctorName: row[1] || '',
+      fileName: row[2] || '',
+      fileData: row[3] || '',
+      uploadedBy: row[4] || '',
+      uploadDate: row[5] || '',
+      status: row[6] || 'pending',
+      analyzedBy: row[7] || '',
+      analysisDate: row[8] || '',
+      reportHtml: row[9] || '',
+      deliveredBy: row[10] || '',
+      deliveryDate: row[11] || '',
+      signature: row[12] || '',
+      notes: row[13] || ''
+    }));
+    
+    res.json({ success: true, tasks });
+  } catch (err) {
+    console.error('Error getting tasks:', err.message);
+    res.json({ success: true, tasks: [] });
+  }
+});
+
+// Add new task
+app.post('/api/insurance/tasks', async (req, res) => {
+  try {
+    const { doctorName, fileName, fileData, uploadedBy } = req.body;
+    const sheets = await getGoogleSheetsClient();
+    
+    const taskId = 'T' + Date.now();
+    const uploadDate = new Date().toLocaleDateString('ar-SA');
+    
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A:N',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[taskId, doctorName, fileName, fileData, uploadedBy, uploadDate, 'pending', '', '', '', '', '', '', '']]
+      }
+    });
+    
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('Error adding task:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Save task report
+app.post('/api/insurance/tasks/:taskId/report', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { reportHtml, analyzedBy } = req.body;
+    const sheets = await getGoogleSheetsClient();
+    
+    // Find the task row
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A:A'
+    });
+    
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(r => r[0] === taskId);
+    
+    if (rowIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Task not found' });
+    }
+    
+    const rowNum = rowIndex + 1;
+    const analysisDate = new Date().toLocaleDateString('ar-SA');
+    
+    // Update status, analyzedBy, analysisDate, and reportHtml
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: [
+          { range: `Audit_Tasks!G${rowNum}`, values: [['analyzed']] },
+          { range: `Audit_Tasks!H${rowNum}`, values: [[analyzedBy]] },
+          { range: `Audit_Tasks!I${rowNum}`, values: [[analysisDate]] },
+          { range: `Audit_Tasks!J${rowNum}`, values: [[reportHtml]] }
+        ]
+      }
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving report:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Confirm delivery with signature
+app.post('/api/insurance/tasks/:taskId/deliver', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { signature, deliveredBy } = req.body;
+    const sheets = await getGoogleSheetsClient();
+    
+    // Find the task row
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A:A'
+    });
+    
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(r => r[0] === taskId);
+    
+    if (rowIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Task not found' });
+    }
+    
+    const rowNum = rowIndex + 1;
+    const deliveryDate = new Date().toLocaleDateString('ar-SA');
+    
+    // Update status, deliveredBy, deliveryDate, and signature
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: [
+          { range: `Audit_Tasks!G${rowNum}`, values: [['delivered']] },
+          { range: `Audit_Tasks!K${rowNum}`, values: [[deliveredBy]] },
+          { range: `Audit_Tasks!L${rowNum}`, values: [[deliveryDate]] },
+          { range: `Audit_Tasks!M${rowNum}`, values: [[signature]] }
+        ]
+      }
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error confirming delivery:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get delivery log (all delivered tasks)
+app.get('/api/insurance/delivery-log', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A2:N1000'
+    });
+    
+    const rows = response.data.values || [];
+    const logs = rows
+      .filter(row => row[6] === 'delivered')
+      .map(row => ({
+        id: row[0] || '',
+        doctorName: row[1] || '',
+        fileName: row[2] || '',
+        uploadedBy: row[4] || '',
+        uploadDate: row[5] || '',
+        status: row[6] || '',
+        analyzedBy: row[7] || '',
+        analysisDate: row[8] || '',
+        deliveredBy: row[10] || '',
+        deliveryDate: row[11] || '',
+        signature: row[12] || ''
+      }));
+    
+    res.json({ success: true, logs });
+  } catch (err) {
+    console.error('Error getting delivery log:', err.message);
+    res.json({ success: true, logs: [] });
+  }
+});
+
+// Update task status (for analyzing, printed, etc.)
+app.post('/api/insurance/tasks/:taskId/status', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { status, analyzedBy, printedBy } = req.body;
+    const sheets = await getGoogleSheetsClient();
+    
+    // Find the task row
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A:A'
+    });
+    
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(r => r[0] === taskId);
+    
+    if (rowIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Task not found' });
+    }
+    
+    const rowNum = rowIndex + 1;
+    const updateData = [{ range: `Audit_Tasks!G${rowNum}`, values: [[status]] }];
+    
+    // Add extra data based on status
+    if (status === 'analyzing' && analyzedBy) {
+      updateData.push({ range: `Audit_Tasks!H${rowNum}`, values: [[analyzedBy]] });
+    }
+    if (status === 'printed' && printedBy) {
+      updateData.push({ range: `Audit_Tasks!N${rowNum}`, values: [[printedBy]] });
+    }
+    
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: updateData
+      }
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error updating task status:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get doctors list for dropdown
+app.get('/api/insurance/doctors', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Doctors!A2:B100'
+    });
+    
+    const rows = response.data.values || [];
+    const doctors = rows.map(row => ({
+      id: row[0] || '',
+      name: row[1] || row[0] || ''
+    }));
+    
+    res.json({ success: true, doctors });
+  } catch (err) {
+    console.error('Error getting doctors:', err.message);
+    res.json({ success: true, doctors: [] });
+  }
+});
+
 // Register Medical Audit API routes
 registerMedicalAuditRoutes(app);
 
