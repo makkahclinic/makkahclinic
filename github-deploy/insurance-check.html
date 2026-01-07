@@ -2407,10 +2407,16 @@ async function startAnalysis(taskIndex) {
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
       
+      // Clear previous files
+      filesState.length = 0;
+      
+      // Add file with correct format for analysis
+      const textContent = jsonData.map(row => row.join('\t')).join('\n');
       filesState.push({
         name: task.fileName,
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        content: jsonData.map(row => row.join('\t')).join('\n')
+        isExcel: true,
+        textContent: textContent,
+        data: textContent
       });
       
       renderFiles();
@@ -2418,7 +2424,7 @@ async function startAnalysis(taskIndex) {
       // Update task status
       await updateTaskStatus(task.id, 'analyzing');
       
-      alert('تم تحميل الملف. اضغط "مراجعة" لبدء التحليل.');
+      alert('تم تحميل الملف (' + jsonData.length + ' صف). اضغط "مراجعة الحالة" لبدء التحليل.');
     }
   } catch(e) {
     console.error('Error loading task file:', e);
