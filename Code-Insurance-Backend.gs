@@ -106,6 +106,9 @@ function handleRequest(e) {
       case 'updateTaskStatus':
         result = updateTaskStatus_(params);
         break;
+      case 'saveTaskReport':
+        result = saveTaskReport_(params);
+        break;
       case 'confirmDelivery':
         result = confirmDelivery_(params);
         break;
@@ -815,6 +818,7 @@ function getTasks_() {
           status: data[i][6],
           analyzedBy: data[i][7],
           fileUrl: data[i][11],
+          reportHtml: data[i][13] || '', // Column 14 (index 13) - saved report
           rowIndex: i + 1
         });
       }
@@ -843,11 +847,46 @@ function getTaskFile_(data) {
     
     for (let i = 1; i < allData.length; i++) {
       if (allData[i][0] === data.taskId) {
-        return { 
-          success: true, 
-          fileData: allData[i][12],
-          fileName: allData[i][2]
-        };
+        const fileUrl = allData[i][11]; // رابط الملف في Drive
+        const cellData = allData[i][12]; // بيانات الملف في الخلية
+        const fileName = allData[i][2];
+        
+        // أولاً: محاولة قراءة الملف من Drive
+        if (fileUrl && fileUrl.length > 10) {
+          try {
+            // استخراج File ID من الرابط
+            const fileIdMatch = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (fileIdMatch && fileIdMatch[1]) {
+              const fileId = fileIdMatch[1];
+              const file = DriveApp.getFileById(fileId);
+              const blob = file.getBlob();
+              const base64Data = Utilities.base64Encode(blob.getBytes());
+              
+              Logger.log('File loaded from Drive: ' + fileName + ' (' + base64Data.length + ' chars)');
+              
+              return { 
+                success: true, 
+                fileData: base64Data,
+                fileName: fileName,
+                source: 'drive'
+              };
+            }
+          } catch(driveError) {
+            Logger.log('Drive read error, falling back to cell: ' + driveError);
+          }
+        }
+        
+        // ثانياً: إذا فشل Drive، استخدم بيانات الخلية
+        if (cellData && cellData.length > 100) {
+          return { 
+            success: true, 
+            fileData: cellData,
+            fileName: fileName,
+            source: 'cell'
+          };
+        }
+        
+        return { success: false, error: 'File data not found' };
       }
     }
     
@@ -890,6 +929,52 @@ function updateTaskStatus_(data) {
     return { success: false, error: 'Task not found' };
   } catch(e) {
     Logger.log('updateTaskStatus error: ' + e);
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * حفظ التقرير بعد التحليل
+ */
+function saveTaskReport_(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const tasksSheet = ss.getSheetByName('Tasks');
+    
+    if (!tasksSheet) {
+      return { success: false, error: 'Tasks sheet not found' };
+    }
+    
+    const allData = tasksSheet.getDataRange().getValues();
+    
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][0] === data.taskId) {
+        // Update status to analyzed
+        tasksSheet.getRange(i + 1, 7).setValue('analyzed');
+        
+        // Save analyzed by and date
+        if (data.analyzedBy) {
+          tasksSheet.getRange(i + 1, 8).setValue(data.analyzedBy);
+          tasksSheet.getRange(i + 1, 9).setValue(Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm'));
+        }
+        
+        // Save report HTML in column 14 (index 13)
+        if (data.reportHtml) {
+          // Compress report if too large (Google Sheets cell limit is ~50000 chars)
+          let reportToSave = data.reportHtml;
+          if (reportToSave.length > 45000) {
+            reportToSave = reportToSave.substring(0, 45000) + '<!-- تم اقتطاع التقرير -->';
+          }
+          tasksSheet.getRange(i + 1, 14).setValue(reportToSave);
+        }
+        
+        return { success: true };
+      }
+    }
+    
+    return { success: false, error: 'Task not found' };
+  } catch(e) {
+    Logger.log('saveTaskReport error: ' + e);
     return { success: false, error: e.toString() };
   }
 }
