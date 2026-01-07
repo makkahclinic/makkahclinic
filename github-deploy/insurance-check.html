@@ -408,7 +408,51 @@
       .rating-grid { grid-template-columns: 1fr; }
     }
 
+    /* Scroll Navigation Buttons */
+    .scroll-nav {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 1000;
+    }
+    .scroll-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: var(--gold);
+      color: var(--primary);
+      border: none;
+      cursor: pointer;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: all 0.3s;
+      opacity: 0;
+      transform: translateX(-100px);
+    }
+    .scroll-btn.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .scroll-btn:hover {
+      background: var(--gold-light);
+      transform: scale(1.1) translateX(0);
+    }
+    .scroll-btn:active {
+      transform: scale(0.95);
+    }
+    @media (max-width: 768px) {
+      .scroll-nav { left: 10px; bottom: 10px; }
+      .scroll-btn { width: 45px; height: 45px; font-size: 1rem; }
+    }
+
     @media print {
+      .scroll-nav { display: none !important; }
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       body { background: white !important; margin: 0; padding: 0; font-size: 10pt; }
       .header, .upload-section, .analyze-section, .report-actions, .powered-by, .hero-card, 
@@ -1095,6 +1139,16 @@
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- Scroll Navigation Buttons -->
+  <div class="scroll-nav" id="scrollNav">
+    <button class="scroll-btn" id="scrollTopBtn" onclick="scrollToTop()" title="أعلى الصفحة">
+      <i class="fas fa-arrow-up"></i>
+    </button>
+    <button class="scroll-btn" id="scrollBottomBtn" onclick="scrollToBottom()" title="أسفل الصفحة">
+      <i class="fas fa-arrow-down"></i>
+    </button>
   </div>
 
 <script>
@@ -2772,6 +2826,72 @@ function viewSignature(idx) {
     </html>
   `);
 }
+
+// ============================================
+// SCROLL NAVIGATION SYSTEM
+// ============================================
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function scrollToBottom() {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+
+// Show/hide scroll buttons based on scroll position
+function updateScrollButtons() {
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const clientHeight = document.documentElement.clientHeight;
+  
+  const scrollTopBtn = document.getElementById('scrollTopBtn');
+  const scrollBottomBtn = document.getElementById('scrollBottomBtn');
+  
+  if (!scrollTopBtn || !scrollBottomBtn) return;
+  
+  // Show buttons only when page is scrollable
+  const isScrollable = scrollHeight > clientHeight + 200;
+  
+  if (isScrollable) {
+    // Show up button when scrolled down
+    if (scrollTop > 300) {
+      scrollTopBtn.classList.add('visible');
+    } else {
+      scrollTopBtn.classList.remove('visible');
+    }
+    
+    // Show down button when not at bottom
+    if (scrollTop + clientHeight < scrollHeight - 300) {
+      scrollBottomBtn.classList.add('visible');
+    } else {
+      scrollBottomBtn.classList.remove('visible');
+    }
+  } else {
+    scrollTopBtn.classList.remove('visible');
+    scrollBottomBtn.classList.remove('visible');
+  }
+}
+
+// Listen to scroll events
+window.addEventListener('scroll', updateScrollButtons);
+window.addEventListener('resize', updateScrollButtons);
+
+// Initial check after page load
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(updateScrollButtons, 500);
+});
+
+// Also check when report is generated
+const originalUpdateScrollObserver = new MutationObserver(() => {
+  updateScrollButtons();
+});
+document.addEventListener('DOMContentLoaded', () => {
+  const reportContent = document.getElementById('reportContent');
+  if (reportContent) {
+    originalUpdateScrollObserver.observe(reportContent, { childList: true, subtree: true });
+  }
+});
 </script>
 </body>
 </html>
