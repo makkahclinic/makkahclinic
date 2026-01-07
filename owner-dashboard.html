@@ -2029,6 +2029,9 @@
                         document.getElementById('stat-incidents-progress').textContent = stats.incidents.investigation || 0;
                         document.getElementById('stat-incidents-escalated').textContent = stats.incidents.escalated || 0;
                         document.getElementById('stat-incidents-closed').textContent = stats.incidents.closed || 0;
+                    } else {
+                        // Fallback: جلب الحوادث مباشرة
+                        loadIncidentsStats();
                     }
                     
                     if (stats.risks) {
@@ -2040,6 +2043,9 @@
                         if (stats.risks.high > 0) {
                             document.getElementById('kpi-risks-sub').textContent = stats.risks.high + ' خطر عالي';
                         }
+                    } else {
+                        // Fallback: جلب المخاطر مباشرة
+                        loadRisksStats();
                     }
                     
                     if (stats.rounds) {
@@ -2201,6 +2207,90 @@
                 console.error('Error loading complaints:', e);
                 container.innerHTML = '<div class="no-alerts">خطأ في تحميل الشكاوى</div>';
             });
+        }
+        
+        // ======== جلب إحصائيات الحوادث مباشرة ========
+        async function loadIncidentsStats() {
+            try {
+                const data = await postToAppsScript(APIs.incidents, 'getIncidents', {});
+                if (data.success && data.incidents) {
+                    const incidents = data.incidents;
+                    const newCount = incidents.filter(i => {
+                        const s = (i.Status || i.الحالة || '').toLowerCase();
+                        return s.includes('جديد') || s.includes('new') || s === '';
+                    }).length;
+                    const investigation = incidents.filter(i => {
+                        const s = (i.Status || i.الحالة || '').toLowerCase();
+                        return s.includes('تحقيق') || s.includes('investigation') || s.includes('progress');
+                    }).length;
+                    const escalated = incidents.filter(i => {
+                        const s = (i.Status || i.الحالة || '').toLowerCase();
+                        return s.includes('مصعد') || s.includes('escalat');
+                    }).length;
+                    const closed = incidents.filter(i => {
+                        const s = (i.Status || i.الحالة || '').toLowerCase();
+                        return s.includes('مغلق') || s.includes('closed');
+                    }).length;
+                    
+                    const openCount = newCount + investigation + escalated;
+                    
+                    document.getElementById('kpi-incidents').textContent = openCount;
+                    document.getElementById('stat-incidents-new').textContent = newCount;
+                    document.getElementById('stat-incidents-progress').textContent = investigation;
+                    document.getElementById('stat-incidents-escalated').textContent = escalated;
+                    document.getElementById('stat-incidents-closed').textContent = closed;
+                    
+                    if (escalated > 0) {
+                        document.getElementById('kpi-incidents-sub').textContent = escalated + ' مصعّدة';
+                        document.getElementById('kpi-incidents-sub').classList.add('danger');
+                    }
+                }
+            } catch(e) {
+                console.error('Error loading incidents stats:', e);
+            }
+        }
+        
+        // ======== جلب إحصائيات المخاطر مباشرة ========
+        async function loadRisksStats() {
+            try {
+                const res = await fetch(APIs.risks + '?action=getRisks', { redirect: 'follow' });
+                const data = await res.json();
+                const risksArr = data.data || data.risks || (Array.isArray(data) ? data : []);
+                
+                if (risksArr.length > 0) {
+                    const high = risksArr.filter(r => {
+                        const lvl = (r.severity || r.riskLevel || r.Level || '').toLowerCase();
+                        return lvl.includes('عالي') || lvl.includes('high');
+                    }).length;
+                    const medium = risksArr.filter(r => {
+                        const lvl = (r.severity || r.riskLevel || r.Level || '').toLowerCase();
+                        return lvl.includes('متوسط') || lvl.includes('medium');
+                    }).length;
+                    const low = risksArr.filter(r => {
+                        const lvl = (r.severity || r.riskLevel || r.Level || '').toLowerCase();
+                        return lvl.includes('منخفض') || lvl.includes('low');
+                    }).length;
+                    const resolved = risksArr.filter(r => {
+                        const s = (r.status || r.Status || '').toLowerCase();
+                        return s.includes('resolved') || s.includes('محلول') || s.includes('مغلق');
+                    }).length;
+                    
+                    const active = risksArr.length - resolved;
+                    
+                    document.getElementById('kpi-risks').textContent = active;
+                    document.getElementById('stat-risks-high').textContent = high;
+                    document.getElementById('stat-risks-medium').textContent = medium;
+                    document.getElementById('stat-risks-low').textContent = low;
+                    document.getElementById('stat-risks-resolved').textContent = resolved;
+                    
+                    if (high > 0) {
+                        document.getElementById('kpi-risks-sub').textContent = high + ' خطر عالي';
+                        document.getElementById('kpi-risks-sub').classList.add('danger');
+                    }
+                }
+            } catch(e) {
+                console.error('Error loading risks stats:', e);
+            }
         }
         
         function loadIncidents() {
