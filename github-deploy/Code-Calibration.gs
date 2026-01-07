@@ -423,7 +423,7 @@ function getCalibrationLog_(ss) {
      NextDue: normalizeYMD_(obj.NextDue),
      Result: normalizeResult_(obj.Result),
      File: obj.File || '',
-     Certificate: obj.Certificate || ''
+     Certificate: obj.CertificateLink || obj.Certificate || ''
    };
  });
 }
