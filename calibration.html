@@ -78,20 +78,37 @@
     .schedule-table tr:hover { background-color: #f3f4f6; }
 
     @media print {
-      body { background-color: white; }
+      body { background-color: white; -webkit-print-color-adjust: exact; color-adjust: exact; }
       header, #smart-alert-banner, #dashboard-kpis, #compliance-indicators,
-      #form-container, #table-controls, .shadow-md, .shadow-lg {
+      #form-container, #table-controls, #pagination-controls, .shadow-md, .shadow-lg, #filter-stats, #table-stats {
         display: none !important;
       }
       #table-container { display: block !important; box-shadow: none;
                          width: 100%; margin: 0; padding: 0; }
-      table { font-size: 10pt; border-collapse: collapse; width: 100%; }
-      th, td { border: 1px solid #ccc; padding: 5px; }
+      .overflow-x-auto { overflow: visible !important; }
+      table { font-size: 8pt !important; border-collapse: collapse; width: 100% !important; table-layout: fixed; }
+      th, td { border: 1px solid #ccc !important; padding: 3px 4px !important; word-wrap: break-word; overflow: hidden; }
+      th { background-color: #1e3a5f !important; color: white !important; }
       .row-upcoming, .bg-red-50 { -webkit-print-color-adjust: exact; color-adjust: exact; }
-      .row-upcoming { background-color: rgba(212, 175, 55, 0.1) !important;
-                      animation: none !important; }
+      .row-upcoming { background-color: rgba(212, 175, 55, 0.1) !important; animation: none !important; }
       .bg-red-50 { background-color: rgba(220, 53, 69, 0.1) !important; }
+      @page { size: A4 landscape; margin: 5mm; }
     }
+    
+    /* فلتر زمني */
+    .time-filter-btn {
+      padding: 6px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: white;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .time-filter-btn:hover { background: #f3f4f6; }
+    .time-filter-btn.active { background: #1e3a5f; color: white; border-color: #1e3a5f; }
+    .date-range-container { display: none; gap: 8px; align-items: center; }
+    .date-range-container.show { display: flex; }
   </style>
 </head>
 
@@ -364,24 +381,43 @@
               <i class="fas fa-table ml-2 text-secondary"></i>
               سجل المعايرات والفحوصات
             </h2>
-            <div class="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-3 rtl:space-x-reverse w-full md:w-auto">
-              <div class="flex space-x-2 w-full md:w-auto">
+            <div class="flex flex-col gap-3 w-full">
+              <!-- صف الفلاتر الأساسية -->
+              <div class="flex flex-wrap gap-2 items-center">
                 <select id="department-filter"
-                        class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm w-full md:w-auto">
+                        class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm">
                   <option value="">جميع الأقسام</option>
                 </select>
-                <input type="text" id="search-input" placeholder="بحث في السجلات..."
-                       class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm w-full md:w-auto" />
-              </div>
-              <div class="flex space-x-2 w-full md:w-auto">
+                <select id="device-filter"
+                        class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm">
+                  <option value="">جميع الأجهزة</option>
+                </select>
+                <input type="text" id="search-input" placeholder="بحث..."
+                       class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm flex-1 min-w-[120px]" />
                 <button id="refresh-btn"
-                        class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-accent transition duration-150 ease-in-out text-sm flex items-center">
+                        class="px-3 py-2 bg-secondary text-white rounded-md hover:bg-accent transition text-sm flex items-center">
                   <i class="fas fa-sync-alt ml-1"></i> تحديث
                 </button>
                 <button id="print-btn" onclick="window.print()"
-                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition duration-150 ease-in-out text-sm flex items-center">
+                        class="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition text-sm flex items-center">
                   <i class="fas fa-print ml-1"></i> طباعة
                 </button>
+              </div>
+              <!-- صف الفلتر الزمني -->
+              <div class="flex flex-wrap gap-2 items-center border-t pt-3">
+                <span class="text-sm text-gray-600 font-medium"><i class="fas fa-calendar-alt ml-1"></i>الفترة:</span>
+                <button class="time-filter-btn active" data-time="all" onclick="setTimeFilter('all')">الكل</button>
+                <button class="time-filter-btn" data-time="today" onclick="setTimeFilter('today')">اليوم</button>
+                <button class="time-filter-btn" data-time="week" onclick="setTimeFilter('week')">أسبوع</button>
+                <button class="time-filter-btn" data-time="2weeks" onclick="setTimeFilter('2weeks')">أسبوعين</button>
+                <button class="time-filter-btn" data-time="month" onclick="setTimeFilter('month')">شهر</button>
+                <button class="time-filter-btn" data-time="custom" onclick="setTimeFilter('custom')">نطاق مخصص</button>
+                <div id="date-range-container" class="date-range-container">
+                  <input type="date" id="date-from" class="px-2 py-1 border rounded text-sm" />
+                  <span class="text-gray-500">إلى</span>
+                  <input type="date" id="date-to" class="px-2 py-1 border rounded text-sm" />
+                  <button onclick="applyDateRange()" class="px-3 py-1 bg-primary text-white rounded text-sm">تطبيق</button>
+                </div>
               </div>
             </div>
           </div>
@@ -459,6 +495,11 @@
     // Pagination
     const RECORDS_PER_PAGE = 25;
     let currentPage = 1;
+    
+    // Time filter state
+    let currentTimeFilter = 'all';
+    let customDateFrom = null;
+    let customDateTo = null;
 
     // عناصر DOM
     const elements = {
@@ -478,6 +519,10 @@
       alertBanner: document.getElementById('smart-alert-banner'),
       alertMessage: document.getElementById('alert-message'),
       departmentFilter: document.getElementById('department-filter'),
+      deviceFilter: document.getElementById('device-filter'),
+      dateRangeContainer: document.getElementById('date-range-container'),
+      dateFrom: document.getElementById('date-from'),
+      dateTo: document.getElementById('date-to'),
       refreshBtn: document.getElementById('refresh-btn'),
       dismissAlert: document.getElementById('dismiss-alert'),
       lastUpdate: document.getElementById('last-update'),
@@ -610,6 +655,9 @@
       elements.form.addEventListener('submit', handleSubmit);
       elements.searchInput.addEventListener('keyup', filterTable);
       elements.departmentFilter.addEventListener('change', filterTable);
+      if (elements.deviceFilter) {
+        elements.deviceFilter.addEventListener('change', filterTable);
+      }
       elements.refreshBtn.addEventListener('click', () => fetchData(true));
       elements.dismissAlert.addEventListener('click', () =>
         elements.alertBanner.classList.add('hidden')
@@ -656,6 +704,7 @@
 
         DEPARTMENTS_LIST = Object.keys(assetsMap || {});
         populateDepartments();
+        populateDeviceFilter();
         processData();
         updateLastUpdateTime();
       } catch (err) {
@@ -1250,6 +1299,7 @@
     function filterTable() {
       const searchFilter = elements.searchInput.value.trim().toUpperCase();
       const departmentFilter = elements.departmentFilter.value;
+      const deviceFilter = elements.deviceFilter ? elements.deviceFilter.value : '';
 
       // ترتيب جميع السجلات من الأحدث للأقدم
       const sorted = [...allRecords].sort((a, b) =>
@@ -1260,6 +1310,8 @@
       filteredRecords = sorted.filter(record => {
         let matchSearch = true;
         let matchDept = true;
+        let matchDevice = true;
+        let matchTime = true;
 
         // فلتر البحث النصي
         if (searchFilter) {
@@ -1281,8 +1333,48 @@
         if (departmentFilter) {
           matchDept = record.department === departmentFilter;
         }
+        
+        // فلتر الجهاز
+        if (deviceFilter) {
+          const deviceName = (record.assetName || record.assetID || '').toUpperCase();
+          matchDevice = deviceName.includes(deviceFilter.toUpperCase());
+        }
+        
+        // فلتر الوقت
+        if (currentTimeFilter !== 'all') {
+          const recordDate = parseYMD(record.testDate);
+          if (recordDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            if (currentTimeFilter === 'today') {
+              const todayStr = todayYMD();
+              matchTime = record.testDate === todayStr;
+            } else if (currentTimeFilter === 'week') {
+              const weekAgo = new Date(today);
+              weekAgo.setDate(weekAgo.getDate() - 7);
+              matchTime = recordDate >= weekAgo && recordDate <= today;
+            } else if (currentTimeFilter === '2weeks') {
+              const twoWeeksAgo = new Date(today);
+              twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+              matchTime = recordDate >= twoWeeksAgo && recordDate <= today;
+            } else if (currentTimeFilter === 'month') {
+              const monthAgo = new Date(today);
+              monthAgo.setMonth(monthAgo.getMonth() - 1);
+              matchTime = recordDate >= monthAgo && recordDate <= today;
+            } else if (currentTimeFilter === 'custom' && customDateFrom && customDateTo) {
+              const fromDate = parseYMD(customDateFrom);
+              const toDate = parseYMD(customDateTo);
+              if (fromDate && toDate) {
+                matchTime = recordDate >= fromDate && recordDate <= toDate;
+              }
+            }
+          } else {
+            matchTime = false;
+          }
+        }
 
-        return matchSearch && matchDept;
+        return matchSearch && matchDept && matchDevice && matchTime;
       });
 
       // إعادة رسم الجدول من الصفحة الأولى
@@ -1293,13 +1385,59 @@
     }
 
     function updateFilterStats() {
-      if (elements.searchInput.value || elements.departmentFilter.value) {
+      const hasFilter = elements.searchInput.value || elements.departmentFilter.value || 
+                        (elements.deviceFilter && elements.deviceFilter.value) || currentTimeFilter !== 'all';
+      if (hasFilter) {
         elements.filterStats.classList.remove('hidden');
         elements.filteredCount.textContent = filteredRecords.length;
         elements.totalCount.textContent = allRecords.length;
       } else {
         elements.filterStats.classList.add('hidden');
       }
+    }
+    
+    // ================ دوال الفلتر الزمني ================
+    function setTimeFilter(filter) {
+      currentTimeFilter = filter;
+      
+      // تحديث أزرار الفلتر
+      document.querySelectorAll('.time-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.time === filter);
+      });
+      
+      // إظهار/إخفاء نطاق التاريخ المخصص
+      if (filter === 'custom') {
+        elements.dateRangeContainer.classList.add('show');
+      } else {
+        elements.dateRangeContainer.classList.remove('show');
+        filterTable();
+      }
+    }
+    
+    function applyDateRange() {
+      customDateFrom = elements.dateFrom.value;
+      customDateTo = elements.dateTo.value;
+      if (!customDateFrom || !customDateTo) {
+        alert('الرجاء تحديد تاريخ البداية والنهاية');
+        return;
+      }
+      filterTable();
+    }
+    
+    // ================ تعبئة قائمة الأجهزة ================
+    function populateDeviceFilter() {
+      if (!elements.deviceFilter) return;
+      const devices = new Set();
+      allRecords.forEach(record => {
+        if (record.assetName) devices.add(record.assetName);
+      });
+      elements.deviceFilter.innerHTML = '<option value="">جميع الأجهزة</option>';
+      [...devices].sort().forEach(device => {
+        const opt = document.createElement('option');
+        opt.value = device;
+        opt.textContent = device;
+        elements.deviceFilter.appendChild(opt);
+      });
     }
   </script>
 </body>
