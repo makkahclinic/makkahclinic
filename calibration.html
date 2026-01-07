@@ -1578,35 +1578,30 @@
     }
     
     // ================ طباعة شهادة المعايرة ================
-    async function printCalibrationCertificate(record) {
-      const certWindow = window.open('', '_blank', 'width=800,height=600');
-      if (!certWindow) {
-        showToast('الرجاء السماح بالنوافذ المنبثقة لطباعة الشهادة', 'warning');
-        return;
-      }
-      
+    function printCalibrationCertificate(record) {
       const isPass = record.result === 'Pass';
       const resultText = isPass ? 'مطابق' : 'غير مطابق';
       const resultColor = isPass ? '#28a745' : '#dc3545';
       const resultBg = isPass ? '#d4edda' : '#f8d7da';
       
       const assetDisplay = record.assetName || record.assetID || 'غير محدد';
-      const certId = `CAL-${Date.now().toString(36).toUpperCase()}`;
+      const certId = 'CAL-' + Date.now().toString(36).toUpperCase();
       
-      // استخدام رابط الشهادة/التقرير المرفق إذا وُجد
-      const attachmentLink = record.CertificateLink || record.FileLink || null;
-      const qrData = attachmentLink && attachmentLink !== 'N/A' 
-        ? attachmentLink 
-        : JSON.stringify({
-            id: certId,
-            device: assetDisplay,
-            department: record.department,
-            testDate: record.testDate,
-            nextDue: record.nextDue,
-            result: record.result
-          });
+      // رابط الملف المرفق
+      const attachmentLink = record.CertificateLink || record.FileLink || '';
+      const hasAttachment = attachmentLink && attachmentLink !== 'N/A' && attachmentLink.trim() !== '';
       
-      const hasAttachment = attachmentLink && attachmentLink !== 'N/A';
+      // محتوى QR code
+      const qrContent = hasAttachment ? attachmentLink : ('https://m2020m.org/calibration.html#' + certId);
+      
+      // استخدام QR Server API (مجاني وموثوق)
+      const qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(qrContent);
+      
+      const certWindow = window.open('', '_blank', 'width=800,height=700');
+      if (!certWindow) {
+        showToast('الرجاء السماح بالنوافذ المنبثقة لطباعة الشهادة', 'warning');
+        return;
+      }
       
       const html = `
         <!DOCTYPE html>
@@ -1614,7 +1609,6 @@
         <head>
           <meta charset="UTF-8">
           <title>شهادة معايرة - ${assetDisplay}</title>
-          <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"><\/script>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
             * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1684,11 +1678,11 @@
             </div>
             
             <div class="qr-section">
-              <div>
-                <canvas id="qrcode" class="qr-code"></canvas>
-                <p class="qr-text">${hasAttachment ? '📄 امسح لفتح شهادة المعايرة المرفقة' : '🔍 امسح للتحقق من بيانات الشهادة'}</p>
+              <div style="text-align: center;">
+                <img src="${qrImageUrl}" alt="QR Code" style="width: 150px; height: 150px; border: 1px solid #eee; border-radius: 8px; padding: 5px; background: white;" />
+                <p class="qr-text" style="margin-top: 8px;">${hasAttachment ? '📄 امسح لفتح شهادة المعايرة المرفقة' : '🔍 امسح للتحقق من الشهادة'}</p>
+                ${hasAttachment ? '<p style="font-size: 10px; color: #28a745; margin-top: 5px;">✅ يحتوي على رابط الشهادة الأصلية</p>' : ''}
               </div>
-              ${hasAttachment ? '<p style="font-size: 10px; color: #28a745; margin-top: 5px;">✅ يحتوي على رابط الشهادة الأصلية</p>' : '<p style="font-size: 10px; color: #999; margin-top: 5px;">⚠️ لا يوجد ملف مرفق - QR يحتوي البيانات فقط</p>'}
             </div>
             
             <div class="footer">
@@ -1700,14 +1694,6 @@
           <button class="print-btn" onclick="window.print()">
             <i class="fas fa-print"></i> طباعة الشهادة
           </button>
-          
-          <script>
-            QRCode.toCanvas(document.getElementById('qrcode'), ${JSON.stringify(qrData)}, {
-              width: 104,
-              margin: 1,
-              color: { dark: '#1e3a5f', light: '#ffffff' }
-            });
-          <\/script>
         </body>
         </html>
       `;
