@@ -847,11 +847,46 @@ function getTaskFile_(data) {
     
     for (let i = 1; i < allData.length; i++) {
       if (allData[i][0] === data.taskId) {
-        return { 
-          success: true, 
-          fileData: allData[i][12],
-          fileName: allData[i][2]
-        };
+        const fileUrl = allData[i][11]; // رابط الملف في Drive
+        const cellData = allData[i][12]; // بيانات الملف في الخلية
+        const fileName = allData[i][2];
+        
+        // أولاً: محاولة قراءة الملف من Drive
+        if (fileUrl && fileUrl.length > 10) {
+          try {
+            // استخراج File ID من الرابط
+            const fileIdMatch = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (fileIdMatch && fileIdMatch[1]) {
+              const fileId = fileIdMatch[1];
+              const file = DriveApp.getFileById(fileId);
+              const blob = file.getBlob();
+              const base64Data = Utilities.base64Encode(blob.getBytes());
+              
+              Logger.log('File loaded from Drive: ' + fileName + ' (' + base64Data.length + ' chars)');
+              
+              return { 
+                success: true, 
+                fileData: base64Data,
+                fileName: fileName,
+                source: 'drive'
+              };
+            }
+          } catch(driveError) {
+            Logger.log('Drive read error, falling back to cell: ' + driveError);
+          }
+        }
+        
+        // ثانياً: إذا فشل Drive، استخدم بيانات الخلية
+        if (cellData && cellData.length > 100) {
+          return { 
+            success: true, 
+            fileData: cellData,
+            fileName: fileName,
+            source: 'cell'
+          };
+        }
+        
+        return { success: false, error: 'File data not found' };
       }
     }
     
