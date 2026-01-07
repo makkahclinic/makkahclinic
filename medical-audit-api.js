@@ -694,6 +694,7 @@ async function callGemini(promptText, images = []) {
   const parts = [{ text: promptText }];
   
   for (const img of images) {
+    if (!img.data) continue; // Skip if no data
     const base64Data = img.data.replace(/^data:[^;]+;base64,/, '');
     parts.push({
       inlineData: {
