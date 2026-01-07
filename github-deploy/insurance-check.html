@@ -2401,22 +2401,34 @@ async function startAnalysis(taskIndex) {
     const data = await response.json();
     
     if (data.success && data.fileData) {
-      // Parse Excel
+      // Parse Excel - same way as direct upload (handleFiles)
       const workbook = XLSX.read(data.fileData, { type: 'base64' });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      // Process ALL sheets (same as handleFiles)
+      let allData = [];
+      let totalRows = 0;
+      workbook.SheetNames.forEach(sheetName => {
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        allData.push({ sheet: sheetName, data: jsonData });
+        totalRows += jsonData.length;
+      });
+      
+      // Format exactly like handleFiles uses ' | ' as separator
+      const textContent = allData.map(s => {
+        return `=== ${s.sheet} ===\n` + s.data.map(row => row.join(' | ')).join('\n');
+      }).join('\n\n');
       
       // Clear previous files
       filesState.length = 0;
       
-      // Add file with correct format for analysis
-      const textContent = jsonData.map(row => row.join('\t')).join('\n');
+      // Add file with correct format for analysis (matching handleFiles format)
       filesState.push({
         name: task.fileName,
-        isExcel: true,
+        mimeType: 'text/plain',
+        data: textContent,
         textContent: textContent,
-        data: textContent
+        isExcel: true
       });
       
       renderFiles();
@@ -2424,7 +2436,8 @@ async function startAnalysis(taskIndex) {
       // Update task status
       await updateTaskStatus(task.id, 'analyzing');
       
-      alert('تم تحميل الملف (' + jsonData.length + ' صف). اضغط "مراجعة الحالة" لبدء التحليل.');
+      console.log('Loaded file:', task.fileName, 'Total rows:', totalRows, 'Sheets:', workbook.SheetNames.length);
+      alert('تم تحميل الملف (' + totalRows + ' صف من ' + workbook.SheetNames.length + ' شيت). اضغط "مراجعة الحالة" لبدء التحليل.');
     }
   } catch(e) {
     console.error('Error loading task file:', e);
