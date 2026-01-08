@@ -632,12 +632,138 @@
       display: block;
     }
     
+    /* Floating Tools - Navigation */
+    .floating-tools {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 1200;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ft-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light, #d4b86a));
+      color: var(--primary);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.35);
+      transition: transform .2s ease, opacity .2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+    .ft-btn:hover { transform: scale(1.06); }
+    .ft-btn:active { transform: scale(0.98); }
+    
+    /* Report TOC Layout */
+    .report-layout {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 18px;
+      align-items: start;
+    }
+    .report-toc {
+      position: sticky;
+      top: 110px;
+      background: linear-gradient(135deg, rgba(30,58,95,0.95), rgba(15,23,42,0.95));
+      border: 2px solid var(--gold);
+      border-radius: 16px;
+      padding: 14px;
+      max-height: calc(100vh - 140px);
+      overflow: auto;
+    }
+    .toc-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      color: var(--gold);
+    }
+    .toc-close {
+      border: none;
+      background: transparent;
+      color: #fff;
+      font-size: 22px;
+      cursor: pointer;
+    }
+    .toc-search {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(201,169,98,.35);
+      background: rgba(0,0,0,.2);
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .toc-item {
+      width: 100%;
+      text-align: right;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      cursor: pointer;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+    .toc-item.small { opacity: .85; font-size: .85rem; }
+    .toc-item.active {
+      background: rgba(201,169,98,.25);
+      border-color: rgba(201,169,98,.65);
+      color: var(--gold);
+    }
+    .report-toc-toggle {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 1200;
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light, #d4b86a));
+      color: var(--primary);
+      box-shadow: 0 8px 25px rgba(0,0,0,.35);
+      display: none;
+    }
+    html { scroll-padding-top: 110px; }
+    
+    @media (max-width: 900px) {
+      .report-layout { grid-template-columns: 1fr; }
+      .report-toc { 
+        display: none; 
+        position: fixed; 
+        right: 12px; 
+        left: 12px; 
+        top: 90px; 
+        bottom: 90px; 
+        z-index: 1300; 
+      }
+      .report-toc.open { display: block; }
+      .report-toc-toggle { display: block; }
+    }
+    @media (max-width: 768px) {
+      .floating-tools {
+        left: 50%;
+        transform: translateX(-50%);
+        flex-direction: row;
+      }
+    }
+    
     /* Quick Actions FAB */
     .quick-actions-fab {
       position: fixed;
       left: 20px;
       bottom: 20px;
       z-index: 1000;
+      display: none;
     }
     .fab-btn {
       display: flex;
@@ -1427,7 +1553,20 @@
           </h3>
           
           
-          <div class="report-content" id="reportContent"></div>
+          <div class="report-layout">
+            <div class="report-content" id="reportContent"></div>
+            <aside class="report-toc no-print" id="reportToc">
+              <div class="toc-head">
+                <strong><i class="fas fa-list"></i> محتويات التقرير</strong>
+                <button class="toc-close" onclick="toggleReportToc(false)">×</button>
+              </div>
+              <input class="toc-search" id="tocSearch" placeholder="بحث..." oninput="filterToc(this.value)"/>
+              <div class="toc-list" id="reportTocList"></div>
+            </aside>
+          </div>
+          <button class="report-toc-toggle no-print" id="reportTocToggle" onclick="toggleReportToc()">
+            <i class="fas fa-list"></i>
+          </button>
           <div class="report-actions">
             <button class="btn-save" id="saveBtn" onclick="saveAndLog()">
               <i class="fas fa-save"></i> حفظ وتسجيل
@@ -1811,6 +1950,7 @@ function showMainApp() {
   document.getElementById('headerTabs').classList.add('visible');
   userInfo.innerHTML = `<i class="fas fa-user"></i> ${currentUser.name}`;
   loadDoctorsList(); // تحميل قائمة الأطباء
+  showFloatingTools(); // تفعيل أدوات التنقل
 }
 
 async function loadDoctorsList() {
@@ -2778,13 +2918,19 @@ analyzeBtn.addEventListener('click', async () => {
       
       // Sanitize HTML with DOMPurify for XSS protection
       const sanitizedHtml = typeof DOMPurify !== 'undefined' 
-        ? DOMPurify.sanitize(data.html, { ADD_ATTR: ['style'], ALLOW_DATA_ATTR: false })
+        ? DOMPurify.sanitize(data.html, { 
+            USE_PROFILES: { html: true },
+            ALLOW_DATA_ATTR: true,
+            FORBID_TAGS: ['script','iframe','object','embed'],
+            ALLOWED_ATTR: ['style','class','href','target','rel','data-insurance-rating','data-service-rating','id','src','alt','width','height','colspan','rowspan','border']
+          })
         : data.html;
       
       originalReport = printHeader + sanitizedHtml + printFooter;
       translatedReport = '';
       reportContent.innerHTML = originalReport;
       highlightRejectedCells();
+      buildReportTOC(); // بناء فهرس التقرير
       reportSection.classList.add('show');
       updateQuickActionsFab();
       reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3917,6 +4063,121 @@ document.addEventListener('DOMContentLoaded', () => {
     originalUpdateScrollObserver.observe(reportContent, { childList: true, subtree: true });
   }
 });
+
+// ===== Floating Tools Functions =====
+function goTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goReport() {
+  document.getElementById('reportSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function goTasks() {
+  switchTab('tasks');
+  document.getElementById('tasksSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function scrollToReportActions() {
+  const actions = document.querySelector('.report-actions');
+  if (actions) actions.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showFloatingTools() {
+  const el = document.getElementById('floatingTools');
+  if (el) el.classList.remove('hidden');
+}
+
+// ===== Report TOC Functions =====
+let tocObserver = null;
+
+function toggleReportToc(force) {
+  const toc = document.getElementById('reportToc');
+  if (!toc) return;
+  const shouldOpen = (typeof force === 'boolean') ? force : !toc.classList.contains('open');
+  toc.classList.toggle('open', shouldOpen);
+}
+
+function buildReportTOC() {
+  const report = document.getElementById('reportContent');
+  const list = document.getElementById('reportTocList');
+  if (!report || !list) return;
+
+  list.innerHTML = '';
+  const headings = Array.from(report.querySelectorAll('h2, h3'));
+
+  if (!headings.length) return;
+
+  headings.forEach((h, idx) => {
+    if (!h.id) h.id = `sec-${idx}`;
+    const btn = document.createElement('button');
+    btn.className = 'toc-item' + (h.tagName.toLowerCase() === 'h3' ? ' small' : '');
+    btn.textContent = h.textContent.trim();
+    btn.onclick = () => {
+      document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toggleReportToc(false);
+    };
+    list.appendChild(btn);
+  });
+
+  setupTOCHighlight(headings);
+}
+
+function setupTOCHighlight(headings) {
+  if (tocObserver) tocObserver.disconnect();
+
+  const list = document.getElementById('reportTocList');
+  if (!list) return;
+
+  const items = Array.from(list.querySelectorAll('.toc-item'));
+  const byId = new Map();
+  headings.forEach((h, i) => byId.set(h.id, items[i]));
+
+  tocObserver = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter(e => e.isIntersecting)
+      .sort((a,b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+    if (!visible) return;
+
+    items.forEach(it => it.classList.remove('active'));
+    const activeBtn = byId.get(visible.target.id);
+    activeBtn?.classList.add('active');
+  }, {
+    root: null,
+    threshold: [0.1, 0.25, 0.5, 0.75],
+    rootMargin: "-25% 0px -60% 0px"
+  });
+
+  headings.forEach(h => tocObserver.observe(h));
+}
+
+function filterToc(q) {
+  const list = document.getElementById('reportTocList');
+  if (!list) return;
+  const query = (q || '').trim().toLowerCase();
+  list.querySelectorAll('.toc-item').forEach(btn => {
+    const ok = btn.textContent.toLowerCase().includes(query);
+    btn.style.display = ok ? '' : 'none';
+  });
+}
 </script>
+
+<!-- Floating Tools -->
+<div class="floating-tools no-print hidden" id="floatingTools">
+  <button class="ft-btn" onclick="goTop()" title="أعلى الصفحة">
+    <i class="fas fa-arrow-up"></i>
+  </button>
+  <button class="ft-btn" onclick="goReport()" title="التقرير">
+    <i class="fas fa-file-alt"></i>
+  </button>
+  <button class="ft-btn" onclick="scrollToReportActions()" title="حفظ/طباعة">
+    <i class="fas fa-save"></i>
+  </button>
+  <button class="ft-btn" onclick="goTasks()" title="المهام">
+    <i class="fas fa-tasks"></i>
+  </button>
+</div>
+
 </body>
 </html>

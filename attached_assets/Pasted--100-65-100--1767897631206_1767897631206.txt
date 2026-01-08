@@ -1,0 +1,601 @@
+ تقييم البناء الحالي (من 100)
+أعطيه 65/100.
+ليش؟
+
+
+واجهة وتجربة المستخدم ممتازة (تصميم، بطاقات، سلايدر، إحصائيات، مهام، توقيع… إلخ) ✅
+
+
+لكن فيه 4 نقاط تسحب التقييم:
+
+
+التنقل أثناء طول التقرير: الاعتماد على الهيدر فقط + عناصر عائمة متداخلة/غير مكتملة (scrollTopBtn/scrollBottomBtn مو موجودة فعليًا في HTML عندك) = تجربة مزعجة.
+
+
+الأمان/الخصوصية: عرض/إرسال مخرجات AI داخل innerHTML حتى مع التنظيف لازم يكون مضبوط جدًا لأن innerHTML يعتبر “sink” خطير لو جاء محتوى غير موثوق.
+
+
+DOMPurify إعداداته عندك تكسر ميزات (مثل استخراج التقييمات من data- attrs لأنك حاط ALLOW_DATA_ATTR: false). DOMPurify يسمح/يمنع data attributes حسب الإعداد.
+
+
+تخزين التقرير داخل Google Sheet بيتقصّ (حدود الخلية ~50k حرف)، وعندك فعلًا truncation. الحل الصحيح: حفظ التقرير في Drive وتخزين الرابط في الشيت.
+
+
+
+
+
+2) حل معاناة “أبغى أروح للمهام وأنا تحت” (بدون أسهم جانبية)
+الحل الأفضل عمليًا: شريط أدوات عائم واحد (Floating Tools) فيه:
+
+
+زر “المهام”
+
+
+زر “التقرير”
+
+
+زر “حفظ/طباعة”
+
+
+زر “أعلى الصفحة”
+
+
+
+scrollIntoView ممتاز للتنقل للسكشن المطلوب.
+ولو عندك هيدر sticky، استخدم scroll-padding-top لتعديل “منطقة العرض” أثناء scroll-into-view.
+
+2.1 أضف هذا في HTML (قبل </body>)
+<!-- Floating Tools (بديل الأسهم + بديل FAB القديم) -->
+<div class="floating-tools no-print hidden" id="floatingTools">
+  <button class="ft-btn" onclick="goTop()" title="أعلى">
+    <i class="fas fa-arrow-up"></i>
+  </button>
+
+  <button class="ft-btn" onclick="goReport()" title="التقرير">
+    <i class="fas fa-file-alt"></i>
+  </button>
+
+  <button class="ft-btn" onclick="scrollToReportActions()" title="حفظ/طباعة">
+    <i class="fas fa-save"></i>
+  </button>
+
+  <button class="ft-btn" onclick="goTasks()" title="المهام">
+    <i class="fas fa-tasks"></i>
+  </button>
+</div>
+
+2.2 أضف هذا في CSS
+
+ضعه آخر الـ <style> عندك.
+
+/* Floating Tools - حل تنقل سريع بدل الأسهم الجانبية */
+.floating-tools{
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ft-btn{
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  color: var(--primary);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.35);
+  transition: transform .2s ease, opacity .2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.ft-btn:hover{ transform: scale(1.06); }
+.ft-btn:active{ transform: scale(0.98); }
+
+@media (max-width: 768px){
+  .floating-tools{
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: row;
+  }
+}
+
+2.3 أضف هذا في JS
+
+ضعه قريب من دوال “Scroll / Tabs”.
+
+function goTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goReport() {
+  document.getElementById('reportSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// زر المهام من أي مكان
+function goTasks() {
+  switchTab('tasks');
+}
+
+// اظهر الشريط بعد تسجيل الدخول
+function showFloatingTools() {
+  const el = document.getElementById('floatingTools');
+  if (el) el.classList.remove('hidden');
+}
+
+وفي showMainApp() بعد ما تعرض التطبيق:
+function showMainApp() {
+  loginScreen.classList.add('hidden');
+  accessDenied.classList.add('hidden');
+  mainApp.classList.remove('hidden');
+  logoutBtn.classList.remove('hidden');
+  document.getElementById('headerTabs').classList.add('visible');
+  userInfo.innerHTML = `<i class="fas fa-user"></i> ${currentUser.name}`;
+  loadDoctorsList();
+
+  // ✅ شغل أدوات التنقل
+  showFloatingTools();
+}
+
+مهم: الآن تقدر تحذف/تعطل:
+
+
+.scroll-nav بالكامل
+
+
+.quick-actions-fab القديم
+لأنها بتتعارض في المكان نفسه (يسار/أسفل).
+
+
+
+3) فهرس داخل التقرير + بحث + تنقل داخل الأقسام (حل “التقرير طويل” صح)
+بدل ما المستخدم “يضيع” داخل التقرير، اعمل:
+
+
+فهرس تلقائي من عناوين h2/h3
+
+
+تمييز القسم الحالي أثناء التمرير بـ IntersectionObserver
+
+
+بحث سريع داخل الفهرس
+
+
+
+IntersectionObserver مصمم لمراقبة ظهور عناصر داخل الـ viewport بكفاءة.
+
+3.1 HTML داخل report-section (استبدل report-content الحالي)
+استبدل:
+<div class="report-content" id="reportContent"></div>
+
+بـ:
+<div class="report-layout">
+  <aside class="report-toc no-print" id="reportToc">
+    <div class="toc-head">
+      <strong><i class="fas fa-list"></i> محتويات التقرير</strong>
+      <button class="toc-close" onclick="toggleReportToc(false)">×</button>
+    </div>
+
+    <input class="toc-search" id="tocSearch" placeholder="بحث..." oninput="filterToc(this.value)"/>
+    <div class="toc-list" id="reportTocList"></div>
+  </aside>
+
+  <div class="report-content" id="reportContent"></div>
+</div>
+
+<button class="report-toc-toggle no-print" id="reportTocToggle" onclick="toggleReportToc()">
+  <i class="fas fa-list"></i>
+</button>
+
+3.2 CSS للفهرس
+.report-layout{
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 18px;
+  align-items: start;
+}
+
+.report-toc{
+  position: sticky;
+  top: 110px;
+  background: linear-gradient(135deg, rgba(30,58,95,0.95), rgba(15,23,42,0.95));
+  border: 2px solid var(--gold);
+  border-radius: 16px;
+  padding: 14px;
+  max-height: calc(100vh - 140px);
+  overflow: auto;
+}
+
+.toc-head{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  margin-bottom: 10px;
+  color: var(--gold);
+}
+
+.toc-close{
+  border:none; background:transparent; color: #fff;
+  font-size: 22px; cursor:pointer;
+}
+
+.toc-search{
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(201,169,98,.35);
+  background: rgba(0,0,0,.2);
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.toc-item{
+  width:100%;
+  text-align:right;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.toc-item.small{ opacity:.85; font-size: .9rem; }
+.toc-item.active{
+  background: rgba(201,169,98,.25);
+  border-color: rgba(201,169,98,.65);
+  color: var(--gold);
+}
+
+.report-toc-toggle{
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1200;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  border:none;
+  cursor:pointer;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  color: var(--primary);
+  box-shadow: 0 8px 25px rgba(0,0,0,.35);
+  display:none;
+}
+
+/* على الشاشات الصغيرة نخفي الـ aside ونستخدم زر فتح */
+@media (max-width: 900px){
+  .report-layout{ grid-template-columns: 1fr; }
+  .report-toc{ display:none; position: fixed; right: 12px; left: 12px; top: 90px; bottom: 90px; z-index: 1300; }
+  .report-toc.open{ display:block; }
+  .report-toc-toggle{ display:block; }
+}
+
+/* مهم مع الـ header الـ sticky */
+html { scroll-padding-top: 110px; }
+
+
+scroll-padding يساعد في ضبط “منطقة العرض المثالية” أثناء scroll-into-view.
+
+3.3 JS: بناء الفهرس وتفعيل التمييز
+let tocObserver = null;
+
+function toggleReportToc(force) {
+  const toc = document.getElementById('reportToc');
+  if (!toc) return;
+  const shouldOpen = (typeof force === 'boolean') ? force : !toc.classList.contains('open');
+  toc.classList.toggle('open', shouldOpen);
+}
+
+function buildReportTOC() {
+  const report = document.getElementById('reportContent');
+  const list = document.getElementById('reportTocList');
+  if (!report || !list) return;
+
+  list.innerHTML = '';
+  const headings = Array.from(report.querySelectorAll('h2, h3'));
+
+  // ما فيه عناوين؟ لا تسوي شيء
+  if (!headings.length) return;
+
+  headings.forEach((h, idx) => {
+    if (!h.id) h.id = `sec-${idx}`;
+    const btn = document.createElement('button');
+    btn.className = 'toc-item' + (h.tagName.toLowerCase() === 'h3' ? ' small' : '');
+    btn.textContent = h.textContent.trim();
+    btn.onclick = () => {
+      document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toggleReportToc(false);
+    };
+    list.appendChild(btn);
+  });
+
+  setupTOCHighlight(headings);
+}
+
+function setupTOCHighlight(headings) {
+  // تنظيف observer السابق
+  if (tocObserver) tocObserver.disconnect();
+
+  const list = document.getElementById('reportTocList');
+  if (!list) return;
+
+  const items = Array.from(list.querySelectorAll('.toc-item'));
+  const byId = new Map();
+  headings.forEach((h, i) => byId.set(h.id, items[i]));
+
+  tocObserver = new IntersectionObserver((entries) => {
+    // خذ أول heading ظاهر
+    const visible = entries
+      .filter(e => e.isIntersecting)
+      .sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
+
+    if (!visible) return;
+
+    items.forEach(it => it.classList.remove('active'));
+    const activeBtn = byId.get(visible.target.id);
+    activeBtn?.classList.add('active');
+  }, {
+    // يخلي التمييز “وسط الشاشة” تقريبًا
+    root: null,
+    threshold: [0.1, 0.25, 0.5, 0.75],
+    rootMargin: "-25% 0px -60% 0px"
+  });
+
+  headings.forEach(h => tocObserver.observe(h));
+}
+
+function filterToc(q) {
+  const list = document.getElementById('reportTocList');
+  if (!list) return;
+  const query = (q || '').trim().toLowerCase();
+  list.querySelectorAll('.toc-item').forEach(btn => {
+    const ok = btn.textContent.toLowerCase().includes(query);
+    btn.style.display = ok ? '' : 'none';
+  });
+}
+
+
+scrollIntoView يدعم خيارات مثل behavior وblock للتنقل بسلاسة.
+IntersectionObserver مناسب لمراقبة ما يظهر في الـ viewport بكفاءة.
+
+ثم نادِ buildReportTOC() بعد ما تضع التقرير:
+داخل نجاح التحليل (بعد reportContent.innerHTML = originalReport;):
+buildReportTOC();
+
+
+4) أهم إصلاح أمني/وظيفي داخل كودك الآن: DOMPurify + innerHTML
+أنت تستخدم:
+reportContent.innerHTML = originalReport;
+
+هذا خطير إذا أي جزء من originalReport جاي من AI أو مصدر خارجي؛ لأن innerHTML يعتبر نقطة حقن (XSS) إذا المحتوى مو موثوق.
+المشكلة الموجودة عندك حاليًا
+أنت عامل:
+DOMPurify.sanitize(data.html, { ADD_ATTR: ['style'], ALLOW_DATA_ATTR: false })
+
+وبعدين تحاول تستخرج data-insurance-rating…
+لكن DOMPurify أصلًا عنده خيار ALLOW_DATA_ATTR للتحكم في data attributes (الافتراضي يسمح بها).
+فأنت تمنعها ثم تستغرب ليه التقييم ما ينقرأ.
+الحل السريع (بدون إعادة بناء السيرفر)
+بدّل sanitize بهذا (توازن بين الأمان والمرونة):
+const sanitizedHtml = DOMPurify.sanitize(data.html, {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: true,
+  FORBID_TAGS: ['script','iframe','object','embed'],
+  // خفف السماح بالخصائص بدل فتحها كلها
+  ALLOWED_ATTR: ['style','class','href','target','rel','data-insurance-rating','data-service-rating']
+});
+
+
+DOMPurify يوضح خيارات مثل ALLOW_DATA_ATTR وكيف التحكم في data-* attributes.
+
+ملاحظة مهمة جدًا: حتى مع sanitize، الأفضل على المدى القريب يكون الإخراج من AI JSON منظّم وتقوم أنت برسم HTML محليًا (أمان أعلى + تحكم أعلى) — وهذا مطابق لنهج OWASP في تقليل استخدام “HTML sinks” الخطرة.
+
+5) “الأداة الخارقة” لتدقيق التأمين: كيف نخلي AI يطلع (تكرار/نقص/غير مبرر) + تبريرات + مصادر
+5.1 ركّب التحليل على 3 طبقات (أفضل نتيجة وأقل هلوسة)
+
+
+Pre-check Rule Engine (قواعد ثابتة)
+
+
+تكرار الخدمات: نفس MRN + نفس التاريخ + نفس CPT/الإجراء = “تكرار يحتاج تبرير”
+
+
+نقص الحقول: غياب ICD-10، غياب vitals، غياب indication للأشعة/التحاليل
+
+
+
+
+AI Summarization + Reasoning (الذكاء الاصطناعي)
+
+
+يقرأ “البيانات المجهزة” وليس الـ Excel الخام
+
+
+يكتب توصيات بنبرة تدقيق تأميني + تحسين جودة
+
+
+
+
+Citation Gate (بوابة مراجع)
+
+
+تمنع أي مرجع من دومين غير مسموح (cdc.gov, who.int, nice.org.uk, …)
+
+
+أي مرجع غير مسموح = يُزال وتكتب “لا يوجد مرجع موثوق متاح” بدل الهلوسة
+
+
+
+
+
+فكرة “الدعم التوثيقي” وطلب مذكرات/أوامر لتأكيد الضرورة الطبية موجودة في إرشادات CMS حول دعم المطالبات بسجل طبي كافٍ.
+ومفهوم “الضرورة الطبية” وخطاب التبرير/Letter of Medical Necessity موضح في مصادر تأمينية تنظيمية.
+ولفكرة رصد خدمات قد تكون منخفضة القيمة/غير مبررة، Choosing Wisely مرجع مشهور في تقليل الهدر/الاختبارات غير الضرورية.
+
+5.2 نموذج إخراج JSON لازم تفرضه على الـ AI (بدل HTML فقط)
+خلي الـ API يرجع شيء مثل هذا:
+{
+  "meta": {
+    "doctorName": "....",
+    "date": "2026-01-08",
+    "language": "ar"
+  },
+  "scores": {
+    "documentationCompleteness": 72,
+    "medicalNecessitySupport": 64,
+    "duplicationRisk": 40,
+    "overall": 68
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "duplicate_service",
+      "title": "تكرار فحص CBC في نفس اليوم",
+      "evidence": "MRN 123 | 2026-01-05 | CBC مكرر مرتين",
+      "why_it_matters": "قد يُرفض من شركة التأمين إذا لم يوجد مبرر واضح",
+      "what_to_fix": [
+        "تأكيد هل هو تكرار إدخال أم إعادة طلب مبررة",
+        "إضافة سبب إعادة الفحص (تدهور مفاجئ/نزف/حمى مستمرة...) إن كان صحيحًا"
+      ],
+      "justification_template": [
+        "السبب السريري لإعادة الفحص:",
+        "العلامات الحيوية/التدهور:",
+        "كيف غيّر القرار العلاجي:"
+      ],
+      "citations": [
+        { "title": "Complying with Medical Record Documentation Requirements (CMS)", "url": "..." }
+      ]
+    }
+  ],
+  "missing_documentation": [
+    { "field": "ICD-10", "why": "ضروري لربط الخدمة بالتشخيص" }
+  ],
+  "suggested_actions_for_doctor": [
+    "توثيق indication للأشعة قبل طلبها",
+    "توضيح معايير التشخيص والأعراض"
+  ]
+}
+
+ثم أنت ترسم HTML محليًا من JSON (تقدر تسوي فلترة: “تكرار” فقط / “غير مبرر” فقط / “ناقص” فقط).
+هذا يخدمك أكثر من HTML “هائل” ويحل مشكلة الطول والتمرير.
+
+6) تعديل مهم في Apps Script: لا تخزن التقرير داخل خلية (بيتقص)
+مصيبة كبيرة عندك: saveTaskReport_ يقص التقرير إذا طول > 45k.
+الحل الصحيح: احفظ التقرير كملف HTML في Drive وخزن الرابط في العمود 14.
+استبدل saveTaskReport_ بهذا (Apps Script)
+function saveTaskReport_(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const tasksSheet = ss.getSheetByName('Tasks');
+    if (!tasksSheet) return { success: false, error: 'Tasks sheet not found' };
+
+    const allData = tasksSheet.getDataRange().getValues();
+    const folder = DriveApp.getFolderById(TASKS_FOLDER_ID);
+
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][0] === data.taskId) {
+
+        // 1) حفظ التقرير كملف HTML في Drive
+        const ts = Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyyMMdd_HHmm');
+        const safeDoctor = (allData[i][1] || 'doctor').toString().replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '');
+        const fileName = `Report_${safeDoctor}_${ts}.html`;
+
+        const html = data.reportHtml || '<p>Empty report</p>';
+        const file = folder.createFile(fileName, html, MimeType.HTML);
+        const reportUrl = file.getUrl();
+
+        // 2) تحديث الحالة + المحلل + التاريخ
+        tasksSheet.getRange(i + 1, 7).setValue('analyzed');
+        tasksSheet.getRange(i + 1, 8).setValue(data.analyzedBy || '');
+        tasksSheet.getRange(i + 1, 9).setValue(Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm'));
+
+        // 3) خزن الرابط في العمود 14 (لو مو موجود يخلق عمود جديد)
+        tasksSheet.getRange(i + 1, 14).setValue(reportUrl);
+
+        return { success: true, reportUrl: reportUrl };
+      }
+    }
+    return { success: false, error: 'Task not found' };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+وبالتالي في الواجهة بدل ما تعتمد على task.reportHtml:
+
+
+اعرض رابط التقرير
+
+
+أو اعمل Action جديد getTaskReport يرجع محتوى الملف من Drive (أفضل عشان العرض داخل النظام).
+
+
+
+7) ملاحظة “لازم” في الأداة الخارقة: اقتراح التبرير ≠ تلفيق
+أنت تبغى “اقتراحات تبرير” للطبيب: هذا ممتاز لتحسين توثيق الملف، لكن لازم يكون بصيغة:
+
+
+“إذا كان هذا صحيحًا في الحالة، وثّقه بهذه العناصر”
+
+
+ولا يكون نص جاهز للتعبئة بمعلومات غير موجودة.
+
+
+هذا مهم لأن الجهات التأمينية تطلب “توثيق داعم” (supportive documentation) ويُرفض الطلب إذا ما يدعم الضرورة الطبية.
+
+8) خصوصية البيانات (خصوصًا لأنك ترفع ملفات مرضى للذكاء الاصطناعي)
+بما أن النظام يتعامل مع بيانات صحية، لازم تحط 3 إجراءات:
+
+
+تقليل البيانات قبل إرسالها للذكاء الاصطناعي (De-identification): حذف الاسم/الهوية/الهاتف/العنوان…
+
+
+تحديد صلاحيات الوصول + تسجيل دخول + سجل تدقيق (Audit log)
+
+
+سياسة احتفاظ (Retention) ومسح تلقائي
+
+
+الدليل الإرشادي لـ PDPL في السعودية يشرح مبادئ حماية البيانات ومسؤوليات المتحكم/المعالج (Controller/Processor) والبيانات الحساسة.
+
+خلاصة تنفيذية (لو تبغى “أقوى نتيجة بسرعة”)
+
+
+طبق Floating Tools (زر المهام من أي مكان) ✅
+
+
+طبق فهرس التقرير + بحث + تمييز القسم الحالي ✅
+
+
+عدل DOMPurify (أو الأفضل: JSON output) ✅
+
+
+عدل Apps Script: حفظ التقرير في Drive كرابط ✅
+
+
+عدّل الـ AI endpoint ليطلع JSON منظم فيه: تكرار/نقص/غير مبرر + “قالب توثيق” + روابط مصادر ✅
+
+
+إذا طبّقت هذه الخمس نقاط، بتلاحظ مباشرة:
+
+
+التنقل صار سريع ومريح
+
+
+التقارير صارت قابلة للفرز بدل ما تكون “نص طويل”
+
+
+التكرار/النقص/غير المبرر يصير واضح جدًا لطبيب التأمين
+
+
+والتبريرات تصير “قائمة عناصر توثيق” تحسن الملف فعليًا بدل ما تكون كلام عام
+
+
