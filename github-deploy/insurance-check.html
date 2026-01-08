@@ -499,7 +499,7 @@
     @media print {
       .scroll-nav, .header, .header-tabs, .upload-section, .analyze-section, .report-actions, 
       .powered-by, .hero-card, .stats-bar, .rating-section, .doctors-stats, .stepper,
-      .tab-btn, .tabs-header { display: none !important; }
+      .tab-btn, .tabs-header, .quick-actions-fab { display: none !important; }
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       html, body { 
         direction: rtl !important; 
@@ -632,6 +632,47 @@
       display: block;
     }
     
+    /* Quick Actions FAB */
+    .quick-actions-fab {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      z-index: 1000;
+    }
+    .fab-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, var(--gold), #b8963d);
+      color: var(--primary);
+      border: none;
+      border-radius: 50px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 25px rgba(201, 169, 98, 0.5);
+      transition: all 0.3s ease;
+      animation: fabPulse 2s infinite;
+    }
+    .fab-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 30px rgba(201, 169, 98, 0.7);
+    }
+    .fab-btn i {
+      font-size: 1.1rem;
+      animation: bounceDown 1s infinite;
+    }
+    @keyframes bounceDown {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(4px); }
+    }
+    @keyframes fabPulse {
+      0%, 100% { box-shadow: 0 6px 25px rgba(201, 169, 98, 0.5); }
+      50% { box-shadow: 0 6px 35px rgba(201, 169, 98, 0.8); }
+    }
+    
     
     /* Tasks Management Styles */
     .tasks-section {
@@ -703,10 +744,21 @@
       justify-content: center;
       gap: 0.4rem;
     }
-    .task-btn.analyze { background: var(--info); color: white; }
+    .task-btn.analyze { 
+      background: linear-gradient(135deg, var(--info), #1d7fc2);
+      color: white;
+      font-size: 1rem;
+      padding: 12px 24px;
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+      animation: analyzeGlow 2s infinite;
+    }
+    @keyframes analyzeGlow {
+      0%, 100% { box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); }
+      50% { box-shadow: 0 4px 25px rgba(56, 189, 248, 0.7); }
+    }
     .task-btn.view { background: #8b5cf6; color: white; }
     .task-btn.deliver { background: var(--success); color: white; }
-    .task-btn:hover { opacity: 0.9; transform: scale(1.02); }
+    .task-btn:hover { opacity: 0.9; transform: scale(1.05); }
     
     /* Signature Modal */
     .signature-modal {
@@ -1512,6 +1564,13 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Quick Actions Floating Button -->
+  <div class="quick-actions-fab hidden" id="quickActionsFab">
+    <button class="fab-btn" onclick="scrollToReportActions()" title="الذهاب للحفظ والطباعة">
+      <i class="fas fa-arrow-down"></i>
+      <span>حفظ/طباعة</span>
+    </button>
+  </div>
 
 <script>
 // Firebase Configuration
@@ -2480,6 +2539,27 @@ function getGregorianDate() {
   return new Date().toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+// Scroll to report actions (save/print)
+function scrollToReportActions() {
+  const reportActions = document.querySelector('.report-actions');
+  if (reportActions) {
+    reportActions.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// Show/hide quick actions FAB based on report visibility
+function updateQuickActionsFab() {
+  const fab = document.getElementById('quickActionsFab');
+  const reportSection = document.getElementById('reportSection');
+  if (fab && reportSection) {
+    if (reportSection.classList.contains('show') && originalReport) {
+      fab.classList.remove('hidden');
+    } else {
+      fab.classList.add('hidden');
+    }
+  }
+}
+
 // Highlight rejected cells with red background
 function highlightRejectedCells() {
   const reportContent = document.getElementById('reportContent');
@@ -2613,6 +2693,7 @@ analyzeBtn.addEventListener('click', async () => {
       reportContent.innerHTML = originalReport;
       highlightRejectedCells();
       reportSection.classList.add('show');
+      updateQuickActionsFab();
       reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       
       // Update stepper to step 3 (Result)
@@ -2852,6 +2933,7 @@ function resetAnalysis() {
   doctorNameInput.value = '';
   document.getElementById('doctorSelected').querySelector('span').textContent = '-- اختر الطبيب --';
   document.querySelectorAll('.custom-dropdown-option').forEach(opt => opt.classList.remove('selected'));
+  updateQuickActionsFab(); // Hide FAB
   insuranceRatingValue = 0;
   serviceRatingValue = 0;
   document.getElementById('translateText').textContent = 'English';
@@ -3220,6 +3302,7 @@ async function viewSavedReport(taskIndex) {
   reportContent.innerHTML = task.reportHtml;
   highlightRejectedCells();
   reportSection.classList.add('show');
+  updateQuickActionsFab();
   reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   
   // Store current task for tracking
