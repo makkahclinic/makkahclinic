@@ -918,6 +918,136 @@
       header, .floating-nav { display: none !important; }
     }
 
+    /* === Stepper styling === */
+    .stepper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 2rem;
+      padding: 0 1rem;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      color: var(--text-muted);
+      transition: all 0.3s ease;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .step:hover {
+      background: rgba(201,169,98,0.1);
+    }
+    .step.active {
+      background: linear-gradient(135deg, rgba(201,169,98,0.2), rgba(201,169,98,0.1));
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    .step.completed {
+      background: rgba(16,185,129,0.15);
+      border-color: #10b981;
+      color: #10b981;
+    }
+    .step-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      background: rgba(255,255,255,0.1);
+      border: 2px solid currentColor;
+    }
+    .step.completed .step-number {
+      background: #10b981;
+      border-color: #10b981;
+      color: white;
+    }
+    .step.completed .step-number::after {
+      content: '✓';
+    }
+    .step.completed .step-number span {
+      display: none;
+    }
+    .step-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .step-connector {
+      width: 40px;
+      height: 3px;
+      background: rgba(255,255,255,0.1);
+      margin: 0 5px;
+    }
+    .step-connector.completed {
+      background: #10b981;
+    }
+    @media (max-width: 600px) {
+      .stepper { flex-wrap: wrap; gap: 8px; }
+      .step { padding: 8px 12px; }
+      .step-label { font-size: 12px; }
+      .step-connector { width: 20px; }
+    }
+
+    /* === Sidebar Summary === */
+    .sidebar-summary {
+      position: sticky;
+      top: 100px;
+      background: linear-gradient(135deg, rgba(30,58,95,0.95), rgba(15,23,42,0.95));
+      border: 2px solid var(--gold);
+      border-radius: 16px;
+      padding: 1.5rem;
+      min-width: 260px;
+      max-width: 300px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    .sidebar-summary h4 {
+      color: var(--gold);
+      margin: 0 0 1rem;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .summary-item:last-child { border-bottom: none; }
+    .summary-value {
+      font-weight: 700;
+      color: var(--gold);
+    }
+    .sidebar-summary .analyze-btn {
+      width: 100%;
+      margin-top: 1rem;
+    }
+    @media (max-width: 900px) {
+      .sidebar-summary { display: none; }
+    }
+
+    /* === Main layout with sidebar === */
+    .analysis-layout {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 2rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .analysis-layout { grid-template-columns: 1fr; }
+    }
+
     /* === Progress bar styling === */
     .progress-container {
       margin-top: 12px;
@@ -1072,6 +1202,27 @@
         <!-- Tab 1: Analysis (Current Content) -->
         <div class="tab-content active" id="analysisTab">
         
+        <!-- Stepper -->
+        <div class="stepper no-print" id="analysisStepper">
+          <div class="step active" id="step1" onclick="goToStep(1)">
+            <div class="step-number"><span>1</span></div>
+            <span class="step-label">اختيار الطبيب</span>
+          </div>
+          <div class="step-connector" id="connector1"></div>
+          <div class="step" id="step2" onclick="goToStep(2)">
+            <div class="step-number"><span>2</span></div>
+            <span class="step-label">رفع الملفات</span>
+          </div>
+          <div class="step-connector" id="connector2"></div>
+          <div class="step" id="step3">
+            <div class="step-number"><span>3</span></div>
+            <span class="step-label">النتيجة</span>
+          </div>
+        </div>
+        
+        <div class="analysis-layout">
+          <div class="analysis-main">
+        
         <div class="upload-section" style="text-align:center;">
           <h2 style="color:var(--gold);font-size:1.8rem;margin-bottom:0.5rem;">
             <i class="fas fa-user-tie"></i> مراجعة الحالات الطبية
@@ -1213,6 +1364,35 @@
         <div class="powered-by">
           <i class="fas fa-shield-alt"></i> لجنة متابعة الجودة والتدقيق الطبي - مجمع مكة الطبي
         </div>
+        
+          </div> <!-- End of analysis-main -->
+          
+          <!-- Sidebar Summary -->
+          <aside class="sidebar-summary no-print" id="sidebarSummary">
+            <h4><i class="fas fa-clipboard-list"></i> ملخص الحالة</h4>
+            <div class="summary-item">
+              <span>الطبيب</span>
+              <span class="summary-value" id="summaryDoctor">لم يُحدد</span>
+            </div>
+            <div class="summary-item">
+              <span>عدد الملفات</span>
+              <span class="summary-value" id="summaryFilesCount">0</span>
+            </div>
+            <div class="summary-item">
+              <span>صفحات PDF</span>
+              <span class="summary-value" id="summaryPdfPages">0</span>
+            </div>
+            <div class="summary-item">
+              <span>ملفات Excel</span>
+              <span class="summary-value" id="summaryExcelCount">0</span>
+            </div>
+            <button class="analyze-btn" id="sidebarAnalyzeBtn" disabled onclick="document.getElementById('analyzeBtn').click()">
+              <i class="fas fa-search-dollar"></i>
+              <span>مراجعة الحالة</span>
+            </button>
+          </aside>
+          
+        </div> <!-- End of analysis-layout -->
         
         </div> <!-- End of Analysis Tab -->
         
@@ -1548,6 +1728,9 @@ function selectDoctor(name, specialty) {
   optionsDiv.querySelectorAll('.custom-dropdown-option').forEach(opt => {
     opt.classList.toggle('selected', opt.dataset.value === name);
   });
+  
+  // Update sidebar summary and stepper
+  updateSidebarSummary();
 }
 
 // Initialize custom dropdown
@@ -2270,9 +2453,15 @@ function renderFiles() {
   
   const manualText = document.getElementById('manualCaseInput')?.value?.trim() || '';
   analyzeBtn.disabled = filesState.length === 0 && manualText.length === 0;
+  
+  // Update sidebar summary
+  updateSidebarSummary();
 }
 
-document.getElementById('manualCaseInput')?.addEventListener('input', renderFiles);
+document.getElementById('manualCaseInput')?.addEventListener('input', () => {
+  renderFiles();
+  updateSidebarSummary();
+});
 
 function getHijriDate() {
   try {
@@ -2673,6 +2862,99 @@ function floatingNav(tabName) {
 
 function scrollToTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================
+// STEPPER SYSTEM
+// ============================================
+
+let currentStepperStep = 1;
+
+function updateStepper(step) {
+  currentStepperStep = step;
+  
+  for (let i = 1; i <= 3; i++) {
+    const stepEl = document.getElementById('step' + i);
+    const connectorEl = document.getElementById('connector' + (i - 1));
+    
+    if (stepEl) {
+      stepEl.classList.remove('active', 'completed');
+      if (i < step) {
+        stepEl.classList.add('completed');
+      } else if (i === step) {
+        stepEl.classList.add('active');
+      }
+    }
+    
+    if (connectorEl) {
+      connectorEl.classList.toggle('completed', i < step);
+    }
+  }
+}
+
+function goToStep(step) {
+  if (step <= currentStepperStep || step === currentStepperStep + 1) {
+    updateStepper(step);
+    
+    // Scroll to relevant section
+    if (step === 1) {
+      document.getElementById('doctorDropdown')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (step === 2) {
+      document.getElementById('dropZone')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (step === 3) {
+      document.getElementById('reportSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+// ============================================
+// SIDEBAR SUMMARY SYSTEM
+// ============================================
+
+function updateSidebarSummary() {
+  const doctorName = document.getElementById('doctorName')?.value || '';
+  const summaryDoctor = document.getElementById('summaryDoctor');
+  const summaryFilesCount = document.getElementById('summaryFilesCount');
+  const summaryPdfPages = document.getElementById('summaryPdfPages');
+  const summaryExcelCount = document.getElementById('summaryExcelCount');
+  const sidebarAnalyzeBtn = document.getElementById('sidebarAnalyzeBtn');
+  
+  // Update doctor name
+  if (summaryDoctor) {
+    summaryDoctor.textContent = doctorName || 'لم يُحدد';
+  }
+  
+  // Count files by type
+  let pdfPages = 0;
+  let excelCount = 0;
+  let totalFiles = filesState.length;
+  
+  filesState.forEach(f => {
+    if (f.isExcel) {
+      excelCount++;
+    } else if (f.name.includes('صفحة')) {
+      pdfPages++;
+    }
+  });
+  
+  if (summaryFilesCount) summaryFilesCount.textContent = totalFiles;
+  if (summaryPdfPages) summaryPdfPages.textContent = pdfPages;
+  if (summaryExcelCount) summaryExcelCount.textContent = excelCount;
+  
+  // Update sidebar analyze button state
+  const canAnalyze = (doctorName && totalFiles > 0) || document.getElementById('manualCaseInput')?.value.trim();
+  if (sidebarAnalyzeBtn) {
+    sidebarAnalyzeBtn.disabled = !canAnalyze;
+  }
+  
+  // Update stepper based on progress
+  if (doctorName && !totalFiles) {
+    updateStepper(2);
+  } else if (doctorName && totalFiles > 0) {
+    updateStepper(2);
+  } else {
+    updateStepper(1);
+  }
 }
 
 // Load doctors for task dropdown (from Staff sheet)
