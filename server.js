@@ -1675,7 +1675,7 @@ app.get('/api/insurance/tasks', async (req, res) => {
     const sheets = await getGoogleSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Audit_Tasks!A2:N1000'
+      range: 'Tasks!A2:N1000'
     });
     
     const rows = response.data.values || [];
@@ -1714,7 +1714,7 @@ app.post('/api/insurance/tasks', async (req, res) => {
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Audit_Tasks!A:N',
+      range: 'Tasks!A:N',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [[taskId, doctorName, fileName, fileData, uploadedBy, uploadDate, 'pending', '', '', '', '', '', '', '']]
@@ -1737,7 +1737,7 @@ app.get('/api/insurance/tasks/:taskId/file', async (req, res) => {
     // Get all task data
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Audit_Tasks!A2:N1000'
+      range: 'Tasks!A2:N1000'
     });
     
     const rows = response.data.values || [];
@@ -1768,7 +1768,7 @@ app.post('/api/insurance/tasks/:taskId/report', async (req, res) => {
     // Find the task row
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Audit_Tasks!A:A'
+      range: 'Tasks!A:A'
     });
     
     const rows = response.data.values || [];
@@ -1787,10 +1787,10 @@ app.post('/api/insurance/tasks/:taskId/report', async (req, res) => {
       requestBody: {
         valueInputOption: 'USER_ENTERED',
         data: [
-          { range: `Audit_Tasks!G${rowNum}`, values: [['analyzed']] },
-          { range: `Audit_Tasks!H${rowNum}`, values: [[analyzedBy]] },
-          { range: `Audit_Tasks!I${rowNum}`, values: [[analysisDate]] },
-          { range: `Audit_Tasks!J${rowNum}`, values: [[reportHtml]] }
+          { range: `Tasks!G${rowNum}`, values: [['analyzed']] },
+          { range: `Tasks!H${rowNum}`, values: [[analyzedBy]] },
+          { range: `Tasks!I${rowNum}`, values: [[analysisDate]] },
+          { range: `Tasks!J${rowNum}`, values: [[reportHtml]] }
         ]
       }
     });
@@ -1812,7 +1812,7 @@ app.post('/api/insurance/tasks/:taskId/deliver', async (req, res) => {
     // Find the task row
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Audit_Tasks!A:A'
+      range: 'Tasks!A:A'
     });
     
     const rows = response.data.values || [];
@@ -1831,10 +1831,10 @@ app.post('/api/insurance/tasks/:taskId/deliver', async (req, res) => {
       requestBody: {
         valueInputOption: 'USER_ENTERED',
         data: [
-          { range: `Audit_Tasks!G${rowNum}`, values: [['delivered']] },
-          { range: `Audit_Tasks!K${rowNum}`, values: [[deliveredBy]] },
-          { range: `Audit_Tasks!L${rowNum}`, values: [[deliveryDate]] },
-          { range: `Audit_Tasks!M${rowNum}`, values: [[signature]] }
+          { range: `Tasks!G${rowNum}`, values: [['delivered']] },
+          { range: `Tasks!K${rowNum}`, values: [[deliveredBy]] },
+          { range: `Tasks!L${rowNum}`, values: [[deliveryDate]] },
+          { range: `Tasks!M${rowNum}`, values: [[signature]] }
         ]
       }
     });
@@ -1852,7 +1852,7 @@ app.get('/api/insurance/delivery-log', async (req, res) => {
     const sheets = await getGoogleSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Audit_Tasks!A2:N1000'
+      range: 'Tasks!A2:N1000'
     });
     
     const rows = response.data.values || [];
@@ -1889,7 +1889,7 @@ app.post('/api/insurance/tasks/:taskId/status', async (req, res) => {
     // Find the task row
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Audit_Tasks!A:A'
+      range: 'Tasks!A:A'
     });
     
     const rows = response.data.values || [];
@@ -1900,14 +1900,14 @@ app.post('/api/insurance/tasks/:taskId/status', async (req, res) => {
     }
     
     const rowNum = rowIndex + 1;
-    const updateData = [{ range: `Audit_Tasks!G${rowNum}`, values: [[status]] }];
+    const updateData = [{ range: `Tasks!G${rowNum}`, values: [[status]] }];
     
     // Add extra data based on status
     if (status === 'analyzing' && analyzedBy) {
-      updateData.push({ range: `Audit_Tasks!H${rowNum}`, values: [[analyzedBy]] });
+      updateData.push({ range: `Tasks!H${rowNum}`, values: [[analyzedBy]] });
     }
     if (status === 'printed' && printedBy) {
-      updateData.push({ range: `Audit_Tasks!N${rowNum}`, values: [[printedBy]] });
+      updateData.push({ range: `Tasks!N${rowNum}`, values: [[printedBy]] });
     }
     
     await sheets.spreadsheets.values.batchUpdate({
