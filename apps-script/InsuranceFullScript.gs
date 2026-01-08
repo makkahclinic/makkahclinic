@@ -980,14 +980,32 @@ function saveTaskReport_(data) {
           tasksSheet.getRange(i + 1, 9).setValue(Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm'));
         }
         
-        // Save report HTML in column 14 (index 13)
+        // Save report as HTML file in Drive instead of cell (avoids 50k char limit)
         if (data.reportHtml) {
-          // Compress report if too large (Google Sheets cell limit is ~50000 chars)
-          let reportToSave = data.reportHtml;
-          if (reportToSave.length > 45000) {
-            reportToSave = reportToSave.substring(0, 45000) + '<!-- تم اقتطاع التقرير -->';
+          try {
+            const folder = DriveApp.getFolderById(TASKS_FOLDER_ID);
+            const ts = Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyyMMdd_HHmm');
+            const safeDoctor = (allData[i][1] || 'doctor').toString().replace(/[^\u0600-\u06FFa-zA-Z0-9_\- ]/g, '');
+            const fileName = 'Report_' + safeDoctor + '_' + ts + '.html';
+            
+            const html = data.reportHtml || '<p>Empty report</p>';
+            const file = folder.createFile(fileName, html, MimeType.HTML);
+            const reportUrl = file.getUrl();
+            
+            // Store Drive link in column 14
+            tasksSheet.getRange(i + 1, 14).setValue(reportUrl);
+            
+            return { success: true, reportUrl: reportUrl };
+          } catch(driveErr) {
+            // Fallback: truncate and save in cell
+            Logger.log('Drive save failed, falling back to cell: ' + driveErr);
+            let reportToSave = data.reportHtml;
+            if (reportToSave.length > 45000) {
+              reportToSave = reportToSave.substring(0, 45000) + '<!-- تم اقتطاع التقرير -->';
+            }
+            tasksSheet.getRange(i + 1, 14).setValue(reportToSave);
+            return { success: true, fallback: true };
           }
-          tasksSheet.getRange(i + 1, 14).setValue(reportToSave);
         }
         
         return { success: true };
