@@ -2712,8 +2712,9 @@ analyzeBtn.addEventListener('click', async () => {
   try {
     const resp = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ 
+        action: 'analyze',
         files: filesToSend, 
         lang: 'ar',
         doctorName: doctorName
@@ -2953,8 +2954,9 @@ async function translateReport() {
     try {
       const resp = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ 
+          action: 'analyze',
           files: filesState, 
           lang: 'en' 
         })
@@ -3249,14 +3251,15 @@ async function uploadTask() {
     reader.onload = async function(e) {
       const base64Data = e.target.result.split(',')[1];
       
-      const response = await fetch(TASKS_API_URL + '?action=addTask', {
+      const response = await fetch(TASKS_API_URL + '?action=createTask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           doctorName: doctor,
           fileName: file.name,
           fileData: base64Data,
-          uploadedBy: currentUser.name
+          uploadedBy: currentUser.name,
+          uploaderEmail: currentUser.email
         })
       });
       
@@ -3512,7 +3515,7 @@ async function updateTaskStatus(taskId, status) {
   try {
     await fetch(TASKS_API_URL + '?action=updateTaskStatus', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
         taskId: taskId,
         status: status,
@@ -3527,9 +3530,9 @@ async function updateTaskStatus(taskId, status) {
 // Save report to task after analysis
 async function saveReportToTask(taskId, reportHtml) {
   try {
-    const response = await fetch(TASKS_API_URL + '?action=saveReport', {
+    const response = await fetch(TASKS_API_URL + '?action=saveTaskReport', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
         taskId: taskId,
         reportHtml: reportHtml,
@@ -3551,7 +3554,7 @@ async function markTaskAsPrinted(taskId) {
   try {
     await fetch(TASKS_API_URL + '?action=updateTaskStatus', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
         taskId: taskId,
         status: 'printed',
@@ -3714,9 +3717,9 @@ async function confirmDelivery() {
   const signatureData = signatureCanvas.toDataURL('image/png');
   
   try {
-    const response = await fetch(TASKS_API_URL + '?action=deliverTask', {
+    const response = await fetch(TASKS_API_URL + '?action=confirmDelivery', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
         taskId: currentDeliveryTask.id,
         signature: signatureData,
