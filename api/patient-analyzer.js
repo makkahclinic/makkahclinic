@@ -1,6 +1,130 @@
 // /api/patient-analyzer.js
 import XLSX from 'xlsx';
 
+// Parse text content that was pre-processed by frontend (pipe-separated rows)
+function parseTextContent(textContent) {
+  try {
+    console.log('[parseTextContent] Parsing pre-processed text content...');
+    
+    // First, normalize newlines within cells (Excel headers may have embedded newlines)
+    // Split by pipe, then rejoin while collapsing embedded newlines
+    const normalizedContent = textContent.replace(/\r?\n(?![=|0-9])/g, ' ');
+    
+    const lines = normalizedContent.split('\n').filter(line => line.trim());
+    if (lines.length < 2) return null;
+    
+    // Find header line (contains Claim, Patient, ICD, Service, etc.)
+    let headerLine = lines[0];
+    let dataStartIdx = 1;
+    
+    // Check if first line is sheet name like "=== ورقة1 ==="
+    if (headerLine.startsWith('===')) {
+      headerLine = lines[1] || '';
+      dataStartIdx = 2;
+    }
+    
+    // Normalize header by replacing multiple spaces with single space
+    const headers = headerLine.split('|').map(h => h.trim().replace(/\s+/g, ' ').toLowerCase());
+    console.log('[parseTextContent] Headers detected:', headers.slice(0, 8));
+    
+    // Find column indices
+    const claimIdx = headers.findIndex(h => h.includes('claim') || h.includes('se no'));
+    const patientIdx = headers.findIndex(h => h.includes('patient') || h.includes('file no'));
+    const icdDescCols = headers.map((h, i) => (h.includes('icd') && h.includes('description')) ? i : -1).filter(i => i >= 0);
+    const serviceDescIdx = headers.findIndex(h => (h.includes('service') && h.includes('desc')) || h.includes('item desc'));
+    const tempIdx = headers.findIndex(h => h.includes('temp'));
+    const bpIdx = headers.findIndex(h => h.includes('pressure') || h.includes('bp'));
+    const pulseIdx = headers.findIndex(h => h.includes('pulse'));
+    const weightIdx = headers.findIndex(h => h.includes('weight'));
+    const heightIdx = headers.findIndex(h => h.includes('height'));
+    
+    console.log('[parseTextContent] Column indices:', { claimIdx, patientIdx, serviceDescIdx, tempIdx });
+    
+    if (claimIdx < 0 && serviceDescIdx < 0) {
+      console.log('[parseTextContent] Could not find key columns, returning null');
+      return null;
+    }
+    
+    // Group rows by claim ID
+    const caseMap = new Map();
+    for (let i = dataStartIdx; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith('===')) continue; // Skip sheet headers
+      
+      const cells = line.split('|').map(c => c.trim());
+      if (cells.length < 3) continue;
+      
+      const claimId = claimIdx >= 0 ? cells[claimIdx] || '' : `row_${i}`;
+      if (!claimId) continue;
+      
+      // Get diagnosis from ICD description columns
+      let diagText = '';
+      if (icdDescCols.length > 0) {
+        diagText = icdDescCols.map(idx => cells[idx] || '').filter(d => d).join(' | ');
+      }
+      
+      if (!caseMap.has(claimId)) {
+        caseMap.set(claimId, {
+          claimId,
+          patientId: patientIdx >= 0 ? cells[patientIdx] : '',
+          diagnosis: diagText,
+          vitals: {
+            temperature: tempIdx >= 0 ? cells[tempIdx] : '',
+            bloodPressure: bpIdx >= 0 ? cells[bpIdx] : '',
+            pulse: pulseIdx >= 0 ? cells[pulseIdx] : '',
+            weight: weightIdx >= 0 ? cells[weightIdx] : '',
+            height: heightIdx >= 0 ? cells[heightIdx] : ''
+          },
+          services: [],
+          medications: [],
+          procedures: [],
+          rawData: []
+        });
+      }
+      
+      const c = caseMap.get(claimId);
+      c.rawData.push(line);
+      
+      // Extract service description
+      if (serviceDescIdx >= 0 && cells[serviceDescIdx]) {
+        const serviceDesc = cells[serviceDescIdx];
+        if (!c.services.some(s => s.name === serviceDesc)) {
+          c.services.push({ name: serviceDesc, code: '', amount: '' });
+        }
+      }
+    }
+    
+    // Classify services as medications or procedures
+    for (const c of caseMap.values()) {
+      for (const svc of c.services) {
+        const name = svc.name.toUpperCase();
+        if (name.includes('TAB') || name.includes('CAP') || name.includes('SYRUP') || 
+            name.includes('INJ') || name.includes('MG') || name.includes('ML') ||
+            name.includes('SOLUTION') || name.includes('INFUSION') || name.includes('CREAM') ||
+            name.includes('DROP') || name.includes('SUSP') || name.includes('ORAL') ||
+            name.includes('I.V.') || name.includes('PARACETAMOL') || name.includes('AMOXICILLIN') ||
+            name.includes('SALINE') || name.includes('DEXTROSE') || name.includes('ANTIBIOTIC')) {
+          c.medications.push({ name: svc.name, dose: '1' });
+        } else if (name.includes('ANALYSIS') || name.includes('TEST') || name.includes('CBC') ||
+                   name.includes('X-RAY') || name.includes('SCAN') || name.includes('CULTURE') ||
+                   name.includes('EXAM') || name.includes('BLOOD') || name.includes('URINE')) {
+          c.procedures.push(svc.name);
+        } else {
+          c.procedures.push(svc.name);
+        }
+      }
+      console.log(`[parseTextContent] Case ${c.claimId}: ${c.medications.length} meds, ${c.procedures.length} procs`);
+    }
+    
+    const cases = Array.from(caseMap.values());
+    console.log(`[parseTextContent] Total cases extracted: ${cases.length}`);
+    return cases.length > 0 ? cases : null;
+  } catch (err) {
+    console.error('[parseTextContent] Error:', err);
+    return null;
+  }
+}
+
 // Parse Excel file and extract cases - FIXED for actual Excel structure
 function parseExcelCases(base64Data) {
   try {
@@ -775,9 +899,22 @@ export default async function handler(req, res) {
         
         if (isExcelFile) {
           excelFile = f;
-          // Parse Excel from base64
           const base64Content = f.base64 || content;
+          
+          // Try to parse as base64 Excel first
           excelCases = parseExcelCases(base64Content);
+          
+          // If base64 parsing failed or returned no valid cases, try parsing as pre-processed text
+          if (!excelCases || excelCases.length === 0 || 
+              (excelCases.length > 0 && excelCases.every(c => c.medications.length === 0 && c.procedures.length === 0 && !c.diagnosis))) {
+            console.log('[Excel Detection] Base64 parsing failed or empty, trying text parsing...');
+            const textCases = parseTextContent(content);
+            if (textCases && textCases.length > 0) {
+              excelCases = textCases;
+              console.log(`[Excel Detection] Text parsing succeeded with ${textCases.length} cases`);
+            }
+          }
+          
           console.log(`[Excel Detection] File: ${f.name}, MIME: ${mimeType}, Parsed cases: ${excelCases?.length || 0}`);
           continue;
         }
