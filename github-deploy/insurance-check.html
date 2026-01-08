@@ -12,6 +12,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- DOMPurify for XSS protection -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -885,6 +887,72 @@
       border-radius: 4px;
       cursor: pointer;
     }
+
+    /* === Missing Helper Classes === */
+    .muted { color: var(--text-secondary, #9ca3af); font-size: 14px; }
+    .no-print { /* default visible */ }
+    .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+
+    /* === Responsive Spacing === */
+    .main-content {
+      padding: clamp(16px, 3vw, 32px);
+      margin: clamp(16px, 3vw, 32px) auto;
+    }
+
+    /* === File name overflow fix === */
+    .file-card .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+
+    /* === Reduce motion for accessibility === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { 
+        animation-duration: 0.01ms !important; 
+        transition-duration: 0.01ms !important; 
+      }
+    }
+
+    /* === Print support === */
+    @media print {
+      .no-print { display: none !important; }
+      .page-wrapper { position: static; backdrop-filter: none; }
+      .main-content { margin: 0; border: none; box-shadow: none; }
+      header, .floating-nav { display: none !important; }
+    }
+
+    /* === Progress bar styling === */
+    .progress-container {
+      margin-top: 12px;
+      display: none;
+    }
+    .progress-container.active { display: block; }
+    .progress-status {
+      color: var(--gold);
+      font-size: 14px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.1);
+      overflow: hidden;
+    }
+    .progress-bar progress {
+      width: 100%;
+      height: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .progress-bar progress::-webkit-progress-bar {
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+    }
+    .progress-bar progress::-webkit-progress-value {
+      background: linear-gradient(90deg, var(--gold), #e6c56a);
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -923,14 +991,14 @@
         <h2>تسجيل الدخول مطلوب</h2>
         <p>هذه الخدمة متاحة فقط للموظفين المصرح لهم</p>
         
-        <div id="emailLoginForm" style="display:flex; flex-direction:column; gap:12px; width:100%;">
-          <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" style="padding:12px 15px; border:2px solid #e2e8f0; border-radius:8px; font-size:1rem; direction:ltr; text-align:left;">
-          <input type="password" id="loginPassword" placeholder="كلمة المرور" style="padding:12px 15px; border:2px solid #e2e8f0; border-radius:8px; font-size:1rem; direction:ltr; text-align:left;">
-          <button class="login-btn" onclick="loginWithEmail()" style="background:linear-gradient(135deg, #10b981, #059669);">
+        <form id="emailLoginForm" style="display:flex; flex-direction:column; gap:12px; width:100%;" onsubmit="event.preventDefault(); loginWithEmail();" autocomplete="on">
+          <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" autocomplete="email" style="padding:12px 15px; border:2px solid #e2e8f0; border-radius:8px; font-size:1rem; direction:ltr; text-align:left;">
+          <input type="password" id="loginPassword" placeholder="كلمة المرور" autocomplete="current-password" style="padding:12px 15px; border:2px solid #e2e8f0; border-radius:8px; font-size:1rem; direction:ltr; text-align:left;">
+          <button type="submit" class="login-btn" style="background:linear-gradient(135deg, #10b981, #059669);">
             <i class="fas fa-sign-in-alt"></i>
             تسجيل الدخول
           </button>
-          <button class="login-btn" onclick="registerWithEmail()" style="background:linear-gradient(135deg, #3b82f6, #2563eb);">
+          <button type="button" class="login-btn" onclick="registerWithEmail()" style="background:linear-gradient(135deg, #3b82f6, #2563eb);">
             <i class="fas fa-user-plus"></i>
             تسجيل جديد
           </button>
@@ -939,11 +1007,11 @@
             <span style="color:#666; font-size:0.9rem;">أو</span>
             <hr style="flex:1; border:none; border-top:1px solid #e2e8f0;">
           </div>
-          <button class="login-btn" onclick="loginWithGoogle()">
+          <button type="button" class="login-btn" onclick="loginWithGoogle()">
             <i class="fab fa-google"></i>
             تسجيل الدخول بـ Google
           </button>
-        </div>
+        </form>
       </div>
 
       <!-- Access Denied Screen -->
@@ -1054,6 +1122,17 @@
           </div>
 
           <div id="filesGrid" class="files-grid"></div>
+          
+          <!-- Progress indicator for file processing -->
+          <div class="progress-container no-print" id="progressContainer">
+            <div class="progress-status" id="progressStatus" role="status" aria-live="polite">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span id="progressText">جاري معالجة الملفات...</span>
+            </div>
+            <div class="progress-bar">
+              <progress id="fileProgress" value="0" max="100"></progress>
+            </div>
+          </div>
         </div>
 
         <div class="analyze-section">
@@ -2029,19 +2108,38 @@ document.getElementById('pdfFilePicker')?.addEventListener('change', (e) => hand
 document.getElementById('excelFilePicker')?.addEventListener('change', (e) => handleFiles(Array.from(e.target.files)));
 
 async function handleFiles(files) {
+  const progressContainer = document.getElementById('progressContainer');
+  const progressText = document.getElementById('progressText');
+  const fileProgress = document.getElementById('fileProgress');
+  
+  // Defensive checks for progress elements
+  const hasProgressUI = progressContainer && progressText && fileProgress;
+  
   statusText.textContent = 'جاري معالجة الملفات...';
   statusMsg.style.display = 'flex';
+  if (hasProgressUI) progressContainer.classList.add('active');
+  
+  // Track completed work units (each page/file = 1 unit)
+  let completedUnits = 0;
+  let totalUnits = files.length; // Start with file count, will be updated for PDFs
 
   for (const f of files) {
     const ext = f.name.split('.').pop().toLowerCase();
     
     if (f.type === 'application/pdf') {
       try {
+        if (hasProgressUI) progressText.textContent = `جاري قراءة PDF: ${f.name}...`;
         const arrayBuffer = await f.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
         
+        // Replace this file's 1 unit with actual page count
+        totalUnits += pdf.numPages - 1;
+        
         for (let i = 1; i <= pdf.numPages; i++) {
-          statusText.textContent = `جاري معالجة صفحة ${i} من ${pdf.numPages}...`;
+          if (hasProgressUI) {
+            progressText.textContent = `معالجة صفحة ${i} من ${pdf.numPages} - ${f.name}`;
+          }
+          
           const page = await pdf.getPage(i);
           const viewport = page.getViewport({ scale: 1.5 });
           const canvas = document.createElement('canvas');
@@ -2058,7 +2156,10 @@ async function handleFiles(files) {
             data: base64Url,
             isExcel: false
           });
+          completedUnits++;
+          if (hasProgressUI) fileProgress.value = Math.round((completedUnits / totalUnits) * 100);
           renderFiles();
+          await new Promise(requestAnimationFrame); // Yield to UI
         }
       } catch(err) {
         console.error("PDF error:", err);
@@ -2066,7 +2167,11 @@ async function handleFiles(files) {
       }
     } else if (['xlsx', 'xls', 'csv'].includes(ext)) {
       try {
-        statusText.textContent = `جاري معالجة ملف Excel: ${f.name}...`;
+        if (hasProgressUI) {
+          progressText.textContent = `جاري معالجة ملف Excel: ${f.name}...`;
+          fileProgress.value = Math.round((completedUnits / totalUnits) * 100);
+        }
+        
         const arrayBuffer = await f.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
@@ -2087,12 +2192,20 @@ async function handleFiles(files) {
           isExcel: true,
           dataQualityWarnings: processedData.warnings
         });
+        completedUnits++;
+        if (hasProgressUI) fileProgress.value = Math.round((completedUnits / totalUnits) * 100);
         renderFiles();
       } catch(err) {
         console.error("Excel error:", err);
         alert(`خطأ في معالجة Excel: ${err.message}`);
+        completedUnits++; // Count as done even on error
       }
     } else {
+      if (hasProgressUI) {
+        progressText.textContent = `جاري معالجة: ${f.name}...`;
+        fileProgress.value = Math.round((completedUnits / totalUnits) * 100);
+      }
+      
       const base64Url = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = reject;
@@ -2105,11 +2218,22 @@ async function handleFiles(files) {
         data: base64Url,
         isExcel: false
       });
+      completedUnits++;
+      if (hasProgressUI) fileProgress.value = Math.round((completedUnits / totalUnits) * 100);
     }
   }
   
+  // Show 100% briefly before hiding
+  if (hasProgressUI) {
+    fileProgress.value = 100;
+    progressText.textContent = 'اكتملت المعالجة!';
+  }
+  await new Promise(resolve => setTimeout(resolve, 300)); // Brief 100% visibility
+  
   renderFiles();
   statusMsg.style.display = 'none';
+  if (progressContainer) progressContainer.classList.remove('active');
+  if (fileProgress) fileProgress.value = 0;
   fileInput.value = '';
 }
 
@@ -2250,14 +2374,19 @@ analyzeBtn.addEventListener('click', async () => {
         </div>
       `;
       
-      originalReport = printHeader + data.html + printFooter;
+      // Sanitize HTML with DOMPurify for XSS protection
+      const sanitizedHtml = typeof DOMPurify !== 'undefined' 
+        ? DOMPurify.sanitize(data.html, { ADD_ATTR: ['style'], ALLOW_DATA_ATTR: false })
+        : data.html;
+      
+      originalReport = printHeader + sanitizedHtml + printFooter;
       translatedReport = '';
       reportContent.innerHTML = originalReport;
       reportSection.classList.add('show');
       reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       
       // Extract AI ratings automatically
-      extractAndApplyAIRatings(data.html);
+      extractAndApplyAIRatings(sanitizedHtml);
       
       // Save report to task if analyzing from task
       if (currentAnalyzingTaskId) {
@@ -2269,10 +2398,12 @@ analyzeBtn.addEventListener('click', async () => {
 
   } catch (err) {
     console.error('Analysis error:', err);
+    // Sanitize error message to prevent XSS
+    const safeErrorMsg = err.message ? err.message.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : 'خطأ غير معروف';
     reportContent.innerHTML = `
       <div style="background:#fee2e2;border:2px solid #ef4444;padding:2rem;border-radius:12px;text-align:center;">
         <h3 style="color:#dc2626;margin:0 0 1rem;"><i class="fas fa-exclamation-triangle"></i> حدث خطأ</h3>
-        <p style="color:#7f1d1d;">${err.message}</p>
+        <p style="color:#7f1d1d;">${safeErrorMsg}</p>
       </div>
     `;
     reportSection.classList.add('show');
