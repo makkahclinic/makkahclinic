@@ -232,14 +232,30 @@ export default async function handler(req, res) {
     userParts.push({
       text:
         language === "ar"
-          ? "أعد HTML فقط بالعربية محافظًا على القالب/الألوان. عند وجود صور أشعة، عدِّد العلامات الشعاعية المحددة."
-          : "Return HTML only in English, preserving template/colors. If radiology images exist, list specific radiographic findings.",
+          ? `أعد HTML فقط بالعربية محافظًا على القالب/الألوان.
+
+**تعليمات إلزامية للتقرير المفصل:**
+1. إذا كان الملف Excel يحتوي على عدة حالات/زيارات، أنشئ قسماً منفصلاً لكل حالة مع عنوان h3
+2. لكل حالة اذكر: رقم الزيارة/الملف، التاريخ، الأعراض، التشخيص (ICD)، الأدوية الموصوفة، تقييم مفصل
+3. استخدم data-insurance-rating="approved" أو "rejected" أو "review" على كل تقييم حالة
+4. أضف جدول ملخص في النهاية يحتوي على: (رقم الحالة | التشخيص | الحالة | التقييم)
+5. عند وجود صور أشعة، اذكر كل النتائج الشعاعية بالتفصيل
+6. لا تختصر أبداً - أريد تحليلاً شاملاً ومفصلاً لكل حالة على حدة`
+          : `Return HTML only in English, preserving template/colors.
+
+**Mandatory detailed report instructions:**
+1. If Excel file contains multiple cases/visits, create a SEPARATE section for each case with h3 heading
+2. For each case include: visit/file number, date, symptoms, diagnosis (ICD), prescribed medications, detailed assessment
+3. Use data-insurance-rating="approved" or "rejected" or "review" on each case assessment
+4. Add a summary table at the end with: (Case# | Diagnosis | Status | Rating)
+5. If radiology images exist, list ALL radiographic findings in detail
+6. NEVER summarize - I need comprehensive detailed analysis for each case separately`,
     });
 
     const payload = {
       system_instruction: { role: "system", parts: [{ text: systemTemplate }] },
       contents: [{ role: "user", parts: userParts }],
-      generation_config: { temperature: 0.2, top_p: 0.95, top_k: 40, max_output_tokens: 8192 },
+      generation_config: { temperature: 0.2, top_p: 0.95, top_k: 40, max_output_tokens: 16384 },
     };
 
     const model = "gemini-2.0-flash";

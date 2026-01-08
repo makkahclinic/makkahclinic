@@ -660,22 +660,28 @@
     .ft-btn:hover { transform: scale(1.06); }
     .ft-btn:active { transform: scale(0.98); }
     
-    /* Report TOC Layout */
+    /* Report TOC Layout - collapsible sidebar */
     .report-layout {
-      display: grid;
-      grid-template-columns: 1fr 280px;
-      gap: 18px;
-      align-items: start;
+      display: block;
+      position: relative;
     }
     .report-toc {
-      position: sticky;
+      position: fixed;
       top: 110px;
-      background: linear-gradient(135deg, rgba(30,58,95,0.95), rgba(15,23,42,0.95));
+      left: 16px;
+      width: 220px;
+      background: linear-gradient(135deg, rgba(30,58,95,0.98), rgba(15,23,42,0.98));
       border: 2px solid var(--gold);
       border-radius: 16px;
       padding: 14px;
       max-height: calc(100vh - 140px);
       overflow: auto;
+      z-index: 1100;
+      transform: translateX(-105%);
+      transition: transform 0.3s ease;
+    }
+    .report-toc.open {
+      transform: translateX(0);
     }
     .toc-head {
       display: flex;
@@ -735,19 +741,15 @@
     }
     html { scroll-padding-top: 110px; }
     
-    @media (max-width: 900px) {
-      .report-layout { grid-template-columns: 1fr; }
+    @media (max-width: 600px) {
       .report-toc { 
-        display: none; 
-        position: fixed; 
-        right: 12px; 
-        left: 12px; 
-        top: 90px; 
-        bottom: 90px; 
-        z-index: 1300; 
+        left: 8px;
+        right: 8px;
+        width: auto;
+        top: 80px; 
+        bottom: 80px; 
+        max-height: none;
       }
-      .report-toc.open { display: block; }
-      .report-toc-toggle { display: block; }
     }
     @media (max-width: 768px) {
       .floating-tools {
@@ -4069,6 +4071,19 @@ function goTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function toggleReportTOC() {
+  const toc = document.getElementById('reportTocAside');
+  if (toc) {
+    toc.classList.toggle('open');
+    const btn = document.getElementById('tocToggleBtn');
+    if (btn) {
+      btn.style.background = toc.classList.contains('open') 
+        ? 'linear-gradient(135deg, #155724, #1e7e34)' 
+        : 'linear-gradient(135deg, var(--gold), var(--gold-light, #d4b86a))';
+    }
+  }
+}
+
 function goReport() {
   document.getElementById('reportSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -4167,6 +4182,9 @@ function filterToc(q) {
 <div class="floating-tools no-print hidden" id="floatingTools">
   <button class="ft-btn" onclick="goTop()" title="أعلى الصفحة">
     <i class="fas fa-arrow-up"></i>
+  </button>
+  <button class="ft-btn" onclick="toggleReportTOC()" title="فهرس التقرير" id="tocToggleBtn">
+    <i class="fas fa-list"></i>
   </button>
   <button class="ft-btn" onclick="goReport()" title="التقرير">
     <i class="fas fa-file-alt"></i>
