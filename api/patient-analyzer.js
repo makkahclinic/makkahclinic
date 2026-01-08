@@ -229,28 +229,184 @@ export default async function handler(req, res) {
       }
     }
 
-    userParts.push({
-      text:
-        language === "ar"
-          ? `أعد HTML فقط بالعربية محافظًا على القالب/الألوان.
+    // Enhanced prompt for insurance audit reports - matching Report #20 format exactly
+    const insuranceAuditPrompt = language === "ar" 
+      ? `أنت مدقق تأميني طبي. حلل كل حالة/زيارة في البيانات المرفقة بشكل منفصل ومفصل.
 
-**تعليمات إلزامية للتقرير المفصل:**
-1. إذا كان الملف Excel يحتوي على عدة حالات/زيارات، أنشئ قسماً منفصلاً لكل حالة مع عنوان h3
-2. لكل حالة اذكر: رقم الزيارة/الملف، التاريخ، الأعراض، التشخيص (ICD)، الأدوية الموصوفة، تقييم مفصل
-3. استخدم data-insurance-rating="approved" أو "rejected" أو "review" على كل تقييم حالة
-4. أضف جدول ملخص في النهاية يحتوي على: (رقم الحالة | التشخيص | الحالة | التقييم)
-5. عند وجود صور أشعة، اذكر كل النتائج الشعاعية بالتفصيل
-6. لا تختصر أبداً - أريد تحليلاً شاملاً ومفصلاً لكل حالة على حدة`
-          : `Return HTML only in English, preserving template/colors.
+**التنسيق الإلزامي لكل حالة (يجب اتباعه حرفياً):**
 
-**Mandatory detailed report instructions:**
-1. If Excel file contains multiple cases/visits, create a SEPARATE section for each case with h3 heading
-2. For each case include: visit/file number, date, symptoms, diagnosis (ICD), prescribed medications, detailed assessment
-3. Use data-insurance-rating="approved" or "rejected" or "review" on each case assessment
-4. Add a summary table at the end with: (Case# | Diagnosis | Status | Rating)
-5. If radiology images exist, list ALL radiographic findings in detail
-6. NEVER summarize - I need comprehensive detailed analysis for each case separately`,
-    });
+<div class="case-section" data-case-id="[رقم]">
+  <h3>🔍 الحالة رقم [N] | Claim Se No.: [رقم الملف] | المريض: [رقم المريض]</h3>
+  
+  <h4>📌 بيانات الحالة</h4>
+  <table class="custom-table">
+    <tr><td>التشخيص:</td><td>[أكواد ICD مع الوصف]</td></tr>
+    <tr><td>درجة الحرارة:</td><td>[القيمة أو "غير متوفر" مع ⚠️]</td></tr>
+    <tr><td>ضغط الدم:</td><td>[القيمة]</td></tr>
+    <tr><td>الطول:</td><td>[القيمة أو "غير متوفر" مع ⚠️]</td></tr>
+    <tr><td>الوزن:</td><td>[القيمة]</td></tr>
+    <tr><td>النبض:</td><td>[القيمة أو "غير متوفر" مع ⚠️]</td></tr>
+  </table>
+
+  <h4>💊 الأدوية</h4>
+  <table class="custom-table">
+    <thead><tr><th>الدواء</th><th>الجرعة</th><th>التقييم</th><th>الحالة</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>[اسم الدواء]</td>
+        <td>[الجرعة]</td>
+        <td>[تحليل مفصل: هل يتوافق مع التشخيص؟ هل درجة الحرارة تبرره؟ هل توجد موانع؟]</td>
+        <td data-insurance-rating="approved">✅ مقبول</td>
+        <!-- أو -->
+        <td data-insurance-rating="rejected">❌ مرفوض</td>
+        <!-- أو -->
+        <td data-insurance-rating="review">⚠️ يحتاج توثيق</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>🔬 التحاليل والإجراءات</h4>
+  <table class="custom-table">
+    <thead><tr><th>الإجراء</th><th>التقييم</th><th>الحالة</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>[اسم التحليل/الإجراء]</td>
+        <td>[هل يتوافق مع التشخيص؟ التبرير]</td>
+        <td data-insurance-rating="...">✅/❌/⚠️</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>❌ إجراءات مرفوضة</h4>
+  <div class="box-critical">
+    <strong>[اسم الدواء/الإجراء]</strong><br>
+    ⚠️ [السبب التفصيلي للرفض]<br>
+    📌 اقتراحات التبرير المقبولة: [عدم تحمل الفم، حالة حادة، حمى...]<br>
+    ❗ عدم التوثيق = رفض التأمين
+  </div>
+
+  <h4>⚠️ إجراءات تحتاج توثيق</h4>
+  <div class="box-warning">
+    <strong>[اسم الإجراء]</strong><br>
+    ⚠️ يحتاج توثيق المبرر الإكلينيكي<br>
+    📌 اقتراحات: [...]<br>
+    ❗ عدم التوثيق = رفض التأمين
+  </div>
+
+  <h4>📊 ملخص الحالة</h4>
+  <table class="custom-table">
+    <tr>
+      <td><strong>✅ صحيح</strong></td>
+      <td>[قائمة الأدوية/الإجراءات المقبولة]</td>
+    </tr>
+    <tr>
+      <td><strong>❌ يحتاج تصحيح</strong></td>
+      <td>[قائمة المرفوض أو يحتاج توثيق]</td>
+    </tr>
+  </table>
+</div>
+
+<hr style="border: 2px solid #1e3a5f; margin: 2rem 0;">
+
+**قواعد التقييم:**
+- ✅ مقبول: الدواء/الإجراء يتوافق تماماً مع التشخيص والعلامات الحيوية
+- ❌ مرفوض: لا يوجد مبرر طبي (مثلاً: باراسيتامول وريدي مع حرارة طبيعية 36.1)
+- ⚠️ يحتاج توثيق: قد يكون مبرراً لكن يحتاج توثيق في الملف (مثلاً: سوائل وريدية بدون توثيق عدم تحمل الفم)
+
+**مهم جداً:**
+- حلل كل حالة على حدة بنفس التنسيق أعلاه
+- لا تختصر أبداً - كل دواء وإجراء يحتاج تقييم منفصل
+- قارن دائماً بين التشخيص والعلامات الحيوية والأدوية الموصوفة
+- أعد HTML كامل بالعربية`
+      : `You are a medical insurance auditor. Analyze each case/visit in the provided data separately and in detail.
+
+**Mandatory format for each case (follow exactly):**
+
+<div class="case-section" data-case-id="[number]">
+  <h3>🔍 Case #[N] | Claim Se No.: [file number] | Patient: [patient number]</h3>
+  
+  <h4>📌 Case Data</h4>
+  <table class="custom-table">
+    <tr><td>Diagnosis:</td><td>[ICD codes with description]</td></tr>
+    <tr><td>Temperature:</td><td>[value or "N/A" with ⚠️]</td></tr>
+    <tr><td>Blood Pressure:</td><td>[value]</td></tr>
+    <tr><td>Height:</td><td>[value or "N/A" with ⚠️]</td></tr>
+    <tr><td>Weight:</td><td>[value]</td></tr>
+    <tr><td>Pulse:</td><td>[value or "N/A" with ⚠️]</td></tr>
+  </table>
+
+  <h4>💊 Medications</h4>
+  <table class="custom-table">
+    <thead><tr><th>Medication</th><th>Dosage</th><th>Assessment</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>[medication name]</td>
+        <td>[dosage]</td>
+        <td>[detailed analysis: compatible with diagnosis? justified by vitals? contraindications?]</td>
+        <td data-insurance-rating="approved">✅ Approved</td>
+        <!-- or -->
+        <td data-insurance-rating="rejected">❌ Rejected</td>
+        <!-- or -->
+        <td data-insurance-rating="review">⚠️ Needs Documentation</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>🔬 Tests & Procedures</h4>
+  <table class="custom-table">
+    <thead><tr><th>Procedure</th><th>Assessment</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>[test/procedure name]</td>
+        <td>[compatible with diagnosis? justification]</td>
+        <td data-insurance-rating="...">✅/❌/⚠️</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>❌ Rejected Items</h4>
+  <div class="box-critical">
+    <strong>[medication/procedure name]</strong><br>
+    ⚠️ [detailed rejection reason]<br>
+    📌 Acceptable justifications: [oral intolerance, acute condition, fever...]<br>
+    ❗ No documentation = Insurance rejection
+  </div>
+
+  <h4>⚠️ Items Needing Documentation</h4>
+  <div class="box-warning">
+    <strong>[procedure name]</strong><br>
+    ⚠️ Needs clinical justification documentation<br>
+    📌 Suggestions: [...]<br>
+    ❗ No documentation = Insurance rejection
+  </div>
+
+  <h4>📊 Case Summary</h4>
+  <table class="custom-table">
+    <tr>
+      <td><strong>✅ Correct</strong></td>
+      <td>[list of approved medications/procedures]</td>
+    </tr>
+    <tr>
+      <td><strong>❌ Needs Correction</strong></td>
+      <td>[list of rejected or needs documentation]</td>
+    </tr>
+  </table>
+</div>
+
+<hr style="border: 2px solid #1e3a5f; margin: 2rem 0;">
+
+**Evaluation Rules:**
+- ✅ Approved: Medication/procedure fully compatible with diagnosis and vital signs
+- ❌ Rejected: No medical justification (e.g., IV paracetamol with normal temp 36.1)
+- ⚠️ Needs Documentation: May be justified but needs file documentation (e.g., IV fluids without documenting oral intolerance)
+
+**Very Important:**
+- Analyze each case separately with the same format above
+- NEVER summarize - each medication and procedure needs separate evaluation
+- Always compare diagnosis, vital signs, and prescribed medications
+- Return complete HTML in English`;
+
+    userParts.push({ text: insuranceAuditPrompt });
 
     const payload = {
       system_instruction: { role: "system", parts: [{ text: systemTemplate }] },
