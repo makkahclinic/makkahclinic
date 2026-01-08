@@ -1,4 +1,529 @@
 // /api/patient-analyzer.js
+import XLSX from 'xlsx';
+
+// Parse Excel file and extract cases
+function parseExcelCases(base64Data) {
+  try {
+    const workbook = XLSX.read(base64Data, { type: 'base64' });
+    const cases = [];
+    
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      if (jsonData.length < 2) continue;
+      
+      const headers = jsonData[0].map(h => String(h || '').toLowerCase().trim());
+      
+      // Find key columns
+      const claimIdx = headers.findIndex(h => h.includes('claim') || h.includes('se no') || h.includes('رقم'));
+      const patientIdx = headers.findIndex(h => h.includes('patient') || h.includes('مريض') || h.includes('mrn'));
+      const diagIdx = headers.findIndex(h => h.includes('diag') || h.includes('تشخيص') || h.includes('icd'));
+      const tempIdx = headers.findIndex(h => h.includes('temp') || h.includes('حرارة'));
+      const bpIdx = headers.findIndex(h => h.includes('bp') || h.includes('ضغط') || h.includes('blood'));
+      const pulseIdx = headers.findIndex(h => h.includes('pulse') || h.includes('نبض') || h.includes('hr'));
+      const weightIdx = headers.findIndex(h => h.includes('weight') || h.includes('وزن'));
+      const heightIdx = headers.findIndex(h => h.includes('height') || h.includes('طول'));
+      
+      // Find medication/procedure columns - EXCLUDE generic "item" columns from medication detection
+      const medCols = headers.map((h, i) => {
+        // Only include columns that are explicitly medication-related
+        // Exclude generic "item" which could be any consumable
+        const isMedCol = (h.includes('med') || h.includes('drug') || h.includes('دواء') || 
+                         h.includes('medicine') || h.includes('prescription')) && 
+                         !h.includes('cost') && !h.includes('price') && !h.includes('code');
+        return isMedCol ? i : -1;
+      }).filter(i => i >= 0);
+      
+      const doseCols = headers.map((h, i) => {
+        // Dose/quantity columns, excluding unit cost
+        const isDoseCol = (h.includes('dose') || h.includes('qty') || h.includes('جرعة') || 
+                          h.includes('كمية') || h.includes('quantity')) && 
+                          !h.includes('unit') && !h.includes('cost') && !h.includes('price');
+        return isDoseCol ? i : -1;
+      }).filter(i => i >= 0);
+      
+      const procCols = headers.map((h, i) => {
+        const isProcCol = h.includes('proc') || h.includes('test') || h.includes('إجراء') || 
+                         h.includes('تحليل') || h.includes('service');
+        return isProcCol ? i : -1;
+      }).filter(i => i >= 0);
+      
+      // Fallback: Find "Item Name" or "Item Description" columns for sheets without explicit med columns
+      const itemNameCols = headers.map((h, i) => {
+        const isItemName = h.includes('item') && (h.includes('name') || h.includes('desc') || h === 'item');
+        return isItemName && !h.includes('code') && !h.includes('cost') ? i : -1;
+      }).filter(i => i >= 0);
+      
+      // Group rows by claim ID
+      const caseMap = new Map();
+      for (let i = 1; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        if (!row || row.length === 0) continue;
+        
+        const claimId = claimIdx >= 0 ? String(row[claimIdx] || '') : `row_${i}`;
+        if (!claimId) continue;
+        
+        if (!caseMap.has(claimId)) {
+          caseMap.set(claimId, {
+            claimId,
+            patientId: patientIdx >= 0 ? row[patientIdx] : '',
+            diagnosis: diagIdx >= 0 ? row[diagIdx] : '',
+            vitals: {
+              temperature: tempIdx >= 0 ? row[tempIdx] : '',
+              bloodPressure: bpIdx >= 0 ? row[bpIdx] : '',
+              pulse: pulseIdx >= 0 ? row[pulseIdx] : '',
+              weight: weightIdx >= 0 ? row[weightIdx] : '',
+              height: heightIdx >= 0 ? row[heightIdx] : ''
+            },
+            medications: [],
+            procedures: [],
+            rawData: []
+          });
+        }
+        
+        const c = caseMap.get(claimId);
+        c.rawData.push(row.join(' | '));
+        
+        // Extract medications with proper dose pairing
+        // Use explicit medication columns first, then fall back to item columns
+        const effectiveMedCols = medCols.length > 0 ? medCols : itemNameCols;
+        
+        for (let mi = 0; mi < effectiveMedCols.length; mi++) {
+          const medIdx = effectiveMedCols[mi];
+          const medValue = row[medIdx] ? String(row[medIdx]).trim() : '';
+          if (!medValue) continue;
+          
+          // Skip if already added (avoid duplicates)
+          if (c.medications.some(m => m.name === medValue)) continue;
+          
+          // Look for dose in the matched dose column, or try adjacent column
+          let dose = '';
+          if (mi < doseCols.length) {
+            dose = row[doseCols[mi]] || '';
+          } else if (medIdx + 1 < row.length) {
+            // Try adjacent column as dose (common layout)
+            const adjacentVal = row[medIdx + 1];
+            // Only use if it looks like a quantity (number or contains digits)
+            if (adjacentVal && /\d/.test(String(adjacentVal))) {
+              dose = adjacentVal;
+            }
+          }
+          
+          c.medications.push({ name: medValue, dose: String(dose) });
+        }
+        
+        // Extract procedures
+        for (const idx of procCols) {
+          if (row[idx]) c.procedures.push(row[idx]);
+        }
+      }
+      
+      cases.push(...caseMap.values());
+    }
+    
+    return cases;
+  } catch (err) {
+    console.error('Excel parsing error:', err);
+    return null;
+  }
+}
+
+// Build prompt for a single case
+function buildSingleCasePrompt(caseData, caseNumber, totalCases, language) {
+  const L = language === 'en' ? 'en' : 'ar';
+  
+  if (L === 'ar') {
+    return `## 🔍 الحالة رقم ${caseNumber} من ${totalCases}
+
+**بيانات الحالة:**
+- رقم المطالبة (Claim Se No.): ${caseData.claimId}
+- رقم المريض: ${caseData.patientId || 'غير متوفر'}
+- التشخيص: ${caseData.diagnosis || 'غير متوفر'}
+
+**العلامات الحيوية:**
+- درجة الحرارة: ${caseData.vitals.temperature || 'غير متوفر'}
+- ضغط الدم: ${caseData.vitals.bloodPressure || 'غير متوفر'}
+- النبض: ${caseData.vitals.pulse || 'غير متوفر'}
+- الوزن: ${caseData.vitals.weight || 'غير متوفر'}
+- الطول: ${caseData.vitals.height || 'غير متوفر'}
+
+**الأدوية الموصوفة:**
+${caseData.medications.length > 0 ? caseData.medications.map(m => `- ${m.name} (${m.dose || 'جرعة غير محددة'})`).join('\n') : '- لا يوجد أدوية'}
+
+**الإجراءات/التحاليل:**
+${caseData.procedures.length > 0 ? caseData.procedures.map(p => `- ${p}`).join('\n') : '- لا يوجد إجراءات'}
+
+**البيانات الخام:**
+${caseData.rawData.slice(0, 10).join('\n')}
+
+---
+حلل هذه الحالة بالتفصيل الكامل باستخدام 3 طبقات التحليل (CDI, NPHIES, Clinical Guidelines).
+أعد HTML بالتنسيق المحدد مسبقاً.`;
+  } else {
+    return `## 🔍 Case ${caseNumber} of ${totalCases}
+
+**Case Data:**
+- Claim Se No.: ${caseData.claimId}
+- Patient ID: ${caseData.patientId || 'N/A'}
+- Diagnosis: ${caseData.diagnosis || 'N/A'}
+
+**Vital Signs:**
+- Temperature: ${caseData.vitals.temperature || 'N/A'}
+- Blood Pressure: ${caseData.vitals.bloodPressure || 'N/A'}
+- Pulse: ${caseData.vitals.pulse || 'N/A'}
+- Weight: ${caseData.vitals.weight || 'N/A'}
+- Height: ${caseData.vitals.height || 'N/A'}
+
+**Medications:**
+${caseData.medications.length > 0 ? caseData.medications.map(m => `- ${m.name} (${m.dose || 'dose N/A'})`).join('\n') : '- No medications'}
+
+**Procedures/Tests:**
+${caseData.procedures.length > 0 ? caseData.procedures.map(p => `- ${p}`).join('\n') : '- No procedures'}
+
+**Raw Data:**
+${caseData.rawData.slice(0, 10).join('\n')}
+
+---
+Analyze this case in full detail using 3-layer analysis (CDI, NPHIES, Clinical Guidelines).
+Return HTML in the specified format.`;
+  }
+}
+
+// Process Excel cases sequentially with individual API calls - FULL TRI-LAYER TEMPLATE
+async function processExcelCasesSequentially(req, res, cases, language, apiKey) {
+  const totalCases = cases.length;
+  const caseResults = [];
+  const model = "gemini-2.0-flash";
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  
+  // FULL Clinical Guidelines Reference (same as bulk mode)
+  const fullClinicalRef = `
+### 📚 مراجع الإرشادات السريرية (للتقييم):
+
+**السوائل الوريدية (IV Fluids):**
+- تُستخدم فقط عند: الجفاف الشديد، عدم تحمل الفم، القيء المستمر، صدمة
+- يجب توثيق: درجة الجفاف، عدم القدرة على الشرب، علامات الصدمة
+- مرجع: WHO Fluid Resuscitation Guidelines
+
+**المضادات الحيوية:**
+- التهاب الحلق: لا مضاد حيوي إلا مع حرارة >38.3 + التهاب لوزتين صديدي (CDC IDSA)
+- التهاب الجهاز التنفسي العلوي: غالباً فيروسي، لا حاجة لمضاد حيوي
+- التهاب المعدة والأمعاء: لا مضاد حيوي إلا مع حمى عالية أو دم في البراز
+- مرجع: CDC Antibiotic Stewardship
+
+**خافضات الحرارة:**
+- باراسيتامول فموي: للحرارة >38°C
+- باراسيتامول وريدي: فقط عند عدم تحمل الفم أو حالة طوارئ
+- مرجع: WHO Essential Medicines
+
+**مثبطات مضخة البروتون (PPIs):**
+- مبررة: GERD، قرحة معدة، مع NSAIDs طويلة المدى
+- غير مبررة: عسر هضم عابر بدون علامات إنذار
+
+### ⚠️ مصفوفة التضارب الدوائي:
+| الدواء الأول | الدواء الثاني | نوع التضارب | الخطورة |
+|-------------|--------------|-------------|---------|
+| NSAIDs | مميعات الدم | زيادة خطر النزيف | 🔴 عالية |
+| NSAIDs | مدرات البول، ACE inhibitors | فشل كلوي حاد | 🔴 عالية |
+| Macrolides | Statins | رابدومايوليسيس | 🔴 عالية |
+| Metronidazole | Warfarin | زيادة تأثير مميع الدم | 🟠 متوسطة |
+| ACE inhibitors | مدرات حافظة للبوتاسيوم | ارتفاع البوتاسيوم | 🔴 عالية |
+
+### 📌 اقتراحات التوثيق:
+- السوائل الوريدية: توثيق صعوبة البلع، جفاف شديد، قيء مستمر، علامات صدمة
+- باراسيتامول وريدي: عدم تحمل الفم، حالة طوارئ، حمى >39°C
+- المضادات الحيوية: علامات عدوى بكتيرية (حمى >38.3، صديد)
+`;
+
+  // FULL Template with exact structure from benchmark report #20
+  const caseTemplate = language === 'ar' ? `أنت مدقق تأميني طبي خبير. حلل هذه الحالة الواحدة باستخدام **3 طبقات تحليل** بالتفصيل الكامل:
+
+${fullClinicalRef}
+
+## 🔍 التنسيق الإلزامي:
+
+<div class="case-section">
+  <h3>🔍 الحالة رقم [N] | Claim Se No.: [رقم الملف] | المريض: [رقم المريض]</h3>
+  
+  <h4>📌 بيانات الحالة</h4>
+  <table class="custom-table">
+    <tr><td><strong>التشخيص:</strong></td><td>[أكواد ICD-10 مع الوصف الكامل]</td></tr>
+    <tr><td><strong>درجة الحرارة:</strong></td><td>[القيمة] أو <span style="color:#856404">⚠️ غير متوفر</span></td></tr>
+    <tr><td><strong>ضغط الدم:</strong></td><td>[القيمة]</td></tr>
+    <tr><td><strong>الطول:</strong></td><td>[القيمة] أو <span style="color:#856404">⚠️ غير متوفر</span></td></tr>
+    <tr><td><strong>الوزن:</strong></td><td>[القيمة]</td></tr>
+    <tr><td><strong>النبض:</strong></td><td>[القيمة] أو <span style="color:#856404">⚠️ غير متوفر</span></td></tr>
+  </table>
+
+  <h4>💊 الأدوية</h4>
+  <table class="custom-table">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th>الدواء</th><th>الجرعة</th><th>التقييم السريري</th><th>الحالة</th></tr>
+    </thead>
+    <tbody>
+      <!-- لكل دواء صف منفصل مع تحليل ثلاثي الطبقات -->
+      <tr>
+        <td>[اسم الدواء]</td>
+        <td>[الجرعة/الكمية]</td>
+        <td>
+          <strong>📋 CDI:</strong> [هل التوثيق كافٍ؟ ما المفقود؟]<br>
+          <strong>🏥 NPHIES:</strong> [هل يتوافق مع سياسات المطالبات؟]<br>
+          <strong>📚 إرشاد سريري:</strong> [المرجع: CDC/WHO - هل منطقي سريرياً؟]
+        </td>
+        <td data-insurance-rating="[approved/rejected/review]">
+          [✅ مقبول / ❌ مرفوض / ⚠️ يحتاج توثيق]
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>🔬 التحاليل والإجراءات</h4>
+  <table class="custom-table">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th>الإجراء</th><th>التقييم (3 طبقات)</th><th>الحالة</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>[اسم الإجراء]</td>
+        <td>
+          <strong>📋 CDI:</strong> [هل مرتبط بالتشخيص؟]<br>
+          <strong>🏥 NPHIES:</strong> [هل مسموح بالتكرار؟]<br>
+          <strong>📚 إرشاد:</strong> [هل مطلوب طبياً؟]
+        </td>
+        <td data-insurance-rating="[...]">[✅/❌/⚠️]</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>❌ إجراءات مرفوضة</h4>
+  <div class="box-critical">
+    <strong>[اسم الدواء/الإجراء]</strong><br>
+    <strong>❌ سبب الرفض:</strong> [التفصيل مع المرجع السريري]<br>
+    <strong>📌 للقبول يجب توثيق:</strong> [عدم تحمل الفم، حالة حادة، حمى >38.5...]<br>
+    <span style="color:#721c24;font-weight:bold">❗ عدم التوثيق = رفض التأمين</span>
+  </div>
+
+  <h4>⚠️ إجراءات تحتاج توثيق</h4>
+  <div class="box-warning">
+    <strong>[اسم الإجراء]</strong><br>
+    <strong>📋 ما ينقص:</strong> [التوثيق المطلوب بالتحديد]<br>
+    <strong>📌 اقتراحات للطبيب:</strong> [كيف يوثق لضمان القبول]
+  </div>
+
+  <h4>📊 ملخص الحالة</h4>
+  <table class="custom-table">
+    <tr style="background:#d4edda">
+      <td width="30%"><strong>✅ صحيح ومقبول</strong></td>
+      <td>[قائمة كل الأدوية والإجراءات المقبولة]</td>
+    </tr>
+    <tr style="background:#f8d7da">
+      <td><strong>❌ مرفوض</strong></td>
+      <td>[قائمة المرفوض مع السبب المختصر]</td>
+    </tr>
+    <tr style="background:#fff3cd">
+      <td><strong>⚠️ يحتاج توثيق</strong></td>
+      <td>[قائمة ما يحتاج توثيق]</td>
+    </tr>
+  </table>
+</div>
+
+## ⚙️ قواعد إلزامية:
+- استخدم التحليل الثلاثي (CDI + NPHIES + Clinical) لكل دواء وإجراء
+- قارن العلامات الحيوية بالأدوية (حرارة 36.1 = لا مبرر لباراسيتامول IV)
+- أذكر المراجع السريرية في كل تقييم
+
+أعد HTML فقط بدون أي markdown أو code blocks.
+` : `You are an expert medical insurance auditor. Analyze this single case using **3-layer analysis** in full detail:
+
+### 📚 Clinical Guidelines Reference:
+
+**IV Fluids:**
+- Use only for: severe dehydration, oral intolerance, persistent vomiting, shock
+- Must document: dehydration degree, inability to drink, shock signs
+- Reference: WHO Fluid Resuscitation Guidelines
+
+**Antibiotics:**
+- Pharyngitis: No antibiotic unless fever >38.3°C + purulent tonsillitis (CDC IDSA)
+- Upper respiratory infection: Usually viral, no antibiotic needed
+- Gastroenteritis: No antibiotic unless high fever or bloody stool
+- Reference: CDC Antibiotic Stewardship
+
+**Antipyretics:**
+- Oral paracetamol: For fever >38°C
+- IV paracetamol: Only when oral intolerance or emergency
+- Reference: WHO Essential Medicines
+
+**Proton Pump Inhibitors (PPIs):**
+- Justified: GERD, gastric ulcer, long-term NSAIDs use
+- Not justified: transient dyspepsia without alarm signs
+- Reference: ACG Guidelines
+
+### ⚠️ Drug Interactions Matrix:
+| Drug 1 | Drug 2 | Interaction | Severity |
+|--------|--------|-------------|----------|
+| NSAIDs | Anticoagulants | Increased bleeding risk | 🔴 High |
+| NSAIDs | Diuretics, ACE inhibitors | Acute kidney injury | 🔴 High |
+| Macrolides | Statins | Rhabdomyolysis | 🔴 High |
+| Metronidazole | Warfarin | Increased anticoagulant effect | 🟠 Medium |
+| ACE inhibitors | Potassium-sparing diuretics | Hyperkalemia | 🔴 High |
+
+### 📌 Documentation Suggestions:
+- IV Fluids: Document oral intolerance, severe dehydration, persistent vomiting, shock signs
+- IV Paracetamol: Oral intolerance, emergency, fever >39°C
+- Antibiotics: Signs of bacterial infection (fever >38.3, purulent discharge)
+
+## 🔍 Required Format:
+
+<div class="case-section">
+  <h3>🔍 Case [N] | Claim Se No.: [claim_id] | Patient: [patient_id]</h3>
+  
+  <h4>📌 Case Data</h4>
+  <table class="custom-table">
+    <tr><td><strong>Diagnosis:</strong></td><td>[ICD-10 codes with full description]</td></tr>
+    <tr><td><strong>Temperature:</strong></td><td>[value] or <span style="color:#856404">⚠️ N/A</span></td></tr>
+    <tr><td><strong>Blood Pressure:</strong></td><td>[value]</td></tr>
+    <tr><td><strong>Height:</strong></td><td>[value]</td></tr>
+    <tr><td><strong>Weight:</strong></td><td>[value]</td></tr>
+    <tr><td><strong>Pulse:</strong></td><td>[value]</td></tr>
+  </table>
+
+  <h4>💊 Medications</h4>
+  <table class="custom-table">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th>Medication</th><th>Dose</th><th>Clinical Evaluation</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>[medication name]</td>
+        <td>[dose/quantity]</td>
+        <td>
+          <strong>📋 CDI:</strong> [Is documentation sufficient?]<br>
+          <strong>🏥 NPHIES:</strong> [Compliant with claim policies?]<br>
+          <strong>📚 Clinical:</strong> [Reference: CDC/WHO - clinically justified?]
+        </td>
+        <td>[✅ Approved / ❌ Rejected / ⚠️ Needs Documentation]</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>🔬 Procedures/Tests</h4>
+  <table class="custom-table">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th>Procedure</th><th>Evaluation (3-layer)</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>[procedure name]</td>
+        <td>
+          <strong>📋 CDI:</strong> [Related to diagnosis?]<br>
+          <strong>🏥 NPHIES:</strong> [Repetition allowed?]<br>
+          <strong>📚 Guideline:</strong> [Medically necessary?]
+        </td>
+        <td>[✅/❌/⚠️]</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>❌ Rejected Items</h4>
+  <div class="box-critical">
+    <strong>[item name]</strong><br>
+    <strong>❌ Rejection reason:</strong> [detail with clinical reference]<br>
+    <strong>📌 For approval must document:</strong> [oral intolerance, acute condition...]
+  </div>
+
+  <h4>⚠️ Items Needing Documentation</h4>
+  <div class="box-warning">
+    <strong>[item name]</strong><br>
+    <strong>📋 Missing:</strong> [specific documentation needed]<br>
+    <strong>📌 Suggestions:</strong> [how to document for approval]
+  </div>
+
+  <h4>📊 Case Summary</h4>
+  <table class="custom-table">
+    <tr style="background:#d4edda"><td><strong>✅ Approved</strong></td><td>[list]</td></tr>
+    <tr style="background:#f8d7da"><td><strong>❌ Rejected</strong></td><td>[list with brief reason]</td></tr>
+    <tr style="background:#fff3cd"><td><strong>⚠️ Needs Documentation</strong></td><td>[list]</td></tr>
+  </table>
+</div>
+
+## ⚙️ Mandatory Rules:
+- Use 3-layer analysis (CDI + NPHIES + Clinical) for every medication and procedure
+- Compare vital signs to medications (temp 36.1 = no justification for IV paracetamol)
+- Cite clinical references in each evaluation
+
+Return HTML only, no markdown or code blocks.
+`;
+
+  console.log(`Processing ${totalCases} cases individually...`);
+  
+  for (let i = 0; i < totalCases; i++) {
+    const caseData = cases[i];
+    const caseNumber = i + 1;
+    
+    console.log(`Processing case ${caseNumber}/${totalCases}: ${caseData.claimId}`);
+    
+    const casePrompt = buildSingleCasePrompt(caseData, caseNumber, totalCases, language);
+    
+    const payload = {
+      system_instruction: { role: "system", parts: [{ text: caseTemplate }] },
+      contents: [{ role: "user", parts: [{ text: casePrompt }] }],
+      generation_config: { temperature: 0.2, top_p: 0.95, top_k: 40, max_output_tokens: 8192 },
+    };
+    
+    try {
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        console.error(`API error for case ${caseNumber}: ${response.status}`);
+        caseResults.push(`<div class="case-section box-critical"><h3>❌ خطأ في تحليل الحالة ${caseNumber}</h3><p>فشل الاتصال بالنظام</p></div>`);
+        continue;
+      }
+      
+      const result = await response.json();
+      let text = result?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || "";
+      
+      // Clean up code fences
+      text = text.replace(/^```html?\s*/i, '').replace(/```\s*$/i, '').trim();
+      text = text.replace(/^```\s*/gm, '').replace(/\s*```$/gm, '');
+      
+      if (text) {
+        caseResults.push(text);
+        console.log(`Case ${caseNumber} processed successfully`);
+      } else {
+        caseResults.push(`<div class="case-section box-warning"><h3>⚠️ الحالة ${caseNumber} - ${caseData.claimId}</h3><p>لم يتم الحصول على تحليل</p></div>`);
+      }
+      
+      // Small delay to avoid rate limiting
+      if (i < totalCases - 1) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+    } catch (err) {
+      console.error(`Error processing case ${caseNumber}:`, err);
+      caseResults.push(`<div class="case-section box-critical"><h3>❌ خطأ في الحالة ${caseNumber}</h3><p>${err.message}</p></div>`);
+    }
+  }
+  
+  // Combine all case results into final report
+  const reportHeader = language === 'ar' 
+    ? `<div class="report-container"><h2>📋 تقرير التدقيق التأميني الشامل</h2><p class="box-info">تم تحليل ${totalCases} حالة بالتفصيل</p>`
+    : `<div class="report-container"><h2>📋 Comprehensive Insurance Audit Report</h2><p class="box-info">Analyzed ${totalCases} cases in detail</p>`;
+  
+  const reportFooter = language === 'ar'
+    ? `<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ تم تحليل ${caseResults.length} حالة من أصل ${totalCases} حالة</strong></div></div>`
+    : `<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ Analyzed ${caseResults.length} of ${totalCases} cases</strong></div></div>`;
+  
+  const fullReport = reportHeader + caseResults.join('<hr style="border:2px solid #1e3a5f;margin:2rem 0">') + reportFooter;
+  
+  console.log(`Completed processing. Generated report with ${caseResults.length} case analyses.`);
+  
+  return res.status(200).json({ htmlReport: fullReport });
+}
 
 function detectMimeType(base64Data = "") {
   const signatures = {
@@ -206,12 +731,33 @@ export default async function handler(req, res) {
     const addInline = (base64, mime) => userParts.push({ inline_data: { mime_type: mime, data: base64 } });
     const addText = (text, name) => userParts.push({ text: `--- محتوى الملف: ${name} ---\n${text}` });
 
+    // Check for Excel files and use per-case processing
+    let excelCases = null;
+    let excelFile = null;
+    
     if (Array.isArray(req.body.files)) {
       for (const f of req.body.files) {
         const content = f.base64 || f.textContent || '';
         if (!content) continue;
         
+        const fileName = (f.name || '').toLowerCase();
         const mimeType = f.type || 'text/plain';
+        
+        // Check if it's an Excel file - MUST check before other file processing
+        const isExcelFile = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv') ||
+            mimeType.includes('spreadsheet') || mimeType.includes('excel') || 
+            mimeType.includes('vnd.openxmlformats-officedocument') ||
+            mimeType.includes('vnd.ms-excel');
+        
+        if (isExcelFile) {
+          excelFile = f;
+          // Parse Excel from base64
+          const base64Content = f.base64 || content;
+          excelCases = parseExcelCases(base64Content);
+          console.log(`[Excel Detection] File: ${f.name}, MIME: ${mimeType}, Parsed cases: ${excelCases?.length || 0}`);
+          continue;
+        }
+        
         const isTextType = mimeType.startsWith('text/') || mimeType === 'application/json';
         const isValidBase64 = /^[A-Za-z0-9+/]+=*$/.test(content.replace(/\s/g, '').substring(0, 100));
         
@@ -227,6 +773,12 @@ export default async function handler(req, res) {
           addInline(content, mimeType);
         }
       }
+    }
+    
+    // If Excel cases found, use per-case processing with FULL tri-layer template
+    if (excelCases && excelCases.length > 0) {
+      console.log(`[Per-Case Mode] Starting processing for ${excelCases.length} cases...`);
+      return await processExcelCasesSequentially(req, res, excelCases, language, apiKey);
     }
 
     // 3-Layer Insurance Audit Prompt with Clinical Guidelines, Drug Interactions & Indications
@@ -438,14 +990,20 @@ ${indicationsRef}
 | ❌ مرفوض | لا يوجد مبرر طبي موثق | باراسيتامول IV مع حرارة 36.1 طبيعية |
 | ⚠️ يحتاج توثيق | قد يكون مبرراً لكن التوثيق غير كافٍ | سوائل وريدية بدون توثيق عدم تحمل الفم |
 
-## 📋 متطلبات التقرير:
-1. **حلل كل حالة على حدة** - لا تختصر أبداً
-2. **كل دواء/إجراء = صف منفصل** في الجدول مع التقييم الثلاثي
+## 📋 متطلبات التقرير الإلزامية:
+1. **حلل كل حالة على حدة بالتفصيل الكامل** - لا تختصر أبداً ولا تتخطَّ أي حالة
+2. **كل دواء/إجراء = صف منفصل** في الجدول مع التقييم الثلاثي (CDI + NPHIES + Clinical)
 3. **استخدم المراجع السريرية** في التبرير (CDC, WHO, CCHI, NPHIES)
 4. **قارن العلامات الحيوية** بالأدوية الموصوفة (حرارة، نبض، ضغط)
 5. **أذكر بالضبط** ما ينقص من التوثيق وكيف يُصحح
 
-أعد HTML كامل بالعربية.`
+## ⚠️ تحذير مهم جداً:
+- **يجب تحليل 100% من الحالات** - لا تتوقف أبداً قبل الانتهاء من كل الحالات
+- إذا كان هناك 10 حالات في الملف، يجب أن يحتوي التقرير على تحليل 10 حالات كاملة
+- **ممنوع الاختصار أو دمج الحالات** - كل حالة قسم منفصل بجميع أقسامه
+- أضف في نهاية التقرير: "✅ تم تحليل [N] حالة من أصل [N] حالة"
+
+أعد HTML كامل بالعربية بدون أي code blocks أو markdown.`
       : `You are an expert medical insurance auditor. Analyze each case using **3 analysis layers**:
 
 ${clinicalGuidelinesRef}
@@ -482,8 +1040,14 @@ Return complete HTML in English.`;
     }
 
     const result = await response.json();
-    const text = result?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || "";
+    let text = result?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || "";
     if (!text) throw new Error("Failed to generate report text from the model.");
+
+    // Clean up code fences that Gemini sometimes adds
+    text = text.replace(/^```html?\s*/i, '').replace(/```\s*$/i, '').trim();
+    
+    // Remove any remaining markdown code block markers
+    text = text.replace(/^```\s*/gm, '').replace(/\s*```$/gm, '');
 
     return res.status(200).json({ htmlReport: text });
   } catch (err) {
