@@ -1746,6 +1746,210 @@ function extractAndApplyAIRatings(html) {
 }
 
 
+// Smart Excel Processing with Header Mapping and Validation
+const MEDICAL_COLUMN_MAPPING = {
+  'name': ['الاسم', 'اسم المريض', 'patient name', 'name', 'اسم', 'المريض'],
+  'mrn': ['رقم الملف', 'mrn', 'medical record', 'رقم السجل', 'file no', 'رقم الملف الطبي', 'file number'],
+  'age': ['العمر', 'age', 'السن', 'عمر'],
+  'gender': ['الجنس', 'gender', 'sex', 'النوع'],
+  'height': ['الطول', 'height', 'طول', 'الطول بالسم', 'height cm'],
+  'weight': ['الوزن', 'weight', 'وزن', 'الوزن بالكجم', 'weight kg'],
+  'bmi': ['مؤشر كتلة الجسم', 'bmi', 'body mass index'],
+  'bp_systolic': ['الضغط الانقباضي', 'systolic', 'sbp', 'ضغط الدم العلوي', 'الضغط العلوي'],
+  'bp_diastolic': ['الضغط الانبساطي', 'diastolic', 'dbp', 'ضغط الدم السفلي', 'الضغط السفلي'],
+  'blood_pressure': ['ضغط الدم', 'blood pressure', 'bp', 'الضغط'],
+  'pulse': ['النبض', 'pulse', 'heart rate', 'hr', 'نبض', 'معدل ضربات القلب', 'نبضات القلب'],
+  'spo2': ['تشبع الأكسجين', 'spo2', 'oxygen saturation', 'o2 sat', 'الأكسجين', 'نسبة الأكسجين', 'oxygen'],
+  'respiratory_rate': ['معدل التنفس', 'respiratory rate', 'rr', 'التنفس', 'عدد مرات التنفس', 'respiration'],
+  'temperature': ['الحرارة', 'temperature', 'temp', 'درجة الحرارة'],
+  'diagnosis': ['التشخيص', 'diagnosis', 'dx', 'المرض', 'التشخيص الرئيسي'],
+  'icd10': ['رمز التشخيص', 'icd10', 'icd-10', 'icd code', 'رمز المرض', 'كود التشخيص'],
+  'procedure': ['الإجراء', 'procedure', 'عملية', 'الإجراء الطبي'],
+  'cpt': ['رمز الإجراء', 'cpt', 'cpt code', 'كود الإجراء'],
+  'medications': ['الأدوية', 'medications', 'drugs', 'medicine', 'العلاج', 'الدواء'],
+  'lab_results': ['نتائج المختبر', 'lab results', 'lab', 'التحاليل', 'المختبر'],
+  'date': ['التاريخ', 'date', 'visit date', 'تاريخ الزيارة'],
+  'insurance': ['التأمين', 'insurance', 'شركة التأمين', 'الضامن', 'payer'],
+  'claim_status': ['حالة المطالبة', 'claim status', 'status', 'الحالة'],
+  'notes': ['ملاحظات', 'notes', 'remarks', 'comments', 'التعليقات']
+};
+
+const VITAL_SIGNS_VALIDATION = {
+  age: { min: 0, max: 120, unit: 'سنة', fieldAr: 'العمر' },
+  height: { min: 30, max: 250, unit: 'سم', fieldAr: 'الطول' },
+  weight: { min: 0.5, max: 350, unit: 'كجم', fieldAr: 'الوزن' },
+  pulse: { min: 30, max: 220, unit: 'نبضة/دقيقة', fieldAr: 'النبض' },
+  spo2: { min: 70, max: 100, unit: '%', fieldAr: 'تشبع الأكسجين' },
+  respiratory_rate: { min: 8, max: 60, unit: '/دقيقة', fieldAr: 'معدل التنفس' },
+  temperature: { min: 34, max: 42, unit: '°C', fieldAr: 'الحرارة' },
+  bp_systolic: { min: 60, max: 250, unit: 'mmHg', fieldAr: 'الضغط الانقباضي' },
+  bp_diastolic: { min: 30, max: 150, unit: 'mmHg', fieldAr: 'الضغط الانبساطي' }
+};
+
+function normalizeColumnName(name) {
+  if (!name) return '';
+  return String(name).toLowerCase().trim()
+    .replace(/[_\-\.]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+function findColumnMapping(headerRow) {
+  const mapping = {};
+  if (!headerRow || !Array.isArray(headerRow)) return mapping;
+  
+  headerRow.forEach((header, index) => {
+    const normalized = normalizeColumnName(header);
+    if (!normalized) return;
+    
+    for (const [standardField, aliases] of Object.entries(MEDICAL_COLUMN_MAPPING)) {
+      for (const alias of aliases) {
+        const normalizedAlias = normalizeColumnName(alias);
+        if (normalized === normalizedAlias || 
+            (normalized.length > 3 && normalizedAlias.length > 3 && 
+             (normalized.startsWith(normalizedAlias) || normalizedAlias.startsWith(normalized)))) {
+          if (!mapping[standardField]) {
+            mapping[standardField] = { index, originalName: header };
+          }
+          break;
+        }
+      }
+    }
+  });
+  
+  return mapping;
+}
+
+function validateVitalSign(field, value) {
+  const rules = VITAL_SIGNS_VALIDATION[field];
+  if (!rules) return { valid: true };
+  
+  const numValue = parseFloat(value);
+  if (isNaN(numValue)) return { valid: true };
+  
+  if (numValue < rules.min || numValue > rules.max) {
+    return {
+      valid: false,
+      warning: `قيمة ${rules.fieldAr} (${numValue} ${rules.unit}) خارج النطاق الطبيعي (${rules.min}-${rules.max})`,
+      field: rules.fieldAr,
+      value: numValue,
+      range: `${rules.min}-${rules.max}`
+    };
+  }
+  return { valid: true };
+}
+
+function detectDataShiftErrors(records) {
+  const errors = [];
+  let impossibleCount = 0;
+  
+  records.forEach((record, idx) => {
+    const recordErrors = [];
+    
+    for (const [field, value] of Object.entries(record)) {
+      if (value === null || value === undefined || value === '') continue;
+      const validation = validateVitalSign(field, value);
+      if (!validation.valid) {
+        recordErrors.push(validation);
+        impossibleCount++;
+      }
+    }
+    
+    if (recordErrors.length > 0) {
+      errors.push({ recordIndex: idx + 1, errors: recordErrors });
+    }
+  });
+  
+  if (impossibleCount > records.length * 0.3) {
+    return {
+      hasSystematicError: true,
+      message: `⚠️ تحذير: تم اكتشاف ${impossibleCount} قيمة غير منطقية في ${errors.length} سجل. قد يكون هناك خطأ في ترتيب أعمدة الملف أو في تصدير البيانات. يرجى التحقق من صحة البيانات قبل الاعتماد على نتائج التحليل.`,
+      errors
+    };
+  }
+  
+  return { hasSystematicError: false, errors };
+}
+
+function processExcelWithSmartMapping(allData) {
+  const warnings = [];
+  let processedText = '';
+  let totalErrors = 0;
+  let totalRecords = 0;
+  
+  allData.forEach(sheetData => {
+    const { sheet, data } = sheetData;
+    if (!data || data.length < 2) {
+      processedText += `=== ${sheet} ===\n(بيانات فارغة)\n\n`;
+      return;
+    }
+    
+    const headerRow = data[0];
+    const columnMapping = findColumnMapping(headerRow);
+    const mappedFields = Object.keys(columnMapping);
+    
+    processedText += `=== ${sheet} ===\n`;
+    
+    if (mappedFields.length > 0) {
+      const fieldNames = mappedFields.map(f => {
+        const rules = VITAL_SIGNS_VALIDATION[f];
+        return rules ? rules.fieldAr : MEDICAL_COLUMN_MAPPING[f]?.[0] || f;
+      });
+      processedText += `[تم التعرف على الحقول: ${fieldNames.join(', ')}]\n\n`;
+    }
+    
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.every(cell => !cell)) continue;
+      totalRecords++;
+      
+      let hasError = false;
+      const formattedFields = [];
+      
+      for (const [field, { index, originalName }] of Object.entries(columnMapping)) {
+        const value = row[index];
+        if (value === null || value === undefined || value === '') continue;
+        
+        const rules = VITAL_SIGNS_VALIDATION[field];
+        const fieldLabel = rules ? rules.fieldAr : originalName;
+        
+        if (rules) {
+          const numValue = parseFloat(value);
+          if (!isNaN(numValue) && (numValue < rules.min || numValue > rules.max)) {
+            formattedFields.push(`${fieldLabel}: [خطأ في البيانات - القيمة ${numValue} خارج النطاق ${rules.min}-${rules.max}]`);
+            hasError = true;
+          } else {
+            formattedFields.push(`${fieldLabel}: ${value}`);
+          }
+        } else {
+          formattedFields.push(`${fieldLabel}: ${value}`);
+        }
+      }
+      
+      for (let j = 0; j < headerRow.length; j++) {
+        const isMapped = Object.values(columnMapping).some(m => m.index === j);
+        if (!isMapped && row[j]) {
+          formattedFields.push(`${headerRow[j]}: ${row[j]}`);
+        }
+      }
+      
+      if (hasError) totalErrors++;
+      processedText += `سجل ${i}: ${formattedFields.join(' | ')}\n`;
+    }
+    
+    processedText += '\n';
+  });
+  
+  if (totalRecords > 0 && totalErrors > totalRecords * 0.3) {
+    const systemWarning = `⚠️ تحذير هام: تم اكتشاف ${totalErrors} سجل من أصل ${totalRecords} يحتوي على قيم مستحيلة طبياً (${Math.round(totalErrors/totalRecords*100)}%). هذا يشير إلى خطأ في ترتيب أعمدة الملف أو في تصدير البيانات. القيم الخاطئة تم وسمها بـ [خطأ في البيانات]. يرجى عدم الاعتماد على هذه القيم في التحليل السريري.`;
+    warnings.push(systemWarning);
+    processedText = `[تحذير جودة البيانات]\n${systemWarning}\n\n` + processedText;
+  } else if (totalErrors > 0) {
+    warnings.push(`تحذير: ${totalErrors} سجل يحتوي على قيم خارج النطاق الطبيعي`);
+  }
+  
+  return { textContent: processedText, warnings };
+}
+
 // File Handling
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
   dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
@@ -1821,16 +2025,15 @@ async function handleFiles(files) {
           allData.push({ sheet: sheetName, data: jsonData });
         });
         
-        const textContent = allData.map(s => {
-          return `=== ${s.sheet} ===\n` + s.data.map(row => row.join(' | ')).join('\n');
-        }).join('\n\n');
+        const processedData = processExcelWithSmartMapping(allData);
         
         filesState.push({ 
           name: f.name, 
           mimeType: 'text/plain', 
-          data: textContent,
-          textContent: textContent,
-          isExcel: true
+          data: processedData.textContent,
+          textContent: processedData.textContent,
+          isExcel: true,
+          dataQualityWarnings: processedData.warnings
         });
         renderFiles();
       } catch(err) {
