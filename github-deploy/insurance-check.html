@@ -1664,13 +1664,11 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// URLs - Use local API for tasks/signatures when on Replit, fallback to Apps Script for production
-const REPLIT_API_BASE = window.location.hostname.includes('m2020m.org') 
-  ? 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev'
-  : '';
+// URLs - All insurance-related APIs use Google Apps Script
+const INSURANCE_APPS_SCRIPT = 'https://script.google.com/macros/s/AKfycbxhKSq0qMIT85_pUfiba5V5Pi-kO_Df4Qw98MRIM4fmCb-XcheI8uGQccFxuKjigATHlQ/exec';
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
-const TASKS_API_URL = REPLIT_API_BASE + '/api/insurance';
-const API_URL = REPLIT_API_BASE + '/api/medical-audit';
+const TASKS_API_URL = INSURANCE_APPS_SCRIPT;
+const API_URL = INSURANCE_APPS_SCRIPT;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
@@ -3155,13 +3153,10 @@ function updateSidebarSummary() {
   }
 }
 
-// Load doctors for task dropdown (from Staff sheet)
+// Load doctors for task dropdown (from DoctorStats sheet)
 async function loadTasksDoctorDropdown() {
   try {
-    const response = await fetch(TASKS_API_URL + '/doctors', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const response = await fetch(TASKS_API_URL + '?action=getDoctors');
     const data = await response.json();
     
     const select = document.getElementById('taskDoctorSelect');
@@ -3170,7 +3165,6 @@ async function loadTasksDoctorDropdown() {
     if (data.success && data.doctors) {
       data.doctors.forEach(doc => {
         const option = document.createElement('option');
-        // Use doc.name like the main dropdown
         const doctorName = doc.name || doc;
         const specialty = doc.specialty || '';
         option.value = doctorName;
@@ -3262,7 +3256,7 @@ async function uploadTask() {
     reader.onload = async function(e) {
       const base64Data = e.target.result.split(',')[1];
       
-      const response = await fetch(TASKS_API_URL + '/tasks', {
+      const response = await fetch(TASKS_API_URL + '?action=addTask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3316,10 +3310,7 @@ async function uploadTask() {
 // Load pending tasks
 async function loadTasks() {
   try {
-    const response = await fetch(TASKS_API_URL + '/tasks', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const response = await fetch(TASKS_API_URL + '?action=getTasks');
     const data = await response.json();
     
     const grid = document.getElementById('pendingTasksGrid');
@@ -3474,12 +3465,9 @@ async function startAnalysis(taskIndex) {
   document.getElementById('doctorName').value = task.doctorName;
   document.getElementById('doctorSelected').querySelector('span').textContent = task.doctorName;
   
-  // Load file from task (using Replit API)
+  // Load file from task (using Apps Script)
   try {
-    const response = await fetch(TASKS_API_URL + '/tasks/' + task.id + '/file', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const response = await fetch(TASKS_API_URL + '?action=getTaskFile&taskId=' + task.id);
     const data = await response.json();
     
     if (data.success && data.fileData) {
@@ -3529,10 +3517,11 @@ async function startAnalysis(taskIndex) {
 
 async function updateTaskStatus(taskId, status) {
   try {
-    await fetch(TASKS_API_URL + '/tasks/' + taskId + '/status', {
+    await fetch(TASKS_API_URL + '?action=updateTaskStatus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        taskId: taskId,
         status: status,
         analyzedBy: currentUser.name
       })
@@ -3545,10 +3534,11 @@ async function updateTaskStatus(taskId, status) {
 // Save report to task after analysis
 async function saveReportToTask(taskId, reportHtml) {
   try {
-    const response = await fetch(TASKS_API_URL + '/tasks/' + taskId + '/report', {
+    const response = await fetch(TASKS_API_URL + '?action=saveReport', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        taskId: taskId,
         reportHtml: reportHtml,
         analyzedBy: currentUser.name
       })
@@ -3566,10 +3556,11 @@ async function saveReportToTask(taskId, reportHtml) {
 // Mark task as printed
 async function markTaskAsPrinted(taskId) {
   try {
-    await fetch(TASKS_API_URL + '/tasks/' + taskId + '/status', {
+    await fetch(TASKS_API_URL + '?action=updateTaskStatus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        taskId: taskId,
         status: 'printed',
         printedBy: currentUser.name
       })
@@ -3730,10 +3721,11 @@ async function confirmDelivery() {
   const signatureData = signatureCanvas.toDataURL('image/png');
   
   try {
-    const response = await fetch(TASKS_API_URL + '/tasks/' + currentDeliveryTask.id + '/deliver', {
+    const response = await fetch(TASKS_API_URL + '?action=deliverTask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        taskId: currentDeliveryTask.id,
         signature: signatureData,
         deliveredBy: currentUser.name
       })
@@ -3758,10 +3750,7 @@ async function confirmDelivery() {
 // Load delivery log
 async function loadDeliveryLog() {
   try {
-    const response = await fetch(TASKS_API_URL + '/delivery-log', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const response = await fetch(TASKS_API_URL + '?action=getDeliveryLog');
     const data = await response.json();
     
     const tbody = document.getElementById('deliveryLogBody');
