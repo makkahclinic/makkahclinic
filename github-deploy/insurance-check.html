@@ -897,9 +897,77 @@
       gap: 0.5rem;
       transition: all 0.3s;
     }
-    .btn-upload-task:hover {
+    .btn-upload-task:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 5px 20px rgba(201,169,98,0.3);
+    }
+    .btn-upload-task:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    /* File Upload Zone */
+    .file-upload-zone {
+      border: 2px dashed var(--gold);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: rgba(201,169,98,0.05);
+    }
+    .file-upload-zone:hover {
+      background: rgba(201,169,98,0.15);
+      border-color: var(--gold-light);
+    }
+    .file-upload-zone i {
+      font-size: 2rem;
+      color: var(--gold);
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    .file-upload-zone span {
+      color: var(--text-muted);
+    }
+    
+    /* Selected File Preview */
+    .selected-file-preview {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid #22c55e;
+      border-radius: 10px;
+      margin-top: 0.5rem;
+    }
+    .selected-file-preview i.fa-file-excel {
+      color: #22c55e;
+      font-size: 1.5rem;
+    }
+    .selected-file-preview span {
+      flex: 1;
+      color: var(--text);
+      font-weight: 500;
+      word-break: break-all;
+    }
+    .remove-file-btn {
+      background: #ef4444;
+      color: white;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .remove-file-btn:hover {
+      background: #dc2626;
+      transform: scale(1.1);
     }
     
     /* Delivery Log Table */
@@ -1473,10 +1541,21 @@
               <div class="form-row">
                 <div class="form-group">
                   <label><i class="fas fa-file-excel"></i> ملف الإكسل</label>
-                  <input type="file" id="taskFileInput" accept=".xlsx,.xls,.csv">
+                  <input type="file" id="taskFileInput" accept=".xlsx,.xls,.csv" onchange="showFilePreview(this)" style="display:none;">
+                  <div class="file-upload-zone" onclick="document.getElementById('taskFileInput').click()">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <span>اضغط لاختيار الملف</span>
+                  </div>
+                  <div id="selectedFilePreview" class="selected-file-preview" style="display:none;">
+                    <i class="fas fa-file-excel"></i>
+                    <span id="selectedFileName"></span>
+                    <button type="button" class="remove-file-btn" onclick="removeSelectedFile(event)">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button class="btn-upload-task" onclick="uploadTask()">
+              <button class="btn-upload-task" onclick="uploadTask()" id="uploadTaskBtn" disabled>
                 <i class="fas fa-plus-circle"></i>
                 إضافة المهمة
               </button>
@@ -3105,6 +3184,38 @@ async function loadTasksDoctorDropdown() {
 }
 
 // Toast Notification System
+// File preview and remove functions
+function showFilePreview(input) {
+  const preview = document.getElementById('selectedFilePreview');
+  const fileName = document.getElementById('selectedFileName');
+  const uploadZone = document.querySelector('.file-upload-zone');
+  const uploadBtn = document.getElementById('uploadTaskBtn');
+  
+  if (input.files && input.files[0]) {
+    fileName.textContent = input.files[0].name;
+    preview.style.display = 'flex';
+    uploadZone.style.display = 'none';
+    uploadBtn.disabled = false;
+  } else {
+    preview.style.display = 'none';
+    uploadZone.style.display = 'block';
+    uploadBtn.disabled = true;
+  }
+}
+
+function removeSelectedFile(event) {
+  event.stopPropagation();
+  const fileInput = document.getElementById('taskFileInput');
+  const preview = document.getElementById('selectedFilePreview');
+  const uploadZone = document.querySelector('.file-upload-zone');
+  const uploadBtn = document.getElementById('uploadTaskBtn');
+  
+  fileInput.value = '';
+  preview.style.display = 'none';
+  uploadZone.style.display = 'block';
+  uploadBtn.disabled = true;
+}
+
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
@@ -3176,6 +3287,10 @@ async function uploadTask() {
         showToast('تم إضافة المهمة بنجاح!', 'success');
         doctorSelect.value = '';
         fileInput.value = '';
+        // Reset file preview
+        document.getElementById('selectedFilePreview').style.display = 'none';
+        document.querySelector('.file-upload-zone').style.display = 'block';
+        document.getElementById('uploadTaskBtn').disabled = true;
         await loadTasks();
         updateTasksBadge();
         
