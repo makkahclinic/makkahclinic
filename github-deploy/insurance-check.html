@@ -1815,13 +1815,14 @@ function showMainApp() {
 
 async function loadDoctorsList() {
   try {
-    // Get doctors from Staff sheet in the main Apps Script
-    const response = await fetch(INSURANCE_APPS_SCRIPT, {
+    // Get doctors from DoctorStats sheet via Apps Script (using BACKEND_URL which is already working)
+    const response = await fetch(BACKEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'getStaffDoctors' })
+      body: JSON.stringify({ action: 'getDoctorsList' })
     });
     const data = await response.json();
+    console.log('loadDoctorsList response:', data);
     
     const optionsContainer = document.getElementById('doctorOptions');
     optionsContainer.innerHTML = '';
@@ -1829,6 +1830,8 @@ async function loadDoctorsList() {
     if (data.success && data.doctors) {
       // Also fill the task doctor dropdown
       const taskDoctorSelect = document.getElementById('taskDoctorSelect');
+      console.log('taskDoctorSelect element:', taskDoctorSelect ? 'FOUND' : 'NOT FOUND');
+      
       if (taskDoctorSelect) {
         taskDoctorSelect.innerHTML = '<option value="">-- اختر الطبيب --</option>';
       }
@@ -1850,7 +1853,11 @@ async function loadDoctorsList() {
           taskDoctorSelect.appendChild(option);
         }
       });
+      
       console.log('Loaded', data.doctors.length, 'doctors');
+      if (taskDoctorSelect) {
+        console.log('taskDoctorSelect now has', taskDoctorSelect.options.length, 'options');
+      }
     }
   } catch(e) {
     console.error('Failed to load doctors:', e);
