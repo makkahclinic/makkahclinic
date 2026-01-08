@@ -1905,9 +1905,10 @@ app.get('/api/insurance/doctors', async (req, res) => {
     });
     
     const rows = response.data.values || [];
-    const doctors = rows.map(row => ({
-      id: row[0] || '',
-      name: row[1] || row[0] || ''
+    // Column A = Name, Column B = Specialty
+    const doctors = rows.filter(row => row[0]).map(row => ({
+      name: row[0] || '',
+      specialty: row[1] || ''
     }));
     
     res.json({ success: true, doctors });
