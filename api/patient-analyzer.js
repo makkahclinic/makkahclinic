@@ -1,7 +1,7 @@
 // /api/patient-analyzer.js
 import XLSX from 'xlsx';
 
-// Parse Excel file and extract cases
+// Parse Excel file and extract cases - FIXED for actual Excel structure
 function parseExcelCases(base64Data) {
   try {
     const workbook = XLSX.read(base64Data, { type: 'base64' });
@@ -13,47 +13,46 @@ function parseExcelCases(base64Data) {
       
       if (jsonData.length < 2) continue;
       
-      const headers = jsonData[0].map(h => String(h || '').toLowerCase().trim());
+      // Clean headers - remove newlines and normalize
+      const rawHeaders = jsonData[0];
+      const headers = rawHeaders.map(h => String(h || '').toLowerCase().replace(/[\r\n]+/g, ' ').trim());
       
-      // Find key columns
+      console.log('[parseExcelCases] Headers found:', headers.slice(0, 10));
+      
+      // Find key columns - support actual Excel format with "Claim Se No.", "Service description", etc.
       const claimIdx = headers.findIndex(h => h.includes('claim') || h.includes('se no') || h.includes('رقم'));
-      const patientIdx = headers.findIndex(h => h.includes('patient') || h.includes('مريض') || h.includes('mrn'));
-      const diagIdx = headers.findIndex(h => h.includes('diag') || h.includes('تشخيص') || h.includes('icd'));
+      const patientIdx = headers.findIndex(h => h.includes('patient') || h.includes('file no') || h.includes('مريض') || h.includes('mrn'));
+      
+      // ICD columns - look for ICD DESCRIPTION (contains diagnosis text)
+      const icdDescCols = headers.map((h, i) => (h.includes('icd') && h.includes('description')) ? i : -1).filter(i => i >= 0);
+      // Fallback to any column with "diag" or "تشخيص"
+      const diagIdx = icdDescCols.length > 0 ? icdDescCols[0] : headers.findIndex(h => h.includes('diag') || h.includes('تشخيص'));
+      
+      // Vital signs
       const tempIdx = headers.findIndex(h => h.includes('temp') || h.includes('حرارة'));
-      const bpIdx = headers.findIndex(h => h.includes('bp') || h.includes('ضغط') || h.includes('blood'));
-      const pulseIdx = headers.findIndex(h => h.includes('pulse') || h.includes('نبض') || h.includes('hr'));
+      const bpIdx = headers.findIndex(h => h.includes('pressure') || h.includes('bp') || h.includes('ضغط'));
+      const pulseIdx = headers.findIndex(h => h.includes('pulse') || h.includes('نبض'));
       const weightIdx = headers.findIndex(h => h.includes('weight') || h.includes('وزن'));
       const heightIdx = headers.findIndex(h => h.includes('height') || h.includes('طول'));
       
-      // Find medication/procedure columns - EXCLUDE generic "item" columns from medication detection
-      const medCols = headers.map((h, i) => {
-        // Only include columns that are explicitly medication-related
-        // Exclude generic "item" which could be any consumable
-        const isMedCol = (h.includes('med') || h.includes('drug') || h.includes('دواء') || 
-                         h.includes('medicine') || h.includes('prescription')) && 
-                         !h.includes('cost') && !h.includes('price') && !h.includes('code');
-        return isMedCol ? i : -1;
-      }).filter(i => i >= 0);
+      // Service description column - THIS IS THE KEY! Contains medications AND procedures
+      const serviceDescIdx = headers.findIndex(h => 
+        (h.includes('service') && h.includes('desc')) || 
+        h.includes('item desc') || 
+        h.includes('item name') ||
+        (h.includes('description') && !h.includes('icd'))
+      );
       
-      const doseCols = headers.map((h, i) => {
-        // Dose/quantity columns, excluding unit cost
-        const isDoseCol = (h.includes('dose') || h.includes('qty') || h.includes('جرعة') || 
-                          h.includes('كمية') || h.includes('quantity')) && 
-                          !h.includes('unit') && !h.includes('cost') && !h.includes('price');
-        return isDoseCol ? i : -1;
-      }).filter(i => i >= 0);
+      // Service code column
+      const serviceCodeIdx = headers.findIndex(h => 
+        (h.includes('service') && h.includes('code')) || 
+        h.includes('item code')
+      );
       
-      const procCols = headers.map((h, i) => {
-        const isProcCol = h.includes('proc') || h.includes('test') || h.includes('إجراء') || 
-                         h.includes('تحليل') || h.includes('service');
-        return isProcCol ? i : -1;
-      }).filter(i => i >= 0);
+      // Net amount column (for context)
+      const amountIdx = headers.findIndex(h => h.includes('amount') || h.includes('net') || h.includes('price') || h.includes('cost'));
       
-      // Fallback: Find "Item Name" or "Item Description" columns for sheets without explicit med columns
-      const itemNameCols = headers.map((h, i) => {
-        const isItemName = h.includes('item') && (h.includes('name') || h.includes('desc') || h === 'item');
-        return isItemName && !h.includes('code') && !h.includes('cost') ? i : -1;
-      }).filter(i => i >= 0);
+      console.log('[parseExcelCases] Column indices:', { claimIdx, patientIdx, diagIdx, serviceDescIdx, tempIdx, bpIdx });
       
       // Group rows by claim ID
       const caseMap = new Map();
@@ -64,11 +63,19 @@ function parseExcelCases(base64Data) {
         const claimId = claimIdx >= 0 ? String(row[claimIdx] || '') : `row_${i}`;
         if (!claimId) continue;
         
+        // Get all ICD descriptions for diagnosis
+        let diagText = '';
+        if (icdDescCols.length > 0) {
+          diagText = icdDescCols.map(idx => row[idx] ? String(row[idx]).trim() : '').filter(d => d).join(' | ');
+        } else if (diagIdx >= 0) {
+          diagText = String(row[diagIdx] || '');
+        }
+        
         if (!caseMap.has(claimId)) {
           caseMap.set(claimId, {
             claimId,
             patientId: patientIdx >= 0 ? row[patientIdx] : '',
-            diagnosis: diagIdx >= 0 ? row[diagIdx] : '',
+            diagnosis: diagText,
             vitals: {
               temperature: tempIdx >= 0 ? row[tempIdx] : '',
               bloodPressure: bpIdx >= 0 ? row[bpIdx] : '',
@@ -76,8 +83,7 @@ function parseExcelCases(base64Data) {
               weight: weightIdx >= 0 ? row[weightIdx] : '',
               height: heightIdx >= 0 ? row[heightIdx] : ''
             },
-            medications: [],
-            procedures: [],
+            services: [], // All services from Service description
             rawData: []
           });
         }
@@ -85,43 +91,61 @@ function parseExcelCases(base64Data) {
         const c = caseMap.get(claimId);
         c.rawData.push(row.join(' | '));
         
-        // Extract medications with proper dose pairing
-        // Use explicit medication columns first, then fall back to item columns
-        const effectiveMedCols = medCols.length > 0 ? medCols : itemNameCols;
-        
-        for (let mi = 0; mi < effectiveMedCols.length; mi++) {
-          const medIdx = effectiveMedCols[mi];
-          const medValue = row[medIdx] ? String(row[medIdx]).trim() : '';
-          if (!medValue) continue;
+        // Extract service/medication from "Service description" column
+        if (serviceDescIdx >= 0 && row[serviceDescIdx]) {
+          const serviceDesc = String(row[serviceDescIdx]).trim();
+          const serviceCode = serviceCodeIdx >= 0 ? String(row[serviceCodeIdx] || '') : '';
+          const amount = amountIdx >= 0 ? row[amountIdx] : '';
           
-          // Skip if already added (avoid duplicates)
-          if (c.medications.some(m => m.name === medValue)) continue;
-          
-          // Look for dose in the matched dose column, or try adjacent column
-          let dose = '';
-          if (mi < doseCols.length) {
-            dose = row[doseCols[mi]] || '';
-          } else if (medIdx + 1 < row.length) {
-            // Try adjacent column as dose (common layout)
-            const adjacentVal = row[medIdx + 1];
-            // Only use if it looks like a quantity (number or contains digits)
-            if (adjacentVal && /\d/.test(String(adjacentVal))) {
-              dose = adjacentVal;
-            }
+          // Check if already added (avoid duplicates)
+          if (serviceDesc && !c.services.some(s => s.name === serviceDesc)) {
+            c.services.push({
+              name: serviceDesc,
+              code: serviceCode,
+              amount: String(amount)
+            });
           }
-          
-          c.medications.push({ name: medValue, dose: String(dose) });
+        }
+      }
+      
+      // Convert services to medications/procedures for compatibility
+      for (const c of caseMap.values()) {
+        // Classify services as medications or procedures based on keywords
+        c.medications = [];
+        c.procedures = [];
+        
+        for (const svc of c.services) {
+          const name = svc.name.toUpperCase();
+          // Medication keywords
+          if (name.includes('TAB') || name.includes('CAP') || name.includes('SYRUP') || 
+              name.includes('INJ') || name.includes('MG') || name.includes('ML') ||
+              name.includes('SOLUTION') || name.includes('INFUSION') || name.includes('CREAM') ||
+              name.includes('OINT') || name.includes('DROP') || name.includes('SUSP') ||
+              name.includes('ORAL') || name.includes('I.V.') || name.includes('IM') ||
+              name.includes('PARACETAMOL') || name.includes('AMOXICILLIN') || name.includes('OMEPRAZOLE') ||
+              name.includes('SALINE') || name.includes('DEXTROSE') || name.includes('ANTIBIOTIC')) {
+            c.medications.push({ name: svc.name, dose: svc.amount || '1' });
+          } 
+          // Procedure/test keywords
+          else if (name.includes('ANALYSIS') || name.includes('TEST') || name.includes('CBC') ||
+                   name.includes('X-RAY') || name.includes('SCAN') || name.includes('CULTURE') ||
+                   name.includes('EXAM') || name.includes('CONSULT') || name.includes('PROCEDURE') ||
+                   name.includes('BLOOD') || name.includes('URINE') || name.includes('STOOL')) {
+            c.procedures.push(svc.name);
+          } 
+          // Default: treat as procedure
+          else {
+            c.procedures.push(svc.name);
+          }
         }
         
-        // Extract procedures
-        for (const idx of procCols) {
-          if (row[idx]) c.procedures.push(row[idx]);
-        }
+        console.log(`[parseExcelCases] Case ${c.claimId}: ${c.medications.length} meds, ${c.procedures.length} procs, diagnosis: ${c.diagnosis.substring(0, 50)}`);
       }
       
       cases.push(...caseMap.values());
     }
     
+    console.log(`[parseExcelCases] Total cases extracted: ${cases.length}`);
     return cases;
   } catch (err) {
     console.error('Excel parsing error:', err);
