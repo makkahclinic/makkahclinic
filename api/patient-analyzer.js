@@ -242,8 +242,8 @@ export default async function handler(req, res) {
       generation_config: { temperature: 0.2, top_p: 0.95, top_k: 40, max_output_tokens: 8192 },
     };
 
-    const model = "models/gemini-1.5-pro-latest";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+    const model = "gemini-2.0-flash";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const response = await fetch(apiUrl, {
       method: "POST",
