@@ -1,0 +1,332 @@
+تقييمي من 100
+
+أعطيها: 68 / 100
+
+ليش مو أعلى؟ (تقسيم تقريبي عشان تعرف وين تركز)
+
+الشكل العام والهوية البصرية: 18/25 (حلوة، بس تحتاج ضبط هيراركية ومساحات Responsive)
+
+التجربة/الترتيب (Flow) والمتابعة: 12/20 (ما فيه Stepper/Progress واضح، والنتيجة تطلع فجأة تحت)
+
+الأداء: 11/20 (تحويل PDF لصور + Base64 + إعادة رسم الكروت كثير يثقل) 
+DebugBear
++3
+web.dev
++3
+Chrome for Developers
++3
+
+الأمان: 9/15 (استخدام innerHTML من رد السيرفر + عرض err.message داخل HTML ممكن يفتح XSS لو ما تعقم) 
+MDN Web Docs
++3
+MDN Web Docs
++3
+OWASP Cheat Sheet Series
++3
+
+الوصولية (Accessibility): 10/15 (التسميات ممتازة، لكن عندك عناصر تفاعلية مبنية كـ span + Drag&Drop يحتاج دعم لوحة مفاتيح/حالات ARIA) 
+W3C
++3
+MDN Web Docs
++3
+MDN Web Docs
++3
+
+جودة البناء/الصيانة: 8/10 (الكود مفهوم، لكن فيه Classes مستخدمة وغير معرّفة + Inline styles + بعض Race conditions)
+
+أكبر المشاكل اللي تخليها “مو مرتبة”
+1) عندك Classes مستخدمة لكنها غير موجودة
+
+muted, no-print, avoid-break مستخدمة في HTML لكن ما لها تعريف في CSS → هذا يعطي نتائج غير متوقعة (خصوصاً الطباعة والـ status).
+هذه تعتبر “Bug” بصري مباشر.
+
+2) زر تغيير اللغة مو زر (وبالتالي مو تفاعلي/ممكن ما ينفهم)
+
+<span class="chip" id="lang-switcher">English</span>
+هذا شكله زر لكنه فعلياً نص. الأفضل يكون <button> (أو على الأقل role+tabindex) لأن الأزرار لازم تكون قابلة للتركيز من لوحة المفاتيح. 
+MDN Web Docs
++1
+
+3) “متابعة الحالة” ضعيفة
+
+عند رفع PDF أنت تعرض “جاري معالجة صفحة X…” في نص صغير فقط.
+
+ما فيه Progress bar ولا عدد الملفات/الصفحات ولا “خطوة 1/2/3”.
+وجود <progress> + role="status" يحسن الإحساس بالمتابعة كثير. 
+MDN Web Docs
++2
+MDN Web Docs
++2
+
+4) الأداء: إعادة رسم الكروت كثير + Base64 ثقيل
+
+داخل PDF: كل صفحة تضيف عنصر + تعمل renderCards() → هذا يعيد بناء DOM بالكامل كل مرة.
+
+Base64 داخل JSON عادة يضخم البايلود ويزيد وقت النقل والذاكرة. (صور هي أثقل مورد غالباً، وتقليل البايتات مهم جداً). 
+web.dev
++2
+Chrome for Developers
++2
+
+5) الأمان: innerHTML من السيرفر
+
+أنت تحط data.html مباشرة داخل innerHTML. لو هذا HTML ممكن يتأثر بمدخلات مستخدم/ملف/نص مستخرج… هنا خطر XSS. MDN تحذر صراحة من إدخال strings غير موثوقة في innerHTML وتوصي بالتعقيم + CSP/Trusted Types. 
+OWASP Cheat Sheet Series
++3
+MDN Web Docs
++3
+MDN Web Docs
++3
+
+نفس الفكرة في error: err.message ينحط داخل HTML.
+
+6) بيانات المريض ما تنرسل للـ API
+
+أنت عندك name/gender/age لكن الـ payload يرسل فقط files و lang. هذا يخلي الصفحة “شكلها نموذج” لكن بدون أثر.
+
+اقتراح ترتيب جديد (يعطي جمال + متابعة أوضح)
+
+على الديسكتوب: خليها تخطيط عمودين
+
+اليسار (أساسي): خطوات الإدخال (معلومات المريض → الملفات → تحليل)
+
+اليمين (ملخص Sticky): عدد الملفات/الصفحات + معاينات + زر التحليل (يبقى ظاهر)
+
+على الجوال:
+
+نفس الخطوات لكن عمود واحد، وزر التحليل يكون Sticky أسفل الشاشة.
+
+إصلاحات سريعة جداً (أقوى عائد بأقل تغيير)
+(A) أضف تعريفات الـ classes الناقصة + تحسين Responsive + طباعة
+
+انسخ هذا فوق نهاية الـ <style>:
+
+/* Helpers referenced in HTML but missing */
+.muted { color: var(--muted-text); font-size: 14px; }
+.no-print { /* default no-op */ }
+.avoid-break { break-inside: avoid; page-break-inside: avoid; }
+
+/* Responsive spacing */
+.main-content {
+  padding: clamp(16px, 3vw, 32px);
+  margin: clamp(16px, 3vw, 32px) auto;
+}
+h1 { font-size: clamp(22px, 3.2vw, 32px); }
+.subtitle { font-size: clamp(14px, 1.6vw, 16px); }
+
+/* Better RTL/LTR future-proof positioning (instead of right/top) */
+.remove { inset-inline-end: 10px; inset-block-start: 10px; }
+
+/* File name doesn’t break layout */
+.meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; transform: none !important; }
+}
+
+/* Print support */
+@media print {
+  .no-print { display: none !important; }
+  .page-wrapper { position: static; backdrop-filter: none; }
+  .main-content { margin: 0; border: none; box-shadow: none; }
+}
+
+
+استخدام prefers-reduced-motion يعتبر تحسين وصولية ممتاز. 
+MDN Web Docs
+
+الخصائص المنطقية مثل inset-inline-end تساعدك لو فعّلت LTR/RTL لاحقاً. 
+MDN Web Docs
++1
+
+(B) حوّل زر اللغة إلى زر فعلي
+
+بدّل هذا:
+
+<span class="chip" id="lang-switcher">English</span>
+
+
+إلى:
+
+<button class="chip" id="lang-switcher" type="button">English</button>
+
+
+لأن عناصر التحكم التفاعلية لازم تكون Focusable وتشتغل بلوحة المفاتيح. 
+MDN Web Docs
++1
+
+(C) أضف “Status + Progress” حقيقي للمعالجة
+
+مثال بسيط تحت قسم رفع الملفات (قبل cards مثلاً):
+
+<div class="no-print" style="margin-top:12px">
+  <div id="busy" class="muted" role="status" aria-live="polite" hidden></div>
+  <progress id="fileProgress" value="0" max="1" style="width:100%; height:14px; margin-top:8px"></progress>
+</div>
+
+
+<progress> عنصر رسمي لمؤشر تقدم. 
+MDN Web Docs
+
+role="status" + aria-live لرسائل الحالة بدون إزعاج. 
+MDN Web Docs
++1
+
+تحسينات أهم في الـ JavaScript (تخلي الصفحة “تتابع” و”ما تهنج”)
+1) عالج الملفات بشكل متسلسل + قلل renderCards()
+
+مشكلتك الحالية: PDF يشتغل داخل FileReader.onload بشكل غير مُنتظر، ولو عندك أكثر من PDF يصير تداخل.
+
+الفكرة: حوّل قراءة الملفات إلى Promises وخلّ المعالجة await:
+
+const fileProgress = document.getElementById('fileProgress');
+
+const readAsArrayBuffer = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onerror = () => reject(new Error('تعذر قراءة الملف'));
+  r.onload = () => resolve(r.result);
+  r.readAsArrayBuffer(file);
+});
+
+const readAsDataURL = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onerror = () => reject(new Error('تعذر قراءة الملف'));
+  r.onload = () => resolve(r.result);
+  r.readAsDataURL(file);
+});
+
+async function handleFiles(files) {
+  busy.hidden = false;
+  busy.textContent = 'جاري معالجة الملفات...';
+
+  for (const f of files) {
+    if (f.type === 'application/pdf') {
+      await splitPdfToImages(f);
+    } else {
+      const base64Url = await readAsDataURL(f);
+      filesState.push({ name: f.name, mimeType: f.type || 'application/octet-stream', data: base64Url });
+    }
+
+    // تحديث خفيف بدل إعادة الرسم عشرات المرات
+    renderCards();
+    await new Promise(requestAnimationFrame);
+  }
+
+  busy.hidden = true;
+  fileInput.value = '';
+}
+
+
+فكرة “تقطيع المهام الطويلة” لتجنب تعليق الـ UI موصى فيها بالأداء. 
+web.dev
++1
+
+2) داخل PDF: اضبط progress وقلل إعادة الرسم
+async function splitPdfToImages(file) {
+  const buf = await readAsArrayBuffer(file);
+  const pdf = await pdfjsLib.getDocument(new Uint8Array(buf)).promise;
+
+  fileProgress.max = pdf.numPages;
+  fileProgress.value = 0;
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    busy.textContent = `جاري معالجة صفحة ${i} من ${pdf.numPages}...`;
+
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1.0 });
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    const base64Url = canvas.toDataURL('image/jpeg', 0.7);
+    filesState.push({ name: `${file.name} - Page ${i}`, mimeType: 'image/jpeg', data: base64Url });
+
+    fileProgress.value = i;
+    await new Promise(requestAnimationFrame);
+  }
+}
+
+الأمان (مهم جداً لأنك تتعامل مع تقارير طبية)
+1) لا تحط data.html مباشرة في innerHTML بدون تعقيم
+
+MDN تحذر بشكل صريح من XSS عند استخدام innerHTML مع نص غير موثوق. 
+MDN Web Docs
++1
+
+حل عملي وسريع: استخدم DOMPurify لتعقيم HTML قبل العرض (OWASP حتى توصي فيه للتعقيم). 
+OWASP Cheat Sheet Series
++1
+
+مثال:
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+
+const clean = DOMPurify.sanitize(data.html || '');
+document.getElementById('reportHTML').innerHTML =
+  `<div id="reportContent" class="card">${clean}</div>`;
+
+2) أضف دفاع إضافي: CSP + (إن أمكن) Trusted Types
+
+CSP “طبقة ثانية” قوية ضد XSS. 
+MDN Web Docs
++1
+
+Trusted Types موجهة خصيصاً لمنع DOM XSS في sinks مثل innerHTML. 
+MDN Web Docs
++2
+W3C
++2
+
+3) رفع الملفات: accept مجرد “تلميح”
+
+لا تعتمد عليه وحده؛ لازم تحقق سيرفر سايد + تحط حدود حجم/عدد. 
+MDN Web Docs
++2
+OWASP Cheat Sheet Series
++2
+
+تحسين مهم جداً (أداء + ترتيب): اترك Base64 للمعاينة/الرفع إذا تقدر
+
+بدل ما تخزن كل شيء كـ Base64 داخل JSON:
+
+للمعاينة: استخدم URL.createObjectURL(file)
+
+للرفع: استخدم FormData وارفع الملف كملف (أخف وأسرع)
+
+MDN توضح createObjectURL وضرورة revokeObjectURL لتجنب تسريب ذاكرة. 
+MDN Web Docs
++2
+MDN Web Docs
++2
+
+وLighthouse يشدد على تقليل الـ payload لأن تأثيره مباشر على زمن التحميل وتجربة المستخدم. 
+Chrome for Developers
+
+اقتراحات UI “تخليها أجمل ومتابعتها أقوى”
+
+Stepper أعلى الصفحة: “1 معلومات المريض → 2 الملفات → 3 النتيجة” (يبين أين المستخدم الآن).
+
+ملخص جانبي Sticky: عدد الملفات، عدد صفحات PDF، الحجم التقريبي، زر التحليل.
+
+زر التحليل Disabled إذا ما فيه ملفات أو بيانات ناقصة (مع رسالة واضحة).
+
+تحقق فوري للمدخلات (العمر نطاق منطقي، الجنس مطلوب…) باستخدام Constraint Validation API بدل تحقق يدوي كثير. 
+MDN Web Docs
++1
+
+تحسين قابلية الوصول:
+
+الـ lang switcher زر
+
+status messages باستخدام role="status"
+
+Drag&Drop يبقى خيار إضافي، لكن لازم “انقر للاختيار” يظل أساسي + دعم لوحة مفاتيح. 
+MDN Web Docs
++2
+MDN Web Docs
++2

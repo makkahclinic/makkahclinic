@@ -1,0 +1,330 @@
+فاهم عليك تمامًا: التقرير لما يطول، إنك تضل تنزل وتدور لين “المهام” (خصوصًا بسهم/سكرول جانبي) مزعج.
+
+ 
+
+بالكود الحالي اللي عندك: لا، ما انحلت — لأنك تعرض التقرير ككتلة واحدة داخل reportHTML بدون أي “تنقّل داخلي” (Table of Contents) أو زر يقفز مباشرة لقسم “المهام”.
+
+ 
+
+الحل اللي يحلها بشكل نظيف (ومن غير أسهم جانبية) هو:
+
+تعمل “قائمة تنقّل سريع” (يمين الشاشة عند RTL)
+
+القائمة تتولّد تلقائيًا من عناوين التقرير (h2/h3)
+
+لما تضغط “المهام” ينقلك لها بسكرول ناعم عبر scrollIntoView({behavior:"smooth"}) 
+MDN Web Docs
++1
+
+وتخلي العنصر الحالي يتظلل (Highlight) باستخدام IntersectionObserver 
+MDN Web Docs
++1
+
+وتستعمل <nav> كمنطقة تنقّل (landmark) عشان تكون أوضح ووصولية أفضل 
+MDN Web Docs
++2
+Chrome for Developers
++2
+
+ملاحظة مهمة: هذا الحل يعتمد على وجود عناوين داخل التقرير (مثل <h2>المهام</h2>). العناوين مفيدة جدًا للتنقل حتى لقرّاء الشاشة وتكوين “فهرس” طبيعي للتقرير. 
+MDN Web Docs
+
+تعديل جاهز يضيف “تنقّل سريع” للمهام وأقسام التقرير
+1) عدّل HTML داخل #reportWrap
+
+استبدل الجزء الحالي لـ reportWrap بهذا (أو خذ منه فكرة البنية):
+
+<div id="reportWrap" class="section" style="display:none">
+  <div class="report-layout">
+    <main class="report-body">
+      <div id="reportTop"></div>
+      <div id="reportHTML" class="avoid-break"></div>
+    </main>
+
+    <nav id="reportNav" class="report-nav no-print" aria-label="التنقل داخل التقرير">
+      <div class="navHeader">
+        <strong>تنقّل سريع</strong>
+        <button type="button" class="chip navClose" id="tocClose" aria-label="إغلاق">×</button>
+      </div>
+
+      <input id="tocSearch" placeholder="ابحث في العناوين…" />
+      <div id="reportToc" class="toc"></div>
+
+      <button type="button" class="chip" id="tocToTop" style="margin-top:10px;">أعلى التقرير</button>
+    </nav>
+  </div>
+
+  <button id="tocToggle" class="tocToggle no-print" type="button"
+          aria-expanded="false" aria-controls="reportNav">تنقّل</button>
+  <div id="tocOverlay" class="tocOverlay no-print" hidden></div>
+
+  <details style="margin-top:16px" class="no-print">
+    <summary>إظهار البيانات المستخرجة (للمراجعة)</summary>
+    <pre id="jsonOut" style="white-space:pre-wrap; background:var(--gray-100); padding:16px; border-radius:12px; border:1px solid var(--border-color)"></pre>
+  </details>
+</div>
+
+2) أضف CSS هذا تحت الـ <style> عندك
+/* === Report navigation layout === */
+.report-layout{
+  display:grid;
+  grid-template-columns: 1fr 280px;
+  grid-template-areas: "body nav";
+  gap:16px;
+  align-items:start;
+}
+.report-body{ grid-area: body; min-width:0; }
+.report-nav{
+  grid-area: nav;
+  position: sticky;
+  top: 88px; /* نفس ارتفاع الهيدر اللاصق تقريبًا */
+  align-self: start;
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 10px 35px rgba(148, 163, 184, 0.08);
+}
+
+.navHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.navClose{ display:none; } /* نخليه للموبايل فقط */
+
+#tocSearch{
+  width:100%;
+  margin-bottom:10px;
+}
+
+.toc{ display:flex; flex-direction:column; gap:6px; }
+.toc-link{
+  display:block;
+  padding:10px 12px;
+  border-radius:12px;
+  text-decoration:none;
+  color: var(--gray-700);
+  border: 1px solid transparent;
+  background: transparent;
+}
+.toc-link:hover{
+  background: var(--primary-50);
+  border-color: var(--primary-200);
+  color: var(--primary-800);
+}
+.toc-link.active{
+  background: var(--primary-100);
+  border-color: var(--primary-300);
+  color: var(--primary-900);
+  font-weight:700;
+}
+.toc-h3{ padding-inline-start: 22px; font-size: 13px; }
+
+/* عشان العنوان ما يختفي تحت الهيدر اللاصق عند القفز */
+#reportContent h2,
+#reportContent h3{
+  scroll-margin-top: 100px;
+}
+
+/* زر تنقّل للموبايل */
+.tocToggle{
+  display:none;
+  position: fixed;
+  bottom: 16px;
+  inset-inline-end: 16px;
+  z-index: 60;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.35);
+  background: var(--primary-600);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+.tocOverlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(2px);
+  z-index: 55;
+}
+
+/* موبايل: نحول القائمة إلى Bottom Sheet */
+@media (max-width: 900px){
+  .report-layout{
+    grid-template-columns: 1fr;
+    grid-template-areas: "body";
+  }
+  .report-nav{
+    position: fixed;
+    inset: auto 12px 12px 12px;
+    top: auto;
+    max-height: 70vh;
+    transform: translateY(calc(100% + 12px));
+    transition: transform .2s ease;
+    z-index: 70;
+  }
+  .report-nav.open{ transform: translateY(0); }
+  .tocToggle{ display:inline-flex; align-items:center; gap:8px; }
+  .navClose{ display:inline-flex; }
+}
+
+
+scroll-margin-top مفيد جدًا مع الهيدر اللاصق عشان القفز بالروابط ما يدفن العنوان تحت الهيدر. 
+MDN Web Docs
++1
+
+3) أضف JavaScript لتوليد فهرس + قفز للمهام
+
+ألصق هذا أسفل سكربتك (قبل </script>):
+
+const reportNav = document.getElementById('reportNav');
+const reportToc = document.getElementById('reportToc');
+const tocSearch = document.getElementById('tocSearch');
+const tocToggle = document.getElementById('tocToggle');
+const tocOverlay = document.getElementById('tocOverlay');
+const tocClose = document.getElementById('tocClose');
+const tocToTop = document.getElementById('tocToTop');
+
+let tocObserver = null;
+
+function openToc(){
+  if(!reportNav) return;
+  reportNav.classList.add('open');
+  if(tocOverlay) tocOverlay.hidden = false;
+  if(tocToggle) tocToggle.setAttribute('aria-expanded', 'true');
+}
+function closeToc(){
+  if(!reportNav) return;
+  reportNav.classList.remove('open');
+  if(tocOverlay) tocOverlay.hidden = true;
+  if(tocToggle) tocToggle.setAttribute('aria-expanded', 'false');
+}
+
+tocToggle?.addEventListener('click', () => {
+  reportNav?.classList.contains('open') ? closeToc() : openToc();
+});
+tocOverlay?.addEventListener('click', closeToc);
+tocClose?.addEventListener('click', closeToc);
+
+tocToTop?.addEventListener('click', () => {
+  document.getElementById('reportTop')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  closeToc();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeToc();
+});
+
+function slugify(text){
+  const s = (text || '').trim().toLowerCase();
+  // يسمح بالعربي + الانجليزي + الأرقام
+  const clean = s.replace(/\s+/g, '-').replace(/[^\w\u0600-\u06FF-]+/g, '');
+  return clean || 'section';
+}
+
+function ensureId(el, i){
+  if (el.id) return el.id;
+  const base = `sec-${slugify(el.textContent)}-${i+1}`;
+  let id = base, n = 1;
+  while (document.getElementById(id)) id = `${base}-${n++}`;
+  el.id = id;
+  return id;
+}
+
+function buildReportToc(){
+  if(!reportToc) return;
+
+  tocObserver?.disconnect();
+  reportToc.innerHTML = '';
+
+  const content = document.getElementById('reportContent');
+  if(!content) return;
+
+  const headings = content.querySelectorAll('h2, h3');
+  if(headings.length === 0){
+    reportToc.innerHTML = `<div class="muted">ما لقيت عناوين داخل التقرير. الأفضل إخراج التقرير بعناوين h2/h3 (مثال: "المهام").</div>`;
+    return;
+  }
+
+  headings.forEach((h, i) => {
+    const id = ensureId(h, i);
+    const a = document.createElement('a');
+    a.href = `#${id}`;
+    a.textContent = h.textContent.trim();
+    a.className = `toc-link toc-${h.tagName.toLowerCase()}`;
+
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      closeToc();
+    });
+
+    reportToc.appendChild(a);
+  });
+
+  // بحث داخل العناوين
+  if (tocSearch){
+    tocSearch.value = '';
+    tocSearch.oninput = () => {
+      const q = tocSearch.value.trim().toLowerCase();
+      reportToc.querySelectorAll('.toc-link').forEach(link => {
+        const ok = !q || link.textContent.toLowerCase().includes(q);
+        link.style.display = ok ? '' : 'none';
+      });
+    };
+  }
+
+  // تظليل القسم الحالي أثناء التمرير
+  const links = Array.from(reportToc.querySelectorAll('.toc-link'));
+  const byId = new Map(links.map(l => [l.getAttribute('href').slice(1), l]));
+
+  tocObserver = new IntersectionObserver((entries) => {
+    for (const ent of entries){
+      if (ent.isIntersecting){
+        const id = ent.target.id;
+        byId.forEach((link, key) => link.classList.toggle('active', key === id));
+      }
+    }
+  }, { root: null, rootMargin: '-20% 0px -70% 0px', threshold: 0.01 });
+
+  headings.forEach(h => tocObserver.observe(h));
+}
+
+
+scrollIntoView يدعم behavior: "smooth" رسميًا ومناسب للتنقل السلس بين أقسام طويلة. 
+MDN Web Docs
++1
+
+وIntersectionObserver مناسب لتحديد أي عنوان ظاهر حاليًا وتحديث التمييز في القائمة. 
+MDN Web Docs
++1
+
+4) أهم سطر: استدعِ buildReportToc() بعد ما تعرض التقرير
+
+داخل نجاح fetch عندك (بعد ما تملأ reportHTML) زِد هذا:
+
+document.getElementById('reportHTML').innerHTML =
+  `<div id="reportContent" class="card">${data.html || ''}</div>`;
+
+buildReportToc();
+closeToc();
+
+نقطة أخيرة عشان “المهام” تصير بضغطة واحدة
+
+إذا تقريرك يطلع من السيرفر بدون عناوين واضحة، خلّي الجزء الخاص بالمهام يطلع كذا (داخل data.html):
+
+<h2>المهام</h2>
+<ul>...</ul>
+
+
+وجود العناوين يساعد في التنقل ويعطي هيكلة أوضح، وحتى أدوات الوصول تقدر تقفز بين العناوين وتعرض قائمة بالعناوين كفهرس. 
+MDN Web Docs
+
+إذا طبقت اللي فوق: ما عاد تحتاج “أسهم جانبية” ولا سكرول طويل عشان توصل للمهام — بتصير عندك قائمة يمين الشاشة (وعلى الجوال زر “تنقل”) تضغط “المهام” وتروح لها مباشرة.
