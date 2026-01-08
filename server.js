@@ -1669,6 +1669,63 @@ app.get('/api/owner/stats', async (req, res) => {
 // ============================================
 const INSURANCE_TASKS_SPREADSHEET_ID = process.env.INSURANCE_TASKS_SPREADSHEET_ID || MASTER_SPREADSHEET_ID;
 
+// Initialize sheets - create if not exist
+app.post('/api/insurance/init', async (req, res) => {
+  try {
+    const sheets = await getGoogleSheetsClient();
+    
+    // Get existing sheets
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID
+    });
+    const existingSheets = spreadsheet.data.sheets.map(s => s.properties.title);
+    
+    const requests = [];
+    
+    // Create Audit_Tasks if not exists
+    if (!existingSheets.includes('Audit_Tasks')) {
+      requests.push({ addSheet: { properties: { title: 'Audit_Tasks' } } });
+    }
+    
+    // Create Doctors if not exists
+    if (!existingSheets.includes('Doctors')) {
+      requests.push({ addSheet: { properties: { title: 'Doctors' } } });
+    }
+    
+    if (requests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+        requestBody: { requests }
+      });
+    }
+    
+    // Add headers to Audit_Tasks
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A1:N1',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [['ID', 'الطبيب', 'اسم الملف', 'بيانات الملف', 'رافع الملف', 'تاريخ الرفع', 'الحالة', 'المحلل', 'تاريخ التحليل', 'التقرير', 'المسلم', 'تاريخ التسليم', 'التوقيع', 'ملاحظات']]
+      }
+    });
+    
+    // Add headers to Doctors
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Doctors!A1:B1',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [['الاسم', 'التخصص']]
+      }
+    });
+    
+    res.json({ success: true, message: 'Sheets initialized successfully', sheetsCreated: requests.length });
+  } catch (err) {
+    console.error('Error initializing sheets:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Get all tasks
 app.get('/api/insurance/tasks', async (req, res) => {
   try {
