@@ -1664,11 +1664,11 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// URLs - All insurance-related APIs use Google Apps Script
-// BACKEND_URL is the working deployed Apps Script that supports all actions
+// URLs - Split between Apps Script (tasks/permissions) and Gemini (analysis)
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwlizY8v800tI9TewDEwtAAVs3vrpbLnT3uI8Bn0pHFOqcfe3E9AYZwOIeFSymzvTSPMA/exec';
 const TASKS_API_URL = BACKEND_URL;
-const API_URL = BACKEND_URL;
+// Analysis API - Replit/Gemini endpoint for AI analysis
+const API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/patient-analyzer';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
@@ -2710,20 +2710,31 @@ analyzeBtn.addEventListener('click', async () => {
   }
 
   try {
+    // Prepare files for Gemini API format
+    const filesForAnalysis = filesToSend.map(f => ({
+      name: f.name,
+      base64: f.data || f.textContent || '',
+      type: f.mimeType || 'text/plain'
+    }));
+    
     const resp = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        action: 'analyze',
-        files: filesToSend, 
-        lang: 'ar',
+        files: filesForAnalysis, 
+        uiLang: 'ar',
         doctorName: doctorName
       })
     });
 
     const data = await resp.json();
     
-    if (data.success) {
+    if (data.htmlReport) {
+      data.success = true;
+      data.html = data.htmlReport;
+    }
+    
+    if (data.success || data.htmlReport) {
       const printHeader = `
         <div class="print-header" style="border-bottom:3px solid #1e3a5f;padding-bottom:15px;margin-bottom:20px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -2952,17 +2963,26 @@ async function translateReport() {
     translateText.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     
     try {
+      const filesForAnalysis = filesState.map(f => ({
+        name: f.name,
+        base64: f.data || f.textContent || '',
+        type: f.mimeType || 'text/plain'
+      }));
+      
       const resp = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          action: 'analyze',
-          files: filesState, 
-          lang: 'en' 
+          files: filesForAnalysis, 
+          uiLang: 'en' 
         })
       });
 
       const data = await resp.json();
+      if (data.htmlReport) {
+        data.success = true;
+        data.html = data.htmlReport;
+      }
       
       if (data.success) {
         const doctorName = doctorNameInput.value.trim();

@@ -7,6 +7,7 @@ import admin from 'firebase-admin';
 import cors from 'cors';
 import { getSheetData, appendRow, updateCell, getSheetNames, createSheet, batchUpdate, findAndUpdateRow, getGoogleSheetsClient } from './sheets-service.js';
 import { registerMedicalAuditRoutes } from './medical-audit-api.js';
+import patientAnalyzerHandler from './api/patient-analyzer.js';
 
 const COMPLAINTS_SPREADSHEET_ID = '1DLBbSkBdfsdyxlXptaCNZsKVoJ-F3B6famr6_8V50Z0';
 const INCIDENTS_SPREADSHEET_ID = '12SS-Nn_TpvIsIoUfdOPRzC_tgLqmb2hfZZi53_dSyVI';
@@ -90,6 +91,16 @@ app.get('/download/:filename', (req, res) => {
 // Serve github-deploy HTML files
 app.get('/emergency-poster.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'github-deploy', 'emergency-poster.html'));
+});
+
+// Patient Analyzer API - AI-powered medical analysis using Gemini
+app.post('/api/patient-analyzer', async (req, res) => {
+  try {
+    await patientAnalyzerHandler(req, res);
+  } catch (err) {
+    console.error('Patient analyzer error:', err);
+    res.status(500).json({ error: 'Analysis failed', detail: err.message });
+  }
 });
 
 // Debug endpoint DISABLED for security
