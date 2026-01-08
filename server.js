@@ -1675,7 +1675,7 @@ app.get('/api/insurance/tasks', async (req, res) => {
     const sheets = await getGoogleSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Tasks!A2:N1000'
+      range: 'Audit_Tasks!A2:N1000'
     });
     
     const rows = response.data.values || [];
@@ -1714,7 +1714,7 @@ app.post('/api/insurance/tasks', async (req, res) => {
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Tasks!A:N',
+      range: 'Audit_Tasks!A:N',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [[taskId, doctorName, fileName, fileData, uploadedBy, uploadDate, 'pending', '', '', '', '', '', '', '']]
@@ -1737,7 +1737,7 @@ app.get('/api/insurance/tasks/:taskId/file', async (req, res) => {
     // Get all task data
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Tasks!A2:N1000'
+      range: 'Audit_Tasks!A2:N1000'
     });
     
     const rows = response.data.values || [];
@@ -1768,7 +1768,7 @@ app.post('/api/insurance/tasks/:taskId/report', async (req, res) => {
     // Find the task row
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Tasks!A:A'
+      range: 'Audit_Tasks!A:A'
     });
     
     const rows = response.data.values || [];
@@ -1812,7 +1812,7 @@ app.post('/api/insurance/tasks/:taskId/deliver', async (req, res) => {
     // Find the task row
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Tasks!A:A'
+      range: 'Audit_Tasks!A:A'
     });
     
     const rows = response.data.values || [];
@@ -1852,7 +1852,7 @@ app.get('/api/insurance/delivery-log', async (req, res) => {
     const sheets = await getGoogleSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Tasks!A2:N1000'
+      range: 'Audit_Tasks!A2:N1000'
     });
     
     const rows = response.data.values || [];
@@ -1889,7 +1889,7 @@ app.post('/api/insurance/tasks/:taskId/status', async (req, res) => {
     // Find the task row
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
-      range: 'Tasks!A:A'
+      range: 'Audit_Tasks!A:A'
     });
     
     const rows = response.data.values || [];
