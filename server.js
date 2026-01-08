@@ -1728,6 +1728,36 @@ app.post('/api/insurance/tasks', async (req, res) => {
   }
 });
 
+// Get task file data
+app.get('/api/insurance/tasks/:taskId/file', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const sheets = await getGoogleSheetsClient();
+    
+    // Get all task data
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: INSURANCE_TASKS_SPREADSHEET_ID,
+      range: 'Audit_Tasks!A2:N1000'
+    });
+    
+    const rows = response.data.values || [];
+    const taskRow = rows.find(r => r[0] === taskId);
+    
+    if (!taskRow) {
+      return res.status(404).json({ success: false, error: 'Task not found' });
+    }
+    
+    // Column D (index 3) = fileData
+    const fileData = taskRow[3] || '';
+    const fileName = taskRow[2] || '';
+    
+    res.json({ success: true, fileData, fileName });
+  } catch (err) {
+    console.error('Error getting task file:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Save task report
 app.post('/api/insurance/tasks/:taskId/report', async (req, res) => {
   try {
