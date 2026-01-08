@@ -204,17 +204,28 @@ export default async function handler(req, res) {
 
     const MAX_IMAGE_SIZE = 4 * 1024 * 1024; // 4MB
     const addInline = (base64, mime) => userParts.push({ inline_data: { mime_type: mime, data: base64 } });
+    const addText = (text, name) => userParts.push({ text: `--- محتوى الملف: ${name} ---\n${text}` });
 
     if (Array.isArray(req.body.files)) {
       for (const f of req.body.files) {
-        if (!f?.base64) continue;
-        const sizeInBytes = Math.floor((f.base64.length * 3) / 4);
-        if (sizeInBytes > MAX_IMAGE_SIZE) {
-          return res.status(413).json({
-            error: language === "ar" ? `حجم الملف "${f.name || "image"}" يتجاوز 4MB` : `File "${f.name || "image"}" exceeds 4MB`,
-          });
+        const content = f.base64 || f.textContent || '';
+        if (!content) continue;
+        
+        const mimeType = f.type || 'text/plain';
+        const isTextType = mimeType.startsWith('text/') || mimeType === 'application/json';
+        const isValidBase64 = /^[A-Za-z0-9+/]+=*$/.test(content.replace(/\s/g, '').substring(0, 100));
+        
+        if (isTextType || !isValidBase64) {
+          addText(content, f.name || 'file');
+        } else {
+          const sizeInBytes = Math.floor((content.length * 3) / 4);
+          if (sizeInBytes > MAX_IMAGE_SIZE) {
+            return res.status(413).json({
+              error: language === "ar" ? `حجم الملف "${f.name || "image"}" يتجاوز 4MB` : `File "${f.name || "image"}" exceeds 4MB`,
+            });
+          }
+          addInline(content, mimeType);
         }
-        addInline(f.base64, f.type || detectMimeType(f.base64));
       }
     }
 
