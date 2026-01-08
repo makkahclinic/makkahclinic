@@ -1815,10 +1815,11 @@ function showMainApp() {
 
 async function loadDoctorsList() {
   try {
-    const response = await fetch(BACKEND_URL, {
+    // Get doctors from Staff sheet in the main Apps Script
+    const response = await fetch(INSURANCE_APPS_SCRIPT, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'getDoctorsList' })
+      body: JSON.stringify({ action: 'getStaffDoctors' })
     });
     const data = await response.json();
     
@@ -3153,28 +3154,17 @@ function updateSidebarSummary() {
   }
 }
 
-// Load doctors for task dropdown (from DoctorStats sheet)
+// Load doctors for task dropdown - called by loadDoctorsList already
+// This is a fallback if loadDoctorsList doesn't populate the task dropdown
 async function loadTasksDoctorDropdown() {
-  try {
-    const response = await fetch(TASKS_API_URL + '?action=getDoctors');
-    const data = await response.json();
-    
-    const select = document.getElementById('taskDoctorSelect');
-    select.innerHTML = '<option value="">-- اختر الطبيب --</option>';
-    
-    if (data.success && data.doctors) {
-      data.doctors.forEach(doc => {
-        const option = document.createElement('option');
-        const doctorName = doc.name || doc;
-        const specialty = doc.specialty || '';
-        option.value = doctorName;
-        option.textContent = doctorName + (specialty ? ` (${specialty})` : '');
-        select.appendChild(option);
-      });
-    }
-  } catch(e) {
-    console.error('Error loading doctors for tasks:', e);
+  // loadDoctorsList already populates taskDoctorSelect, so just check if it's populated
+  const select = document.getElementById('taskDoctorSelect');
+  if (select && select.options.length > 1) {
+    console.log('Task doctor dropdown already populated');
+    return;
   }
+  // If not populated, call loadDoctorsList
+  await loadDoctorsList();
 }
 
 // Toast Notification System
