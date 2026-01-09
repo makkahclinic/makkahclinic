@@ -6,24 +6,38 @@ function parseTextContent(textContent) {
   try {
     console.log('[parseTextContent] Parsing pre-processed text content...');
     
-    // First, normalize newlines within cells (Excel headers may have embedded newlines)
-    // Split by pipe, then rejoin while collapsing embedded newlines
-    const normalizedContent = textContent.replace(/\r?\n(?![=|0-9])/g, ' ');
-    
-    const lines = normalizedContent.split('\n').filter(line => line.trim());
+    const lines = textContent.split('\n').filter(line => line.trim());
     if (lines.length < 2) return null;
     
-    // Find header line (contains Claim, Patient, ICD, Service, etc.)
-    let headerLine = lines[0];
-    let dataStartIdx = 1;
+    // Find header line by scanning for key tokens (claim, patient, service, icd)
+    let headerLineIdx = -1;
+    const headerKeywords = ['claim', 'patient', 'service', 'icd', 'description', 'file no'];
     
-    // Check if first line is sheet name like "=== ورقة1 ==="
-    if (headerLine.startsWith('===')) {
-      headerLine = lines[1] || '';
-      dataStartIdx = 2;
+    for (let i = 0; i < Math.min(lines.length, 10); i++) {
+      const lineLower = lines[i].toLowerCase();
+      // Skip sheet name lines like "=== ورقة1 ==="
+      if (lines[i].startsWith('===')) continue;
+      // Skip metadata lines like "[تم التعرف على الحقول:"
+      if (lines[i].startsWith('[')) continue;
+      
+      // Check if this line contains multiple header keywords
+      const matchCount = headerKeywords.filter(kw => lineLower.includes(kw)).length;
+      if (matchCount >= 2) {
+        headerLineIdx = i;
+        console.log(`[parseTextContent] Found header at line ${i}: ${lines[i].substring(0, 100)}...`);
+        break;
+      }
     }
     
-    // Normalize header by replacing multiple spaces with single space
+    if (headerLineIdx < 0) {
+      console.log('[parseTextContent] Could not find header line with key tokens');
+      return null;
+    }
+    
+    let headerLine = lines[headerLineIdx];
+    let dataStartIdx = headerLineIdx + 1;
+    
+    // Normalize header by replacing multiple spaces/newlines with single space
     const headers = headerLine.split('|').map(h => h.trim().replace(/\s+/g, ' ').toLowerCase());
     console.log('[parseTextContent] Headers detected:', headers.slice(0, 8));
     
