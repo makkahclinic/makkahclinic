@@ -1316,6 +1316,83 @@
       box-shadow: 0 10px 35px rgba(16, 185, 129, 0.6);
     }
     
+    /* Custom Alert Modal */
+    .custom-alert-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      padding: 1rem;
+      animation: fadeIn 0.25s ease;
+    }
+    .custom-alert-content {
+      background: linear-gradient(145deg, #1a3a5c, #0f2744);
+      border-radius: 20px;
+      padding: 2rem;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      animation: slideUp 0.3s ease;
+    }
+    .custom-alert-content.alert-success {
+      border: 2px solid var(--success);
+      box-shadow: 0 20px 60px rgba(16, 185, 129, 0.25);
+    }
+    .custom-alert-content.alert-error {
+      border: 2px solid #ef4444;
+      box-shadow: 0 20px 60px rgba(239, 68, 68, 0.25);
+    }
+    .custom-alert-content.alert-warning {
+      border: 2px solid var(--gold);
+      box-shadow: 0 20px 60px rgba(201, 169, 98, 0.25);
+    }
+    .custom-alert-content.alert-info {
+      border: 2px solid #3b82f6;
+      box-shadow: 0 20px 60px rgba(59, 130, 246, 0.25);
+    }
+    .custom-alert-icon {
+      font-size: 3.5rem;
+      margin-bottom: 1rem;
+      animation: bounce 0.5s ease;
+    }
+    .alert-success .custom-alert-icon { color: var(--success); }
+    .alert-error .custom-alert-icon { color: #ef4444; }
+    .alert-warning .custom-alert-icon { color: var(--gold); }
+    .alert-info .custom-alert-icon { color: #3b82f6; }
+    .custom-alert-message {
+      color: var(--text);
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+      white-space: pre-wrap;
+    }
+    .custom-alert-btn {
+      background: linear-gradient(135deg, var(--gold), #a88b4a);
+      color: var(--primary);
+      border: none;
+      padding: 0.9rem 2.5rem;
+      font-size: 1.1rem;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .alert-success .custom-alert-btn {
+      background: linear-gradient(135deg, var(--success), #059669);
+      color: white;
+    }
+    .alert-error .custom-alert-btn {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+    }
+    .custom-alert-btn:hover {
+      transform: scale(1.05);
+    }
+    
     /* Signature Modal */
     .signature-modal {
       position: fixed;
@@ -2207,6 +2284,15 @@
     </div>
   </div>
   
+  <!-- Custom Alert Modal -->
+  <div class="custom-alert-modal hidden" id="customAlertModal">
+    <div class="custom-alert-content" id="customAlertContent">
+      <div class="custom-alert-icon" id="customAlertIcon">✅</div>
+      <div class="custom-alert-message" id="customAlertMessage"></div>
+      <button class="custom-alert-btn" onclick="closeCustomAlert()">حسناً</button>
+    </div>
+  </div>
+  
   <!-- Signature Modal -->
   <div class="signature-modal hidden" id="signatureModal">
     <div class="signature-modal-content">
@@ -2502,7 +2588,7 @@ function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
   auth.signInWithPopup(provider).catch(err => {
     console.error('Login error:', err);
-    alert('حدث خطأ أثناء تسجيل الدخول');
+    showCustomAlert('حدث خطأ أثناء تسجيل الدخول', 'error');
   });
 }
 
@@ -2511,7 +2597,7 @@ function loginWithEmail() {
   const password = document.getElementById('loginPassword').value;
   
   if (!email || !password) {
-    alert('الرجاء إدخال البريد وكلمة المرور');
+    showCustomAlert('الرجاء إدخال البريد وكلمة المرور', 'warning');
     return;
   }
   
@@ -2519,11 +2605,11 @@ function loginWithEmail() {
     .catch(err => {
       console.error('Email login error:', err);
       if (err.code === 'auth/user-not-found') {
-        alert('المستخدم غير موجود. استخدم "تسجيل جديد" للتسجيل أولاً');
+        showCustomAlert('المستخدم غير موجود. استخدم "تسجيل جديد" للتسجيل أولاً', 'warning');
       } else if (err.code === 'auth/wrong-password') {
-        alert('كلمة المرور غير صحيحة');
+        showCustomAlert('كلمة المرور غير صحيحة', 'error');
       } else {
-        alert('خطأ في تسجيل الدخول: ' + err.message);
+        showCustomAlert('خطأ في تسجيل الدخول: ' + err.message, 'error');
       }
     });
 }
@@ -2533,27 +2619,27 @@ function registerWithEmail() {
   const password = document.getElementById('loginPassword').value;
   
   if (!email || !password) {
-    alert('الرجاء إدخال البريد وكلمة المرور');
+    showCustomAlert('الرجاء إدخال البريد وكلمة المرور', 'warning');
     return;
   }
   
   if (password.length < 6) {
-    alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+    showCustomAlert('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'warning');
     return;
   }
   
   auth.createUserWithEmailAndPassword(email, password)
     .then(() => {
-      alert('تم التسجيل بنجاح! سيتم التحقق من صلاحياتك...');
+      showCustomAlert('تم التسجيل بنجاح! سيتم التحقق من صلاحياتك...', 'success');
     })
     .catch(err => {
       console.error('Registration error:', err);
       if (err.code === 'auth/email-already-in-use') {
-        alert('هذا البريد مسجل مسبقاً. استخدم "تسجيل الدخول"');
+        showCustomAlert('هذا البريد مسجل مسبقاً. استخدم "تسجيل الدخول"', 'warning');
       } else if (err.code === 'auth/weak-password') {
-        alert('كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل');
+        showCustomAlert('كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل', 'warning');
       } else {
-        alert('خطأ في التسجيل: ' + err.message);
+        showCustomAlert('خطأ في التسجيل: ' + err.message, 'error');
       }
     });
 }
@@ -3140,7 +3226,7 @@ async function handleFiles(files) {
         }
       } catch(err) {
         console.error("PDF error:", err);
-        alert(`خطأ في معالجة PDF: ${err.message}`);
+        showCustomAlert(`خطأ في معالجة PDF: ${err.message}`, 'error');
       }
     } else if (['xlsx', 'xls', 'csv'].includes(ext)) {
       try {
@@ -3184,7 +3270,7 @@ async function handleFiles(files) {
         renderFiles();
       } catch(err) {
         console.error("Excel error:", err);
-        alert(`خطأ في معالجة Excel: ${err.message}`);
+        showCustomAlert(`خطأ في معالجة Excel: ${err.message}`, 'error');
         completedUnits++; // Count as done even on error
       }
     } else {
@@ -3340,7 +3426,7 @@ analyzeBtn.addEventListener('click', async () => {
   
   const doctorName = doctorNameInput.value.trim();
   if (!doctorName) {
-    alert('يرجى إدخال اسم الطبيب المعالج');
+    showCustomAlert('يرجى إدخال اسم الطبيب المعالج', 'warning');
     doctorNameInput.focus();
     return;
   }
@@ -3594,9 +3680,9 @@ async function saveAndLog() {
     
     if (result.success) {
       // Drive فقط - بدون تنزيل
-      alert('✅ تم حفظ التقرير في Google Drive بنجاح!\n\n📂 يمكنك الوصول للتقرير من Drive أو طباعته مباشرة.');
+      showCustomAlert('تم حفظ التقرير في Google Drive بنجاح!\n\nيمكنك الوصول للتقرير من Drive أو طباعته مباشرة.', 'success');
     } else {
-      alert('⚠️ لم يتم الحفظ في Drive: ' + (result.error || 'خطأ غير معروف'));
+      showCustomAlert('لم يتم الحفظ في Drive: ' + (result.error || 'خطأ غير معروف'), 'warning');
     }
     
     loadStats();
@@ -3604,7 +3690,7 @@ async function saveAndLog() {
     
   } catch(err) {
     console.error('Save error:', err);
-    alert('حدث خطأ أثناء الحفظ: ' + err.message);
+    showCustomAlert('حدث خطأ أثناء الحفظ: ' + err.message, 'error');
   } finally {
     saveBtn.disabled = false;
     saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ وتسجيل';
@@ -3678,7 +3764,7 @@ async function translateReport() {
       }
     } catch(err) {
       console.error('Translation error:', err);
-      alert('حدث خطأ أثناء الترجمة');
+      showCustomAlert('حدث خطأ أثناء الترجمة', 'error');
     } finally {
       translateBtn.disabled = false;
     }
@@ -4083,7 +4169,7 @@ async function viewSavedReport(taskIndex) {
   const task = tasksData[taskIndex];
   
   if (!task.reportHtml) {
-    alert('لم يتم حفظ التقرير بعد. قم بالتحليل أولاً.');
+    showCustomAlert('لم يتم حفظ التقرير بعد. قم بالتحليل أولاً.', 'warning');
     return;
   }
   
@@ -4159,13 +4245,13 @@ async function startAnalysis(taskIndex) {
     
     if (!data.success) {
       console.error('Server error:', data.error || 'Unknown error');
-      alert('خطأ من الخادم: ' + (data.error || 'خطأ غير معروف'));
+      showCustomAlert('خطأ من الخادم: ' + (data.error || 'خطأ غير معروف'), 'error');
       return;
     }
     
     if (!data.fileData) {
       console.error('No file data received:', data);
-      alert('لم يتم استلام بيانات الملف. تأكد من وجود الملف في Google Drive.');
+      showCustomAlert('لم يتم استلام بيانات الملف. تأكد من وجود الملف في Google Drive.', 'error');
       return;
     }
     
@@ -4215,8 +4301,34 @@ async function startAnalysis(taskIndex) {
     }
   } catch(e) {
     console.error('Error loading task file:', e);
-    alert('خطأ في تحميل الملف');
+    showCustomAlert('خطأ في تحميل الملف', 'error');
   }
+}
+
+// Custom Alert Functions
+function showCustomAlert(message, type = 'info') {
+  const modal = document.getElementById('customAlertModal');
+  const content = document.getElementById('customAlertContent');
+  const icon = document.getElementById('customAlertIcon');
+  const msg = document.getElementById('customAlertMessage');
+  
+  content.className = 'custom-alert-content';
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  content.classList.add('alert-' + type);
+  icon.textContent = icons[type] || icons.info;
+  msg.textContent = message;
+  modal.classList.remove('hidden');
+}
+
+function closeCustomAlert() {
+  document.getElementById('customAlertModal').classList.add('hidden');
 }
 
 function showLoadSuccessModal(fileName, rowCount, sheetCount) {
@@ -4464,7 +4576,7 @@ async function confirmDelivery() {
   }
   
   if (isBlank) {
-    alert('الرجاء التوقيع أولاً');
+    showCustomAlert('الرجاء التوقيع أولاً', 'warning');
     return;
   }
   
@@ -4484,16 +4596,16 @@ async function confirmDelivery() {
     const result = await response.json();
     
     if (result.success) {
-      alert('تم تأكيد التسليم بنجاح! ✅');
+      showCustomAlert('تم تأكيد التسليم بنجاح!', 'success');
       closeSignatureModal();
       loadTasks();
       loadDeliveryLog();
     } else {
-      alert('خطأ: ' + (result.error || 'فشل في تأكيد التسليم'));
+      showCustomAlert('خطأ: ' + (result.error || 'فشل في تأكيد التسليم'), 'error');
     }
   } catch(e) {
     console.error('Confirm delivery error:', e);
-    alert('حدث خطأ أثناء تأكيد التسليم');
+    showCustomAlert('حدث خطأ أثناء تأكيد التسليم', 'error');
   }
 }
 
@@ -4541,7 +4653,7 @@ async function loadDeliveryLog() {
 function viewSignature(idx) {
   const signatureData = signatureStore[idx];
   if (!signatureData) {
-    alert('التوقيع غير متوفر');
+    showCustomAlert('التوقيع غير متوفر', 'warning');
     return;
   }
   
