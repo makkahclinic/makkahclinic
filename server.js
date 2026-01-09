@@ -41,12 +41,24 @@ const HOST = '0.0.0.0';
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// CORS middleware - allow all origins for API
+// CORS middleware - allow specific origins
+const allowedOrigins = [
+  'https://m2020m.org',
+  'https://www.m2020m.org',
+  'https://makkahclinic.github.io'
+];
+
 app.use(cors({
-  origin: '*',
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow for development
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  credentials: false,
+  credentials: true,
   maxAge: 86400,
   preflightContinue: false,
   optionsSuccessStatus: 204
@@ -54,9 +66,15 @@ app.use(cors({
 
 // Additional CORS headers for all responses
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || !origin) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    res.header('Access-Control-Allow-Origin', origin); // Allow for dev
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
