@@ -398,8 +398,145 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 - المضادات الحيوية: علامات عدوى بكتيرية (حمى >38.3، صديد)
 `;
 
-  // FULL Template with exact structure from benchmark report #20
-  const caseTemplate = language === 'ar' ? `أنت مدقق تأميني طبي خبير. حلل هذه الحالة الواحدة باستخدام **3 طبقات تحليل** بالتفصيل الكامل:
+  // COMPACT Template with scoring criteria
+  const caseTemplate = language === 'ar' ? `أنت مدقق تأميني طبي خبير. حلل الحالة باختصار مع تقييم رقمي واضح.
+
+${fullClinicalRef}
+
+## معايير التقييم الرقمي (من 10):
+
+### 📋 معيار الالتزام التأميني (Insurance Compliance Score):
+- 10/10: توثيق كامل + أكواد ICD صحيحة + علامات حيوية موثقة
+- 8-9/10: توثيق جيد مع نقص بسيط
+- 5-7/10: توثيق متوسط يحتاج تحسين
+- 1-4/10: توثيق ضعيف مع مخاطر رفض
+- 0/10: لا توثيق
+
+### 🏥 معيار جودة الإجراءات الطبية (Medical Quality Score):
+- 10/10: كل الإجراءات مبررة طبياً + متوافقة مع الإرشادات السريرية
+- 8-9/10: إجراءات مناسبة مع ملاحظات بسيطة
+- 5-7/10: بعض الإجراءات تحتاج مبرر أوضح
+- 1-4/10: إجراءات غير مبررة أو مفرطة
+- 0/10: لا إجراءات أو كلها مرفوضة
+
+## 🔍 التنسيق المختصر (استخدم هذا بالضبط):
+
+<div class="case-section" data-insurance-score="[X]" data-medical-score="[Y]">
+  <h3>🔍 الحالة [N] | Claim: [رقم الملف] | المريض: [رقم المريض]</h3>
+  
+  <table class="custom-table case-info-table" style="width:100%">
+    <tr><td width="15%"><strong>التشخيص:</strong></td><td>[ICD + الوصف]</td><td width="20%"><strong>الحرارة:</strong> [قيمة]</td><td width="20%"><strong>الضغط:</strong> [قيمة]</td></tr>
+  </table>
+
+  <table class="custom-table medications-table" style="width:100%">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th width="20%">الدواء</th><th width="10%">الجرعة</th><th width="55%">التقييم المختصر</th><th width="15%">الحالة</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>[اسم الدواء]</td>
+        <td>[جرعة]</td>
+        <td><strong>CDI:</strong> [مختصر]. <strong>NPHIES:</strong> [مختصر]. <strong>سريري:</strong> [مرجع مختصر]</td>
+        <td>[✅/❌/⚠️]</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="display:flex; gap:10px; margin:8px 0;">
+    <div style="flex:1; background:#f8d7da; padding:6px; border-radius:4px; font-size:11px;">
+      <strong>❌ مرفوض:</strong> [قائمة مختصرة أو "لا يوجد"]
+    </div>
+    <div style="flex:1; background:#fff3cd; padding:6px; border-radius:4px; font-size:11px;">
+      <strong>⚠️ يحتاج توثيق:</strong> [قائمة مختصرة أو "لا يوجد"]
+    </div>
+  </div>
+
+  <table class="custom-table scores-table" style="width:100%; margin-top:5px;">
+    <tr style="background:#e8f4fd">
+      <td width="50%"><strong>📋 الالتزام التأميني:</strong> <span class="score-badge">[X]/10</span></td>
+      <td width="50%"><strong>🏥 جودة الإجراءات:</strong> <span class="score-badge">[Y]/10</span></td>
+    </tr>
+  </table>
+</div>
+
+## ⚙️ قواعد:
+- اختصر التقييم السريري في جملة واحدة لكل دواء/إجراء
+- استخدم الأرقام للتقييم (X/10 و Y/10)
+- لا تكرر المعلومات
+- أعد HTML فقط بدون markdown
+
+بيانات الحالة:
+` : `You are an expert medical insurance auditor. Analyze concisely with numeric scores.
+
+${fullClinicalRef}
+
+## Scoring Criteria (out of 10):
+
+### 📋 Insurance Compliance Score:
+- 10/10: Complete documentation + correct ICD codes + vitals documented
+- 8-9/10: Good documentation with minor gaps
+- 5-7/10: Average documentation needs improvement
+- 1-4/10: Poor documentation with rejection risks
+- 0/10: No documentation
+
+### 🏥 Medical Quality Score:
+- 10/10: All procedures medically justified + aligned with clinical guidelines
+- 8-9/10: Appropriate procedures with minor notes
+- 5-7/10: Some procedures need clearer justification
+- 1-4/10: Unjustified or excessive procedures
+- 0/10: No procedures or all rejected
+
+## 🔍 Compact Format (use exactly):
+
+<div class="case-section" data-insurance-score="[X]" data-medical-score="[Y]">
+  <h3>🔍 Case [N] | Claim: [claim_id] | Patient: [patient_id]</h3>
+  
+  <table class="custom-table case-info-table" style="width:100%">
+    <tr><td width="15%"><strong>Diagnosis:</strong></td><td>[ICD + description]</td><td width="20%"><strong>Temp:</strong> [value]</td><td width="20%"><strong>BP:</strong> [value]</td></tr>
+  </table>
+
+  <table class="custom-table medications-table" style="width:100%">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th width="20%">Medication</th><th width="10%">Dose</th><th width="55%">Brief Evaluation</th><th width="15%">Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>[medication]</td>
+        <td>[dose]</td>
+        <td><strong>CDI:</strong> [brief]. <strong>NPHIES:</strong> [brief]. <strong>Clinical:</strong> [brief ref]</td>
+        <td>[✅/❌/⚠️]</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="display:flex; gap:10px; margin:8px 0;">
+    <div style="flex:1; background:#f8d7da; padding:6px; border-radius:4px; font-size:11px;">
+      <strong>❌ Rejected:</strong> [brief list or "None"]
+    </div>
+    <div style="flex:1; background:#fff3cd; padding:6px; border-radius:4px; font-size:11px;">
+      <strong>⚠️ Needs Documentation:</strong> [brief list or "None"]
+    </div>
+  </div>
+
+  <table class="custom-table scores-table" style="width:100%; margin-top:5px;">
+    <tr style="background:#e8f4fd">
+      <td width="50%"><strong>📋 Insurance Compliance:</strong> <span class="score-badge">[X]/10</span></td>
+      <td width="50%"><strong>🏥 Medical Quality:</strong> <span class="score-badge">[Y]/10</span></td>
+    </tr>
+  </table>
+</div>
+
+## Rules:
+- Keep clinical evaluation to ONE sentence per medication/procedure
+- Use numeric scores (X/10 and Y/10)
+- Don't repeat information
+- Return HTML only, no markdown
+
+Case data:
+`;
+
+  // Also prepare the original detailed template for cases that need it
+  const detailedCaseTemplate = language === 'ar' ? `أنت مدقق تأميني طبي خبير. حلل هذه الحالة الواحدة باستخدام **3 طبقات تحليل** بالتفصيل الكامل:
 
 ${fullClinicalRef}
 
@@ -419,12 +556,11 @@ ${fullClinicalRef}
   </table>
 
   <h4>💊 الأدوية</h4>
-  <table class="custom-table">
+  <table class="custom-table medications-table">
     <thead style="background:#1e3a5f;color:white">
       <tr><th>الدواء</th><th>الجرعة</th><th>التقييم السريري</th><th>الحالة</th></tr>
     </thead>
     <tbody>
-      <!-- لكل دواء صف منفصل مع تحليل ثلاثي الطبقات -->
       <tr>
         <td>[اسم الدواء]</td>
         <td>[الجرعة/الكمية]</td>
@@ -439,39 +575,6 @@ ${fullClinicalRef}
       </tr>
     </tbody>
   </table>
-
-  <h4>🔬 التحاليل والإجراءات</h4>
-  <table class="custom-table">
-    <thead style="background:#1e3a5f;color:white">
-      <tr><th>الإجراء</th><th>التقييم (3 طبقات)</th><th>الحالة</th></tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>[اسم الإجراء]</td>
-        <td>
-          <strong>📋 CDI:</strong> [هل مرتبط بالتشخيص؟]<br>
-          <strong>🏥 NPHIES:</strong> [هل مسموح بالتكرار؟]<br>
-          <strong>📚 إرشاد:</strong> [هل مطلوب طبياً؟]
-        </td>
-        <td data-insurance-rating="[...]">[✅/❌/⚠️]</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h4>❌ إجراءات مرفوضة</h4>
-  <div class="box-critical">
-    <strong>[اسم الدواء/الإجراء]</strong><br>
-    <strong>❌ سبب الرفض:</strong> [التفصيل مع المرجع السريري]<br>
-    <strong>📌 للقبول يجب توثيق:</strong> [عدم تحمل الفم، حالة حادة، حمى >38.5...]<br>
-    <span style="color:#721c24;font-weight:bold">❗ عدم التوثيق = رفض التأمين</span>
-  </div>
-
-  <h4>⚠️ إجراءات تحتاج توثيق</h4>
-  <div class="box-warning">
-    <strong>[اسم الإجراء]</strong><br>
-    <strong>📋 ما ينقص:</strong> [التوثيق المطلوب بالتحديد]<br>
-    <strong>📌 اقتراحات للطبيب:</strong> [كيف يوثق لضمان القبول]
-  </div>
 
   <h4>📊 ملخص الحالة</h4>
   <table class="custom-table">
@@ -671,16 +774,127 @@ Return HTML only, no markdown or code blocks.
     }
   }
   
+  // Extract scores from case results for summary
+  const allCasesHtml = caseResults.join('');
+  const insuranceScoreMatches = allCasesHtml.match(/data-insurance-score="(\d+)"/g) || [];
+  const medicalScoreMatches = allCasesHtml.match(/data-medical-score="(\d+)"/g) || [];
+  
+  const insuranceScores = insuranceScoreMatches.map(m => parseInt(m.match(/\d+/)?.[0] || '0'));
+  const medicalScores = medicalScoreMatches.map(m => parseInt(m.match(/\d+/)?.[0] || '0'));
+  
+  const avgInsuranceScore = insuranceScores.length > 0 ? (insuranceScores.reduce((a,b) => a+b, 0) / insuranceScores.length).toFixed(1) : '0';
+  const avgMedicalScore = medicalScores.length > 0 ? (medicalScores.reduce((a,b) => a+b, 0) / medicalScores.length).toFixed(1) : '0';
+  
+  // Count approved/rejected/review items from HTML content
+  const approvedCount = (allCasesHtml.match(/✅/g) || []).length;
+  const rejectedCount = (allCasesHtml.match(/❌/g) || []).length;
+  const reviewCount = (allCasesHtml.match(/⚠️/g) || []).length;
+  
+  // Determine overall status
+  const getScoreClass = (score) => {
+    const s = parseFloat(score);
+    if (s >= 8) return 'score-good';
+    if (s >= 5) return 'score-warning';
+    return 'score-danger';
+  };
+  
   // Combine all case results into final report
   const reportHeader = language === 'ar' 
     ? `<div class="report-container"><h2>📋 تقرير التدقيق التأميني الشامل</h2><p class="box-info">تم تحليل ${totalCases} حالة بالتفصيل</p>`
     : `<div class="report-container"><h2>📋 Comprehensive Insurance Audit Report</h2><p class="box-info">Analyzed ${totalCases} cases in detail</p>`;
   
-  const reportFooter = language === 'ar'
-    ? `<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ تم تحليل ${caseResults.length} حالة من أصل ${totalCases} حالة</strong></div></div>`
-    : `<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ Analyzed ${caseResults.length} of ${totalCases} cases</strong></div></div>`;
+  // Final summary table
+  const summaryTable = language === 'ar' ? `
+  <div class="report-summary-section" style="margin-top:2rem;page-break-before:always;">
+    <h2 style="background:#1e3a5f;color:white;padding:12px;border-radius:8px;text-align:center;">📊 الملخص النهائي للتقرير</h2>
+    
+    <table class="custom-table report-summary-table" style="width:100%;margin-top:1rem;">
+      <thead style="background:#1e3a5f;color:white">
+        <tr><th colspan="2" style="text-align:center;font-size:14pt;">إحصائيات الحالات</th></tr>
+      </thead>
+      <tbody>
+        <tr><td width="50%"><strong>📁 إجمالي الحالات المحللة</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
+        <tr style="background:#d4edda"><td><strong>✅ الإجراءات المقبولة</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
+        <tr style="background:#f8d7da"><td><strong>❌ الإجراءات المرفوضة</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
+        <tr style="background:#fff3cd"><td><strong>⚠️ تحتاج توثيق</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
+      </tbody>
+    </table>
+    
+    <table class="custom-table" style="width:100%;margin-top:1.5rem;">
+      <thead style="background:#1e3a5f;color:white">
+        <tr><th colspan="3" style="text-align:center;font-size:14pt;">متوسط التقييمات</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td width="40%"><strong>📋 الالتزام التأميني</strong><br><small>توثيق + أكواد ICD + علامات حيوية</small></td>
+          <td width="30%" style="text-align:center;">
+            <div class="score-badge ${getScoreClass(avgInsuranceScore)}" style="font-size:20pt;padding:8px 16px;">${avgInsuranceScore}/10</div>
+          </td>
+          <td width="30%"><small>${parseFloat(avgInsuranceScore) >= 8 ? 'ممتاز ✅' : parseFloat(avgInsuranceScore) >= 5 ? 'متوسط ⚠️' : 'ضعيف ❌'}</small></td>
+        </tr>
+        <tr>
+          <td><strong>🏥 جودة الإجراءات الطبية</strong><br><small>مبررة طبياً + متوافقة مع الإرشادات</small></td>
+          <td style="text-align:center;">
+            <div class="score-badge ${getScoreClass(avgMedicalScore)}" style="font-size:20pt;padding:8px 16px;">${avgMedicalScore}/10</div>
+          </td>
+          <td><small>${parseFloat(avgMedicalScore) >= 8 ? 'ممتاز ✅' : parseFloat(avgMedicalScore) >= 5 ? 'متوسط ⚠️' : 'ضعيف ❌'}</small></td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <div class="box-info" style="margin-top:1.5rem;">
+      <h4 style="margin:0 0 8px 0;border:none;">📌 معايير التقييم:</h4>
+      <table style="width:100%;font-size:11px;">
+        <tr><td width="50%"><strong>الالتزام التأميني (من 10):</strong><br>10 = توثيق كامل | 8-9 = جيد | 5-7 = متوسط | 1-4 = ضعيف</td>
+        <td><strong>جودة الإجراءات (من 10):</strong><br>10 = مبررة بالكامل | 8-9 = مناسبة | 5-7 = تحتاج توضيح | 1-4 = غير مبررة</td></tr>
+      </table>
+    </div>
+  </div>
+  ` : `
+  <div class="report-summary-section" style="margin-top:2rem;page-break-before:always;">
+    <h2 style="background:#1e3a5f;color:white;padding:12px;border-radius:8px;text-align:center;">📊 Final Report Summary</h2>
+    
+    <table class="custom-table report-summary-table" style="width:100%;margin-top:1rem;">
+      <thead style="background:#1e3a5f;color:white">
+        <tr><th colspan="2" style="text-align:center;font-size:14pt;">Case Statistics</th></tr>
+      </thead>
+      <tbody>
+        <tr><td width="50%"><strong>📁 Total Cases Analyzed</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
+        <tr style="background:#d4edda"><td><strong>✅ Approved Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
+        <tr style="background:#f8d7da"><td><strong>❌ Rejected Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
+        <tr style="background:#fff3cd"><td><strong>⚠️ Needs Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
+      </tbody>
+    </table>
+    
+    <table class="custom-table" style="width:100%;margin-top:1.5rem;">
+      <thead style="background:#1e3a5f;color:white">
+        <tr><th colspan="3" style="text-align:center;font-size:14pt;">Average Scores</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td width="40%"><strong>📋 Insurance Compliance</strong></td>
+          <td width="30%" style="text-align:center;">
+            <div class="score-badge ${getScoreClass(avgInsuranceScore)}" style="font-size:20pt;padding:8px 16px;">${avgInsuranceScore}/10</div>
+          </td>
+          <td width="30%"><small>${parseFloat(avgInsuranceScore) >= 8 ? 'Excellent ✅' : parseFloat(avgInsuranceScore) >= 5 ? 'Average ⚠️' : 'Poor ❌'}</small></td>
+        </tr>
+        <tr>
+          <td><strong>🏥 Medical Quality</strong></td>
+          <td style="text-align:center;">
+            <div class="score-badge ${getScoreClass(avgMedicalScore)}" style="font-size:20pt;padding:8px 16px;">${avgMedicalScore}/10</div>
+          </td>
+          <td><small>${parseFloat(avgMedicalScore) >= 8 ? 'Excellent ✅' : parseFloat(avgMedicalScore) >= 5 ? 'Average ⚠️' : 'Poor ❌'}</small></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  `;
   
-  const fullReport = reportHeader + caseResults.join('<hr style="border:2px solid #1e3a5f;margin:2rem 0">') + reportFooter;
+  const reportFooter = language === 'ar'
+    ? `${summaryTable}<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ تم تحليل ${caseResults.length} حالة من أصل ${totalCases} حالة</strong></div></div>`
+    : `${summaryTable}<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ Analyzed ${caseResults.length} of ${totalCases} cases</strong></div></div>`;
+  
+  const fullReport = reportHeader + caseResults.join('<hr style="border:1px solid #ddd;margin:1rem 0">') + reportFooter;
   
   console.log(`Completed processing. Generated report with ${caseResults.length} case analyses.`);
   
