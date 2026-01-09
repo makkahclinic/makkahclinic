@@ -291,64 +291,35 @@ function parseExcelCases(base64Data) {
   }
 }
 
-// Build prompt for a single case
+// Build prompt for a single case - COMPACT format like Report #20
 function buildSingleCasePrompt(caseData, caseNumber, totalCases, language) {
   const L = language === 'en' ? 'en' : 'ar';
   
+  // Only include vitals that are actually available
+  const vitals = caseData.vitals || {};
+  const temp = vitals.temperature && vitals.temperature !== 'N/A' ? vitals.temperature : '';
+  const bp = vitals.bloodPressure && vitals.bloodPressure !== 'N/A' ? vitals.bloodPressure : '';
+  
   if (L === 'ar') {
-    return `## 🔍 الحالة رقم ${caseNumber} من ${totalCases}
-
-**بيانات الحالة:**
-- رقم المطالبة (Claim Se No.): ${caseData.claimId}
-- رقم المريض: ${caseData.patientId || 'غير متوفر'}
-- التشخيص: ${caseData.diagnosis || 'غير متوفر'}
-
-**العلامات الحيوية:**
-- درجة الحرارة: ${caseData.vitals.temperature || 'غير متوفر'}
-- ضغط الدم: ${caseData.vitals.bloodPressure || 'غير متوفر'}
-- النبض: ${caseData.vitals.pulse || 'غير متوفر'}
-- الوزن: ${caseData.vitals.weight || 'غير متوفر'}
-- الطول: ${caseData.vitals.height || 'غير متوفر'}
-
-**الأدوية الموصوفة:**
-${caseData.medications.length > 0 ? caseData.medications.map(m => `- ${m.name} (${m.dose || 'جرعة غير محددة'})`).join('\n') : '- لا يوجد أدوية'}
-
-**الإجراءات/التحاليل:**
-${caseData.procedures.length > 0 ? caseData.procedures.map(p => `- ${p}`).join('\n') : '- لا يوجد إجراءات'}
-
-**البيانات الخام:**
-${caseData.rawData.slice(0, 10).join('\n')}
-
----
-حلل هذه الحالة بالتفصيل الكامل باستخدام 3 طبقات التحليل (CDI, NPHIES, Clinical Guidelines).
-أعد HTML بالتنسيق المحدد مسبقاً.`;
+    let vitalsLine = '';
+    if (temp) vitalsLine += `الحرارة: ${temp}`;
+    if (bp) vitalsLine += (vitalsLine ? ' | ' : '') + `الضغط: ${bp}`;
+    
+    return `🔍 الحالة ${caseNumber} | Claim: ${caseData.claimId} | المريض: ${caseData.patientId || '-'}
+التشخيص: ${caseData.diagnosis || '-'}${vitalsLine ? '\n' + vitalsLine : ''}
+الأدوية: ${caseData.medications.length > 0 ? caseData.medications.map(m => `${m.name} (${m.dose || '-'})`).join(' | ') : 'لا يوجد'}
+الإجراءات: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'لا يوجد'}
+---`;
   } else {
-    return `## 🔍 Case ${caseNumber} of ${totalCases}
-
-**Case Data:**
-- Claim Se No.: ${caseData.claimId}
-- Patient ID: ${caseData.patientId || 'N/A'}
-- Diagnosis: ${caseData.diagnosis || 'N/A'}
-
-**Vital Signs:**
-- Temperature: ${caseData.vitals.temperature || 'N/A'}
-- Blood Pressure: ${caseData.vitals.bloodPressure || 'N/A'}
-- Pulse: ${caseData.vitals.pulse || 'N/A'}
-- Weight: ${caseData.vitals.weight || 'N/A'}
-- Height: ${caseData.vitals.height || 'N/A'}
-
-**Medications:**
-${caseData.medications.length > 0 ? caseData.medications.map(m => `- ${m.name} (${m.dose || 'dose N/A'})`).join('\n') : '- No medications'}
-
-**Procedures/Tests:**
-${caseData.procedures.length > 0 ? caseData.procedures.map(p => `- ${p}`).join('\n') : '- No procedures'}
-
-**Raw Data:**
-${caseData.rawData.slice(0, 10).join('\n')}
-
----
-Analyze this case in full detail using 3-layer analysis (CDI, NPHIES, Clinical Guidelines).
-Return HTML in the specified format.`;
+    let vitalsLine = '';
+    if (temp) vitalsLine += `Temp: ${temp}`;
+    if (bp) vitalsLine += (vitalsLine ? ' | ' : '') + `BP: ${bp}`;
+    
+    return `🔍 Case ${caseNumber} | Claim: ${caseData.claimId} | Patient: ${caseData.patientId || '-'}
+Diagnosis: ${caseData.diagnosis || '-'}${vitalsLine ? '\n' + vitalsLine : ''}
+Medications: ${caseData.medications.length > 0 ? caseData.medications.map(m => `${m.name} (${m.dose || '-'})`).join(' | ') : 'None'}
+Procedures: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'None'}
+---`;
   }
 }
 
