@@ -2655,6 +2655,9 @@ async function handleFiles(files) {
         const arrayBuffer = await f.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
+        // Store original base64 for API
+        const base64Excel = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        
         let allData = [];
         workbook.SheetNames.forEach(sheetName => {
           const sheet = workbook.Sheets[sheetName];
@@ -2664,10 +2667,13 @@ async function handleFiles(files) {
         
         const processedData = processExcelWithSmartMapping(allData);
         
+        // Log for debugging
+        console.log('Total rows:', allData.reduce((sum, s) => sum + s.data.length, 0), 'Sheets:', allData.length);
+        
         filesState.push({ 
           name: f.name, 
-          mimeType: 'text/plain', 
-          data: processedData.textContent,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          data: base64Excel,
           textContent: processedData.textContent,
           isExcel: true,
           dataQualityWarnings: processedData.warnings
