@@ -531,7 +531,7 @@ ${fullClinicalRef}
 
 ## 🔍 التنسيق الإلزامي (مثل التقرير 20):
 
-<div class="case-section" data-insurance-score="[X]" data-medical-score="[Y]">
+<div class="case-section" data-insurance-score="8" data-medical-score="7">
   <h3>🔍 الحالة رقم [N] | Claim Se No.: [رقم] | المريض: [رقم]</h3>
   
   <h4>📌 بيانات الحالة</h4>
@@ -577,8 +577,8 @@ ${fullClinicalRef}
       <strong>❌ المشكلة:</strong> [اشرح المشكلة بوضوح - مثال: "الحرارة 36.1°C طبيعية، لا يوجد دليل على عدوى بكتيرية"]
     </div>
     <div style="background:#bbf7d0; padding:10px; border-radius:4px; margin:8px 0; border:2px solid #16a34a;">
-      <strong style="color:#15803d; font-size:14px;">✅ الحل - اكتب في ملف المريض:</strong><br>
-      <span style="font-size:15px; font-weight:bold;">"[الجملة الجاهزة من الجدول - مثال: فحص الحلق يُظهر صديد]"</span>
+      <strong style="color:#15803d; font-size:14px;">📝 التوثيق الحالي لا يوضح المبرر الطبي للإجراء - يجب وضع مبرر واضح مثل:</strong><br>
+      <span style="font-size:15px; font-weight:bold;">"[انسخ الجملة من جدول يُقبل مع - مثال: فحص الحلق يُظهر صديد]"</span>
     </div>
   </div>
   
@@ -589,8 +589,8 @@ ${fullClinicalRef}
       <strong>⚠️ الناقص:</strong> [ما الذي يجب توثيقه]
     </div>
     <div style="background:#bbf7d0; padding:10px; border-radius:4px; margin:8px 0; border:2px solid #16a34a;">
-      <strong style="color:#15803d; font-size:14px;">✅ الحل - اكتب في ملف المريض:</strong><br>
-      <span style="font-size:15px; font-weight:bold;">"[الجملة الجاهزة من الجدول]"</span>
+      <strong style="color:#15803d; font-size:14px;">📝 التوثيق الحالي لا يوضح المبرر الطبي - يجب وضع مبرر واضح مثل:</strong><br>
+      <span style="font-size:15px; font-weight:bold;">"[انسخ الجملة من جدول يُقبل مع]"</span>
     </div>
   </div>
   
@@ -609,6 +609,11 @@ ${fullClinicalRef}
 - ❌ ممنوع: لا تكتب "CDI: لا يوجد" أو "NPHIES: لا يوجد" - اكتب السبب مباشرة فقط
 - ✅ صحيح: "مبرر لالتهاب المعدة" أو "غير مبرر - الحرارة طبيعية"
 - ⚠️ إلزامي: لكل دواء مرفوض/يحتاج توثيق، انسخ "📌 يُقبل مع:" من جدول الأدوية أعلاه. ممنوع تركه فارغاً!
+- 🔢 **التقييم الرقمي إلزامي**: ضع رقم حقيقي (1-10) في data-insurance-score و data-medical-score لكل حالة:
+  * 10 = توثيق مثالي، كل شيء مبرر
+  * 8-9 = جيد مع ملاحظات بسيطة
+  * 5-7 = متوسط، يحتاج توثيق
+  * 1-4 = ضعيف، مرفوض
 - أعد HTML فقط بدون markdown
 
 بيانات الحالة:
@@ -625,7 +630,7 @@ ${fullClinicalRef}
 
 ## 🔍 Required Format (like Report #20):
 
-<div class="case-section" data-insurance-score="[X]" data-medical-score="[Y]">
+<div class="case-section" data-insurance-score="8" data-medical-score="7">
   <h3>🔍 Case [N] | Claim Se No.: [number] | Patient: [number]</h3>
   
   <h4>📌 Case Data</h4>
