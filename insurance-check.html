@@ -4157,9 +4157,22 @@ async function startAnalysis(taskIndex) {
     const response = await fetch(TASKS_API_URL + '?action=getTaskFile&taskId=' + task.id);
     const data = await response.json();
     
-    if (data.success && data.fileData) {
-      // Parse Excel - same way as direct upload (handleFiles)
-      const workbook = XLSX.read(data.fileData, { type: 'base64' });
+    if (!data.success) {
+      console.error('Server error:', data.error || 'Unknown error');
+      alert('خطأ من الخادم: ' + (data.error || 'خطأ غير معروف'));
+      return;
+    }
+    
+    if (!data.fileData) {
+      console.error('No file data received:', data);
+      alert('لم يتم استلام بيانات الملف. تأكد من وجود الملف في Google Drive.');
+      return;
+    }
+    
+    // Parse Excel - same way as direct upload (handleFiles)
+    const workbook = XLSX.read(data.fileData, { type: 'base64' });
+    
+    if (workbook) {
       
       // Process ALL sheets (same as handleFiles)
       let allData = [];
