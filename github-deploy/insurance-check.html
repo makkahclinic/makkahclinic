@@ -4301,7 +4301,14 @@ async function startAnalysis(taskIndex) {
     }
   } catch(e) {
     console.error('Error loading task file:', e);
-    showCustomAlert('خطأ في تحميل الملف', 'error');
+    // Check if it's a network/fetch error vs parsing error
+    if (e.message && e.message.includes('JSON')) {
+      showCustomAlert('خطأ في استلام البيانات من الخادم. قد يكون الملف كبير جداً أو هناك مشكلة في الاتصال.', 'error');
+    } else if (e.message && e.message.includes('Failed to fetch')) {
+      showCustomAlert('فشل الاتصال بالخادم. تحقق من اتصال الإنترنت.', 'error');
+    } else {
+      showCustomAlert('خطأ في تحميل الملف: ' + (e.message || 'خطأ غير معروف'), 'error');
+    }
   }
 }
 
