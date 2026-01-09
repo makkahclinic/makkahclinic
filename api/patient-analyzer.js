@@ -542,7 +542,7 @@ ${fullClinicalRef}
       <tr>
         <td>[اسم الدواء]</td>
         <td>[الجرعة]</td>
-        <td>[شرح مفصل لماذا مقبول أو مرفوض - اربط بالتشخيص والعلامات الحيوية]</td>
+        <td>[اكتب السبب الرئيسي فقط - مثال: "مبرر لالتهاب المعدة" أو "غير مبرر - الحرارة طبيعية 36.1". لا تذكر "لا يوجد تضارب" أو "لا يوجد تحذير" - اذكر المشاكل فقط إن وجدت]</td>
         <td>[✅ مقبول / ❌ مرفوض / ⚠️ يحتاج توثيق]</td>
       </tr>
     </tbody>
@@ -590,6 +590,8 @@ ${fullClinicalRef}
 - اربط كل حكم بالعلامات الحيوية والتشخيص (مثلاً: "الحرارة 36.1 لا تبرر باراسيتامول وريدي")
 - اذكر التضارب الدوائي والتحويلات الناقصة إن وجدت
 - لا تستخدم "غير متوفر" أو "N/A" - اترك الحقل فارغاً إذا لم تتوفر البيانات
+- ❌ ممنوع: لا تكتب "CDI: لا يوجد" أو "NPHIES: لا يوجد" - اكتب السبب مباشرة فقط
+- ✅ صحيح: "مبرر لالتهاب المعدة" أو "غير مبرر - الحرارة طبيعية"
 - أعد HTML فقط بدون markdown
 
 بيانات الحالة:
@@ -625,7 +627,7 @@ ${fullClinicalRef}
       <tr>
         <td>[medication name]</td>
         <td>[dose]</td>
-        <td>[Detailed explanation why accepted or rejected - link to diagnosis and vitals]</td>
+        <td>[Write the main reason only - e.g. "Justified for gastritis" or "Not justified - temp normal 36.1". Do NOT write "No drug interaction" or "No warning" - only mention problems if they exist]</td>
         <td>[✅ Approved / ❌ Rejected / ⚠️ Needs Documentation]</td>
       </tr>
     </tbody>
