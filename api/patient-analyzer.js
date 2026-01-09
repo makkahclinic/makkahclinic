@@ -430,23 +430,23 @@ ${fullClinicalRef}
 
   <table class="custom-table medications-table" style="width:100%">
     <thead style="background:#1e3a5f;color:white">
-      <tr><th width="20%">الدواء</th><th width="10%">الجرعة</th><th width="55%">التقييم المختصر</th><th width="15%">الحالة</th></tr>
+      <tr><th width="22%">الدواء</th><th width="10%">الجرعة</th><th width="50%">التقييم المختصر</th><th width="18%">الحالة</th></tr>
     </thead>
     <tbody>
       <tr>
         <td>[اسم الدواء]</td>
         <td>[جرعة]</td>
         <td><strong>CDI:</strong> [مختصر]. <strong>NPHIES:</strong> [مختصر]. <strong>سريري:</strong> [مرجع مختصر]</td>
-        <td>[✅/❌/⚠️]</td>
+        <td class="status-[approve/reject/warning]" data-status="[approved/rejected/warning]">[✅ مقبول/❌ مرفوض/⚠️ يحتاج توثيق]</td>
       </tr>
     </tbody>
   </table>
 
   <div style="display:flex; gap:10px; margin:8px 0;">
-    <div style="flex:1; background:#f8d7da; padding:6px; border-radius:4px; font-size:11px;">
+    <div class="box-critical" style="flex:1; padding:8px; border-radius:6px; font-size:11px;">
       <strong>❌ مرفوض:</strong> [قائمة مختصرة أو "لا يوجد"]
     </div>
-    <div style="flex:1; background:#fff3cd; padding:6px; border-radius:4px; font-size:11px;">
+    <div class="box-warning" style="flex:1; padding:8px; border-radius:6px; font-size:11px;">
       <strong>⚠️ يحتاج توثيق:</strong> [قائمة مختصرة أو "لا يوجد"]
     </div>
   </div>
