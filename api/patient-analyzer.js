@@ -1622,7 +1622,71 @@ ${indicationsRef}
 - **يجب تحليل 100% من الحالات** - لا تتوقف أبداً قبل الانتهاء من كل الحالات
 - إذا كان هناك 10 حالات في الملف، يجب أن يحتوي التقرير على تحليل 10 حالات كاملة
 - **ممنوع الاختصار أو دمج الحالات** - كل حالة قسم منفصل بجميع أقسامه
-- أضف في نهاية التقرير: "✅ تم تحليل [N] حالة من أصل [N] حالة"
+
+---
+
+## 📊 الملخص التنفيذي (Executive Summary) - يُضاف في نهاية التقرير:
+
+<div class="executive-summary" style="background:linear-gradient(135deg,#1e3a5f,#2d5a8b);padding:2rem;border-radius:16px;margin-top:2rem;color:#fff">
+  <h2 style="color:#c9a962;margin-bottom:1.5rem;text-align:center">📊 الملخص التنفيذي</h2>
+  
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem">
+    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;text-align:center">
+      <div style="font-size:2rem;font-weight:bold;color:#22c55e">[عدد]</div>
+      <div>حالات مكتملة</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;text-align:center">
+      <div style="font-size:2rem;font-weight:bold;color:#f59e0b">[نسبة%]</div>
+      <div>معدل القبول التأميني</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;text-align:center">
+      <div style="font-size:2rem;font-weight:bold;color:#ef4444">[عدد]</div>
+      <div>إجراءات مرفوضة</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;text-align:center">
+      <div style="font-size:2rem;font-weight:bold;color:#3b82f6">[X/100]</div>
+      <div>درجة الجودة الإجمالية</div>
+    </div>
+  </div>
+
+  <h3 style="color:#c9a962;margin:1.5rem 0 1rem">🔄 الأنماط المتكررة (Cross-Case Patterns)</h3>
+  <table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,0.05);border-radius:8px;overflow:hidden">
+    <thead style="background:rgba(201,169,98,0.3)">
+      <tr><th style="padding:10px;text-align:right">النمط</th><th style="padding:10px;text-align:center">التكرار</th><th style="padding:10px;text-align:right">التوصية</th></tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.1)">
+        <td style="padding:10px">[مثال: باراسيتامول وريدي مع حرارة طبيعية]</td>
+        <td style="padding:10px;text-align:center">[X حالات]</td>
+        <td style="padding:10px">[التوصية: توثيق عدم تحمل الفم]</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.1)">
+        <td style="padding:10px">[مثال: مضاد حيوي لالتهاب فيروسي]</td>
+        <td style="padding:10px;text-align:center">[X حالات]</td>
+        <td style="padding:10px">[التوصية: توثيق علامات العدوى البكتيرية]</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="color:#c9a962;margin:1.5rem 0 1rem">📚 المراجع العلمية المستخدمة</h3>
+  <div style="background:rgba(255,255,255,0.05);padding:1rem;border-radius:8px;font-size:0.9rem">
+    <ol style="margin:0;padding-right:1.5rem;line-height:1.8">
+      <li><strong>WHO</strong> - Fluid Resuscitation Guidelines (2023) - معايير السوائل الوريدية</li>
+      <li><strong>CDC IDSA</strong> - Antibiotic Stewardship Guidelines - ترشيد المضادات الحيوية</li>
+      <li><strong>WHO Essential Medicines</strong> - استخدام خافضات الحرارة</li>
+      <li><strong>ACG Guidelines</strong> - American College of Gastroenterology - مثبطات مضخة البروتون</li>
+      <li><strong>CCHI/NPHIES</strong> - سياسات التأمين الصحي السعودية</li>
+      <li><strong>ESC Guidelines</strong> - European Society of Cardiology - أمراض القلب والأوعية</li>
+      <li><strong>ADA Standards</strong> - American Diabetes Association - معايير السكري</li>
+    </ol>
+  </div>
+
+  <div style="margin-top:1.5rem;padding:1rem;background:rgba(34,197,94,0.2);border-radius:8px;text-align:center">
+    ✅ تم تحليل [N] حالة من أصل [N] حالة بنجاح
+  </div>
+</div>
+
+---
 
 أعد HTML كامل بالعربية بدون أي code blocks أو markdown.`
       : `You are an expert medical insurance auditor. Analyze each case using **3 analysis layers**:
