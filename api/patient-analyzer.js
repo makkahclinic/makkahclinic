@@ -436,8 +436,8 @@ ${fullClinicalRef}
       <tr>
         <td>[اسم الدواء]</td>
         <td>[جرعة]</td>
-        <td><strong>CDI:</strong> [مختصر]. <strong>NPHIES:</strong> [مختصر]. <strong>سريري:</strong> [مرجع مختصر]</td>
-        <td class="status-[approve/reject/warning]" data-status="[approved/rejected/warning]">[✅ مقبول/❌ مرفوض/⚠️ يحتاج توثيق]</td>
+        <td class="eval-[accepted/rejected/warning]"><strong>CDI:</strong> [مختصر]. <strong>NPHIES:</strong> [مختصر]. <strong>سريري:</strong> [مرجع مختصر]</td>
+        <td class="status-[accepted/rejected/warning]">[✅ مقبول/❌ مرفوض/⚠️ يحتاج توثيق]</td>
       </tr>
     </tbody>
   </table>
@@ -503,8 +503,8 @@ ${fullClinicalRef}
       <tr>
         <td>[medication]</td>
         <td>[dose]</td>
-        <td><strong>CDI:</strong> [brief]. <strong>NPHIES:</strong> [brief]. <strong>Clinical:</strong> [brief ref]</td>
-        <td>[✅/❌/⚠️]</td>
+        <td class="eval-[accepted/rejected/warning]"><strong>CDI:</strong> [brief]. <strong>NPHIES:</strong> [brief]. <strong>Clinical:</strong> [brief ref]</td>
+        <td class="status-[accepted/rejected/warning]">[✅/❌/⚠️]</td>
       </tr>
     </tbody>
   </table>
