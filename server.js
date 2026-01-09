@@ -125,7 +125,17 @@ app.get('/emergency-poster.html', (req, res) => {
 });
 
 // Patient Analyzer API - AI-powered medical analysis using Gemini
+app.options('/api/patient-analyzer', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.status(204).end();
+});
+
 app.post('/api/patient-analyzer', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   try {
     await patientAnalyzerHandler(req, res);
   } catch (err) {
