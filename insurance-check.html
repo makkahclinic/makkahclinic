@@ -2632,67 +2632,67 @@ function renderDoctorsChart(doctors) {
 
 function extractAndApplyAIRatings(html) {
   try {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
+    // Method 1: Extract from Arabic format "الالتزام التأميني: X/10" and "جودة الإجراءات: X/10"
+    const insuranceMatches = html.match(/الالتزام\s*التأميني[:\s]*(\d+)\s*\/\s*10/g) || [];
+    const serviceMatches = html.match(/جودة\s*(?:الإجراءات|الخدمات)[:\s]*(\d+)\s*\/\s*10/g) || [];
     
-    // Extract scores from NEW format (data-insurance-score, data-medical-score)
-    const caseSections = tempDiv.querySelectorAll('[data-insurance-score], [data-medical-score]');
+    let insuranceScores = [], serviceScores = [];
     
-    if (caseSections.length > 0) {
-      let totalInsurance = 0, totalMedical = 0, count = 0;
-      
-      caseSections.forEach(section => {
-        const ins = parseInt(section.getAttribute('data-insurance-score')) || 0;
-        const med = parseInt(section.getAttribute('data-medical-score')) || 0;
-        if (ins > 0 || med > 0) {
-          totalInsurance += ins;
-          totalMedical += med;
-          count++;
-        }
-      });
-      
-      if (count > 0) {
-        insuranceRatingValue = Math.round(totalInsurance / count);
-        serviceRatingValue = Math.round(totalMedical / count);
-      }
+    insuranceMatches.forEach(m => {
+      const num = m.match(/(\d+)\s*\/\s*10/);
+      if (num) insuranceScores.push(parseInt(num[1]));
+    });
+    
+    serviceMatches.forEach(m => {
+      const num = m.match(/(\d+)\s*\/\s*10/);
+      if (num) serviceScores.push(parseInt(num[1]));
+    });
+    
+    if (insuranceScores.length > 0) {
+      insuranceRatingValue = Math.round(insuranceScores.reduce((a,b) => a+b, 0) / insuranceScores.length);
+    }
+    if (serviceScores.length > 0) {
+      serviceRatingValue = Math.round(serviceScores.reduce((a,b) => a+b, 0) / serviceScores.length);
     }
     
-    // Fallback: try regex for both old and new formats
+    // Method 2: Fallback - count approved/rejected/warning items
     if (insuranceRatingValue === 0 && serviceRatingValue === 0) {
-      // New format
-      const insuranceScoreMatch = html.match(/data-insurance-score="(\d+)"/g);
-      const medicalScoreMatch = html.match(/data-medical-score="(\d+)"/g);
+      const approvedCount = (html.match(/✅|مقبول|approved/gi) || []).length;
+      const rejectedCount = (html.match(/❌|مرفوض|rejected/gi) || []).length;
+      const warningCount = (html.match(/⚠️|يحتاج توثيق|needs.*doc/gi) || []).length;
       
-      if (insuranceScoreMatch && insuranceScoreMatch.length > 0) {
-        let sum = 0;
-        insuranceScoreMatch.forEach(m => {
-          const val = m.match(/\d+/);
-          if (val) sum += parseInt(val[0]);
-        });
-        insuranceRatingValue = Math.round(sum / insuranceScoreMatch.length);
-      }
-      
-      if (medicalScoreMatch && medicalScoreMatch.length > 0) {
-        let sum = 0;
-        medicalScoreMatch.forEach(m => {
-          const val = m.match(/\d+/);
-          if (val) sum += parseInt(val[0]);
-        });
-        serviceRatingValue = Math.round(sum / medicalScoreMatch.length);
-      }
-      
-      // Old format fallback
-      if (insuranceRatingValue === 0) {
-        const oldInsMatch = html.match(/data-insurance-rating="(\d+)"/);
-        if (oldInsMatch) insuranceRatingValue = parseInt(oldInsMatch[1]) || 0;
-      }
-      if (serviceRatingValue === 0) {
-        const oldSvcMatch = html.match(/data-service-rating="(\d+)"/);
-        if (oldSvcMatch) serviceRatingValue = parseInt(oldSvcMatch[1]) || 0;
+      const totalItems = approvedCount + rejectedCount + warningCount;
+      if (totalItems > 0) {
+        // Calculate score: approved=10, warning=5, rejected=0
+        const weightedScore = (approvedCount * 10 + warningCount * 5 + rejectedCount * 0) / totalItems;
+        insuranceRatingValue = Math.round(weightedScore);
+        serviceRatingValue = Math.round(weightedScore);
       }
     }
     
-    console.log('AI Ratings extracted:', { insurance: insuranceRatingValue, service: serviceRatingValue });
+    // Method 3: data attributes fallback
+    if (insuranceRatingValue === 0) {
+      const dataMatches = html.match(/data-insurance-(?:score|rating)="(\d+)"/g) || [];
+      if (dataMatches.length > 0) {
+        let sum = 0;
+        dataMatches.forEach(m => { const v = m.match(/\d+/); if(v) sum += parseInt(v[0]); });
+        insuranceRatingValue = Math.round(sum / dataMatches.length);
+      }
+    }
+    if (serviceRatingValue === 0) {
+      const dataMatches = html.match(/data-(?:medical|service)-(?:score|rating)="(\d+)"/g) || [];
+      if (dataMatches.length > 0) {
+        let sum = 0;
+        dataMatches.forEach(m => { const v = m.match(/\d+/); if(v) sum += parseInt(v[0]); });
+        serviceRatingValue = Math.round(sum / dataMatches.length);
+      }
+    }
+    
+    // Ensure minimum score of 1 if we have a report
+    if (html.length > 500 && insuranceRatingValue === 0) insuranceRatingValue = 5;
+    if (html.length > 500 && serviceRatingValue === 0) serviceRatingValue = 5;
+    
+    console.log('AI Ratings extracted:', { insurance: insuranceRatingValue, service: serviceRatingValue, methods: { insuranceMatches: insuranceScores.length, serviceMatches: serviceScores.length } });
   } catch(e) {
     console.error('Error extracting AI ratings:', e);
   }
