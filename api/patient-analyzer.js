@@ -509,138 +509,170 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 - المضادات الحيوية: "يوجد دليل على عدوى بكتيرية: [حمى >38.3°C/صديد/CRP مرتفع/WBC مرتفع]"
 `;
 
-  // COMPACT Template with scoring criteria
-  const caseTemplate = language === 'ar' ? `أنت مدقق تأميني طبي خبير. حلل الحالة باختصار مع تقييم رقمي واضح.
+  // Report #20 Format Template - Detailed with clear sections
+  const caseTemplate = language === 'ar' ? `أنت مدقق تأميني طبي خبير. حلل الحالة بتفصيل واضح مثل التقرير 20.
 
 ${fullClinicalRef}
 
-## معايير التقييم الرقمي (من 10):
+## ⚠️ تنبيهات إلزامية يجب ذكرها إن وجدت:
+1. **التضارب الدوائي**: إذا وجدت أدوية متضاربة من المصفوفة أعلاه، اذكرها بوضوح
+2. **التحويلات الناقصة**: 
+   - مريض سكري بدون تحويل لطبيب العيون ← اذكر "⚠️ يحتاج تحويل لطبيب العيون"
+   - ألم عظام/مفاصل بدون تحويل لطبيب العظام ← اذكر "⚠️ يحتاج تحويل لطبيب العظام"
+3. **التكرار**: إذا نفس المريض زار أكثر من مرة بنفس العلاج ← اذكر "⚠️ زيارة متكررة"
 
-### 📋 معيار الالتزام التأميني (Insurance Compliance Score):
-- 10/10: توثيق كامل + أكواد ICD صحيحة + علامات حيوية موثقة
-- 8-9/10: توثيق جيد مع نقص بسيط
-- 5-7/10: توثيق متوسط يحتاج تحسين
-- 1-4/10: توثيق ضعيف مع مخاطر رفض
-- 0/10: لا توثيق
-
-### 🏥 معيار جودة الإجراءات الطبية (Medical Quality Score):
-- 10/10: كل الإجراءات مبررة طبياً + متوافقة مع الإرشادات السريرية
-- 8-9/10: إجراءات مناسبة مع ملاحظات بسيطة
-- 5-7/10: بعض الإجراءات تحتاج مبرر أوضح
-- 1-4/10: إجراءات غير مبررة أو مفرطة
-- 0/10: لا إجراءات أو كلها مرفوضة
-
-## 🔍 التنسيق المختصر (استخدم هذا بالضبط):
+## 🔍 التنسيق الإلزامي (مثل التقرير 20):
 
 <div class="case-section" data-insurance-score="[X]" data-medical-score="[Y]">
-  <h3>🔍 الحالة [N] | Claim: [رقم الملف] | المريض: [رقم المريض]</h3>
+  <h3>🔍 الحالة رقم [N] | Claim Se No.: [رقم] | المريض: [رقم]</h3>
   
-  <table class="custom-table case-info-table" style="width:100%">
-    <tr><td width="15%"><strong>التشخيص:</strong></td><td>[ICD + الوصف]</td><td width="20%"><strong>الحرارة:</strong> [قيمة]</td><td width="20%"><strong>الضغط:</strong> [قيمة]</td></tr>
+  <h4>📌 بيانات الحالة</h4>
+  <table class="custom-table">
+    <tr><td><strong>التشخيص:</strong></td><td>[كود ICD مع الوصف الكامل]</td></tr>
+    <tr><td><strong>درجة الحرارة:</strong></td><td>[القيمة]</td></tr>
+    <tr><td><strong>ضغط الدم:</strong></td><td>[القيمة]</td></tr>
   </table>
-
-  <table class="custom-table medications-table" style="width:100%">
+  
+  <h4>💊 الأدوية</h4>
+  <table class="custom-table medications-table">
     <thead style="background:#1e3a5f;color:white">
-      <tr><th width="22%">الدواء</th><th width="10%">الجرعة</th><th width="50%">التقييم المختصر</th><th width="18%">الحالة</th></tr>
+      <tr><th>الدواء</th><th>الجرعة</th><th>التقييم</th><th>الحالة</th></tr>
     </thead>
     <tbody>
       <tr>
         <td>[اسم الدواء]</td>
-        <td>[جرعة]</td>
-        <td class="eval-[accepted/rejected/warning]"><strong>CDI:</strong> [مختصر]. <strong>NPHIES:</strong> [مختصر]. <strong>سريري:</strong> [مرجع مختصر]</td>
-        <td class="status-[accepted/rejected/warning]">[✅ مقبول/❌ مرفوض/⚠️ يحتاج توثيق]</td>
+        <td>[الجرعة]</td>
+        <td>[شرح مفصل لماذا مقبول أو مرفوض - اربط بالتشخيص والعلامات الحيوية]</td>
+        <td>[✅ مقبول / ❌ مرفوض / ⚠️ يحتاج توثيق]</td>
       </tr>
     </tbody>
   </table>
-
-  <div style="display:flex; gap:10px; margin:8px 0;">
-    <div class="box-critical" style="flex:1; padding:8px; border-radius:6px; font-size:11px;">
-      <strong>❌ مرفوض:</strong> [قائمة مختصرة أو "لا يوجد"]
-    </div>
-    <div class="box-warning" style="flex:1; padding:8px; border-radius:6px; font-size:11px;">
-      <strong>⚠️ يحتاج توثيق:</strong> [قائمة مختصرة أو "لا يوجد"]
-    </div>
-  </div>
-
-  <table class="custom-table scores-table" style="width:100%; margin-top:5px;">
-    <tr style="background:#e8f4fd">
-      <td width="50%"><strong>📋 الالتزام التأميني:</strong> <span class="score-badge">[X]/10</span></td>
-      <td width="50%"><strong>🏥 جودة الإجراءات:</strong> <span class="score-badge">[Y]/10</span></td>
-    </tr>
-  </table>
-</div>
-
-## ⚙️ قواعد:
-- اختصر التقييم السريري في جملة واحدة لكل دواء/إجراء
-- استخدم الأرقام للتقييم (X/10 و Y/10)
-- لا تكرر المعلومات
-- أعد HTML فقط بدون markdown
-
-بيانات الحالة:
-` : `You are an expert medical insurance auditor. Analyze concisely with numeric scores.
-
-${fullClinicalRef}
-
-## Scoring Criteria (out of 10):
-
-### 📋 Insurance Compliance Score:
-- 10/10: Complete documentation + correct ICD codes + vitals documented
-- 8-9/10: Good documentation with minor gaps
-- 5-7/10: Average documentation needs improvement
-- 1-4/10: Poor documentation with rejection risks
-- 0/10: No documentation
-
-### 🏥 Medical Quality Score:
-- 10/10: All procedures medically justified + aligned with clinical guidelines
-- 8-9/10: Appropriate procedures with minor notes
-- 5-7/10: Some procedures need clearer justification
-- 1-4/10: Unjustified or excessive procedures
-- 0/10: No procedures or all rejected
-
-## 🔍 Compact Format (use exactly):
-
-<div class="case-section" data-insurance-score="[X]" data-medical-score="[Y]">
-  <h3>🔍 Case [N] | Claim: [claim_id] | Patient: [patient_id]</h3>
   
-  <table class="custom-table case-info-table" style="width:100%">
-    <tr><td width="15%"><strong>Diagnosis:</strong></td><td>[ICD + description]</td><td width="20%"><strong>Temp:</strong> [value]</td><td width="20%"><strong>BP:</strong> [value]</td></tr>
-  </table>
-
-  <table class="custom-table medications-table" style="width:100%">
+  <h4>🔬 التحاليل والإجراءات</h4>
+  <table class="custom-table">
     <thead style="background:#1e3a5f;color:white">
-      <tr><th width="20%">Medication</th><th width="10%">Dose</th><th width="55%">Brief Evaluation</th><th width="15%">Status</th></tr>
+      <tr><th>الإجراء</th><th>التقييم</th><th>الحالة</th></tr>
     </thead>
     <tbody>
       <tr>
-        <td>[medication]</td>
-        <td>[dose]</td>
-        <td class="eval-[accepted/rejected/warning]"><strong>CDI:</strong> [brief]. <strong>NPHIES:</strong> [brief]. <strong>Clinical:</strong> [brief ref]</td>
-        <td class="status-[accepted/rejected/warning]">[✅/❌/⚠️]</td>
+        <td>[اسم الإجراء]</td>
+        <td>[هل يتوافق مع التشخيص؟]</td>
+        <td>[✅ مقبول / ❌ مرفوض]</td>
       </tr>
     </tbody>
   </table>
-
-  <div style="display:flex; gap:10px; margin:8px 0;">
-    <div style="flex:1; background:#f8d7da; padding:6px; border-radius:4px; font-size:11px;">
-      <strong>❌ Rejected:</strong> [brief list or "None"]
-    </div>
-    <div style="flex:1; background:#fff3cd; padding:6px; border-radius:4px; font-size:11px;">
-      <strong>⚠️ Needs Documentation:</strong> [brief list or "None"]
-    </div>
+  
+  <div style="background:#fee2e2; border:2px solid #dc2626; padding:12px; border-radius:8px; margin:10px 0;">
+    <h4 style="color:#dc2626; margin:0 0 8px 0;">❌ إجراءات مرفوضة</h4>
+    <div style="font-weight:bold;">[اسم الدواء/الإجراء المرفوض]</div>
+    <div>⚠️ [اسم الدواء] يحتاج توثيق المبرر الإكلينيكي. [سبب الرفض بالتفصيل - مثلاً: لا يوجد ارتفاع في درجة الحرارة أو توثيق لألم حاد]</div>
+    <div>📌 اقتراحات التبرير المقبولة: [قائمة مثل: عدم تحمل الفم، حالة حادة، حمى]</div>
+    <div style="color:#dc2626; font-weight:bold;">❗ عدم التوثيق = رفض التأمين</div>
   </div>
-
-  <table class="custom-table scores-table" style="width:100%; margin-top:5px;">
-    <tr style="background:#e8f4fd">
-      <td width="50%"><strong>📋 Insurance Compliance:</strong> <span class="score-badge">[X]/10</span></td>
-      <td width="50%"><strong>🏥 Medical Quality:</strong> <span class="score-badge">[Y]/10</span></td>
+  
+  <div style="background:#fef3c7; border:2px solid #d97706; padding:12px; border-radius:8px; margin:10px 0;">
+    <h4 style="color:#d97706; margin:0 0 8px 0;">⚠️ إجراءات تحتاج توثيق</h4>
+    <div style="font-weight:bold;">[اسم الدواء/الإجراء]</div>
+    <div>⚠️ [اسم الدواء] يحتاج توثيق المبرر الإكلينيكي.</div>
+    <div>📌 اقتراحات التبرير المقبولة: [قائمة]</div>
+    <div style="color:#d97706; font-weight:bold;">❗ عدم التوثيق = رفض التأمين</div>
+  </div>
+  
+  <table class="custom-table" style="margin-top:10px;">
+    <tr>
+      <td style="background:#dcfce7; width:50%;"><strong>✅ صحيح</strong><br>[قائمة الأدوية والإجراءات المقبولة]</td>
+      <td style="background:#fee2e2; width:50%;"><strong>❌ يحتاج تصحيح</strong><br>[قائمة المرفوض ويحتاج توثيق]</td>
     </tr>
   </table>
 </div>
 
-## Rules:
-- Keep clinical evaluation to ONE sentence per medication/procedure
-- Use numeric scores (X/10 and Y/10)
-- Don't repeat information
+## ⚙️ قواعد إلزامية:
+- اربط كل حكم بالعلامات الحيوية والتشخيص (مثلاً: "الحرارة 36.1 لا تبرر باراسيتامول وريدي")
+- اذكر التضارب الدوائي والتحويلات الناقصة إن وجدت
+- لا تستخدم "غير متوفر" أو "N/A" - اترك الحقل فارغاً إذا لم تتوفر البيانات
+- أعد HTML فقط بدون markdown
+
+بيانات الحالة:
+` : `You are an expert medical insurance auditor. Analyze in detail like Report #20.
+
+${fullClinicalRef}
+
+## ⚠️ Mandatory Alerts (mention if found):
+1. **Drug Interactions**: If conflicting drugs found, state clearly
+2. **Missing Referrals**:
+   - Diabetic patient without ophthalmology referral → mention "⚠️ Needs ophthalmology referral"
+   - Bone/joint pain without orthopedics referral → mention "⚠️ Needs orthopedics referral"
+3. **Repetition**: If same patient visited multiple times with same treatment → mention "⚠️ Repeated visit"
+
+## 🔍 Required Format (like Report #20):
+
+<div class="case-section" data-insurance-score="[X]" data-medical-score="[Y]">
+  <h3>🔍 Case [N] | Claim Se No.: [number] | Patient: [number]</h3>
+  
+  <h4>📌 Case Data</h4>
+  <table class="custom-table">
+    <tr><td><strong>Diagnosis:</strong></td><td>[ICD code with full description]</td></tr>
+    <tr><td><strong>Temperature:</strong></td><td>[value]</td></tr>
+    <tr><td><strong>Blood Pressure:</strong></td><td>[value]</td></tr>
+  </table>
+  
+  <h4>💊 Medications</h4>
+  <table class="custom-table medications-table">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th>Medication</th><th>Dose</th><th>Evaluation</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>[medication name]</td>
+        <td>[dose]</td>
+        <td>[Detailed explanation why accepted or rejected - link to diagnosis and vitals]</td>
+        <td>[✅ Approved / ❌ Rejected / ⚠️ Needs Documentation]</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <h4>🔬 Tests and Procedures</h4>
+  <table class="custom-table">
+    <thead style="background:#1e3a5f;color:white">
+      <tr><th>Procedure</th><th>Evaluation</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>[procedure name]</td>
+        <td>[Does it align with diagnosis?]</td>
+        <td>[✅ Approved / ❌ Rejected]</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div style="background:#fee2e2; border:2px solid #dc2626; padding:12px; border-radius:8px; margin:10px 0;">
+    <h4 style="color:#dc2626; margin:0 0 8px 0;">❌ Rejected Items</h4>
+    <div style="font-weight:bold;">[Rejected medication/procedure name]</div>
+    <div>⚠️ [medication] needs clinical justification. [Detailed rejection reason - e.g., No fever elevation or documented acute pain]</div>
+    <div>📌 Acceptable justifications: [list like: oral intolerance, acute condition, fever]</div>
+    <div style="color:#dc2626; font-weight:bold;">❗ No documentation = Insurance rejection</div>
+  </div>
+  
+  <div style="background:#fef3c7; border:2px solid #d97706; padding:12px; border-radius:8px; margin:10px 0;">
+    <h4 style="color:#d97706; margin:0 0 8px 0;">⚠️ Items Needing Documentation</h4>
+    <div style="font-weight:bold;">[Medication/procedure name]</div>
+    <div>⚠️ [medication] needs clinical justification.</div>
+    <div>📌 Acceptable justifications: [list]</div>
+    <div style="color:#d97706; font-weight:bold;">❗ No documentation = Insurance rejection</div>
+  </div>
+  
+  <table class="custom-table" style="margin-top:10px;">
+    <tr>
+      <td style="background:#dcfce7; width:50%;"><strong>✅ Correct</strong><br>[List of approved medications and procedures]</td>
+      <td style="background:#fee2e2; width:50%;"><strong>❌ Needs Correction</strong><br>[List of rejected and needs documentation]</td>
+    </tr>
+  </table>
+</div>
+
+## ⚙️ Mandatory Rules:
+- Link every judgment to vitals and diagnosis (e.g., "Temperature 36.1 does not justify IV paracetamol")
+- Mention drug interactions and missing referrals if found
+- Do NOT use "N/A" or "Not available" - leave field empty if data not available
 - Return HTML only, no markdown
 
 Case data:
