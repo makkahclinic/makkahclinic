@@ -352,6 +352,126 @@ Return HTML in the specified format.`;
   }
 }
 
+// ========== REPETITION DETECTION & PATTERN ANALYSIS ==========
+function detectRepetitionsAndPatterns(cases) {
+  const repetitions = [];
+  const patterns = [];
+  const referralAlerts = [];
+  
+  // Group by patient ID to detect same-day visits
+  const patientVisits = new Map();
+  cases.forEach((c, idx) => {
+    const patientId = c.patientId || c.claimId;
+    if (!patientVisits.has(patientId)) {
+      patientVisits.set(patientId, []);
+    }
+    patientVisits.get(patientId).push({ ...c, index: idx });
+  });
+  
+  // Detect repeated visits for same patient
+  for (const [patientId, visits] of patientVisits) {
+    if (visits.length > 1) {
+      // Check for repeated IV fluids
+      const ivFluidVisits = visits.filter(v => 
+        v.medications.some(m => 
+          m.name.toUpperCase().includes('SALINE') || 
+          m.name.toUpperCase().includes('DEXTROSE') ||
+          m.name.toUpperCase().includes('RINGER') ||
+          m.name.toUpperCase().includes('I.V.') ||
+          m.name.toUpperCase().includes('INFUSION')
+        )
+      );
+      
+      if (ivFluidVisits.length > 1) {
+        repetitions.push({
+          type: 'IV_FLUID_REPEAT',
+          patientId,
+          count: ivFluidVisits.length,
+          claims: ivFluidVisits.map(v => v.claimId),
+          alert: `🔴 تنبيه تكرار: المريض ${patientId} حصل على سوائل وريدية ${ivFluidVisits.length} مرات. يجب توثيق مبرر كل مرة.`
+        });
+      }
+      
+      // Check for repeated antibiotics
+      const antibioticVisits = visits.filter(v =>
+        v.medications.some(m => {
+          const name = m.name.toUpperCase();
+          return name.includes('AMOXICILLIN') || name.includes('AZITHROMYCIN') ||
+                 name.includes('CIPROFLOXACIN') || name.includes('CEFTRIAXONE') ||
+                 name.includes('AUGMENTIN') || name.includes('ANTIBIOTIC');
+        })
+      );
+      
+      if (antibioticVisits.length > 1) {
+        repetitions.push({
+          type: 'ANTIBIOTIC_REPEAT',
+          patientId,
+          count: antibioticVisits.length,
+          claims: antibioticVisits.map(v => v.claimId),
+          alert: `🔴 تنبيه تكرار: المريض ${patientId} حصل على مضادات حيوية ${antibioticVisits.length} مرات. هل هناك مقاومة أو فشل علاجي؟`
+        });
+      }
+    }
+  }
+  
+  // Detect patterns across all cases
+  const ivFluidCount = cases.filter(c => 
+    c.medications.some(m => 
+      m.name.toUpperCase().includes('SALINE') || 
+      m.name.toUpperCase().includes('DEXTROSE') ||
+      m.name.toUpperCase().includes('I.V.')
+    )
+  ).length;
+  
+  const ivFluidPercentage = (ivFluidCount / cases.length * 100).toFixed(1);
+  if (ivFluidPercentage > 50) {
+    patterns.push({
+      type: 'HIGH_IV_USAGE',
+      percentage: ivFluidPercentage,
+      alert: `🟠 نمط غير طبيعي: ${ivFluidPercentage}% من الحالات تحصل على سوائل وريدية. المعدل الطبيعي أقل من 30%.`
+    });
+  }
+  
+  // Detect cases needing specialist referral
+  cases.forEach((c, idx) => {
+    const diagUpper = (c.diagnosis || '').toUpperCase();
+    
+    // Diabetes → Eye specialist referral needed
+    if (diagUpper.includes('DIABETES') || diagUpper.includes('DM') || 
+        diagUpper.includes('E11') || diagUpper.includes('E10') ||
+        diagUpper.includes('السكري') || diagUpper.includes('سكر')) {
+      referralAlerts.push({
+        type: 'DIABETES_EYE_REFERRAL',
+        claimId: c.claimId,
+        patientId: c.patientId,
+        alert: `👁️ تنبيه تحويل: مريض سكري (${c.claimId}) - يجب التحويل لطبيب العيون سنوياً (ADA Guidelines 2024)`,
+        recommendation: 'Referral to Ophthalmology for diabetic retinopathy screening'
+      });
+    }
+    
+    // Hypertension → Renal function check
+    if (diagUpper.includes('HYPERTENSION') || diagUpper.includes('HTN') ||
+        diagUpper.includes('I10') || diagUpper.includes('ضغط')) {
+      const hasRenalTest = c.procedures.some(p => 
+        p.toUpperCase().includes('CREATININE') || 
+        p.toUpperCase().includes('KIDNEY') ||
+        p.toUpperCase().includes('RENAL')
+      );
+      if (!hasRenalTest) {
+        referralAlerts.push({
+          type: 'HTN_RENAL_CHECK',
+          claimId: c.claimId,
+          patientId: c.patientId,
+          alert: `🔬 تنبيه فحوصات: مريض ضغط (${c.claimId}) - يجب فحص وظائف الكلى (ESC Guidelines 2023)`,
+          recommendation: 'Order serum creatinine and eGFR'
+        });
+      }
+    }
+  });
+  
+  return { repetitions, patterns, referralAlerts };
+}
+
 // Process Excel cases sequentially with individual API calls - FULL TRI-LAYER TEMPLATE
 async function processExcelCasesSequentially(req, res, cases, language, apiKey) {
   const totalCases = cases.length;
@@ -359,43 +479,63 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
   const model = "gemini-2.0-flash";
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   
-  // FULL Clinical Guidelines Reference (same as bulk mode)
+  // Detect repetitions and patterns BEFORE processing
+  const { repetitions, patterns, referralAlerts } = detectRepetitionsAndPatterns(cases);
+  console.log(`[Pattern Detection] Found ${repetitions.length} repetitions, ${patterns.length} patterns, ${referralAlerts.length} referral alerts`);
+  
+  // ENHANCED Clinical Guidelines Reference with Scientific Sources
   const fullClinicalRef = `
-### 📚 مراجع الإرشادات السريرية (للتقييم):
+### 📚 مراجع الإرشادات السريرية المعتمدة:
 
-**السوائل الوريدية (IV Fluids):**
-- تُستخدم فقط عند: الجفاف الشديد، عدم تحمل الفم، القيء المستمر، صدمة
+**السوائل الوريدية (IV Fluids) - WHO 2023:**
+- تُستخدم فقط عند: الجفاف الشديد (>5%)، عدم تحمل الفم، القيء المستمر، صدمة
 - يجب توثيق: درجة الجفاف، عدم القدرة على الشرب، علامات الصدمة
-- مرجع: WHO Fluid Resuscitation Guidelines
+- ⚠️ التكرار بدون مبرر = رفض تأميني
+- 📖 مرجع: WHO Pocket Book of Hospital Care 2023, Ch. 5
 
-**المضادات الحيوية:**
-- التهاب الحلق: لا مضاد حيوي إلا مع حرارة >38.3 + التهاب لوزتين صديدي (CDC IDSA)
-- التهاب الجهاز التنفسي العلوي: غالباً فيروسي، لا حاجة لمضاد حيوي
+**المضادات الحيوية - CDC IDSA 2024:**
+- التهاب الحلق: لا مضاد حيوي إلا مع حرارة >38.3 + التهاب لوزتين صديدي + Centor Score ≥3
+- التهاب الجهاز التنفسي العلوي: 80% فيروسي، لا حاجة لمضاد حيوي
 - التهاب المعدة والأمعاء: لا مضاد حيوي إلا مع حمى عالية أو دم في البراز
-- مرجع: CDC Antibiotic Stewardship
+- 📖 مرجع: CDC Antibiotic Stewardship Guidelines 2024
 
-**خافضات الحرارة:**
-- باراسيتامول فموي: للحرارة >38°C
-- باراسيتامول وريدي: فقط عند عدم تحمل الفم أو حالة طوارئ
-- مرجع: WHO Essential Medicines
+**خافضات الحرارة - WHO Essential Medicines 2023:**
+- باراسيتامول فموي: للحرارة >38°C (الخيار الأول)
+- باراسيتامول وريدي: فقط عند عدم تحمل الفم أو حالة طوارئ أو غيبوبة
+- ⚠️ وريدي مع حرارة طبيعية (<37.5°C) = مرفوض
+- 📖 مرجع: WHO Model List of Essential Medicines 2023
 
-**مثبطات مضخة البروتون (PPIs):**
-- مبررة: GERD، قرحة معدة، مع NSAIDs طويلة المدى
-- غير مبررة: عسر هضم عابر بدون علامات إنذار
+**مثبطات مضخة البروتون (PPIs) - ACG 2022:**
+- مبررة: GERD موثق، قرحة معدة، مع NSAIDs لمرضى عالي الخطورة
+- غير مبررة: عسر هضم عابر بدون إنذار، استخدام طويل بدون مراجعة
+- 📖 مرجع: American College of Gastroenterology Guidelines 2022
 
-### ⚠️ مصفوفة التضارب الدوائي:
-| الدواء الأول | الدواء الثاني | نوع التضارب | الخطورة |
-|-------------|--------------|-------------|---------|
-| NSAIDs | مميعات الدم | زيادة خطر النزيف | 🔴 عالية |
-| NSAIDs | مدرات البول، ACE inhibitors | فشل كلوي حاد | 🔴 عالية |
-| Macrolides | Statins | رابدومايوليسيس | 🔴 عالية |
-| Metronidazole | Warfarin | زيادة تأثير مميع الدم | 🟠 متوسطة |
-| ACE inhibitors | مدرات حافظة للبوتاسيوم | ارتفاع البوتاسيوم | 🔴 عالية |
+### 🩺 تنبيهات التحويل الطبي الإلزامية:
 
-### 📌 اقتراحات التوثيق:
-- السوائل الوريدية: توثيق صعوبة البلع، جفاف شديد، قيء مستمر، علامات صدمة
-- باراسيتامول وريدي: عدم تحمل الفم، حالة طوارئ، حمى >39°C
-- المضادات الحيوية: علامات عدوى بكتيرية (حمى >38.3، صديد)
+**مرضى السكري (ADA Standards 2024):**
+- 👁️ تحويل لطبيب العيون: فحص الشبكية السنوي (Diabetic Retinopathy Screening)
+- 🦶 فحص القدم: كل 6 أشهر للوقاية من القدم السكرية
+- 🔬 فحص الكلى: Microalbuminuria + eGFR سنوياً
+- 📖 مرجع: ADA Standards of Care in Diabetes 2024
+
+**مرضى الضغط (ESC Guidelines 2023):**
+- 🔬 فحص وظائف الكلى: Creatinine + eGFR عند التشخيص وسنوياً
+- ❤️ تخطيط القلب: ECG أساسي وعند تغيير العلاج
+- 📖 مرجع: ESC Guidelines for Arterial Hypertension 2023
+
+### ⚠️ مصفوفة التضارب الدوائي (UpToDate 2024):
+| الدواء الأول | الدواء الثاني | نوع التضارب | الخطورة | المرجع |
+|-------------|--------------|-------------|---------|--------|
+| NSAIDs | مميعات الدم | زيادة خطر النزيف | 🔴 عالية | Lexicomp |
+| NSAIDs | ACE inhibitors + مدرات | فشل كلوي حاد (Triple Whammy) | 🔴 عالية | NEJM 2019 |
+| Macrolides | Statins | رابدومايوليسيس | 🔴 عالية | FDA Alert |
+| Metronidazole | Warfarin | زيادة INR | 🟠 متوسطة | UpToDate |
+| Fluoroquinolones | Theophylline | تسمم ثيوفيلين | 🟠 متوسطة | Micromedex |
+
+### 📌 قوالب اقتراحات التوثيق للطبيب:
+- السوائل الوريدية: "المريض يعاني من [جفاف شديد/قيء مستمر/عدم تحمل الفم] مما يستدعي IV fluids"
+- باراسيتامول وريدي: "المريض [فاقد الوعي/لا يتحمل الفم/حالة طوارئ] لذا يُعطى IV paracetamol"
+- المضادات الحيوية: "يوجد دليل على عدوى بكتيرية: [حمى >38.3°C/صديد/CRP مرتفع/WBC مرتفع]"
 `;
 
   // COMPACT Template with scoring criteria
@@ -890,9 +1030,101 @@ Return HTML only, no markdown or code blocks.
   </div>
   `;
   
+  // Build repetition and referral alerts section
+  const buildAlertsSection = (lang) => {
+    let alertsHtml = '';
+    
+    // Repetition alerts
+    if (repetitions.length > 0) {
+      const repetitionAlerts = repetitions.map(r => `
+        <div class="box-critical" style="margin:8px 0;padding:10px;border-radius:6px;">
+          <strong>${r.alert}</strong>
+          <br><small>📋 Claims: ${r.claims.join(', ')}</small>
+        </div>
+      `).join('');
+      
+      alertsHtml += lang === 'ar' ? `
+        <div style="margin-top:1.5rem;page-break-inside:avoid;">
+          <h3 style="background:#dc3545;color:white;padding:10px;border-radius:8px;margin:0;">
+            🔴 تنبيهات التكرار (${repetitions.length})
+          </h3>
+          <p style="background:#f8d7da;padding:10px;margin:0;font-size:12px;">
+            الحالات التالية تحتوي على تكرار خدمات بدون مبرر طبي واضح. يجب على الطبيب توثيق سبب التكرار لتجنب الرفض التأميني.
+          </p>
+          ${repetitionAlerts}
+        </div>
+      ` : `
+        <div style="margin-top:1.5rem;page-break-inside:avoid;">
+          <h3 style="background:#dc3545;color:white;padding:10px;border-radius:8px;margin:0;">
+            🔴 Repetition Alerts (${repetitions.length})
+          </h3>
+          ${repetitionAlerts}
+        </div>
+      `;
+    }
+    
+    // Pattern alerts
+    if (patterns.length > 0) {
+      const patternAlerts = patterns.map(p => `
+        <div class="box-warning" style="margin:8px 0;padding:10px;border-radius:6px;">
+          <strong>${p.alert}</strong>
+        </div>
+      `).join('');
+      
+      alertsHtml += lang === 'ar' ? `
+        <div style="margin-top:1rem;page-break-inside:avoid;">
+          <h3 style="background:#ffc107;color:#000;padding:10px;border-radius:8px;margin:0;">
+            🟠 أنماط غير طبيعية (${patterns.length})
+          </h3>
+          ${patternAlerts}
+        </div>
+      ` : `
+        <div style="margin-top:1rem;page-break-inside:avoid;">
+          <h3 style="background:#ffc107;color:#000;padding:10px;border-radius:8px;margin:0;">
+            🟠 Unusual Patterns (${patterns.length})
+          </h3>
+          ${patternAlerts}
+        </div>
+      `;
+    }
+    
+    // Referral alerts
+    if (referralAlerts.length > 0) {
+      const referralItems = referralAlerts.map(r => `
+        <div class="box-info" style="margin:8px 0;padding:10px;border-radius:6px;">
+          <strong>${r.alert}</strong>
+          <br><small>📌 ${lang === 'ar' ? 'التوصية' : 'Recommendation'}: ${r.recommendation}</small>
+        </div>
+      `).join('');
+      
+      alertsHtml += lang === 'ar' ? `
+        <div style="margin-top:1rem;page-break-inside:avoid;">
+          <h3 style="background:#0d6efd;color:white;padding:10px;border-radius:8px;margin:0;">
+            👁️ تنبيهات التحويل الطبي (${referralAlerts.length})
+          </h3>
+          <p style="background:#cce5ff;padding:10px;margin:0;font-size:12px;">
+            هذه الحالات تحتاج تحويل لأخصائي وفقاً للإرشادات السريرية المعتمدة (ADA, ESC, WHO).
+          </p>
+          ${referralItems}
+        </div>
+      ` : `
+        <div style="margin-top:1rem;page-break-inside:avoid;">
+          <h3 style="background:#0d6efd;color:white;padding:10px;border-radius:8px;margin:0;">
+            👁️ Specialist Referral Alerts (${referralAlerts.length})
+          </h3>
+          ${referralItems}
+        </div>
+      `;
+    }
+    
+    return alertsHtml;
+  };
+  
+  const alertsSection = buildAlertsSection(language);
+  
   const reportFooter = language === 'ar'
-    ? `${summaryTable}<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ تم تحليل ${caseResults.length} حالة من أصل ${totalCases} حالة</strong></div></div>`
-    : `${summaryTable}<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ Analyzed ${caseResults.length} of ${totalCases} cases</strong></div></div>`;
+    ? `${alertsSection}${summaryTable}<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ تم تحليل ${caseResults.length} حالة من أصل ${totalCases} حالة</strong></div></div>`
+    : `${alertsSection}${summaryTable}<div class="box-good" style="margin-top:2rem;text-align:center"><strong>✅ Analyzed ${caseResults.length} of ${totalCases} cases</strong></div></div>`;
   
   const fullReport = reportHeader + caseResults.join('<hr style="border:1px solid #ddd;margin:1rem 0">') + reportFooter;
   
