@@ -1198,6 +1198,111 @@
     .task-btn.deliver { background: var(--success); color: white; }
     .task-btn:hover { opacity: 0.9; transform: scale(1.05); }
     
+    /* Success Load Modal */
+    .success-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 1rem;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .success-modal-content {
+      background: linear-gradient(145deg, #1a3a5c, #0f2744);
+      border-radius: 24px;
+      padding: 2.5rem;
+      max-width: 420px;
+      width: 100%;
+      border: 3px solid var(--success);
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(16, 185, 129, 0.3);
+      animation: slideUp 0.4s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(30px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .success-modal .success-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      animation: bounce 0.6s ease;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    .success-modal h2 {
+      color: var(--success);
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+    }
+    .success-modal .file-info {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--success);
+      border-radius: 12px;
+      padding: 1rem;
+      margin: 1.5rem 0;
+    }
+    .success-modal .file-info .file-name {
+      color: var(--gold);
+      font-weight: bold;
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      word-break: break-all;
+    }
+    .success-modal .file-info .file-stats {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      color: var(--text);
+    }
+    .success-modal .file-info .stat {
+      display: flex;
+      flex-direction: column;
+    }
+    .success-modal .file-info .stat-value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--success);
+    }
+    .success-modal .file-info .stat-label {
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+    .success-modal .analyze-btn {
+      background: linear-gradient(135deg, var(--success), #059669);
+      color: white;
+      border: none;
+      padding: 1.2rem 3rem;
+      font-size: 1.3rem;
+      font-weight: bold;
+      border-radius: 16px;
+      cursor: pointer;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      transition: all 0.3s;
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+      animation: pulseGreen 2s infinite;
+    }
+    @keyframes pulseGreen {
+      0%, 100% { box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4); }
+      50% { box-shadow: 0 8px 40px rgba(16, 185, 129, 0.7); }
+    }
+    .success-modal .analyze-btn:hover {
+      transform: scale(1.03);
+      box-shadow: 0 10px 35px rgba(16, 185, 129, 0.6);
+    }
+    
     /* Signature Modal */
     .signature-modal {
       position: fixed;
@@ -2063,6 +2168,31 @@
       </div>
     </div>
   </main>
+  
+  <!-- Success Load Modal -->
+  <div class="success-modal hidden" id="successLoadModal">
+    <div class="success-modal-content">
+      <div class="success-icon">✅</div>
+      <h2>تم تحميل الملف بنجاح!</h2>
+      <div class="file-info">
+        <div class="file-name" id="loadedFileName"></div>
+        <div class="file-stats">
+          <div class="stat">
+            <span class="stat-value" id="loadedRowCount"></span>
+            <span class="stat-label">صف</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="loadedSheetCount"></span>
+            <span class="stat-label">شيت</span>
+          </div>
+        </div>
+      </div>
+      <button class="analyze-btn" onclick="startAnalysisFromModal()">
+        <i class="fas fa-microscope"></i>
+        ابدأ التحليل الآن
+      </button>
+    </div>
+  </div>
   
   <!-- Signature Modal -->
   <div class="signature-modal hidden" id="signatureModal">
@@ -4052,12 +4182,24 @@ async function startAnalysis(taskIndex) {
       await updateTaskStatus(task.id, 'analyzing');
       
       console.log('Loaded file:', task.fileName, 'Total rows:', totalRows, 'Sheets:', workbook.SheetNames.length);
-      alert('تم تحميل الملف (' + totalRows + ' صف من ' + workbook.SheetNames.length + ' شيت). اضغط "مراجعة الحالة" لبدء التحليل.');
+      showLoadSuccessModal(task.fileName, totalRows, workbook.SheetNames.length);
     }
   } catch(e) {
     console.error('Error loading task file:', e);
     alert('خطأ في تحميل الملف');
   }
+}
+
+function showLoadSuccessModal(fileName, rowCount, sheetCount) {
+  document.getElementById('loadedFileName').textContent = fileName;
+  document.getElementById('loadedRowCount').textContent = rowCount;
+  document.getElementById('loadedSheetCount').textContent = sheetCount;
+  document.getElementById('successLoadModal').classList.remove('hidden');
+}
+
+function startAnalysisFromModal() {
+  document.getElementById('successLoadModal').classList.add('hidden');
+  analyzeCase();
 }
 
 async function updateTaskStatus(taskId, status) {
