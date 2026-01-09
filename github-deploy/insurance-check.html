@@ -2520,23 +2520,63 @@ function extractAndApplyAIRatings(html) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
     
-    const ratingsDiv = tempDiv.querySelector('#ai-ratings');
-    if (ratingsDiv) {
-      const insuranceSpan = ratingsDiv.querySelector('[data-insurance-rating]');
-      const serviceSpan = ratingsDiv.querySelector('[data-service-rating]');
+    // Extract scores from NEW format (data-insurance-score, data-medical-score)
+    const caseSections = tempDiv.querySelectorAll('[data-insurance-score], [data-medical-score]');
+    
+    if (caseSections.length > 0) {
+      let totalInsurance = 0, totalMedical = 0, count = 0;
       
-      if (insuranceSpan) {
-        insuranceRatingValue = parseInt(insuranceSpan.getAttribute('data-insurance-rating')) || 0;
+      caseSections.forEach(section => {
+        const ins = parseInt(section.getAttribute('data-insurance-score')) || 0;
+        const med = parseInt(section.getAttribute('data-medical-score')) || 0;
+        if (ins > 0 || med > 0) {
+          totalInsurance += ins;
+          totalMedical += med;
+          count++;
+        }
+      });
+      
+      if (count > 0) {
+        insuranceRatingValue = Math.round(totalInsurance / count);
+        serviceRatingValue = Math.round(totalMedical / count);
       }
-      if (serviceSpan) {
-        serviceRatingValue = parseInt(serviceSpan.getAttribute('data-service-rating')) || 0;
-      }
-    } else {
-      const insuranceMatch = html.match(/data-insurance-rating="(\d+)"/);
-      const serviceMatch = html.match(/data-service-rating="(\d+)"/);
-      if (insuranceMatch) insuranceRatingValue = parseInt(insuranceMatch[1]) || 0;
-      if (serviceMatch) serviceRatingValue = parseInt(serviceMatch[1]) || 0;
     }
+    
+    // Fallback: try regex for both old and new formats
+    if (insuranceRatingValue === 0 && serviceRatingValue === 0) {
+      // New format
+      const insuranceScoreMatch = html.match(/data-insurance-score="(\d+)"/g);
+      const medicalScoreMatch = html.match(/data-medical-score="(\d+)"/g);
+      
+      if (insuranceScoreMatch && insuranceScoreMatch.length > 0) {
+        let sum = 0;
+        insuranceScoreMatch.forEach(m => {
+          const val = m.match(/\d+/);
+          if (val) sum += parseInt(val[0]);
+        });
+        insuranceRatingValue = Math.round(sum / insuranceScoreMatch.length);
+      }
+      
+      if (medicalScoreMatch && medicalScoreMatch.length > 0) {
+        let sum = 0;
+        medicalScoreMatch.forEach(m => {
+          const val = m.match(/\d+/);
+          if (val) sum += parseInt(val[0]);
+        });
+        serviceRatingValue = Math.round(sum / medicalScoreMatch.length);
+      }
+      
+      // Old format fallback
+      if (insuranceRatingValue === 0) {
+        const oldInsMatch = html.match(/data-insurance-rating="(\d+)"/);
+        if (oldInsMatch) insuranceRatingValue = parseInt(oldInsMatch[1]) || 0;
+      }
+      if (serviceRatingValue === 0) {
+        const oldSvcMatch = html.match(/data-service-rating="(\d+)"/);
+        if (oldSvcMatch) serviceRatingValue = parseInt(oldSvcMatch[1]) || 0;
+      }
+    }
+    
     console.log('AI Ratings extracted:', { insurance: insuranceRatingValue, service: serviceRatingValue });
   } catch(e) {
     console.error('Error extracting AI ratings:', e);
