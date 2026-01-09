@@ -2662,7 +2662,11 @@ async function handleFiles(files) {
         workbook.SheetNames.forEach(sheetName => {
           const sheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-          allData.push({ sheet: sheetName, data: jsonData });
+          // Clean cells: remove newlines from cell values (especially headers)
+          const cleanedData = jsonData.map(row => 
+            row.map(cell => typeof cell === 'string' ? cell.replace(/[\r\n]+/g, ' ').trim() : cell)
+          );
+          allData.push({ sheet: sheetName, data: cleanedData });
         });
         
         const processedData = processExcelWithSmartMapping(allData);
@@ -3659,8 +3663,12 @@ async function startAnalysis(taskIndex) {
       workbook.SheetNames.forEach(sheetName => {
         const sheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-        allData.push({ sheet: sheetName, data: jsonData });
-        totalRows += jsonData.length;
+        // Clean cells: remove newlines from cell values
+        const cleanedData = jsonData.map(row => 
+          row.map(cell => typeof cell === 'string' ? cell.replace(/[\r\n]+/g, ' ').trim() : cell)
+        );
+        allData.push({ sheet: sheetName, data: cleanedData });
+        totalRows += cleanedData.length;
       });
       
       // Format exactly like handleFiles uses ' | ' as separator
