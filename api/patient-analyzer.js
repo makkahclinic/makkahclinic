@@ -1,7 +1,7 @@
 // /api/patient-analyzer.js
 import XLSX from 'xlsx';
 import { detectDuplicates, formatDuplicatesForPrompt, formatDuplicatesForReport } from './claim-history.js';
-import { detectMissingRequiredTests, generateMissingTestsSection, generateMissingTestsHTML } from './required-tests.js';
+import { detectMissingRequiredTests, generateMissingTestsSection, generateMissingTestsHTML, getDemographicRecommendations, generateDemographicRecommendationsHTML, calculateBMI, getBMICategory } from './required-tests.js';
 import { calculateKPIs, generateKPIDashboardHTML, extractStatsFromReport, extractStatsFromCases } from './kpi-dashboard.js';
 
 // Robust date parser - handles Excel serials, dd/MM/yyyy, yyyy-MM-dd, and other formats
@@ -111,10 +111,14 @@ function parseTextContent(textContent) {
     const tempIdx = headers.findIndex(h => h.includes('temp'));
     const bpIdx = headers.findIndex(h => h.includes('pressure') || h.includes('bp'));
     const pulseIdx = headers.findIndex(h => h.includes('pulse'));
-    const weightIdx = headers.findIndex(h => h.includes('weight'));
-    const heightIdx = headers.findIndex(h => h.includes('height'));
+    const weightIdx = headers.findIndex(h => h.includes('weight') || h.includes('وزن'));
+    const heightIdx = headers.findIndex(h => h.includes('height') || h.includes('طول'));
     
-    console.log('[parseTextContent] Column indices:', { claimIdx, patientIdx, serviceDescIdx, serviceDateIdx, tempIdx });
+    // Demographics - العمر والجنس
+    const ageIdx = headers.findIndex(h => h.includes('age') || h.includes('عمر') || h.includes('سن'));
+    const genderIdx = headers.findIndex(h => h.includes('gender') || h.includes('sex') || h.includes('جنس'));
+    
+    console.log('[parseTextContent] Column indices:', { claimIdx, patientIdx, serviceDescIdx, serviceDateIdx, ageIdx, genderIdx });
     
     if (claimIdx < 0 && serviceDescIdx < 0) {
       console.log('[parseTextContent] Could not find key columns, returning null');
@@ -149,12 +153,33 @@ function parseTextContent(textContent) {
         // Extract service date using robust parser
         const serviceDate = serviceDateIdx >= 0 ? parseServiceDate(cells[serviceDateIdx]) : null;
         
+        // Extract age
+        let patientAge = null;
+        if (ageIdx >= 0 && cells[ageIdx]) {
+          const ageVal = String(cells[ageIdx]).trim();
+          const numMatch = ageVal.match(/\d+/);
+          if (numMatch) patientAge = parseInt(numMatch[0]);
+        }
+        
+        // Extract gender
+        let patientGender = null;
+        if (genderIdx >= 0 && cells[genderIdx]) {
+          const genderVal = String(cells[genderIdx]).toLowerCase().trim();
+          if (genderVal.includes('male') || genderVal.includes('ذكر') || genderVal === 'm') {
+            patientGender = 'male';
+          } else if (genderVal.includes('female') || genderVal.includes('أنثى') || genderVal.includes('انثى') || genderVal === 'f') {
+            patientGender = 'female';
+          }
+        }
+        
         caseMap.set(claimId, {
           claimId,
           patientId: patientIdx >= 0 ? cells[patientIdx] : '',
           diagnosis: diagText,
           icdCode: icdCodes, // Add ICD codes for required tests detection
           serviceDate: serviceDate,
+          age: patientAge,
+          gender: patientGender,
           vitals: {
             temperature: tempIdx >= 0 ? cells[tempIdx] : '',
             bloodPressure: bpIdx >= 0 ? cells[bpIdx] : '',
@@ -273,6 +298,10 @@ function parseExcelCases(base64Data) {
       const weightIdx = headers.findIndex(h => h.includes('weight') || h.includes('وزن'));
       const heightIdx = headers.findIndex(h => h.includes('height') || h.includes('طول'));
       
+      // Demographics - العمر والجنس
+      const ageIdx = headers.findIndex(h => h.includes('age') || h.includes('عمر') || h.includes('سن'));
+      const genderIdx = headers.findIndex(h => h.includes('gender') || h.includes('sex') || h.includes('جنس'));
+      
       // Service description column - THIS IS THE KEY! Contains medications AND procedures
       const serviceDescIdx = headers.findIndex(h => 
         (h.includes('service') && h.includes('desc')) || 
@@ -325,12 +354,33 @@ function parseExcelCases(base64Data) {
           // Extract service date using robust parser
           const serviceDate = serviceDateIdx >= 0 ? parseServiceDate(row[serviceDateIdx]) : null;
           
+          // Extract age - handle various formats
+          let patientAge = null;
+          if (ageIdx >= 0 && row[ageIdx]) {
+            const ageVal = String(row[ageIdx]).trim();
+            const numMatch = ageVal.match(/\d+/);
+            if (numMatch) patientAge = parseInt(numMatch[0]);
+          }
+          
+          // Extract gender
+          let patientGender = null;
+          if (genderIdx >= 0 && row[genderIdx]) {
+            const genderVal = String(row[genderIdx]).toLowerCase().trim();
+            if (genderVal.includes('male') || genderVal.includes('ذكر') || genderVal === 'm') {
+              patientGender = 'male';
+            } else if (genderVal.includes('female') || genderVal.includes('أنثى') || genderVal.includes('انثى') || genderVal === 'f') {
+              patientGender = 'female';
+            }
+          }
+          
           caseMap.set(claimId, {
             claimId,
             patientId: patientIdx >= 0 ? row[patientIdx] : '',
             diagnosis: diagText,
             icdCode: icdCodes, // Add ICD codes for required tests detection
             serviceDate: serviceDate,
+            age: patientAge,
+            gender: patientGender,
             vitals: {
               temperature: tempIdx >= 0 ? row[tempIdx] : '',
               bloodPressure: bpIdx >= 0 ? row[bpIdx] : '',
@@ -1248,16 +1298,38 @@ Return HTML only, no markdown or code blocks.
       if (text) {
         // كشف الفحوصات الناقصة من حق المريض
         const missingTests = detectMissingRequiredTests(caseData);
+        let additionalHTML = '';
+        
         if (missingTests && missingTests.length > 0) {
-          const missingTestsHTML = generateMissingTestsHTML(missingTests, language);
-          // إضافة الفحوصات الناقصة قبل نهاية div الحالة
+          additionalHTML += generateMissingTestsHTML(missingTests, language);
+          console.log(`Case ${caseNumber}: Found ${missingTests.length} missing required tests`);
+        }
+        
+        // التوصيات الديموغرافية المخصصة (حسب العمر والجنس والوزن والطول)
+        const patientDemoData = {
+          age: caseData.age || caseData.vitals?.age,
+          gender: caseData.gender || caseData.vitals?.gender,
+          weight: parseFloat(caseData.vitals?.weight) || null,
+          height: parseFloat(caseData.vitals?.height) || null
+        };
+        
+        // فقط إذا كان هناك بيانات ديموغرافية متاحة
+        if (patientDemoData.age || patientDemoData.gender || (patientDemoData.weight && patientDemoData.height)) {
+          const demographicHTML = generateDemographicRecommendationsHTML(patientDemoData);
+          if (demographicHTML) {
+            additionalHTML += demographicHTML;
+            console.log(`Case ${caseNumber}: Generated demographic recommendations`);
+          }
+        }
+        
+        // إضافة HTML الإضافي قبل نهاية div الحالة
+        if (additionalHTML) {
           const closeDivIdx = text.lastIndexOf('</div>');
           if (closeDivIdx > 0) {
-            text = text.substring(0, closeDivIdx) + missingTestsHTML + text.substring(closeDivIdx);
+            text = text.substring(0, closeDivIdx) + additionalHTML + text.substring(closeDivIdx);
           } else {
-            text += missingTestsHTML;
+            text += additionalHTML;
           }
-          console.log(`Case ${caseNumber}: Found ${missingTests.length} missing required tests`);
         }
         caseResults.push(text);
         console.log(`Case ${caseNumber} processed successfully`);
