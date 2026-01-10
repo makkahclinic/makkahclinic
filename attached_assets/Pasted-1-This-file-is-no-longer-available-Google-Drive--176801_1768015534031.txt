@@ -1,0 +1,188 @@
+1) سبب رسالة This file is no longer available (في Google Drive) وكيف تحلّها بسرعة
+
+هذه الرسالة غالبًا تعني أحد الأشياء التالية:
+
+الملف تم حذفه أو نقله إلى سلة المهملات.
+
+المالك حذف الملف نهائيًا أو انتهت فترة بقائه في “المهملات”.
+
+صلاحية الوصول تغيّرت (تمت إزالة مشاركتك أو فتحت الرابط بحساب Google مختلف).
+
+خطوات الحل (بالترتيب):
+
+افتح Google Drive بنفس الحساب الذي شارك الملف معك.
+
+ادخل إلى سلة المهملات (Trash) وابحث عن الملف ثم Restore.
+
+ملفات Google Drive تبقى في “سلة المهملات” عادةً لمدة محدودة قبل الحذف النهائي (مثل 30 يومًا) بحسب سياسة Google Drive.
+
+إذا لم تجده في المهملات: غالبًا تم حذفه نهائيًا أو لم يعد لديك صلاحية → اطلب من مالك الملف إعادة رفعه أو إعادة مشاركته معك.
+
+بما أنك أرسلت لقطة فيها هذا التحذير، فالمشكلة ليست “كود” بقدر ما هي ملف/صلاحية على Drive.
+
+2) إصلاحات ضرورية في كودك (مباشرة من كودك) لأنها تسبب أعطال/سلوك غير متوقع
+(أ) إصلاح خطير جدًا: تحويل Excel إلى Base64 بالطريقة الحالية ممكن ينهار مع الملفات الكبيرة
+
+في كودك عند Excel لديك:
+
+const base64Excel = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+
+هذه قد تسبب RangeError / Maximum call stack size إذا كان الملف كبيرًا.
+
+استبدلها بهذه الدالة (آمنة):
+
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000; // 32KB
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+// ...
+const base64Excel = arrayBufferToBase64(arrayBuffer);
+
+(ب) إصلاح showLoadSuccessModal لأنها تشير لعناصر غير موجودة عندك
+
+عندك داخل showLoadSuccessModal:
+
+تستخدم .tab-btn و data-tab="analysis"
+بينما واجهتك تعتمد على .header-tab و switchTab('analysis').
+
+بدّل الدالة كاملة بهذا:
+
+function showLoadSuccessModal(fileName, rowCount, sheetCount) {
+  switchTab('analysis');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showCustomAlert(`تم تحميل الملف: ${fileName}\n${rowCount} صف - ${sheetCount} ورقة`, 'success');
+}
+
+(ج) أهم نقطة لو بتحوّل Gemini → ChatGPT: لا ترسل الـ XLSX Base64 للموديل… أرسل النص (textContent)
+
+أنت بالفعل تحوّل Excel إلى نص داخل:
+
+textContent: processedData.textContent,
+
+
+لكن عند الإرسال للـ API تعمل:
+
+base64: f.data || f.textContent || ''
+
+
+وهذا يجعل الـ Excel يُرسل أحيانًا كـ Base64 خام (غير مفيد للموديل بدون فكّه/رفع ملف).
+
+عدّل تجهيز payload هكذا (Excel/Manual = نص):
+
+const filesForAnalysis = filesToSend.map(f => ({
+  name: f.name,
+  base64: f.isExcel ? (f.textContent || f.data || '') : (f.data || ''),
+  type: f.isExcel ? 'text/plain' : (f.mimeType || 'application/octet-stream')
+}));
+
+(د) حماية من انهيار الصفحة إذا عنصر غير موجود (Defensive DOM)
+
+عندك ربط Drag/Drop مباشر على dropZone بدون تحقق. خليها بهذا الشكل:
+
+if (dropZone && fileInput) {
+  ['dragenter','dragover','dragleave','drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
+  });
+  dropZone.addEventListener('dragenter', () => dropZone.classList.add('drag'));
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => {
+    dropZone.classList.remove('drag');
+    handleFiles(Array.from(e.dataTransfer.files));
+  });
+  fileInput.addEventListener('change', () => handleFiles(Array.from(fileInput.files)));
+}
+
+3) تحويل التحليل من Gemini إلى ChatGPT (OpenAI API) بالطريقة الصحيحة
+الفكرة الصحيحة (باختصار)
+
+لا تضع مفتاح OpenAI داخل HTML.
+
+خلي التحليل يتم عبر Backend (Node/Express مثلًا) وتستدعي OpenAI Responses API.
+
+أنت بالفعل ترسل صور كـ data:image/...base64 — OpenAI يدعم إرسال الصور بهذه الطريقة ضمن محتوى الطلب.
+
+وتستلم النص النهائي من response.output_text.
+
+مثال Backend جاهز (Node.js) يدعم نص + صور ويُرجع htmlReport
+
+استخدم نفس شكل الـ payload الذي عندك (files, doctorName, uiLang)، ثم في السيرفر:
+
+لو الملف صورة → input_image مع image_url (يدعم data URL base64).
+
+لو الملف نص → input_text.
+
+كود سيرفر جاهز للتشغيل (مرفق لك كملف أيضًا):
+
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import OpenAI from 'openai';
+
+const app = express();
+app.use(cors({ origin: true, methods: ['POST'] }));
+app.use(express.json({ limit: '50mb' }));
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+function buildPrompt({ uiLang = 'ar', doctorName = '' } = {}) {
+  return uiLang === 'en'
+    ? `Return ONLY an HTML fragment in English... Doctor: ${doctorName}`
+    : `أعد فقط تقرير HTML عربي بدون <script>... اسم الطبيب: ${doctorName}`;
+}
+
+function normalizeToDataUrl(mime, base64OrDataUrl) {
+  if (!base64OrDataUrl) return '';
+  if (base64OrDataUrl.startsWith('data:')) return base64OrDataUrl;
+  return `data:${mime || 'image/jpeg'};base64,${base64OrDataUrl}`;
+}
+
+app.post('/api/patient-analyzer', async (req, res) => {
+  try {
+    const { files = [], uiLang = 'ar', doctorName = '' } = req.body || {};
+
+    const content = [
+      { type: 'input_text', text: buildPrompt({ uiLang, doctorName }) }
+    ];
+
+    for (const f of files) {
+      const name = f.name || 'file';
+      const type = (f.type || 'text/plain').toLowerCase();
+      const payload = typeof f.base64 === 'string' ? f.base64 : '';
+      if (!payload.trim()) continue;
+
+      if (type.startsWith('image/') || payload.startsWith('data:image/')) {
+        content.push({
+          type: 'input_image',
+          image_url: normalizeToDataUrl(type, payload),
+        });
+      } else {
+        content.push({ type: 'input_text', text: `\n\n### ${name}\n${payload}` });
+      }
+    }
+
+    const response = await client.responses.create({
+      model: 'gpt-4.1-mini',
+      input: [{ role: 'user', content }],
+    });
+
+    res.json({ success: true, htmlReport: response.output_text || '' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err?.message || 'Server error' });
+  }
+});
+
+app.listen(process.env.PORT || 3000);
+
+
+ملاحظة مصدرية: صيغة responses.create + عناصر input_text و input_image وطريقة تمرير base64 Data URL موثقة في دليل OpenAI.
+
+4) نقطة أمنية مهمة جدًا: “checkPermission” في الواجهة لوحده لا يكفي
+
+حتى لو تحققت من الصلاحيات في JavaScript، لازم قواعد Firestore Security Rules تمنع القراءة/الكتابة لغير المصرح لهم (لأن أي شخص يقدر يفتح DevTools ويعدل الكود عنده). وثائق Firebase توضّح أن التحكم الحقيقي يكون عبر Security Rules.
