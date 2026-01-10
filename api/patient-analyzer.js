@@ -644,6 +644,13 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
   const fullClinicalRef = `
 ### 📚 مراجع الإرشادات السريرية المعتمدة:
 
+⚠️ **تنبيه مهم حول رموز المقارنة:**
+- ≥ تعني "أكبر من أو يساوي" (greater than or equal) - مثال: حمى ≥38°C تعني الحرارة 38 فأكثر
+- > تعني "أكبر من" (greater than) - مثال: حرارة >38°C تعني الحرارة أعلى من 38
+- < تعني "أصغر من" (less than) - مثال: حرارة <37.5°C تعني الحرارة أقل من 37.5
+- ≤ تعني "أصغر من أو يساوي" (less than or equal) - مثال: ≤37°C تعني 37 فأقل
+- 🔴 لا تخلط بين ≥ و ≤ - هذا خطأ شائع!
+
 **السوائل الوريدية (IV Fluids) - WHO 2023 (نظام المبررات الإلزامي):**
 
 ⚠️ **لا تُقبل السوائل الوريدية إلا باختيار سبب من القائمة:**
@@ -2162,13 +2169,15 @@ ${indicationsRef}
   <h3 style="color:#c9a962;margin:1.5rem 0 1rem">📚 المراجع العلمية المستخدمة</h3>
   <div style="background:rgba(255,255,255,0.05);padding:1rem;border-radius:8px;font-size:0.9rem">
     <ol style="margin:0;padding-right:1.5rem;line-height:1.8">
-      <li><strong>WHO</strong> - Fluid Resuscitation Guidelines (2023) - معايير السوائل الوريدية</li>
-      <li><strong>CDC IDSA</strong> - Antibiotic Stewardship Guidelines - ترشيد المضادات الحيوية</li>
-      <li><strong>WHO Essential Medicines</strong> - استخدام خافضات الحرارة</li>
-      <li><strong>ACG Guidelines</strong> - American College of Gastroenterology - مثبطات مضخة البروتون</li>
+      <li><strong>CDC Adult Outpatient</strong> - Antibiotic Prescribing (Acute Bronchitis) - ترشيد المضادات للشعب الهوائية</li>
+      <li><strong>CDC Group A Strep</strong> - Pharyngitis Testing & Treatment - فحص وعلاج التهاب الحلق العقدي</li>
+      <li><strong>WHO Diarrhoeal Disease</strong> - ORS and IV Fluids - معايير الجفاف والسوائل</li>
+      <li><strong>EMA Domperidone</strong> - Restricted Indication Referral - تقييد دواعي الاستعمال</li>
+      <li><strong>AHA/ACC 2021</strong> - Chest Pain Guideline - إرشادات آلام الصدر</li>
+      <li><strong>USPSTF</strong> - Screening for Prediabetes & Type 2 Diabetes - فحص ما قبل السكري</li>
+      <li><strong>Paracetamol IV SmPC</strong> - Medicines UK - خصائص الباراسيتامول الوريدي</li>
       <li><strong>CCHI/NPHIES</strong> - سياسات التأمين الصحي السعودية</li>
-      <li><strong>ESC Guidelines</strong> - European Society of Cardiology - أمراض القلب والأوعية</li>
-      <li><strong>ADA Standards</strong> - American Diabetes Association - معايير السكري</li>
+      <li><strong>ADA Standards 2024</strong> - American Diabetes Association - معايير السكري</li>
     </ol>
   </div>
 
