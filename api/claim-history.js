@@ -71,6 +71,207 @@ function daysBetween(date1, date2) {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
+// ============================================
+// مبررات جاهزة للنسخ حسب نوع الإجراء/الدواء
+// ============================================
+const PROCEDURE_JUSTIFICATIONS = {
+  // تحاليل البراز
+  'stool': {
+    suggestions: [
+      'استمرار الأعراض الهضمية (إسهال/مغص) رغم العلاج الأولي',
+      'الاشتباه بعدوى طفيلية لم تُكتشف بالعينة السابقة (Giardia/Entamoeba)',
+      'متابعة الاستجابة العلاجية والتأكد من القضاء على العامل المسبب (Test of Cure)',
+      'عدم توافق النتيجة السابقة مع الصورة السريرية الحالية',
+      'الاشتباه في نزيف أو التهاب معوي نشط',
+      'سوء جودة/كفاية العينة السابقة مما أثر على دقة النتائج',
+      'مريض عالي الخطورة (ضعف مناعة/كبار السن) يستدعي إعادة التقييم'
+    ],
+    references: 'CDC Stool Testing Guidelines, IDSA Infectious Diarrhea Guidelines'
+  },
+  // تحليل الدم الشامل
+  'cbc': {
+    suggestions: [
+      'متابعة استجابة العلاج (ارتفاع/انخفاض WBC أو Hgb)',
+      'تدهور الحالة السريرية يستدعي إعادة التقييم',
+      'الاشتباه في نزيف نشط أو فقر دم جديد',
+      'مراقبة تأثير الأدوية على مكونات الدم',
+      'حمى مستمرة أو عدوى غير مستجيبة للعلاج',
+      'تقييم ما قبل الإجراء الجراحي العاجل'
+    ],
+    references: 'CLSI Guidelines, ASCP Best Practices'
+  },
+  // وظائف الكلى
+  'renal|kidney|bun|creatinine|kft': {
+    suggestions: [
+      'مراقبة وظائف الكلى أثناء العلاج بأدوية سامة كلوياً (NSAIDs/Aminoglycosides)',
+      'تدهور الحالة أو ظهور أعراض جديدة (تورم/قلة البول)',
+      'مريض سكري/ضغط يحتاج متابعة دورية',
+      'تقييم قبل إعطاء صبغة وريدية (CT Contrast)'
+    ],
+    references: 'KDIGO Guidelines, ADA Diabetes Care Standards'
+  },
+  // وظائف الكبد
+  'liver|lft|alt|ast|bilirubin': {
+    suggestions: [
+      'متابعة استجابة العلاج لالتهاب الكبد',
+      'مراقبة سمية الأدوية الكبدية (Paracetamol/Statins)',
+      'تدهور الأعراض (يرقان/حكة/ألم بطني علوي)',
+      'تقييم قبل بدء علاج جديد يؤثر على الكبد'
+    ],
+    references: 'AASLD Guidelines, ACG Clinical Guidelines'
+  },
+  // فحص البول
+  'urine|urinalysis': {
+    suggestions: [
+      'استمرار أعراض التهاب المسالك (حرقة/تكرار)',
+      'متابعة الاستجابة للمضاد الحيوي',
+      'الاشتباه في عدوى صاعدة (حمى/ألم خاصرة)',
+      'سوء جودة العينة السابقة (تلوث)'
+    ],
+    references: 'IDSA UTI Guidelines, AUA Best Practices'
+  },
+  // أشعة الصدر
+  'xray|chest|cxr': {
+    suggestions: [
+      'تدهور الأعراض التنفسية رغم العلاج',
+      'متابعة استجابة الالتهاب الرئوي للعلاج',
+      'ظهور أعراض جديدة (ضيق تنفس/سعال دموي)',
+      'استبعاد مضاعفات (انصباب جنبي/استرواح صدري)'
+    ],
+    references: 'ACR Appropriateness Criteria, BTS Guidelines'
+  },
+  // الموجات فوق الصوتية
+  'ultrasound|us|sono': {
+    suggestions: [
+      'متابعة حجم/شكل الآفة المكتشفة سابقاً',
+      'تدهور الأعراض يستدعي إعادة التقييم',
+      'تقييم الاستجابة للعلاج',
+      'ظهور أعراض جديدة في نفس المنطقة'
+    ],
+    references: 'ACR Practice Guidelines, AIUM Guidelines'
+  }
+};
+
+const MEDICATION_JUSTIFICATIONS = {
+  // المحاليل الوريدية
+  'saline|ringer|iv fluid|dextrose': {
+    suggestions: [
+      'استمرار علامات الجفاف: ارتداد جلد >2 ثانية، جفاف الأغشية المخاطية',
+      'قيء متكرر (≥3 مرات) لا يتحمل معه الشرب',
+      'انخفاض ضغط الدم الانتصابي',
+      'نقص النتاج البولي (<0.5 mL/kg/hr)'
+    ],
+    references: 'NICE Fluid Therapy Guidelines, WHO Dehydration Assessment'
+  },
+  // الباراسيتامول الوريدي
+  'paracetamol.*infusion|paracetamol.*iv|perfalgan': {
+    suggestions: [
+      'ألم شديد VAS ≥7/10 لا يستجيب للفموي',
+      'قيء متكرر لا يتحمل الأدوية الفموية',
+      'حمى ≥39°C مع تدهور الحالة العامة',
+      'مريض ما بعد العمليات يحتاج تسكين سريع'
+    ],
+    references: 'WHO Pain Ladder, ERAS Guidelines'
+  },
+  // المضادات الحيوية
+  'antibiotic|amoxicillin|azithromycin|augmentin|cephalosporin|ciprofloxacin': {
+    suggestions: [
+      'عدم استجابة للمضاد السابق بعد 48-72 ساعة',
+      'تغيير المضاد بناءً على نتيجة المزرعة والحساسية',
+      'تدهور الحالة السريرية يستدعي تصعيد العلاج',
+      'ظهور عدوى جديدة مختلفة عن السابقة'
+    ],
+    references: 'IDSA Guidelines, CDC Antibiotic Stewardship'
+  },
+  // مضادات القيء
+  'ondansetron|zofran|metoclopramide|domperidone|dompy': {
+    suggestions: [
+      'قيء متكرر ≥2 مرات خلال 24 ساعة',
+      'غثيان مستمر يؤثر على تناول الطعام/الأدوية',
+      'قيء ما بعد العمليات أو العلاج الكيميائي'
+    ],
+    references: 'ASCO Antiemetic Guidelines, ASA Postoperative Nausea Guidelines'
+  },
+  // مضادات الحموضة
+  'omeprazole|pantoprazole|esomeprazole|esopole|lansoprazole|ppi': {
+    suggestions: [
+      'استمرار أعراض الارتجاع رغم العلاج',
+      'وقاية من قرحة الإجهاد في المريض الحرج',
+      'تناول مضادات التهاب غير ستيرويدية طويلة المدى',
+      'تحضير لمنظار الجهاز الهضمي'
+    ],
+    references: 'ACG GERD Guidelines, AGA PPI Best Practices'
+  },
+  // مضادات الهيستامين
+  'antihistamine|loratadine|cetirizine|chlorpheniramine|diphenhydramine': {
+    suggestions: [
+      'أعراض حساسية موثقة: حكة، شرى، رشح أنفي، عطاس',
+      'تفاعل تحسسي حاد يستدعي علاج فوري',
+      'حساسية موسمية مع أعراض نشطة'
+    ],
+    references: 'ARIA Guidelines, AAAAI Practice Parameters'
+  }
+};
+
+function getSpecificJustifications(serviceName, serviceType) {
+  const name = (serviceName || '').toLowerCase();
+  const mappings = serviceType === 'medication' ? MEDICATION_JUSTIFICATIONS : PROCEDURE_JUSTIFICATIONS;
+  
+  for (const [pattern, data] of Object.entries(mappings)) {
+    const regex = new RegExp(pattern, 'i');
+    if (regex.test(name)) {
+      return data;
+    }
+  }
+  
+  // مبررات عامة إذا لم يوجد تطابق محدد
+  if (serviceType === 'medication') {
+    return {
+      suggestions: [
+        'المريض فقد الدواء السابق ويحتاج بديل',
+        'تغيير الجرعة بسبب عدم الاستجابة للجرعة السابقة',
+        'انتهاء الكمية المصروفة مبكراً بسبب زيادة الجرعة العلاجية'
+      ],
+      references: 'Hospital Pharmacy Guidelines'
+    };
+  }
+  
+  return {
+    suggestions: [
+      'نتيجة الفحص السابق غير حاسمة وتتطلب إعادة التقييم',
+      'تطور الحالة السريرية يستدعي إعادة الفحص',
+      'متابعة الاستجابة العلاجية'
+    ],
+    references: 'Clinical Practice Guidelines'
+  };
+}
+
+function formatCopyPasteText(serviceName, serviceType) {
+  const justifications = getSpecificJustifications(serviceName, serviceType);
+  const header = serviceType === 'medication' ? 'سبب إعادة الصرف' : 'سبب إعادة الإجراء';
+  
+  // إرجاع أول 3 مبررات كنص جاهز للنسخ
+  const options = justifications.suggestions.slice(0, 3).map((s, i) => `${i + 1}. ${s}`).join('\n');
+  return `📋 ${header} (اختر أحد المبررات التالية):\n${options}`;
+}
+
+function formatDoctorInstruction(serviceName, serviceType, daysDiff, priorDate) {
+  const justifications = getSpecificJustifications(serviceName, serviceType);
+  const priorDateStr = new Date(priorDate).toLocaleDateString('ar-SA');
+  const typeAr = serviceType === 'medication' ? 'الدواء' : 'الإجراء';
+  
+  let instruction = `🔴 هذا ${typeAr} تم للمريض بتاريخ ${priorDateStr} (قبل ${daysDiff} يوم). التأمين سيرفض تلقائياً.\n\n`;
+  instruction += `📋 للموافقة، يجب كتابة أحد المبررات التالية في الملف:\n`;
+  
+  justifications.suggestions.forEach((s, i) => {
+    instruction += `   ${i + 1}. "${s}"\n`;
+  });
+  
+  instruction += `\n📚 المرجع: ${justifications.references}`;
+  
+  return instruction;
+}
+
 async function ensureHistorySheet() {
   try {
     const sheets = await getSheetNames();
@@ -189,10 +390,11 @@ export async function detectDuplicates(cases, sourceFileName = '') {
               severity: 'reject',
               reason: `❌ مرفوض تلقائياً: نفس الدواء صُرف قبل ${daysDiff} يوم فقط`,
               priorClaimId: prior.claimId,
-              doctorInstruction: `🔴 هذا الدواء صُرف للمريض بتاريخ ${prior.date.toLocaleDateString('ar-SA')} (قبل ${daysDiff} يوم). التأمين سيرفض تلقائياً.\n\n📋 للموافقة، يجب توثيق أحد الأسباب التالية:\n• "المريض فقد الدواء السابق ويحتاج بديل"\n• "تغيير الجرعة من X إلى Y بسبب عدم الاستجابة"\n• "انتهاء الكمية المصروفة مبكراً بسبب زيادة الجرعة"`,
-              copyPasteText: `سبب إعادة الصرف: __________`
+              doctorInstruction: formatDoctorInstruction(serviceName, 'medication', daysDiff, prior.date),
+              copyPasteText: formatCopyPasteText(serviceName, 'medication')
             });
           } else if (daysDiff <= 60) {
+            const justifications = getSpecificJustifications(serviceName, 'medication');
             caseDuplicates.medications.push({
               medication: serviceName,
               priorDate: prior.date.toISOString().split('T')[0],
@@ -200,8 +402,8 @@ export async function detectDuplicates(cases, sourceFileName = '') {
               severity: 'warning',
               reason: `⚠️ تحذير: نفس الدواء صُرف قبل ${daysDiff} يوم`,
               priorClaimId: prior.claimId,
-              doctorInstruction: `🟡 هذا الدواء صُرف للمريض قبل ${daysDiff} يوم. قد يُطلب توثيق إضافي.\n\n📋 يُنصح بتوثيق:\n• سبب الحاجة لإعادة الصرف\n• الاستجابة للعلاج السابق`,
-              copyPasteText: `الاستجابة للعلاج السابق: __________ | سبب الإعادة: __________`
+              doctorInstruction: `🟡 هذا الدواء صُرف للمريض قبل ${daysDiff} يوم. قد يُطلب توثيق إضافي.\n\n📋 يُنصح بتوثيق أحد الأسباب:\n${justifications.suggestions.slice(0, 2).map((s, i) => `   ${i + 1}. "${s}"`).join('\n')}`,
+              copyPasteText: formatCopyPasteText(serviceName, 'medication')
             });
           } else if (daysDiff <= 90) {
             caseDuplicates.medications.push({
@@ -252,10 +454,11 @@ export async function detectDuplicates(cases, sourceFileName = '') {
               severity: 'reject',
               reason: `❌ مرفوض: نفس الإجراء تم قبل ${daysDiff} يوم`,
               priorClaimId: prior.claimId,
-              doctorInstruction: `🔴 هذا الإجراء تم للمريض بتاريخ ${prior.date.toLocaleDateString('ar-SA')} (قبل ${daysDiff} يوم).\n\n📋 للموافقة، يجب توثيق:\n• "نتيجة الإجراء السابق غير حاسمة ويتطلب إعادة"\n• "تطور الحالة يستدعي إعادة التقييم"`,
-              copyPasteText: `سبب إعادة الإجراء: __________`
+              doctorInstruction: formatDoctorInstruction(serviceName, 'procedure', daysDiff, prior.date),
+              copyPasteText: formatCopyPasteText(serviceName, 'procedure')
             });
           } else if (daysDiff <= 60) {
+            const justifications = getSpecificJustifications(serviceName, 'procedure');
             caseDuplicates.procedures.push({
               procedure: serviceName,
               priorDate: prior.date.toISOString().split('T')[0],
@@ -263,8 +466,8 @@ export async function detectDuplicates(cases, sourceFileName = '') {
               severity: 'warning',
               reason: `⚠️ تحذير: نفس الإجراء تم قبل ${daysDiff} يوم`,
               priorClaimId: prior.claimId,
-              doctorInstruction: `🟡 هذا الإجراء تم قبل ${daysDiff} يوم. قد يُطلب مبرر طبي.`,
-              copyPasteText: `المبرر الطبي: __________`
+              doctorInstruction: `🟡 هذا الإجراء تم قبل ${daysDiff} يوم. قد يُطلب مبرر طبي.\n\n📋 مبررات مقترحة:\n${justifications.suggestions.slice(0, 2).map((s, i) => `   ${i + 1}. "${s}"`).join('\n')}`,
+              copyPasteText: formatCopyPasteText(serviceName, 'procedure')
             });
           }
         }
