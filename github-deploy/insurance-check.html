@@ -3603,12 +3603,32 @@ analyzeBtn.addEventListener('click', async () => {
 
   } catch (err) {
     console.error('Analysis error:', err);
-    // Sanitize error message to prevent XSS
-    const safeErrorMsg = err.message ? err.message.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : 'خطأ غير معروف';
+    // Determine error type and provide helpful message
+    let errorTitle = 'حدث خطأ';
+    let errorMsg = 'خطأ غير معروف';
+    let errorHint = '';
+    
+    if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('CORS'))) {
+      errorTitle = 'خطأ في الاتصال بالخادم';
+      errorMsg = 'لم نتمكن من الاتصال بخادم التحليل';
+      errorHint = '<p style="margin-top:1rem;font-size:0.9rem;">الحلول المقترحة:</p><ul style="text-align:right;margin:0.5rem 1rem;font-size:0.85rem;"><li>تحقق من اتصال الإنترنت</li><li>انتظر دقيقة ثم حاول مرة أخرى</li><li>إذا استمرت المشكلة، تواصل مع الدعم الفني</li></ul>';
+    } else if (err.message && err.message.includes('timeout')) {
+      errorTitle = 'انتهت المهلة';
+      errorMsg = 'استغرق التحليل وقتاً طويلاً';
+      errorHint = '<p style="margin-top:1rem;font-size:0.9rem;">جرب تقليل عدد الحالات أو إعادة المحاولة</p>';
+    } else {
+      // Sanitize error message to prevent XSS
+      errorMsg = err.message ? err.message.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : 'خطأ غير معروف';
+    }
+    
     reportContent.innerHTML = `
       <div style="background:#fee2e2;border:2px solid #ef4444;padding:2rem;border-radius:12px;text-align:center;">
-        <h3 style="color:#dc2626;margin:0 0 1rem;"><i class="fas fa-exclamation-triangle"></i> حدث خطأ</h3>
-        <p style="color:#7f1d1d;">${safeErrorMsg}</p>
+        <h3 style="color:#dc2626;margin:0 0 1rem;"><i class="fas fa-exclamation-triangle"></i> ${errorTitle}</h3>
+        <p style="color:#7f1d1d;">${errorMsg}</p>
+        ${errorHint}
+        <button onclick="analyzePatientData()" style="margin-top:1rem;background:#dc2626;color:white;padding:0.5rem 1.5rem;border:none;border-radius:8px;cursor:pointer;font-family:inherit;">
+          <i class="fas fa-redo"></i> إعادة المحاولة
+        </button>
       </div>
     `;
     reportSection.classList.add('show');
