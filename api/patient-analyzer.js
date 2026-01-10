@@ -142,6 +142,12 @@ function parseTextContent(textContent) {
 // Parse Excel file and extract cases - FIXED for actual Excel structure
 function parseExcelCases(base64Data) {
   try {
+    // Quick check: if it looks like pre-processed text (has pipes and line breaks), skip XLSX parsing
+    if (typeof base64Data === 'string' && (base64Data.includes('|') && base64Data.includes('\n'))) {
+      console.log('[parseExcelCases] Detected pre-processed text format, skipping XLSX parsing');
+      return null; // Let parseTextContent handle it
+    }
+    
     const workbook = XLSX.read(base64Data, { type: 'base64' });
     const cases = [];
     
@@ -459,22 +465,34 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 ### 📚 مراجع الإرشادات السريرية المعتمدة:
 
 **السوائل الوريدية (IV Fluids) - WHO 2023:**
-- تُستخدم فقط عند: الجفاف الشديد (>5%)، عدم تحمل الفم، القيء المستمر، صدمة
-- يجب توثيق: درجة الجفاف، عدم القدرة على الشرب، علامات الصدمة
+- تُستخدم فقط عند: الجفاف المتوسط/الشديد، عدم تحمل الفم، القيء المستمر ≥3 مرات، صدمة
+- علامات الجفاف الشديد (WHO): خمول شديد، عدم القدرة على الشرب، ارتداد الجلد ببطء شديد (>2 ثانية)، عيون غائرة
+- علامات الجفاف المتوسط: عطش شديد، بول قليل، ارتداد جلد بطيء (1-2 ثانية)
 - ⚠️ التكرار بدون مبرر = رفض تأميني
 - 📖 مرجع: WHO Pocket Book of Hospital Care 2023, Ch. 5
 
 **المضادات الحيوية - CDC IDSA 2024:**
-- التهاب الحلق: لا مضاد حيوي إلا مع حرارة >38.3 + التهاب لوزتين صديدي + Centor Score ≥3
-- التهاب الجهاز التنفسي العلوي: 80% فيروسي، لا حاجة لمضاد حيوي
-- التهاب المعدة والأمعاء: لا مضاد حيوي إلا مع حمى عالية أو دم في البراز
+- التهاب الحلق (العقدي GAS): يجب تأكيد بـ RADT (اختبار سريع) أو زرع قبل المضاد الحيوي
+- Centor Score ≥3 يدعم القرار لكن لا يُغني عن الاختبار المعملي
+- التهاب الشعب الهوائية الحاد (غير معقد): لا مضاد حيوي روتينياً (معظمها فيروسي)
+- التهاب المعدة والأمعاء: لا مضاد حيوي إلا مع: حمى عالية ≥38.5°C، دم في البراز، أو علامات إنتان
+- حمى التيفوئيد: Azithromycin أو Ceftriaxone كخط أول (CDC 2024)، MEGAMOX/Amoxicillin ليس الخيار الأول
 - 📖 مرجع: CDC Antibiotic Stewardship Guidelines 2024
 
-**خافضات الحرارة - WHO Essential Medicines 2023:**
-- باراسيتامول فموي: للحرارة >38°C (الخيار الأول)
-- باراسيتامول وريدي: فقط عند عدم تحمل الفم أو حالة طوارئ أو غيبوبة
-- ⚠️ وريدي مع حرارة طبيعية (<37.5°C) = مرفوض
+**الباراسيتامول (خافض حرارة + مسكن) - WHO 2023:**
+- باراسيتامول فموي: للحرارة ≥38°C أو للألم (VAS ≥4/10) - الخيار الأول
+- باراسيتامول وريدي: فقط عند: عدم تحمل الفم، قيء مستمر، غيبوبة، حالة طوارئ حادة، أو ألم شديد VAS ≥7/10
+- ⚠️ مهم: الباراسيتامول مسكن للألم وليس فقط خافض حرارة!
+- ⚠️ وريدي مع حرارة طبيعية (<37.5°C) وبدون توثيق ألم = مرفوض
 - 📖 مرجع: WHO Model List of Essential Medicines 2023
+
+### 🚫 قائمة عدم التوافق دواء-تشخيص (Drug-Diagnosis Mismatch):
+| الدواء | ❌ لا يُستخدم لـ | ✅ يُستخدم لـ |
+|--------|----------------|--------------|
+| Domperidone (DOMPY) | ❌ الإمساك | ✅ الغثيان والقيء فقط |
+| Loperamide | ❌ أطفال <6 سنوات | ✅ إسهال بالغين |
+| Metoclopramide | ❌ أطفال <1 سنة | ✅ غثيان/قيء بالغين |
+| مضاد حيوي للتيفوئيد | ❌ MEGAMOX كخط أول | ✅ Azithromycin أو Ceftriaxone |
 
 **مثبطات مضخة البروتون (PPIs) - ACG 2022:**
 - مبررة: GERD موثق، قرحة معدة، مع NSAIDs لمرضى عالي الخطورة
@@ -507,9 +525,9 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 
 | الدواء | ❌ سبب الرفض | ✅ اكتب للطبيب هذه الجملة الجاهزة |
 |--------|-------------|----------------------------------|
-| المضاد الحيوي (AZIMAC, AUGMENTIN, AMOXICILLIN) | الحرارة طبيعية = مافي دليل عدوى | **اكتب في الملف:** "فحص الحلق يُظهر صديد" أو "CRP مرتفع" أو "WBC مرتفع" |
-| السوائل الوريدية (NORMAL SALINE, DEXTROSE) | مافي دليل جفاف أو قيء | **اكتب في الملف:** "المريض لا يتحمل الشرب بالفم" أو "قيء مستمر >3 مرات" |
-| الباراسيتامول الوريدي (PARACETAMOL IV) | الحرارة طبيعية أو منخفضة | **اكتب في الملف:** "المريض لا يتحمل البلع" أو "حمى >39°C" |
+| المضاد الحيوي (AZIMAC, AUGMENTIN, AMOXICILLIN) | لا يوجد دليل عدوى بكتيرية | **اكتب في الملف:** "RADT إيجابي للعقديات" أو "زرع حلق إيجابي" أو "صديد على اللوزتين + حمى ≥38.3" |
+| السوائل الوريدية (NORMAL SALINE, DEXTROSE) | مافي دليل جفاف أو قيء | **اكتب في الملف:** "علامات جفاف: ارتداد جلد >2 ثانية، عيون غائرة" أو "قيء مستمر ≥3 مرات" أو "لا يتحمل الشرب" |
+| الباراسيتامول الوريدي (PARACETAMOL IV) | الحرارة طبيعية وبدون ألم موثق | **اكتب في الملف:** "ألم شديد VAS 8/10" أو "قيء متكرر لا يتحمل الفموي" أو "حمى ≥39°C مع أعراض حادة" |
 | مضاد الحساسية (CLARA, ZYRTEC) | مافي تشخيص حساسية | **اكتب في الملف:** "التهاب أنف تحسسي" أو "حكة جلدية" |
 | مثبط الحموضة (ESOPOLE, OMEPRAZOLE) | مافي تشخيص معدي | **اكتب في الملف:** "ارتجاع مريئي GERD" أو "التهاب معدة" |
 | مسكن NSAID (IBUPROFEN, RUMAFEN) | مافي توثيق ألم | **اكتب في الملف:** "ألم شديد VAS 7/10" أو "التهاب مفاصل" |
@@ -1386,19 +1404,33 @@ export default async function handler(req, res) {
         
         if (isExcelFile) {
           excelFile = f;
-          const base64Content = f.base64 || content;
+          const base64Content = f.base64 || '';
+          const textContent = f.textContent || '';
           
-          // Try to parse as base64 Excel first
-          excelCases = parseExcelCases(base64Content);
+          // Try to parse as base64 Excel first (if valid base64)
+          if (base64Content && /^[A-Za-z0-9+/]+=*$/.test(base64Content.substring(0, 100).replace(/\s/g, ''))) {
+            excelCases = parseExcelCases(base64Content);
+          }
           
-          // If base64 parsing failed or returned no valid cases, try parsing as pre-processed text
+          // If base64 parsing failed or returned no valid cases, try parsing textContent
           if (!excelCases || excelCases.length === 0 || 
               (excelCases.length > 0 && excelCases.every(c => c.medications.length === 0 && c.procedures.length === 0 && !c.diagnosis))) {
-            console.log('[Excel Detection] Base64 parsing failed or empty, trying text parsing...');
-            const textCases = parseTextContent(content);
-            if (textCases && textCases.length > 0) {
-              excelCases = textCases;
-              console.log(`[Excel Detection] Text parsing succeeded with ${textCases.length} cases`);
+            console.log('[Excel Detection] Base64 parsing failed or empty, trying textContent...');
+            // Try textContent if provided
+            if (textContent) {
+              const textCases = parseTextContent(textContent);
+              if (textCases && textCases.length > 0) {
+                excelCases = textCases;
+                console.log(`[Excel Detection] TextContent parsing succeeded with ${textCases.length} cases`);
+              }
+            }
+            // Fallback: try base64Content as text
+            if (!excelCases && base64Content) {
+              const textCases = parseTextContent(base64Content);
+              if (textCases && textCases.length > 0) {
+                excelCases = textCases;
+                console.log(`[Excel Detection] Base64 as text parsing succeeded with ${textCases.length} cases`);
+              }
             }
           }
           
