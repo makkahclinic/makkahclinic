@@ -45,14 +45,22 @@ function doPost(e) {
   try {
     switch(action) {
       case 'getStaffDoctors':
+      case 'getDoctors':
         return jsonResponse(getStaffDoctors());
       case 'addTask':
+      case 'createTask':
         return jsonResponse(addTask(data));
+      case 'getTasks':
+        return jsonResponse(getTasks());
+      case 'getTaskFile':
+        return jsonResponse(getTaskFile(data.taskId));
       case 'updateTaskStatus':
         return jsonResponse(updateTaskStatus(data));
       case 'saveReport':
+      case 'saveTaskReport':
         return jsonResponse(saveReport(data));
       case 'deliverTask':
+      case 'confirmDelivery':
         return jsonResponse(deliverTask(data));
       default:
         return jsonResponse({ success: false, error: 'Unknown action: ' + action });
