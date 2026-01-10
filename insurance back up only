@@ -2354,6 +2354,25 @@ const API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.wo
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
+// Safe Base64 conversion for large files (avoids stack overflow)
+function arrayBufferToBase64Safe(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000; // 32KB chunks
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+// Sanitize user input to prevent XSS
+function sanitizeText(text) {
+  if (typeof DOMPurify !== 'undefined') {
+    return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+  }
+  return String(text).replace(/[<>&"']/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[s]));
+}
+
 // State
 const filesState = [];
 let currentUser = null;
@@ -2491,7 +2510,7 @@ function showMainApp() {
   mainApp.classList.remove('hidden');
   logoutBtn.classList.remove('hidden');
   document.getElementById('headerTabs').classList.add('visible');
-  userInfo.innerHTML = `<i class="fas fa-user"></i> ${currentUser.name}`;
+  userInfo.textContent = '👤 ' + currentUser.name;
   loadDoctorsList(); // تحميل قائمة الأطباء
   showFloatingTools(); // تفعيل أدوات التنقل
 }
@@ -2874,13 +2893,13 @@ function extractAndApplyAIRatings(html) {
     let insuranceScores = [], serviceScores = [];
     
     insuranceMatches.forEach(m => {
-      const num = m.match(/(\d+)\s*\/\s*10/);
-      if (num) insuranceScores.push(parseInt(num[1]));
+      const num = m.match(/(\d+(?:\.\d+)?)\s*\/\s*10/);
+      if (num) insuranceScores.push(parseFloat(num[1]));
     });
     
     serviceMatches.forEach(m => {
-      const num = m.match(/(\d+)\s*\/\s*10/);
-      if (num) serviceScores.push(parseInt(num[1]));
+      const num = m.match(/(\d+(?:\.\d+)?)\s*\/\s*10/);
+      if (num) serviceScores.push(parseFloat(num[1]));
     });
     
     if (insuranceScores.length > 0) {
@@ -3195,12 +3214,18 @@ async function handleFiles(files) {
         const arrayBuffer = await f.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
         
-        // Replace this file's 1 unit with actual page count
-        totalUnits += pdf.numPages - 1;
+        // Limit PDF pages to prevent browser crash (max 15 pages)
+        const maxPages = Math.min(pdf.numPages, 15);
+        if (pdf.numPages > 15) {
+          showCustomAlert(`تنبيه: الـ PDF يحتوي ${pdf.numPages} صفحة. سيتم معالجة أول 15 صفحة فقط لتجنب بطء المتصفح.`, 'warning');
+        }
         
-        for (let i = 1; i <= pdf.numPages; i++) {
+        // Replace this file's 1 unit with actual page count
+        totalUnits += maxPages - 1;
+        
+        for (let i = 1; i <= maxPages; i++) {
           if (hasProgressUI) {
-            progressText.textContent = `معالجة صفحة ${i} من ${pdf.numPages} - ${f.name}`;
+            progressText.textContent = `معالجة صفحة ${i} من ${maxPages} - ${f.name}`;
           }
           
           const page = await pdf.getPage(i);
@@ -3221,7 +3246,8 @@ async function handleFiles(files) {
           });
           completedUnits++;
           if (hasProgressUI) fileProgress.value = Math.round((completedUnits / totalUnits) * 100);
-          renderFiles();
+          // Render files every 5 pages to reduce DOM thrashing
+          if (i % 5 === 0 || i === maxPages) renderFiles();
           await new Promise(requestAnimationFrame); // Yield to UI
         }
       } catch(err) {
@@ -3239,7 +3265,8 @@ async function handleFiles(files) {
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
         // Store original base64 for API
-        const base64Excel = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        // Safe Base64 conversion for large files (using chunks)
+        const base64Excel = arrayBufferToBase64Safe(arrayBuffer);
         
         let allData = [];
         workbook.SheetNames.forEach(sheetName => {
@@ -3454,10 +3481,13 @@ analyzeBtn.addEventListener('click', async () => {
   }
 
   try {
-    // Prepare files for Gemini API format
+    // Prepare files for API - send BOTH raw base64 AND textContent for Excel
     const filesForAnalysis = filesToSend.map(f => ({
       name: f.name,
-      base64: f.data || f.textContent || '',
+      // For Excel: send raw base64 for XLSX parsing, textContent as fallback
+      // For images: send data URL
+      base64: f.data || '',
+      textContent: f.textContent || '',
       type: f.mimeType || 'text/plain'
     }));
     
@@ -3715,7 +3745,8 @@ async function translateReport() {
     try {
       const filesForAnalysis = filesState.map(f => ({
         name: f.name,
-        base64: f.data || f.textContent || '',
+        base64: f.data || '',
+        textContent: f.textContent || '',
         type: f.mimeType || 'text/plain'
       }));
       
@@ -4339,13 +4370,8 @@ function closeCustomAlert() {
 }
 
 function showLoadSuccessModal(fileName, rowCount, sheetCount) {
-  // Switch to Analysis tab
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  const analysisTabBtn = document.querySelector('[data-tab="analysis"]');
-  const analysisTab = document.getElementById('analysisTab');
-  if (analysisTabBtn) analysisTabBtn.classList.add('active');
-  if (analysisTab) analysisTab.classList.add('active');
+  // Switch to Analysis tab using the existing switchTab function
+  switchTab('analysis');
   
   // Scroll to top smoothly
   window.scrollTo({ top: 0, behavior: 'smooth' });
