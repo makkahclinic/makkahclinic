@@ -287,7 +287,7 @@ async function ensureHistorySheet() {
   }
 }
 
-async function loadHistoricalClaims(patientIds = []) {
+async function loadHistoricalClaims(patientIds = [], excludeSourceFile = '', excludeClaimIds = []) {
   try {
     await ensureHistorySheet();
     const data = await getSheetData(CLAIM_HISTORY_SHEET);
@@ -307,20 +307,38 @@ async function loadHistoricalClaims(patientIds = []) {
     const serviceTypeIdx = headers.indexOf('service_type');
     const claimIdIdx = headers.indexOf('claim_id');
     const hashIdx = headers.indexOf('hash');
+    const sourceFileIdx = headers.indexOf('source_file');
     
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - HISTORY_WINDOW_DAYS);
     
     const historyMap = new Map();
     const patientIdSet = patientIds.length > 0 ? new Set(patientIds.map(String)) : null;
+    const excludeClaimSet = new Set(excludeClaimIds.map(String));
+    
+    let excludedCount = 0;
     
     for (const row of rows) {
       const patientId = row[patientIdIdx];
       const serviceDate = parseServiceDate(row[serviceDateIdx]);
+      const sourceFile = row[sourceFileIdx] || '';
+      const claimId = row[claimIdIdx] || '';
       
       if (!patientId || !serviceDate) continue;
       if (serviceDate < cutoffDate) continue;
       if (patientIdSet && !patientIdSet.has(String(patientId))) continue;
+      
+      // استثناء السجلات من نفس الملف الحالي (لتجنب التكرار الوهمي)
+      if (excludeSourceFile && sourceFile === excludeSourceFile) {
+        excludedCount++;
+        continue;
+      }
+      
+      // استثناء السجلات من نفس المطالبات الحالية
+      if (excludeClaimSet.has(String(claimId))) {
+        excludedCount++;
+        continue;
+      }
       
       if (!historyMap.has(patientId)) {
         historyMap.set(patientId, new Map());
@@ -337,9 +355,14 @@ async function loadHistoricalClaims(patientIds = []) {
         date: serviceDate,
         serviceName: row[serviceNameIdx] || row[serviceCodeIdx],
         serviceType: row[serviceTypeIdx],
-        claimId: row[claimIdIdx],
-        hash: row[hashIdx]
+        claimId: claimId,
+        hash: row[hashIdx],
+        sourceFile: sourceFile
       });
+    }
+    
+    if (excludedCount > 0) {
+      console.log(`[ClaimHistory] Excluded ${excludedCount} records from current file/claims`);
     }
     
     console.log(`[ClaimHistory] Loaded ${historyMap.size} patients with history`);
@@ -356,7 +379,12 @@ export async function detectDuplicates(cases, sourceFileName = '') {
   
   try {
     const patientIds = [...new Set(cases.map(c => c.patientId).filter(Boolean))];
-    const historyMap = await loadHistoricalClaims(patientIds);
+    const currentClaimIds = [...new Set(cases.map(c => c.claimId).filter(Boolean))];
+    
+    // تحميل السجلات التاريخية مع استثناء نفس الملف ونفس المطالبات الحالية
+    const historyMap = await loadHistoricalClaims(patientIds, sourceFileName, currentClaimIds);
+    
+    console.log(`[ClaimHistory] Checking ${cases.length} cases for duplicates (excluding file: ${sourceFileName || 'none'})`);
     
     const today = new Date();
     
