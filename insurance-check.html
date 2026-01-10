@@ -3587,6 +3587,9 @@ analyzeBtn.addEventListener('click', async () => {
       updateQuickActionsFab();
       reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       
+      // Play notification sound
+      playNotificationSound();
+      
       // Update stepper to step 3 (Result)
       updateStepper(3);
       
@@ -4853,6 +4856,53 @@ function goTop() {
 
 function goBottom() {
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+
+// ===== Notification Sound =====
+function playNotificationSound() {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Create a pleasant two-tone chime
+    const playTone = (freq, startTime, duration) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = freq;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+      
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    };
+    
+    const now = audioContext.currentTime;
+    playTone(523.25, now, 0.15);        // C5
+    playTone(659.25, now + 0.15, 0.15); // E5
+    playTone(783.99, now + 0.3, 0.3);   // G5
+    
+    // Show browser notification if permitted
+    if (Notification.permission === 'granted') {
+      new Notification('مجمع مكة الطبي', {
+        body: 'تم الانتهاء من تحليل التقرير',
+        icon: 'logo.png',
+        tag: 'analysis-complete'
+      });
+    }
+  } catch (e) {
+    console.log('Audio notification not supported');
+  }
+}
+
+// Request notification permission on page load
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
 }
 
 function toggleReportTOC() {
