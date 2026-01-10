@@ -3481,13 +3481,14 @@ analyzeBtn.addEventListener('click', async () => {
   }
 
   try {
-    // Prepare files for API - Excel files send textContent, images send base64 data URL
+    // Prepare files for API - send BOTH raw base64 AND textContent for Excel
     const filesForAnalysis = filesToSend.map(f => ({
       name: f.name,
-      // For Excel/text: use textContent (plain text for AI analysis)
-      // For images: use data URL (data:image/...;base64,...)
-      base64: f.isExcel ? (f.textContent || '') : (f.data || ''),
-      type: f.isExcel ? 'text/plain' : (f.mimeType || 'text/plain')
+      // For Excel: send raw base64 for XLSX parsing, textContent as fallback
+      // For images: send data URL
+      base64: f.data || '',
+      textContent: f.textContent || '',
+      type: f.mimeType || 'text/plain'
     }));
     
     const resp = await fetch(API_URL, {
@@ -3744,8 +3745,9 @@ async function translateReport() {
     try {
       const filesForAnalysis = filesState.map(f => ({
         name: f.name,
-        base64: f.isExcel ? (f.textContent || '') : (f.data || ''),
-        type: f.isExcel ? 'text/plain' : (f.mimeType || 'text/plain')
+        base64: f.data || '',
+        textContent: f.textContent || '',
+        type: f.mimeType || 'text/plain'
       }));
       
       const resp = await fetch(API_URL, {
