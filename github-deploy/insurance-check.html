@@ -1062,6 +1062,10 @@
       box-shadow: 0 8px 25px rgba(0,0,0,.35);
       display: none;
     }
+    /* Show TOC toggle only when report is visible */
+    .report-section.show .report-toc-toggle {
+      display: block;
+    }
     html { scroll-padding-top: 110px; }
     
     @media (max-width: 600px) {
@@ -1088,6 +1092,9 @@
       left: 20px;
       bottom: 20px;
       z-index: 1000;
+      display: block;
+    }
+    .quick-actions-fab.hidden {
       display: none;
     }
     .fab-btn {
@@ -2352,7 +2359,10 @@ const TASKS_API_URL = BACKEND_URL;
 // Analysis API - Replit/Gemini endpoint for AI analysis
 const API_URL = 'https://a8177153-f101-499b-80cc-71e97221e63a-00-svkpkqlbggdx.worf.replit.dev/api/patient-analyzer';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+// pdfjsLib guard - prevent crash if library failed to load
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+}
 
 // Safe Base64 conversion for large files (avoids stack overflow)
 function arrayBufferToBase64Safe(buffer) {
@@ -2879,16 +2889,27 @@ function renderDoctorsChart(doctors) {
 }
 
 
+// Helper: Normalize Arabic numerals (٠١٢٣٤٥٦٧٨٩) to English (0123456789)
+function normalizeArabicDigits(str) {
+  const arabicNums = '٠١٢٣٤٥٦٧٨٩';
+  return String(str).replace(/[٠-٩]/g, d => arabicNums.indexOf(d).toString())
+                    .replace(/٫/g, '.'); // Arabic decimal separator
+}
+
 function extractAndApplyAIRatings(html) {
   try {
     // Convert HTML to plain text for reliable regex matching
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
-    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    let plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Normalize Arabic numerals to English for consistent regex matching
+    plainText = normalizeArabicDigits(plainText);
     
     // Method 1: Extract from Arabic format "الالتزام التأميني: X/10" and "جودة الإجراءات: X/10"
-    const insuranceMatches = plainText.match(/الالتزام\s*التأميني[:\s]*(\d+)\s*\/\s*10/g) || [];
-    const serviceMatches = plainText.match(/جودة\s*(?:الإجراءات|الخدمات)[:\s]*(\d+)\s*\/\s*10/g) || [];
+    // Updated regex to support decimals (e.g., 7.5/10)
+    const insuranceMatches = plainText.match(/الالتزام\s*التأميني[:\s]*(\d+(?:\.\d+)?)\s*\/\s*10/g) || [];
+    const serviceMatches = plainText.match(/جودة\s*(?:الإجراءات|الخدمات)[:\s]*(\d+(?:\.\d+)?)\s*\/\s*10/g) || [];
     
     let insuranceScores = [], serviceScores = [];
     
@@ -3509,6 +3530,10 @@ analyzeBtn.addEventListener('click', async () => {
     }
     
     if (data.success || data.htmlReport) {
+      // XSS protection: sanitize user-controlled values
+      const safeDoctorName = sanitizeText(doctorName);
+      const safeReviewerName = sanitizeText(currentUser.name);
+      
       const printHeader = `
         <div class="print-header" style="border-bottom:3px solid #1e3a5f;padding-bottom:15px;margin-bottom:20px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3525,7 +3550,7 @@ analyzeBtn.addEventListener('click', async () => {
             </div>
           </div>
           <h1 style="text-align:center;color:#1e3a5f;margin:15px 0 10px;font-size:18px;border:none;padding:0;">تقرير مراجعة جودة الرعاية الطبية</h1>
-          <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${doctorName}</strong></p>
+          <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${safeDoctorName}</strong></p>
         </div>
         <div style="background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:12px;margin-bottom:20px;text-align:center;font-size:13px;color:#0369a1;">
           <strong>تقرير صادر عن قسم متابعة الجودة والتدقيق الطبي</strong><br>
@@ -3544,7 +3569,7 @@ analyzeBtn.addEventListener('click', async () => {
             ويُعد وثيقة رسمية لتحسين جودة الرعاية الصحية المقدمة
           </div>
           <div style="margin-top:15px;display:flex;justify-content:space-between;font-size:11px;color:#666;">
-            <span>المراجع: ${currentUser.name}</span>
+            <span>المراجع: ${safeReviewerName}</span>
             <span>www.m2020m.org</span>
           </div>
         </div>
@@ -3602,6 +3627,9 @@ analyzeBtn.addEventListener('click', async () => {
 
 async function saveAndLog() {
   const doctorName = doctorNameInput.value.trim();
+  // XSS protection: sanitize user-controlled values
+  const safeDoctorName = sanitizeText(doctorName);
+  const safeReviewerName = sanitizeText(currentUser.name);
   
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
@@ -3611,7 +3639,7 @@ async function saveAndLog() {
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
     const timeStr = today.toTimeString().split(' ')[0].replace(/:/g, '');
-    const fileName = `تقرير_${doctorName}_${dateStr}_${timeStr}.html`;
+    const fileName = `تقرير_${safeDoctorName}_${dateStr}_${timeStr}.html`;
     
     // Get clean content
     let cleanContent = reportContent.innerHTML;
@@ -3624,7 +3652,7 @@ async function saveAndLog() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${fileName}</title>
+  <title>${sanitizeText(fileName)}</title>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -3654,7 +3682,7 @@ async function saveAndLog() {
       </div>
     </div>
     <h1 style="text-align:center;color:#1e3a5f;margin:15px 0 10px;font-size:18px;">تقرير مراجعة جودة الرعاية الطبية</h1>
-    <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${doctorName}</strong></p>
+    <p style="text-align:center;color:#666;font-size:12px;margin:0;">الطبيب المعالج: <strong>${safeDoctorName}</strong></p>
   </div>
   <div style="background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:12px;margin-bottom:20px;text-align:center;font-size:13px;color:#0369a1;">
     <strong>تقرير صادر عن قسم متابعة الجودة والتدقيق الطبي</strong><br>
@@ -3671,7 +3699,7 @@ async function saveAndLog() {
       ويُعد وثيقة رسمية لتحسين جودة الرعاية الصحية المقدمة
     </div>
     <div style="margin-top:15px;display:flex;justify-content:space-between;font-size:11px;color:#666;">
-      <span>المراجع: ${currentUser.name}</span>
+      <span>المراجع: ${safeReviewerName}</span>
       <span>www.m2020m.org</span>
     </div>
   </div>
@@ -4024,7 +4052,12 @@ function showToast(message, type = 'success') {
     info: 'fa-info-circle'
   };
   
-  toast.innerHTML = `<i class="fas ${icons[type]}"></i> <span>${message}</span>`;
+  // XSS-safe: use createElement + textContent instead of innerHTML
+  const icon = document.createElement('i');
+  icon.className = `fas ${icons[type] || icons.info}`;
+  const span = document.createElement('span');
+  span.textContent = message;
+  toast.append(icon, document.createTextNode(' '), span);
   container.appendChild(toast);
   
   // Remove after animation
@@ -4053,10 +4086,10 @@ async function uploadTask() {
   btn.classList.add('uploading');
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الرفع...';
   
-  try {
-    // Read file as base64
-    const reader = new FileReader();
-    reader.onload = async function(e) {
+  // Read file as base64
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
       const base64Data = e.target.result.split(',')[1];
       
       const response = await fetch(TASKS_API_URL + '?action=createTask', {
@@ -4072,10 +4105,6 @@ async function uploadTask() {
       });
       
       const result = await response.json();
-      
-      btn.disabled = false;
-      btn.classList.remove('uploading');
-      btn.innerHTML = '<i class="fas fa-plus-circle"></i> إضافة المهمة';
       
       if (result.success) {
         // Success animation
@@ -4100,15 +4129,23 @@ async function uploadTask() {
       } else {
         showToast('خطأ: ' + (result.error || 'فشل في إضافة المهمة'), 'error');
       }
-    };
-    reader.readAsDataURL(file);
-  } catch(err) {
-    console.error('Upload task error:', err);
-    showToast('حدث خطأ أثناء رفع المهمة', 'error');
+    } catch(err) {
+      console.error('Upload task error:', err);
+      showToast('حدث خطأ أثناء رفع المهمة', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('uploading');
+      btn.innerHTML = '<i class="fas fa-plus-circle"></i> إضافة المهمة';
+    }
+  };
+  reader.onerror = function() {
+    console.error('FileReader error');
+    showToast('حدث خطأ أثناء قراءة الملف', 'error');
     btn.disabled = false;
     btn.classList.remove('uploading');
     btn.innerHTML = '<i class="fas fa-plus-circle"></i> إضافة المهمة';
-  }
+  };
+  reader.readAsDataURL(file);
 }
 
 // Load pending tasks
@@ -4847,10 +4884,7 @@ function updateFloatingButtons(activeTab) {
   }
 }
 
-function scrollToReportActions() {
-  const actions = document.querySelector('.report-actions');
-  if (actions) actions.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
+// scrollToReportActions is defined earlier in the file
 
 function showFloatingTools() {
   const el = document.getElementById('floatingTools');
@@ -4932,8 +4966,8 @@ function filterToc(q) {
 }
 </script>
 
-<!-- Floating Tools -->
-<div class="floating-tools no-print" id="floatingTools">
+<!-- Floating Tools (hidden until login) -->
+<div class="floating-tools no-print hidden" id="floatingTools">
   <button class="ft-btn" id="ftTop" onclick="goTop()" title="أعلى الصفحة">
     <i class="fas fa-arrow-up"></i>
   </button>

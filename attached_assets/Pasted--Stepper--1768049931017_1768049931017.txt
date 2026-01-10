@@ -1,0 +1,242 @@
+ملاحظات سريعة (تقييم تقريبي)
+
+الواجهة والتجربة ممتازة ومفصلة، وفيها شغل كبير (Stepper، مهام، توقيع، طباعة، إحصائيات).
+
+لكن فيه نقاط أمنية ووظيفية لازم تتعدل قبل الاعتماد عليها في بيئة حقيقية، خصوصًا لأن النظام يتعامل مع بيانات طبية (حساسة).
+
+1) أخطاء/مشاكل وظيفية واضحة (Features غالبًا “لن تعمل” كما تتوقع)
+A) فهرس التقرير (TOC) عمليًا “غير قابل للفتح”
+
+الـ <aside class="report-toc"> مخفي بتحويل translateX(-105%)، والزر اللي يفتحه موجود (#reportTocToggle) لكن CSS عامل له display: none دائمًا؛ وبالتالي المستخدم ما يقدر يفتحه.
+
+إصلاح سريع (CSS):
+
+/* خله يظهر عندما يكون التقرير ظاهر */
+.report-section.show .report-toc-toggle { 
+  display: block; 
+}
+
+B) زر الـ Quick Actions FAB لن يظهر أبدًا
+
+عندك .quick-actions-fab { display: none; } + كمان تتحكم فيه بـ .hidden من JS.
+بسبب display:none الثابتة، حتى لو شلت hidden بالـ JS ما راح يظهر.
+
+إصلاح (اختر واحد):
+
+/* خيار 1 */
+.quick-actions-fab { display: block; }
+.quick-actions-fab.hidden { display: none; }
+
+
+أو:
+
+/* خيار 2 */
+.quick-actions-fab { display: none; }
+.quick-actions-fab:not(.hidden) { display: block; }
+
+C) أدوات الـ Floating Tools تظهر حتى قبل تسجيل الدخول
+
+زرّات “أعلى/التحليل/التقرير/المهام” موجودة خارج #mainApp، وما عليها hidden افتراضيًا، فممكن تظهر في شاشة الدخول (شكلًا وتجربةً).
+
+حل مقترح:
+
+حط hidden مبدئيًا في HTML:
+
+<div class="floating-tools no-print hidden" id="floatingTools">
+
+
+وخلي showFloatingTools() هي اللي تظهرها بعد التأكد من الصلاحيات.
+
+D) وظائف/عناصر تتم الإشارة لها وهي غير موجودة (كود “ميت” أو ناقص)
+
+أمثلة:
+
+scrollTopBtn و scrollBottomBtn مستخدمين في JS، لكن ما فيه عناصر بهذي الـ IDs في HTML.
+
+tasksBadge يتم تحديثه، لكن ما فيه عنصر بهذا الـ ID.
+
+imageFilePicker / pdfFilePicker / excelFilePicker يتم ربطها بـ listeners لكنها غير موجودة بالصفحة.
+
+هذا ما يكسر الصفحة لأنك عامل “حراسة” في بعض المواضع، لكنه يسبب تشويش وصيانة أصعب.
+
+2) أهم المخاطر الأمنية (لازم تتعدل)
+
+لأنك تستخدم innerHTML كثير + بيانات قابلة للتلاعب (اسم الطبيب، اسم المستخدم، أسماء الملفات…)، فخطر DOM XSS وارد.
+
+OWASP يوصّي بتجنب إدخال نصوص غير موثوقة عبر innerHTML واستخدام مخارج آمنة مثل textContent أو sanitization صارم.
+
+A) XSS عبر حقول مثل doctorName و currentUser.name وأسماء الملفات
+
+أمثلة خطرة عندك:
+
+بناء printHeader و printFooter بـ template literals وفيها ${doctorName} و ${currentUser.name} ثم حقنها مباشرة في DOM:
+
+reportContent.innerHTML = originalReport;
+
+
+المشكلة: doctorName ممكن يتغير يدويًا من DevTools (لأنه <input type="hidden">)، وdisplayName في Firebase ممكن المستخدم نفسه يضبطه. هذا يفتح باب لحقن HTML/JS.
+
+حل سريع داخل نهجك الحالي (استخدم sanitizeText الموجود عندك):
+
+const safeDoctorName = sanitizeText(doctorName);
+const safeReviewerName = sanitizeText(currentUser.name);
+
+const printHeader = `... <strong>${safeDoctorName}</strong> ...`;
+const printFooter = `... ${safeReviewerName} ...`;
+
+
+أنت أصلًا مستورد DOMPurify وتستخدمه لتطهير تقرير الـ AI، لكنه لا يطهر الـ header/footer اللي أنت تبنيهم. DOMPurify مصمم لهذه الحالات مع خيارات منع سكربت/إطارات… إلخ.
+
+أفضل حل (أكثر أمانًا):
+
+ابنِ الهيدر DOM Elements بـ createElement وtextContent بدل النصوص المدمجة، ثم append.
+
+B) showToast() يستخدم innerHTML مع message
+
+إذا كانت الرسالة فيها نص قادم من ملف/سيرفر، ممكن تصير حقن HTML.
+
+حل آمن بدون تغيير التصميم:
+
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  const icons = { success:'fa-check-circle', error:'fa-exclamation-circle', info:'fa-info-circle' };
+
+  const icon = document.createElement('i');
+  icon.className = `fas ${icons[type] || icons.info}`;
+
+  const span = document.createElement('span');
+  span.textContent = message; // آمن
+
+  toast.append(icon, span);
+  container.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 4000);
+}
+
+C) “التحقق من الصلاحيات” على الواجهة فقط ليس حاجز أمني
+
+حتى لو منعت المستخدم بالواجهة، أي شخص يقدر يفتح DevTools وينفّذ showMainApp() أو يرسل طلبات مباشرة لـ:
+
+Google Apps Script endpoints
+
+Replit API (تحليل)
+
+لازم يكون فيه تحقق صلاحيات على السيرفر (Authorization server-side). التوجه الموصى به في Firebase: تمرير Firebase ID Token والتحقق منه في الباكند (Admin SDK) قبل تنفيذ أي عملية حساسة.
+
+D) target="_blank" ونافذة التوقيع
+
+أنت تفتح نافذة جديدة وتكتب HTML. لو في أي روابط لاحقًا بـ target="_blank"، الأفضل إضافة rel="noopener noreferrer" لتقليل مخاطر window.opener. معيار HTML يعرّف noopener/noreferrer كـ tokens لهذا الغرض.
+
+3) أخطاء منطقية/تحليلية قد تعطي نتائج غير دقيقة
+A) استخراج التقييمات من التقرير: regex لا يلتقط الكسور ولا الأرقام العربية
+
+في extractAndApplyAIRatings() عندك:
+
+plainText.match(/...(\d+)\s*\/\s*10/g)
+
+
+هذا لا يلتقط 7.5/10، ولا يلتقط الأرقام العربية (٧/١٠ أو ٧٫٥/١٠).
+
+تحسين مقترح:
+
+طبّع الأرقام العربية إلى الإنجليزية قبل regex.
+
+غيّر regex ليدعم الكسور.
+
+مثال:
+
+function normalizeArabicDigits(s) {
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  return String(s).replace(/[٠-٩]/g, d => ar.indexOf(d).toString());
+}
+
+const text = normalizeArabicDigits(plainText);
+
+const insuranceMatches = text.match(/الالتزام\s*التأميني[:\s]*(\d+(?:\.\d+)?)\s*\/\s*10/g) || [];
+const serviceMatches   = text.match(/جودة\s*(?:الإجراءات|الخدمات)[:\s]*(\d+(?:\.\d+)?)\s*\/\s*10/g) || [];
+
+4) تحسينات استقرار وأداء (خصوصًا مع ملفات كبيرة)
+A) الاعتماد على pdfjsLib بدون حراسة
+
+سطر:
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = '...';
+
+
+لو pdf.js فشل تحميله لأي سبب، هذا يرمي خطأ ويكسر السكربت كامل.
+الأفضل:
+
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '...';
+}
+
+B) تحويل PDF إلى صور Base64 داخل المتصفح مكلف جدًا
+
+أنت تقللها بـ limit 15 صفحة — ممتاز.
+لكن ما زال:
+
+استهلاك ذاكرة عالي
+
+JSON request كبير جدًا للـ API
+إذا الهدف النهائي إرسال المحتوى للتحليل: غالبًا أفضل إرسال الـ PDF/Excel كـ Blob/FormData للباكند بدل DataURL base64 (أخف وأسرع)، أو استخراج نص PDF بدل صورة إن كان مناسب.
+
+C) uploadTask() فيه خطأ شائع: try/catch لن يمسك أخطاء داخل reader.onload
+
+أنت عامل try { ... reader.onload = async function(){ ... await fetch ... } } catch { ... }
+أي خطأ داخل onload لن يقع في catch الخارجي.
+
+حل: ضع try/catch داخل onload:
+
+reader.onload = async (e) => {
+  try {
+    // fetch...
+  } catch (err) {
+    // رجّع زر الرفع لحالته + رسالة خطأ
+  } finally {
+    // تأكد ما يظل الزر "uploading"
+  }
+};
+
+5) تحسينات نظافة وصيانة الكود (تقلل الأعطال مستقبلًا)
+A) تكرار دوال/تعريفات
+
+عندك scrollToReportActions() معرف مرتين؛ هذا يسبب تشويش، وثاني تعريف يطغى على الأول.
+
+B) توحيد أسماء الدوال/IDs
+
+عندك toggleReportTOC() و toggleReportToc() (اختلاف حالة الحروف) — هذا مصدر أخطاء مستقبلية.
+
+C) تقليل استخدام innerHTML في عناصر كثيرة
+
+أمثلة: renderFiles(), loadDoctorsList()… إلخ.
+كلما تقدر، استخدم DOM API + textContent للأجزاء النصية؛ هذا يرفع الأمان ويقلل bugs.
+
+D) فصل الملفات
+
+حجم الصفحة كبير جدًا. فصل:
+
+CSS في ملف
+
+JS في ملف/ملفات
+
+وضع defer للسكريبتات الخارجية
+بيقلل وقت التحميل ويسهّل الصيانة.
+
+روابط مرجعية (للتأكد/التوسع)
+OWASP XSS Prevention Cheat Sheet:
+https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+
+DOMPurify (GitHub / Docs):
+https://github.com/cure53/DOMPurify
+
+Firebase: Manage Session Cookies / Verifying ID tokens (server-side patterns):
+https://firebase.google.com/docs/auth/admin/manage-cookies
+
+Chart.js Tooltip configuration (rtl/textDirection options وغيرها):
+https://www.chartjs.org/docs/latest/configuration/tooltip.html
+
+WHATWG HTML (noopener/noreferrer tokens):
+https://html.spec.whatwg.org/
