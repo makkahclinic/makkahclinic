@@ -83,7 +83,7 @@ const DIABETIC_GENERAL_REQUIREMENTS = {
 };
 
 const PREGNANCY_REQUIREMENTS = {
-  conditions: ['Z34', 'O', 'pregnancy', 'حمل', 'حامل', 'prenatal', 'antenatal'],
+  conditions: ['Z34', 'O0', 'O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8', 'O9', 'O9A', 'pregnancy', 'pregnant', 'حمل', 'حامل', 'prenatal', 'antenatal', 'obstetric', 'gravida', 'gestation'],
   requiredTests: [
     {
       code: 'ultrasound',
@@ -137,7 +137,7 @@ const PREGNANCY_REQUIREMENTS = {
 };
 
 const ORTHOPEDIC_REQUIREMENTS = {
-  conditions: ['S', 'M', 'fracture', 'كسر', 'إصابة', 'injury', 'trauma', 'pain'],
+  conditions: ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'T0', 'T1', 'T2', 'M0', 'M1', 'M2', 'M4', 'M5', 'M6', 'M7', 'M8', 'M9', 'fracture', 'كسر', 'كسور', 'trauma', 'dislocation', 'خلع', 'sprain', 'التواء'],
   requiredTests: [
     {
       code: 'xray',
