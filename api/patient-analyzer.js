@@ -1,5 +1,6 @@
 // /api/patient-analyzer.js
 import XLSX from 'xlsx';
+import { detectDuplicates, formatDuplicatesForPrompt, formatDuplicatesForReport } from './claim-history.js';
 
 // Parse text content that was pre-processed by frontend (pipe-separated rows)
 function parseTextContent(textContent) {
@@ -46,13 +47,14 @@ function parseTextContent(textContent) {
     const patientIdx = headers.findIndex(h => h.includes('patient') || h.includes('file no'));
     const icdDescCols = headers.map((h, i) => (h.includes('icd') && h.includes('description')) ? i : -1).filter(i => i >= 0);
     const serviceDescIdx = headers.findIndex(h => (h.includes('service') && h.includes('desc')) || h.includes('item desc'));
+    const serviceDateIdx = headers.findIndex(h => h.includes('date') || h.includes('تاريخ'));
     const tempIdx = headers.findIndex(h => h.includes('temp'));
     const bpIdx = headers.findIndex(h => h.includes('pressure') || h.includes('bp'));
     const pulseIdx = headers.findIndex(h => h.includes('pulse'));
     const weightIdx = headers.findIndex(h => h.includes('weight'));
     const heightIdx = headers.findIndex(h => h.includes('height'));
     
-    console.log('[parseTextContent] Column indices:', { claimIdx, patientIdx, serviceDescIdx, tempIdx });
+    console.log('[parseTextContent] Column indices:', { claimIdx, patientIdx, serviceDescIdx, serviceDateIdx, tempIdx });
     
     if (claimIdx < 0 && serviceDescIdx < 0) {
       console.log('[parseTextContent] Could not find key columns, returning null');
@@ -78,10 +80,23 @@ function parseTextContent(textContent) {
       }
       
       if (!caseMap.has(claimId)) {
+        // Extract service date from text
+        let serviceDate = null;
+        if (serviceDateIdx >= 0 && cells[serviceDateIdx]) {
+          const rawDate = cells[serviceDateIdx];
+          const parsed = new Date(rawDate);
+          if (!isNaN(parsed.getTime())) {
+            serviceDate = parsed.toISOString().split('T')[0];
+          } else {
+            serviceDate = String(rawDate);
+          }
+        }
+        
         caseMap.set(claimId, {
           claimId,
           patientId: patientIdx >= 0 ? cells[patientIdx] : '',
           diagnosis: diagText,
+          serviceDate: serviceDate,
           vitals: {
             temperature: tempIdx >= 0 ? cells[tempIdx] : '',
             bloodPressure: bpIdx >= 0 ? cells[bpIdx] : '',
@@ -196,7 +211,13 @@ function parseExcelCases(base64Data) {
       // Net amount column (for context)
       const amountIdx = headers.findIndex(h => h.includes('amount') || h.includes('net') || h.includes('price') || h.includes('cost'));
       
-      console.log('[parseExcelCases] Column indices:', { claimIdx, patientIdx, diagIdx, serviceDescIdx, tempIdx, bpIdx });
+      // Service date column - CRITICAL for temporal duplicate detection
+      const serviceDateIdx = headers.findIndex(h => 
+        h.includes('service date') || h.includes('claim date') || h.includes('date') ||
+        h.includes('تاريخ') || h.includes('visit date')
+      );
+      
+      console.log('[parseExcelCases] Column indices:', { claimIdx, patientIdx, diagIdx, serviceDescIdx, serviceDateIdx, tempIdx, bpIdx });
       
       // Group rows by claim ID
       const caseMap = new Map();
@@ -216,10 +237,30 @@ function parseExcelCases(base64Data) {
         }
         
         if (!caseMap.has(claimId)) {
+          // Extract service date - handle Excel serial number or date string
+          let serviceDate = null;
+          if (serviceDateIdx >= 0 && row[serviceDateIdx]) {
+            const rawDate = row[serviceDateIdx];
+            if (typeof rawDate === 'number') {
+              // Excel serial date number
+              const excelEpoch = new Date(1899, 11, 30);
+              serviceDate = new Date(excelEpoch.getTime() + rawDate * 86400000).toISOString().split('T')[0];
+            } else {
+              // Try to parse as date string
+              const parsed = new Date(rawDate);
+              if (!isNaN(parsed.getTime())) {
+                serviceDate = parsed.toISOString().split('T')[0];
+              } else {
+                serviceDate = String(rawDate);
+              }
+            }
+          }
+          
           caseMap.set(claimId, {
             claimId,
             patientId: patientIdx >= 0 ? row[patientIdx] : '',
             diagnosis: diagText,
+            serviceDate: serviceDate, // CRITICAL for duplicate detection
             vitals: {
               temperature: tempIdx >= 0 ? row[tempIdx] : '',
               bloodPressure: bpIdx >= 0 ? row[bpIdx] : '',
@@ -298,13 +339,47 @@ function parseExcelCases(base64Data) {
 }
 
 // Build prompt for a single case - COMPACT format like Report #20
-function buildSingleCasePrompt(caseData, caseNumber, totalCases, language) {
+function buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseDuplicates = null) {
   const L = language === 'en' ? 'en' : 'ar';
   
   // Only include vitals that are actually available
   const vitals = caseData.vitals || {};
   const temp = vitals.temperature && vitals.temperature !== 'N/A' ? vitals.temperature : '';
   const bp = vitals.bloodPressure && vitals.bloodPressure !== 'N/A' ? vitals.bloodPressure : '';
+  
+  // Build duplicate warning section if duplicates found for this case
+  let duplicateSection = '';
+  if (caseDuplicates) {
+    if (L === 'ar') {
+      duplicateSection = '\n\n🔄 **تنبيه تكرار تاريخي:**\n';
+      for (const med of (caseDuplicates.medications || [])) {
+        duplicateSection += `${med.severity === 'reject' ? '🔴' : med.severity === 'warning' ? '🟡' : '🔵'} ${med.medication}: ${med.reason}\n`;
+        if (med.copyPasteText) {
+          duplicateSection += `  📝 نص التوثيق: "${med.copyPasteText}"\n`;
+        }
+      }
+      for (const proc of (caseDuplicates.procedures || [])) {
+        duplicateSection += `${proc.severity === 'reject' ? '🔴' : proc.severity === 'warning' ? '🟡' : '🔵'} ${proc.procedure}: ${proc.reason}\n`;
+        if (proc.copyPasteText) {
+          duplicateSection += `  📝 نص التوثيق: "${proc.copyPasteText}"\n`;
+        }
+      }
+    } else {
+      duplicateSection = '\n\n🔄 **Historical Duplicate Alert:**\n';
+      for (const med of (caseDuplicates.medications || [])) {
+        duplicateSection += `${med.severity === 'reject' ? '🔴' : med.severity === 'warning' ? '🟡' : '🔵'} ${med.medication}: ${med.reason}\n`;
+        if (med.copyPasteText) {
+          duplicateSection += `  📝 Documentation: "${med.copyPasteText}"\n`;
+        }
+      }
+      for (const proc of (caseDuplicates.procedures || [])) {
+        duplicateSection += `${proc.severity === 'reject' ? '🔴' : proc.severity === 'warning' ? '🟡' : '🔵'} ${proc.procedure}: ${proc.reason}\n`;
+        if (proc.copyPasteText) {
+          duplicateSection += `  📝 Documentation: "${proc.copyPasteText}"\n`;
+        }
+      }
+    }
+  }
   
   if (L === 'ar') {
     let vitalsLine = '';
@@ -314,7 +389,7 @@ function buildSingleCasePrompt(caseData, caseNumber, totalCases, language) {
     return `🔍 الحالة ${caseNumber} | Claim: ${caseData.claimId} | المريض: ${caseData.patientId || '-'}
 التشخيص: ${caseData.diagnosis || '-'}${vitalsLine ? '\n' + vitalsLine : ''}
 الأدوية: ${caseData.medications.length > 0 ? caseData.medications.map(m => `${m.name} (${m.dose || '-'})`).join(' | ') : 'لا يوجد'}
-الإجراءات: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'لا يوجد'}
+الإجراءات: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'لا يوجد'}${duplicateSection}
 ---`;
   } else {
     let vitalsLine = '';
@@ -324,7 +399,7 @@ function buildSingleCasePrompt(caseData, caseNumber, totalCases, language) {
     return `🔍 Case ${caseNumber} | Claim: ${caseData.claimId} | Patient: ${caseData.patientId || '-'}
 Diagnosis: ${caseData.diagnosis || '-'}${vitalsLine ? '\n' + vitalsLine : ''}
 Medications: ${caseData.medications.length > 0 ? caseData.medications.map(m => `${m.name} (${m.dose || '-'})`).join(' | ') : 'None'}
-Procedures: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'None'}
+Procedures: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'None'}${duplicateSection}
 ---`;
   }
 }
@@ -460,6 +535,23 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
   const { repetitions, patterns, referralAlerts } = detectRepetitionsAndPatterns(cases);
   console.log(`[Pattern Detection] Found ${repetitions.length} repetitions, ${patterns.length} patterns, ${referralAlerts.length} referral alerts`);
   
+  // 🆕 Detect temporal duplicates from historical data (Google Sheets)
+  let duplicateResult = null;
+  let duplicatesPromptSection = '';
+  try {
+    const sourceFileName = req.body.files?.[0]?.name || 'upload';
+    duplicateResult = await detectDuplicates(cases, sourceFileName);
+    
+    if (duplicateResult && duplicateResult.duplicates && duplicateResult.duplicates.length > 0) {
+      duplicatesPromptSection = formatDuplicatesForPrompt(duplicateResult);
+      console.log(`[Duplicate Detection] Found ${duplicateResult.summary?.totalDuplicates || 0} duplicates across ${duplicateResult.patientsWithDuplicates} patients`);
+    } else {
+      console.log('[Duplicate Detection] No temporal duplicates found');
+    }
+  } catch (dupError) {
+    console.error('[Duplicate Detection] Error:', dupError.message);
+  }
+  
   // ENHANCED Clinical Guidelines Reference with Scientific Sources
   const fullClinicalRef = `
 ### 📚 مراجع الإرشادات السريرية المعتمدة:
@@ -546,6 +638,10 @@ ${fullClinicalRef}
    - مريض سكري بدون تحويل لطبيب العيون ← اذكر "⚠️ يحتاج تحويل لطبيب العيون"
    - ألم عظام/مفاصل بدون تحويل لطبيب العظام ← اذكر "⚠️ يحتاج تحويل لطبيب العظام"
 3. **التكرار**: إذا نفس المريض زار أكثر من مرة بنفس العلاج ← اذكر "⚠️ زيارة متكررة"
+4. **🔄 التكرار عبر الزمن**: إذا ظهر "تنبيه تكرار تاريخي" في بيانات الحالة، يجب:
+   - 🔴 إذا <30 يوم: أضف صندوق أحمر "❌ مرفوض - تكرار" مع نص التوثيق الجاهز
+   - 🟡 إذا 30-60 يوم: أضف صندوق أصفر "⚠️ يحتاج توثيق - تكرار سابق" مع نص التوثيق
+   - 🔵 إذا 60-90 يوم: ذكر كملاحظة فقط بدون تأثير على القرار
 
 ## 🔍 التنسيق الإلزامي (مثل التقرير 20):
 
@@ -905,6 +1001,17 @@ ${fullClinicalRef}
 Return HTML only, no markdown or code blocks.
 `;
 
+  // Build a map of duplicates by patient/claim for quick lookup
+  const duplicatesMap = new Map();
+  if (duplicateResult && duplicateResult.duplicates) {
+    for (const dup of duplicateResult.duplicates) {
+      const key = `${dup.patientId}_${dup.caseId}`;
+      duplicatesMap.set(key, dup);
+      // Also map by claimId directly
+      if (dup.caseId) duplicatesMap.set(dup.caseId, dup);
+    }
+  }
+
   console.log(`Processing ${totalCases} cases individually...`);
   
   for (let i = 0; i < totalCases; i++) {
@@ -913,7 +1020,11 @@ Return HTML only, no markdown or code blocks.
     
     console.log(`Processing case ${caseNumber}/${totalCases}: ${caseData.claimId}`);
     
-    const casePrompt = buildSingleCasePrompt(caseData, caseNumber, totalCases, language);
+    // Find duplicates for this specific case
+    const caseDuplicates = duplicatesMap.get(`${caseData.patientId}_${caseData.claimId}`) || 
+                           duplicatesMap.get(caseData.claimId) || null;
+    
+    const casePrompt = buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseDuplicates);
     
     const payload = {
       system_instruction: { role: "system", parts: [{ text: caseTemplate }] },
@@ -1158,6 +1269,71 @@ Return HTML only, no markdown or code blocks.
             👁️ Specialist Referral Alerts (${referralAlerts.length})
           </h3>
           ${referralItems}
+        </div>
+      `;
+    }
+    
+    // 🆕 Temporal duplicate alerts (from historical data)
+    if (duplicateResult && duplicateResult.duplicates && duplicateResult.duplicates.length > 0) {
+      const summary = duplicateResult.summary;
+      const duplicateItems = duplicateResult.duplicates.map(dup => {
+        let itemHtml = `<div style="background:#f8f9fa;border:1px solid #dee2e6;padding:12px;border-radius:8px;margin:10px 0;">
+          <strong>🔍 ${lang === 'ar' ? 'المريض' : 'Patient'}: ${dup.patientId} | ${lang === 'ar' ? 'المطالبة' : 'Claim'}: ${dup.caseId || '-'}</strong>`;
+        
+        for (const med of (dup.medications || [])) {
+          const severityStyle = med.severity === 'reject' 
+            ? 'background:#fee2e2;border-left:4px solid #dc2626;' 
+            : med.severity === 'warning' 
+              ? 'background:#fef3c7;border-left:4px solid #d97706;'
+              : 'background:#dbeafe;border-left:4px solid #2563eb;';
+          itemHtml += `
+            <div style="${severityStyle}padding:8px;margin:6px 0;border-radius:4px;">
+              <strong>${med.severity === 'reject' ? '🔴' : med.severity === 'warning' ? '🟡' : '🔵'} ${med.medication}</strong><br>
+              <span style="font-size:13px;">${med.reason}</span><br>
+              ${med.copyPasteText ? `<div style="background:#bbf7d0;padding:6px;margin-top:4px;border-radius:4px;font-size:13px;"><strong>📝 ${lang === 'ar' ? 'نص التوثيق' : 'Documentation'}:</strong> ${med.copyPasteText}</div>` : ''}
+            </div>`;
+        }
+        
+        for (const proc of (dup.procedures || [])) {
+          const severityStyle = proc.severity === 'reject' 
+            ? 'background:#fee2e2;border-left:4px solid #dc2626;' 
+            : 'background:#fef3c7;border-left:4px solid #d97706;';
+          itemHtml += `
+            <div style="${severityStyle}padding:8px;margin:6px 0;border-radius:4px;">
+              <strong>${proc.severity === 'reject' ? '🔴' : '🟡'} ${proc.procedure}</strong><br>
+              <span style="font-size:13px;">${proc.reason}</span><br>
+              ${proc.copyPasteText ? `<div style="background:#bbf7d0;padding:6px;margin-top:4px;border-radius:4px;font-size:13px;"><strong>📝 ${lang === 'ar' ? 'نص التوثيق' : 'Documentation'}:</strong> ${proc.copyPasteText}</div>` : ''}
+            </div>`;
+        }
+        
+        itemHtml += '</div>';
+        return itemHtml;
+      }).join('');
+      
+      alertsHtml += lang === 'ar' ? `
+        <div style="margin-top:1.5rem;page-break-inside:avoid;">
+          <h3 style="background:#7c3aed;color:white;padding:10px;border-radius:8px;margin:0;">
+            🔄 مراقبة التكرار عبر الزمن (${summary?.totalDuplicates || duplicateResult.duplicates.length})
+          </h3>
+          <p style="background:#ede9fe;padding:10px;margin:0;font-size:12px;">
+            ${summary?.rejectCount > 0 ? `❌ ${summary.rejectCount} مرفوض (أقل من 30 يوم)` : ''}
+            ${summary?.warningCount > 0 ? ` | ⚠️ ${summary.warningCount} تحذير (30-60 يوم)` : ''}
+            ${summary?.watchCount > 0 ? ` | 📊 ${summary.watchCount} ملاحظة (60-90 يوم)` : ''}
+            <br>تم فحص ${duplicateResult.totalChecked} حالة مقابل السجل التاريخي للمطالبات.
+          </p>
+          ${duplicateItems}
+        </div>
+      ` : `
+        <div style="margin-top:1.5rem;page-break-inside:avoid;">
+          <h3 style="background:#7c3aed;color:white;padding:10px;border-radius:8px;margin:0;">
+            🔄 Temporal Duplicate Surveillance (${summary?.totalDuplicates || duplicateResult.duplicates.length})
+          </h3>
+          <p style="background:#ede9fe;padding:10px;margin:0;font-size:12px;">
+            ${summary?.rejectCount > 0 ? `❌ ${summary.rejectCount} rejected (<30 days)` : ''}
+            ${summary?.warningCount > 0 ? ` | ⚠️ ${summary.warningCount} warnings (30-60 days)` : ''}
+            ${summary?.watchCount > 0 ? ` | 📊 ${summary.watchCount} notes (60-90 days)` : ''}
+          </p>
+          ${duplicateItems}
         </div>
       `;
     }
