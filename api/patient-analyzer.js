@@ -2,6 +2,7 @@
 import XLSX from 'xlsx';
 import { detectDuplicates, formatDuplicatesForPrompt, formatDuplicatesForReport } from './claim-history.js';
 import { detectMissingRequiredTests, generateMissingTestsSection, generateMissingTestsHTML } from './required-tests.js';
+import { calculateKPIs, generateKPIDashboardHTML, extractStatsFromReport, extractStatsFromCases } from './kpi-dashboard.js';
 
 // Robust date parser - handles Excel serials, dd/MM/yyyy, yyyy-MM-dd, and other formats
 // Returns ISO date string (YYYY-MM-DD) or null if unparseable
@@ -1575,7 +1576,21 @@ Return HTML only, no markdown or code blocks.
   
   console.log(`Completed processing. Generated report with ${caseResults.length} case analyses.`);
   
-  return res.status(200).json({ htmlReport: fullReport });
+  // Generate KPI Dashboard for multi-case report using structured case data
+  let kpiDashboard = '';
+  try {
+    const reportStats = extractStatsFromCases(cases); // Use structured case data
+    const kpis = calculateKPIs(reportStats);
+    kpiDashboard = generateKPIDashboardHTML(kpis, 'شهري');
+    console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10`);
+  } catch (kpiErr) {
+    console.error('[KPI] Error generating dashboard:', kpiErr.message);
+  }
+
+  // Append KPI dashboard to report
+  const finalReportWithKPI = kpiDashboard ? fullReport + kpiDashboard : fullReport;
+  
+  return res.status(200).json({ htmlReport: finalReportWithKPI });
 }
 
 function detectMimeType(base64Data = "") {
@@ -2234,7 +2249,25 @@ Return complete HTML in English.`;
     // Remove any remaining markdown code block markers
     text = text.replace(/^```\s*/gm, '').replace(/\s*```$/gm, '');
 
-    return res.status(200).json({ htmlReport: text });
+    // Generate KPI Dashboard (for single-case reports, case count = 1)
+    let kpiDashboard = '';
+    try {
+      const reportStats = extractStatsFromReport(text);
+      // For single-case handler, totalCases is 1 (multi-case Excel goes through processExcelCasesSequentially)
+      if (!reportStats.totalCases || reportStats.totalCases === 0) {
+        reportStats.totalCases = 1;
+      }
+      const kpis = calculateKPIs(reportStats);
+      kpiDashboard = generateKPIDashboardHTML(kpis, 'شهري');
+      console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10`);
+    } catch (kpiErr) {
+      console.error('[KPI] Error generating dashboard:', kpiErr.message);
+    }
+
+    // Append KPI dashboard to report
+    const finalReport = kpiDashboard ? text + kpiDashboard : text;
+
+    return res.status(200).json({ htmlReport: finalReport });
   } catch (err) {
     console.error("patient-analyzer error:", err);
     return res.status(500).json({ error: "Server error during case analysis", detail: err.message });
