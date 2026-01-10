@@ -1,6 +1,7 @@
 // /api/patient-analyzer.js
 import XLSX from 'xlsx';
 import { detectDuplicates, formatDuplicatesForPrompt, formatDuplicatesForReport } from './claim-history.js';
+import { detectMissingRequiredTests, generateMissingTestsSection, generateMissingTestsHTML } from './required-tests.js';
 
 // Robust date parser - handles Excel serials, dd/MM/yyyy, yyyy-MM-dd, and other formats
 // Returns ISO date string (YYYY-MM-DD) or null if unparseable
@@ -102,6 +103,8 @@ function parseTextContent(textContent) {
     const claimIdx = headers.findIndex(h => h.includes('claim') || h.includes('se no'));
     const patientIdx = headers.findIndex(h => h.includes('patient') || h.includes('file no'));
     const icdDescCols = headers.map((h, i) => (h.includes('icd') && h.includes('description')) ? i : -1).filter(i => i >= 0);
+    // Find ICD code columns (not descriptions) - e.g., "icd_code 1", "icd code"
+    const icdCodeCols = headers.map((h, i) => (h.includes('icd') && h.includes('code') && !h.includes('description')) ? i : -1).filter(i => i >= 0);
     const serviceDescIdx = headers.findIndex(h => (h.includes('service') && h.includes('desc')) || h.includes('item desc'));
     const serviceDateIdx = headers.findIndex(h => h.includes('date') || h.includes('تاريخ'));
     const tempIdx = headers.findIndex(h => h.includes('temp'));
@@ -135,6 +138,12 @@ function parseTextContent(textContent) {
         diagText = icdDescCols.map(idx => cells[idx] || '').filter(d => d).join(' | ');
       }
       
+      // Get ICD codes (actual codes like E11.9, K29.70)
+      let icdCodes = '';
+      if (icdCodeCols.length > 0) {
+        icdCodes = icdCodeCols.map(idx => cells[idx] || '').filter(c => c).join(' | ');
+      }
+      
       if (!caseMap.has(claimId)) {
         // Extract service date using robust parser
         const serviceDate = serviceDateIdx >= 0 ? parseServiceDate(cells[serviceDateIdx]) : null;
@@ -143,6 +152,7 @@ function parseTextContent(textContent) {
           claimId,
           patientId: patientIdx >= 0 ? cells[patientIdx] : '',
           diagnosis: diagText,
+          icdCode: icdCodes, // Add ICD codes for required tests detection
           serviceDate: serviceDate,
           vitals: {
             temperature: tempIdx >= 0 ? cells[tempIdx] : '',
@@ -165,6 +175,19 @@ function parseTextContent(textContent) {
       if (!c.serviceDate && serviceDateIdx >= 0) {
         const parsedDate = parseServiceDate(cells[serviceDateIdx]);
         if (parsedDate) c.serviceDate = parsedDate;
+      }
+      
+      // UPDATE icdCode if current row has ICD codes and we don't have them yet
+      if ((!c.icdCode || c.icdCode.length === 0) && icdCodes) {
+        c.icdCode = icdCodes;
+      } else if (c.icdCode && icdCodes && !c.icdCode.includes(icdCodes)) {
+        // Append new ICD codes if not already included
+        c.icdCode = c.icdCode + ' | ' + icdCodes;
+      }
+      
+      // UPDATE diagnosis if current row has diagnosis text and we don't have it yet
+      if ((!c.diagnosis || c.diagnosis.length === 0) && diagText) {
+        c.diagnosis = diagText;
       }
       
       // Extract service description
@@ -237,6 +260,8 @@ function parseExcelCases(base64Data) {
       
       // ICD columns - look for ICD DESCRIPTION (contains diagnosis text)
       const icdDescCols = headers.map((h, i) => (h.includes('icd') && h.includes('description')) ? i : -1).filter(i => i >= 0);
+      // ICD code columns (actual codes like E11.9) - for required tests detection
+      const icdCodeCols = headers.map((h, i) => (h.includes('icd') && h.includes('code') && !h.includes('description')) ? i : -1).filter(i => i >= 0);
       // Fallback to any column with "diag" or "تشخيص"
       const diagIdx = icdDescCols.length > 0 ? icdDescCols[0] : headers.findIndex(h => h.includes('diag') || h.includes('تشخيص'));
       
@@ -289,6 +314,12 @@ function parseExcelCases(base64Data) {
           diagText = String(row[diagIdx] || '');
         }
         
+        // Get ICD codes (actual codes like E11.9, K29.70)
+        let icdCodes = '';
+        if (icdCodeCols.length > 0) {
+          icdCodes = icdCodeCols.map(idx => row[idx] ? String(row[idx]).trim() : '').filter(c => c).join(' | ');
+        }
+        
         if (!caseMap.has(claimId)) {
           // Extract service date using robust parser
           const serviceDate = serviceDateIdx >= 0 ? parseServiceDate(row[serviceDateIdx]) : null;
@@ -297,6 +328,7 @@ function parseExcelCases(base64Data) {
             claimId,
             patientId: patientIdx >= 0 ? row[patientIdx] : '',
             diagnosis: diagText,
+            icdCode: icdCodes, // Add ICD codes for required tests detection
             serviceDate: serviceDate,
             vitals: {
               temperature: tempIdx >= 0 ? row[tempIdx] : '',
@@ -317,6 +349,19 @@ function parseExcelCases(base64Data) {
         if (!c.serviceDate && serviceDateIdx >= 0) {
           const parsedDate = parseServiceDate(row[serviceDateIdx]);
           if (parsedDate) c.serviceDate = parsedDate;
+        }
+        
+        // UPDATE icdCode if current row has ICD codes and we don't have them yet
+        if ((!c.icdCode || c.icdCode.length === 0) && icdCodes) {
+          c.icdCode = icdCodes;
+        } else if (c.icdCode && icdCodes && !c.icdCode.includes(icdCodes)) {
+          // Append new ICD codes if not already included
+          c.icdCode = c.icdCode + ' | ' + icdCodes;
+        }
+        
+        // UPDATE diagnosis if current row has diagnosis text and we don't have it yet
+        if ((!c.diagnosis || c.diagnosis.length === 0) && diagText) {
+          c.diagnosis = diagText;
         }
         
         // Extract service/medication from "Service description" column
@@ -1193,6 +1238,19 @@ Return HTML only, no markdown or code blocks.
       text = text.replace(/^```\s*/gm, '').replace(/\s*```$/gm, '');
       
       if (text) {
+        // كشف الفحوصات الناقصة من حق المريض
+        const missingTests = detectMissingRequiredTests(caseData);
+        if (missingTests && missingTests.length > 0) {
+          const missingTestsHTML = generateMissingTestsHTML(missingTests, language);
+          // إضافة الفحوصات الناقصة قبل نهاية div الحالة
+          const closeDivIdx = text.lastIndexOf('</div>');
+          if (closeDivIdx > 0) {
+            text = text.substring(0, closeDivIdx) + missingTestsHTML + text.substring(closeDivIdx);
+          } else {
+            text += missingTestsHTML;
+          }
+          console.log(`Case ${caseNumber}: Found ${missingTests.length} missing required tests`);
+        }
         caseResults.push(text);
         console.log(`Case ${caseNumber} processed successfully`);
       } else {
@@ -1207,6 +1265,23 @@ Return HTML only, no markdown or code blocks.
     } catch (err) {
       console.error(`Error processing case ${caseNumber}:`, err);
       caseResults.push(`<div class="case-section box-critical"><h3>❌ خطأ في الحالة ${caseNumber}</h3><p>${err.message}</p></div>`);
+    }
+  }
+  
+  // Collect missing tests across all cases for summary
+  let totalMissingTests = 0;
+  let casesWithMissingTests = 0;
+  const missingTestsSummary = new Map(); // testName -> count
+  
+  for (const caseData of cases) {
+    const missingTests = detectMissingRequiredTests(caseData);
+    if (missingTests && missingTests.length > 0) {
+      casesWithMissingTests++;
+      totalMissingTests += missingTests.length;
+      for (const test of missingTests) {
+        const key = `${test.testName}|${test.priority}`;
+        missingTestsSummary.set(key, (missingTestsSummary.get(key) || 0) + 1);
+      }
     }
   }
   
@@ -1253,6 +1328,7 @@ Return HTML only, no markdown or code blocks.
         <tr style="background:#d4edda"><td><strong>✅ الإجراءات المقبولة</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
         <tr style="background:#f8d7da"><td><strong>❌ الإجراءات المرفوضة</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
         <tr style="background:#fff3cd"><td><strong>⚠️ تحتاج توثيق</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
+        ${casesWithMissingTests > 0 ? `<tr style="background:#fef3c7"><td><strong>📋 حالات بفحوصات ناقصة (حق المريض)</strong></td><td style="font-size:16pt;font-weight:bold;color:#92400e;text-align:center;">${casesWithMissingTests} (${totalMissingTests} فحص)</td></tr>` : ''}
       </tbody>
     </table>
     
@@ -1299,6 +1375,7 @@ Return HTML only, no markdown or code blocks.
         <tr style="background:#d4edda"><td><strong>✅ Approved Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
         <tr style="background:#f8d7da"><td><strong>❌ Rejected Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
         <tr style="background:#fff3cd"><td><strong>⚠️ Needs Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
+        ${casesWithMissingTests > 0 ? `<tr style="background:#fef3c7"><td><strong>📋 Cases with Missing Required Tests</strong></td><td style="font-size:16pt;font-weight:bold;color:#92400e;text-align:center;">${casesWithMissingTests} (${totalMissingTests} tests)</td></tr>` : ''}
       </tbody>
     </table>
     
