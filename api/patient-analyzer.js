@@ -2,6 +2,62 @@
 import XLSX from 'xlsx';
 import { detectDuplicates, formatDuplicatesForPrompt, formatDuplicatesForReport } from './claim-history.js';
 
+// Robust date parser - handles Excel serials, dd/MM/yyyy, yyyy-MM-dd, and other formats
+// Returns ISO date string (YYYY-MM-DD) or null if unparseable
+function parseServiceDate(value) {
+  if (!value) return null;
+  
+  // Handle Excel serial date number
+  if (typeof value === 'number') {
+    const excelEpoch = new Date(1899, 11, 30);
+    const date = new Date(excelEpoch.getTime() + value * 86400000);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+    return null;
+  }
+  
+  const str = String(value).trim();
+  if (!str) return null;
+  
+  // Try ISO format (yyyy-MM-dd) first
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return str;
+  }
+  
+  // Handle dd/MM/yyyy or dd-MM-yyyy (common Arabic/European format)
+  const ddmmyyyy = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+  }
+  
+  // Handle MM/dd/yyyy (US format)
+  const mmddyyyy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mmddyyyy) {
+    const [, month, day, year] = mmddyyyy;
+    // Only try US format if day > 12 (can't be month)
+    if (parseInt(day) > 12) {
+      const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+      }
+    }
+  }
+  
+  // Last resort: try native Date parsing
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 2000 && parsed.getFullYear() < 2100) {
+    return parsed.toISOString().split('T')[0];
+  }
+  
+  return null; // Unparseable - return null, don't store invalid strings
+}
+
 // Parse text content that was pre-processed by frontend (pipe-separated rows)
 function parseTextContent(textContent) {
   try {
@@ -80,17 +136,8 @@ function parseTextContent(textContent) {
       }
       
       if (!caseMap.has(claimId)) {
-        // Extract service date from text
-        let serviceDate = null;
-        if (serviceDateIdx >= 0 && cells[serviceDateIdx]) {
-          const rawDate = cells[serviceDateIdx];
-          const parsed = new Date(rawDate);
-          if (!isNaN(parsed.getTime())) {
-            serviceDate = parsed.toISOString().split('T')[0];
-          } else {
-            serviceDate = String(rawDate);
-          }
-        }
+        // Extract service date using robust parser
+        const serviceDate = serviceDateIdx >= 0 ? parseServiceDate(cells[serviceDateIdx]) : null;
         
         caseMap.set(claimId, {
           claimId,
@@ -113,6 +160,12 @@ function parseTextContent(textContent) {
       
       const c = caseMap.get(claimId);
       c.rawData.push(line);
+      
+      // UPDATE serviceDate if current row has a valid date and we don't have one yet
+      if (!c.serviceDate && serviceDateIdx >= 0) {
+        const parsedDate = parseServiceDate(cells[serviceDateIdx]);
+        if (parsedDate) c.serviceDate = parsedDate;
+      }
       
       // Extract service description
       if (serviceDescIdx >= 0 && cells[serviceDescIdx]) {
@@ -237,30 +290,14 @@ function parseExcelCases(base64Data) {
         }
         
         if (!caseMap.has(claimId)) {
-          // Extract service date - handle Excel serial number or date string
-          let serviceDate = null;
-          if (serviceDateIdx >= 0 && row[serviceDateIdx]) {
-            const rawDate = row[serviceDateIdx];
-            if (typeof rawDate === 'number') {
-              // Excel serial date number
-              const excelEpoch = new Date(1899, 11, 30);
-              serviceDate = new Date(excelEpoch.getTime() + rawDate * 86400000).toISOString().split('T')[0];
-            } else {
-              // Try to parse as date string
-              const parsed = new Date(rawDate);
-              if (!isNaN(parsed.getTime())) {
-                serviceDate = parsed.toISOString().split('T')[0];
-              } else {
-                serviceDate = String(rawDate);
-              }
-            }
-          }
+          // Extract service date using robust parser
+          const serviceDate = serviceDateIdx >= 0 ? parseServiceDate(row[serviceDateIdx]) : null;
           
           caseMap.set(claimId, {
             claimId,
             patientId: patientIdx >= 0 ? row[patientIdx] : '',
             diagnosis: diagText,
-            serviceDate: serviceDate, // CRITICAL for duplicate detection
+            serviceDate: serviceDate,
             vitals: {
               temperature: tempIdx >= 0 ? row[tempIdx] : '',
               bloodPressure: bpIdx >= 0 ? row[bpIdx] : '',
@@ -275,6 +312,12 @@ function parseExcelCases(base64Data) {
         
         const c = caseMap.get(claimId);
         c.rawData.push(row.join(' | '));
+        
+        // UPDATE serviceDate if current row has a valid date and we don't have one yet
+        if (!c.serviceDate && serviceDateIdx >= 0) {
+          const parsedDate = parseServiceDate(row[serviceDateIdx]);
+          if (parsedDate) c.serviceDate = parsedDate;
+        }
         
         // Extract service/medication from "Service description" column
         if (serviceDescIdx >= 0 && row[serviceDescIdx]) {
