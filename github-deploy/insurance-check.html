@@ -2738,12 +2738,42 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
     return result + generateFreshKPIDashboard(aggregatedStats);
   }
   
-  // ✅ الحل: لا نحذف أي شيء من التقرير - نجمع كل شيء كما هو
+  // ✅ الحل: نحذف فقط الملخصات المكررة باستخدام DOM Parser (آمن)
+  function safeRemoveKPIOnly(html) {
+    if (!html || html.length < 100) return html;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div id="temp-wrapper">${html}</div>`, 'text/html');
+      const wrapper = doc.getElementById('temp-wrapper');
+      if (!wrapper) return html;
+      
+      // Find all elements that contain KPI text but are NOT case sections
+      const allElements = wrapper.querySelectorAll('div, table, section');
+      allElements.forEach(el => {
+        // ✅ حماية: لا نحذف أي case-section أو عناصرها
+        if (el.classList.contains('case-section')) return;
+        if (el.closest('.case-section')) return;
+        if (el.querySelector('.case-section')) return;
+        
+        const text = el.textContent || '';
+        // نحذف فقط صناديق الملخص/KPI
+        if ((text.includes('الملخص النهائي للتقرير') || text.includes('إحصائيات الحالات والخدمات')) &&
+            !text.includes('🔍 الحالة') && !text.includes('💊 الأدوية') && !text.includes('🔬 التحاليل')) {
+          el.remove();
+        }
+      });
+      
+      return wrapper.innerHTML;
+    } catch (e) {
+      return html;
+    }
+  }
+  
   let combinedHtml = '';
   
   reports.forEach((report, idx) => {
-    // ✅ لا نحذف أي شيء - نحتفظ بالتقرير كاملاً
-    let cleanedReport = report;
+    // ✅ نحذف الملخصات المتكررة فقط بطريقة آمنة
+    let cleanedReport = safeRemoveKPIOnly(report);
     
     // Update case count text
     cleanedReport = cleanedReport.replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
