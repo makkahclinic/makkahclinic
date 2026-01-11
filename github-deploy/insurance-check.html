@@ -2693,12 +2693,18 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
     `;
   }
   
-  // Remove existing KPI dashboard from HTML
+  // Remove existing KPI dashboard from HTML (carefully, without removing case content)
   function removeExistingKPIDashboard(html) {
-    // Remove the KPI section (الملخص النهائي للتقرير)
-    html = html.replace(/<div[^>]*>[\s\S]*?الملخص النهائي للتقرير[\s\S]*?<\/table>[\s\S]*?<\/div>\s*<\/div>/gi, '');
-    // Also remove any standalone KPI tables
-    html = html.replace(/<h3[^>]*>📊 الملخص النهائي[\s\S]*?<\/table>/gi, '');
+    // Remove KPI dashboard sections - be specific to avoid removing case analyses
+    // Pattern 1: الملخص النهائي للتقرير section with background gradient
+    html = html.replace(/<div[^>]*style="[^"]*margin-top:2rem;background:linear-gradient[^>]*>[\s\S]*?الملخص النهائي للتقرير[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi, '');
+    
+    // Pattern 2: KPI dashboard with table inside gradient container
+    html = html.replace(/<div[^>]*background:linear-gradient\(135deg,#1e3a5f[^>]*>[\s\S]*?إحصائيات الحالات والخدمات[\s\S]*?<\/table>[\s\S]*?<\/div>\s*<\/div>/gi, '');
+    
+    // Pattern 3: Remove KPI with chart.js canvas (if present)
+    html = html.replace(/<div[^>]*id="kpi-dashboard"[^>]*>[\s\S]*?<\/div>/gi, '');
+    
     return html;
   }
   

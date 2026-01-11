@@ -1822,18 +1822,19 @@ Return HTML only, no markdown or code blocks.
   const finalReportWithKPI = kpiDashboard ? fullReport + kpiDashboard : fullReport;
   
   // Return both HTML and structured stats for frontend aggregation
+  // Map field names: approvedCount->acceptedItems, rejectedCount->reviewItems, needsDocCount->docItems
   return res.status(200).json({ 
     htmlReport: finalReportWithKPI,
     stats: {
       totalCases: caseStats.totalCases || caseResults.length,
       totalServiceItems: caseStats.totalServiceItems || 0,
-      acceptedItems: caseStats.acceptedItems || 0,
-      reviewItems: caseStats.reviewItems || 0,
-      docItems: caseStats.docItems || 0,
+      acceptedItems: caseStats.approvedCount || 0,
+      reviewItems: caseStats.rejectedCount || 0,
+      docItems: caseStats.needsDocCount || 0,
       duplicateCases: caseStats.duplicateCases || 0,
       avgInsuranceScore: caseStats.avgInsuranceScore || 0,
       avgMedicalScore: caseStats.avgMedicalScore || 0,
-      vitalSignsDocRate: caseStats.vitalSignsDocRate || 0
+      vitalSignsDocRate: Math.round((caseStats.vitalsDocumented / Math.max(caseStats.totalCases, 1)) * 100) || 0
     }
   });
 }
@@ -2456,9 +2457,9 @@ Return complete HTML in English.`;
       stats: {
         totalCases: reportStats.totalCases || 1,
         totalServiceItems: reportStats.totalServiceItems || 0,
-        acceptedItems: reportStats.acceptedItems || 0,
-        reviewItems: reportStats.reviewItems || 0,
-        docItems: reportStats.docItems || 0,
+        acceptedItems: reportStats.approvedCount || 0,
+        reviewItems: reportStats.rejectedCount || 0,
+        docItems: reportStats.needsDocCount || 0,
         duplicateCases: reportStats.duplicateCases || 0,
         avgInsuranceScore: reportStats.avgInsuranceScore || 0,
         avgMedicalScore: reportStats.avgMedicalScore || 0,
