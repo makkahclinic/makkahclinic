@@ -2617,11 +2617,50 @@ function countCasesInContent(textContent) {
 }
 
 // Helper: Combine multiple HTML reports into one
-function combineReports(reports, totalCases) {
+function combineReports(reports, totalCases, aggregatedStats = null) {
   if (reports.length === 0) return '';
+  
+  // Helper function to update KPI stats in HTML
+  function updateKPIStats(html, stats) {
+    if (!stats) return html;
+    
+    // Update "إجمالي الحالات (المطالبات)" - find the row and update the value
+    html = html.replace(
+      /(<td[^>]*>📋 إجمالي الحالات \(المطالبات\)<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
+      `$1${stats.totalCases}$2`
+    );
+    
+    // Update "إجمالي بنود الخدمة في Excel"
+    html = html.replace(
+      /(<td[^>]*>📄 إجمالي بنود الخدمة في Excel<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
+      `$1${stats.totalServices}$2`
+    );
+    
+    // Update "بنود مقبولة"
+    html = html.replace(
+      /(<td[^>]*>✅ بنود مقبولة \(تقدير أولي\)<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
+      `$1${stats.acceptedItems}$2`
+    );
+    
+    // Update "بنود تحتاج مراجعة"  
+    html = html.replace(
+      /(<td[^>]*>❌ بنود تحتاج مراجعة<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
+      `$1${stats.reviewItems}$2`
+    );
+    
+    // Update "بنود تحتاج توثيق"
+    html = html.replace(
+      /(<td[^>]*>⚠️ بنود تحتاج توثيق<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
+      `$1${stats.docItems}$2`
+    );
+    
+    return html;
+  }
+  
   if (reports.length === 1) {
-    // Single report: update case count to show correct total
-    return reports[0].replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
+    // Single report: update case count and KPI stats
+    let result = reports[0].replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
+    return updateKPIStats(result, aggregatedStats);
   }
   
   // Simple approach: concatenate reports with separators
@@ -2692,6 +2731,9 @@ function combineReports(reports, totalCases) {
   
   // Replace existing final summary if present
   combinedHtml = combinedHtml.replace(/<div class="box-good"[^>]*>[\s\S]*?تم تحليل[\s\S]*?<\/div>\s*<\/div>\s*$/i, finalSummary);
+  
+  // Update KPI stats with aggregated values
+  combinedHtml = updateKPIStats(combinedHtml, aggregatedStats);
   
   return combinedHtml;
 }
@@ -3831,6 +3873,15 @@ analyzeBtn.addEventListener('click', async () => {
       const allReports = [];
       let processedCases = 0;
       
+      // Aggregated stats from all batches
+      const aggregatedStats = {
+        totalCases: 0,
+        totalServices: 0,
+        acceptedItems: 0,
+        reviewItems: 0,
+        docItems: 0
+      };
+      
       // Split files into batches
       const allBatches = [];
       filesToSend.forEach(f => {
@@ -3972,9 +4023,23 @@ analyzeBtn.addEventListener('click', async () => {
           const data = await resp.json();
           
           if (data.htmlReport || data.html) {
-            allReports.push(data.htmlReport || data.html);
+            const reportHtml = data.htmlReport || data.html;
+            allReports.push(reportHtml);
             processedCases += batch.caseCount;
-            console.log(`[Batch Analysis] Batch ${batchNum} completed: ${batch.caseCount} cases`);
+            
+            // Extract and aggregate stats from this batch's HTML
+            const extractNumber = (pattern) => {
+              const match = reportHtml.match(pattern);
+              return match ? parseInt(match[1]) || 0 : 0;
+            };
+            
+            aggregatedStats.totalCases += batch.caseCount;
+            aggregatedStats.totalServices += extractNumber(/📄 إجمالي بنود الخدمة في Excel<\/td>\s*<td[^>]*>(\d+)/i);
+            aggregatedStats.acceptedItems += extractNumber(/✅ بنود مقبولة \(تقدير أولي\)<\/td>\s*<td[^>]*>(\d+)/i);
+            aggregatedStats.reviewItems += extractNumber(/❌ بنود تحتاج مراجعة<\/td>\s*<td[^>]*>(\d+)/i);
+            aggregatedStats.docItems += extractNumber(/⚠️ بنود تحتاج توثيق<\/td>\s*<td[^>]*>(\d+)/i);
+            
+            console.log(`[Batch Analysis] Batch ${batchNum} completed: ${batch.caseCount} cases, Services: ${aggregatedStats.totalServices}`);
           } else if (data.error) {
             console.error(`[Batch Analysis] Batch ${batchNum} error:`, data.error);
             // Continue with next batch
@@ -4032,7 +4097,8 @@ analyzeBtn.addEventListener('click', async () => {
         
         await new Promise(r => setTimeout(r, 2000));
         
-        const combinedHtml = combineReports(allReports, processedCases);
+        console.log(`[Batch Analysis] Aggregated stats:`, aggregatedStats);
+        const combinedHtml = combineReports(allReports, processedCases, aggregatedStats);
         // Create success response
         var data = { success: true, html: combinedHtml, htmlReport: combinedHtml };
       } else {
