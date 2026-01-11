@@ -2619,7 +2619,10 @@ function countCasesInContent(textContent) {
 // Helper: Combine multiple HTML reports into one
 function combineReports(reports, totalCases) {
   if (reports.length === 0) return '';
-  if (reports.length === 1) return reports[0];
+  if (reports.length === 1) {
+    // Single report: update case count to show correct total
+    return reports[0].replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
+  }
   
   // Simple approach: concatenate reports with separators
   // Remove duplicate headers/footers by stripping them from middle reports
@@ -2638,8 +2641,11 @@ function combineReports(reports, totalCases) {
           </div>
         </div>
       ` : '';
-      // Insert batch header after the main title
-      combinedHtml = report.replace(/(<h2[^>]*>تقرير التدقيق التأميني الشامل<\/h2>)/i, '$1' + batchHeader);
+      // Insert batch header after the main title AND update case count
+      let modifiedReport = report.replace(/(<h2[^>]*>تقرير التدقيق التأميني الشامل<\/h2>)/i, '$1' + batchHeader);
+      // Update "تم تحليل X حالة" to show total instead of batch count
+      modifiedReport = modifiedReport.replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
+      combinedHtml = modifiedReport;
     } else {
       // Subsequent reports: extract main content only
       // Remove opening container divs and closing footer
@@ -3765,7 +3771,16 @@ function highlightRejectedCells() {
   });
 }
 
+// Flag to prevent duplicate analysis requests
+let isAnalyzing = false;
+
 analyzeBtn.addEventListener('click', async () => {
+  // Prevent duplicate requests
+  if (isAnalyzing) {
+    console.log('[Debounce] Analysis already in progress, ignoring click');
+    return;
+  }
+  
   const manualText = document.getElementById('manualCaseInput')?.value?.trim() || '';
   
   if (filesState.length === 0 && manualText.length === 0) return;
@@ -3777,6 +3792,7 @@ analyzeBtn.addEventListener('click', async () => {
     return;
   }
   
+  isAnalyzing = true;
   analyzeBtn.disabled = true;
   statusText.textContent = 'جاري التدقيق الطبي وفقاً لمعايير الصحة العالمية...';
   statusMsg.style.display = 'flex';
@@ -4164,6 +4180,7 @@ analyzeBtn.addEventListener('click', async () => {
     `;
     reportSection.classList.add('show');
   } finally {
+    isAnalyzing = false;
     analyzeBtn.disabled = false;
     statusMsg.style.display = 'none';
   }
