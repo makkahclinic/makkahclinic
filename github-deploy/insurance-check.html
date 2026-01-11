@@ -2732,22 +2732,18 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
   }
   
   if (reports.length === 1) {
-    // Single report: remove old KPI and add fresh one
+    // Single report: keep everything as is, just update case count
     let result = reports[0].replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
-    result = removeExistingKPIDashboard(result);
+    // ✅ لا نحذف أي شيء - نضيف KPI جديدة فقط في النهاية
     return result + generateFreshKPIDashboard(aggregatedStats);
   }
   
-  // SIMPLIFIED APPROACH: Keep ALL report content, just add separators and aggregated KPI
+  // ✅ الحل: لا نحذف أي شيء من التقرير - نجمع كل شيء كما هو
   let combinedHtml = '';
   
-  console.log(`[combineReports] Combining ${reports.length} reports, totalCases=${totalCases}`);
   reports.forEach((report, idx) => {
-    console.log(`[combineReports] Report ${idx+1} original length: ${report?.length || 0}`);
-    
-    // Remove KPI dashboard from each batch (will add aggregated one at the end)
-    let cleanedReport = removeExistingKPIDashboard(report);
-    console.log(`[combineReports] Report ${idx+1} after KPI removal: ${cleanedReport?.length || 0}`);
+    // ✅ لا نحذف أي شيء - نحتفظ بالتقرير كاملاً
+    let cleanedReport = report;
     
     // Update case count text
     cleanedReport = cleanedReport.replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
@@ -2779,7 +2775,7 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
     combinedHtml += cleanedReport;
   });
   
-  // Add final summary
+  // Add final summary at the very end
   combinedHtml += `
     <div style="margin-top:2rem;padding:1.5rem;background:linear-gradient(135deg,#0d5c2e 0%,#1a7a3e 100%);border-radius:12px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
       <div style="color:#fff;font-size:1.5rem;font-weight:bold;margin-bottom:0.5rem;">
@@ -4248,13 +4244,14 @@ analyzeBtn.addEventListener('click', async () => {
         </div>
       `;
       
-      // Sanitize HTML with DOMPurify for XSS protection
+      // Sanitize HTML with DOMPurify for XSS protection - توسيع السماح للحفاظ على المحتوى
       const sanitizedHtml = typeof DOMPurify !== 'undefined' 
         ? DOMPurify.sanitize(data.html, { 
-            USE_PROFILES: { html: true },
+            USE_PROFILES: { html: false },
             ALLOW_DATA_ATTR: true,
+            ADD_TAGS: ['section','article','details','summary','main','header','footer','nav','aside','figure','figcaption'],
             FORBID_TAGS: ['script','iframe','object','embed'],
-            ALLOWED_ATTR: ['style','class','href','target','rel','data-insurance-rating','data-service-rating','id','src','alt','width','height','colspan','rowspan','border']
+            ALLOWED_ATTR: ['style','class','href','target','rel','id','src','alt','width','height','colspan','rowspan','border','data-insurance-score','data-medical-score','data-insurance-rating','data-service-rating','data-case-id','data-claim-id']
           })
         : data.html;
       
