@@ -2034,13 +2034,24 @@ export default async function handler(req, res) {
     let excelCases = null;
     let excelFile = null;
     
+    // Log batch info if present
+    if (req.body.batchInfo) {
+      console.log(`[Batch Processing] Received batch ${req.body.batchInfo.current} of ${req.body.batchInfo.total}`);
+    }
+    
     if (Array.isArray(req.body.files)) {
       for (const f of req.body.files) {
         const content = f.base64 || f.textContent || '';
-        if (!content) continue;
+        if (!content) {
+          console.log(`[File Check] File ${f.name} has no content, skipping`);
+          continue;
+        }
         
         const fileName = (f.name || '').toLowerCase();
         const mimeType = f.type || 'text/plain';
+        
+        // Log content info for debugging
+        console.log(`[File Check] Processing: ${f.name}, type: ${mimeType}, base64 length: ${(f.base64 || '').length}, textContent length: ${(f.textContent || '').length}`);
         
         // Check if it's an Excel file - MUST check before other file processing
         const isExcelFile = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv') ||
@@ -2052,6 +2063,12 @@ export default async function handler(req, res) {
           excelFile = f;
           const base64Content = f.base64 || '';
           const textContent = f.textContent || '';
+          
+          // Log textContent first line for header debugging
+          if (textContent) {
+            const firstLine = textContent.split('\n')[0]?.substring(0, 200) || '';
+            console.log(`[Excel Detection] TextContent first line (header): ${firstLine}...`);
+          }
           
           // Try to parse as base64 Excel first (if valid base64)
           if (base64Content && /^[A-Za-z0-9+/]+=*$/.test(base64Content.substring(0, 100).replace(/\s/g, ''))) {
