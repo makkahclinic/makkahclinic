@@ -2551,8 +2551,19 @@ function combineReports(reports, totalCases) {
   
   reports.forEach((report, idx) => {
     if (idx === 0) {
-      // First report: keep everything
-      combinedHtml = report;
+      // First report: add batch header at the beginning
+      const batchHeader = reports.length > 1 ? `
+        <div style="margin-bottom:1.5rem;padding:1rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);border-radius:12px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+          <div style="color:#c9a962;font-size:1.3rem;font-weight:bold;">
+            📦 الدفعة 1
+          </div>
+          <div style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:0.3rem;">
+            إجمالي الدفعات: ${reports.length}
+          </div>
+        </div>
+      ` : '';
+      // Insert batch header after the main title
+      combinedHtml = report.replace(/(<h2[^>]*>تقرير التدقيق التأميني الشامل<\/h2>)/i, '$1' + batchHeader);
     } else {
       // Subsequent reports: extract main content only
       // Remove opening container divs and closing footer
@@ -2566,23 +2577,34 @@ function combineReports(reports, totalCases) {
       // Remove closing divs at the end
       content = content.replace(/<div class="box-good"[\s\S]*?<\/div>\s*<\/div>\s*$/i, '');
       
-      // Add batch separator
+      // Add batch separator with clear visual distinction
       combinedHtml = combinedHtml.replace(/<\/div>\s*$/, ''); // Remove closing div
       combinedHtml += `
-        <hr style="margin:1.5rem 0;border:1px dashed #ccc;">
-        <div class="box-info" style="text-align:center;padding:0.5rem;margin:0.5rem 0;">
-          <small>الدفعة ${idx + 1}</small>
+        <div style="margin:2rem 0;padding:1rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);border-radius:12px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+          <div style="color:#c9a962;font-size:1.3rem;font-weight:bold;">
+            📦 الدفعة ${idx + 1}
+          </div>
+          <div style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:0.3rem;">
+            تحليل مجموعة جديدة من الحالات
+          </div>
         </div>
       `;
       combinedHtml += content;
     }
   });
   
-  // Add final summary
+  // Add final summary with batch breakdown
   const finalSummary = `
-    <div class="box-good" style="text-align:center;margin-top:2rem;">
-      <strong>✅ تم تحليل ${totalCases} حالة بنجاح</strong>
-      <br><small>تم التحليل على ${reports.length} دفعة</small>
+    <div style="margin-top:2rem;padding:1.5rem;background:linear-gradient(135deg,#0d5c2e 0%,#1a7a3e 100%);border-radius:12px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+      <div style="color:#fff;font-size:1.5rem;font-weight:bold;margin-bottom:0.5rem;">
+        ✅ اكتمل التحليل بنجاح
+      </div>
+      <div style="color:rgba(255,255,255,0.9);font-size:1.1rem;">
+        تم تحليل <strong style="color:#ffd700;">${totalCases}</strong> حالة
+      </div>
+      <div style="color:rgba(255,255,255,0.7);font-size:0.9rem;margin-top:0.5rem;">
+        تم التحليل على <strong>${reports.length}</strong> دفعة متتالية
+      </div>
     </div>
   </div>`;
   
