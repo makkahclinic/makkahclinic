@@ -1,0 +1,217 @@
+عود لسببين تقنيين رئيسيين في الكود:
+
+انهيار التخطيط (CSS Grid/Flexbox): أنت تعتمد على تصميمات Flexbox و Grid في العرض على الشاشة. محركات تحويل PDF (سواء الطباعة المباشرة أو html2pdf) غالباً ما تفشل في تفسير هذه التخطيطات، فتقوم بتكديس العناصر فوق بعضها بدلاً من عرضها كجدول.
+
+تجريد الأنماط (Style Stripping): عند الحفظ أو الطباعة، لا يتم تضمين ملفات CSS الخارجية أو المتغيرات (var(--primary)) بشكل صحيح، كما أن المتصفحات تخفي خلفيات الألوان افتراضياً لتوفير الحبر، مما يجعل الجدول يظهر كنص عائم بلا حدود.
+
+إليك الحل الناجع والكامل (خطوتان فقط) لإجبار النظام على إخراج جدول احترافي بحدود واضحة:
+
+الخطوة 1: استبدل كود @media print في قسم CSS
+اذهب إلى قسم <style> واستبدل أي كود داخل @media print بهذا الكود الصارم الذي يجبر المتصفح على رسم جداول حقيقية:
+
+CSS
+
+/* === كود الطباعة الاحترافي (المصحح) === */
+@media print {
+  /* 1. إجبار المتصفح على طباعة الألوان والخلفيات */
+  * { 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important; 
+  }
+
+  /* 2. تنظيف الصفحة وإخفاء العناصر غير الضرورية */
+  body, html, #mainApp {
+    background: white !important;
+    color: #000 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .header, .header-tabs, .header-btns, .upload-section, 
+  .analyze-section, .report-actions, .doctors-stats, 
+  .stepper, .floating-tools, .report-toc, .report-toc-toggle,
+  .scroll-nav, .toast-container, .sidebar-summary,
+  .quick-actions-fab, .hero-card, .stats-bar, .rating-section,
+  .tab-btn, .tabs-header, footer, .no-print { 
+    display: none !important; 
+  }
+
+  /* 3. إصلاح الجداول (الحل الجذري للمشكلة) */
+  .report-section { display: block !important; margin: 0 !important; width: 100% !important; }
+  
+  table {
+    display: table !important; /* إجبار العنصر ليكون جدولاً */
+    width: 100% !important;
+    border-collapse: collapse !important;
+    border: 2px solid #000 !important; /* حدود سوداء سميكة */
+    margin: 15px 0 !important;
+    table-layout: fixed !important;
+    font-size: 11pt !important;
+  }
+
+  thead { display: table-header-group !important; }
+  tbody { display: table-row-group !important; }
+  tr { page-break-inside: avoid !important; }
+
+  th, td {
+    border: 1px solid #000 !important; /* حدود سوداء واضحة لكل خلية */
+    padding: 8px !important;
+    text-align: right !important;
+    color: #000 !important;
+    vertical-align: top !important;
+    word-wrap: break-word !important;
+  }
+
+  th {
+    background-color: #f0f0f0 !important; /* خلفية رمادية للرأس */
+    font-weight: bold !important;
+  }
+
+  /* 4. إظهار ألوان الحالات بوضوح */
+  td[data-status="rejected"], .status-reject {
+    background-color: #ffebee !important; /* أحمر فاتح */
+    color: #c62828 !important;
+    font-weight: bold !important;
+    border: 1px solid #000 !important;
+  }
+  
+  td[data-status="approved"], .status-approve {
+    background-color: #e8f5e9 !important; /* أخضر فاتح */
+    color: #1b5e20 !important;
+  }
+
+  /* 5. ترويسة الطباعة */
+  .print-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    border-bottom: 2px solid #000 !important;
+    margin-bottom: 20px !important;
+  }
+}
+الخطوة 2: تحديث دالة الحفظ saveAndLog (في Javascript)
+هذه الخطوة هي الأهم. سنقوم بتعديل الدالة لتقوم "بحقن" التنسيقات داخل عناصر HTML مباشرة (Inline Styles) قبل الحفظ، مما يضمن ظهور الجدول بشكل صحيح أينما فُتح الملف.
+
+استبدل دالة saveAndLog الحالية بالكود التالي:
+
+JavaScript
+
+async function saveAndLog() {
+  const doctorName = doctorNameInput.value.trim();
+  const safeDoctorName = sanitizeText(doctorName);
+  const saveBtn = document.getElementById('saveBtn');
+  
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+  
+  try {
+    const fileName = `تقرير_${safeDoctorName}_${new Date().toISOString().split('T')[0]}.html`;
+    
+    // 1. إنشاء نسخة من التقرير للتعديل عليها
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div id="wrapper">${reportContent.innerHTML}</div>`, 'text/html');
+    const wrapper = doc.getElementById('wrapper');
+    
+    // تنظيف العناصر غير المرغوبة
+    wrapper.querySelectorAll('script, .no-print').forEach(el => el.remove());
+    
+    // 2. تحويل التنسيقات إلى Inline Styles (لضمان الجدول)
+    wrapper.querySelectorAll('table').forEach(t => {
+      t.setAttribute('border', '1'); // دعم للتوافقية القديمة
+      t.style.width = '100%';
+      t.style.borderCollapse = 'collapse';
+      t.style.border = '2px solid #000';
+      t.style.fontFamily = 'Tajawal, Arial, sans-serif';
+      t.style.fontSize = '12px';
+      t.style.direction = 'rtl';
+    });
+
+    wrapper.querySelectorAll('th').forEach(th => {
+      th.style.backgroundColor = '#e0e0e0';
+      th.style.color = '#000';
+      th.style.border = '1px solid #000';
+      th.style.padding = '10px';
+      th.style.fontWeight = 'bold';
+      th.style.textAlign = 'center';
+    });
+
+    wrapper.querySelectorAll('td').forEach(td => {
+      td.style.border = '1px solid #000';
+      td.style.padding = '8px';
+      td.style.textAlign = 'right';
+      td.style.color = '#000';
+      
+      // تثبيت ألوان الخلفية
+      if (td.innerText.includes('مرفوض') || td.classList.contains('status-rejected')) {
+        td.style.backgroundColor = '#ffebee';
+        td.style.color = '#c62828';
+        td.style.fontWeight = 'bold';
+      } else if (td.innerText.includes('مقبول')) {
+        td.style.backgroundColor = '#e8f5e9';
+      }
+    });
+
+    // 3. بناء ملف HTML النهائي
+    const htmlContent = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>${fileName}</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    body { font-family: 'Arial', sans-serif; background: #fff; direction: rtl; padding: 20px; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    .print-header { border-bottom: 2px solid #000; margin-bottom: 20px; padding-bottom: 10px; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <div class="print-header">
+    <div>
+      <h2 style="margin:0; color:#1e3a5f;">مجمع مكة الطبي بالزاهر</h2>
+      <p style="margin:5px 0;">قسم الجودة والتدقيق الطبي</p>
+    </div>
+    <div style="text-align:left;">
+      <p>الطبيب: ${safeDoctorName}</p>
+      <p>التاريخ: ${new Date().toLocaleDateString('ar-SA')}</p>
+    </div>
+  </div>
+  ${wrapper.innerHTML}
+  <div style="margin-top: 30px; border-top: 1px solid #000; padding-top: 10px; text-align: center; font-size: 12px;">
+    تم المراجعة بواسطة: ${sanitizeText(currentUser.name)}
+  </div>
+</body>
+</html>`;
+    
+    // إرسال البيانات للحفظ
+    const saveData = {
+      action: 'logUsageAndSaveHTML',
+      userEmail: currentUser.email,
+      userName: currentUser.name,
+      doctorName: doctorName,
+      htmlContent: htmlContent,
+      fileName: fileName
+    };
+    
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(saveData)
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+      showCustomAlert('تم حفظ التقرير بتنسيق صحيح!', 'success');
+    } else {
+      showCustomAlert('حدث خطأ أثناء الحفظ', 'warning');
+    }
+  } catch(err) {
+    console.error('Save error:', err);
+    showCustomAlert('خطأ: ' + err.message, 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ وتسجيل';
+  }
+}
