@@ -25,7 +25,8 @@ export function calculateKPIs(reportStats) {
     : 0;
   
   const needsDocRate = (reportStats.needsDocCount || 0) / totalCases;
-  const duplicateRate = (reportStats.duplicateCount || 0) / totalCases;
+  // استخدام نسبة التكرار المحسوبة من extractStatsFromCases (عدد الحالات بتكرار ÷ إجمالي الحالات)
+  const duplicateRate = reportStats.duplicateRate || ((reportStats.duplicateCases || 0) / totalCases);
   const ivWithoutJustificationRate = (reportStats.ivWithoutJustification || 0) / totalCases;
 
   // استخدام متوسط تقييمات الذكاء الاصطناعي إن وجدت
@@ -301,10 +302,12 @@ function generateImprovementPlan(kpis) {
 export function extractStatsFromCases(cases) {
   const stats = {
     totalCases: cases.length,
+    totalServiceItems: 0, // إجمالي بنود الخدمة من الإكسل
     approvedCount: 0,
     rejectedCount: 0,
     needsDocCount: 0,
     duplicateCount: 0,
+    duplicateCases: 0, // عدد الحالات التي فيها تكرار
     ivWithoutJustification: 0,
     antibioticTotal: 0,
     antibioticAppropriate: 0,
@@ -312,10 +315,37 @@ export function extractStatsFromCases(cases) {
     requiredTestsTotal: 0,
     requiredTestsOrdered: 0,
     diagnosisSpecific: 0,
+    diagnosisNonSpecific: 0, // للتوضيح
     icdCodesPresent: 0
   };
 
+  // تتبع التكرارات على مستوى الخدمة
+  const serviceOccurrences = new Map(); // claimId+serviceCode -> count
+
   for (const c of cases) {
+    // حساب إجمالي بنود الخدمة الفعلية
+    const serviceCount = c.services?.length || 0;
+    stats.totalServiceItems += serviceCount;
+    
+    // تتبع التكرارات داخل نفس المطالبة
+    const claimServices = new Map();
+    for (const svc of (c.services || [])) {
+      const key = `${c.claimId}_${svc.code || svc.name}`;
+      claimServices.set(key, (claimServices.get(key) || 0) + 1);
+    }
+    
+    // حساب التكرارات
+    let hasDuplicate = false;
+    for (const [key, count] of claimServices) {
+      if (count > 1) {
+        stats.duplicateCount += (count - 1);
+        hasDuplicate = true;
+      }
+    }
+    if (hasDuplicate) {
+      stats.duplicateCases++;
+    }
+    
     // Vitals documented
     if (c.vitals && (c.vitals.temperature || c.vitals.bloodPressure || c.vitals.pulse)) {
       stats.vitalsDocumented++;
@@ -326,11 +356,19 @@ export function extractStatsFromCases(cases) {
       stats.icdCodesPresent++;
     }
 
-    // Specific diagnosis (not vague)
-    if (c.diagnosis && c.diagnosis.length > 10 && 
-        !c.diagnosis.toLowerCase().includes('unspecified') &&
-        !c.diagnosis.includes('غير محدد')) {
+    // Specific diagnosis - تعريف واضح
+    // التشخيص غير محدد إذا: يحتوي على UNSPECIFIED أو ينتهي بـ .9 أو يحتوي على "site not specified"
+    const diagLower = (c.diagnosis || '').toLowerCase();
+    const icdCode = c.icdCode || '';
+    const isNonSpecific = diagLower.includes('unspecified') ||
+                          diagLower.includes('site not specified') ||
+                          diagLower.includes('غير محدد') ||
+                          icdCode.endsWith('.9');
+    
+    if (c.diagnosis && c.diagnosis.length > 5 && !isNonSpecific) {
       stats.diagnosisSpecific++;
+    } else if (c.diagnosis) {
+      stats.diagnosisNonSpecific++;
     }
 
     // Count IV medications without clear justification
@@ -375,11 +413,8 @@ export function extractStatsFromCases(cases) {
     }
   }
 
-  // Estimate approval rate based on documentation quality
-  const docQuality = (stats.vitalsDocumented + stats.icdCodesPresent + stats.diagnosisSpecific) / (stats.totalCases * 3);
-  stats.approvedCount = Math.round(stats.totalCases * Math.min(0.9, docQuality + 0.3));
-  stats.needsDocCount = Math.round(stats.totalCases * (1 - docQuality) * 0.5);
-  stats.rejectedCount = stats.totalCases - stats.approvedCount - stats.needsDocCount;
+  // نسبة التكرار: عدد الحالات التي فيها تكرار ÷ إجمالي الحالات
+  stats.duplicateRate = stats.totalCases > 0 ? (stats.duplicateCases / stats.totalCases) : 0;
 
   return stats;
 }

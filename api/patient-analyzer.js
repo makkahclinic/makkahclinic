@@ -216,12 +216,10 @@ function parseTextContent(textContent) {
         c.diagnosis = diagText;
       }
       
-      // Extract service description
+      // Extract service description - الاحتفاظ بكل الخدمات حتى المكررة للحساب الصحيح
       if (serviceDescIdx >= 0 && cells[serviceDescIdx]) {
         const serviceDesc = cells[serviceDescIdx];
-        if (!c.services.some(s => s.name === serviceDesc)) {
-          c.services.push({ name: serviceDesc, code: '', amount: '' });
-        }
+        c.services.push({ name: serviceDesc, code: '', amount: '' });
       }
     }
     
@@ -421,8 +419,8 @@ function parseExcelCases(base64Data) {
           const serviceCode = serviceCodeIdx >= 0 ? String(row[serviceCodeIdx] || '') : '';
           const amount = amountIdx >= 0 ? row[amountIdx] : '';
           
-          // Check if already added (avoid duplicates)
-          if (serviceDesc && !c.services.some(s => s.name === serviceDesc)) {
+          // الاحتفاظ بكل الخدمات حتى المكررة للحساب الصحيح
+          if (serviceDesc) {
             c.services.push({
               name: serviceDesc,
               code: serviceCode,
@@ -1447,6 +1445,28 @@ Return HTML only, no markdown or code blocks.
       <table style="width:100%;font-size:11px;">
         <tr><td width="50%"><strong>الالتزام التأميني (من 10):</strong><br>10 = توثيق كامل | 8-9 = جيد | 5-7 = متوسط | 1-4 = ضعيف</td>
         <td><strong>جودة الإجراءات (من 10):</strong><br>10 = مبررة بالكامل | 8-9 = مناسبة | 5-7 = تحتاج توضيح | 1-4 = غير مبررة</td></tr>
+      </table>
+    </div>
+    
+    <div style="margin-top:1.5rem;background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0;">
+      <h4 style="margin:0 0 10px 0;color:#334155;font-size:13px;">📋 المنهجية والتعريفات:</h4>
+      <table style="width:100%;font-size:11px;color:#475569;">
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td width="30%"><strong>الإجراءات المقبولة/المرفوضة:</strong></td>
+          <td>عدد الأحكام (✅/❌/⚠️) في تقييم AI لكل بند. ملاحظة: البند الواحد قد يُقيّم من عدة جوانب (CDI, NPHIES, إرشادات سريرية).</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td><strong>التشخيص المحدد:</strong></td>
+          <td>التشخيص يُعتبر "غير محدد" إذا احتوى على: UNSPECIFIED، site not specified، غير محدد، أو انتهى كود ICD بـ .9</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td><strong>نسبة التكرار:</strong></td>
+          <td>عدد الحالات التي تحتوي على نفس الخدمة مكررة داخل نفس المطالبة ÷ إجمالي الحالات</td>
+        </tr>
+        <tr>
+          <td><strong>تقييم AI:</strong></td>
+          <td>يُحسب كمتوسط التقييمات (data-insurance-score) التي يُخرجها نموذج Gemini لكل حالة</td>
+        </tr>
       </table>
     </div>
   </div>
