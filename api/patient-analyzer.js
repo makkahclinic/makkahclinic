@@ -547,77 +547,81 @@ function injectCaseDataIntoHTML(aiHtml, caseData) {
   if (!aiHtml || !caseData) return aiHtml;
   
   let html = aiHtml;
-  
-  // حقن التشخيص إذا كان فارغاً
-  const diagnosisPattern = /<tr>\s*<td>\s*<strong>التشخيص:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
-  const diagnosisValue = caseData.diagnosis || caseData.icdCode || '-';
-  if (diagnosisPattern.test(html)) {
-    html = html.replace(diagnosisPattern, `<tr><td><strong>التشخيص:</strong></td><td>${diagnosisValue}</td></tr>`);
-  }
-  
-  // حقن درجة الحرارة
   const vitals = caseData.vitals || {};
-  const tempValue = vitals.temperature && vitals.temperature !== 'N/A' && vitals.temperature !== '' 
-    ? vitals.temperature 
-    : '<span style="color:#856404">⚠️ غير متوفر</span>';
-  const tempPattern = /<tr>\s*<td>\s*<strong>درجة الحرارة:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
-  if (tempPattern.test(html)) {
-    html = html.replace(tempPattern, `<tr><td><strong>درجة الحرارة:</strong></td><td>${tempValue}</td></tr>`);
-  }
   
-  // حقن ضغط الدم
-  const bpValue = vitals.bloodPressure && vitals.bloodPressure !== 'N/A' && vitals.bloodPressure !== ''
-    ? vitals.bloodPressure
-    : '<span style="color:#856404">⚠️ غير متوفر</span>';
-  const bpPattern = /<tr>\s*<td>\s*<strong>ضغط الدم:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
-  if (bpPattern.test(html)) {
-    html = html.replace(bpPattern, `<tr><td><strong>ضغط الدم:</strong></td><td>${bpValue}</td></tr>`);
-  }
+  // ========== استبدال الـ Placeholders المباشرة ==========
+  // هذه هي الـ placeholders التي يولدها الـ AI
   
-  // حقن الطول
-  const heightValue = vitals.height && vitals.height !== '' 
-    ? vitals.height 
-    : '<span style="color:#856404">⚠️ غير متوفر</span>';
-  const heightPattern = /<tr>\s*<td>\s*<strong>الطول:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
-  if (heightPattern.test(html)) {
-    html = html.replace(heightPattern, `<tr><td><strong>الطول:</strong></td><td>${heightValue}</td></tr>`);
-  }
+  // استبدال placeholder التشخيص
+  html = html.replace(/\[التشخيص\]/g, caseData.diagnosis || caseData.icdCode || 'غير محدد');
+  html = html.replace(/\[رقم ICD\]/g, caseData.icdCode || '-');
   
-  // حقن الوزن
-  const weightValue = vitals.weight && vitals.weight !== '' 
-    ? vitals.weight 
-    : '<span style="color:#856404">⚠️ غير متوفر</span>';
-  const weightPattern = /<tr>\s*<td>\s*<strong>الوزن:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
-  if (weightPattern.test(html)) {
-    html = html.replace(weightPattern, `<tr><td><strong>الوزن:</strong></td><td>${weightValue}</td></tr>`);
-  }
+  // استبدال placeholders العلامات الحيوية
+  html = html.replace(/\[درجة الحرارة\]/g, vitals.temperature || 'غير متوفر');
+  html = html.replace(/\[ضغط الدم\]/g, vitals.bloodPressure || 'غير متوفر');
+  html = html.replace(/\[الطول\]/g, vitals.height || 'غير متوفر');
+  html = html.replace(/\[الوزن\]/g, vitals.weight || 'غير متوفر');
+  html = html.replace(/\[النبض\]/g, vitals.pulse || 'غير متوفر');
+  html = html.replace(/\[السكري\]/g, vitals.bloodSugar || 'غير متوفر');
   
-  // حقن النبض
-  const pulseValue = vitals.pulse && vitals.pulse !== '' 
-    ? vitals.pulse 
-    : '<span style="color:#856404">⚠️ غير متوفر</span>';
-  const pulsePattern = /<tr>\s*<td>\s*<strong>النبض:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
-  if (pulsePattern.test(html)) {
-    html = html.replace(pulsePattern, `<tr><td><strong>النبض:</strong></td><td>${pulseValue}</td></tr>`);
-  }
-  
-  // إذا لم يوجد جدول أدوية صحيح، أنشئ واحداً
-  const medsTableCheck = /<h4>💊 الأدوية<\/h4>\s*<table[^>]*>\s*<thead[^>]*>[\s\S]*?<\/thead>\s*<tbody>\s*(?:<tr>\s*<td>لا يوجد<\/td>\s*<\/tr>|<tr>\s*<td>\s*<\/td>)/gi;
-  if (caseData.medications && caseData.medications.length > 0 && medsTableCheck.test(html)) {
-    const medsRows = caseData.medications.map(m => 
-      `<tr><td>${m.name}</td><td>${m.dose || '-'}</td><td>⏳ جاري التحليل</td><td>-</td></tr>`
+  // استبدال placeholders الأدوية - نبني صفوف جدول حقيقية
+  if (caseData.medications && caseData.medications.length > 0) {
+    // البحث عن صف placeholder الأدوية واستبداله
+    const medPlaceholderRow = /<tr[^>]*>\s*<td[^>]*>\s*\[اسم الدواء\]\s*<\/td>\s*<td[^>]*>\s*\[الجرعة\/الكمية\]\s*<\/td>[\s\S]*?<\/tr>/gi;
+    const medRows = caseData.medications.map((m, idx) => 
+      `<tr style="background:${idx % 2 === 0 ? '#f8fafc' : 'white'}">
+        <td style="border:1px solid #ccc;padding:6px">${m.name}</td>
+        <td style="border:1px solid #ccc;padding:6px">${m.dose || '-'}</td>
+        <td style="border:1px solid #ccc;padding:6px">⏳ راجع التقييم أدناه</td>
+        <td style="border:1px solid #ccc;padding:6px">-</td>
+      </tr>`
     ).join('\n');
+    html = html.replace(medPlaceholderRow, medRows);
     
-    html = html.replace(medsTableCheck, 
-      `<h4>💊 الأدوية</h4>
-      <table class="custom-table">
-        <thead style="background:#1e3a5f;color:white">
-          <tr><th>الدواء</th><th>الجرعة</th><th>التقييم</th><th>الحالة</th></tr>
-        </thead>
-        <tbody>
-        ${medsRows}`
-    );
+    // أيضاً استبدال النص المباشر
+    html = html.replace(/\[اسم الدواء\]/g, caseData.medications[0]?.name || '-');
+    html = html.replace(/\[الجرعة\/الكمية\]/g, caseData.medications[0]?.dose || '-');
+  } else {
+    html = html.replace(/\[اسم الدواء\]/g, 'لا يوجد');
+    html = html.replace(/\[الجرعة\/الكمية\]/g, '-');
   }
+  
+  // استبدال placeholders الإجراءات
+  if (caseData.procedures && caseData.procedures.length > 0) {
+    const procPlaceholderRow = /<tr[^>]*>\s*<td[^>]*>\s*\[اسم الإجراء\]\s*<\/td>[\s\S]*?<\/tr>/gi;
+    const procRows = caseData.procedures.map((proc, idx) => {
+      const procName = typeof proc === 'string' ? proc : (proc.name || proc.code || '-');
+      return `<tr style="background:${idx % 2 === 0 ? '#f8fafc' : 'white'}">
+        <td style="border:1px solid #ccc;padding:6px">${procName}</td>
+        <td style="border:1px solid #ccc;padding:6px">⏳ راجع التقييم</td>
+        <td style="border:1px solid #ccc;padding:6px">-</td>
+      </tr>`;
+    }).join('\n');
+    html = html.replace(procPlaceholderRow, procRows);
+    
+    html = html.replace(/\[اسم الإجراء\]/g, caseData.procedures[0] || '-');
+  } else {
+    html = html.replace(/\[اسم الإجراء\]/g, 'لا يوجد');
+  }
+  
+  // استبدال placeholders عامة أخرى
+  html = html.replace(/\[رقم الملف\]/g, caseData.claimId || '-');
+  html = html.replace(/\[رقم المريض\]/g, caseData.patientId || '-');
+  html = html.replace(/\[التفصيل مع المرجع السريري\]/g, 'راجع التقييم التفصيلي أدناه');
+  html = html.replace(/\[التوثيق المطلوب بالتحديد\]/g, 'توثيق المبرر الطبي');
+  html = html.replace(/\[كيف يوثق لضمان القبول\]/g, 'إضافة ملاحظات سريرية مفصلة');
+  html = html.replace(/\[سبب التكرار\]/g, 'تكرار الإجراء بدون مبرر واضح');
+  html = html.replace(/\[الإجراء المتكرر\]/g, '-');
+  html = html.replace(/\[العدد\]/g, '-');
+  
+  // إزالة أي placeholders متبقية بين أقواس مربعة
+  html = html.replace(/\[[^\]]{1,50}\]/g, function(match) {
+    // لا تزيل الأقواس إذا كانت جزء من تنسيق معروف
+    if (match.includes('✓') || match.includes('✗') || match.includes('!')) {
+      return match;
+    }
+    return '<span style="color:#6b7280;font-style:italic">غير متوفر</span>';
+  });
   
   return html;
 }
