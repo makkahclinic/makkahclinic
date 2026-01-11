@@ -2459,6 +2459,87 @@ let translatedReport = '';
 let insuranceRatingValue = 0;
 let serviceRatingValue = 0;
 
+// Batch Processing Configuration
+const BATCH_SIZE = 50; // Maximum cases per batch
+const BATCH_DELAY_MS = 2000; // Delay between batches to avoid rate limits
+
+// Helper: Split text content into batches based on case count
+function splitTextContentIntoBatches(textContent, batchSize = BATCH_SIZE) {
+  const lines = textContent.split('\n');
+  if (lines.length <= 1) return [textContent];
+  
+  const headerLine = lines[0];
+  const dataLines = lines.slice(1).filter(line => line.trim());
+  
+  if (dataLines.length <= batchSize) return [textContent];
+  
+  const batches = [];
+  for (let i = 0; i < dataLines.length; i += batchSize) {
+    const batchLines = dataLines.slice(i, i + batchSize);
+    batches.push(headerLine + '\n' + batchLines.join('\n'));
+  }
+  return batches;
+}
+
+// Helper: Count approximate cases in file content
+function countCasesInContent(textContent) {
+  if (!textContent) return 0;
+  const lines = textContent.split('\n').filter(line => line.trim());
+  return Math.max(0, lines.length - 1); // Subtract header row
+}
+
+// Helper: Combine multiple HTML reports into one
+function combineReports(reports, totalCases) {
+  if (reports.length === 0) return '';
+  if (reports.length === 1) return reports[0];
+  
+  // Simple approach: concatenate reports with separators
+  // Remove duplicate headers/footers by stripping them from middle reports
+  let combinedHtml = '';
+  
+  reports.forEach((report, idx) => {
+    if (idx === 0) {
+      // First report: keep everything
+      combinedHtml = report;
+    } else {
+      // Subsequent reports: extract main content only
+      // Remove opening container divs and closing footer
+      let content = report;
+      
+      // Try to extract just the case content
+      // Remove report-container opening
+      content = content.replace(/^<div class="report-container">[\s\S]*?<\/h2>/i, '');
+      // Remove box-info intro paragraph
+      content = content.replace(/<p class="box-info">[\s\S]*?<\/p>/gi, '');
+      // Remove closing divs at the end
+      content = content.replace(/<div class="box-good"[\s\S]*?<\/div>\s*<\/div>\s*$/i, '');
+      
+      // Add batch separator
+      combinedHtml = combinedHtml.replace(/<\/div>\s*$/, ''); // Remove closing div
+      combinedHtml += `
+        <hr style="margin:1.5rem 0;border:1px dashed #ccc;">
+        <div class="box-info" style="text-align:center;padding:0.5rem;margin:0.5rem 0;">
+          <small>الدفعة ${idx + 1}</small>
+        </div>
+      `;
+      combinedHtml += content;
+    }
+  });
+  
+  // Add final summary
+  const finalSummary = `
+    <div class="box-good" style="text-align:center;margin-top:2rem;">
+      <strong>✅ تم تحليل ${totalCases} حالة بنجاح</strong>
+      <br><small>تم التحليل على ${reports.length} دفعة</small>
+    </div>
+  </div>`;
+  
+  // Replace existing final summary if present
+  combinedHtml = combinedHtml.replace(/<div class="box-good"[^>]*>[\s\S]*?تم تحليل[\s\S]*?<\/div>\s*<\/div>\s*$/i, finalSummary);
+  
+  return combinedHtml;
+}
+
 // DOM Elements
 const loginScreen = document.getElementById('loginScreen');
 const accessDenied = document.getElementById('accessDenied');
@@ -3569,27 +3650,147 @@ analyzeBtn.addEventListener('click', async () => {
   }
 
   try {
-    // Prepare files for API - send BOTH raw base64 AND textContent for Excel
-    const filesForAnalysis = filesToSend.map(f => ({
-      name: f.name,
-      // For Excel: send raw base64 for XLSX parsing, textContent as fallback
-      // For images: send data URL
-      base64: f.data || '',
-      textContent: f.textContent || '',
-      type: f.mimeType || 'text/plain'
-    }));
-    
-    const resp = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        files: filesForAnalysis, 
-        uiLang: 'ar',
-        doctorName: doctorName
-      })
+    // Count total cases to determine if batching is needed
+    let totalCases = 0;
+    filesToSend.forEach(f => {
+      if (f.textContent) {
+        totalCases += countCasesInContent(f.textContent);
+      }
     });
+    
+    console.log(`[Batch Analysis] Total cases detected: ${totalCases}`);
+    
+    // If large file, use batch processing
+    if (totalCases > BATCH_SIZE) {
+      const allReports = [];
+      let processedCases = 0;
+      
+      // Split files into batches
+      const allBatches = [];
+      filesToSend.forEach(f => {
+        if (f.textContent) {
+          const batches = splitTextContentIntoBatches(f.textContent, BATCH_SIZE);
+          batches.forEach((batchContent, idx) => {
+            allBatches.push({
+              name: f.name,
+              batchIndex: idx + 1,
+              totalBatches: batches.length,
+              textContent: batchContent,
+              caseCount: countCasesInContent(batchContent),
+              data: f.data,
+              mimeType: f.mimeType,
+              isTextBatch: true // Flag to clear base64 and use text only
+            });
+          });
+        } else {
+          // Non-text files (images) go in their own batch - KEEP original data
+          allBatches.push({
+            name: f.name,
+            batchIndex: 1,
+            totalBatches: 1,
+            textContent: '',
+            caseCount: 0,
+            data: f.data,
+            mimeType: f.mimeType,
+            isTextBatch: false // Flag to preserve original data
+          });
+        }
+      });
+      
+      console.log(`[Batch Analysis] Split into ${allBatches.length} batches`);
+      
+      // Process each batch
+      for (let i = 0; i < allBatches.length; i++) {
+        const batch = allBatches[i];
+        const batchNum = i + 1;
+        
+        // Update progress
+        statusText.innerHTML = `
+          <div style="text-align:center;">
+            <div style="font-size:1.1rem;margin-bottom:0.5rem;">⏳ جاري التحليل...</div>
+            <div style="background:rgba(255,255,255,0.2);border-radius:10px;padding:0.5rem 1rem;">
+              <strong>الدفعة ${batchNum} من ${allBatches.length}</strong>
+              <div style="font-size:0.85rem;color:#a0aec0;">${processedCases} من ${totalCases} حالة</div>
+            </div>
+            <div style="margin-top:0.5rem;background:rgba(255,255,255,0.1);border-radius:5px;height:8px;overflow:hidden;">
+              <div style="background:#c9a962;height:100%;width:${Math.round((batchNum-1)/allBatches.length*100)}%;transition:width 0.3s;"></div>
+            </div>
+          </div>
+        `;
+        
+        try {
+          // For text batches: only send textContent (the sliced portion)
+          // For non-text files (images/PDFs): preserve original data
+          const batchFiles = [{
+            name: batch.name,
+            base64: batch.isTextBatch ? '' : (batch.data || ''), // Clear for text batches only
+            textContent: batch.textContent,
+            type: batch.isTextBatch ? 'text/plain' : (batch.mimeType || 'text/plain')
+          }];
+          
+          const resp = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              files: batchFiles, 
+              uiLang: 'ar',
+              doctorName: doctorName,
+              batchInfo: { current: batchNum, total: allBatches.length }
+            })
+          });
+          
+          const data = await resp.json();
+          
+          if (data.htmlReport || data.html) {
+            allReports.push(data.htmlReport || data.html);
+            processedCases += batch.caseCount;
+            console.log(`[Batch Analysis] Batch ${batchNum} completed: ${batch.caseCount} cases`);
+          } else if (data.error) {
+            console.error(`[Batch Analysis] Batch ${batchNum} error:`, data.error);
+            // Continue with next batch
+          }
+          
+          // Delay between batches to avoid rate limits
+          if (i < allBatches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+          }
+          
+        } catch (batchErr) {
+          console.error(`[Batch Analysis] Batch ${batchNum} failed:`, batchErr);
+          // Continue with next batch
+        }
+      }
+      
+      // Combine all reports
+      if (allReports.length > 0) {
+        const combinedHtml = combineReports(allReports, processedCases);
+        // Create success response
+        var data = { success: true, html: combinedHtml, htmlReport: combinedHtml };
+      } else {
+        throw new Error('فشل تحليل جميع الدفعات');
+      }
+      
+    } else {
+      // Normal processing for small files
+      const filesForAnalysis = filesToSend.map(f => ({
+        name: f.name,
+        base64: f.data || '',
+        textContent: f.textContent || '',
+        type: f.mimeType || 'text/plain'
+      }));
+      
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          files: filesForAnalysis, 
+          uiLang: 'ar',
+          doctorName: doctorName
+        })
+      });
 
-    const data = await resp.json();
+      var data = await resp.json();
+    }
     
     if (data.htmlReport) {
       data.success = true;
