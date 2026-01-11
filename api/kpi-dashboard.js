@@ -114,6 +114,10 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
       : '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">✗ يحتاج تحسين</span>';
   };
 
+  // حساب الهدف الديناميكي - دائماً للأعلى
+  const currentScore = parseFloat(kpis.overallScore.score) || 0;
+  const targetScore = currentScore >= 9 ? 10.0 : currentScore >= 8 ? 9.0 : 8.0;
+
   return `
 <div class="kpi-dashboard" style="background:linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); border-radius:16px; padding:24px; margin:20px 0; direction:rtl;">
   
@@ -121,7 +125,7 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
     <h2 style="color:#c9a962; margin:0 0 8px 0; font-size:24px;">
       📊 لوحة مؤشرات الأداء
     </h2>
-    <p style="color:#94a3b8; margin:0; font-size:14px;">التقييم ${period} - يمكن استهداف الرفع من ${kpis.overallScore.score} إلى 8+ خلال 3 أشهر</p>
+    <p style="color:#94a3b8; margin:0; font-size:14px;">التقييم ${period} - يمكن استهداف الرفع من ${kpis.overallScore.score} إلى ${targetScore}+ خلال 3 أشهر</p>
   </div>
 
   <!-- Overall Score Circle -->
@@ -205,7 +209,7 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
   <!-- Target Setting -->
   <div style="margin-top:16px; padding:12px; background:rgba(34,197,94,0.1); border-radius:8px; text-align:center;">
     <span style="color:#22c55e; font-size:14px;">
-      🎯 الهدف: رفع التقييم الإجمالي من <strong>${kpis.overallScore.score}</strong> إلى <strong>8.0</strong> خلال 3 أشهر
+      🎯 الهدف: رفع التقييم الإجمالي من <strong>${kpis.overallScore.score}</strong> إلى <strong>${targetScore}</strong> خلال 3 أشهر
     </span>
   </div>
 

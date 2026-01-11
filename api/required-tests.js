@@ -412,23 +412,23 @@ export function generateMissingTestsHTML(missingTests, lang = 'ar') {
   const conditional = missingTests.filter(t => t.priority === 'conditional');
   
   let html = `
-    <div class="missing-tests-section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 16px; margin-top: 16px; border-right: 5px solid #f59e0b;">
-      <h4 style="color: #92400e; margin: 0 0 12px 0; font-size: 16px;">
-        <span style="font-size:18px;">📋</span> ${lang === 'ar' ? 'فحوصات من حق المريض (ناقصة)' : 'Patient Rights: Missing Required Tests'}
+    <div class="missing-tests-section" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 12px; margin-top: 12px; border-right: 5px solid #f59e0b;">
+      <h4 style="color: #92400e; margin: 0 0 10px 0; font-size: 15px;">
+        <span style="font-size:16px;">📋</span> ${lang === 'ar' ? 'فحوصات من حق المريض (ناقصة)' : 'Patient Rights: Missing Required Tests'}
       </h4>
   `;
   
   if (essential.length > 0) {
-    html += `<div style="margin-bottom: 12px;">
-      <h5 style="color: #dc2626; margin: 0 0 8px 0;"><span style="color:#dc2626;font-size:14px;">●</span> ${lang === 'ar' ? 'فحوصات إلزامية' : 'Essential Tests'}</h5>`;
+    html += `<div style="margin-bottom: 8px;">
+      <h5 style="color: #dc2626; margin: 0 0 6px 0; font-size: 13px;"><span style="color:#dc2626;font-size:12px;">●</span> ${lang === 'ar' ? 'فحوصات إلزامية' : 'Essential Tests'}</h5>`;
     
     essential.forEach(test => {
       html += `
-        <div style="background: #fef2f2; border-radius: 8px; padding: 12px; margin-bottom: 8px; border-right: 3px solid #dc2626;">
-          <div style="font-weight: bold; color: #991b1b; margin-bottom: 4px;">${test.testName.toUpperCase()}</div>
-          <div style="font-size: 13px; color: #7f1d1d; margin-bottom: 4px;">السبب: ${test.reason}</div>
-          <div style="font-size: 12px; color: #991b1b;">التكرار: ${test.frequency}</div>
-          <div style="font-size: 11px; color: #b91c1c; font-style: italic;">المرجع: ${test.reference}</div>
+        <div style="background: #fef2f2; border-radius: 6px; padding: 8px 10px; margin-bottom: 4px; border-right: 3px solid #dc2626;">
+          <div style="font-weight: bold; color: #991b1b; font-size: 13px;">${test.testName.toUpperCase()}</div>
+          <div style="font-size: 12px; color: #7f1d1d;">السبب: ${test.reason}</div>
+          <div style="font-size: 11px; color: #991b1b;">التكرار: ${test.frequency}</div>
+          <div style="font-size: 10px; color: #b91c1c; font-style: italic;">المرجع: ${test.reference}</div>
         </div>
       `;
     });
@@ -436,14 +436,14 @@ export function generateMissingTestsHTML(missingTests, lang = 'ar') {
   }
   
   if (recommended.length > 0) {
-    html += `<div>
-      <h5 style="color: #d97706; margin: 0 0 8px 0;"><span style="color:#d97706;font-size:14px;">●</span> ${lang === 'ar' ? 'فحوصات موصى بها' : 'Recommended Tests'}</h5>`;
+    html += `<div style="margin-bottom: 6px;">
+      <h5 style="color: #d97706; margin: 0 0 6px 0; font-size: 13px;"><span style="color:#d97706;font-size:12px;">●</span> ${lang === 'ar' ? 'فحوصات موصى بها' : 'Recommended Tests'}</h5>`;
     
     recommended.forEach(test => {
       html += `
-        <div style="background: #fffbeb; border-radius: 8px; padding: 10px; margin-bottom: 6px; border-right: 3px solid #f59e0b;">
-          <div style="font-weight: bold; color: #92400e;">${test.testName.toUpperCase()}</div>
-          <div style="font-size: 12px; color: #78350f;">السبب: ${test.reason}</div>
+        <div style="background: #fffbeb; border-radius: 6px; padding: 8px 10px; margin-bottom: 4px; border-right: 3px solid #f59e0b;">
+          <div style="font-weight: bold; color: #92400e; font-size: 12px;">${test.testName.toUpperCase()}</div>
+          <div style="font-size: 11px; color: #78350f;">السبب: ${test.reason}</div>
         </div>
       `;
     });
@@ -451,15 +451,15 @@ export function generateMissingTestsHTML(missingTests, lang = 'ar') {
   }
   
   if (conditional.length > 0) {
-    html += `<div style="margin-top: 12px;">
-      <h5 style="color: #6366f1; margin: 0 0 8px 0;"><span style="color:#6366f1;font-size:14px;">●</span> ${lang === 'ar' ? 'فحوصات مشروطة (حسب الحالة)' : 'Conditional Tests (Case Dependent)'}</h5>`;
+    html += `<div>
+      <h5 style="color: #6366f1; margin: 0 0 6px 0; font-size: 13px;"><span style="color:#6366f1;font-size:12px;">●</span> ${lang === 'ar' ? 'فحوصات مشروطة (حسب الحالة)' : 'Conditional Tests (Case Dependent)'}</h5>`;
     
     conditional.forEach(test => {
       html += `
-        <div style="background: #eef2ff; border-radius: 8px; padding: 10px; margin-bottom: 6px; border-right: 3px solid #6366f1;">
-          <div style="font-weight: bold; color: #4338ca;">${test.testName.toUpperCase()}</div>
-          <div style="font-size: 12px; color: #3730a3;">السبب: ${test.reason}</div>
-          <div style="font-size: 11px; color: #4f46e5; font-style: italic;">ملاحظة: يُطلب حسب شدة الحالة أو مؤشرات سريرية</div>
+        <div style="background: #eef2ff; border-radius: 6px; padding: 8px 10px; margin-bottom: 4px; border-right: 3px solid #6366f1;">
+          <div style="font-weight: bold; color: #4338ca; font-size: 12px;">${test.testName.toUpperCase()}</div>
+          <div style="font-size: 11px; color: #3730a3;">السبب: ${test.reason}</div>
+          <div style="font-size: 10px; color: #4f46e5; font-style: italic;">ملاحظة: يُطلب حسب شدة الحالة أو مؤشرات سريرية</div>
         </div>
       `;
     });
