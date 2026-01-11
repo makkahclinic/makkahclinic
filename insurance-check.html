@@ -3937,6 +3937,26 @@ async function saveAndLog() {
     cleanContent = cleanContent.replace(/<div id="ai-ratings"[^>]*>[\s\S]*?<\/div>/gi, '');
     cleanContent = cleanContent.replace(/<script[\s\S]*?<\/script>/gi, '');
     
+    // إصلاح الخلايا الفارغة قبل الحفظ
+    cleanContent = cleanContent.replace(/<td>\s*<\/td>/gi, '<td style="color:#856404">⚠️ غير متوفر</td>');
+    cleanContent = cleanContent.replace(/<td>\[.*?\]<\/td>/gi, '<td style="color:#856404">⚠️ غير متوفر</td>');
+    
+    // إصلاح أنماط الجداول للـ PDF
+    cleanContent = cleanContent.replace(/<table/gi, '<table style="width:100%;border-collapse:collapse;margin:15px 0;page-break-inside:auto"');
+    cleanContent = cleanContent.replace(/<th(?![^>]*style)/gi, '<th style="background:#1e3a5f;color:white;padding:10px;border:1px solid #1e3a5f;text-align:right"');
+    cleanContent = cleanContent.replace(/<td(?![^>]*style)/gi, '<td style="padding:8px;border:1px solid #ddd;text-align:right;vertical-align:top"');
+    cleanContent = cleanContent.replace(/<tr(?![^>]*style)/gi, '<tr style="page-break-inside:avoid"');
+    
+    // إصلاح صناديق التنبيه
+    cleanContent = cleanContent.replace(/class="box-critical"/gi, 'style="background:#fee2e2;border:2px solid #dc2626;border-radius:8px;padding:15px;margin:10px 0"');
+    cleanContent = cleanContent.replace(/class="box-warning"/gi, 'style="background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:15px;margin:10px 0"');
+    cleanContent = cleanContent.replace(/class="box-success"/gi, 'style="background:#d1fae5;border:2px solid #16a34a;border-radius:8px;padding:15px;margin:10px 0"');
+    cleanContent = cleanContent.replace(/class="box-info"/gi, 'style="background:#e0f2fe;border:2px solid #0ea5e9;border-radius:8px;padding:15px;margin:10px 0"');
+    
+    // إصلاح عناوين الأقسام
+    cleanContent = cleanContent.replace(/<h3>/gi, '<h3 style="color:#1e3a5f;border-bottom:2px solid #c9a962;padding-bottom:8px;margin:20px 0 10px">');
+    cleanContent = cleanContent.replace(/<h4>/gi, '<h4 style="color:#1e3a5f;margin:15px 0 8px">');
+    
     // Create full HTML document for saving
     const htmlContent = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -3948,13 +3968,27 @@ async function saveAndLog() {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Tajawal', Arial, sans-serif; direction: rtl; padding: 20px; background: #f8fafc; color: #1e293b; line-height: 1.8; }
-    @media print { body { background: white; padding: 10mm; } }
-    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-    th, td { padding: 10px; border: 1px solid #e2e8f0; text-align: right; }
-    th { background: #1e3a5f; color: white; }
-    .status-accepted { background: #16a34a !important; color: white !important; font-weight: bold; border-radius: 6px; }
-    .status-rejected { background: #dc2626 !important; color: white !important; font-weight: bold; border-radius: 6px; }
-    .status-needs-correction, .status-warning { background: #f59e0b !important; color: white !important; font-weight: bold; border-radius: 6px; }
+    @media print { 
+      body { background: white; padding: 10mm; } 
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      tr { page-break-inside: avoid !important; }
+    }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; page-break-inside: auto; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th, td { padding: 10px; border: 1px solid #e2e8f0; text-align: right; vertical-align: top; }
+    th { background: #1e3a5f; color: white; font-weight: bold; }
+    td { word-break: break-word; }
+    .status-accepted { background: #16a34a !important; color: white !important; font-weight: bold; border-radius: 6px; padding: 4px 8px; }
+    .status-rejected { background: #dc2626 !important; color: white !important; font-weight: bold; border-radius: 6px; padding: 4px 8px; }
+    .status-needs-correction, .status-warning { background: #f59e0b !important; color: white !important; font-weight: bold; border-radius: 6px; padding: 4px 8px; }
+    .case-section { margin: 20px 0; padding: 15px; border: 1px solid #e2e8f0; border-radius: 10px; background: white; page-break-inside: avoid; }
+    h3 { color: #1e3a5f; border-bottom: 2px solid #c9a962; padding-bottom: 8px; margin: 20px 0 10px; }
+    h4 { color: #1e3a5f; margin: 15px 0 8px; }
+    .box-critical { background: #fee2e2; border: 2px solid #dc2626; border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .box-warning { background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .box-success { background: #d1fae5; border: 2px solid #16a34a; border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .box-info { background: #e0f2fe; border: 2px solid #0ea5e9; border-radius: 8px; padding: 15px; margin: 10px 0; }
   </style>
 </head>
 <body>
