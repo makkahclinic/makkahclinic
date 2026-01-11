@@ -327,27 +327,78 @@ export function extractStatsFromCases(cases) {
     const serviceCount = c.services?.length || 0;
     stats.totalServiceItems += serviceCount;
     
-    // تتبع التكرارات داخل نفس المطالبة
+    // تحديد حالة الحالة
+    const hasVitals = c.vitals && (c.vitals.temperature || c.vitals.bloodPressure || c.vitals.pulse);
+    const hasIcd = c.icdCode && c.icdCode.length > 0;
+    
+    // ========== أولاً: تتبع التكرارات داخل نفس المطالبة ==========
     const claimServices = new Map();
     for (const svc of (c.services || [])) {
-      const key = `${c.claimId}_${svc.code || svc.name}`;
+      const key = `${svc.code || svc.name}`;
       claimServices.set(key, (claimServices.get(key) || 0) + 1);
     }
     
-    // حساب التكرارات
+    // تحديد الخدمات المكررة
+    const duplicatedKeys = new Set();
     let hasDuplicate = false;
     for (const [key, count] of claimServices) {
       if (count > 1) {
         stats.duplicateCount += (count - 1);
         hasDuplicate = true;
+        duplicatedKeys.add(key);
       }
     }
     if (hasDuplicate) {
       stats.duplicateCases++;
     }
     
+    // ========== ثانياً: تقييم كل خدمة (حالة واحدة فقط: مقبول/مرفوض/تحتاج توثيق) ==========
+    const seenServices = new Map(); // لتتبع أي خدمة تم عدها
+    
+    for (const svc of (c.services || [])) {
+      const svcKey = svc.code || svc.name;
+      const svcName = (svc.name || svc.code || '').toUpperCase();
+      
+      // تحديد حالة الخدمة
+      let status = 'approved'; // افتراضي: مقبول
+      
+      // التكرار: الخدمة الأولى من نوعها = تقييم عادي، المكررة = needsDoc
+      const seenCount = seenServices.get(svcKey) || 0;
+      if (seenCount > 0 && duplicatedKeys.has(svcKey)) {
+        status = 'needsDoc'; // مكررة
+      } else {
+        // معايير الرفض:
+        const isIV = svcName.includes('IV') || svcName.includes('INFUSION') || svcName.includes('SALINE');
+        if (isIV) {
+          const hasJustification = c.diagnosis?.toLowerCase().includes('vomit') ||
+                                   c.diagnosis?.toLowerCase().includes('dehydrat') ||
+                                   c.diagnosis?.toLowerCase().includes('قيء') ||
+                                   (c.vitals?.temperature && parseFloat(c.vitals.temperature) >= 39);
+          if (!hasJustification) {
+            status = 'rejected';
+          }
+        }
+        
+        // معايير "تحتاج توثيق":
+        if (status === 'approved') {
+          if (!hasVitals && (svcName.includes('CONSULTATION') || svcName.includes('INJECTION'))) {
+            status = 'needsDoc';
+          } else if (!hasIcd) {
+            status = 'needsDoc';
+          }
+        }
+      }
+      
+      seenServices.set(svcKey, seenCount + 1);
+      
+      // تحديث العدادات (حالة واحدة فقط لكل خدمة)
+      if (status === 'approved') stats.approvedCount++;
+      else if (status === 'rejected') stats.rejectedCount++;
+      else stats.needsDocCount++;
+    }
+    
     // Vitals documented
-    if (c.vitals && (c.vitals.temperature || c.vitals.bloodPressure || c.vitals.pulse)) {
+    if (hasVitals) {
       stats.vitalsDocumented++;
     }
 

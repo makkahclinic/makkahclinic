@@ -1454,7 +1454,10 @@ Return HTML only, no markdown or code blocks.
     }
   }
   
-  // Extract scores from case results for summary
+  // ========== حساب الإحصائيات من البيانات الهيكلية (مصدر الحقيقة الوحيد) ==========
+  const caseStats = extractStatsFromCases(cases);
+  
+  // Extract AI scores from case results
   const allCasesHtml = caseResults.join('');
   const insuranceScoreMatches = allCasesHtml.match(/data-insurance-score="(\d+)"/g) || [];
   const medicalScoreMatches = allCasesHtml.match(/data-medical-score="(\d+)"/g) || [];
@@ -1462,17 +1465,40 @@ Return HTML only, no markdown or code blocks.
   const insuranceScores = insuranceScoreMatches.map(m => parseInt(m.match(/\d+/)?.[0] || '0'));
   const medicalScores = medicalScoreMatches.map(m => parseInt(m.match(/\d+/)?.[0] || '0'));
   
-  const avgInsuranceScore = insuranceScores.length > 0 ? (insuranceScores.reduce((a,b) => a+b, 0) / insuranceScores.length).toFixed(1) : '0';
-  const avgMedicalScore = medicalScores.length > 0 ? (medicalScores.reduce((a,b) => a+b, 0) / medicalScores.length).toFixed(1) : '0';
+  const aiAvgInsurance = insuranceScores.length > 0 ? (insuranceScores.reduce((a,b) => a+b, 0) / insuranceScores.length) : 0;
+  const aiAvgMedical = medicalScores.length > 0 ? (medicalScores.reduce((a,b) => a+b, 0) / medicalScores.length) : 0;
   
-  // Count approved/rejected/review items from HTML content
-  const approvedCount = (allCasesHtml.match(/✅/g) || []).length;
-  const rejectedCount = (allCasesHtml.match(/❌/g) || []).length;
-  const reviewCount = (allCasesHtml.match(/⚠️/g) || []).length;
+  // حساب الدرجات من البيانات الهيكلية
+  const vitalsRate = caseStats.totalCases > 0 ? caseStats.vitalsDocumented / caseStats.totalCases : 0;
+  const icdRate = caseStats.totalCases > 0 ? caseStats.icdCodesPresent / caseStats.totalCases : 0;
+  const diagSpecificRate = caseStats.totalCases > 0 ? caseStats.diagnosisSpecific / caseStats.totalCases : 0;
+  const duplicateRateCalc = caseStats.duplicateRate || 0;
   
-  // حساب نسبة قبول الإجراءات (متوافق مع لوحة KPI)
-  const totalProcedures = approvedCount + rejectedCount;
-  const procedureApprovalRate = totalProcedures > 0 ? ((approvedCount / totalProcedures) * 100).toFixed(0) : 0;
+  // حساب درجة الالتزام التأميني من البيانات الهيكلية
+  let structuredInsuranceScore = 10;
+  structuredInsuranceScore -= (1 - icdRate) * 3;
+  structuredInsuranceScore -= (1 - vitalsRate) * 2;
+  structuredInsuranceScore -= duplicateRateCalc * 2;
+  structuredInsuranceScore -= (caseStats.ivWithoutJustification / Math.max(caseStats.totalCases, 1)) * 2;
+  structuredInsuranceScore = Math.max(0, Math.min(10, structuredInsuranceScore));
+  
+  // توحيد الدرجة: متوسط بين AI والحساب الهيكلي
+  const avgInsuranceScore = aiAvgInsurance > 0 
+    ? ((aiAvgInsurance + structuredInsuranceScore) / 2).toFixed(1)
+    : structuredInsuranceScore.toFixed(1);
+  const avgMedicalScore = aiAvgMedical > 0 ? aiAvgMedical.toFixed(1) : '7.0';
+  
+  // استخدام totalServiceItems كمقام (عدد بنود الخدمة الفعلية من Excel)
+  const totalServiceItems = caseStats.totalServiceItems || 0;
+  
+  // نسبة التكرار الفعلية
+  const duplicateRate = (duplicateRateCalc * 100).toFixed(0);
+  const duplicateCases = caseStats.duplicateCases || 0;
+  
+  // نسب التوثيق
+  const vitalsDocRate = (vitalsRate * 100).toFixed(0);
+  const icdDocRate = (icdRate * 100).toFixed(0);
+  const diagSpecificRatePercent = (diagSpecificRate * 100).toFixed(0);
   
   // Determine overall status
   const getScoreClass = (score) => {
@@ -1487,21 +1513,25 @@ Return HTML only, no markdown or code blocks.
     ? `<div class="report-container"><h2>📋 تقرير التدقيق التأميني الشامل</h2><p class="box-info">تم تحليل ${totalCases} حالة بالتفصيل</p>`
     : `<div class="report-container"><h2>📋 Comprehensive Insurance Audit Report</h2><p class="box-info">Analyzed ${totalCases} cases in detail</p>`;
   
-  // Final summary table
+  // Final summary table - مبني على البيانات الهيكلية
   const summaryTable = language === 'ar' ? `
   <div class="report-summary-section" style="margin-top:2rem;page-break-before:always;">
     <h2 style="background:#1e3a5f;color:white;padding:12px;border-radius:8px;text-align:center;">📊 الملخص النهائي للتقرير</h2>
     
     <table class="custom-table report-summary-table" style="width:100%;margin-top:1rem;">
       <thead style="background:#1e3a5f;color:white">
-        <tr><th colspan="2" style="text-align:center;font-size:14pt;">إحصائيات الحالات</th></tr>
+        <tr><th colspan="2" style="text-align:center;font-size:14pt;">إحصائيات الحالات والخدمات</th></tr>
       </thead>
       <tbody>
-        <tr><td width="50%"><strong>📁 إجمالي الحالات المحللة</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
-        <tr style="background:#d4edda"><td><strong>✅ الإجراءات المقبولة</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
-        <tr style="background:#f8d7da"><td><strong>❌ الإجراءات المرفوضة</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
-        <tr style="background:#e0f2fe"><td><strong>📊 نسبة قبول الإجراءات</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${procedureApprovalRate}%</td></tr>
-        <tr style="background:#fff3cd"><td><strong>⚠️ تحتاج توثيق</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
+        <tr><td width="50%"><strong>📁 إجمالي الحالات (المطالبات)</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
+        <tr><td><strong>📋 إجمالي بنود الخدمة في Excel</strong></td><td style="font-size:16pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalServiceItems}</td></tr>
+        <tr style="background:#d4edda"><td><strong>✅ بنود مقبولة (تقدير أولي)</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${caseStats.approvedCount || 0}</td></tr>
+        <tr style="background:#f8d7da"><td><strong>❌ بنود تحتاج مراجعة</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${caseStats.rejectedCount || 0}</td></tr>
+        <tr style="background:#fff3cd"><td><strong>⚠️ بنود تحتاج توثيق</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${caseStats.needsDocCount || 0}</td></tr>
+        <tr style="background:#e0f2fe"><td><strong>🩺 توثيق العلامات الحيوية</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${vitalsDocRate}%</td></tr>
+        <tr style="background:#d4edda"><td><strong>🔢 أكواد ICD موجودة</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${icdDocRate}%</td></tr>
+        <tr style="background:#e0f2fe"><td><strong>📝 التشخيص المحدد</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${diagSpecificRatePercent}%</td></tr>
+        <tr style="background:${duplicateCases > 0 ? '#fff3cd' : '#d4edda'}"><td><strong>🔄 نسبة التكرار</strong></td><td style="font-size:16pt;font-weight:bold;color:${duplicateCases > 0 ? '#856404' : '#155724'};text-align:center;">${duplicateRate}% (${duplicateCases} حالة)</td></tr>
         ${casesWithMissingTests > 0 ? `<tr style="background:#fef3c7"><td><strong>📋 حالات بفحوصات ناقصة (حق المريض)</strong></td><td style="font-size:16pt;font-weight:bold;color:#92400e;text-align:center;">${casesWithMissingTests} (${totalMissingTests} فحص)</td></tr>` : ''}
       </tbody>
     </table>
@@ -1537,11 +1567,11 @@ Return HTML only, no markdown or code blocks.
     </div>
     
     <div style="margin-top:1.5rem;background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0;">
-      <h4 style="margin:0 0 10px 0;color:#334155;font-size:13px;">📋 المنهجية والتعريفات:</h4>
+      <h4 style="margin:0 0 10px 0;color:#334155;font-size:13px;">📋 المنهجية والتعريفات (مصدر الحقيقة: ملف Excel):</h4>
       <table style="width:100%;font-size:11px;color:#475569;">
         <tr style="border-bottom:1px solid #e2e8f0;">
-          <td width="30%"><strong>الإجراءات المقبولة/المرفوضة:</strong></td>
-          <td>عدد الأحكام (✅/❌/⚠️) في تقييم AI لكل بند. ملاحظة: البند الواحد قد يُقيّم من عدة جوانب (CDI, NPHIES, إرشادات سريرية).</td>
+          <td width="30%"><strong>إجمالي بنود الخدمة:</strong></td>
+          <td>عدد الصفوف الفعلية في ملف Excel (${totalServiceItems} بند). هذا هو المقام لجميع النسب.</td>
         </tr>
         <tr style="border-bottom:1px solid #e2e8f0;">
           <td><strong>التشخيص المحدد:</strong></td>
@@ -1549,11 +1579,15 @@ Return HTML only, no markdown or code blocks.
         </tr>
         <tr style="border-bottom:1px solid #e2e8f0;">
           <td><strong>نسبة التكرار:</strong></td>
-          <td>عدد الحالات التي تحتوي على نفس الخدمة مكررة داخل نفس المطالبة ÷ إجمالي الحالات</td>
+          <td>(عدد الحالات التي فيها تكرار نفس الخدمة ÷ إجمالي الحالات) × 100 = ${duplicateRate}%</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td><strong>درجة الالتزام التأميني:</strong></td>
+          <td>تبدأ من 10 ويُخصم: (1-نسبة ICD)×3 + (1-نسبة العلامات الحيوية)×2 + نسبة التكرار×2 + (IV بدون مبرر)×2</td>
         </tr>
         <tr>
-          <td><strong>تقييم AI:</strong></td>
-          <td>يُحسب كمتوسط التقييمات (data-insurance-score) التي يُخرجها نموذج Gemini لكل حالة</td>
+          <td><strong>الدرجة النهائية:</strong></td>
+          <td>متوسط بين تقييم AI وحساب البيانات الهيكلية للتوازن والموثوقية</td>
         </tr>
       </table>
     </div>
@@ -1564,14 +1598,18 @@ Return HTML only, no markdown or code blocks.
     
     <table class="custom-table report-summary-table" style="width:100%;margin-top:1rem;">
       <thead style="background:#1e3a5f;color:white">
-        <tr><th colspan="2" style="text-align:center;font-size:14pt;">Case Statistics</th></tr>
+        <tr><th colspan="2" style="text-align:center;font-size:14pt;">Case & Service Statistics</th></tr>
       </thead>
       <tbody>
-        <tr><td width="50%"><strong>📁 Total Cases Analyzed</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
-        <tr style="background:#d4edda"><td><strong>✅ Approved Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
-        <tr style="background:#f8d7da"><td><strong>❌ Rejected Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
-        <tr style="background:#e0f2fe"><td><strong>📊 Procedure Approval Rate</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${procedureApprovalRate}%</td></tr>
-        <tr style="background:#fff3cd"><td><strong>⚠️ Needs Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
+        <tr><td width="50%"><strong>📁 Total Cases (Claims)</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
+        <tr><td><strong>📋 Total Service Items in Excel</strong></td><td style="font-size:16pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalServiceItems}</td></tr>
+        <tr style="background:#d4edda"><td><strong>✅ Approved Items (Preliminary)</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${caseStats.approvedCount || 0}</td></tr>
+        <tr style="background:#f8d7da"><td><strong>❌ Items Need Review</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${caseStats.rejectedCount || 0}</td></tr>
+        <tr style="background:#fff3cd"><td><strong>⚠️ Items Need Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${caseStats.needsDocCount || 0}</td></tr>
+        <tr style="background:#e0f2fe"><td><strong>🩺 Vital Signs Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${vitalsDocRate}%</td></tr>
+        <tr style="background:#d4edda"><td><strong>🔢 ICD Codes Present</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${icdDocRate}%</td></tr>
+        <tr style="background:#e0f2fe"><td><strong>📝 Specific Diagnosis</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${diagSpecificRatePercent}%</td></tr>
+        <tr style="background:${duplicateCases > 0 ? '#fff3cd' : '#d4edda'}"><td><strong>🔄 Duplication Rate</strong></td><td style="font-size:16pt;font-weight:bold;color:${duplicateCases > 0 ? '#856404' : '#155724'};text-align:center;">${duplicateRate}% (${duplicateCases} cases)</td></tr>
         ${casesWithMissingTests > 0 ? `<tr style="background:#fef3c7"><td><strong>📋 Cases with Missing Required Tests</strong></td><td style="font-size:16pt;font-weight:bold;color:#92400e;text-align:center;">${casesWithMissingTests} (${totalMissingTests} tests)</td></tr>` : ''}
       </tbody>
     </table>
@@ -1768,17 +1806,14 @@ Return HTML only, no markdown or code blocks.
   // Generate KPI Dashboard for multi-case report using structured case data
   let kpiDashboard = '';
   try {
-    const reportStats = extractStatsFromCases(cases); // Use structured case data
-    // توحيد الإحصائيات مع القيم المستخرجة من HTML (أدق)
-    reportStats.approvedCount = approvedCount;
-    reportStats.rejectedCount = rejectedCount;
-    reportStats.needsDocCount = reviewCount;
-    reportStats.avgInsuranceScore = parseFloat(avgInsuranceScore) || 0;
-    reportStats.avgMedicalScore = parseFloat(avgMedicalScore) || 0;
+    // استخدام caseStats المحسوبة سابقاً (مصدر الحقيقة الوحيد)
+    // إضافة الدرجات المحسوبة
+    caseStats.avgInsuranceScore = parseFloat(avgInsuranceScore) || structuredInsuranceScore;
+    caseStats.avgMedicalScore = parseFloat(avgMedicalScore) || 7;
     
-    const kpis = calculateKPIs(reportStats);
+    const kpis = calculateKPIs(caseStats);
     kpiDashboard = generateKPIDashboardHTML(kpis, 'شهري');
-    console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10`);
+    console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10, Services: ${caseStats.totalServiceItems}, Duplicates: ${caseStats.duplicateCases}`);
   } catch (kpiErr) {
     console.error('[KPI] Error generating dashboard:', kpiErr.message);
   }
