@@ -1,0 +1,127 @@
+4) تحسينات تقنية دقيقة على كودك الحالي (مباشرة على ما كتبته)
+4.1 توحيد الصلاحيات بدل نظامين متداخلين
+
+عندك الآن:
+
+صلاحيات في Firestore (staff_roles)
+
+وصلاحيات في Google Sheet (InsurancePermissions) لكن الواجهة فعليًا لا تستخدمها للتحكم
+
+اقترح أحد خيارين (اختر واحدًا فقط):
+
+اعتمد Firebase بالكامل: الصلاحيات في Firestore، وBackend يتحقق من Firebase ID Token.
+
+اعتمد Google Workspace/Apps Script بالكامل: الوصول يكون “داخل الدومين” وتسجيل الدخول Google فقط.
+
+الخيار (1) عادة أفضل لأنه يعطيك RBAC واضح + قابل للتوسع، بشرط تحقق الـ token في السيرفر.
+
+4.2 أغلق Apps Script API بطريقة صحيحة
+
+أنت تستخدم Apps Script كـ API + عنده صلاحية Drive. هذا ممتاز ولكن لازم “تغلقه”:
+
+الحد الأدنى:
+
+اجعل “Who has access” في نشر Web App ليس “anyone”، بل محصور (domain/authorized users).
+
+تذكر أن Web Apps في Apps Script لها إعدادات “تنفيذ كـ مالك السكربت أو كمستخدم” وهذا يؤثر على صلاحيات Drive، ويجب أن تتعامل معه بحذر.
+
+الأفضل:
+
+اترك Apps Script للمهام البسيطة (القراءة/الكتابة في Sheets)
+
+وانقل العمليات الحساسة (تحميل ملفات المرضى + التقارير) إلى Backend حقيقي (Cloud Run/Functions) يتحقق من Firebase ID Token.
+
+4.3 أصلح XSS في واجهة “المهام” و“سجل التسليمات”
+
+عندك مناطق تستخدم:
+
+grid.innerHTML = data.tasks.map(task => `... ${task.doctorName} ...`).join('');
+
+
+هذه خطيرة لأن task.doctorName قد يحمل HTML/JS.
+
+الحل الأفضل:
+استخدم document.createElement + textContent لكل قيمة نصية.
+(هذا أفضل من التعقيم لأنك تتجنب innerHTML أصلًا.)
+
+OWASP يوضح أن XSS ينتج من دمج مدخلات غير موثوقة في HTML بدون معالجة سليمة.
+
+4.4 أصلح Bug واضح: زر “إعادة المحاولة” يستدعي دالة غير موجودة
+
+في رسالة الخطأ داخل catch:
+
+<button onclick="analyzePatientData()">إعادة المحاولة</button>
+
+
+لا يوجد analyzePatientData() في الكود (حسب ما ظهر).
+الحل: إما:
+
+استبدلها بـ:
+
+document.getElementById('analyzeBtn').click()
+
+
+أو أنشئ Wrapper:
+
+function analyzePatientData(){ document.getElementById('analyzeBtn')?.click(); }
+
+4.5 وحّد معالجة Excel في “المهام” مثل “الرفع المباشر”
+
+في startAnalysis(taskIndex) أنت تعمل parsing وتحويل لنص بـ join فقط، بينما handleFiles() يعمل smart mapping + تحذيرات.
+هذا يسبب تفاوت جودة التحليل.
+الحل: استدعِ نفس الدالة:
+
+استخدم processExcelWithSmartMapping(allData) داخل مسار المهام أيضًا.
+
+4.6 أصلح تصميم شيت Tasks: أنت تكتب عمود 14 بدون Header
+
+في Apps Script:
+
+setupSheets() ينشئ Tasks بـ 13 عمود.
+
+saveTaskReport_() يكتب في العمود 14.
+
+getTasks_() يحاول يقرأ data[i][13].
+
+الحل: عدّل header لتضمين عمود “ReportLink/ReportHtml” كعمود 14 بشكل رسمي (حتى تكون القراءة/الكتابة ثابتة).
+
+4.7 التوقيع (Signature) لا تخزنه base64 في Google Sheet
+
+خلايا Sheets لها حد أحرف (قد يقطع التوقيع أو يكبر بسرعة).
+الأفضل:
+
+احفظ التوقيع كملف PNG في Drive (Tasks folder)
+
+خزن الرابط في الشيت
+
+واجهة العرض تستخدم الرابط
+
+4.8 لا تحفظ تقارير فيها بيانات تعريفية للمريض “كما هي”
+
+حاليًا saveAndLog() يحفظ HTML كامل للتقرير. إذا التقرير يحتوي اسم/رقم ملف/صورة… تصبح حساسة.
+
+الحل العملي:
+
+قبل الحفظ: طبّق “Redaction” تلقائي:
+
+احذف الاسم الكامل/الهوية/الجوال/العنوان
+
+واحتفظ بـ MRN مُعمّى (Hash)
+
+أو احفظ نسختين:
+
+نسخة “تشغيلية” داخل Drive بصلاحيات شديدة
+
+نسخة “تعليمية” بدون معرفات (للتدريب/المراجعات)
+
+4.9 قلّل الاعتماد على Base64 داخل JSON للملفات الكبيرة
+
+رفع PDF صفحات كصور Base64 + Excel Base64 داخل JSON يسبب:
+
+بطء
+
+مشاكل ذاكرة
+
+احتمالات فشل الشبكة
+
+الأفضل: ارفع الملفات إلى Storage (Firebase Storage أو Drive) ثم أرسل “روابط مؤقتة” للـ backend.
