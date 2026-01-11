@@ -2467,7 +2467,8 @@ let serviceRatingValue = 0;
 const BATCH_SIZE = 50; // Maximum cases per batch
 const BATCH_DELAY_MS = 2000; // Delay between batches to avoid rate limits
 
-// Helper: Split text content into batches based on case count
+// Helper: Split text content into batches based on CLAIM count (not row count)
+// Groups rows by Claim Se No. to keep all services of a claim together
 function splitTextContentIntoBatches(textContent, batchSize = BATCH_SIZE) {
   const lines = textContent.split('\n');
   if (lines.length <= 1) return [textContent];
@@ -2475,21 +2476,68 @@ function splitTextContentIntoBatches(textContent, batchSize = BATCH_SIZE) {
   const headerLine = lines[0];
   const dataLines = lines.slice(1).filter(line => line.trim());
   
-  if (dataLines.length <= batchSize) return [textContent];
+  // Find Claim column index from header (usually column 1 or 2)
+  const headerCols = headerLine.split('|').map(h => h.trim().toLowerCase());
+  let claimColIdx = headerCols.findIndex(h => h.includes('claim') && h.includes('no'));
+  if (claimColIdx < 0) claimColIdx = 1; // Default to column 1
   
+  // Group rows by claim ID
+  const claimGroups = new Map(); // claimId -> [rows]
+  const claimOrder = []; // Preserve order of first appearance
+  
+  dataLines.forEach(line => {
+    const cols = line.split('|');
+    const claimId = cols[claimColIdx]?.trim() || 'unknown';
+    if (!claimGroups.has(claimId)) {
+      claimGroups.set(claimId, []);
+      claimOrder.push(claimId);
+    }
+    claimGroups.get(claimId).push(line);
+  });
+  
+  console.log(`[splitTextContentIntoBatches] Found ${claimOrder.length} unique claims in ${dataLines.length} rows`);
+  
+  // If fewer claims than batch size, return as-is
+  if (claimOrder.length <= batchSize) return [textContent];
+  
+  // Split into batches of batchSize CLAIMS (not rows)
   const batches = [];
-  for (let i = 0; i < dataLines.length; i += batchSize) {
-    const batchLines = dataLines.slice(i, i + batchSize);
+  for (let i = 0; i < claimOrder.length; i += batchSize) {
+    const batchClaimIds = claimOrder.slice(i, i + batchSize);
+    const batchLines = [];
+    batchClaimIds.forEach(cid => {
+      batchLines.push(...claimGroups.get(cid));
+    });
     batches.push(headerLine + '\n' + batchLines.join('\n'));
+    console.log(`[splitTextContentIntoBatches] Batch ${batches.length}: ${batchClaimIds.length} claims, ${batchLines.length} rows`);
   }
+  
   return batches;
 }
 
-// Helper: Count approximate cases in file content
+// Helper: Count actual CLAIMS in file content (not rows)
 function countCasesInContent(textContent) {
   if (!textContent) return 0;
   const lines = textContent.split('\n').filter(line => line.trim());
-  return Math.max(0, lines.length - 1); // Subtract header row
+  if (lines.length <= 1) return 0;
+  
+  const headerLine = lines[0];
+  const dataLines = lines.slice(1);
+  
+  // Find Claim column index from header
+  const headerCols = headerLine.split('|').map(h => h.trim().toLowerCase());
+  let claimColIdx = headerCols.findIndex(h => h.includes('claim') && h.includes('no'));
+  if (claimColIdx < 0) claimColIdx = 1; // Default
+  
+  // Count unique claim IDs
+  const uniqueClaims = new Set();
+  dataLines.forEach(line => {
+    const cols = line.split('|');
+    const claimId = cols[claimColIdx]?.trim();
+    if (claimId) uniqueClaims.add(claimId);
+  });
+  
+  return uniqueClaims.size;
 }
 
 // Helper: Combine multiple HTML reports into one
