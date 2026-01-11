@@ -3773,22 +3773,61 @@ analyzeBtn.addEventListener('click', async () => {
       
       console.log(`[Batch Analysis] Split into ${allBatches.length} batches`);
       
+      // PHASE 1: Show decomposition animation
+      statusText.innerHTML = `
+        <div style="text-align:center;padding:1rem;">
+          <div style="font-size:2rem;margin-bottom:1rem;animation:pulse 1s infinite;">📊</div>
+          <div style="font-size:1.3rem;color:#c9a962;font-weight:bold;margin-bottom:0.5rem;">مرحلة التفكيك</div>
+          <div style="color:#a0aec0;">جاري تقسيم ${totalCases} حالة إلى ${allBatches.length} دفعات...</div>
+          <div style="display:flex;justify-content:center;gap:8px;margin-top:1rem;flex-wrap:wrap;">
+            ${allBatches.map((b, i) => `<div style="width:40px;height:40px;background:#1e3a5f;border:2px solid #c9a962;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.8rem;animation:fadeIn 0.3s ${i * 0.1}s both;">${i + 1}</div>`).join('')}
+          </div>
+        </div>
+      `;
+      await new Promise(r => setTimeout(r, 1500));
+      
       // Process each batch
       for (let i = 0; i < allBatches.length; i++) {
         const batch = allBatches[i];
         const batchNum = i + 1;
+        const progress = Math.round((i / allBatches.length) * 100);
         
-        // Update progress
+        // PHASE 2: Show analysis animation with visual pipeline
         statusText.innerHTML = `
-          <div style="text-align:center;">
-            <div style="font-size:1.1rem;margin-bottom:0.5rem;">⏳ جاري التحليل...</div>
-            <div style="background:rgba(255,255,255,0.2);border-radius:10px;padding:0.5rem 1rem;">
-              <strong>الدفعة ${batchNum} من ${allBatches.length}</strong>
-              <div style="font-size:0.85rem;color:#a0aec0;">${processedCases} من ${totalCases} حالة</div>
+          <div style="text-align:center;padding:1rem;">
+            <style>
+              @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.1);} }
+              @keyframes fadeIn { from{opacity:0;transform:scale(0.8);} to{opacity:1;transform:scale(1);} }
+              @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+              @keyframes glow { 0%,100%{box-shadow:0 0 5px #c9a962;} 50%{box-shadow:0 0 20px #c9a962;} }
+            </style>
+            <div style="font-size:1.3rem;color:#c9a962;font-weight:bold;margin-bottom:1rem;">🔬 مرحلة التحليل</div>
+            
+            <!-- Batch boxes visualization -->
+            <div style="display:flex;justify-content:center;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;">
+              ${allBatches.map((b, idx) => {
+                const status = idx < i ? '✓' : (idx === i ? '⚡' : (idx + 1));
+                const bg = idx < i ? '#0d5c2e' : (idx === i ? '#c9a962' : '#1e3a5f');
+                const border = idx === i ? '#fff' : '#c9a962';
+                const anim = idx === i ? 'animation:glow 1s infinite;' : '';
+                return `<div style="width:45px;height:45px;background:${bg};border:2px solid ${border};border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.9rem;font-weight:bold;${anim}">${status}</div>`;
+              }).join('')}
             </div>
-            <div style="margin-top:0.5rem;background:rgba(255,255,255,0.1);border-radius:5px;height:8px;overflow:hidden;">
-              <div style="background:#c9a962;height:100%;width:${Math.round((batchNum-1)/allBatches.length*100)}%;transition:width 0.3s;"></div>
+            
+            <!-- Current batch info -->
+            <div style="background:rgba(201,169,98,0.2);border:2px solid #c9a962;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+              <div style="font-size:1.1rem;color:#fff;margin-bottom:0.5rem;">
+                <span style="animation:spin 2s linear infinite;display:inline-block;">⚙️</span>
+                جاري تحليل الدفعة <strong style="color:#c9a962;">${batchNum}</strong> من <strong>${allBatches.length}</strong>
+              </div>
+              <div style="color:#a0aec0;font-size:0.9rem;">${batch.caseCount} حالة في هذه الدفعة</div>
             </div>
+            
+            <!-- Progress bar -->
+            <div style="background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;margin-bottom:0.5rem;">
+              <div style="background:linear-gradient(90deg,#c9a962,#ffd700);height:100%;width:${progress}%;transition:width 0.5s;border-radius:10px;"></div>
+            </div>
+            <div style="color:#a0aec0;font-size:0.85rem;">${processedCases} من ${totalCases} حالة مكتملة</div>
           </div>
         `;
         
@@ -3842,8 +3881,47 @@ analyzeBtn.addEventListener('click', async () => {
         }
       }
       
-      // Combine all reports
+      // PHASE 3: Show combining animation
       if (allReports.length > 0) {
+        statusText.innerHTML = `
+          <div style="text-align:center;padding:1rem;">
+            <style>
+              @keyframes merge { 
+                0% { transform: translateY(0) scale(1); opacity: 1; }
+                50% { transform: translateY(-20px) scale(0.8); opacity: 0.7; }
+                100% { transform: translateY(0) scale(0); opacity: 0; }
+              }
+              @keyframes grow { 
+                0% { transform: scale(0.5); opacity: 0; }
+                50% { transform: scale(1.2); }
+                100% { transform: scale(1); opacity: 1; }
+              }
+            </style>
+            <div style="font-size:1.3rem;color:#c9a962;font-weight:bold;margin-bottom:1rem;">📑 مرحلة الجمع</div>
+            
+            <!-- Merging animation -->
+            <div style="display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:1.5rem;">
+              ${allReports.map((r, idx) => `
+                <div style="width:35px;height:45px;background:#0d5c2e;border:2px solid #2ecc71;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.8rem;animation:merge 1s ${idx * 0.15}s forwards;">✓</div>
+              `).join('')}
+              <div style="font-size:2rem;margin:0 1rem;color:#c9a962;">→</div>
+              <div style="width:80px;height:100px;background:linear-gradient(135deg,#1e3a5f,#2d5a87);border:3px solid #c9a962;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;animation:grow 1s 0.8s both;box-shadow:0 5px 20px rgba(201,169,98,0.3);">
+                <div style="font-size:1.5rem;">📋</div>
+                <div style="color:#fff;font-size:0.7rem;margin-top:5px;">التقرير النهائي</div>
+              </div>
+            </div>
+            
+            <div style="color:#2ecc71;font-size:1.1rem;font-weight:bold;">
+              ✅ تم دمج ${allReports.length} دفعات في تقرير واحد!
+            </div>
+            <div style="color:#a0aec0;font-size:0.9rem;margin-top:0.5rem;">
+              إجمالي الحالات: ${processedCases}
+            </div>
+          </div>
+        `;
+        
+        await new Promise(r => setTimeout(r, 2000));
+        
         const combinedHtml = combineReports(allReports, processedCases);
         // Create success response
         var data = { success: true, html: combinedHtml, htmlReport: combinedHtml };
