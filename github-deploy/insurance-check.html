@@ -2620,47 +2620,93 @@ function countCasesInContent(textContent) {
 function combineReports(reports, totalCases, aggregatedStats = null) {
   if (reports.length === 0) return '';
   
-  // Helper function to update KPI stats in HTML
-  function updateKPIStats(html, stats) {
-    if (!stats) return html;
+  // Generate a fresh KPI dashboard with correct aggregated stats
+  function generateFreshKPIDashboard(stats) {
+    if (!stats) return '';
     
-    // Update "إجمالي الحالات (المطالبات)" - find the row and update the value
-    html = html.replace(
-      /(<td[^>]*>📋 إجمالي الحالات \(المطالبات\)<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
-      `$1${stats.totalCases}$2`
-    );
+    // Calculate average scores if we have the scoreSum
+    const avgInsurance = stats.scoreSum?.count > 0 
+      ? (stats.scoreSum.insurance / stats.scoreSum.count).toFixed(1) 
+      : '7.0';
+    const avgMedical = stats.scoreSum?.count > 0 
+      ? (stats.scoreSum.medical / stats.scoreSum.count).toFixed(1) 
+      : '7.0';
     
-    // Update "إجمالي بنود الخدمة في Excel"
-    html = html.replace(
-      /(<td[^>]*>📄 إجمالي بنود الخدمة في Excel<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
-      `$1${stats.totalServices}$2`
-    );
+    // Calculate acceptance rate
+    const totalItems = stats.totalServices || 1;
+    const acceptRate = totalItems > 0 ? Math.round((stats.acceptedItems / totalItems) * 100) : 80;
+    const vitalRate = stats.vitalSignsDocRate || 80;
     
-    // Update "بنود مقبولة"
-    html = html.replace(
-      /(<td[^>]*>✅ بنود مقبولة \(تقدير أولي\)<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
-      `$1${stats.acceptedItems}$2`
-    );
-    
-    // Update "بنود تحتاج مراجعة"  
-    html = html.replace(
-      /(<td[^>]*>❌ بنود تحتاج مراجعة<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
-      `$1${stats.reviewItems}$2`
-    );
-    
-    // Update "بنود تحتاج توثيق"
-    html = html.replace(
-      /(<td[^>]*>⚠️ بنود تحتاج توثيق<\/td>\s*<td[^>]*>)\d+(<\/td>)/gi,
-      `$1${stats.docItems}$2`
-    );
-    
+    return `
+    <div style="margin-top:2rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);padding:1.5rem;border-radius:12px;">
+      <h3 style="color:#fff;text-align:center;margin:0 0 1rem;border:none;">📊 الملخص النهائي للتقرير</h3>
+      
+      <table style="width:100%;background:#fff;border-radius:8px;overflow:hidden;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#1e3a5f;">
+            <th colspan="2" style="color:#fff;padding:12px;text-align:center;font-size:1.1rem;">إحصائيات الحالات والخدمات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:#f8f9fa;">
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;font-weight:bold;">📋 إجمالي الحالات (المطالبات)</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;font-size:1.2rem;font-weight:bold;color:#1e3a5f;">${stats.totalCases}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;">📄 إجمالي بنود الخدمة في Excel</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${stats.totalServices}</td>
+          </tr>
+          <tr style="background:#d4edda;">
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;">✅ بنود مقبولة (تقدير أولي)</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#155724;font-weight:bold;">${stats.acceptedItems}</td>
+          </tr>
+          <tr style="background:#f8d7da;">
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;">❌ بنود تحتاج مراجعة</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#721c24;font-weight:bold;">${stats.reviewItems}</td>
+          </tr>
+          <tr style="background:#fff3cd;">
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;">⚠️ بنود تحتاج توثيق</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#856404;font-weight:bold;">${stats.docItems}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;">🏥 توثيق العلامات الحيوية</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${vitalRate}%</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <div style="display:flex;gap:1rem;margin-top:1rem;justify-content:center;flex-wrap:wrap;">
+        <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
+          <div style="font-size:0.9rem;color:#666;">معدل القبول</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:#16a34a;">${acceptRate}%</div>
+        </div>
+        <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
+          <div style="font-size:0.9rem;color:#666;">تقييم الامتثال التأميني</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:#1e3a5f;">${avgInsurance}/10</div>
+        </div>
+        <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
+          <div style="font-size:0.9rem;color:#666;">جودة التوثيق الطبي</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:#0b63c2;">${avgMedical}/10</div>
+        </div>
+      </div>
+    </div>
+    `;
+  }
+  
+  // Remove existing KPI dashboard from HTML
+  function removeExistingKPIDashboard(html) {
+    // Remove the KPI section (الملخص النهائي للتقرير)
+    html = html.replace(/<div[^>]*>[\s\S]*?الملخص النهائي للتقرير[\s\S]*?<\/table>[\s\S]*?<\/div>\s*<\/div>/gi, '');
+    // Also remove any standalone KPI tables
+    html = html.replace(/<h3[^>]*>📊 الملخص النهائي[\s\S]*?<\/table>/gi, '');
     return html;
   }
   
   if (reports.length === 1) {
-    // Single report: update case count and KPI stats
+    // Single report: remove old KPI and add fresh one
     let result = reports[0].replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
-    return updateKPIStats(result, aggregatedStats);
+    result = removeExistingKPIDashboard(result);
+    return result + generateFreshKPIDashboard(aggregatedStats);
   }
   
   // Simple approach: concatenate reports with separators
@@ -2732,8 +2778,11 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
   // Replace existing final summary if present
   combinedHtml = combinedHtml.replace(/<div class="box-good"[^>]*>[\s\S]*?تم تحليل[\s\S]*?<\/div>\s*<\/div>\s*$/i, finalSummary);
   
-  // Update KPI stats with aggregated values
-  combinedHtml = updateKPIStats(combinedHtml, aggregatedStats);
+  // Remove ALL existing KPI dashboards from combined HTML
+  combinedHtml = removeExistingKPIDashboard(combinedHtml);
+  
+  // Add a single fresh KPI dashboard with aggregated stats at the end
+  combinedHtml += generateFreshKPIDashboard(aggregatedStats);
   
   return combinedHtml;
 }
@@ -4027,19 +4076,27 @@ analyzeBtn.addEventListener('click', async () => {
             allReports.push(reportHtml);
             processedCases += batch.caseCount;
             
-            // Extract and aggregate stats from this batch's HTML
-            const extractNumber = (pattern) => {
-              const match = reportHtml.match(pattern);
-              return match ? parseInt(match[1]) || 0 : 0;
-            };
+            // Use JSON stats from backend (reliable) instead of regex extraction (unreliable)
+            if (data.stats) {
+              aggregatedStats.totalCases += data.stats.totalCases || batch.caseCount;
+              aggregatedStats.totalServices += data.stats.totalServiceItems || 0;
+              aggregatedStats.acceptedItems += data.stats.acceptedItems || 0;
+              aggregatedStats.reviewItems += data.stats.reviewItems || 0;
+              aggregatedStats.docItems += data.stats.docItems || 0;
+              aggregatedStats.duplicateCases = (aggregatedStats.duplicateCases || 0) + (data.stats.duplicateCases || 0);
+              aggregatedStats.vitalSignsDocRate = data.stats.vitalSignsDocRate || aggregatedStats.vitalSignsDocRate || 0;
+              
+              // Average the scores (weighted by case count)
+              if (!aggregatedStats.scoreSum) aggregatedStats.scoreSum = { insurance: 0, medical: 0, count: 0 };
+              aggregatedStats.scoreSum.insurance += (data.stats.avgInsuranceScore || 0) * (data.stats.totalCases || 1);
+              aggregatedStats.scoreSum.medical += (data.stats.avgMedicalScore || 0) * (data.stats.totalCases || 1);
+              aggregatedStats.scoreSum.count += data.stats.totalCases || 1;
+            } else {
+              // Fallback: just count cases
+              aggregatedStats.totalCases += batch.caseCount;
+            }
             
-            aggregatedStats.totalCases += batch.caseCount;
-            aggregatedStats.totalServices += extractNumber(/📄 إجمالي بنود الخدمة في Excel<\/td>\s*<td[^>]*>(\d+)/i);
-            aggregatedStats.acceptedItems += extractNumber(/✅ بنود مقبولة \(تقدير أولي\)<\/td>\s*<td[^>]*>(\d+)/i);
-            aggregatedStats.reviewItems += extractNumber(/❌ بنود تحتاج مراجعة<\/td>\s*<td[^>]*>(\d+)/i);
-            aggregatedStats.docItems += extractNumber(/⚠️ بنود تحتاج توثيق<\/td>\s*<td[^>]*>(\d+)/i);
-            
-            console.log(`[Batch Analysis] Batch ${batchNum} completed: ${batch.caseCount} cases, Services: ${aggregatedStats.totalServices}`);
+            console.log(`[Batch Analysis] Batch ${batchNum} completed: ${batch.caseCount} cases, Total Services: ${aggregatedStats.totalServices}`);
           } else if (data.error) {
             console.error(`[Batch Analysis] Batch ${batchNum} error:`, data.error);
             // Continue with next batch

@@ -1821,7 +1821,21 @@ Return HTML only, no markdown or code blocks.
   // Append KPI dashboard to report
   const finalReportWithKPI = kpiDashboard ? fullReport + kpiDashboard : fullReport;
   
-  return res.status(200).json({ htmlReport: finalReportWithKPI });
+  // Return both HTML and structured stats for frontend aggregation
+  return res.status(200).json({ 
+    htmlReport: finalReportWithKPI,
+    stats: {
+      totalCases: caseStats.totalCases || caseResults.length,
+      totalServiceItems: caseStats.totalServiceItems || 0,
+      acceptedItems: caseStats.acceptedItems || 0,
+      reviewItems: caseStats.reviewItems || 0,
+      docItems: caseStats.docItems || 0,
+      duplicateCases: caseStats.duplicateCases || 0,
+      avgInsuranceScore: caseStats.avgInsuranceScore || 0,
+      avgMedicalScore: caseStats.avgMedicalScore || 0,
+      vitalSignsDocRate: caseStats.vitalSignsDocRate || 0
+    }
+  });
 }
 
 function detectMimeType(base64Data = "") {
@@ -2433,8 +2447,24 @@ Return complete HTML in English.`;
 
     // Append KPI dashboard to report
     const finalReport = kpiDashboard ? text + kpiDashboard : text;
+    
+    // Extract stats for frontend aggregation
+    const reportStats = extractStatsFromReport(text);
 
-    return res.status(200).json({ htmlReport: finalReport });
+    return res.status(200).json({ 
+      htmlReport: finalReport,
+      stats: {
+        totalCases: reportStats.totalCases || 1,
+        totalServiceItems: reportStats.totalServiceItems || 0,
+        acceptedItems: reportStats.acceptedItems || 0,
+        reviewItems: reportStats.reviewItems || 0,
+        docItems: reportStats.docItems || 0,
+        duplicateCases: reportStats.duplicateCases || 0,
+        avgInsuranceScore: reportStats.avgInsuranceScore || 0,
+        avgMedicalScore: reportStats.avgMedicalScore || 0,
+        vitalSignsDocRate: reportStats.vitalSignsDocRate || 0
+      }
+    });
   } catch (err) {
     console.error("patient-analyzer error:", err);
     return res.status(500).json({ error: "Server error during case analysis", detail: err.message });
