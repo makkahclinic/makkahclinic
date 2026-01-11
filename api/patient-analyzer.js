@@ -541,6 +541,87 @@ Procedures: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') :
   }
 }
 
+// ========== INJECT MISSING DATA INTO AI RESPONSE ==========
+// إصلاح مشكلة البيانات الفارغة في HTML الذي ينتجه الذكاء الاصطناعي
+function injectCaseDataIntoHTML(aiHtml, caseData) {
+  if (!aiHtml || !caseData) return aiHtml;
+  
+  let html = aiHtml;
+  
+  // حقن التشخيص إذا كان فارغاً
+  const diagnosisPattern = /<tr>\s*<td>\s*<strong>التشخيص:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
+  const diagnosisValue = caseData.diagnosis || caseData.icdCode || '-';
+  if (diagnosisPattern.test(html)) {
+    html = html.replace(diagnosisPattern, `<tr><td><strong>التشخيص:</strong></td><td>${diagnosisValue}</td></tr>`);
+  }
+  
+  // حقن درجة الحرارة
+  const vitals = caseData.vitals || {};
+  const tempValue = vitals.temperature && vitals.temperature !== 'N/A' && vitals.temperature !== '' 
+    ? vitals.temperature 
+    : '<span style="color:#856404">⚠️ غير متوفر</span>';
+  const tempPattern = /<tr>\s*<td>\s*<strong>درجة الحرارة:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
+  if (tempPattern.test(html)) {
+    html = html.replace(tempPattern, `<tr><td><strong>درجة الحرارة:</strong></td><td>${tempValue}</td></tr>`);
+  }
+  
+  // حقن ضغط الدم
+  const bpValue = vitals.bloodPressure && vitals.bloodPressure !== 'N/A' && vitals.bloodPressure !== ''
+    ? vitals.bloodPressure
+    : '<span style="color:#856404">⚠️ غير متوفر</span>';
+  const bpPattern = /<tr>\s*<td>\s*<strong>ضغط الدم:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
+  if (bpPattern.test(html)) {
+    html = html.replace(bpPattern, `<tr><td><strong>ضغط الدم:</strong></td><td>${bpValue}</td></tr>`);
+  }
+  
+  // حقن الطول
+  const heightValue = vitals.height && vitals.height !== '' 
+    ? vitals.height 
+    : '<span style="color:#856404">⚠️ غير متوفر</span>';
+  const heightPattern = /<tr>\s*<td>\s*<strong>الطول:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
+  if (heightPattern.test(html)) {
+    html = html.replace(heightPattern, `<tr><td><strong>الطول:</strong></td><td>${heightValue}</td></tr>`);
+  }
+  
+  // حقن الوزن
+  const weightValue = vitals.weight && vitals.weight !== '' 
+    ? vitals.weight 
+    : '<span style="color:#856404">⚠️ غير متوفر</span>';
+  const weightPattern = /<tr>\s*<td>\s*<strong>الوزن:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
+  if (weightPattern.test(html)) {
+    html = html.replace(weightPattern, `<tr><td><strong>الوزن:</strong></td><td>${weightValue}</td></tr>`);
+  }
+  
+  // حقن النبض
+  const pulseValue = vitals.pulse && vitals.pulse !== '' 
+    ? vitals.pulse 
+    : '<span style="color:#856404">⚠️ غير متوفر</span>';
+  const pulsePattern = /<tr>\s*<td>\s*<strong>النبض:<\/strong><\/td>\s*<td>(\s*|\[.*?\])<\/td>\s*<\/tr>/gi;
+  if (pulsePattern.test(html)) {
+    html = html.replace(pulsePattern, `<tr><td><strong>النبض:</strong></td><td>${pulseValue}</td></tr>`);
+  }
+  
+  // إذا لم يوجد جدول أدوية صحيح، أنشئ واحداً
+  const medsTableCheck = /<h4>💊 الأدوية<\/h4>\s*<table[^>]*>\s*<thead[^>]*>[\s\S]*?<\/thead>\s*<tbody>\s*(?:<tr>\s*<td>لا يوجد<\/td>\s*<\/tr>|<tr>\s*<td>\s*<\/td>)/gi;
+  if (caseData.medications && caseData.medications.length > 0 && medsTableCheck.test(html)) {
+    const medsRows = caseData.medications.map(m => 
+      `<tr><td>${m.name}</td><td>${m.dose || '-'}</td><td>⏳ جاري التحليل</td><td>-</td></tr>`
+    ).join('\n');
+    
+    html = html.replace(medsTableCheck, 
+      `<h4>💊 الأدوية</h4>
+      <table class="custom-table">
+        <thead style="background:#1e3a5f;color:white">
+          <tr><th>الدواء</th><th>الجرعة</th><th>التقييم</th><th>الحالة</th></tr>
+        </thead>
+        <tbody>
+        ${medsRows}`
+    );
+  }
+  
+  return html;
+}
+
 // ========== REPETITION DETECTION & PATTERN ANALYSIS ==========
 function detectRepetitionsAndPatterns(cases) {
   const repetitions = [];
@@ -1295,6 +1376,9 @@ Return HTML only, no markdown or code blocks.
       // Clean up code fences
       text = text.replace(/^```html?\s*/i, '').replace(/```\s*$/i, '').trim();
       text = text.replace(/^```\s*/gm, '').replace(/\s*```$/gm, '');
+      
+      // إصلاح: حقن البيانات الفعلية إذا كانت فارغة في استجابة الذكاء الاصطناعي
+      text = injectCaseDataIntoHTML(text, caseData);
       
       if (text) {
         // كشف الفحوصات الناقصة من حق المريض
