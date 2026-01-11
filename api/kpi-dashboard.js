@@ -18,23 +18,31 @@ export function calculateKPIs(reportStats) {
 
   const totalCases = reportStats.totalCases || 1;
 
-  // 1. Insurance Compliance Score /10
-  // Based on: approval rate, documentation completeness, duplicate rate
-  const approvalRate = (reportStats.approvedCount || 0) / totalCases;
+  // حساب نسبة قبول الإجراءات (الأدق) بدلاً من الحالات
+  const totalProcedures = (reportStats.approvedCount || 0) + (reportStats.rejectedCount || 0);
+  const procedureApprovalRate = totalProcedures > 0 
+    ? (reportStats.approvedCount || 0) / totalProcedures 
+    : 0;
+  
   const needsDocRate = (reportStats.needsDocCount || 0) / totalCases;
   const duplicateRate = (reportStats.duplicateCount || 0) / totalCases;
   const ivWithoutJustificationRate = (reportStats.ivWithoutJustification || 0) / totalCases;
 
-  // Score calculation
-  let insuranceScore = 10;
-  insuranceScore -= (1 - approvalRate) * 3; // -3 max for rejections
-  insuranceScore -= needsDocRate * 2; // -2 max for missing docs
-  insuranceScore -= duplicateRate * 2; // -2 max for duplicates
-  insuranceScore -= ivWithoutJustificationRate * 3; // -3 max for unjustified IV
-  kpis.insuranceCompliance.score = Math.max(0, Math.min(10, parseFloat(insuranceScore.toFixed(1))));
+  // استخدام متوسط تقييمات الذكاء الاصطناعي إن وجدت
+  if (reportStats.avgInsuranceScore && reportStats.avgInsuranceScore > 0) {
+    kpis.insuranceCompliance.score = parseFloat(reportStats.avgInsuranceScore.toFixed(1));
+  } else {
+    // حساب بديل إذا لم تتوفر التقييمات
+    let insuranceScore = 10;
+    insuranceScore -= (1 - procedureApprovalRate) * 4;
+    insuranceScore -= needsDocRate * 3;
+    insuranceScore -= duplicateRate * 2;
+    insuranceScore -= ivWithoutJustificationRate * 1;
+    kpis.insuranceCompliance.score = Math.max(0, Math.min(10, parseFloat(insuranceScore.toFixed(1))));
+  }
   
   kpis.insuranceCompliance.details = [
-    { label: 'معدل القبول', value: `${(approvalRate * 100).toFixed(0)}%`, target: '≥80%', status: approvalRate >= 0.8 ? 'good' : 'bad' },
+    { label: 'قبول الإجراءات', value: `${(procedureApprovalRate * 100).toFixed(0)}%`, target: '≥70%', status: procedureApprovalRate >= 0.7 ? 'good' : 'bad' },
     { label: 'نسبة يحتاج توثيق', value: `${(needsDocRate * 100).toFixed(0)}%`, target: '<15%', status: needsDocRate < 0.15 ? 'good' : 'bad' },
     { label: 'نسبة التكرار', value: `${(duplicateRate * 100).toFixed(0)}%`, target: '<5%', status: duplicateRate < 0.05 ? 'good' : 'bad' },
     { label: 'IV بدون مبرر', value: `${(ivWithoutJustificationRate * 100).toFixed(0)}%`, target: '<10%', status: ivWithoutJustificationRate < 0.1 ? 'good' : 'bad' }
@@ -49,11 +57,16 @@ export function calculateKPIs(reportStats) {
   const requiredTestsOrderedRate = reportStats.requiredTestsOrdered ?
     (reportStats.requiredTestsOrdered / (reportStats.requiredTestsTotal || 1)) : 1;
 
-  let medicalScore = 10;
-  medicalScore -= (1 - antibioticAppropriateRate) * 4; // -4 max for inappropriate antibiotics
-  medicalScore -= (1 - vitalsDocRate) * 3; // -3 max for missing vitals
-  medicalScore -= (1 - requiredTestsOrderedRate) * 3; // -3 max for missing required tests
-  kpis.medicalQuality.score = Math.max(0, Math.min(10, parseFloat(medicalScore.toFixed(1))));
+  // استخدام متوسط تقييمات الذكاء الاصطناعي إن وجدت
+  if (reportStats.avgMedicalScore && reportStats.avgMedicalScore > 0) {
+    kpis.medicalQuality.score = parseFloat(reportStats.avgMedicalScore.toFixed(1));
+  } else {
+    let medicalScore = 10;
+    medicalScore -= (1 - antibioticAppropriateRate) * 4;
+    medicalScore -= (1 - vitalsDocRate) * 3;
+    medicalScore -= (1 - requiredTestsOrderedRate) * 3;
+    kpis.medicalQuality.score = Math.max(0, Math.min(10, parseFloat(medicalScore.toFixed(1))));
+  }
 
   kpis.medicalQuality.details = [
     { label: 'المضادات المناسبة', value: `${(antibioticAppropriateRate * 100).toFixed(0)}%`, target: '≥90%', status: antibioticAppropriateRate >= 0.9 ? 'good' : 'bad' },

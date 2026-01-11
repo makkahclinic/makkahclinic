@@ -1384,6 +1384,10 @@ Return HTML only, no markdown or code blocks.
   const rejectedCount = (allCasesHtml.match(/❌/g) || []).length;
   const reviewCount = (allCasesHtml.match(/⚠️/g) || []).length;
   
+  // حساب نسبة قبول الإجراءات (متوافق مع لوحة KPI)
+  const totalProcedures = approvedCount + rejectedCount;
+  const procedureApprovalRate = totalProcedures > 0 ? ((approvedCount / totalProcedures) * 100).toFixed(0) : 0;
+  
   // Determine overall status
   const getScoreClass = (score) => {
     const s = parseFloat(score);
@@ -1410,6 +1414,7 @@ Return HTML only, no markdown or code blocks.
         <tr><td width="50%"><strong>📁 إجمالي الحالات المحللة</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
         <tr style="background:#d4edda"><td><strong>✅ الإجراءات المقبولة</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
         <tr style="background:#f8d7da"><td><strong>❌ الإجراءات المرفوضة</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
+        <tr style="background:#e0f2fe"><td><strong>📊 نسبة قبول الإجراءات</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${procedureApprovalRate}%</td></tr>
         <tr style="background:#fff3cd"><td><strong>⚠️ تحتاج توثيق</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
         ${casesWithMissingTests > 0 ? `<tr style="background:#fef3c7"><td><strong>📋 حالات بفحوصات ناقصة (حق المريض)</strong></td><td style="font-size:16pt;font-weight:bold;color:#92400e;text-align:center;">${casesWithMissingTests} (${totalMissingTests} فحص)</td></tr>` : ''}
       </tbody>
@@ -1457,6 +1462,7 @@ Return HTML only, no markdown or code blocks.
         <tr><td width="50%"><strong>📁 Total Cases Analyzed</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
         <tr style="background:#d4edda"><td><strong>✅ Approved Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${approvedCount}</td></tr>
         <tr style="background:#f8d7da"><td><strong>❌ Rejected Items</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${rejectedCount}</td></tr>
+        <tr style="background:#e0f2fe"><td><strong>📊 Procedure Approval Rate</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${procedureApprovalRate}%</td></tr>
         <tr style="background:#fff3cd"><td><strong>⚠️ Needs Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${reviewCount}</td></tr>
         ${casesWithMissingTests > 0 ? `<tr style="background:#fef3c7"><td><strong>📋 Cases with Missing Required Tests</strong></td><td style="font-size:16pt;font-weight:bold;color:#92400e;text-align:center;">${casesWithMissingTests} (${totalMissingTests} tests)</td></tr>` : ''}
       </tbody>
@@ -1655,6 +1661,13 @@ Return HTML only, no markdown or code blocks.
   let kpiDashboard = '';
   try {
     const reportStats = extractStatsFromCases(cases); // Use structured case data
+    // توحيد الإحصائيات مع القيم المستخرجة من HTML (أدق)
+    reportStats.approvedCount = approvedCount;
+    reportStats.rejectedCount = rejectedCount;
+    reportStats.needsDocCount = reviewCount;
+    reportStats.avgInsuranceScore = parseFloat(avgInsuranceScore) || 0;
+    reportStats.avgMedicalScore = parseFloat(avgMedicalScore) || 0;
+    
     const kpis = calculateKPIs(reportStats);
     kpiDashboard = generateKPIDashboardHTML(kpis, 'شهري');
     console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10`);
