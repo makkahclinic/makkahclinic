@@ -2738,10 +2738,16 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
     return result + generateFreshKPIDashboard(aggregatedStats);
   }
   
-  // ✅ الحل: نحذف فقط الملخصات المكررة باستخدام DOM Parser (آمن)
+  // ✅ الحل: نحذف فقط الملخصات المكررة مع الحفاظ على <style>
   function safeRemoveKPIOnly(html) {
     if (!html || html.length < 100) return html;
+    
     try {
+      // 1️⃣ أولاً: نستخرج كل <style> tags قبل الـ DOM parsing
+      const styleMatches = html.match(/<style[^>]*>[\s\S]*?<\/style>/gi) || [];
+      const stylesHtml = styleMatches.join('\n');
+      
+      // 2️⃣ DOM parsing لإزالة KPI فقط
       const parser = new DOMParser();
       const doc = parser.parseFromString(`<div id="temp-wrapper">${html}</div>`, 'text/html');
       const wrapper = doc.getElementById('temp-wrapper');
@@ -2763,7 +2769,8 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
         }
       });
       
-      return wrapper.innerHTML;
+      // 3️⃣ نعيد إدخال الـ styles في البداية
+      return stylesHtml + wrapper.innerHTML;
     } catch (e) {
       return html;
     }
