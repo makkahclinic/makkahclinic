@@ -2693,19 +2693,42 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
     `;
   }
   
-  // Remove existing KPI dashboard from HTML (carefully, without removing case content)
+  // Remove existing KPI dashboard from HTML - USE DOM PARSER for safety
   function removeExistingKPIDashboard(html) {
-    // Remove KPI dashboard sections - be specific to avoid removing case analyses
-    // Pattern 1: الملخص النهائي للتقرير section with background gradient
-    html = html.replace(/<div[^>]*style="[^"]*margin-top:2rem;background:linear-gradient[^>]*>[\s\S]*?الملخص النهائي للتقرير[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi, '');
+    if (!html || html.length < 100) return html;
     
-    // Pattern 2: KPI dashboard with table inside gradient container
-    html = html.replace(/<div[^>]*background:linear-gradient\(135deg,#1e3a5f[^>]*>[\s\S]*?إحصائيات الحالات والخدمات[\s\S]*?<\/table>[\s\S]*?<\/div>\s*<\/div>/gi, '');
-    
-    // Pattern 3: Remove KPI with chart.js canvas (if present)
-    html = html.replace(/<div[^>]*id="kpi-dashboard"[^>]*>[\s\S]*?<\/div>/gi, '');
-    
-    return html;
+    try {
+      // Use DOMParser for safe, precise removal
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div id="wrapper">${html}</div>`, 'text/html');
+      const wrapper = doc.getElementById('wrapper');
+      
+      if (!wrapper) return html;
+      
+      // Remove KPI dashboard by ID if present
+      const kpiById = wrapper.querySelector('#kpi-dashboard');
+      if (kpiById) kpiById.remove();
+      
+      // Remove any div containing "الملخص النهائي للتقرير" that is NOT a case-section
+      const allDivs = wrapper.querySelectorAll('div');
+      allDivs.forEach(div => {
+        // Skip case sections - NEVER remove them
+        if (div.classList.contains('case-section')) return;
+        if (div.closest('.case-section')) return;
+        
+        // Check if this div contains the KPI summary header
+        const text = div.textContent || '';
+        if (text.includes('الملخص النهائي للتقرير') && 
+            text.includes('إحصائيات الحالات والخدمات')) {
+          div.remove();
+        }
+      });
+      
+      return wrapper.innerHTML;
+    } catch (e) {
+      console.error('[removeKPI] DOM parsing failed:', e);
+      return html; // Return original if parsing fails
+    }
   }
   
   if (reports.length === 1) {
@@ -2718,9 +2741,13 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
   // SIMPLIFIED APPROACH: Keep ALL report content, just add separators and aggregated KPI
   let combinedHtml = '';
   
+  console.log(`[combineReports] Combining ${reports.length} reports, totalCases=${totalCases}`);
   reports.forEach((report, idx) => {
+    console.log(`[combineReports] Report ${idx+1} original length: ${report?.length || 0}`);
+    
     // Remove KPI dashboard from each batch (will add aggregated one at the end)
     let cleanedReport = removeExistingKPIDashboard(report);
+    console.log(`[combineReports] Report ${idx+1} after KPI removal: ${cleanedReport?.length || 0}`);
     
     // Update case count text
     cleanedReport = cleanedReport.replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
