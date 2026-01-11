@@ -2473,12 +2473,51 @@ function splitTextContentIntoBatches(textContent, batchSize = BATCH_SIZE) {
   const lines = textContent.split('\n');
   if (lines.length <= 1) return [textContent];
   
-  const headerLine = lines[0];
-  const dataLines = lines.slice(1).filter(line => line.trim());
+  // Find the REAL header line (skip sheet markers like "=== Sheet1 ===" and metadata)
+  const headerKeywords = ['claim', 'patient', 'service', 'icd', 'description', 'file no', 'item'];
+  let headerLineIdx = -1;
+  let headerLine = '';
+  
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
+    const line = lines[i].trim();
+    // Skip empty lines, sheet markers (===), metadata ([)
+    if (!line || line.startsWith('===') || line.startsWith('[')) continue;
+    
+    // Check if this line contains multiple header keywords
+    const lineLower = line.toLowerCase();
+    const matchCount = headerKeywords.filter(kw => lineLower.includes(kw)).length;
+    if (matchCount >= 2) {
+      headerLineIdx = i;
+      headerLine = line;
+      console.log(`[splitTextContentIntoBatches] Found real header at line ${i}: ${line.substring(0, 100)}...`);
+      break;
+    }
+  }
+  
+  // If no header found, fallback to first non-marker line
+  if (headerLineIdx < 0) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line && !line.startsWith('===') && !line.startsWith('[')) {
+        headerLineIdx = i;
+        headerLine = line;
+        break;
+      }
+    }
+  }
+  
+  if (headerLineIdx < 0) return [textContent];
+  
+  // Get data lines (everything after header, excluding markers)
+  const dataLines = lines.slice(headerLineIdx + 1).filter(line => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith('===') && !trimmed.startsWith('[');
+  });
   
   // Find Claim column index from header (usually column 1 or 2)
   const headerCols = headerLine.split('|').map(h => h.trim().toLowerCase());
   let claimColIdx = headerCols.findIndex(h => h.includes('claim') && h.includes('no'));
+  if (claimColIdx < 0) claimColIdx = headerCols.findIndex(h => h.includes('claim'));
   if (claimColIdx < 0) claimColIdx = 1; // Default to column 1
   
   // Group rows by claim ID
@@ -2508,6 +2547,7 @@ function splitTextContentIntoBatches(textContent, batchSize = BATCH_SIZE) {
     batchClaimIds.forEach(cid => {
       batchLines.push(...claimGroups.get(cid));
     });
+    // IMPORTANT: Include the REAL header line in each batch
     batches.push(headerLine + '\n' + batchLines.join('\n'));
     console.log(`[splitTextContentIntoBatches] Batch ${batches.length}: ${batchClaimIds.length} claims, ${batchLines.length} rows`);
   }
@@ -2521,12 +2561,48 @@ function countCasesInContent(textContent) {
   const lines = textContent.split('\n').filter(line => line.trim());
   if (lines.length <= 1) return 0;
   
-  const headerLine = lines[0];
-  const dataLines = lines.slice(1);
+  // Find the REAL header line (skip sheet markers like "=== Sheet1 ===" and metadata)
+  const headerKeywords = ['claim', 'patient', 'service', 'icd', 'description', 'file no', 'item'];
+  let headerLineIdx = -1;
+  let headerLine = '';
+  
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('===') || line.startsWith('[')) continue;
+    
+    const lineLower = line.toLowerCase();
+    const matchCount = headerKeywords.filter(kw => lineLower.includes(kw)).length;
+    if (matchCount >= 2) {
+      headerLineIdx = i;
+      headerLine = line;
+      break;
+    }
+  }
+  
+  // Fallback to first non-marker line
+  if (headerLineIdx < 0) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line && !line.startsWith('===') && !line.startsWith('[')) {
+        headerLineIdx = i;
+        headerLine = line;
+        break;
+      }
+    }
+  }
+  
+  if (headerLineIdx < 0) return 0;
+  
+  // Get data lines (everything after header, excluding markers)
+  const dataLines = lines.slice(headerLineIdx + 1).filter(line => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith('===') && !trimmed.startsWith('[');
+  });
   
   // Find Claim column index from header
   const headerCols = headerLine.split('|').map(h => h.trim().toLowerCase());
   let claimColIdx = headerCols.findIndex(h => h.includes('claim') && h.includes('no'));
+  if (claimColIdx < 0) claimColIdx = headerCols.findIndex(h => h.includes('claim'));
   if (claimColIdx < 0) claimColIdx = 1; // Default
   
   // Count unique claim IDs
