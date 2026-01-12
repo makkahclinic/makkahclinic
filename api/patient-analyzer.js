@@ -1815,19 +1815,46 @@ Return HTML only, no markdown or code blocks.
   };
   
   try {
-    // عد ✅ مقبول من HTML
-    const approvedMatches = fullReport.match(/✅\s*مقبول/gi);
-    aiGeneratedStats.approvedCount = approvedMatches ? approvedMatches.length : 0;
+    // ========== عد خلايا الجدول فقط (تجنب صناديق الملخص المكررة) ==========
+    // نعد فقط الخلايا <td> التي تحتوي على الحالة
     
-    // عد 🚫 مرفوض من HTML
-    const rejectedMatches = fullReport.match(/🚫\s*مرفوض/gi);
-    aiGeneratedStats.rejectedCount = rejectedMatches ? rejectedMatches.length : 0;
+    // Pattern 1: خلايا الجدول بالضبط - <td>...✅ مقبول...</td>
+    const approvedInCells = fullReport.match(/<td[^>]*>[^<]*✅[^<]*مقبول[^<]*<\/td>/gi) || [];
     
-    // عد ⚠️ يحتاج توثيق من HTML
-    const needsDocMatches = fullReport.match(/⚠️\s*يحتاج\s*توثيق/gi);
-    aiGeneratedStats.needsDocCount = needsDocMatches ? needsDocMatches.length : 0;
+    // Pattern 2: خلايا الجدول - <td>...🚫 مرفوض...</td>
+    const rejectedInCells = fullReport.match(/<td[^>]*>[^<]*🚫[^<]*مرفوض[^<]*<\/td>/gi) || [];
     
-    console.log(`[AI Stats] Extracted from HTML: Approved=${aiGeneratedStats.approvedCount}, Rejected=${aiGeneratedStats.rejectedCount}, NeedsDoc=${aiGeneratedStats.needsDocCount}`);
+    // Pattern 3: خلايا الجدول - <td>...⚠️ يحتاج توثيق...</td>
+    const needsDocInCells = fullReport.match(/<td[^>]*>[^<]*⚠️[^<]*يحتاج[^<]*توثيق[^<]*<\/td>/gi) || [];
+    
+    aiGeneratedStats.approvedCount = approvedInCells.length;
+    aiGeneratedStats.rejectedCount = rejectedInCells.length;
+    aiGeneratedStats.needsDocCount = needsDocInCells.length;
+    
+    console.log(`[AI Stats] Table cells only: Approved=${aiGeneratedStats.approvedCount}, Rejected=${aiGeneratedStats.rejectedCount}, NeedsDoc=${aiGeneratedStats.needsDocCount}`);
+    
+    // إذا لم نجد أي شيء في الجدول، نستخدم fallback أكثر تحديداً
+    if (aiGeneratedStats.approvedCount === 0 && aiGeneratedStats.rejectedCount === 0) {
+      // Fallback: عد من جدول الأدوية والتحاليل فقط (قبل صندوق الملخص)
+      // نبحث عن النمط في الجداول فقط
+      const tableContent = fullReport.match(/<table[^>]*>[\s\S]*?<\/table>/gi) || [];
+      let approvedInTables = 0;
+      let rejectedInTables = 0;
+      let needsDocInTables = 0;
+      
+      for (const table of tableContent) {
+        approvedInTables += (table.match(/✅\s*مقبول/gi) || []).length;
+        rejectedInTables += (table.match(/🚫\s*مرفوض/gi) || []).length;
+        needsDocInTables += (table.match(/⚠️\s*يحتاج\s*توثيق/gi) || []).length;
+      }
+      
+      if (approvedInTables > 0 || rejectedInTables > 0) {
+        aiGeneratedStats.approvedCount = approvedInTables;
+        aiGeneratedStats.rejectedCount = rejectedInTables;
+        aiGeneratedStats.needsDocCount = needsDocInTables;
+        console.log(`[AI Stats] Fallback (tables): Approved=${approvedInTables}, Rejected=${rejectedInTables}, NeedsDoc=${needsDocInTables}`);
+      }
+    }
   } catch (e) {
     console.error('[AI Stats] Error extracting:', e.message);
   }
