@@ -505,9 +505,14 @@
       margin: 0 auto;
       box-sizing: border-box;
       overflow-x: hidden;
+      text-align: center; /* توسيط المحتوى */
+    }
+    .report-content > * {
+      margin-left: auto;
+      margin-right: auto;
     }
     .report-content h1 { color: var(--primary); font-size: 1.8rem; text-align: center; margin-bottom: 1.5rem; border-bottom: 3px solid var(--gold); padding-bottom: 1rem; }
-    .report-content h2 { color: var(--primary); font-size: 1.4rem; margin: 1.5rem 0 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .report-content h2 { color: var(--primary); font-size: 1.4rem; margin: 1.5rem 0 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
     .report-content h3 { color: #334155; font-size: 1.1rem; margin: 1rem 0 0.5rem; padding: 0 0.5rem; }
     .report-content h4 { color: var(--primary); font-size: 1rem; margin: 1rem 0 0.5rem; padding: 0 0.5rem; }
     .report-content p { color: #475569; margin: 0.5rem 0; padding: 0 0.5rem; }
@@ -2803,7 +2808,7 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
     return result + generateFreshKPIDashboard(aggregatedStats);
   }
   
-  // ✅ الحل: نحذف فقط الملخصات المكررة مع الحفاظ على <style>
+  // ✅ الحل: نحذف الملخصات المكررة والعناوين الزائدة مع الحفاظ على <style>
   function safeRemoveKPIOnly(html) {
     if (!html || html.length < 100) return html;
     
@@ -2812,13 +2817,13 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
       const styleMatches = html.match(/<style[^>]*>[\s\S]*?<\/style>/gi) || [];
       const stylesHtml = styleMatches.join('\n');
       
-      // 2️⃣ DOM parsing لإزالة KPI فقط
+      // 2️⃣ DOM parsing لإزالة KPI والملخصات فقط
       const parser = new DOMParser();
       const doc = parser.parseFromString(`<div id="temp-wrapper">${html}</div>`, 'text/html');
       const wrapper = doc.getElementById('temp-wrapper');
       if (!wrapper) return html;
       
-      // Find all elements that contain KPI text but are NOT case sections
+      // Find all elements that contain KPI/summary text but are NOT case sections
       const allElements = wrapper.querySelectorAll('div, table, section');
       allElements.forEach(el => {
         // ✅ حماية: لا نحذف أي case-section أو عناصرها
@@ -2827,9 +2832,23 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
         if (el.querySelector('.case-section')) return;
         
         const text = el.textContent || '';
-        // نحذف فقط صناديق الملخص/KPI
-        if ((text.includes('الملخص النهائي للتقرير') || text.includes('إحصائيات الحالات والخدمات')) &&
-            !text.includes('🔍 الحالة') && !text.includes('💊 الأدوية') && !text.includes('🔬 التحاليل')) {
+        // نحذف صناديق الملخص/KPI
+        const isKPISummary = (
+          text.includes('الملخص النهائي للتقرير') || 
+          text.includes('إحصائيات الحالات والخدمات') ||
+          text.includes('📊 ملخص') ||
+          text.includes('الملخص العام') ||
+          text.includes('التقييم النهائي للدفعة') ||
+          text.includes('ملخص الدفعة')
+        );
+        const hasPatientData = (
+          text.includes('🔍 الحالة') || 
+          text.includes('💊 الأدوية') || 
+          text.includes('🔬 التحاليل') ||
+          text.includes('Claim ID')
+        );
+        
+        if (isKPISummary && !hasPatientData) {
           el.remove();
         }
       });
@@ -2850,28 +2869,10 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
     // Update case count text
     cleanedReport = cleanedReport.replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
     
-    // Add batch separator between reports
+    // ✅ لا نضيف فواصل بين الدفعات - تقرير واحد متصل بدون تقسيم
+    // فقط نضيف page-break للطباعة بين الدفعات
     if (idx > 0) {
-      combinedHtml += `
-        <div style="margin:2rem 0;padding:1rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);border-radius:12px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.2);page-break-before:always;">
-          <div style="color:#c9a962;font-size:1.3rem;font-weight:bold;">
-            📦 الدفعة ${idx + 1} من ${reports.length}
-          </div>
-        </div>
-      `;
-    } else {
-      // First batch header
-      const batchHeader = `
-        <div style="margin-bottom:1.5rem;padding:1rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);border-radius:12px;text-align:center;">
-          <div style="color:#c9a962;font-size:1.3rem;font-weight:bold;">
-            📦 الدفعة 1 من ${reports.length}
-          </div>
-          <div style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:0.3rem;">
-            إجمالي الحالات: ${totalCases} | إجمالي الدفعات: ${reports.length}
-          </div>
-        </div>
-      `;
-      cleanedReport = cleanedReport.replace(/(<h2[^>]*>تقرير التدقيق التأميني الشامل<\/h2>)/i, '$1' + batchHeader);
+      combinedHtml += `<div style="page-break-before:always;margin-top:1rem;"></div>`;
     }
     
     combinedHtml += cleanedReport;
