@@ -159,7 +159,7 @@ function setupSheets() {
     logSheet = ss.insertSheet('InsuranceUsageLog');
     logSheet.appendRow([
       'timestamp', 'userEmail', 'userName', 'doctorName', 'caseType',
-      'filesCount', 'insuranceRating', 'serviceRating', 'overallRating',
+      'filesCount', 'docQuality', 'medicalQuality', 'eligibility',
       'reportLink', 'notes'
     ]);
     logSheet.getRange(1, 1, 1, 11).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
@@ -170,8 +170,8 @@ function setupSheets() {
   if (!statsSheet) {
     statsSheet = ss.insertSheet('DoctorStats');
     statsSheet.appendRow([
-      'doctorName', 'totalCases', 'avgInsuranceRating', 'avgServiceRating',
-      'avgOverallRating', 'lastCaseDate', 'folderLink', 'status'
+      'doctorName', 'totalCases', 'avgDocQuality', 'avgMedicalQuality',
+      'avgEligibility', 'lastCaseDate', 'folderLink', 'status'
     ]);
     statsSheet.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
   }
@@ -361,9 +361,9 @@ function logInsuranceUsage(params) {
   }
   
   const timestamp = new Date();
-  const insuranceRating = parseFloat(params.insuranceRating) || 0;
-  const serviceRating = parseFloat(params.serviceRating) || 0;
-  const overallRating = ((insuranceRating + serviceRating) / 2).toFixed(1);
+  const docQuality = parseFloat(params.docQuality) || 0;
+  const medicalQuality = parseFloat(params.medicalQuality) || 0;
+  const eligibility = parseFloat(params.eligibility) || 0;
   
   logSheet.appendRow([
     timestamp,
@@ -372,23 +372,23 @@ function logInsuranceUsage(params) {
     params.doctorName || '',
     params.caseType || '',
     params.filesCount || 0,
-    insuranceRating,
-    serviceRating,
-    overallRating,
+    docQuality,
+    medicalQuality,
+    eligibility,
     params.reportLink || '',
     params.notes || ''
   ]);
   
   // تحديث إحصائيات الطبيب
-  updateDoctorStats(params.doctorName, insuranceRating, serviceRating, params.reportLink);
+  updateDoctorStats(params.doctorName, docQuality, medicalQuality, eligibility, params.reportLink);
   
   return { success: true, message: 'تم تسجيل الاستخدام بنجاح' };
 }
 
 /**
- * تحديث إحصائيات الطبيب
+ * تحديث إحصائيات الطبيب - المعايير الثلاثة: جودة التوثيق، جودة الخدمات الطبية، أهلية المريض
  */
-function updateDoctorStats(doctorName, insuranceRating, serviceRating, reportLink) {
+function updateDoctorStats(doctorName, docQuality, medicalQuality, eligibility, reportLink) {
   if (!doctorName) return;
   
   const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -416,34 +416,36 @@ function updateDoctorStats(doctorName, insuranceRating, serviceRating, reportLin
   if (doctorRow > 0) {
     // تحديث الطبيب الموجود
     const currentCases = parseInt(data[doctorRow - 1][1]) || 0;
-    const currentInsRating = parseFloat(data[doctorRow - 1][2]) || 0;
-    const currentSvcRating = parseFloat(data[doctorRow - 1][3]) || 0;
+    const currentDocQuality = parseFloat(data[doctorRow - 1][2]) || 0;
+    const currentMedicalQuality = parseFloat(data[doctorRow - 1][3]) || 0;
+    const currentEligibility = parseFloat(data[doctorRow - 1][4]) || 0;
     
     const newCases = currentCases + 1;
-    const newInsRating = ((currentInsRating * currentCases + insuranceRating) / newCases).toFixed(1);
-    const newSvcRating = ((currentSvcRating * currentCases + serviceRating) / newCases).toFixed(1);
-    const newOverall = ((parseFloat(newInsRating) + parseFloat(newSvcRating)) / 2).toFixed(1);
+    const newDocQuality = ((currentDocQuality * currentCases + docQuality) / newCases).toFixed(1);
+    const newMedicalQuality = ((currentMedicalQuality * currentCases + medicalQuality) / newCases).toFixed(1);
+    const newEligibility = ((currentEligibility * currentCases + eligibility) / newCases).toFixed(1);
     
-    // تحديد الحالة بناءً على التقييم
+    // تحديد الحالة بناءً على متوسط المعايير الثلاثة
+    const avgQuality = (parseFloat(newDocQuality) + parseFloat(newMedicalQuality) + parseFloat(newEligibility)) / 3;
     let status = 'ممتاز';
-    if (newOverall < 5) status = 'يحتاج تحسين';
-    else if (newOverall < 7) status = 'جيد';
-    else if (newOverall < 9) status = 'جيد جداً';
+    if (avgQuality < 50) status = 'يحتاج تحسين';
+    else if (avgQuality < 70) status = 'جيد';
+    else if (avgQuality < 90) status = 'جيد جداً';
     
     statsSheet.getRange(doctorRow, 2).setValue(newCases);
-    statsSheet.getRange(doctorRow, 3).setValue(newInsRating);
-    statsSheet.getRange(doctorRow, 4).setValue(newSvcRating);
-    statsSheet.getRange(doctorRow, 5).setValue(newOverall);
+    statsSheet.getRange(doctorRow, 3).setValue(newDocQuality);
+    statsSheet.getRange(doctorRow, 4).setValue(newMedicalQuality);
+    statsSheet.getRange(doctorRow, 5).setValue(newEligibility);
     statsSheet.getRange(doctorRow, 6).setValue(formattedDate);
     statsSheet.getRange(doctorRow, 8).setValue(status);
     
   } else {
     // إضافة طبيب جديد
-    const overallRating = ((insuranceRating + serviceRating) / 2).toFixed(1);
+    const avgQuality = (docQuality + medicalQuality + eligibility) / 3;
     let status = 'ممتاز';
-    if (overallRating < 5) status = 'يحتاج تحسين';
-    else if (overallRating < 7) status = 'جيد';
-    else if (overallRating < 9) status = 'جيد جداً';
+    if (avgQuality < 50) status = 'يحتاج تحسين';
+    else if (avgQuality < 70) status = 'جيد';
+    else if (avgQuality < 90) status = 'جيد جداً';
     
     // إنشاء مجلد للطبيب
     const folderUrl = createDoctorFolder(doctorName);
@@ -451,9 +453,9 @@ function updateDoctorStats(doctorName, insuranceRating, serviceRating, reportLin
     statsSheet.appendRow([
       doctorName,
       1,
-      insuranceRating,
-      serviceRating,
-      overallRating,
+      docQuality,
+      medicalQuality,
+      eligibility,
       formattedDate,
       folderUrl || '',
       status
@@ -505,9 +507,9 @@ function getUsageLog(email) {
         doctorName: data[i][3],
         caseType: data[i][4],
         filesCount: data[i][5],
-        insuranceRating: data[i][6],
-        serviceRating: data[i][7],
-        overallRating: data[i][8],
+        docQuality: data[i][6],
+        medicalQuality: data[i][7],
+        eligibility: data[i][8],
         reportLink: data[i][9],
         notes: data[i][10]
       });
@@ -536,9 +538,9 @@ function getDoctorStats() {
       doctors.push({
         doctorName: data[i][0],
         totalCases: data[i][1],
-        avgInsuranceRating: data[i][2],
-        avgServiceRating: data[i][3],
-        avgOverallRating: data[i][4],
+        avgDocQuality: data[i][2],
+        avgMedicalQuality: data[i][3],
+        avgEligibility: data[i][4],
         lastCaseDate: data[i][5],
         folderLink: data[i][6],
         status: data[i][7]
