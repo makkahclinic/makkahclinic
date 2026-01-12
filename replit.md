@@ -42,6 +42,13 @@ I prefer clear and concise communication. When making changes, prioritize iterat
     - **Insurance Defense Score**: Strict on all issues for strong defense against insurance companies
     - **Official Score**: 60% Insurance Defense + 40% Clinician Fairness
   - **Transparent Deduction Ledger**: Shows all penalties with classifications and actual contribution to official score
+  - **KPI History Tracking System** (Added 2026-01-12):
+    - Firestore collection `kpi_history` stores KPI snapshots with: timestamp, date, doctorName, reviewer, totalCases, totalServices, acceptedItems, reviewItems, docItems, documentationQuality, medicalQuality, patientEligibility
+    - Time-based filtering with pill buttons: daily, weekly, 2 weeks, 3 weeks
+    - Cumulative KPI dashboard with three colored cards (gold, orange, red) showing quality metrics
+    - Chart.js trend chart displaying KPI changes over time
+    - Filter persistence via sessionStorage
+    - Empty state handling with friendly Arabic messages
 
 ## External Dependencies
 
