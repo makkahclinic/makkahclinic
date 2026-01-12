@@ -798,7 +798,7 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 | E | صدمة / انخفاض ضغط | "BP < 90/60، علامات صدمة، نبض ضعيف" |
 | F | حالة طوارئ | "حالة طوارئ تستدعي تعويض سريع" |
 
-❌ **ترفض إذا غاب التوثيق** - لا يكفي كتابة "جفاف" فقط بدون علامات!
+🚫 **ترفض إذا غاب التوثيق** - لا يكفي كتابة "جفاف" فقط بدون علامات!
 
 - علامات الجفاف الشديد (WHO): خمول شديد، عدم القدرة على الشرب، ارتداد الجلد ببطء شديد (>2 ثانية)، عيون غائرة
 - علامات الجفاف المتوسط: عطش شديد، بول قليل، ارتداد جلد بطيء (1-2 ثانية)
@@ -818,7 +818,7 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 | E | غيبوبة/مستوى وعي منخفض | "GCS <13، لا يتحمل الفموي" |
 | F | ما بعد العمليات | "ما بعد إجراء جراحي، ألم حاد" |
 
-❌ **ترفض إذا**: حرارة طبيعية (<38°C) + بدون توثيق ألم VAS ≥4/10
+🚫 **ترفض إذا**: حرارة طبيعية (<38°C) + بدون توثيق ألم VAS ≥4/10
 
 **المضادات الحيوية - CDC IDSA 2024 (قائمة إلزامية):**
 
@@ -827,14 +827,14 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 2. ✅ **العلامات الداعمة**: حمى ≥38.3°C + صديد/إفرازات + WBC مرتفع
 3. ✅ **نتيجة RADT/زرع** أو سبب موثق لعدم توفرها (طوارئ/حالة حرجة)
 
-❌ **ترفض إذا غاب أي عنصر** - مع طلب التوثيق:
+🚫 **ترفض إذا غاب أي عنصر** - مع طلب التوثيق:
 
-| الحالة | ❌ المشكلة | ✅ المطلوب للقبول |
+| الحالة | 🚫 المشكلة | ✅ المطلوب للقبول |
 |--------|-----------|------------------|
 | التهاب الحلق | لا يوجد RADT/زرع | **اكتب:** "RADT إيجابي" أو "لا يتوفر RADT - صديد + حمى 39°C" |
 | التهاب رئوي | لا يوجد أشعة صدر | **اكتب:** "CXR يُظهر ارتشاح" أو "طوارئ - علامات سريرية واضحة" |
 | التهاب بولي | لا يوجد فحص بول | **اكتب:** "Urine WBC >10 + Nitrite+" أو "أعراض نموذجية + حرقة شديدة" |
-| التهاب معدة | لا دليل بكتيري | ❌ **لا يُقبل** - معظمها فيروسي |
+| التهاب معدة | لا دليل بكتيري | 🚫 **لا يُقبل** - معظمها فيروسي |
 
 - التهاب الشعب الهوائية الحاد (غير معقد): لا مضاد حيوي روتينياً (معظمها فيروسي)
 - التهاب المعدة والأمعاء: لا مضاد حيوي إلا مع: حمى عالية ≥38.5°C، دم في البراز، أو علامات إنتان
@@ -849,13 +849,13 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 - 📖 مرجع: WHO Model List of Essential Medicines 2023
 
 ### 🚫 قائمة عدم التوافق دواء-تشخيص (Drug-Diagnosis Mismatch):
-| الدواء | ❌ لا يُستخدم لـ | ✅ يُستخدم لـ | ملاحظات |
+| الدواء | 🚫 لا يُستخدم لـ | ✅ يُستخدم لـ | ملاحظات |
 |--------|----------------|--------------|---------|
-| Domperidone (DOMPY) | ❌ الإمساك، عسر الهضم بدون غثيان | ✅ الغثيان والقيء فقط | ⚠️ EMA: أقل جرعة، أقصر مدة، ≤30mg/يوم، خطر QT |
-| DRAMYLIN Syrup | ❌ الغثيان والقيء | ✅ السعال المرتبط بعدوى الجهاز التنفسي العلوي | محتوى: Diphenhydramine + Ammonium chloride (مضاد هيستامين + مقشع) |
-| Loperamide | ❌ أطفال <6 سنوات، إسهال دموي | ✅ إسهال بالغين غير معدي | 
-| Metoclopramide | ❌ أطفال <1 سنة | ✅ غثيان/قيء بالغين | ⚠️ خطر EPS، أقصى 5 أيام |
-| مضاد حيوي للتيفوئيد | ❌ MEGAMOX كخط أول | ✅ Azithromycin أو Ceftriaxone |
+| Domperidone (DOMPY) | 🚫 الإمساك، عسر الهضم بدون غثيان | ✅ الغثيان والقيء فقط | ⚠️ EMA: أقل جرعة، أقصر مدة، ≤30mg/يوم، خطر QT |
+| DRAMYLIN Syrup | 🚫 الغثيان والقيء | ✅ السعال المرتبط بعدوى الجهاز التنفسي العلوي | محتوى: Diphenhydramine + Ammonium chloride (مضاد هيستامين + مقشع) |
+| Loperamide | 🚫 أطفال <6 سنوات، إسهال دموي | ✅ إسهال بالغين غير معدي | 
+| Metoclopramide | 🚫 أطفال <1 سنة | ✅ غثيان/قيء بالغين | ⚠️ خطر EPS، أقصى 5 أيام |
+| مضاد حيوي للتيفوئيد | 🚫 MEGAMOX كخط أول | ✅ Azithromycin أو Ceftriaxone |
 
 ### 🩺 نظام التحقق من العرض المرتبط (إلزامي قبل الصرف):
 
@@ -870,7 +870,7 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 | D | طفح جلدي | "طفح جلدي تحسسي / eczema" |
 | E | رد فعل تحسسي | "تاريخ حساسية موثق لـ [المادة]" |
 
-❌ **ترفض إذا**: لا يوجد عرض تحسسي موثق (لا يكفي كتابة "حساسية" فقط)
+🚫 **ترفض إذا**: لا يوجد عرض تحسسي موثق (لا يكفي كتابة "حساسية" فقط)
 
 **أدوية القيء (مضادات الإقياء):**
 ⚠️ لا يُقبل DOMPY / MOTILIUM / PRIMPERAN / PLASIL إلا مع عرض من القائمة:
@@ -882,12 +882,12 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 | C | غثيان ما بعد الأكل | "غثيان وامتلاء بعد الوجبات" |
 | D | ارتجاع | "ارتجاع معدي مريئي مع غثيان" |
 
-❌ **ترفض إذا**: التشخيص عسر هضم/إمساك بدون غثيان/قيء موثق
+🚫 **ترفض إذا**: التشخيص عسر هضم/إمساك بدون غثيان/قيء موثق
 
 **مثبطات مضخة البروتون (PPIs) - ACG/CAG 2022:**
 - ✅ **مبررة (مقبول)**: GERD موثق، قرحة معدة مشخصة، وقاية مع NSAIDs لمرضى عالي الخطورة، H. pylori
 - ⚠️ **تحتاج توثيق (ليس مرفوض)**: عسر هضم (Dyspepsia) مع أعراض معدية - ACG يسمح بتجربة PPI
-- ❌ **غير مبررة**: استخدام طويل >8 أسابيع بدون مراجعة، لا أعراض معدية إطلاقاً
+- 🚫 **غير مبررة**: استخدام طويل >8 أسابيع بدون مراجعة، لا أعراض معدية إطلاقاً
 - 📖 مرجع: American College of Gastroenterology - Dyspepsia Guidelines 2022
 - ⚠️ **مهم**: عسر الهضم + التهاب معدة = PPI يحتاج توثيق "أعراض معدية" فقط، ليس مرفوضاً!
 
@@ -915,7 +915,7 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 
 ### 📌 جدول "يُقبل مع" الإلزامي - أعط الطبيب جمل جاهزة للنسخ:
 
-| الدواء | ❌ سبب الرفض | ✅ اكتب للطبيب هذه الجملة الجاهزة |
+| الدواء | 🚫 سبب الرفض | ✅ اكتب للطبيب هذه الجملة الجاهزة |
 |--------|-------------|----------------------------------|
 | المضاد الحيوي (AZIMAC, AUGMENTIN, AMOXICILLIN) | لا يوجد دليل عدوى بكتيرية | **اكتب في الملف:** "RADT إيجابي للعقديات" أو "زرع حلق إيجابي" أو "صديد على اللوزتين + حمى ≥38.3" |
 | السوائل الوريدية (NORMAL SALINE, DEXTROSE) | مافي دليل جفاف أو قيء | **اكتب في الملف:** "علامات جفاف: ارتداد جلد >2 ثانية، عيون غائرة" أو "قيء مستمر ≥3 مرات" أو "لا يتحمل الشرب" |
@@ -932,7 +932,7 @@ async function processExcelCasesSequentially(req, res, cases, language, apiKey) 
 - إذا كان الكود لا يتطابق مع الوصف ← اذكر "⚠️ تعارض ICD: الكود [X] لا يتوافق مع [الوصف]"
 - إذا كان الوصف عام جداً ← اقترح كود أدق
 
-| مشكلة شائعة | ❌ خطأ | ✅ صحيح |
+| مشكلة شائعة | 🚫 خطأ | ✅ صحيح |
 |-------------|--------|--------|
 | التهاب الحلق | R07.0 (ألم الحلق) | J02.9 (التهاب بلعوم حاد) أو J03.90 (التهاب لوزتين) |
 | نزلة برد | J00 بدون توضيح | J00 + وصف الأعراض (رشح، عطاس، احتقان) |
@@ -968,7 +968,7 @@ ${fullClinicalRef}
    - ألم عظام/مفاصل بدون تحويل لطبيب العظام ← اذكر "⚠️ يحتاج تحويل لطبيب العظام"
 3. **التكرار**: إذا نفس المريض زار أكثر من مرة بنفس العلاج ← اذكر "⚠️ زيارة متكررة"
 4. **🔄 التكرار عبر الزمن**: إذا ظهر "تنبيه تكرار تاريخي" في بيانات الحالة، يجب:
-   - 🔴 إذا <30 يوم: أضف صندوق أحمر "❌ مرفوض - تكرار" مع نص التوثيق الجاهز
+   - 🔴 إذا <30 يوم: أضف صندوق أحمر "🚫 مرفوض - تكرار" مع نص التوثيق الجاهز
    - 🟡 إذا 30-60 يوم: أضف صندوق أصفر "⚠️ يحتاج توثيق - تكرار سابق" مع نص التوثيق
    - 🔵 إذا 60-90 يوم: ذكر كملاحظة فقط بدون تأثير على القرار
 
@@ -994,7 +994,7 @@ ${fullClinicalRef}
         <td>[اسم الدواء]</td>
         <td>[الجرعة]</td>
         <td>[اكتب السبب الرئيسي فقط - مثال: "مبرر لالتهاب المعدة" أو "غير مبرر - الحرارة طبيعية 36.1". لا تذكر "لا يوجد تضارب" أو "لا يوجد تحذير" - اذكر المشاكل فقط إن وجدت]</td>
-        <td>[✅ مقبول / ❌ مرفوض / ⚠️ يحتاج توثيق]</td>
+        <td>[✅ مقبول / 🚫 مرفوض / ⚠️ يحتاج توثيق]</td>
       </tr>
     </tbody>
   </table>
@@ -1008,16 +1008,16 @@ ${fullClinicalRef}
       <tr>
         <td>[اسم الإجراء]</td>
         <td>[هل يتوافق مع التشخيص؟]</td>
-        <td>[✅ مقبول / ❌ مرفوض]</td>
+        <td>[✅ مقبول / 🚫 مرفوض]</td>
       </tr>
     </tbody>
   </table>
   
   <div style="background:#fee2e2; border:2px solid #dc2626; padding:12px; border-radius:8px; margin:10px 0;">
-    <h4 style="color:#dc2626; margin:0 0 8px 0;">❌ مرفوض - يحتاج تعديل</h4>
+    <h4 style="color:#dc2626; margin:0 0 8px 0;">🚫 مرفوض - يحتاج تعديل</h4>
     <div style="font-weight:bold; font-size:16px; margin:8px 0;">[اسم الدواء]</div>
     <div style="background:#fecaca; padding:8px; border-radius:4px; margin:8px 0;">
-      <strong>❌ المشكلة:</strong> [اشرح المشكلة بوضوح - مثال: "الحرارة 36.1°C طبيعية، لا يوجد دليل على عدوى بكتيرية"]
+      <strong>🚫 المشكلة:</strong> [اشرح المشكلة بوضوح - مثال: "الحرارة 36.1°C طبيعية، لا يوجد دليل على عدوى بكتيرية"]
     </div>
     <div style="background:#bbf7d0; padding:10px; border-radius:4px; margin:8px 0; border:2px solid #16a34a;">
       <strong style="color:#15803d; font-size:14px;">📝 التوثيق الحالي لا يوضح المبرر الطبي للإجراء - يجب وضع مبرر واضح مثل:</strong><br>
@@ -1040,7 +1040,7 @@ ${fullClinicalRef}
   <table class="custom-table" style="margin-top:10px;">
     <tr>
       <td style="background:#dcfce7; width:50%;"><strong>✅ صحيح</strong><br>[قائمة الأدوية والإجراءات المقبولة]</td>
-      <td style="background:#fee2e2; width:50%;"><strong>❌ يحتاج تصحيح</strong><br>[قائمة المرفوض ويحتاج توثيق]</td>
+      <td style="background:#fee2e2; width:50%;"><strong>🚫 يحتاج تصحيح</strong><br>[قائمة المرفوض ويحتاج توثيق]</td>
     </tr>
   </table>
 </div>
@@ -1049,7 +1049,7 @@ ${fullClinicalRef}
 - اربط كل حكم بالعلامات الحيوية والتشخيص (مثلاً: "الحرارة 36.1 لا تبرر باراسيتامول وريدي")
 - اذكر التضارب الدوائي والتحويلات الناقصة إن وجدت
 - لا تستخدم "غير متوفر" أو "N/A" - اترك الحقل فارغاً إذا لم تتوفر البيانات
-- ❌ ممنوع: لا تكتب "CDI: لا يوجد" أو "NPHIES: لا يوجد" - اكتب السبب مباشرة فقط
+- 🚫 ممنوع: لا تكتب "CDI: لا يوجد" أو "NPHIES: لا يوجد" - اكتب السبب مباشرة فقط
 - ✅ صحيح: "مبرر لالتهاب المعدة" أو "غير مبرر - الحرارة طبيعية"
 - ⚠️ إلزامي: لكل دواء مرفوض/يحتاج توثيق، انسخ "📌 يُقبل مع:" من جدول الأدوية أعلاه. ممنوع تركه فارغاً!
 - 🔢 **التقييم الرقمي إلزامي**: ضع رقم حقيقي (1-10) في data-insurance-score و data-medical-score لكل حالة:
@@ -1093,7 +1093,7 @@ ${fullClinicalRef}
         <td>[medication name]</td>
         <td>[dose]</td>
         <td>[Write the main reason only - e.g. "Justified for gastritis" or "Not justified - temp normal 36.1". Do NOT write "No drug interaction" or "No warning" - only mention problems if they exist]</td>
-        <td>[✅ Approved / ❌ Rejected / ⚠️ Needs Documentation]</td>
+        <td>[✅ Approved / 🚫 Rejected / ⚠️ Needs Documentation]</td>
       </tr>
     </tbody>
   </table>
@@ -1107,13 +1107,13 @@ ${fullClinicalRef}
       <tr>
         <td>[procedure name]</td>
         <td>[Does it align with diagnosis?]</td>
-        <td>[✅ Approved / ❌ Rejected]</td>
+        <td>[✅ Approved / 🚫 Rejected]</td>
       </tr>
     </tbody>
   </table>
   
   <div style="background:#fee2e2; border:2px solid #dc2626; padding:12px; border-radius:8px; margin:10px 0;">
-    <h4 style="color:#dc2626; margin:0 0 8px 0;">❌ Rejected Items</h4>
+    <h4 style="color:#dc2626; margin:0 0 8px 0;">🚫 Rejected Items</h4>
     <div style="font-weight:bold;">[Rejected medication/procedure name]</div>
     <div>⚠️ [medication] needs clinical justification. [Detailed rejection reason - e.g., No fever elevation or documented acute pain]</div>
     <div>📌 Acceptable justifications: [list like: oral intolerance, acute condition, fever]</div>
@@ -1131,7 +1131,7 @@ ${fullClinicalRef}
   <table class="custom-table" style="margin-top:10px;">
     <tr>
       <td style="background:#dcfce7; width:50%;"><strong>✅ Correct</strong><br>[List of approved medications and procedures]</td>
-      <td style="background:#fee2e2; width:50%;"><strong>❌ Needs Correction</strong><br>[List of rejected and needs documentation]</td>
+      <td style="background:#fee2e2; width:50%;"><strong>🚫 Needs Correction</strong><br>[List of rejected and needs documentation]</td>
     </tr>
   </table>
 </div>
@@ -1180,7 +1180,7 @@ ${fullClinicalRef}
           <strong>📚 إرشاد سريري:</strong> [المرجع: CDC/WHO - هل منطقي سريرياً؟]
         </td>
         <td data-insurance-rating="[approved/rejected/review]">
-          [✅ مقبول / ❌ مرفوض / ⚠️ يحتاج توثيق]
+          [✅ مقبول / 🚫 مرفوض / ⚠️ يحتاج توثيق]
         </td>
       </tr>
     </tbody>
@@ -1193,7 +1193,7 @@ ${fullClinicalRef}
       <td>[قائمة كل الأدوية والإجراءات المقبولة]</td>
     </tr>
     <tr style="background:#f8d7da">
-      <td><strong>❌ مرفوض</strong></td>
+      <td><strong>🚫 مرفوض</strong></td>
       <td>[قائمة المرفوض مع السبب المختصر]</td>
     </tr>
     <tr style="background:#fff3cd">
@@ -1277,7 +1277,7 @@ ${fullClinicalRef}
           <strong>🏥 NPHIES:</strong> [Compliant with claim policies?]<br>
           <strong>📚 Clinical:</strong> [Reference: CDC/WHO - clinically justified?]
         </td>
-        <td>[✅ Approved / ❌ Rejected / ⚠️ Needs Documentation]</td>
+        <td>[✅ Approved / 🚫 Rejected / ⚠️ Needs Documentation]</td>
       </tr>
     </tbody>
   </table>
@@ -1295,15 +1295,15 @@ ${fullClinicalRef}
           <strong>🏥 NPHIES:</strong> [Repetition allowed?]<br>
           <strong>📚 Guideline:</strong> [Medically necessary?]
         </td>
-        <td>[✅/❌/⚠️]</td>
+        <td>[✅/🚫/⚠️]</td>
       </tr>
     </tbody>
   </table>
 
-  <h4>❌ Rejected Items</h4>
+  <h4>🚫 Rejected Items</h4>
   <div class="box-critical">
     <strong>[item name]</strong><br>
-    <strong>❌ Rejection reason:</strong> [detail with clinical reference]<br>
+    <strong>🚫 Rejection reason:</strong> [detail with clinical reference]<br>
     <strong>📌 For approval must document:</strong> [oral intolerance, acute condition...]
   </div>
 
@@ -1317,7 +1317,7 @@ ${fullClinicalRef}
   <h4>📊 Case Summary</h4>
   <table class="custom-table">
     <tr style="background:#d4edda"><td><strong>✅ Approved</strong></td><td>[list]</td></tr>
-    <tr style="background:#f8d7da"><td><strong>❌ Rejected</strong></td><td>[list with brief reason]</td></tr>
+    <tr style="background:#f8d7da"><td><strong>🚫 Rejected</strong></td><td>[list with brief reason]</td></tr>
     <tr style="background:#fff3cd"><td><strong>⚠️ Needs Documentation</strong></td><td>[list]</td></tr>
   </table>
 </div>
@@ -1370,7 +1370,7 @@ Return HTML only, no markdown or code blocks.
       
       if (!response.ok) {
         console.error(`API error for case ${caseNumber}: ${response.status}`);
-        caseResults.push(`<div class="case-section box-critical"><h3>❌ خطأ في تحليل الحالة ${caseNumber}</h3><p>فشل الاتصال بالنظام</p></div>`);
+        caseResults.push(`<div class="case-section box-critical"><h3>🚫 خطأ في تحليل الحالة ${caseNumber}</h3><p>فشل الاتصال بالنظام</p></div>`);
         continue;
       }
       
@@ -1433,7 +1433,7 @@ Return HTML only, no markdown or code blocks.
       
     } catch (err) {
       console.error(`Error processing case ${caseNumber}:`, err);
-      caseResults.push(`<div class="case-section box-critical"><h3>❌ خطأ في الحالة ${caseNumber}</h3><p>${err.message}</p></div>`);
+      caseResults.push(`<div class="case-section box-critical"><h3>🚫 خطأ في الحالة ${caseNumber}</h3><p>${err.message}</p></div>`);
     }
   }
   
@@ -1526,7 +1526,7 @@ Return HTML only, no markdown or code blocks.
         <tr><td width="50%"><strong>📁 إجمالي الحالات (المطالبات)</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
         <tr><td><strong>📋 إجمالي بنود الخدمة في Excel</strong></td><td style="font-size:16pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalServiceItems}</td></tr>
         <tr style="background:#d4edda"><td><strong>✅ بنود مقبولة (تقدير أولي)</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${caseStats.approvedCount || 0}</td></tr>
-        <tr style="background:#f8d7da"><td><strong>❌ بنود تحتاج مراجعة</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${caseStats.rejectedCount || 0}</td></tr>
+        <tr style="background:#f8d7da"><td><strong>🚫 بنود تحتاج مراجعة</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${caseStats.rejectedCount || 0}</td></tr>
         <tr style="background:#fff3cd"><td><strong>⚠️ بنود تحتاج توثيق</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${caseStats.needsDocCount || 0}</td></tr>
         <tr style="background:#e0f2fe"><td><strong>🩺 توثيق العلامات الحيوية</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${vitalsDocRate}%</td></tr>
         <tr style="background:#d4edda"><td><strong>🔢 أكواد ICD موجودة</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${icdDocRate}%</td></tr>
@@ -1546,14 +1546,14 @@ Return HTML only, no markdown or code blocks.
           <td width="30%" style="text-align:center;">
             <div class="score-badge ${getScoreClass(avgInsuranceScore)}" style="font-size:20pt;padding:8px 16px;">${avgInsuranceScore}/10</div>
           </td>
-          <td width="30%"><small>${parseFloat(avgInsuranceScore) >= 8 ? 'ممتاز ✅' : parseFloat(avgInsuranceScore) >= 5 ? 'متوسط ⚠️' : 'ضعيف ❌'}</small></td>
+          <td width="30%"><small>${parseFloat(avgInsuranceScore) >= 8 ? 'ممتاز ✅' : parseFloat(avgInsuranceScore) >= 5 ? 'متوسط ⚠️' : 'ضعيف 🚫'}</small></td>
         </tr>
         <tr>
           <td><strong>🏥 جودة الإجراءات الطبية</strong><br><small>مبررة طبياً + متوافقة مع الإرشادات</small></td>
           <td style="text-align:center;">
             <div class="score-badge ${getScoreClass(avgMedicalScore)}" style="font-size:20pt;padding:8px 16px;">${avgMedicalScore}/10</div>
           </td>
-          <td><small>${parseFloat(avgMedicalScore) >= 8 ? 'ممتاز ✅' : parseFloat(avgMedicalScore) >= 5 ? 'متوسط ⚠️' : 'ضعيف ❌'}</small></td>
+          <td><small>${parseFloat(avgMedicalScore) >= 8 ? 'ممتاز ✅' : parseFloat(avgMedicalScore) >= 5 ? 'متوسط ⚠️' : 'ضعيف 🚫'}</small></td>
         </tr>
       </tbody>
     </table>
@@ -1604,7 +1604,7 @@ Return HTML only, no markdown or code blocks.
         <tr><td width="50%"><strong>📁 Total Cases (Claims)</strong></td><td style="font-size:18pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalCases}</td></tr>
         <tr><td><strong>📋 Total Service Items in Excel</strong></td><td style="font-size:16pt;font-weight:bold;color:#1e3a5f;text-align:center;">${totalServiceItems}</td></tr>
         <tr style="background:#d4edda"><td><strong>✅ Approved Items (Preliminary)</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${caseStats.approvedCount || 0}</td></tr>
-        <tr style="background:#f8d7da"><td><strong>❌ Items Need Review</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${caseStats.rejectedCount || 0}</td></tr>
+        <tr style="background:#f8d7da"><td><strong>🚫 Items Need Review</strong></td><td style="font-size:16pt;font-weight:bold;color:#721c24;text-align:center;">${caseStats.rejectedCount || 0}</td></tr>
         <tr style="background:#fff3cd"><td><strong>⚠️ Items Need Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#856404;text-align:center;">${caseStats.needsDocCount || 0}</td></tr>
         <tr style="background:#e0f2fe"><td><strong>🩺 Vital Signs Documentation</strong></td><td style="font-size:16pt;font-weight:bold;color:#0369a1;text-align:center;">${vitalsDocRate}%</td></tr>
         <tr style="background:#d4edda"><td><strong>🔢 ICD Codes Present</strong></td><td style="font-size:16pt;font-weight:bold;color:#155724;text-align:center;">${icdDocRate}%</td></tr>
@@ -1624,14 +1624,14 @@ Return HTML only, no markdown or code blocks.
           <td width="30%" style="text-align:center;">
             <div class="score-badge ${getScoreClass(avgInsuranceScore)}" style="font-size:20pt;padding:8px 16px;">${avgInsuranceScore}/10</div>
           </td>
-          <td width="30%"><small>${parseFloat(avgInsuranceScore) >= 8 ? 'Excellent ✅' : parseFloat(avgInsuranceScore) >= 5 ? 'Average ⚠️' : 'Poor ❌'}</small></td>
+          <td width="30%"><small>${parseFloat(avgInsuranceScore) >= 8 ? 'Excellent ✅' : parseFloat(avgInsuranceScore) >= 5 ? 'Average ⚠️' : 'Poor 🚫'}</small></td>
         </tr>
         <tr>
           <td><strong>🏥 Medical Quality</strong></td>
           <td style="text-align:center;">
             <div class="score-badge ${getScoreClass(avgMedicalScore)}" style="font-size:20pt;padding:8px 16px;">${avgMedicalScore}/10</div>
           </td>
-          <td><small>${parseFloat(avgMedicalScore) >= 8 ? 'Excellent ✅' : parseFloat(avgMedicalScore) >= 5 ? 'Average ⚠️' : 'Poor ❌'}</small></td>
+          <td><small>${parseFloat(avgMedicalScore) >= 8 ? 'Excellent ✅' : parseFloat(avgMedicalScore) >= 5 ? 'Average ⚠️' : 'Poor 🚫'}</small></td>
         </tr>
       </tbody>
     </table>
@@ -1768,7 +1768,7 @@ Return HTML only, no markdown or code blocks.
             🔄 مراقبة التكرار عبر الزمن (${summary?.totalDuplicates || duplicateResult.duplicates.length})
           </h3>
           <p style="background:#ede9fe;padding:10px;margin:0;font-size:12px;">
-            ${summary?.rejectCount > 0 ? `❌ ${summary.rejectCount} مرفوض (أقل من 30 يوم)` : ''}
+            ${summary?.rejectCount > 0 ? `🚫 ${summary.rejectCount} مرفوض (أقل من 30 يوم)` : ''}
             ${summary?.warningCount > 0 ? ` | ⚠️ ${summary.warningCount} تحذير (30-60 يوم)` : ''}
             ${summary?.watchCount > 0 ? ` | 📊 ${summary.watchCount} ملاحظة (60-90 يوم)` : ''}
             <br>تم فحص ${duplicateResult.totalChecked} حالة مقابل السجل التاريخي للمطالبات.
@@ -1781,7 +1781,7 @@ Return HTML only, no markdown or code blocks.
             🔄 Temporal Duplicate Surveillance (${summary?.totalDuplicates || duplicateResult.duplicates.length})
           </h3>
           <p style="background:#ede9fe;padding:10px;margin:0;font-size:12px;">
-            ${summary?.rejectCount > 0 ? `❌ ${summary.rejectCount} rejected (<30 days)` : ''}
+            ${summary?.rejectCount > 0 ? `🚫 ${summary.rejectCount} rejected (<30 days)` : ''}
             ${summary?.warningCount > 0 ? ` | ⚠️ ${summary.warningCount} warnings (30-60 days)` : ''}
             ${summary?.watchCount > 0 ? ` | 📊 ${summary.watchCount} notes (60-90 days)` : ''}
           </p>
@@ -1875,7 +1875,7 @@ const reportTemplates = {
     <h4>1) ملخص الحالة والتقييم</h4>
     <ul>
       <li><div class="box-good">✅ <strong>الملخص السريري:</strong> [ملخص دقيق].</div></li>
-      <li><div class="box-critical">❌ <strong>نقاط حرجة:</strong> [تعارض/نقص حيوي].</div></li>
+      <li><div class="box-critical">🚫 <strong>نقاط حرجة:</strong> [تعارض/نقص حيوي].</div></li>
       <li><div class="box-warning">⚠️ <strong>بيانات ناقصة:</strong> [فحوص ضرورية مفقودة].</div></li>
     </ul>
     <h4>2) التشخيصات المحتملة (حسب الخطورة)</h4>
@@ -1888,7 +1888,7 @@ const reportTemplates = {
     <h5>أ) الأدوية</h5>
     <table class="custom-table"><thead><tr><th>الدواء</th><th>الجرعة/المدة</th><th>الغرض</th><th>تحليل المخاطر</th></tr></thead>
       <tbody>
-        <tr><td>[دواء]</td><td>[جرعة]</td><td>[غرض]</td><td class="box-critical">❌ <strong>خطر عالٍ:</strong> [سبب].</td></tr>
+        <tr><td>[دواء]</td><td>[جرعة]</td><td>[غرض]</td><td class="box-critical">🚫 <strong>خطر عالٍ:</strong> [سبب].</td></tr>
         <tr><td>[دواء]</td><td>[جرعة]</td><td>[غرض]</td><td class="box-warning">⚠️ <strong>بحذر:</strong> [سبب].</td></tr>
       </tbody>
     </table>
@@ -1931,7 +1931,7 @@ const reportTemplates = {
     <h4>1) Case summary & assessment</h4>
     <ul>
       <li><div class="box-good">✅ <strong>Clinical summary:</strong> [Concise summary].</div></li>
-      <li><div class="box-critical">❌ <strong>Critical issues:</strong> [Conflicts / vital omissions].</div></li>
+      <li><div class="box-critical">🚫 <strong>Critical issues:</strong> [Conflicts / vital omissions].</div></li>
       <li><div class="box-warning">⚠️ <strong>Missing data:</strong> [Essential tests not done].</div></li>
     </ul>
     <h4>2) Differential diagnoses (by severity)</h4>
@@ -1944,7 +1944,7 @@ const reportTemplates = {
     <h5>A) Medication audit</h5>
     <table class="custom-table"><thead><tr><th>Drug</th><th>Dosage/Duration</th><th>Indication</th><th>Risk analysis</th></tr></thead>
       <tbody>
-        <tr><td>[Med]</td><td>[Dose]</td><td>[Use]</td><td class="box-critical">❌ <strong>High risk:</strong> [Why].</td></tr>
+        <tr><td>[Med]</td><td>[Dose]</td><td>[Use]</td><td class="box-critical">🚫 <strong>High risk:</strong> [Why].</td></tr>
         <tr><td>[Med]</td><td>[Dose]</td><td>[Use]</td><td class="box-warning">⚠️ <strong>Caution:</strong> [Why].</td></tr>
       </tbody>
     </table>
@@ -2253,7 +2253,7 @@ ${indicationsRef}
           <strong>📚 إرشاد سريري:</strong> [المرجع: CDC/WHO - هل منطقي سريرياً؟]
         </td>
         <td data-insurance-rating="[approved/rejected/review]">
-          [✅ مقبول / ❌ مرفوض / ⚠️ يحتاج توثيق]
+          [✅ مقبول / 🚫 مرفوض / ⚠️ يحتاج توثيق]
         </td>
       </tr>
     </tbody>
@@ -2273,16 +2273,16 @@ ${indicationsRef}
           <strong>🏥 NPHIES:</strong> [هل مسموح بالتكرار؟ الترميز صحيح؟]<br>
           <strong>📚 إرشاد:</strong> [هل مطلوب طبياً حسب البروتوكول؟]
         </td>
-        <td data-insurance-rating="[...]">[✅/❌/⚠️]</td>
+        <td data-insurance-rating="[...]">[✅/🚫/⚠️]</td>
       </tr>
     </tbody>
   </table>
 
   <!-- ═══════ الطبقة 3: المرفوضات والتوثيق ═══════ -->
-  <h4>❌ إجراءات مرفوضة</h4>
+  <h4>🚫 إجراءات مرفوضة</h4>
   <div class="box-critical">
     <strong>[اسم الدواء/الإجراء]</strong><br>
-    <strong>❌ سبب الرفض:</strong> [التفصيل مع المرجع السريري]<br>
+    <strong>🚫 سبب الرفض:</strong> [التفصيل مع المرجع السريري]<br>
     <strong>📌 للقبول يجب توثيق:</strong> [عدم تحمل الفم، حالة حادة، حمى >38.5، علامات جفاف...]<br>
     <strong>⚠️ مرجع:</strong> [CDC/NPHIES/CCHI]<br>
     <span style="color:#721c24;font-weight:bold">❗ عدم التوثيق = رفض التأمين</span>
@@ -2326,7 +2326,7 @@ ${indicationsRef}
       <td>[قائمة كل الأدوية والإجراءات المقبولة]</td>
     </tr>
     <tr style="background:#f8d7da">
-      <td><strong>❌ مرفوض</strong></td>
+      <td><strong>🚫 مرفوض</strong></td>
       <td>[قائمة المرفوض مع السبب المختصر]</td>
     </tr>
     <tr style="background:#fff3cd">
@@ -2348,13 +2348,13 @@ ${indicationsRef}
 |---------|--------|------------|------|
 | ✅ مقبول | يتوافق مع التشخيص + العلامات الحيوية + الإرشادات السريرية | كل المعلومات المطلوبة موجودة في البيانات | CBC مع التهاب معدة وأمعاء + WBC مرتفع |
 | ⚠️ يحتاج توثيق | **التشخيص يتوافق مع الدواء** لكن التوثيق غير كافٍ في بيانات المطالبة | الدواء منطقي للتشخيص لكن العلامات الداعمة غير مذكورة | PPI مع عسر هضم (الدواء منطقي لكن نحتاج توثيق GERD/أعراض) |
-| ❌ مرفوض | **التشخيص لا يتوافق مع الدواء** أو مخالف صريح للإرشادات | تعارض واضح بين الدواء والتشخيص أو الحالة السريرية | DRAMYLIN (مقشع سعال) لعلاج الغثيان، مضاد حيوي لنزلة برد فيروسية صريحة |
+| 🚫 مرفوض | **التشخيص لا يتوافق مع الدواء** أو مخالف صريح للإرشادات | تعارض واضح بين الدواء والتشخيص أو الحالة السريرية | DRAMYLIN (مقشع سعال) لعلاج الغثيان، مضاد حيوي لنزلة برد فيروسية صريحة |
 
 ### 🔴 قاعدة ذهبية: لا ترفض فقط لأن المعلومة غير موجودة!
 - إذا كان الدواء **منطقياً للتشخيص** لكن التوثيق ناقص ← ⚠️ يحتاج توثيق
-- إذا كان الدواء **غير منطقي للتشخيص** أو مخالف للإرشادات ← ❌ مرفوض
+- إذا كان الدواء **غير منطقي للتشخيص** أو مخالف للإرشادات ← 🚫 مرفوض
 - مثال: ESOPOLE مع عسر هضم = ⚠️ يحتاج توثيق (PPI منطقي لعسر الهضم، فقط نحتاج توثيق GERD)
-- مثال: DRAMYLIN مع غثيان = ❌ مرفوض (DRAMYLIN ليس دواء غثيان، هو مقشع للسعال)
+- مثال: DRAMYLIN مع غثيان = 🚫 مرفوض (DRAMYLIN ليس دواء غثيان، هو مقشع للسعال)
 
 ### 🌡️ معايير الحمى (تعريف موحد):
 - **الحمى تُعرف طبياً**: ≥38.0°C (WHO, CDC)
@@ -2381,7 +2381,7 @@ ${indicationsRef}
 
 **مطلوب منك فقط:**
 1. تحليل كل حالة بالتفصيل باستخدام النموذج أعلاه
-2. استخدام ✅ و ❌ و ⚠️ بشكل صحيح حسب قواعد التقييم
+2. استخدام ✅ و 🚫 و ⚠️ بشكل صحيح حسب قواعد التقييم
 3. في نهاية كل حالة، اكتب ملخص الحالة الواحدة فقط (مقبول/مرفوض/يحتاج توثيق)
 4. **لا تكتب ملخصاً عاماً أو تقييمات أو أهداف تحسين** - النظام يفعل ذلك تلقائياً
 

@@ -2463,11 +2463,24 @@ let serviceRatingValue = 0;
 
 // ========== نظام الأذكار أثناء الانتظار ==========
 const ADHKAR_LIST = [
+  // أذكار وتسبيح
   { right: 'سبحان الله', center: '🤲 سبّح الله وأنت تنتظر', left: 'الحمد لله' },
   { right: 'الله أكبر', center: '🤲 كبّر الله وأنت تنتظر', left: 'لا إله إلا الله' },
   { right: 'استغفر الله', center: '🤲 استغفر الله العظيم', left: 'سبحان الله وبحمده' },
   { right: 'لا حول ولا قوة إلا بالله', center: '🤲 اذكر الله يذكرك', left: 'الحمد لله رب العالمين' },
-  { right: 'سبحان الله العظيم', center: '🤲 سبحان الله وبحمده', left: 'اللهم صل على محمد' },
+  // الصلاة على النبي ﷺ
+  { right: 'اللهم صل على محمد', center: '🕌 صلِّ على النبي ﷺ', left: 'وعلى آل محمد' },
+  { right: 'صلى الله عليه وسلم', center: '🕌 اللهم صل وسلم على نبينا محمد', left: 'وبارك عليه' },
+  { right: 'اللهم صل على سيدنا محمد', center: '🕌 وعلى آله وصحبه وسلم', left: 'تسليماً كثيراً' },
+  // أسماء الله الحسنى
+  { right: 'الله - الرحمن', center: '☪️ من أسماء الله الحسنى', left: 'الرحيم - الملك' },
+  { right: 'القدوس - السلام', center: '☪️ سبحان الله وبحمده', left: 'المؤمن - المهيمن' },
+  { right: 'العزيز - الجبار', center: '☪️ لا إله إلا الله', left: 'المتكبر - الخالق' },
+  { right: 'البارئ - المصور', center: '☪️ الله أكبر كبيراً', left: 'الغفار - القهار' },
+  { right: 'الوهاب - الرزاق', center: '☪️ والحمد لله كثيراً', left: 'الفتاح - العليم' },
+  { right: 'السميع - البصير', center: '☪️ تبارك الله أحسن الخالقين', left: 'الحكم - العدل' },
+  { right: 'اللطيف - الخبير', center: '☪️ هو الله الذي لا إله إلا هو', left: 'الحليم - العظيم' },
+  // أدعية متنوعة
   { right: 'رب اغفر لي', center: '🤲 اللهم إني أسألك الجنة', left: 'رب زدني علماً' },
   { right: 'حسبي الله ونعم الوكيل', center: '🤲 توكل على الله', left: 'اللهم يسّر ولا تعسّر' },
   { right: 'لا إله إلا أنت سبحانك', center: '🤲 إني كنت من الظالمين', left: 'ربنا آتنا في الدنيا حسنة' }
@@ -2713,7 +2726,7 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
             <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#155724;font-weight:bold;">${stats.acceptedItems}</td>
           </tr>
           <tr style="background:#f8d7da;">
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;">❌ بنود تحتاج مراجعة</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;">🚫 بنود تحتاج مراجعة</td>
             <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#721c24;font-weight:bold;">${stats.reviewItems}</td>
           </tr>
           <tr style="background:#fff3cd;">
@@ -3426,7 +3439,7 @@ function extractAndApplyAIRatings(html) {
     // Method 2: Fallback - count approved/rejected/warning separately for each metric
     if (insuranceRatingValue === 0 || serviceRatingValue === 0) {
       const approvedCount = (plainText.match(/✅|مقبول(?!\s*لل)/gi) || []).length;
-      const rejectedCount = (plainText.match(/❌|مرفوض/gi) || []).length;
+      const rejectedCount = (plainText.match(/🚫|⛔|مرفوض/gi) || []).length;
       const warningCount = (plainText.match(/⚠️|يحتاج توثيق/gi) || []).length;
       
       const totalItems = approvedCount + rejectedCount + warningCount;
@@ -3941,7 +3954,7 @@ function highlightRejectedCells() {
   cells.forEach(cell => {
     const text = cell.textContent.trim();
     // Check for rejection keywords
-    if (text.includes('مرفوض') || text === 'مرفوض' || text.includes('❌ مرفوض')) {
+    if (text.includes('مرفوض') || text === 'مرفوض' || text.includes('🚫 مرفوض') || text.includes('⛔ مرفوض')) {
       cell.style.background = '#dc2626';
       cell.style.color = 'white';
       cell.style.fontWeight = 'bold';
@@ -5364,7 +5377,7 @@ function showCustomAlert(message, type = 'info') {
   
   const icons = {
     success: '✅',
-    error: '❌',
+    error: '⛔',
     warning: '⚠️',
     info: 'ℹ️'
   };
@@ -5465,7 +5478,7 @@ function printAndTrack() {
   // Add visual status classes to status cells for printing
   document.querySelectorAll('#reportContent td').forEach(td => {
     const text = td.textContent;
-    if (text.includes('❌') || text.includes('مرفوض')) {
+    if (text.includes('🚫') || text.includes('⛔') || text.includes('مرفوض')) {
       td.classList.add('status-reject');
       td.setAttribute('data-status', 'rejected');
     } else if (text.includes('⚠️') || text.includes('يحتاج توثيق')) {
