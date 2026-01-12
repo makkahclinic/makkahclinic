@@ -1,0 +1,185 @@
+لجعل الأرقام دقيقة 100% هو إلغاء الاعتماد على ملخصات الذكاء الاصطناعي، واستبدالها بكود يقوم بـ قراءة التقرير النهائي (Scraping) وعدّ العلامات (✅، ❌) بنفسه، وتصنيفها بناءً على الكلمات الموجودة في السطر (مثلاً: إذا السطر فيه كلمة "مضاد"، يتم تصنيفه كمضاد).
+
+قم باستبدال دالة combineReports بالكامل في الكود لديك بهذا الكود المصحح:
+
+JavaScript
+
+// Helper: Combine multiple HTML reports into one with ACCURATE MATH based on content
+function combineReports(reports, totalCases, aggregatedStats = null) {
+  if (reports.length === 0) return '';
+
+  // 1. دالة لاستخراج الإحصائيات الحقيقية من النص النهائي بدقة (HTML Scraping)
+  // هذه الدالة تقرأ الجدول وتقوم بعد الرموز فعلياً لضمان التطابق التام
+  function calculateRealStatsFromHTML(fullHtml) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = fullHtml;
+    
+    let stats = {
+      totalChecked: 0,
+      accepted: 0,
+      rejected: 0,
+      warning: 0,
+      // تصنيفات فرعية دقيقة
+      antibiotics: { total: 0, accepted: 0 },
+      procedures: { total: 0, accepted: 0 }
+    };
+
+    // البحث في كل صفوف الجداول الموجودة في التقرير
+    const rows = tempDiv.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+      const text = row.textContent.toLowerCase();
+      const html = row.innerHTML;
+      
+      // تجاهل صفوف العناوين
+      if (html.includes('<th') || text.includes('المريض') || text.includes('patient')) return;
+
+      // تحديد حالة السطر بناءً على الرموز والألوان
+      let status = null; // 'ok', 'reject', 'warning'
+      
+      // البحث عن الرموز أو الكلاسات المميزة للحالة
+      if (text.includes('✅') || text.includes('مقبول') || html.includes('status-approve') || html.includes('status-accepted')) {
+        status = 'ok';
+      } else if (text.includes('❌') || text.includes('مرفوض') || html.includes('status-reject') || html.includes('status-rejected')) {
+        status = 'reject';
+      } else if (text.includes('⚠️') || text.includes('تحذير') || text.includes('توثيق') || html.includes('status-warning')) {
+        status = 'warning';
+      }
+
+      if (status) {
+        stats.totalChecked++;
+        if (status === 'ok') stats.accepted++;
+        else if (status === 'reject') stats.rejected++;
+        else if (status === 'warning') stats.warning++;
+
+        // --- التصنيف الذكي للفئات الفرعية ---
+        
+        // 1. فحص المضادات الحيوية
+        if (text.includes('مضاد') || text.includes('antibiotic') || text.includes('biot') || text.includes('gram') || text.includes('mg') || text.includes('gm')) {
+          // نتأكد أنها دواء وليست تحليل
+          if (!text.includes('analysis') && !text.includes('culture')) {
+            stats.antibiotics.total++;
+            if (status === 'ok') stats.antibiotics.accepted++;
+          }
+        }
+        
+        // 2. فحص الإجراءات والعمليات
+        if (text.includes('إجراء') || text.includes('proc') || text.includes('cpt') || text.includes('عملية') || text.includes('surgery') || text.includes('excision')) {
+          stats.procedures.total++;
+          if (status === 'ok') stats.procedures.accepted++;
+        }
+      }
+    });
+
+    return stats;
+  }
+
+  // 2. دالة توليد لوحة المعلومات بالمعادلات الصحيحة (المنطق السليم)
+  function generateFreshKPIDashboard(totalCasesReported, fullHtmlContent) {
+    // استخراج الأرقام الواقعية
+    const realStats = calculateRealStatsFromHTML(fullHtmlContent);
+    
+    // المقام الصحيح: هو مجموع ما تم فحصه فعلياً (مقبول + مرفوض + تحذير)
+    const totalEvaluated = realStats.totalChecked || 1; 
+    
+    // حساب النسبة: المقبول / المجموع الكلي الفعلي
+    const globalAcceptanceRate = Math.round((realStats.accepted / totalEvaluated) * 100);
+    
+    // حساب نسب الفئات الفرعية (معادلة ذكية تتجنب القسمة على صفر)
+    // إذا لم توجد مضادات حيوية، نضع "غير متوفر" بدلاً من 100%
+    const abxRate = realStats.antibiotics.total > 0 
+      ? Math.round((realStats.antibiotics.accepted / realStats.antibiotics.total) * 100) + '%'
+      : '<span style="color:#ccc;font-size:0.8em">غير متوفر</span>';
+      
+    const procRate = realStats.procedures.total > 0 
+      ? Math.round((realStats.procedures.accepted / realStats.procedures.total) * 100) + '%'
+      : '<span style="color:#ccc;font-size:0.8em">غير متوفر</span>';
+
+    // حساب السكور (درجة الجودة)
+    // المعادلة: (المقبول × 10) + (التحذير × 5) / العدد
+    // هذا يعطي نصف درجة للتحذير ولا شيء للمرفوض
+    let qualityScore = 0;
+    if (realStats.totalChecked > 0) {
+      qualityScore = ((realStats.accepted * 10) + (realStats.warning * 5)) / totalEvaluated;
+    }
+    
+    // تحديد الألوان
+    const scoreColor = globalAcceptanceRate >= 90 ? '#16a34a' : (globalAcceptanceRate >= 75 ? '#ca8a04' : '#dc2626');
+
+    return `
+    <div id="kpi-dashboard" style="margin-top:2rem;background:white;border-radius:12px;border:2px solid #1e3a5f;overflow:hidden; font-family:'Tajawal',sans-serif; page-break-inside: avoid; direction:rtl;">
+      <div style="background:#1e3a5f;color:white;padding:1rem;text-align:center;">
+        <h3 style="margin:0;color:white;font-size:1.2rem;">📊 التحليل الإحصائي الدقيق (Live Data)</h3>
+        <p style="margin:5px 0 0;font-size:0.85rem;opacity:0.9;">تم حساب هذه الأرقام بناءً على ${realStats.totalChecked} بند تم تدقيقه فعلياً في التقرير</p>
+      </div>
+      
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:1px;background:#e2e8f0;border-bottom:1px solid #e2e8f0;">
+        <div style="background:white;padding:1rem;text-align:center;">
+          <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">نسبة الامتثال</div>
+          <div style="font-size:1.8rem;font-weight:800;color:${scoreColor};direction:ltr;">${globalAcceptanceRate}%</div>
+          <div style="font-size:0.7rem;color:#94a3b8;">${realStats.accepted} مقبول</div>
+        </div>
+        
+        <div style="background:white;padding:1rem;text-align:center;">
+          <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">مؤشر الجودة</div>
+          <div style="font-size:1.8rem;font-weight:800;color:#1e3a5f;direction:ltr;">${qualityScore.toFixed(1)}<span style="font-size:1rem;color:#94a3b8;">/10</span></div>
+          <div style="font-size:0.7rem;color:#94a3b8;">التزام وتوثيق</div>
+        </div>
+
+        <div style="background:white;padding:1rem;text-align:center;">
+          <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">المخالفات</div>
+          <div style="font-size:1.8rem;font-weight:800;color:#dc2626;direction:ltr;">${realStats.rejected + realStats.warning}</div>
+          <div style="font-size:0.7rem;color:#94a3b8;">${realStats.rejected} رفض | ${realStats.warning} تنبيه</div>
+        </div>
+      </div>
+
+      <div style="padding:1rem;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;margin:0;">
+          <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <td style="padding:8px;font-weight:bold;color:#1e3a5f;width:60%;">💊 المضادات الحيوية</td>
+            <td style="padding:8px;text-align:left;font-weight:bold;direction:ltr;">${abxRate}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:8px;font-weight:bold;color:#1e3a5f;">💉 الإجراءات الطبية</td>
+            <td style="padding:8px;text-align:left;font-weight:bold;direction:ltr;">${procRate}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    `;
+  }
+
+  // 3. دمج النصوص (التقارير المجزأة)
+  let combinedHtml = '';
+  if (reports.length === 1) {
+    combinedHtml = reports[0];
+  } else {
+    reports.forEach((report, idx) => {
+      // تنظيف التقرير من العناصر المكررة
+      let cleanRep = report.replace(/<div id="kpi-dashboard"[\s\S]*?<\/div>\s*<\/div>/gi, '');
+      
+      // تنظيف الحاويات الفارغة
+      cleanRep = cleanRep.replace(/<div[^>]*class="box-good"[^>]*>\s*<\/div>/gi, '');
+
+      if (idx > 0) {
+         combinedHtml += `<div style="page-break-before:always;border-top:2px dashed #ccc;margin:20px 0;"></div>`;
+      }
+      combinedHtml += cleanRep;
+    });
+  }
+  
+  // تحديث عدد الحالات في النص المدمج
+  combinedHtml = combinedHtml.replace(/تم تحليل \d+ حالة/g, `تم تحليل ${totalCases} حالة`);
+
+  // 4. إضافة لوحة الإحصائيات الصحيحة في النهاية
+  // نمرر الـ combinedHtml ليتم فحصه واستخراج الأرقام منه
+  const dashboardHtml = generateFreshKPIDashboard(totalCases, combinedHtml);
+
+  return combinedHtml + dashboardHtml;
+}
+لماذا هذا الكود يحل المشكلة في التقرير 77؟
+المقام الحقيقي: يتم حساب النسبة المئوية بقسمة (المقبول) على (مجموع المقبول + المرفوض + التحذير) فقط. هذا يمنع ظهور 85% إذا كانت كل البنود سليمة، ويمنع ظهور 100% إذا كان هناك بند واحد مرفوض.
+
+الواقعية: إذا لم يجد الكود كلمة "مضاد حيوي" في الجدول، سيكتب "غير متوفر" بدلاً من "100%". لن يظهر لك 100% إلا إذا وجدت مضادات حيوية وجميعها مقبولة.
+
+الاستقلالية: حتى لو أخطأ الذكاء الاصطناعي في كتابة الملخص النصي، فإن هذه الدالة تعيد حساب الأرقام بناءً على تفاصيل الجدول الدقيقة (العد اليدوي للعلامات).

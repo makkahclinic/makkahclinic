@@ -303,6 +303,114 @@ export function calculateKPIs(reportStats) {
 }
 
 /**
+ * توليد قسم التقييم الثنائي
+ * @param {Object} kpis - مؤشرات الأداء
+ * @param {Function} getScoreColor - دالة لون الدرجة
+ * @returns {string} HTML
+ */
+function generateDualScoreSection(kpis, getScoreColor) {
+  const fairnessScore = kpis.clinicianFairness?.score ?? 0;
+  const defenseScore = kpis.insuranceDefense?.score ?? 0;
+  
+  let fairnessDetailsHtml = '';
+  (kpis.clinicianFairness?.details || []).forEach(d => {
+    const statusColor = d.status === 'good' ? '#22c55e' : d.status === 'warning' ? '#f59e0b' : '#ef4444';
+    fairnessDetailsHtml += '<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">' +
+      '<span style="color:#94a3b8;">' + d.label + '</span>' +
+      '<span>' + d.value + ' <span style="color:' + statusColor + '; font-size:10px;">(' + d.impact + ')</span></span>' +
+      '</div>';
+  });
+  
+  let defenseDetailsHtml = '';
+  (kpis.insuranceDefense?.details || []).forEach(d => {
+    const statusMark = d.status === 'good' ? '<span style="color:#22c55e;">✓</span>' : '<span style="color:#ef4444;">✗</span>';
+    defenseDetailsHtml += '<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">' +
+      '<span style="color:#94a3b8;">' + d.label + '</span>' +
+      '<span>' + d.value + ' ' + statusMark + '</span>' +
+      '</div>';
+  });
+  
+  let deductionRowsHtml = '';
+  (kpis.deductionLedger || []).forEach(d => {
+    const typeBg = d.type === 'medical_error' ? '#dc2626' : '#f59e0b';
+    const typeLabel = d.type === 'medical_error' ? 'خطأ طبي' : 'نقص توثيق';
+    deductionRowsHtml += '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
+      '<td style="padding:8px; color:' + d.color + ';">' + d.label + '</td>' +
+      '<td style="text-align:center; padding:8px; color:#e2e8f0;">' + d.rate + '</td>' +
+      '<td style="text-align:center; padding:8px;"><span style="background:' + typeBg + '; color:white; padding:2px 6px; border-radius:4px; font-size:10px;">' + typeLabel + '</span></td>' +
+      '<td style="text-align:left; padding:8px; color:#ef4444; font-weight:bold;">-' + d.deduction + '</td>' +
+      '</tr>';
+  });
+  
+  const deductionTableHtml = (kpis.deductionLedger && kpis.deductionLedger.length > 0) ? 
+    '<div style="background:rgba(0,0,0,0.2); border-radius:8px; padding:12px; margin-top:16px;">' +
+    '<h4 style="color:#f59e0b; margin:0 0 12px 0; font-size:14px;">📋 جدول الخصومات الشفاف</h4>' +
+    '<table style="width:100%; border-collapse:collapse; font-size:12px;">' +
+    '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.2);">' +
+    '<th style="text-align:right; padding:8px; color:#94a3b8;">البند</th>' +
+    '<th style="text-align:center; padding:8px; color:#94a3b8;">النسبة</th>' +
+    '<th style="text-align:center; padding:8px; color:#94a3b8;">النوع</th>' +
+    '<th style="text-align:left; padding:8px; color:#94a3b8;">الخصم</th>' +
+    '</tr></thead><tbody>' +
+    '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
+    '<td style="padding:8px; color:#22c55e;">🏁 البداية</td>' +
+    '<td style="text-align:center; padding:8px; color:#e2e8f0;">—</td>' +
+    '<td style="text-align:center; padding:8px; color:#e2e8f0;">—</td>' +
+    '<td style="text-align:left; padding:8px; color:#22c55e; font-weight:bold;">10.0</td></tr>' +
+    deductionRowsHtml +
+    '<tr style="background:rgba(201,169,98,0.2);">' +
+    '<td style="padding:8px; color:#c9a962; font-weight:bold;">🎯 الدرجة الرسمية</td>' +
+    '<td colspan="2" style="text-align:center; padding:8px; color:#94a3b8; font-size:11px;">60% دفاع + 40% عدالة</td>' +
+    '<td style="text-align:left; padding:8px; color:#c9a962; font-weight:bold; font-size:16px;">' + kpis.overallScore.score + '/10</td>' +
+    '</tr></tbody></table></div>' : '';
+
+  return `
+  <div style="margin-bottom:24px; padding:20px; background:linear-gradient(135deg, rgba(201,169,98,0.15) 0%, rgba(30,58,95,0.3) 100%); border-radius:12px; border:1px solid rgba(201,169,98,0.3);">
+    <h3 style="color:#c9a962; margin:0 0 16px 0; font-size:18px; text-align:center;">
+      ⚖️ نظام التقييم العادل (ثنائي المسار)
+    </h3>
+    <p style="color:#94a3b8; text-align:center; margin:0 0 20px 0; font-size:13px;">
+      ${kpis.overallScore.formula || '60% دفاع تأميني + 40% عدالة الطبيب'}
+    </p>
+    
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:16px; margin-bottom:20px;">
+      
+      <div style="background:rgba(34,197,94,0.1); border-radius:10px; padding:16px; border:2px solid ${getScoreColor(fairnessScore)};">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div>
+            <h4 style="color:#22c55e; margin:0; font-size:14px;">👨‍⚕️ عدالة الطبيب</h4>
+            <p style="color:#94a3b8; margin:4px 0 0 0; font-size:11px;">تخفيف عقوبات نقص التوثيق</p>
+          </div>
+          <div style="font-size:28px; font-weight:bold; color:${getScoreColor(fairnessScore)};">
+            ${fairnessScore}/10
+          </div>
+        </div>
+        <div style="font-size:12px; color:#e2e8f0;">
+          ${fairnessDetailsHtml}
+        </div>
+      </div>
+      
+      <div style="background:rgba(59,130,246,0.1); border-radius:10px; padding:16px; border:2px solid ${getScoreColor(defenseScore)};">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div>
+            <h4 style="color:#3b82f6; margin:0; font-size:14px;">🛡️ الدفاع التأميني</h4>
+            <p style="color:#94a3b8; margin:4px 0 0 0; font-size:11px;">قوة الملف أمام شركات التأمين</p>
+          </div>
+          <div style="font-size:28px; font-weight:bold; color:${getScoreColor(defenseScore)};">
+            ${defenseScore}/10
+          </div>
+        </div>
+        <div style="font-size:12px; color:#e2e8f0;">
+          ${defenseDetailsHtml}
+        </div>
+      </div>
+    </div>
+    
+    ${deductionTableHtml}
+  </div>`;
+}
+
+/**
  * توليد HTML للوحة المؤشرات
  * @param {Object} kpis - مؤشرات الأداء
  * @param {string} period - الفترة (شهري/أسبوعي)
@@ -433,6 +541,9 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
     </div>
 
   </div>
+
+  <!-- ========== نظام التقييم الثنائي ========== -->
+  ${generateDualScoreSection(kpis, getScoreColor)}
 
   <!-- Improvement Recommendations -->
   <div style="background:rgba(201,169,98,0.1); border-radius:12px; padding:16px; border:1px solid rgba(201,169,98,0.3);">
