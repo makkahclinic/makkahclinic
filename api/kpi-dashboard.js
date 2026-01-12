@@ -24,7 +24,16 @@ export function calculateKPIs(reportStats) {
     ? (reportStats.approvedCount || 0) / totalProcedures 
     : null; // null يعني "غير متوفر" بدلاً من 0
   
-  const needsDocRate = (reportStats.needsDocCount || 0) / totalCases;
+  // نسبة البنود التي تحتاج توثيق - نفس المقام (totalProcedures) للاتساق
+  // ملاحظة: هذا يجعل approved% + rejected% + needsDoc% = 100%
+  const needsDocRate = totalProcedures > 0 
+    ? (reportStats.needsDocCount || 0) / totalProcedures 
+    : 0;
+  
+  // نسبة الرفض (للعرض الإضافي)
+  const rejectionRate = totalProcedures > 0 
+    ? (reportStats.rejectedCount || 0) / totalProcedures 
+    : 0;
   // استخدام نسبة التكرار المحسوبة من extractStatsFromCases (عدد الحالات بتكرار ÷ إجمالي الحالات)
   const duplicateRate = reportStats.duplicateRate || ((reportStats.duplicateCases || 0) / totalCases);
   const ivWithoutJustificationRate = (reportStats.ivWithoutJustification || 0) / totalCases;
@@ -44,9 +53,12 @@ export function calculateKPIs(reportStats) {
     kpis.insuranceCompliance.score = Math.max(0, Math.min(10, parseFloat(insuranceScore.toFixed(1))));
   }
   
+  // === المؤشرات المتسقة ===
+  // الآن: قبول% + رفض% + يحتاج توثيق% = 100%
   kpis.insuranceCompliance.details = [
     { label: 'قبول الإجراءات', value: procedureApprovalRate !== null ? `${(procedureApprovalRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥70%', status: procedureApprovalRate !== null && procedureApprovalRate >= 0.7 ? 'good' : 'na' },
-    { label: 'نسبة يحتاج توثيق', value: `${(needsDocRate * 100).toFixed(0)}%`, target: '<15%', status: needsDocRate < 0.15 ? 'good' : 'bad' },
+    { label: 'رفض الإجراءات', value: `${(rejectionRate * 100).toFixed(0)}%`, target: '<10%', status: rejectionRate < 0.1 ? 'good' : 'bad' },
+    { label: 'يحتاج توثيق (بنود)', value: `${(needsDocRate * 100).toFixed(0)}%`, target: '<20%', status: needsDocRate < 0.2 ? 'good' : 'bad' },
     { label: 'نسبة التكرار', value: `${(duplicateRate * 100).toFixed(0)}%`, target: '<5%', status: duplicateRate < 0.05 ? 'good' : 'bad' },
     { label: 'IV بدون مبرر', value: `${(ivWithoutJustificationRate * 100).toFixed(0)}%`, target: '<10%', status: ivWithoutJustificationRate < 0.1 ? 'good' : 'bad' }
   ];
