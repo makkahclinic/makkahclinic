@@ -1924,9 +1924,12 @@ const reportTemplates = {
     .box-warning{border-right:5px solid #856404;background:#fff3cd;color:#856404;padding:1rem;margin:.75rem 0;border-radius:10px}
     .box-good{border-right:5px solid #155724;background:#d4edda;color:#155724;padding:1rem;margin:.75rem 0;border-radius:10px}
     .box-info{border-right:5px solid #004085;background:#cce5ff;color:#004085;padding:1rem;margin:.75rem 0;border-radius:10px}
-    .custom-table{border-collapse:collapse;width:100%;text-align:right;margin-top:1rem;box-shadow:0 2px 4px rgba(0,0,0,.06)}
-    .custom-table th,.custom-table td{padding:12px;border:1px solid #dee2e6}
+    .custom-table{border-collapse:collapse;width:100%;text-align:right;margin-top:1rem;box-shadow:0 2px 4px rgba(0,0,0,.06);table-layout:fixed}
+    .custom-table th,.custom-table td{padding:12px 16px;border:1px solid #dee2e6;word-wrap:break-word}
     .custom-table thead{background:#e9ecef}
+    .custom-table th:first-child,.custom-table td:first-child{width:40%}
+    .custom-table th:nth-child(2),.custom-table td:nth-child(2){width:40%}
+    .custom-table th:last-child,.custom-table td:last-child{width:20%}
     h3,h4{color:#243143;border-bottom:2px solid #0b63c2;padding-bottom:8px;margin-top:1.6rem}
     .icon{font-size:1.2em;margin-left:.5rem}
   </style>
@@ -1980,9 +1983,12 @@ const reportTemplates = {
     .box-warning{border-left:5px solid #856404;background:#fff3cd;color:#856404;padding:1rem;margin:.75rem 0;border-radius:10px}
     .box-good{border-left:5px solid #155724;background:#d4edda;color:#155724;padding:1rem;margin:.75rem 0;border-radius:10px}
     .box-info{border-left:5px solid #004085;background:#cce5ff;color:#004085;padding:1rem;margin:.75rem 0;border-radius:10px}
-    .custom-table{border-collapse:collapse;width:100%;text-align:left;margin-top:1rem;box-shadow:0 2px 4px rgba(0,0,0,.06)}
-    .custom-table th,.custom-table td{padding:12px;border:1px solid #dee2e6}
+    .custom-table{border-collapse:collapse;width:100%;text-align:left;margin-top:1rem;box-shadow:0 2px 4px rgba(0,0,0,.06);table-layout:fixed}
+    .custom-table th,.custom-table td{padding:12px 16px;border:1px solid #dee2e6;word-wrap:break-word}
     .custom-table thead{background:#e9ecef}
+    .custom-table th:first-child,.custom-table td:first-child{width:40%}
+    .custom-table th:nth-child(2),.custom-table td:nth-child(2){width:40%}
+    .custom-table th:last-child,.custom-table td:last-child{width:20%}
     h3,h4{color:#243143;border-bottom:2px solid #0b63c2;padding-bottom:8px;margin-top:1.6rem}
     .icon{font-size:1.2em;margin-right:.5rem}
   </style>
