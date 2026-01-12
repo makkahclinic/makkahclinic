@@ -567,12 +567,55 @@ export function extractStatsFromReport(htmlReport) {
     icdCodesPresent: 0
   };
 
+  if (!htmlReport || typeof htmlReport !== 'string') {
+    return stats;
+  }
+
   // Count cases from HTML
-  const caseMatches = htmlReport.match(/الحالة\s*#?\d+|Case\s*#?\d+/gi);
+  const caseMatches = htmlReport.match(/الحالة\s*(?:رقم\s*)?#?\d+|Case\s*#?\d+/gi);
   stats.totalCases = caseMatches ? caseMatches.length : 1;
 
-  // لا نضع قيم افتراضية وهمية - البيانات غير متوفرة
-  // vitalsDocumented, diagnosisSpecific, approvedCount تبقى صفر (غير معروفة)
+  // ========== استخراج الإحصائيات الفعلية من التقرير ==========
+  // عد البنود المقبولة (✅ مقبول) - تجنب عد العناوين والملخصات
+  const approvedMatches = htmlReport.match(/✅\s*مقبول(?!ة)|<td[^>]*>مقبول<\/td>|class="[^"]*approved[^"]*"/gi);
+  stats.approvedCount = approvedMatches ? approvedMatches.length : 0;
+
+  // عد البنود المرفوضة والتي تحتاج مراجعة/تصحيح (❌ أو 🚫 أو ⛔)
+  // تشمل: مرفوض، يحتاج مراجعة، يحتاج تصحيح، يحتاج تدقيق، Rejected
+  const rejectedMatches = htmlReport.match(/[❌🚫⛔]\s*(?:مرفوض|يحتاج\s*(?:مراجعة|تصحيح|تدقيق|تعديل))|Rejected|<td[^>]*>مرفوض<\/td>|مرفوض\s*-\s*يحتاج|غير\s*مبرر/gi);
+  stats.rejectedCount = rejectedMatches ? rejectedMatches.length : 0;
+
+  // عد البنود التي تحتاج توثيق (⚠️)
+  // تشمل: يحتاج توثيق، يحتاج توثيق إضافي، يحتاج توثيق تفصيلي، Needs Documentation
+  const needsDocMatches = htmlReport.match(/⚠️\s*يحتاج\s*توثيق|يحتاج\s*توثيق\s*(?:إضافي|تفصيلي)?|<td[^>]*>يحتاج\s*توثيق<\/td>|Needs\s*(?:Documentation|Doc)/gi);
+  stats.needsDocCount = needsDocMatches ? needsDocMatches.length : 0;
+
+  // عد حالات التكرار
+  const duplicateMatches = htmlReport.match(/تكرار|مكرر|duplicate/gi);
+  stats.duplicateCount = duplicateMatches ? duplicateMatches.length : 0;
+
+  // عد IV بدون مبرر
+  const ivNoJustMatches = htmlReport.match(/IV\s*بدون\s*مبرر|وريدي\s*غير\s*مبرر|IV\s*without\s*justification/gi);
+  stats.ivWithoutJustification = ivNoJustMatches ? ivNoJustMatches.length : 0;
+
+  // عد العلامات الحيوية الموثقة
+  const vitalsMatches = htmlReport.match(/درجة\s*الحرارة:\s*\d|Temperature:\s*\d|ضغط\s*الدم:\s*\d|BP:\s*\d/gi);
+  stats.vitalsDocumented = vitalsMatches ? Math.min(vitalsMatches.length, stats.totalCases) : 0;
+
+  // عد أكواد ICD الموجودة
+  const icdMatches = htmlReport.match(/[A-Z]\d{2}(?:\.\d{1,2})?/g);
+  stats.icdCodesPresent = icdMatches ? Math.min(new Set(icdMatches).size, stats.totalCases) : 0;
+
+  // عد التشخيصات المحددة (غير المنتهية بـ unspecified)
+  const diagMatches = htmlReport.match(/التشخيص:\s*[^<\n]+/gi);
+  if (diagMatches) {
+    const specificCount = diagMatches.filter(d => 
+      !d.toLowerCase().includes('unspecified') && 
+      !d.includes('غير محدد') &&
+      !d.match(/\.\d*9\s*-/)
+    ).length;
+    stats.diagnosisSpecific = specificCount;
+  }
 
   return stats;
 }
