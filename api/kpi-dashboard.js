@@ -208,64 +208,21 @@ export function calculateKPIs(reportStats) {
   // تشخيص غير محدد (نقص توثيق)
   const nonSpecificDiagRate = 1 - diagnosisSpecificityRate;
   
-  // ========== جدول الخصومات الشفاف ==========
-  const deductions = [];
-  
-  // خصومات الأخطاء الطبية (وزن عالي)
-  if (medicalErrorRate > 0) {
-    deductions.push({
-      type: 'medical_error',
-      label: '❌ إجراءات مرفوضة طبياً',
-      rate: `${(medicalErrorRate * 100).toFixed(0)}%`,
-      deduction: parseFloat((medicalErrorRate * 3).toFixed(1)),
-      color: '#dc2626'
-    });
-  }
-  
-  if (ivRate > 0) {
-    deductions.push({
-      type: 'medical_error',
-      label: '❌ IV بدون مبرر طبي',
-      rate: `${(ivRate * 100).toFixed(0)}%`,
-      deduction: parseFloat((ivRate * 2).toFixed(1)),
-      color: '#dc2626'
-    });
-  }
-  
-  // خصومات نقص التوثيق (وزن منخفض)
-  if (docGapRate > 0) {
-    deductions.push({
-      type: 'documentation_gap',
-      label: '⚠️ بنود تحتاج توثيق',
-      rate: `${(docGapRate * 100).toFixed(0)}%`,
-      deduction: parseFloat((docGapRate * 1).toFixed(1)),
-      color: '#f59e0b'
-    });
-  }
-  
-  if (nonSpecificDiagRate > 0.1) {
-    deductions.push({
-      type: 'documentation_gap',
-      label: '⚠️ تشخيص غير محدد',
-      rate: `${(nonSpecificDiagRate * 100).toFixed(0)}%`,
-      deduction: parseFloat((nonSpecificDiagRate * 1.5).toFixed(1)),
-      color: '#f59e0b'
-    });
-  }
-  
-  kpis.deductionLedger = deductions;
-  
   // ========== 1. درجة عدالة الطبيب (Clinician Fairness) ==========
-  // لا يُعاقب بشدة على نقص التوثيق
+  // أوزان مُعدّلة: أخطاء طبية تؤثر بشكل كبير
   let fairnessScore = 10;
   
-  // خصم الأخطاء الطبية بالكامل
-  fairnessScore -= medicalErrorRate * 3;
-  fairnessScore -= ivRate * 2;
+  // خصم الأخطاء الطبية (وزن عالي: حتى -8 للأخطاء الكاملة)
+  const fairnessMedicalDed = medicalErrorRate * 5;
+  const fairnessIvDed = ivRate * 3;
+  fairnessScore -= fairnessMedicalDed;
+  fairnessScore -= fairnessIvDed;
   
-  // خصم نقص التوثيق بشكل مخفف (50% من الوزن)
-  fairnessScore -= docGapRate * 0.5;
-  fairnessScore -= Math.min(nonSpecificDiagRate * 0.5, 1); // حد أقصى -1
+  // خصم نقص التوثيق بشكل مخفف (وزن منخفض: حتى -2)
+  const fairnessDocDed = docGapRate * 1;
+  const fairnessDiagDed = nonSpecificDiagRate * 1;
+  fairnessScore -= fairnessDocDed;
+  fairnessScore -= fairnessDiagDed;
   
   kpis.clinicianFairness.score = Math.max(0, Math.min(10, parseFloat(fairnessScore.toFixed(1))));
   kpis.clinicianFairness.details = [
@@ -275,16 +232,20 @@ export function calculateKPIs(reportStats) {
   ];
   
   // ========== 2. درجة الدفاع التأميني (Insurance Defense) ==========
-  // تبرير قوي أمام شركات التأمين
+  // صارمة: كل خطأ يُحسب بوزن عالي
   let defenseScore = 10;
   
-  // خصم الأخطاء الطبية بشكل كامل (شركات التأمين صارمة)
-  defenseScore -= medicalErrorRate * 4;
-  defenseScore -= ivRate * 3;
+  // خصم الأخطاء الطبية (وزن عالي جداً)
+  const defenseMedicalDed = medicalErrorRate * 6;
+  const defenseIvDed = ivRate * 4;
+  defenseScore -= defenseMedicalDed;
+  defenseScore -= defenseIvDed;
   
   // خصم نقص التوثيق (يؤثر على المطالبات)
-  defenseScore -= docGapRate * 2;
-  defenseScore -= nonSpecificDiagRate * 2;
+  const defenseDocDed = docGapRate * 2;
+  const defenseDiagDed = nonSpecificDiagRate * 2;
+  defenseScore -= defenseDocDed;
+  defenseScore -= defenseDiagDed;
   
   kpis.insuranceDefense.score = Math.max(0, Math.min(10, parseFloat(defenseScore.toFixed(1))));
   kpis.insuranceDefense.details = [
@@ -298,6 +259,56 @@ export function calculateKPIs(reportStats) {
   const officialScore = (kpis.insuranceDefense.score * 0.6) + (kpis.clinicianFairness.score * 0.4);
   kpis.overallScore.score = parseFloat(officialScore.toFixed(1));
   kpis.overallScore.formula = '60% دفاع تأميني + 40% عدالة الطبيب';
+
+  // ========== جدول الخصومات الشفاف (يعكس المساهمة الفعلية في الدرجة الرسمية) ==========
+  // الخصم الفعلي = (خصم دفاعي × 0.6) + (خصم عدالة × 0.4)
+  const deductions = [];
+  
+  if (medicalErrorRate > 0) {
+    const actualDed = (defenseMedicalDed * 0.6) + (fairnessMedicalDed * 0.4);
+    deductions.push({
+      type: 'medical_error',
+      label: '❌ إجراءات مرفوضة طبياً',
+      rate: `${(medicalErrorRate * 100).toFixed(0)}%`,
+      deduction: parseFloat(actualDed.toFixed(2)),
+      color: '#dc2626'
+    });
+  }
+  
+  if (ivRate > 0) {
+    const actualDed = (defenseIvDed * 0.6) + (fairnessIvDed * 0.4);
+    deductions.push({
+      type: 'medical_error',
+      label: '❌ IV بدون مبرر طبي',
+      rate: `${(ivRate * 100).toFixed(0)}%`,
+      deduction: parseFloat(actualDed.toFixed(2)),
+      color: '#dc2626'
+    });
+  }
+  
+  if (docGapRate > 0) {
+    const actualDed = (defenseDocDed * 0.6) + (fairnessDocDed * 0.4);
+    deductions.push({
+      type: 'documentation_gap',
+      label: '⚠️ بنود تحتاج توثيق',
+      rate: `${(docGapRate * 100).toFixed(0)}%`,
+      deduction: parseFloat(actualDed.toFixed(2)),
+      color: '#f59e0b'
+    });
+  }
+  
+  if (nonSpecificDiagRate > 0.1) {
+    const actualDed = (defenseDiagDed * 0.6) + (fairnessDiagDed * 0.4);
+    deductions.push({
+      type: 'documentation_gap',
+      label: '⚠️ تشخيص غير محدد',
+      rate: `${(nonSpecificDiagRate * 100).toFixed(0)}%`,
+      deduction: parseFloat(actualDed.toFixed(2)),
+      color: '#f59e0b'
+    });
+  }
+  
+  kpis.deductionLedger = deductions;
 
   return kpis;
 }
