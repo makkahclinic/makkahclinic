@@ -3486,6 +3486,58 @@ function calculateEligibility(stats) {
   return Math.round(((totalCases - casesWithIssues) / totalCases) * 100);
 }
 
+// استخراج الإحصائيات من HTML التقرير (كحل بديل إذا لم يُرجعها الـ API)
+function extractStatsFromHtml(html) {
+  if (!html) return { totalCases: 0, totalServices: 0, acceptedItems: 0, reviewItems: 0, docItems: 0 };
+  
+  // البحث عن عدد الحالات - "تم تحليل X حالة"
+  const casesMatch = html.match(/تم تحليل\s*(\d+)\s*حال/);
+  const totalCases = casesMatch ? parseInt(casesMatch[1]) : 0;
+  
+  // حساب البنود المقبولة والمرفوضة والتحذيرات من الجداول
+  let acceptedItems = 0;
+  let reviewItems = 0;
+  let docItems = 0;
+  
+  // عد ✅ مقبول
+  const acceptedMatches = html.match(/✅\s*مقبول/g);
+  acceptedItems = acceptedMatches ? acceptedMatches.length : 0;
+  
+  // عد 🚫 مرفوض (أخطاء طبية)
+  const rejectedMatches = html.match(/🚫\s*مرفوض/g);
+  reviewItems = rejectedMatches ? rejectedMatches.length : 0;
+  
+  // عد ⚠️ يحتاج توثيق (أخطاء توثيق)
+  const docMatches = html.match(/⚠️?\s*(يحتاج توثيق|تحتاج تعديل)/g);
+  docItems = docMatches ? docMatches.length : 0;
+  
+  // إذا لم نجد أي شيء، نحاول بطريقة أخرى
+  if (acceptedItems === 0 && reviewItems === 0) {
+    // البحث عن status-accepted و status-rejected
+    const statusAccepted = html.match(/status-accepted/g);
+    acceptedItems = statusAccepted ? statusAccepted.length : 0;
+    
+    const statusRejected = html.match(/status-rejected/g);
+    reviewItems = statusRejected ? statusRejected.length : 0;
+    
+    const statusWarning = html.match(/status-(warning|needs-correction)/g);
+    docItems = statusWarning ? statusWarning.length : 0;
+  }
+  
+  const totalServices = acceptedItems + reviewItems + docItems;
+  
+  console.log(`[extractStatsFromHtml] Cases: ${totalCases}, Services: ${totalServices}, Accepted: ${acceptedItems}, Review: ${reviewItems}, Doc: ${docItems}`);
+  
+  return {
+    totalCases: totalCases || 1,
+    totalServices: totalServices,
+    totalServiceItems: totalServices,
+    acceptedItems: acceptedItems,
+    reviewItems: reviewItems,
+    docItems: docItems
+  };
+}
+
 // تحميل سجل KPI من Firestore
 async function loadKpiHistory() {
   const kpiContainer = document.getElementById('kpiCumulativeCards');
@@ -4904,6 +4956,10 @@ analyzeBtn.addEventListener('click', async () => {
     // حفظ الإحصائيات من التحليل العادي لاستخدامها في KPI
     if (data.stats) {
       lastReportStats = data.stats;
+    } else if (data.html || data.htmlReport) {
+      // استخراج الإحصائيات من HTML إذا لم يُرجعها الـ API
+      lastReportStats = extractStatsFromHtml(data.html || data.htmlReport);
+      console.log('[Stats] Extracted from HTML:', lastReportStats);
     }
     
     if (data.success || data.htmlReport) {
