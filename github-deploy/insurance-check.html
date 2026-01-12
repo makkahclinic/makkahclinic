@@ -3439,7 +3439,7 @@ function extractAndApplyAIRatings(html) {
     // Method 2: Fallback - count approved/rejected/warning separately for each metric
     if (insuranceRatingValue === 0 || serviceRatingValue === 0) {
       const approvedCount = (plainText.match(/✅|مقبول(?!\s*لل)/gi) || []).length;
-      const rejectedCount = (plainText.match(/🚫|⛔|مرفوض/gi) || []).length;
+      const rejectedCount = (plainText.match(/🚫|⛔|❌|مرفوض/gi) || []).length;
       const warningCount = (plainText.match(/⚠️|يحتاج توثيق/gi) || []).length;
       
       const totalItems = approvedCount + rejectedCount + warningCount;
@@ -3954,7 +3954,7 @@ function highlightRejectedCells() {
   cells.forEach(cell => {
     const text = cell.textContent.trim();
     // Check for rejection keywords
-    if (text.includes('مرفوض') || text === 'مرفوض' || text.includes('🚫 مرفوض') || text.includes('⛔ مرفوض')) {
+    if (text.includes('مرفوض') || text === 'مرفوض' || text.includes('🚫 مرفوض') || text.includes('⛔ مرفوض') || text.includes('❌ مرفوض')) {
       cell.style.background = '#dc2626';
       cell.style.color = 'white';
       cell.style.fontWeight = 'bold';
@@ -4369,7 +4369,7 @@ analyzeBtn.addEventListener('click', async () => {
       `;
       
       // Sanitize HTML with DOMPurify for XSS protection - الحفاظ على التنسيق والجداول
-      const sanitizedHtml = typeof DOMPurify !== 'undefined' 
+      let sanitizedHtml = typeof DOMPurify !== 'undefined' 
         ? DOMPurify.sanitize(data.html, { 
             USE_PROFILES: { html: true },
             ALLOW_DATA_ATTR: true,
@@ -4381,6 +4381,14 @@ analyzeBtn.addEventListener('click', async () => {
             ADD_ATTR: ['style', 'class', 'id', 'border', 'cellpadding', 'cellspacing', 'colspan', 'rowspan', 'data-status', 'data-insurance-score','data-medical-score','data-insurance-rating','data-service-rating','data-case-id','data-claim-id']
           })
         : data.html;
+      
+      // Post-processing: استبدال رموز الصليب بالهلال/منع للتوافق الإسلامي
+      sanitizedHtml = sanitizedHtml
+        .replace(/❌\s*مرفوض/g, '🚫 مرفوض')
+        .replace(/❌\s*المشكلة/g, '🚫 المشكلة')
+        .replace(/❌\s*خطأ/g, '⛔ خطأ')
+        .replace(/❌\s*Rejected/gi, '🚫 Rejected')
+        .replace(/❌/g, '🚫'); // استبدال أي ❌ متبقية
       
       originalReport = printHeader + sanitizedHtml + printFooter;
       translatedReport = '';
@@ -5478,7 +5486,7 @@ function printAndTrack() {
   // Add visual status classes to status cells for printing
   document.querySelectorAll('#reportContent td').forEach(td => {
     const text = td.textContent;
-    if (text.includes('🚫') || text.includes('⛔') || text.includes('مرفوض')) {
+    if (text.includes('🚫') || text.includes('⛔') || text.includes('❌') || text.includes('مرفوض')) {
       td.classList.add('status-reject');
       td.setAttribute('data-status', 'rejected');
     } else if (text.includes('⚠️') || text.includes('يحتاج توثيق')) {
