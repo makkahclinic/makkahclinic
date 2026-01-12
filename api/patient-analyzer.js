@@ -1805,15 +1805,49 @@ Return HTML only, no markdown or code blocks.
   
   // Generate KPI Dashboard for multi-case report using structured case data
   let kpiDashboard = '';
+  
+  // ========== استخراج الإحصائيات من تقرير AI (مصدر الحقيقة) ==========
+  // عد البنود من HTML المولّد بدلاً من البيانات قبل التحليل
+  const aiGeneratedStats = {
+    approvedCount: 0,
+    rejectedCount: 0,
+    needsDocCount: 0
+  };
+  
   try {
-    // استخدام caseStats المحسوبة سابقاً (مصدر الحقيقة الوحيد)
-    // إضافة الدرجات المحسوبة
+    // عد ✅ مقبول من HTML
+    const approvedMatches = fullReport.match(/✅\s*مقبول/gi);
+    aiGeneratedStats.approvedCount = approvedMatches ? approvedMatches.length : 0;
+    
+    // عد 🚫 مرفوض من HTML
+    const rejectedMatches = fullReport.match(/🚫\s*مرفوض/gi);
+    aiGeneratedStats.rejectedCount = rejectedMatches ? rejectedMatches.length : 0;
+    
+    // عد ⚠️ يحتاج توثيق من HTML
+    const needsDocMatches = fullReport.match(/⚠️\s*يحتاج\s*توثيق/gi);
+    aiGeneratedStats.needsDocCount = needsDocMatches ? needsDocMatches.length : 0;
+    
+    console.log(`[AI Stats] Extracted from HTML: Approved=${aiGeneratedStats.approvedCount}, Rejected=${aiGeneratedStats.rejectedCount}, NeedsDoc=${aiGeneratedStats.needsDocCount}`);
+  } catch (e) {
+    console.error('[AI Stats] Error extracting:', e.message);
+  }
+  
+  // استخدام إحصائيات AI إذا متوفرة، وإلا استخدام caseStats
+  const finalApproved = aiGeneratedStats.approvedCount > 0 ? aiGeneratedStats.approvedCount : caseStats.approvedCount;
+  const finalRejected = aiGeneratedStats.rejectedCount > 0 ? aiGeneratedStats.rejectedCount : caseStats.rejectedCount;
+  const finalNeedsDoc = aiGeneratedStats.needsDocCount > 0 ? aiGeneratedStats.needsDocCount : caseStats.needsDocCount;
+  
+  try {
+    // تحديث caseStats بالقيم من AI
+    caseStats.approvedCount = finalApproved;
+    caseStats.rejectedCount = finalRejected;
+    caseStats.needsDocCount = finalNeedsDoc;
     caseStats.avgInsuranceScore = parseFloat(avgInsuranceScore) || structuredInsuranceScore;
     caseStats.avgMedicalScore = parseFloat(avgMedicalScore) || 7;
     
     const kpis = calculateKPIs(caseStats);
     kpiDashboard = generateKPIDashboardHTML(kpis, 'شهري');
-    console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10, Services: ${caseStats.totalServiceItems}, Duplicates: ${caseStats.duplicateCases}`);
+    console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10, Approved: ${finalApproved}, Rejected: ${finalRejected}, NeedsDoc: ${finalNeedsDoc}`);
   } catch (kpiErr) {
     console.error('[KPI] Error generating dashboard:', kpiErr.message);
   }
@@ -1822,15 +1856,15 @@ Return HTML only, no markdown or code blocks.
   const finalReportWithKPI = kpiDashboard ? fullReport + kpiDashboard : fullReport;
   
   // Return both HTML and structured stats for frontend aggregation
-  // Map field names: approvedCount->acceptedItems, rejectedCount->reviewItems, needsDocCount->docItems
+  // استخدام الإحصائيات المستخرجة من AI
   return res.status(200).json({ 
     htmlReport: finalReportWithKPI,
     stats: {
       totalCases: caseStats.totalCases || caseResults.length,
       totalServiceItems: caseStats.totalServiceItems || 0,
-      acceptedItems: caseStats.approvedCount || 0,
-      reviewItems: caseStats.rejectedCount || 0,
-      docItems: caseStats.needsDocCount || 0,
+      acceptedItems: finalApproved,
+      reviewItems: finalRejected,
+      docItems: finalNeedsDoc,
       duplicateCases: caseStats.duplicateCases || 0,
       avgInsuranceScore: caseStats.avgInsuranceScore || 0,
       avgMedicalScore: caseStats.avgMedicalScore || 0,
