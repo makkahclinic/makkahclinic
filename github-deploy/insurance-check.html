@@ -2622,18 +2622,18 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
   function generateFreshKPIDashboard(stats) {
     if (!stats) return '';
     
-    // Calculate average scores if we have the scoreSum
+    // Calculate average scores if we have the scoreSum - إلغاء القيم الافتراضية الوهمية
     const avgInsurance = stats.scoreSum?.count > 0 
       ? (stats.scoreSum.insurance / stats.scoreSum.count).toFixed(1) 
-      : '7.0';
+      : null;
     const avgMedical = stats.scoreSum?.count > 0 
       ? (stats.scoreSum.medical / stats.scoreSum.count).toFixed(1) 
-      : '7.0';
+      : null;
     
-    // Calculate acceptance rate
-    const totalItems = stats.totalServices || 1;
-    const acceptRate = totalItems > 0 ? Math.round((stats.acceptedItems / totalItems) * 100) : 80;
-    const vitalRate = stats.vitalSignsDocRate || 80;
+    // Calculate acceptance rate - المقام الموحد: مقبول + مرفوض + يحتاج توثيق
+    const totalItems = (stats.acceptedItems || 0) + (stats.reviewItems || 0) + (stats.docItems || 0);
+    const acceptRate = totalItems > 0 ? Math.round((stats.acceptedItems / totalItems) * 100) : null;
+    const vitalRate = stats.vitalSignsDocRate !== undefined ? stats.vitalSignsDocRate : null;
     
     return `
     <div style="margin-top:2rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);padding:1.5rem;border-radius:12px;">
@@ -2668,7 +2668,7 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
           </tr>
           <tr>
             <td style="padding:12px;border-bottom:1px solid #dee2e6;">🏥 توثيق العلامات الحيوية</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${vitalRate}%</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${vitalRate !== null ? vitalRate + '%' : 'غير متوفر'}</td>
           </tr>
         </tbody>
       </table>
@@ -2676,15 +2676,15 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
       <div style="display:flex;gap:1rem;margin-top:1rem;justify-content:center;flex-wrap:wrap;">
         <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
           <div style="font-size:0.9rem;color:#666;">معدل القبول</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:#16a34a;">${acceptRate}%</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:${acceptRate !== null ? '#16a34a' : '#6b7280'};">${acceptRate !== null ? acceptRate + '%' : 'غير متوفر'}</div>
         </div>
         <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
           <div style="font-size:0.9rem;color:#666;">تقييم الامتثال التأميني</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:#1e3a5f;">${avgInsurance}/10</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:${avgInsurance !== null ? '#1e3a5f' : '#6b7280'};">${avgInsurance !== null ? avgInsurance + '/10' : 'غير متوفر'}</div>
         </div>
         <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
           <div style="font-size:0.9rem;color:#666;">جودة التوثيق الطبي</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:#0b63c2;">${avgMedical}/10</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:${avgMedical !== null ? '#0b63c2' : '#6b7280'};">${avgMedical !== null ? avgMedical + '/10' : 'غير متوفر'}</div>
         </div>
       </div>
     </div>
@@ -3406,15 +3406,20 @@ function extractAndApplyAIRatings(html) {
       }
     }
     
-    // Clamp values to valid range 1-10
-    insuranceRatingValue = Math.max(1, Math.min(10, insuranceRatingValue || 1));
-    serviceRatingValue = Math.max(1, Math.min(10, serviceRatingValue || 1));
+    // Clamp values to valid range 1-10 فقط إذا كانت موجودة، وإلا تبقى 0 (غير متوفر)
+    if (insuranceRatingValue > 0) {
+      insuranceRatingValue = Math.max(1, Math.min(10, insuranceRatingValue));
+    }
+    if (serviceRatingValue > 0) {
+      serviceRatingValue = Math.max(1, Math.min(10, serviceRatingValue));
+    }
     
     console.log('AI Ratings extracted:', { insurance: insuranceRatingValue, service: serviceRatingValue, found: { ins: insuranceScores.length, svc: serviceScores.length } });
   } catch(e) {
     console.error('Error extracting AI ratings:', e);
-    insuranceRatingValue = 5;
-    serviceRatingValue = 5;
+    // لا نضع قيم افتراضية وهمية عند الخطأ
+    insuranceRatingValue = 0;
+    serviceRatingValue = 0;
   }
 }
 

@@ -18,11 +18,11 @@ export function calculateKPIs(reportStats) {
 
   const totalCases = reportStats.totalCases || 1;
 
-  // حساب نسبة قبول الإجراءات (الأدق) بدلاً من الحالات
-  const totalProcedures = (reportStats.approvedCount || 0) + (reportStats.rejectedCount || 0);
+  // حساب نسبة قبول الإجراءات - المقام الموحد: مقبول + مرفوض + يحتاج توثيق
+  const totalProcedures = (reportStats.approvedCount || 0) + (reportStats.rejectedCount || 0) + (reportStats.needsDocCount || 0);
   const procedureApprovalRate = totalProcedures > 0 
     ? (reportStats.approvedCount || 0) / totalProcedures 
-    : 0;
+    : null; // null يعني "غير متوفر" بدلاً من 0
   
   const needsDocRate = (reportStats.needsDocCount || 0) / totalCases;
   // استخدام نسبة التكرار المحسوبة من extractStatsFromCases (عدد الحالات بتكرار ÷ إجمالي الحالات)
@@ -35,7 +35,9 @@ export function calculateKPIs(reportStats) {
   } else {
     // حساب بديل إذا لم تتوفر التقييمات
     let insuranceScore = 10;
-    insuranceScore -= (1 - procedureApprovalRate) * 4;
+    if (procedureApprovalRate !== null) {
+      insuranceScore -= (1 - procedureApprovalRate) * 4;
+    }
     insuranceScore -= needsDocRate * 3;
     insuranceScore -= duplicateRate * 2;
     insuranceScore -= ivWithoutJustificationRate * 1;
@@ -43,7 +45,7 @@ export function calculateKPIs(reportStats) {
   }
   
   kpis.insuranceCompliance.details = [
-    { label: 'قبول الإجراءات', value: `${(procedureApprovalRate * 100).toFixed(0)}%`, target: '≥70%', status: procedureApprovalRate >= 0.7 ? 'good' : 'bad' },
+    { label: 'قبول الإجراءات', value: procedureApprovalRate !== null ? `${(procedureApprovalRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥70%', status: procedureApprovalRate !== null && procedureApprovalRate >= 0.7 ? 'good' : 'na' },
     { label: 'نسبة يحتاج توثيق', value: `${(needsDocRate * 100).toFixed(0)}%`, target: '<15%', status: needsDocRate < 0.15 ? 'good' : 'bad' },
     { label: 'نسبة التكرار', value: `${(duplicateRate * 100).toFixed(0)}%`, target: '<5%', status: duplicateRate < 0.05 ? 'good' : 'bad' },
     { label: 'IV بدون مبرر', value: `${(ivWithoutJustificationRate * 100).toFixed(0)}%`, target: '<10%', status: ivWithoutJustificationRate < 0.1 ? 'good' : 'bad' }
@@ -51,28 +53,48 @@ export function calculateKPIs(reportStats) {
 
   // 2. Medical Quality Score /10
   // Based on: antibiotic appropriateness, vital signs documentation, test ordering
-  const antibioticAppropriateRate = reportStats.antibioticAppropriate ? 
-    (reportStats.antibioticAppropriate / (reportStats.antibioticTotal || 1)) : 1;
-  const vitalsDocRate = reportStats.vitalsDocumented ? 
-    (reportStats.vitalsDocumented / totalCases) : 0.5;
-  const requiredTestsOrderedRate = reportStats.requiredTestsOrdered ?
-    (reportStats.requiredTestsOrdered / (reportStats.requiredTestsTotal || 1)) : 1;
+  // إلغاء القيم الافتراضية الوهمية - null يعني "غير متوفر"
+  const antibioticAppropriateRate = (reportStats.antibioticTotal && reportStats.antibioticTotal > 0)
+    ? (reportStats.antibioticAppropriate || 0) / reportStats.antibioticTotal 
+    : null; // لا توجد مضادات = غير قابل للحساب
+  const vitalsDocRate = reportStats.vitalsDocumented !== undefined
+    ? (reportStats.vitalsDocumented / totalCases) 
+    : null;
+  const requiredTestsOrderedRate = (reportStats.requiredTestsTotal && reportStats.requiredTestsTotal > 0)
+    ? (reportStats.requiredTestsOrdered || 0) / reportStats.requiredTestsTotal 
+    : null; // لا توجد فحوصات مطلوبة = غير قابل للحساب
 
   // استخدام متوسط تقييمات الذكاء الاصطناعي إن وجدت
   if (reportStats.avgMedicalScore && reportStats.avgMedicalScore > 0) {
     kpis.medicalQuality.score = parseFloat(reportStats.avgMedicalScore.toFixed(1));
   } else {
     let medicalScore = 10;
-    medicalScore -= (1 - antibioticAppropriateRate) * 4;
-    medicalScore -= (1 - vitalsDocRate) * 3;
-    medicalScore -= (1 - requiredTestsOrderedRate) * 3;
-    kpis.medicalQuality.score = Math.max(0, Math.min(10, parseFloat(medicalScore.toFixed(1))));
+    let penaltyCount = 0;
+    // خصم فقط للمؤشرات المتوفرة
+    if (antibioticAppropriateRate !== null) {
+      medicalScore -= (1 - antibioticAppropriateRate) * 4;
+      penaltyCount++;
+    }
+    if (vitalsDocRate !== null) {
+      medicalScore -= (1 - vitalsDocRate) * 3;
+      penaltyCount++;
+    }
+    if (requiredTestsOrderedRate !== null) {
+      medicalScore -= (1 - requiredTestsOrderedRate) * 3;
+      penaltyCount++;
+    }
+    // إذا لا توجد بيانات كافية، نُظهر تحذير
+    if (penaltyCount === 0) {
+      kpis.medicalQuality.score = null; // غير قابل للحساب
+    } else {
+      kpis.medicalQuality.score = Math.max(0, Math.min(10, parseFloat(medicalScore.toFixed(1))));
+    }
   }
 
   kpis.medicalQuality.details = [
-    { label: 'المضادات المناسبة', value: `${(antibioticAppropriateRate * 100).toFixed(0)}%`, target: '≥90%', status: antibioticAppropriateRate >= 0.9 ? 'good' : 'bad' },
-    { label: 'توثيق العلامات الحيوية', value: `${(vitalsDocRate * 100).toFixed(0)}%`, target: '≥95%', status: vitalsDocRate >= 0.95 ? 'good' : 'bad' },
-    { label: 'الفحوصات المطلوبة', value: `${(requiredTestsOrderedRate * 100).toFixed(0)}%`, target: '≥85%', status: requiredTestsOrderedRate >= 0.85 ? 'good' : 'bad' }
+    { label: 'المضادات المناسبة', value: antibioticAppropriateRate !== null ? `${(antibioticAppropriateRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥90%', status: antibioticAppropriateRate !== null && antibioticAppropriateRate >= 0.9 ? 'good' : 'na' },
+    { label: 'توثيق العلامات الحيوية', value: vitalsDocRate !== null ? `${(vitalsDocRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥95%', status: vitalsDocRate !== null && vitalsDocRate >= 0.95 ? 'good' : 'na' },
+    { label: 'الفحوصات المطلوبة', value: requiredTestsOrderedRate !== null ? `${(requiredTestsOrderedRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥85%', status: requiredTestsOrderedRate !== null && requiredTestsOrderedRate >= 0.85 ? 'good' : 'na' }
   ];
 
   // 3. Documentation Quality Score /10
@@ -91,12 +113,36 @@ export function calculateKPIs(reportStats) {
     { label: 'أكواد ICD موجودة', value: `${(icdCodeRate * 100).toFixed(0)}%`, target: '≥95%', status: icdCodeRate >= 0.95 ? 'good' : 'bad' }
   ];
 
-  // Overall Score (weighted average)
-  kpis.overallScore.score = parseFloat((
-    (kpis.insuranceCompliance.score * 0.4) +
-    (kpis.medicalQuality.score * 0.35) +
-    (kpis.documentationQuality.score * 0.25)
-  ).toFixed(1));
+  // Overall Score (weighted average) - التعامل مع القيم null
+  let totalWeight = 0;
+  let weightedSum = 0;
+  
+  if (kpis.insuranceCompliance.score !== null) {
+    weightedSum += kpis.insuranceCompliance.score * 0.4;
+    totalWeight += 0.4;
+  }
+  if (kpis.medicalQuality.score !== null) {
+    weightedSum += kpis.medicalQuality.score * 0.35;
+    totalWeight += 0.35;
+  }
+  if (kpis.documentationQuality.score !== null) {
+    weightedSum += kpis.documentationQuality.score * 0.25;
+    totalWeight += 0.25;
+  }
+  
+  // إذا كان هناك قسم واحد على الأقل متوفر، نحسب المتوسط المرجح المتناسب
+  if (totalWeight > 0) {
+    // نحسب المتوسط مع إعادة توزيع الأوزان على الأقسام المتوفرة فقط
+    kpis.overallScore.score = parseFloat((weightedSum / totalWeight).toFixed(1));
+  } else {
+    kpis.overallScore.score = null; // جميع الأقسام غير متوفرة
+  }
+  
+  // تتبع الأقسام غير المتوفرة
+  kpis.overallScore.missingPillars = [];
+  if (kpis.insuranceCompliance.score === null) kpis.overallScore.missingPillars.push('الامتثال التأميني');
+  if (kpis.medicalQuality.score === null) kpis.overallScore.missingPillars.push('الجودة الطبية');
+  if (kpis.documentationQuality.score === null) kpis.overallScore.missingPillars.push('جودة التوثيق');
 
   return kpis;
 }
@@ -109,6 +155,7 @@ export function calculateKPIs(reportStats) {
  */
 export function generateKPIDashboardHTML(kpis, period = 'شهري') {
   const getScoreColor = (score) => {
+    if (score === null || score === undefined) return '#6b7280'; // gray for N/A
     if (score >= 8) return '#22c55e'; // green
     if (score >= 6) return '#eab308'; // yellow
     if (score >= 4) return '#f97316'; // orange
@@ -116,21 +163,41 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
   };
 
   const getScoreEmoji = (score) => {
+    if (score === null || score === undefined) return '⚪';
     if (score >= 8) return '🟢';
     if (score >= 6) return '🟡';
     if (score >= 4) return '🟠';
     return '🔴';
   };
+  
+  // دالة مساعدة لعرض النتيجة
+  const formatScore = (score, max) => {
+    if (score === null || score === undefined) return 'غير متوفر';
+    return `${score}/${max}`;
+  };
 
   const getStatusBadge = (status) => {
-    return status === 'good' 
-      ? '<span style="background:#22c55e;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">✓ جيد</span>'
-      : '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">✗ يحتاج تحسين</span>';
+    if (status === 'good') {
+      return '<span style="background:#22c55e;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">✓ جيد</span>';
+    } else if (status === 'na') {
+      return '<span style="background:#6b7280;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">- غير متوفر</span>';
+    } else {
+      return '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">✗ يحتاج تحسين</span>';
+    }
   };
 
   // حساب الهدف الديناميكي - دائماً للأعلى
-  const currentScore = parseFloat(kpis.overallScore.score) || 0;
-  const targetScore = currentScore >= 9 ? 10.0 : currentScore >= 8 ? 9.0 : 8.0;
+  const currentScore = kpis.overallScore.score !== null ? parseFloat(kpis.overallScore.score) : null;
+  const targetScore = currentScore !== null ? (currentScore >= 9 ? 10.0 : currentScore >= 8 ? 9.0 : 8.0) : null;
+  
+  // نص الهدف
+  const targetText = currentScore !== null 
+    ? `التقييم ${period} - يمكن استهداف الرفع من ${currentScore} إلى ${targetScore}+ خلال 3 أشهر`
+    : `التقييم ${period} - البيانات غير كافية لحساب التقييم`;
+  
+  // عرض التقييم الإجمالي
+  const overallScoreDisplay = currentScore !== null ? currentScore : '—';
+  const overallScoreSubtext = currentScore !== null ? '/10' : 'غير متوفر';
 
   return `
 <div class="kpi-dashboard" style="background:linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); border-radius:16px; padding:24px; margin:20px 0; direction:rtl;">
@@ -139,15 +206,15 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
     <h2 style="color:#c9a962; margin:0 0 8px 0; font-size:24px;">
       📊 لوحة مؤشرات الأداء
     </h2>
-    <p style="color:#94a3b8; margin:0; font-size:14px;">التقييم ${period} - يمكن استهداف الرفع من ${kpis.overallScore.score} إلى ${targetScore}+ خلال 3 أشهر</p>
+    <p style="color:#94a3b8; margin:0; font-size:14px;">${targetText}</p>
   </div>
 
   <!-- Overall Score Circle -->
   <div style="text-align:center; margin-bottom:24px;">
     <div style="display:inline-block; width:120px; height:120px; border-radius:50%; background:linear-gradient(135deg, ${getScoreColor(kpis.overallScore.score)}22, ${getScoreColor(kpis.overallScore.score)}44); border:4px solid ${getScoreColor(kpis.overallScore.score)}; position:relative;">
       <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;">
-        <div style="font-size:32px; font-weight:bold; color:${getScoreColor(kpis.overallScore.score)};">${kpis.overallScore.score}</div>
-        <div style="font-size:12px; color:#94a3b8;">/10</div>
+        <div style="font-size:32px; font-weight:bold; color:${getScoreColor(kpis.overallScore.score)};">${overallScoreDisplay}</div>
+        <div style="font-size:12px; color:#94a3b8;">${overallScoreSubtext}</div>
       </div>
     </div>
     <div style="margin-top:8px; color:#e2e8f0; font-size:14px;">التقييم الإجمالي</div>
@@ -161,7 +228,7 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="color:#e2e8f0; margin:0; font-size:16px;">🏥 الامتثال التأميني</h3>
         <div style="font-size:24px; font-weight:bold; color:${getScoreColor(kpis.insuranceCompliance.score)};">
-          ${kpis.insuranceCompliance.score}/${kpis.insuranceCompliance.max}
+          ${formatScore(kpis.insuranceCompliance.score, kpis.insuranceCompliance.max)}
         </div>
       </div>
       <div style="font-size:13px;">
@@ -179,7 +246,7 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="color:#e2e8f0; margin:0; font-size:16px;">⚕️ الجودة الطبية</h3>
         <div style="font-size:24px; font-weight:bold; color:${getScoreColor(kpis.medicalQuality.score)};">
-          ${kpis.medicalQuality.score}/${kpis.medicalQuality.max}
+          ${formatScore(kpis.medicalQuality.score, kpis.medicalQuality.max)}
         </div>
       </div>
       <div style="font-size:13px;">
@@ -197,7 +264,7 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h3 style="color:#e2e8f0; margin:0; font-size:16px;">📝 جودة التوثيق</h3>
         <div style="font-size:24px; font-weight:bold; color:${getScoreColor(kpis.documentationQuality.score)};">
-          ${kpis.documentationQuality.score}/${kpis.documentationQuality.max}
+          ${formatScore(kpis.documentationQuality.score, kpis.documentationQuality.max)}
         </div>
       </div>
       <div style="font-size:13px;">
@@ -221,11 +288,19 @@ export function generateKPIDashboardHTML(kpis, period = 'شهري') {
   </div>
 
   <!-- Target Setting -->
+  ${currentScore !== null ? `
   <div style="margin-top:16px; padding:12px; background:rgba(34,197,94,0.1); border-radius:8px; text-align:center;">
     <span style="color:#22c55e; font-size:14px;">
-      🎯 الهدف: رفع التقييم الإجمالي من <strong>${kpis.overallScore.score}</strong> إلى <strong>${targetScore}</strong> خلال 3 أشهر
+      🎯 الهدف: رفع التقييم الإجمالي من <strong>${currentScore}</strong> إلى <strong>${targetScore}</strong> خلال 3 أشهر
     </span>
   </div>
+  ` : `
+  <div style="margin-top:16px; padding:12px; background:rgba(107,114,128,0.1); border-radius:8px; text-align:center;">
+    <span style="color:#9ca3af; font-size:14px;">
+      ⚠️ البيانات غير كافية لتحديد هدف رقمي - يرجى توفير بيانات كاملة
+    </span>
+  </div>
+  `}
 
 </div>`;
 }
@@ -496,10 +571,8 @@ export function extractStatsFromReport(htmlReport) {
   const caseMatches = htmlReport.match(/الحالة\s*#?\d+|Case\s*#?\d+/gi);
   stats.totalCases = caseMatches ? caseMatches.length : 1;
 
-  // For single-case reports, use reasonable defaults
-  stats.vitalsDocumented = 1;
-  stats.diagnosisSpecific = 1;
-  stats.approvedCount = 1;
+  // لا نضع قيم افتراضية وهمية - البيانات غير متوفرة
+  // vitalsDocumented, diagnosisSpecific, approvedCount تبقى صفر (غير معروفة)
 
   return stats;
 }
