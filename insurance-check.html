@@ -2461,6 +2461,73 @@ let translatedReport = '';
 let insuranceRatingValue = 0;
 let serviceRatingValue = 0;
 
+// ========== نظام الأذكار أثناء الانتظار ==========
+const ADHKAR_LIST = [
+  // أذكار وتسبيح
+  { right: 'سبحان الله', center: '🤲 سبّح الله وأنت تنتظر', left: 'الحمد لله' },
+  { right: 'الله أكبر', center: '🤲 كبّر الله وأنت تنتظر', left: 'لا إله إلا الله' },
+  { right: 'استغفر الله', center: '🤲 استغفر الله العظيم', left: 'سبحان الله وبحمده' },
+  { right: 'لا حول ولا قوة إلا بالله', center: '🤲 اذكر الله يذكرك', left: 'الحمد لله رب العالمين' },
+  // الصلاة على النبي ﷺ
+  { right: 'اللهم صل على محمد', center: '🕌 صلِّ على النبي ﷺ', left: 'وعلى آل محمد' },
+  { right: 'صلى الله عليه وسلم', center: '🕌 اللهم صل وسلم على نبينا محمد', left: 'وبارك عليه' },
+  { right: 'اللهم صل على سيدنا محمد', center: '🕌 وعلى آله وصحبه وسلم', left: 'تسليماً كثيراً' },
+  // أسماء الله الحسنى
+  { right: 'الله - الرحمن', center: '☪️ من أسماء الله الحسنى', left: 'الرحيم - الملك' },
+  { right: 'القدوس - السلام', center: '☪️ سبحان الله وبحمده', left: 'المؤمن - المهيمن' },
+  { right: 'العزيز - الجبار', center: '☪️ لا إله إلا الله', left: 'المتكبر - الخالق' },
+  { right: 'البارئ - المصور', center: '☪️ الله أكبر كبيراً', left: 'الغفار - القهار' },
+  { right: 'الوهاب - الرزاق', center: '☪️ والحمد لله كثيراً', left: 'الفتاح - العليم' },
+  { right: 'السميع - البصير', center: '☪️ تبارك الله أحسن الخالقين', left: 'الحكم - العدل' },
+  { right: 'اللطيف - الخبير', center: '☪️ هو الله الذي لا إله إلا هو', left: 'الحليم - العظيم' },
+  // أدعية متنوعة
+  { right: 'رب اغفر لي', center: '🤲 اللهم إني أسألك الجنة', left: 'رب زدني علماً' },
+  { right: 'حسبي الله ونعم الوكيل', center: '🤲 توكل على الله', left: 'اللهم يسّر ولا تعسّر' },
+  { right: 'لا إله إلا أنت سبحانك', center: '🤲 إني كنت من الظالمين', left: 'ربنا آتنا في الدنيا حسنة' }
+];
+let dhikrInterval = null;
+let dhikrIndex = 0;
+
+function startDhikrRotation() {
+  if (dhikrInterval) clearInterval(dhikrInterval);
+  dhikrIndex = 0;
+  
+  dhikrInterval = setInterval(() => {
+    dhikrIndex = (dhikrIndex + 1) % ADHKAR_LIST.length;
+    const dhikr = ADHKAR_LIST[dhikrIndex];
+    
+    const rightEl = document.querySelector('#dhikr-right div');
+    const centerEl = document.getElementById('dhikr-center');
+    const leftEl = document.querySelector('#dhikr-left div');
+    
+    if (rightEl) {
+      rightEl.style.animation = 'none';
+      rightEl.offsetHeight; // trigger reflow
+      rightEl.textContent = dhikr.right;
+      rightEl.style.animation = 'dhikrFade 3s infinite';
+    }
+    if (centerEl) {
+      centerEl.style.animation = 'none';
+      centerEl.offsetHeight;
+      centerEl.textContent = dhikr.center;
+      centerEl.style.animation = 'dhikrFade 3s infinite';
+    }
+    if (leftEl) {
+      leftEl.style.animation = 'none';
+      leftEl.offsetHeight;
+      leftEl.textContent = dhikr.left;
+      leftEl.style.animation = 'dhikrFade 3s infinite ease-in-out 1.5s';
+    }
+  }, 4000); // تبديل كل 4 ثوانٍ
+}
+
+function stopDhikrRotation() {
+  if (dhikrInterval) {
+    clearInterval(dhikrInterval);
+    dhikrInterval = null;
+  }
+}
+
 // Batch Processing Configuration
 const BATCH_SIZE = 15; // Maximum cases per batch (reduced to avoid timeout - each case takes ~1-2 seconds)
 const BATCH_DELAY_MS = 1000; // Delay between batches to avoid rate limits
@@ -2622,18 +2689,18 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
   function generateFreshKPIDashboard(stats) {
     if (!stats) return '';
     
-    // Calculate average scores if we have the scoreSum
+    // Calculate average scores if we have the scoreSum - إلغاء القيم الافتراضية الوهمية
     const avgInsurance = stats.scoreSum?.count > 0 
       ? (stats.scoreSum.insurance / stats.scoreSum.count).toFixed(1) 
-      : '7.0';
+      : null;
     const avgMedical = stats.scoreSum?.count > 0 
       ? (stats.scoreSum.medical / stats.scoreSum.count).toFixed(1) 
-      : '7.0';
+      : null;
     
-    // Calculate acceptance rate
-    const totalItems = stats.totalServices || 1;
-    const acceptRate = totalItems > 0 ? Math.round((stats.acceptedItems / totalItems) * 100) : 80;
-    const vitalRate = stats.vitalSignsDocRate || 80;
+    // Calculate acceptance rate - المقام الموحد: مقبول + مرفوض + يحتاج توثيق
+    const totalItems = (stats.acceptedItems || 0) + (stats.reviewItems || 0) + (stats.docItems || 0);
+    const acceptRate = totalItems > 0 ? Math.round((stats.acceptedItems / totalItems) * 100) : null;
+    const vitalRate = stats.vitalSignsDocRate !== undefined ? stats.vitalSignsDocRate : null;
     
     return `
     <div style="margin-top:2rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);padding:1.5rem;border-radius:12px;">
@@ -2659,7 +2726,7 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
             <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#155724;font-weight:bold;">${stats.acceptedItems}</td>
           </tr>
           <tr style="background:#f8d7da;">
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;">❌ بنود تحتاج مراجعة</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;">🚫 بنود تحتاج مراجعة</td>
             <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#721c24;font-weight:bold;">${stats.reviewItems}</td>
           </tr>
           <tr style="background:#fff3cd;">
@@ -2668,7 +2735,7 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
           </tr>
           <tr>
             <td style="padding:12px;border-bottom:1px solid #dee2e6;">🏥 توثيق العلامات الحيوية</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${vitalRate}%</td>
+            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${vitalRate !== null ? vitalRate + '%' : 'غير متوفر'}</td>
           </tr>
         </tbody>
       </table>
@@ -2676,15 +2743,15 @@ function combineReports(reports, totalCases, aggregatedStats = null) {
       <div style="display:flex;gap:1rem;margin-top:1rem;justify-content:center;flex-wrap:wrap;">
         <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
           <div style="font-size:0.9rem;color:#666;">معدل القبول</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:#16a34a;">${acceptRate}%</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:${acceptRate !== null ? '#16a34a' : '#6b7280'};">${acceptRate !== null ? acceptRate + '%' : 'غير متوفر'}</div>
         </div>
         <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
           <div style="font-size:0.9rem;color:#666;">تقييم الامتثال التأميني</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:#1e3a5f;">${avgInsurance}/10</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:${avgInsurance !== null ? '#1e3a5f' : '#6b7280'};">${avgInsurance !== null ? avgInsurance + '/10' : 'غير متوفر'}</div>
         </div>
         <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
           <div style="font-size:0.9rem;color:#666;">جودة التوثيق الطبي</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:#0b63c2;">${avgMedical}/10</div>
+          <div style="font-size:1.5rem;font-weight:bold;color:${avgMedical !== null ? '#0b63c2' : '#6b7280'};">${avgMedical !== null ? avgMedical + '/10' : 'غير متوفر'}</div>
         </div>
       </div>
     </div>
@@ -3372,7 +3439,7 @@ function extractAndApplyAIRatings(html) {
     // Method 2: Fallback - count approved/rejected/warning separately for each metric
     if (insuranceRatingValue === 0 || serviceRatingValue === 0) {
       const approvedCount = (plainText.match(/✅|مقبول(?!\s*لل)/gi) || []).length;
-      const rejectedCount = (plainText.match(/❌|مرفوض/gi) || []).length;
+      const rejectedCount = (plainText.match(/🚫|⛔|❌|مرفوض/gi) || []).length;
       const warningCount = (plainText.match(/⚠️|يحتاج توثيق/gi) || []).length;
       
       const totalItems = approvedCount + rejectedCount + warningCount;
@@ -3406,15 +3473,20 @@ function extractAndApplyAIRatings(html) {
       }
     }
     
-    // Clamp values to valid range 1-10
-    insuranceRatingValue = Math.max(1, Math.min(10, insuranceRatingValue || 1));
-    serviceRatingValue = Math.max(1, Math.min(10, serviceRatingValue || 1));
+    // Clamp values to valid range 1-10 فقط إذا كانت موجودة، وإلا تبقى 0 (غير متوفر)
+    if (insuranceRatingValue > 0) {
+      insuranceRatingValue = Math.max(1, Math.min(10, insuranceRatingValue));
+    }
+    if (serviceRatingValue > 0) {
+      serviceRatingValue = Math.max(1, Math.min(10, serviceRatingValue));
+    }
     
     console.log('AI Ratings extracted:', { insurance: insuranceRatingValue, service: serviceRatingValue, found: { ins: insuranceScores.length, svc: serviceScores.length } });
   } catch(e) {
     console.error('Error extracting AI ratings:', e);
-    insuranceRatingValue = 5;
-    serviceRatingValue = 5;
+    // لا نضع قيم افتراضية وهمية عند الخطأ
+    insuranceRatingValue = 0;
+    serviceRatingValue = 0;
   }
 }
 
@@ -3882,7 +3954,7 @@ function highlightRejectedCells() {
   cells.forEach(cell => {
     const text = cell.textContent.trim();
     // Check for rejection keywords
-    if (text.includes('مرفوض') || text === 'مرفوض' || text.includes('❌ مرفوض')) {
+    if (text.includes('مرفوض') || text === 'مرفوض' || text.includes('🚫 مرفوض') || text.includes('⛔ مرفوض') || text.includes('❌ مرفوض')) {
       cell.style.background = '#dc2626';
       cell.style.color = 'white';
       cell.style.fontWeight = 'bold';
@@ -4034,56 +4106,70 @@ analyzeBtn.addEventListener('click', async () => {
         const estimatedMinutes = Math.ceil((remainingCases * estimatedTimePerCase) / 60);
         
         statusText.innerHTML = `
-          <div style="text-align:center;padding:1rem;">
+          <div style="display:flex;align-items:stretch;gap:0.5rem;padding:0.5rem;">
             <style>
               @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.1);} }
-              @keyframes fadeIn { from{opacity:0;transform:scale(0.8);} to{opacity:1;transform:scale(1);} }
+              @keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
               @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
               @keyframes glow { 0%,100%{box-shadow:0 0 5px #c9a962;} 50%{box-shadow:0 0 20px #c9a962;} }
-              @keyframes dots { 0%{content:'.';} 33%{content:'..';} 66%{content:'...';} }
+              @keyframes dhikrFade { 0%,100%{opacity:0.6;} 50%{opacity:1;} }
             </style>
-            <div style="font-size:1.3rem;color:#c9a962;font-weight:bold;margin-bottom:1rem;">🔬 مرحلة التحليل</div>
             
-            <!-- Batch boxes visualization -->
-            <div style="display:flex;justify-content:center;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;">
-              ${allBatches.map((b, idx) => {
-                const status = idx < i ? '✓' : (idx === i ? '⚡' : (idx + 1));
-                const bg = idx < i ? '#0d5c2e' : (idx === i ? '#c9a962' : '#1e3a5f');
-                const border = idx === i ? '#fff' : '#c9a962';
-                const anim = idx === i ? 'animation:glow 1s infinite;' : '';
-                return `<div style="width:45px;height:45px;background:${bg};border:2px solid ${border};border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.9rem;font-weight:bold;${anim}">${status}</div>`;
-              }).join('')}
+            <!-- ذكر الجانب الأيمن -->
+            <div id="dhikr-right" style="flex:0 0 80px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;text-orientation:mixed;background:linear-gradient(180deg,rgba(201,169,98,0.15),rgba(201,169,98,0.05));border-radius:12px;padding:0.5rem;border:1px solid rgba(201,169,98,0.3);">
+              <div style="color:#c9a962;font-size:1rem;font-weight:bold;animation:dhikrFade 3s infinite;text-align:center;">سبحان الله</div>
             </div>
             
-            <!-- Current batch info -->
-            <div style="background:rgba(201,169,98,0.2);border:2px solid #c9a962;border-radius:12px;padding:1rem;margin-bottom:1rem;">
-              <div style="font-size:1.1rem;color:#fff;margin-bottom:0.5rem;">
-                <span style="animation:spin 2s linear infinite;display:inline-block;">⚙️</span>
-                جاري تحليل الدفعة <strong style="color:#c9a962;">${batchNum}</strong> من <strong>${allBatches.length}</strong>
+            <!-- المحتوى الرئيسي -->
+            <div style="flex:1;text-align:center;padding:0.5rem;">
+              <div style="font-size:1.3rem;color:#c9a962;font-weight:bold;margin-bottom:1rem;">🔬 مرحلة التحليل</div>
+              
+              <!-- Batch boxes visualization -->
+              <div style="display:flex;justify-content:center;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;">
+                ${allBatches.map((b, idx) => {
+                  const status = idx < i ? '✓' : (idx === i ? '⚡' : (idx + 1));
+                  const bg = idx < i ? '#0d5c2e' : (idx === i ? '#c9a962' : '#1e3a5f');
+                  const border = idx === i ? '#fff' : '#c9a962';
+                  const anim = idx === i ? 'animation:glow 1s infinite;' : '';
+                  return `<div style="width:45px;height:45px;background:${bg};border:2px solid ${border};border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.9rem;font-weight:bold;${anim}">${status}</div>`;
+                }).join('')}
               </div>
-              <div style="color:#a0aec0;font-size:0.9rem;">${batch.caseCount} حالة في هذه الدفعة</div>
-              <div style="color:#ffd700;font-size:0.8rem;margin-top:0.5rem;">
-                ⏱️ الوقت المتبقي التقريبي: ~${estimatedMinutes} دقيقة
+              
+              <!-- Current batch info -->
+              <div style="background:rgba(201,169,98,0.2);border:2px solid #c9a962;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+                <div style="font-size:1.1rem;color:#fff;margin-bottom:0.5rem;">
+                  <span style="animation:spin 2s linear infinite;display:inline-block;">⚙️</span>
+                  جاري تحليل الدفعة <strong style="color:#c9a962;">${batchNum}</strong> من <strong>${allBatches.length}</strong>
+                </div>
+                <div style="color:#a0aec0;font-size:0.9rem;">${batch.caseCount} حالة في هذه الدفعة</div>
+                <div style="color:#ffd700;font-size:0.8rem;margin-top:0.5rem;">
+                  ⏱️ الوقت المتبقي التقريبي: ~${estimatedMinutes} دقيقة
+                </div>
               </div>
+              
+              <!-- أذكار متحركة -->
+              <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.75rem;margin-bottom:1rem;">
+                <div id="dhikr-center" style="color:#4ade80;font-size:1.1rem;font-weight:bold;animation:dhikrFade 3s infinite;">
+                  🤲 اذكر الله وأنت تنتظر
+                </div>
+              </div>
+              
+              <!-- Progress bar -->
+              <div style="background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;margin-bottom:0.5rem;">
+                <div style="background:linear-gradient(90deg,#c9a962,#ffd700);height:100%;width:${progress}%;transition:width 0.5s;border-radius:10px;"></div>
+              </div>
+              <div style="color:#a0aec0;font-size:0.85rem;">${processedCases} من ${totalCases} حالة مكتملة</div>
             </div>
             
-            <!-- Processing indicator -->
-            <div style="background:rgba(46,204,113,0.2);border:1px solid #2ecc71;border-radius:8px;padding:0.5rem;margin-bottom:1rem;">
-              <div style="color:#2ecc71;font-size:0.85rem;">
-                📋 يتم تحليل كل حالة بشكل منفصل...
-              </div>
-              <div style="color:#ffd700;font-size:0.8rem;margin-top:0.3rem;">
-                كن صبوراً - العملية قد تستغرق بضع دقائق
-              </div>
+            <!-- ذكر الجانب الأيسر -->
+            <div id="dhikr-left" style="flex:0 0 80px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-lr;text-orientation:mixed;background:linear-gradient(180deg,rgba(201,169,98,0.15),rgba(201,169,98,0.05));border-radius:12px;padding:0.5rem;border:1px solid rgba(201,169,98,0.3);">
+              <div style="color:#c9a962;font-size:1rem;font-weight:bold;animation:dhikrFade 3s infinite ease-in-out 1.5s;text-align:center;">الحمد لله</div>
             </div>
-            
-            <!-- Progress bar -->
-            <div style="background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;margin-bottom:0.5rem;">
-              <div style="background:linear-gradient(90deg,#c9a962,#ffd700);height:100%;width:${progress}%;transition:width 0.5s;border-radius:10px;"></div>
-            </div>
-            <div style="color:#a0aec0;font-size:0.85rem;">${processedCases} من ${totalCases} حالة مكتملة</div>
           </div>
         `;
+        
+        // تفعيل تبديل الأذكار
+        startDhikrRotation();
         
         try {
           // For text batches: only send textContent (the sliced portion)
@@ -4156,6 +4242,9 @@ analyzeBtn.addEventListener('click', async () => {
           // Continue with next batch
         }
       }
+      
+      // إيقاف الأذكار عند انتهاء التحليل
+      stopDhikrRotation();
       
       // PHASE 3: Show combining animation
       if (allReports.length > 0) {
@@ -4280,7 +4369,7 @@ analyzeBtn.addEventListener('click', async () => {
       `;
       
       // Sanitize HTML with DOMPurify for XSS protection - الحفاظ على التنسيق والجداول
-      const sanitizedHtml = typeof DOMPurify !== 'undefined' 
+      let sanitizedHtml = typeof DOMPurify !== 'undefined' 
         ? DOMPurify.sanitize(data.html, { 
             USE_PROFILES: { html: true },
             ALLOW_DATA_ATTR: true,
@@ -4292,6 +4381,14 @@ analyzeBtn.addEventListener('click', async () => {
             ADD_ATTR: ['style', 'class', 'id', 'border', 'cellpadding', 'cellspacing', 'colspan', 'rowspan', 'data-status', 'data-insurance-score','data-medical-score','data-insurance-rating','data-service-rating','data-case-id','data-claim-id']
           })
         : data.html;
+      
+      // Post-processing: استبدال رموز الصليب بالهلال/منع للتوافق الإسلامي
+      sanitizedHtml = sanitizedHtml
+        .replace(/❌\s*مرفوض/g, '🚫 مرفوض')
+        .replace(/❌\s*المشكلة/g, '🚫 المشكلة')
+        .replace(/❌\s*خطأ/g, '⛔ خطأ')
+        .replace(/❌\s*Rejected/gi, '🚫 Rejected')
+        .replace(/❌/g, '🚫'); // استبدال أي ❌ متبقية
       
       originalReport = printHeader + sanitizedHtml + printFooter;
       translatedReport = '';
@@ -4321,6 +4418,7 @@ analyzeBtn.addEventListener('click', async () => {
 
   } catch (err) {
     console.error('Analysis error:', err);
+    stopDhikrRotation(); // إيقاف الأذكار عند حدوث خطأ
     // Determine error type and provide helpful message
     let errorTitle = 'حدث خطأ';
     let errorMsg = 'خطأ غير معروف';
@@ -5287,7 +5385,7 @@ function showCustomAlert(message, type = 'info') {
   
   const icons = {
     success: '✅',
-    error: '❌',
+    error: '⛔',
     warning: '⚠️',
     info: 'ℹ️'
   };
@@ -5388,7 +5486,7 @@ function printAndTrack() {
   // Add visual status classes to status cells for printing
   document.querySelectorAll('#reportContent td').forEach(td => {
     const text = td.textContent;
-    if (text.includes('❌') || text.includes('مرفوض')) {
+    if (text.includes('🚫') || text.includes('⛔') || text.includes('❌') || text.includes('مرفوض')) {
       td.classList.add('status-reject');
       td.setAttribute('data-status', 'rejected');
     } else if (text.includes('⚠️') || text.includes('يحتاج توثيق')) {
