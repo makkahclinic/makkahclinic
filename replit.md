@@ -36,6 +36,12 @@ I prefer clear and concise communication. When making changes, prioritize iterat
 - **Calibration Log (`calibration.html`)**: System for tracking equipment calibration.
 - **Complaint Management**: Includes a complaint submission form (`report.html`) and a system for analysis and follow-up (`complaint_analysis.html`).
 - **Digital Quality Center (`mega.html`)**: A centralized hub for quality-related documentation and processes.
+- **Insurance Audit System**: Advanced RBAC system with Gemini AI for generating tri-layer insurance audit reports (CDI, NPHIES, Clinical Guidelines).
+  - **Dual-Track Scoring System**: Fair evaluation differentiating between medical errors and documentation gaps:
+    - **Clinician Fairness Score**: Lenient on documentation gaps (weight: -1), strict on medical errors (weight: -5 to -8)
+    - **Insurance Defense Score**: Strict on all issues for strong defense against insurance companies
+    - **Official Score**: 60% Insurance Defense + 40% Clinician Fairness
+  - **Transparent Deduction Ledger**: Shows all penalties with classifications and actual contribution to official score
 
 ## External Dependencies
 
