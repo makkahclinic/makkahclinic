@@ -2398,11 +2398,11 @@
             <canvas id="casesChart" style="max-height: 280px;"></canvas>
           </div>
           
-          <!-- Bar Chart for Ratings -->
+          <!-- Bar Chart for Quality Metrics -->
           <div class="chart-container" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; padding: 25px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
             <h4 style="color: #c9a962; margin: 0 0 20px 0; font-size: 1.2rem; text-align: center;">
               <i class="fas fa-star" style="margin-left: 8px;"></i>
-              تقييمات الأداء (من 10)
+              مؤشرات الجودة (%)
             </h4>
             <canvas id="ratingsChart" style="max-height: 280px;"></canvas>
           </div>
@@ -2412,9 +2412,9 @@
               <tr>
                 <th>الطبيب</th>
                 <th>عدد الحالات</th>
-                <th>معايير التأمين</th>
+                <th>جودة التوثيق</th>
                 <th>جودة الخدمات</th>
-                <th>المتوسط</th>
+                <th>أهلية المريض</th>
                 <th>الحالة</th>
                 <th>آخر مراجعة</th>
               </tr>
@@ -3791,18 +3791,23 @@ function renderDoctorStats(doctors) {
   
   // Render table
   doctors.forEach(doc => {
-    const avgRating = parseFloat(doc.avgOverallRating) || 0;
+    const docQ = parseFloat(doc.avgDocQuality || doc.avgInsuranceRating) || 0;
+    const medQ = parseFloat(doc.avgMedicalQuality || doc.avgServiceRating) || 0;
+    const eligQ = parseFloat(doc.avgEligibility || doc.avgOverallRating) || 0;
+    const avgRating = (docQ + medQ + eligQ) / 3;
+    
     let badgeClass = 'rating-needs';
-    if (avgRating >= 8) badgeClass = 'rating-excellent';
-    else if (avgRating >= 5) badgeClass = 'rating-good';
+    if (avgRating >= 90) badgeClass = 'rating-excellent';
+    else if (avgRating >= 70) badgeClass = 'rating-good';
+    else if (avgRating >= 50) badgeClass = 'rating-good';
     
     const row = document.createElement('tr');
     row.innerHTML = `
       <td><strong>${doc.doctorName}</strong></td>
       <td>${doc.totalCases}</td>
-      <td>${doc.avgInsuranceRating}/10</td>
-      <td>${doc.avgServiceRating}/10</td>
-      <td><strong>${doc.avgOverallRating}/10</strong></td>
+      <td>${docQ.toFixed(1)}%</td>
+      <td>${medQ.toFixed(1)}%</td>
+      <td><strong>${eligQ.toFixed(1)}%</strong></td>
       <td><span class="rating-badge ${badgeClass}">${doc.status}</span></td>
       <td>${doc.lastCaseDate || '-'}</td>
     `;
@@ -3824,8 +3829,9 @@ function renderDoctorsChart(doctors) {
   
   const labels = doctors.map(d => d.doctorName);
   const casesData = doctors.map(d => parseInt(d.totalCases) || 0);
-  const insuranceData = doctors.map(d => Math.min(Math.max(parseFloat(d.avgInsuranceRating) || 0, 0), 10));
-  const serviceData = doctors.map(d => Math.min(Math.max(parseFloat(d.avgServiceRating) || 0, 0), 10));
+  const docQualityData = doctors.map(d => Math.min(Math.max(parseFloat(d.avgDocQuality || d.avgInsuranceRating) || 0, 0), 100));
+  const medicalQualityData = doctors.map(d => Math.min(Math.max(parseFloat(d.avgMedicalQuality || d.avgServiceRating) || 0, 0), 100));
+  const eligibilityData = doctors.map(d => Math.min(Math.max(parseFloat(d.avgEligibility || d.avgOverallRating) || 0, 0), 100));
   const maxCases = Math.max(...casesData, 5);
   
   // === رسم بياني عدد الحالات ===
@@ -3881,7 +3887,7 @@ function renderDoctorsChart(doctors) {
     });
   }
   
-  // === رسم بياني التقييمات ===
+  // === رسم بياني مؤشرات الجودة الثلاثة ===
   const ratingsCtx = document.getElementById('ratingsChart');
   if (ratingsCtx) {
     if (ratingsChartInstance) ratingsChartInstance.destroy();
@@ -3892,16 +3898,24 @@ function renderDoctorsChart(doctors) {
         labels: labels,
         datasets: [
           {
-            label: 'معايير التأمين',
-            data: insuranceData,
+            label: 'جودة التوثيق',
+            data: docQualityData,
+            backgroundColor: 'rgba(201, 169, 98, 0.9)',
+            borderColor: '#c9a962',
+            borderWidth: 0,
+            borderRadius: 6
+          },
+          {
+            label: 'جودة الخدمات الطبية',
+            data: medicalQualityData,
             backgroundColor: 'rgba(34, 197, 94, 0.9)',
             borderColor: '#22c55e',
             borderWidth: 0,
             borderRadius: 6
           },
           {
-            label: 'جودة الخدمات',
-            data: serviceData,
+            label: 'أهلية المريض',
+            data: eligibilityData,
             backgroundColor: 'rgba(59, 130, 246, 0.9)',
             borderColor: '#3b82f6',
             borderWidth: 0,
@@ -3934,7 +3948,7 @@ function renderDoctorsChart(doctors) {
             borderColor: '#c9a962',
             borderWidth: 1,
             callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}/10`
+              label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%`
             }
           }
         },
@@ -3945,11 +3959,12 @@ function renderDoctorsChart(doctors) {
           },
           y: {
             min: 0,
-            max: 10,
+            max: 100,
             ticks: { 
               color: '#94a3b8', 
               font: { family: 'Tajawal', size: 10 },
-              stepSize: 2
+              stepSize: 20,
+              callback: value => value + '%'
             },
             grid: { color: 'rgba(148, 163, 184, 0.1)' }
           }
