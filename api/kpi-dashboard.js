@@ -1,7 +1,34 @@
 /**
  * لوحة مؤشرات الأداء الشهرية (KPI Dashboard)
- * تحويل تقييمات التقارير إلى مؤشرات قابلة للقياس
+ * نظام تقييم ثنائي المسار: عدالة الطبيب + دفاع تأميني
  */
+
+/**
+ * تصنيف الأخطاء وأوزانها
+ */
+const ERROR_WEIGHTS = {
+  // ❌ أخطاء طبية فعلية (خطورة عالية)
+  medical_error: {
+    label: 'خطأ طبي',
+    weight: -2.0,
+    color: '#dc2626',
+    examples: ['IV بدون مبرر طبي', 'دواء غير مناسب للتشخيص', 'جرعة خاطئة']
+  },
+  // ⚠️ نقص توثيق (قابل للإصلاح)
+  documentation_gap: {
+    label: 'نقص توثيق',
+    weight: -0.5,
+    color: '#f59e0b',
+    examples: ['تشخيص غير محدد', 'علامات حيوية ناقصة', 'ICD ينتهي بـ .9']
+  },
+  // ✅ مقبول
+  compliant: {
+    label: 'مقبول',
+    weight: 0,
+    color: '#22c55e',
+    examples: ['إجراء مبرر', 'توثيق كامل']
+  }
+};
 
 /**
  * حساب مؤشرات الأداء من نتائج التقرير
@@ -13,7 +40,11 @@ export function calculateKPIs(reportStats) {
     insuranceCompliance: { score: 0, max: 10, details: [] },
     medicalQuality: { score: 0, max: 10, details: [] },
     documentationQuality: { score: 0, max: 10, details: [] },
-    overallScore: { score: 0, max: 10 }
+    overallScore: { score: 0, max: 10 },
+    // ========== النظام الجديد: ثنائي المسار ==========
+    clinicianFairness: { score: 0, max: 10, details: [] },   // درجة عدالة الطبيب
+    insuranceDefense: { score: 0, max: 10, details: [] },    // درجة الدفاع التأميني
+    deductionLedger: []  // جدول الخصومات الشفاف
   };
 
   const totalCases = reportStats.totalCases || 1;
@@ -155,6 +186,118 @@ export function calculateKPIs(reportStats) {
   if (kpis.insuranceCompliance.score === null) kpis.overallScore.missingPillars.push('الامتثال التأميني');
   if (kpis.medicalQuality.score === null) kpis.overallScore.missingPillars.push('الجودة الطبية');
   if (kpis.documentationQuality.score === null) kpis.overallScore.missingPillars.push('جودة التوثيق');
+
+  // ========== النظام الجديد: ثنائي المسار ==========
+  // تصنيف الأخطاء: medical_error (أخطاء طبية) vs documentation_gap (نقص توثيق)
+  
+  const totalProceduresForDual = (reportStats.approvedCount || 0) + (reportStats.rejectedCount || 0) + (reportStats.needsDocCount || 0);
+  
+  // افتراض: البنود المرفوضة = أخطاء طبية، البنود التي تحتاج توثيق = نقص توثيق
+  const medicalErrors = reportStats.rejectedCount || 0;
+  const docGaps = reportStats.needsDocCount || 0;
+  const compliantItems = reportStats.approvedCount || 0;
+  
+  // معدلات الأخطاء
+  const medicalErrorRate = totalProceduresForDual > 0 ? medicalErrors / totalProceduresForDual : 0;
+  const docGapRate = totalProceduresForDual > 0 ? docGaps / totalProceduresForDual : 0;
+  
+  // IV بدون مبرر (خطأ طبي إضافي)
+  const ivWithoutJustCount = reportStats.ivWithoutJustification || 0;
+  const ivRate = totalCases > 0 ? ivWithoutJustCount / totalCases : 0;
+  
+  // تشخيص غير محدد (نقص توثيق)
+  const nonSpecificDiagRate = 1 - diagnosisSpecificityRate;
+  
+  // ========== جدول الخصومات الشفاف ==========
+  const deductions = [];
+  
+  // خصومات الأخطاء الطبية (وزن عالي)
+  if (medicalErrorRate > 0) {
+    deductions.push({
+      type: 'medical_error',
+      label: '❌ إجراءات مرفوضة طبياً',
+      rate: `${(medicalErrorRate * 100).toFixed(0)}%`,
+      deduction: parseFloat((medicalErrorRate * 3).toFixed(1)),
+      color: '#dc2626'
+    });
+  }
+  
+  if (ivRate > 0) {
+    deductions.push({
+      type: 'medical_error',
+      label: '❌ IV بدون مبرر طبي',
+      rate: `${(ivRate * 100).toFixed(0)}%`,
+      deduction: parseFloat((ivRate * 2).toFixed(1)),
+      color: '#dc2626'
+    });
+  }
+  
+  // خصومات نقص التوثيق (وزن منخفض)
+  if (docGapRate > 0) {
+    deductions.push({
+      type: 'documentation_gap',
+      label: '⚠️ بنود تحتاج توثيق',
+      rate: `${(docGapRate * 100).toFixed(0)}%`,
+      deduction: parseFloat((docGapRate * 1).toFixed(1)),
+      color: '#f59e0b'
+    });
+  }
+  
+  if (nonSpecificDiagRate > 0.1) {
+    deductions.push({
+      type: 'documentation_gap',
+      label: '⚠️ تشخيص غير محدد',
+      rate: `${(nonSpecificDiagRate * 100).toFixed(0)}%`,
+      deduction: parseFloat((nonSpecificDiagRate * 1.5).toFixed(1)),
+      color: '#f59e0b'
+    });
+  }
+  
+  kpis.deductionLedger = deductions;
+  
+  // ========== 1. درجة عدالة الطبيب (Clinician Fairness) ==========
+  // لا يُعاقب بشدة على نقص التوثيق
+  let fairnessScore = 10;
+  
+  // خصم الأخطاء الطبية بالكامل
+  fairnessScore -= medicalErrorRate * 3;
+  fairnessScore -= ivRate * 2;
+  
+  // خصم نقص التوثيق بشكل مخفف (50% من الوزن)
+  fairnessScore -= docGapRate * 0.5;
+  fairnessScore -= Math.min(nonSpecificDiagRate * 0.5, 1); // حد أقصى -1
+  
+  kpis.clinicianFairness.score = Math.max(0, Math.min(10, parseFloat(fairnessScore.toFixed(1))));
+  kpis.clinicianFairness.details = [
+    { label: 'أخطاء طبية', value: `${medicalErrors}`, impact: 'عالي', status: medicalErrors === 0 ? 'good' : 'bad' },
+    { label: 'نقص توثيق', value: `${docGaps}`, impact: 'منخفض', status: docGaps <= 1 ? 'good' : 'warning' },
+    { label: 'IV بدون مبرر', value: `${ivWithoutJustCount}`, impact: 'عالي', status: ivWithoutJustCount === 0 ? 'good' : 'bad' }
+  ];
+  
+  // ========== 2. درجة الدفاع التأميني (Insurance Defense) ==========
+  // تبرير قوي أمام شركات التأمين
+  let defenseScore = 10;
+  
+  // خصم الأخطاء الطبية بشكل كامل (شركات التأمين صارمة)
+  defenseScore -= medicalErrorRate * 4;
+  defenseScore -= ivRate * 3;
+  
+  // خصم نقص التوثيق (يؤثر على المطالبات)
+  defenseScore -= docGapRate * 2;
+  defenseScore -= nonSpecificDiagRate * 2;
+  
+  kpis.insuranceDefense.score = Math.max(0, Math.min(10, parseFloat(defenseScore.toFixed(1))));
+  kpis.insuranceDefense.details = [
+    { label: 'قبول الإجراءات', value: `${(procedureApprovalRate !== null ? procedureApprovalRate * 100 : 0).toFixed(0)}%`, target: '≥70%', status: procedureApprovalRate !== null && procedureApprovalRate >= 0.7 ? 'good' : 'bad' },
+    { label: 'توثيق كامل', value: `${((1 - docGapRate) * 100).toFixed(0)}%`, target: '≥90%', status: docGapRate < 0.1 ? 'good' : 'bad' },
+    { label: 'تشخيص محدد', value: `${(diagnosisSpecificityRate * 100).toFixed(0)}%`, target: '≥80%', status: diagnosisSpecificityRate >= 0.8 ? 'good' : 'bad' }
+  ];
+  
+  // ========== الدرجة الرسمية المجمعة ==========
+  // 60% دفاع تأميني + 40% عدالة الطبيب
+  const officialScore = (kpis.insuranceDefense.score * 0.6) + (kpis.clinicianFairness.score * 0.4);
+  kpis.overallScore.score = parseFloat(officialScore.toFixed(1));
+  kpis.overallScore.formula = '60% دفاع تأميني + 40% عدالة الطبيب';
 
   return kpis;
 }
