@@ -2902,73 +2902,133 @@ function countCasesInContent(textContent) {
 function combineReports(reports, totalCases, aggregatedStats = null) {
   if (reports.length === 0) return '';
   
-  // Generate a fresh KPI dashboard with correct aggregated stats
+  // Generate a fresh KPI dashboard with all 10 metrics + definitions
   function generateFreshKPIDashboard(stats) {
     if (!stats) return '';
     
-    // Calculate average scores if we have the scoreSum - إلغاء القيم الافتراضية الوهمية
-    const avgInsurance = stats.scoreSum?.count > 0 
-      ? (stats.scoreSum.insurance / stats.scoreSum.count).toFixed(1) 
-      : null;
-    const avgMedical = stats.scoreSum?.count > 0 
-      ? (stats.scoreSum.medical / stats.scoreSum.count).toFixed(1) 
-      : null;
-    
-    // Calculate acceptance rate - المقام الموحد: مقبول + مرفوض + يحتاج توثيق
-    const totalItems = (stats.acceptedItems || 0) + (stats.reviewItems || 0) + (stats.docItems || 0);
-    const acceptRate = totalItems > 0 ? Math.round((stats.acceptedItems / totalItems) * 100) : null;
+    // Calculate all 10 metrics
+    const totalCases = stats.totalCases || 0;
+    const totalServices = stats.totalServices || 0;
+    const acceptedItems = stats.acceptedItems || 0;
+    const reviewItems = stats.reviewItems || 0;
+    const docItems = stats.docItems || 0;
     const vitalRate = stats.vitalSignsDocRate !== undefined ? stats.vitalSignsDocRate : null;
     
+    // Calculate percentage-based metrics
+    const docQuality = totalServices > 0 
+      ? Math.round(((totalServices - docItems) / totalServices) * 100) 
+      : null;
+    const medicalQuality = totalServices > 0 
+      ? Math.round(((totalServices - reviewItems) / totalServices) * 100) 
+      : null;
+    const eligibility = totalCases > 0 
+      ? Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100) 
+      : null;
+    
+    // Calculate score out of 10
+    const docQualityScore = docQuality !== null ? (docQuality / 10).toFixed(1) : null;
+    
+    // Helper for status color
+    const getStatusColor = (val) => {
+      if (val === null) return '#6b7280';
+      if (val >= 90) return '#16a34a';
+      if (val >= 70) return '#0ea5e9';
+      if (val >= 50) return '#f59e0b';
+      return '#dc2626';
+    };
+    
     return `
-    <div style="margin-top:2rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);padding:1.5rem;border-radius:12px;">
-      <h3 style="color:#fff;text-align:center;margin:0 0 1rem;border:none;">📊 الملخص النهائي للتقرير</h3>
+    <div style="margin-top:2rem;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%);padding:1.5rem;border-radius:12px;page-break-inside:avoid;">
+      <h3 style="color:#fff;text-align:center;margin:0 0 1rem;border:none;">📊 ملخص مؤشرات الجودة الشامل</h3>
       
-      <table style="width:100%;background:#fff;border-radius:8px;overflow:hidden;border-collapse:collapse;">
+      <!-- جدول الإحصائيات الأساسية -->
+      <table style="width:100%;background:#fff;border-radius:8px;overflow:hidden;border-collapse:collapse;margin-bottom:1rem;">
         <thead>
           <tr style="background:#1e3a5f;">
-            <th colspan="2" style="color:#fff;padding:12px;text-align:center;font-size:1.1rem;">إحصائيات الحالات والخدمات</th>
+            <th colspan="2" style="color:#fff;padding:10px;text-align:center;font-size:1rem;">📋 إحصائيات الحالات والخدمات</th>
           </tr>
         </thead>
         <tbody>
           <tr style="background:#f8f9fa;">
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;font-weight:bold;">📋 إجمالي الحالات (المطالبات)</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;font-size:1.2rem;font-weight:bold;color:#1e3a5f;">${stats.totalCases}</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;font-weight:bold;width:60%;">1️⃣ إجمالي الحالات (المطالبات)</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;font-size:1.1rem;font-weight:bold;color:#1e3a5f;">${totalCases}</td>
           </tr>
           <tr>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;">📄 إجمالي بنود الخدمة في Excel</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${stats.totalServices}</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">2️⃣ إجمالي بنود الخدمة</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;font-weight:bold;">${totalServices}</td>
           </tr>
           <tr style="background:#d4edda;">
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;">✅ بنود مقبولة (تقدير أولي)</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#155724;font-weight:bold;">${stats.acceptedItems}</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">3️⃣ بنود مقبولة (تقدير أولي)</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;color:#155724;font-weight:bold;">${acceptedItems}</td>
           </tr>
           <tr style="background:#f8d7da;">
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;">🚫 بنود تحتاج مراجعة</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#721c24;font-weight:bold;">${stats.reviewItems}</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">4️⃣ بنود تحتاج مراجعة (أخطاء طبية)</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;color:#721c24;font-weight:bold;">${reviewItems}</td>
           </tr>
           <tr style="background:#fff3cd;">
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;">⚠️ بنود تحتاج توثيق</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;color:#856404;font-weight:bold;">${stats.docItems}</td>
-          </tr>
-          <tr>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;">🏥 توثيق العلامات الحيوية</td>
-            <td style="padding:12px;border-bottom:1px solid #dee2e6;text-align:center;">${vitalRate !== null ? vitalRate + '%' : 'غير متوفر'}</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">5️⃣ بنود تحتاج توثيق</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;color:#856404;font-weight:bold;">${docItems}</td>
           </tr>
         </tbody>
       </table>
-      
-      <div style="display:flex;gap:1rem;margin-top:1rem;justify-content:center;flex-wrap:wrap;">
-        <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
-          <div style="font-size:0.9rem;color:#666;">معدل القبول</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:${acceptRate !== null ? '#16a34a' : '#6b7280'};">${acceptRate !== null ? acceptRate + '%' : 'غير متوفر'}</div>
+
+      <!-- جدول مؤشرات الجودة النسبية -->
+      <table style="width:100%;background:#fff;border-radius:8px;overflow:hidden;border-collapse:collapse;margin-bottom:1rem;">
+        <thead>
+          <tr style="background:#c9a962;">
+            <th colspan="2" style="color:#1e3a5f;padding:10px;text-align:center;font-size:1rem;">📈 مؤشرات الجودة النسبية</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:#f8f9fa;">
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;width:60%;">6️⃣ توثيق العلامات الحيوية</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;font-weight:bold;color:${getStatusColor(vitalRate)};">${vitalRate !== null ? vitalRate + '%' : 'غير متوفر'}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">7️⃣ جودة التوثيق الطبي</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;font-weight:bold;color:${getStatusColor(docQuality)};">${docQualityScore !== null ? docQualityScore + ' / 10' : 'غير متوفر'}</td>
+          </tr>
+          <tr style="background:#f8f9fa;">
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">8️⃣ تغطية استحقاق المريض</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;font-weight:bold;color:${getStatusColor(eligibility)};">${eligibility !== null ? eligibility + '%' : 'غير متوفر'}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">9️⃣ جودة الخدمات الطبية</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;font-weight:bold;color:${getStatusColor(medicalQuality)};">${medicalQuality !== null ? medicalQuality + '%' : 'غير متوفر'}</td>
+          </tr>
+          <tr style="background:#f8f9fa;">
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;">🔟 جودة التوثيق التأميني</td>
+            <td style="padding:10px;border-bottom:1px solid #dee2e6;text-align:center;font-weight:bold;color:${getStatusColor(docQuality)};">${docQuality !== null ? docQuality + '%' : 'غير متوفر'}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- بطاقات الملخص السريع -->
+      <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;margin-bottom:1rem;">
+        <div style="background:linear-gradient(135deg,#16a34a,#15803d);padding:0.75rem 1rem;border-radius:8px;text-align:center;min-width:120px;color:#fff;">
+          <div style="font-size:0.8rem;opacity:0.9;">جودة الخدمات</div>
+          <div style="font-size:1.3rem;font-weight:bold;">${medicalQuality !== null ? medicalQuality + '%' : '-'}</div>
         </div>
-        <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
-          <div style="font-size:0.9rem;color:#666;">تقييم الامتثال التأميني</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:${avgInsurance !== null ? '#1e3a5f' : '#6b7280'};">${avgInsurance !== null ? avgInsurance + '/10' : 'غير متوفر'}</div>
+        <div style="background:linear-gradient(135deg,#c9a962,#b8963a);padding:0.75rem 1rem;border-radius:8px;text-align:center;min-width:120px;color:#1e3a5f;">
+          <div style="font-size:0.8rem;">جودة التوثيق</div>
+          <div style="font-size:1.3rem;font-weight:bold;">${docQuality !== null ? docQuality + '%' : '-'}</div>
         </div>
-        <div style="background:#fff;padding:1rem;border-radius:8px;text-align:center;min-width:150px;">
-          <div style="font-size:0.9rem;color:#666;">جودة التوثيق الطبي</div>
-          <div style="font-size:1.5rem;font-weight:bold;color:${avgMedical !== null ? '#0b63c2' : '#6b7280'};">${avgMedical !== null ? avgMedical + '/10' : 'غير متوفر'}</div>
+        <div style="background:linear-gradient(135deg,#0ea5e9,#0284c7);padding:0.75rem 1rem;border-radius:8px;text-align:center;min-width:120px;color:#fff;">
+          <div style="font-size:0.8rem;opacity:0.9;">استحقاق المريض</div>
+          <div style="font-size:1.3rem;font-weight:bold;">${eligibility !== null ? eligibility + '%' : '-'}</div>
+        </div>
+      </div>
+
+      <!-- تعريفات المؤشرات -->
+      <div style="background:#fff;border-radius:8px;padding:1rem;font-size:0.85rem;color:#374151;">
+        <h4 style="color:#1e3a5f;margin:0 0 0.75rem;font-size:0.95rem;border-bottom:2px solid #c9a962;padding-bottom:0.5rem;">📖 تعريف المؤشرات</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0.5rem;">
+          <div><strong>1-5:</strong> إحصائيات عددية للحالات والبنود</div>
+          <div><strong>6:</strong> نسبة الحالات الموثقة بعلامات حيوية</div>
+          <div><strong>7:</strong> (البنود الموثقة ÷ الإجمالي) × 10</div>
+          <div><strong>8:</strong> نسبة المرضى المؤهلين تأمينياً</div>
+          <div><strong>9:</strong> (البنود بدون أخطاء ÷ الإجمالي) × 100</div>
+          <div><strong>10:</strong> (البنود الموثقة تأمينياً ÷ الإجمالي) × 100</div>
         </div>
       </div>
     </div>
@@ -5349,21 +5409,25 @@ async function saveAndLog() {
     // Save HTML to Drive
     console.log('📤 Sending save request to Google Apps Script...');
     
-    // حساب المعايير الثلاثة من إحصائيات التقرير
+    // استخراج الـ 10 مؤشرات من إحصائيات التقرير
     const stats = lastReportStats || {};
-    const totalServices = stats.totalServices || 0;
     const totalCases = stats.totalCases || 0;
+    const totalServices = stats.totalServices || 0;
+    const acceptedItems = stats.acceptedItems || 0;
+    const reviewItems = stats.reviewItems || 0;
+    const docItems = stats.docItems || 0;
+    const vitalSignsRate = stats.vitalSignsDocRate || 0;
     
-    // إذا لم تكن هناك بيانات كافية، نترك القيم فارغة
+    // حساب المؤشرات النسبية
     const docQuality = totalServices > 0 
-      ? Math.round(((totalServices - (stats.docItems || 0)) / totalServices) * 100) 
-      : null;
+      ? Math.round(((totalServices - docItems) / totalServices) * 100) 
+      : 0;
     const medicalQuality = totalServices > 0 
-      ? Math.round(((totalServices - (stats.reviewItems || 0)) / totalServices) * 100) 
-      : null;
+      ? Math.round(((totalServices - reviewItems) / totalServices) * 100) 
+      : 0;
     const eligibility = totalCases > 0 
-      ? Math.round(((totalCases - (stats.rejectedCases || 0)) / totalCases) * 100) 
-      : null;
+      ? Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100) 
+      : 0;
     
     const saveData = {
       action: 'logUsageAndSaveHTML',
@@ -5372,6 +5436,13 @@ async function saveAndLog() {
       doctorName: doctorName,
       caseType: 'مراجعة تأمين',
       filesCount: filesState.length,
+      // الـ 10 مؤشرات الكاملة
+      totalCases: totalCases,
+      totalServices: totalServices,
+      acceptedItems: acceptedItems,
+      reviewItems: reviewItems,
+      docItems: docItems,
+      vitalSignsRate: vitalSignsRate,
       docQuality: docQuality,
       medicalQuality: medicalQuality,
       eligibility: eligibility,

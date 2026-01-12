@@ -153,27 +153,45 @@ function setupSheets() {
     permSheet.getRange(1, 1, 1, 6).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
   }
   
-  // ورقة سجل الاستخدام
+  // ورقة سجل الاستخدام - مع الـ 10 مؤشرات الكاملة
   let logSheet = ss.getSheetByName('InsuranceUsageLog');
+  const logHeaders = [
+    'timestamp', 'userEmail', 'userName', 'doctorName', 'caseType', 'filesCount',
+    'totalCases', 'totalServices', 'acceptedItems', 'reviewItems', 'docItems',
+    'vitalSignsRate', 'docQuality', 'medicalQuality', 'eligibility',
+    'reportLink', 'notes'
+  ];
   if (!logSheet) {
     logSheet = ss.insertSheet('InsuranceUsageLog');
-    logSheet.appendRow([
-      'timestamp', 'userEmail', 'userName', 'doctorName', 'caseType',
-      'filesCount', 'docQuality', 'medicalQuality', 'eligibility',
-      'reportLink', 'notes'
-    ]);
-    logSheet.getRange(1, 1, 1, 11).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
+    logSheet.appendRow(logHeaders);
+    logSheet.getRange(1, 1, 1, logHeaders.length).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
+  } else {
+    // تحديث الهيدرز إذا كانت قديمة
+    const existingHeaders = logSheet.getRange(1, 1, 1, logSheet.getLastColumn()).getValues()[0];
+    if (existingHeaders.length < logHeaders.length || existingHeaders[6] !== 'totalCases') {
+      logSheet.getRange(1, 1, 1, logHeaders.length).setValues([logHeaders]);
+      logSheet.getRange(1, 1, 1, logHeaders.length).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
+    }
   }
   
-  // ورقة إحصائيات الأطباء
+  // ورقة إحصائيات الأطباء - مع الـ 10 مؤشرات
   let statsSheet = ss.getSheetByName('DoctorStats');
+  const statsHeaders = [
+    'doctorName', 'totalReports', 'sumCases', 'sumServices', 'sumAccepted', 
+    'sumReview', 'sumDoc', 'avgVitalRate', 'avgDocQuality', 'avgMedicalQuality',
+    'avgEligibility', 'lastCaseDate', 'folderLink', 'status'
+  ];
   if (!statsSheet) {
     statsSheet = ss.insertSheet('DoctorStats');
-    statsSheet.appendRow([
-      'doctorName', 'totalCases', 'avgDocQuality', 'avgMedicalQuality',
-      'avgEligibility', 'lastCaseDate', 'folderLink', 'status'
-    ]);
-    statsSheet.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
+    statsSheet.appendRow(statsHeaders);
+    statsSheet.getRange(1, 1, 1, statsHeaders.length).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
+  } else {
+    // تحديث الهيدرز إذا كانت قديمة
+    const existingHeaders = statsSheet.getRange(1, 1, 1, statsSheet.getLastColumn()).getValues()[0];
+    if (existingHeaders.length < statsHeaders.length || existingHeaders[2] !== 'sumCases') {
+      statsSheet.getRange(1, 1, 1, statsHeaders.length).setValues([statsHeaders]);
+      statsSheet.getRange(1, 1, 1, statsHeaders.length).setFontWeight('bold').setBackground('#1e3a5f').setFontColor('white');
+    }
   }
   
   // ورقة المهام - NEW
@@ -349,7 +367,7 @@ function createUserFolder(name, email) {
 }
 
 /**
- * تسجيل استخدام الخدمة
+ * تسجيل استخدام الخدمة - مع الـ 10 مؤشرات الكاملة
  */
 function logInsuranceUsage(params) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -361,6 +379,14 @@ function logInsuranceUsage(params) {
   }
   
   const timestamp = new Date();
+  
+  // استخراج الـ 10 مؤشرات
+  const totalCases = parseInt(params.totalCases) || 0;
+  const totalServices = parseInt(params.totalServices) || 0;
+  const acceptedItems = parseInt(params.acceptedItems) || 0;
+  const reviewItems = parseInt(params.reviewItems) || 0;
+  const docItems = parseInt(params.docItems) || 0;
+  const vitalSignsRate = parseFloat(params.vitalSignsRate) || 0;
   const docQuality = parseFloat(params.docQuality) || 0;
   const medicalQuality = parseFloat(params.medicalQuality) || 0;
   const eligibility = parseFloat(params.eligibility) || 0;
@@ -372,6 +398,12 @@ function logInsuranceUsage(params) {
     params.doctorName || '',
     params.caseType || '',
     params.filesCount || 0,
+    totalCases,
+    totalServices,
+    acceptedItems,
+    reviewItems,
+    docItems,
+    vitalSignsRate,
     docQuality,
     medicalQuality,
     eligibility,
@@ -379,17 +411,23 @@ function logInsuranceUsage(params) {
     params.notes || ''
   ]);
   
-  // تحديث إحصائيات الطبيب
-  updateDoctorStats(params.doctorName, docQuality, medicalQuality, eligibility, params.reportLink);
+  // تحديث إحصائيات الطبيب مع كل المؤشرات
+  updateDoctorStats(params.doctorName, {
+    totalCases, totalServices, acceptedItems, reviewItems, docItems,
+    vitalSignsRate, docQuality, medicalQuality, eligibility
+  });
   
   return { success: true, message: 'تم تسجيل الاستخدام بنجاح' };
 }
 
 /**
- * تحديث إحصائيات الطبيب - المعايير الثلاثة: جودة التوثيق، جودة الخدمات الطبية، أهلية المريض
+ * تحديث إحصائيات الطبيب - مع الـ 10 مؤشرات الكاملة
+ * الهيدرز: doctorName, totalReports, sumCases, sumServices, sumAccepted, 
+ *          sumReview, sumDoc, avgVitalRate, avgDocQuality, avgMedicalQuality,
+ *          avgEligibility, lastCaseDate, folderLink, status
  */
-function updateDoctorStats(doctorName, docQuality, medicalQuality, eligibility, reportLink) {
-  if (!doctorName) return;
+function updateDoctorStats(doctorName, stats) {
+  if (!doctorName || !stats) return;
   
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let statsSheet = ss.getSheetByName('DoctorStats');
@@ -413,49 +451,67 @@ function updateDoctorStats(doctorName, docQuality, medicalQuality, eligibility, 
   const timestamp = new Date();
   const formattedDate = Utilities.formatDate(timestamp, 'Asia/Riyadh', 'yyyy-MM-dd HH:mm');
   
+  // حساب الحالة بناءً على متوسط المؤشرات الثلاثة الرئيسية
+  function getStatus(docQ, medQ, elig) {
+    const avg = (docQ + medQ + elig) / 3;
+    if (avg >= 90) return 'ممتاز';
+    if (avg >= 70) return 'جيد جداً';
+    if (avg >= 50) return 'جيد';
+    return 'يحتاج تحسين';
+  }
+  
   if (doctorRow > 0) {
-    // تحديث الطبيب الموجود
-    const currentCases = parseInt(data[doctorRow - 1][1]) || 0;
-    const currentDocQuality = parseFloat(data[doctorRow - 1][2]) || 0;
-    const currentMedicalQuality = parseFloat(data[doctorRow - 1][3]) || 0;
-    const currentEligibility = parseFloat(data[doctorRow - 1][4]) || 0;
+    // تحديث الطبيب الموجود - جمع القيم التراكمية
+    const currentReports = parseInt(data[doctorRow - 1][1]) || 0;
+    const currentSumCases = parseInt(data[doctorRow - 1][2]) || 0;
+    const currentSumServices = parseInt(data[doctorRow - 1][3]) || 0;
+    const currentSumAccepted = parseInt(data[doctorRow - 1][4]) || 0;
+    const currentSumReview = parseInt(data[doctorRow - 1][5]) || 0;
+    const currentSumDoc = parseInt(data[doctorRow - 1][6]) || 0;
+    const currentVitalRate = parseFloat(data[doctorRow - 1][7]) || 0;
+    const currentDocQuality = parseFloat(data[doctorRow - 1][8]) || 0;
+    const currentMedicalQuality = parseFloat(data[doctorRow - 1][9]) || 0;
+    const currentEligibility = parseFloat(data[doctorRow - 1][10]) || 0;
     
-    const newCases = currentCases + 1;
-    const newDocQuality = ((currentDocQuality * currentCases + docQuality) / newCases).toFixed(1);
-    const newMedicalQuality = ((currentMedicalQuality * currentCases + medicalQuality) / newCases).toFixed(1);
-    const newEligibility = ((currentEligibility * currentCases + eligibility) / newCases).toFixed(1);
+    const newReports = currentReports + 1;
+    const newSumCases = currentSumCases + (stats.totalCases || 0);
+    const newSumServices = currentSumServices + (stats.totalServices || 0);
+    const newSumAccepted = currentSumAccepted + (stats.acceptedItems || 0);
+    const newSumReview = currentSumReview + (stats.reviewItems || 0);
+    const newSumDoc = currentSumDoc + (stats.docItems || 0);
     
-    // تحديد الحالة بناءً على متوسط المعايير الثلاثة
-    const avgQuality = (parseFloat(newDocQuality) + parseFloat(newMedicalQuality) + parseFloat(newEligibility)) / 3;
-    let status = 'ممتاز';
-    if (avgQuality < 50) status = 'يحتاج تحسين';
-    else if (avgQuality < 70) status = 'جيد';
-    else if (avgQuality < 90) status = 'جيد جداً';
+    // حساب المتوسطات (معدل متحرك)
+    const newVitalRate = ((currentVitalRate * currentReports + (stats.vitalSignsRate || 0)) / newReports).toFixed(1);
+    const newDocQuality = ((currentDocQuality * currentReports + (stats.docQuality || 0)) / newReports).toFixed(1);
+    const newMedicalQuality = ((currentMedicalQuality * currentReports + (stats.medicalQuality || 0)) / newReports).toFixed(1);
+    const newEligibility = ((currentEligibility * currentReports + (stats.eligibility || 0)) / newReports).toFixed(1);
     
-    statsSheet.getRange(doctorRow, 2).setValue(newCases);
-    statsSheet.getRange(doctorRow, 3).setValue(newDocQuality);
-    statsSheet.getRange(doctorRow, 4).setValue(newMedicalQuality);
-    statsSheet.getRange(doctorRow, 5).setValue(newEligibility);
-    statsSheet.getRange(doctorRow, 6).setValue(formattedDate);
-    statsSheet.getRange(doctorRow, 8).setValue(status);
+    const status = getStatus(parseFloat(newDocQuality), parseFloat(newMedicalQuality), parseFloat(newEligibility));
+    
+    // تحديث الصف
+    statsSheet.getRange(doctorRow, 2, 1, 13).setValues([[
+      newReports, newSumCases, newSumServices, newSumAccepted, newSumReview, newSumDoc,
+      newVitalRate, newDocQuality, newMedicalQuality, newEligibility,
+      formattedDate, data[doctorRow - 1][12] || '', status
+    ]]);
     
   } else {
     // إضافة طبيب جديد
-    const avgQuality = (docQuality + medicalQuality + eligibility) / 3;
-    let status = 'ممتاز';
-    if (avgQuality < 50) status = 'يحتاج تحسين';
-    else if (avgQuality < 70) status = 'جيد';
-    else if (avgQuality < 90) status = 'جيد جداً';
-    
-    // إنشاء مجلد للطبيب
     const folderUrl = createDoctorFolder(doctorName);
+    const status = getStatus(stats.docQuality || 0, stats.medicalQuality || 0, stats.eligibility || 0);
     
     statsSheet.appendRow([
       doctorName,
       1,
-      docQuality,
-      medicalQuality,
-      eligibility,
+      stats.totalCases || 0,
+      stats.totalServices || 0,
+      stats.acceptedItems || 0,
+      stats.reviewItems || 0,
+      stats.docItems || 0,
+      stats.vitalSignsRate || 0,
+      stats.docQuality || 0,
+      stats.medicalQuality || 0,
+      stats.eligibility || 0,
       formattedDate,
       folderUrl || '',
       status
