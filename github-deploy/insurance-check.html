@@ -2461,6 +2461,60 @@ let translatedReport = '';
 let insuranceRatingValue = 0;
 let serviceRatingValue = 0;
 
+// ========== نظام الأذكار أثناء الانتظار ==========
+const ADHKAR_LIST = [
+  { right: 'سبحان الله', center: '🤲 سبّح الله وأنت تنتظر', left: 'الحمد لله' },
+  { right: 'الله أكبر', center: '🤲 كبّر الله وأنت تنتظر', left: 'لا إله إلا الله' },
+  { right: 'استغفر الله', center: '🤲 استغفر الله العظيم', left: 'سبحان الله وبحمده' },
+  { right: 'لا حول ولا قوة إلا بالله', center: '🤲 اذكر الله يذكرك', left: 'الحمد لله رب العالمين' },
+  { right: 'سبحان الله العظيم', center: '🤲 سبحان الله وبحمده', left: 'اللهم صل على محمد' },
+  { right: 'رب اغفر لي', center: '🤲 اللهم إني أسألك الجنة', left: 'رب زدني علماً' },
+  { right: 'حسبي الله ونعم الوكيل', center: '🤲 توكل على الله', left: 'اللهم يسّر ولا تعسّر' },
+  { right: 'لا إله إلا أنت سبحانك', center: '🤲 إني كنت من الظالمين', left: 'ربنا آتنا في الدنيا حسنة' }
+];
+let dhikrInterval = null;
+let dhikrIndex = 0;
+
+function startDhikrRotation() {
+  if (dhikrInterval) clearInterval(dhikrInterval);
+  dhikrIndex = 0;
+  
+  dhikrInterval = setInterval(() => {
+    dhikrIndex = (dhikrIndex + 1) % ADHKAR_LIST.length;
+    const dhikr = ADHKAR_LIST[dhikrIndex];
+    
+    const rightEl = document.querySelector('#dhikr-right div');
+    const centerEl = document.getElementById('dhikr-center');
+    const leftEl = document.querySelector('#dhikr-left div');
+    
+    if (rightEl) {
+      rightEl.style.animation = 'none';
+      rightEl.offsetHeight; // trigger reflow
+      rightEl.textContent = dhikr.right;
+      rightEl.style.animation = 'dhikrFade 3s infinite';
+    }
+    if (centerEl) {
+      centerEl.style.animation = 'none';
+      centerEl.offsetHeight;
+      centerEl.textContent = dhikr.center;
+      centerEl.style.animation = 'dhikrFade 3s infinite';
+    }
+    if (leftEl) {
+      leftEl.style.animation = 'none';
+      leftEl.offsetHeight;
+      leftEl.textContent = dhikr.left;
+      leftEl.style.animation = 'dhikrFade 3s infinite ease-in-out 1.5s';
+    }
+  }, 4000); // تبديل كل 4 ثوانٍ
+}
+
+function stopDhikrRotation() {
+  if (dhikrInterval) {
+    clearInterval(dhikrInterval);
+    dhikrInterval = null;
+  }
+}
+
 // Batch Processing Configuration
 const BATCH_SIZE = 15; // Maximum cases per batch (reduced to avoid timeout - each case takes ~1-2 seconds)
 const BATCH_DELAY_MS = 1000; // Delay between batches to avoid rate limits
@@ -4039,56 +4093,70 @@ analyzeBtn.addEventListener('click', async () => {
         const estimatedMinutes = Math.ceil((remainingCases * estimatedTimePerCase) / 60);
         
         statusText.innerHTML = `
-          <div style="text-align:center;padding:1rem;">
+          <div style="display:flex;align-items:stretch;gap:0.5rem;padding:0.5rem;">
             <style>
               @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.1);} }
-              @keyframes fadeIn { from{opacity:0;transform:scale(0.8);} to{opacity:1;transform:scale(1);} }
+              @keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
               @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
               @keyframes glow { 0%,100%{box-shadow:0 0 5px #c9a962;} 50%{box-shadow:0 0 20px #c9a962;} }
-              @keyframes dots { 0%{content:'.';} 33%{content:'..';} 66%{content:'...';} }
+              @keyframes dhikrFade { 0%,100%{opacity:0.6;} 50%{opacity:1;} }
             </style>
-            <div style="font-size:1.3rem;color:#c9a962;font-weight:bold;margin-bottom:1rem;">🔬 مرحلة التحليل</div>
             
-            <!-- Batch boxes visualization -->
-            <div style="display:flex;justify-content:center;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;">
-              ${allBatches.map((b, idx) => {
-                const status = idx < i ? '✓' : (idx === i ? '⚡' : (idx + 1));
-                const bg = idx < i ? '#0d5c2e' : (idx === i ? '#c9a962' : '#1e3a5f');
-                const border = idx === i ? '#fff' : '#c9a962';
-                const anim = idx === i ? 'animation:glow 1s infinite;' : '';
-                return `<div style="width:45px;height:45px;background:${bg};border:2px solid ${border};border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.9rem;font-weight:bold;${anim}">${status}</div>`;
-              }).join('')}
+            <!-- ذكر الجانب الأيمن -->
+            <div id="dhikr-right" style="flex:0 0 80px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;text-orientation:mixed;background:linear-gradient(180deg,rgba(201,169,98,0.15),rgba(201,169,98,0.05));border-radius:12px;padding:0.5rem;border:1px solid rgba(201,169,98,0.3);">
+              <div style="color:#c9a962;font-size:1rem;font-weight:bold;animation:dhikrFade 3s infinite;text-align:center;">سبحان الله</div>
             </div>
             
-            <!-- Current batch info -->
-            <div style="background:rgba(201,169,98,0.2);border:2px solid #c9a962;border-radius:12px;padding:1rem;margin-bottom:1rem;">
-              <div style="font-size:1.1rem;color:#fff;margin-bottom:0.5rem;">
-                <span style="animation:spin 2s linear infinite;display:inline-block;">⚙️</span>
-                جاري تحليل الدفعة <strong style="color:#c9a962;">${batchNum}</strong> من <strong>${allBatches.length}</strong>
+            <!-- المحتوى الرئيسي -->
+            <div style="flex:1;text-align:center;padding:0.5rem;">
+              <div style="font-size:1.3rem;color:#c9a962;font-weight:bold;margin-bottom:1rem;">🔬 مرحلة التحليل</div>
+              
+              <!-- Batch boxes visualization -->
+              <div style="display:flex;justify-content:center;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;">
+                ${allBatches.map((b, idx) => {
+                  const status = idx < i ? '✓' : (idx === i ? '⚡' : (idx + 1));
+                  const bg = idx < i ? '#0d5c2e' : (idx === i ? '#c9a962' : '#1e3a5f');
+                  const border = idx === i ? '#fff' : '#c9a962';
+                  const anim = idx === i ? 'animation:glow 1s infinite;' : '';
+                  return `<div style="width:45px;height:45px;background:${bg};border:2px solid ${border};border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.9rem;font-weight:bold;${anim}">${status}</div>`;
+                }).join('')}
               </div>
-              <div style="color:#a0aec0;font-size:0.9rem;">${batch.caseCount} حالة في هذه الدفعة</div>
-              <div style="color:#ffd700;font-size:0.8rem;margin-top:0.5rem;">
-                ⏱️ الوقت المتبقي التقريبي: ~${estimatedMinutes} دقيقة
+              
+              <!-- Current batch info -->
+              <div style="background:rgba(201,169,98,0.2);border:2px solid #c9a962;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+                <div style="font-size:1.1rem;color:#fff;margin-bottom:0.5rem;">
+                  <span style="animation:spin 2s linear infinite;display:inline-block;">⚙️</span>
+                  جاري تحليل الدفعة <strong style="color:#c9a962;">${batchNum}</strong> من <strong>${allBatches.length}</strong>
+                </div>
+                <div style="color:#a0aec0;font-size:0.9rem;">${batch.caseCount} حالة في هذه الدفعة</div>
+                <div style="color:#ffd700;font-size:0.8rem;margin-top:0.5rem;">
+                  ⏱️ الوقت المتبقي التقريبي: ~${estimatedMinutes} دقيقة
+                </div>
               </div>
+              
+              <!-- أذكار متحركة -->
+              <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.75rem;margin-bottom:1rem;">
+                <div id="dhikr-center" style="color:#4ade80;font-size:1.1rem;font-weight:bold;animation:dhikrFade 3s infinite;">
+                  🤲 اذكر الله وأنت تنتظر
+                </div>
+              </div>
+              
+              <!-- Progress bar -->
+              <div style="background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;margin-bottom:0.5rem;">
+                <div style="background:linear-gradient(90deg,#c9a962,#ffd700);height:100%;width:${progress}%;transition:width 0.5s;border-radius:10px;"></div>
+              </div>
+              <div style="color:#a0aec0;font-size:0.85rem;">${processedCases} من ${totalCases} حالة مكتملة</div>
             </div>
             
-            <!-- Processing indicator -->
-            <div style="background:rgba(46,204,113,0.2);border:1px solid #2ecc71;border-radius:8px;padding:0.5rem;margin-bottom:1rem;">
-              <div style="color:#2ecc71;font-size:0.85rem;">
-                📋 يتم تحليل كل حالة بشكل منفصل...
-              </div>
-              <div style="color:#ffd700;font-size:0.8rem;margin-top:0.3rem;">
-                كن صبوراً - العملية قد تستغرق بضع دقائق
-              </div>
+            <!-- ذكر الجانب الأيسر -->
+            <div id="dhikr-left" style="flex:0 0 80px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-lr;text-orientation:mixed;background:linear-gradient(180deg,rgba(201,169,98,0.15),rgba(201,169,98,0.05));border-radius:12px;padding:0.5rem;border:1px solid rgba(201,169,98,0.3);">
+              <div style="color:#c9a962;font-size:1rem;font-weight:bold;animation:dhikrFade 3s infinite ease-in-out 1.5s;text-align:center;">الحمد لله</div>
             </div>
-            
-            <!-- Progress bar -->
-            <div style="background:rgba(255,255,255,0.1);border-radius:10px;height:12px;overflow:hidden;margin-bottom:0.5rem;">
-              <div style="background:linear-gradient(90deg,#c9a962,#ffd700);height:100%;width:${progress}%;transition:width 0.5s;border-radius:10px;"></div>
-            </div>
-            <div style="color:#a0aec0;font-size:0.85rem;">${processedCases} من ${totalCases} حالة مكتملة</div>
           </div>
         `;
+        
+        // تفعيل تبديل الأذكار
+        startDhikrRotation();
         
         try {
           // For text batches: only send textContent (the sliced portion)
@@ -4161,6 +4229,9 @@ analyzeBtn.addEventListener('click', async () => {
           // Continue with next batch
         }
       }
+      
+      // إيقاف الأذكار عند انتهاء التحليل
+      stopDhikrRotation();
       
       // PHASE 3: Show combining animation
       if (allReports.length > 0) {
@@ -4326,6 +4397,7 @@ analyzeBtn.addEventListener('click', async () => {
 
   } catch (err) {
     console.error('Analysis error:', err);
+    stopDhikrRotation(); // إيقاف الأذكار عند حدوث خطأ
     // Determine error type and provide helpful message
     let errorTitle = 'حدث خطأ';
     let errorMsg = 'خطأ غير معروف';
