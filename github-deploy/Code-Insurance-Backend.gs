@@ -158,7 +158,7 @@ function setupSheets() {
   const logHeaders = [
     'timestamp', 'userEmail', 'userName', 'doctorName', 'caseType', 'filesCount',
     'totalCases', 'totalServices', 'acceptedItems', 'reviewItems', 'docItems',
-    'vitalSignsRate', 'docQuality', 'medicalQuality', 'eligibility',
+    'vitalSignsRate', 'docQuality', 'medicalQuality', 'eligibility', 'insuranceDocQuality',
     'reportLink', 'notes'
   ];
   if (!logSheet) {
@@ -179,7 +179,7 @@ function setupSheets() {
   const statsHeaders = [
     'doctorName', 'totalReports', 'sumCases', 'sumServices', 'sumAccepted', 
     'sumReview', 'sumDoc', 'avgVitalRate', 'avgDocQuality', 'avgMedicalQuality',
-    'avgEligibility', 'lastCaseDate', 'folderLink', 'status'
+    'avgEligibility', 'avgInsuranceDocQuality', 'lastCaseDate', 'folderLink', 'status'
   ];
   if (!statsSheet) {
     statsSheet = ss.insertSheet('DoctorStats');
@@ -390,6 +390,7 @@ function logInsuranceUsage(params) {
   const docQuality = parseFloat(params.docQuality) || 0;
   const medicalQuality = parseFloat(params.medicalQuality) || 0;
   const eligibility = parseFloat(params.eligibility) || 0;
+  const insuranceDocQuality = parseFloat(params.insuranceDocQuality) || 0;
   
   logSheet.appendRow([
     timestamp,
@@ -407,6 +408,7 @@ function logInsuranceUsage(params) {
     docQuality,
     medicalQuality,
     eligibility,
+    insuranceDocQuality,
     params.reportLink || '',
     params.notes || ''
   ]);
@@ -414,7 +416,7 @@ function logInsuranceUsage(params) {
   // تحديث إحصائيات الطبيب مع كل المؤشرات
   updateDoctorStats(params.doctorName, {
     totalCases, totalServices, acceptedItems, reviewItems, docItems,
-    vitalSignsRate, docQuality, medicalQuality, eligibility
+    vitalSignsRate, docQuality, medicalQuality, eligibility, insuranceDocQuality
   });
   
   return { success: true, message: 'تم تسجيل الاستخدام بنجاح' };
@@ -472,6 +474,7 @@ function updateDoctorStats(doctorName, stats) {
     const currentDocQuality = parseFloat(data[doctorRow - 1][8]) || 0;
     const currentMedicalQuality = parseFloat(data[doctorRow - 1][9]) || 0;
     const currentEligibility = parseFloat(data[doctorRow - 1][10]) || 0;
+    const currentInsuranceDocQuality = parseFloat(data[doctorRow - 1][11]) || 0;
     
     const newReports = currentReports + 1;
     const newSumCases = currentSumCases + (stats.totalCases || 0);
@@ -485,14 +488,15 @@ function updateDoctorStats(doctorName, stats) {
     const newDocQuality = ((currentDocQuality * currentReports + (stats.docQuality || 0)) / newReports).toFixed(1);
     const newMedicalQuality = ((currentMedicalQuality * currentReports + (stats.medicalQuality || 0)) / newReports).toFixed(1);
     const newEligibility = ((currentEligibility * currentReports + (stats.eligibility || 0)) / newReports).toFixed(1);
+    const newInsuranceDocQuality = ((currentInsuranceDocQuality * currentReports + (stats.insuranceDocQuality || 0)) / newReports).toFixed(1);
     
     const status = getStatus(parseFloat(newDocQuality), parseFloat(newMedicalQuality), parseFloat(newEligibility));
     
-    // تحديث الصف
-    statsSheet.getRange(doctorRow, 2, 1, 13).setValues([[
+    // تحديث الصف - 14 عمود
+    statsSheet.getRange(doctorRow, 2, 1, 14).setValues([[
       newReports, newSumCases, newSumServices, newSumAccepted, newSumReview, newSumDoc,
-      newVitalRate, newDocQuality, newMedicalQuality, newEligibility,
-      formattedDate, data[doctorRow - 1][12] || '', status
+      newVitalRate, newDocQuality, newMedicalQuality, newEligibility, newInsuranceDocQuality,
+      formattedDate, data[doctorRow - 1][13] || '', status
     ]]);
     
   } else {
@@ -512,6 +516,7 @@ function updateDoctorStats(doctorName, stats) {
       stats.docQuality || 0,
       stats.medicalQuality || 0,
       stats.eligibility || 0,
+      stats.insuranceDocQuality || 0,
       formattedDate,
       folderUrl || '',
       status

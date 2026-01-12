@@ -42,9 +42,21 @@ I prefer clear and concise communication. When making changes, prioritize iterat
     - **Insurance Defense Score**: Strict on all issues for strong defense against insurance companies
     - **Official Score**: 60% Insurance Defense + 40% Clinician Fairness
   - **Transparent Deduction Ledger**: Shows all penalties with classifications and actual contribution to official score
-  - **KPI History Tracking System** (Added 2026-01-12):
-    - Firestore collection `kpi_history` stores KPI snapshots with: timestamp, date, doctorName, reviewer, totalCases, totalServices, acceptedItems, reviewItems, docItems, documentationQuality, medicalQuality, patientEligibility
-    - Time-based filtering with pill buttons: daily, weekly, 2 weeks, 3 weeks
+  - **10 Quality Metrics System** (Updated 2026-01-12):
+    1. totalCases: Total patient claims analyzed
+    2. totalServices: Total service items (meds + tests + procedures)
+    3. acceptedItems: Items with no issues
+    4. reviewItems: Items with medical errors
+    5. docItems: Items needing documentation
+    6. vitalSignsRate: % of cases with documented vital signs
+    7. docQuality: Medical documentation quality (0-100%)
+    8. medicalQuality: % of services without medical errors
+    9. eligibility: % of patients eligible for insurance coverage
+    10. insuranceDocQuality: % of items with complete insurance documentation
+  - **Auto-Headers System**: Google Apps Script automatically creates/updates headers for InsuranceUsageLog (18 columns) and DoctorStats (15 columns)
+  - **KPI History Tracking System**:
+    - Firestore collection `kpi_history` stores KPI snapshots with all 10 metrics
+    - Time-based filtering with pill buttons: daily, weekly, 2 weeks, month, 3 months
     - Cumulative KPI dashboard with three colored cards (gold, orange, red) showing quality metrics
     - Chart.js trend chart displaying KPI changes over time
     - Filter persistence via sessionStorage

@@ -2375,7 +2375,8 @@
                 <button class="kpi-pill active" onclick="setKpiFilter('daily')">يومي</button>
                 <button class="kpi-pill" onclick="setKpiFilter('weekly')">أسبوعي</button>
                 <button class="kpi-pill" onclick="setKpiFilter('2weeks')">أسبوعين</button>
-                <button class="kpi-pill" onclick="setKpiFilter('3weeks')">3 أسابيع</button>
+                <button class="kpi-pill" onclick="setKpiFilter('month')">شهر</button>
+                <button class="kpi-pill" onclick="setKpiFilter('3months')">3 أشهر</button>
               </div>
             </div>
             <div style="text-align:center;padding:2rem;color:var(--text-muted);">
@@ -3556,7 +3557,7 @@ function calculateEligibility(stats) {
 
 // استخراج الإحصائيات من HTML التقرير (كحل بديل إذا لم يُرجعها الـ API)
 function extractStatsFromHtml(html) {
-  if (!html) return { totalCases: 0, totalServices: 0, acceptedItems: 0, reviewItems: 0, docItems: 0 };
+  if (!html) return { totalCases: 0, totalServices: 0, acceptedItems: 0, reviewItems: 0, docItems: 0, rejectedCases: 0 };
   
   // البحث عن عدد الحالات - "تم تحليل X حالة"
   const casesMatch = html.match(/تم تحليل\s*(\d+)\s*حال/);
@@ -3594,7 +3595,12 @@ function extractStatsFromHtml(html) {
   
   const totalServices = acceptedItems + reviewItems + docItems;
   
-  console.log(`[extractStatsFromHtml] Cases: ${totalCases}, Services: ${totalServices}, Accepted: ${acceptedItems}, Review: ${reviewItems}, Doc: ${docItems}`);
+  // حساب الحالات المرفوضة (حالات بها أخطاء طبية أو توثيقية)
+  const rejectedCases = reviewItems > 0 || docItems > 0 
+    ? Math.min(Math.ceil((reviewItems + docItems) / Math.max(totalServices, 1) * totalCases), totalCases)
+    : 0;
+  
+  console.log(`[extractStatsFromHtml] Cases: ${totalCases}, Services: ${totalServices}, Accepted: ${acceptedItems}, Review: ${reviewItems}, Doc: ${docItems}, RejectedCases: ${rejectedCases}`);
   
   return {
     totalCases: totalCases || 1,
@@ -3602,7 +3608,8 @@ function extractStatsFromHtml(html) {
     totalServiceItems: totalServices,
     acceptedItems: acceptedItems,
     reviewItems: reviewItems,
-    docItems: docItems
+    docItems: docItems,
+    rejectedCases: rejectedCases
   };
 }
 
@@ -3654,7 +3661,8 @@ function showEmptyKpiState(container) {
     'daily': 'اليوم',
     'weekly': 'الأسبوع',
     '2weeks': 'أسبوعين',
-    '3weeks': '3 أسابيع'
+    'month': 'الشهر',
+    '3months': '3 أشهر'
   };
   
   container.innerHTML = `
@@ -3664,7 +3672,8 @@ function showEmptyKpiState(container) {
         <button class="kpi-pill ${currentKpiFilter === 'daily' ? 'active' : ''}" onclick="setKpiFilter('daily')">يومي</button>
         <button class="kpi-pill ${currentKpiFilter === 'weekly' ? 'active' : ''}" onclick="setKpiFilter('weekly')">أسبوعي</button>
         <button class="kpi-pill ${currentKpiFilter === '2weeks' ? 'active' : ''}" onclick="setKpiFilter('2weeks')">أسبوعين</button>
-        <button class="kpi-pill ${currentKpiFilter === '3weeks' ? 'active' : ''}" onclick="setKpiFilter('3weeks')">3 أسابيع</button>
+        <button class="kpi-pill ${currentKpiFilter === 'month' ? 'active' : ''}" onclick="setKpiFilter('month')">شهر</button>
+        <button class="kpi-pill ${currentKpiFilter === '3months' ? 'active' : ''}" onclick="setKpiFilter('3months')">3 أشهر</button>
       </div>
     </div>
     <div style="text-align:center;padding:3rem;color:var(--text-muted);">
@@ -3681,7 +3690,8 @@ function getFilterDays(filter) {
     'daily': 1,
     'weekly': 7,
     '2weeks': 14,
-    '3weeks': 21
+    'month': 30,
+    '3months': 90
   };
   return filters[filter] || 7;
 }
@@ -3718,7 +3728,8 @@ function generateKpiCardsHtml(docQuality, medicalQuality, eligibility, totals) {
     'daily': 'اليوم',
     'weekly': 'الأسبوع',
     '2weeks': 'أسبوعين',
-    '3weeks': '3 أسابيع'
+    'month': 'الشهر',
+    '3months': '3 أشهر'
   };
   
   return `
@@ -3728,7 +3739,8 @@ function generateKpiCardsHtml(docQuality, medicalQuality, eligibility, totals) {
         <button class="kpi-pill ${currentKpiFilter === 'daily' ? 'active' : ''}" onclick="setKpiFilter('daily')">يومي</button>
         <button class="kpi-pill ${currentKpiFilter === 'weekly' ? 'active' : ''}" onclick="setKpiFilter('weekly')">أسبوعي</button>
         <button class="kpi-pill ${currentKpiFilter === '2weeks' ? 'active' : ''}" onclick="setKpiFilter('2weeks')">أسبوعين</button>
-        <button class="kpi-pill ${currentKpiFilter === '3weeks' ? 'active' : ''}" onclick="setKpiFilter('3weeks')">3 أسابيع</button>
+        <button class="kpi-pill ${currentKpiFilter === 'month' ? 'active' : ''}" onclick="setKpiFilter('month')">شهر</button>
+        <button class="kpi-pill ${currentKpiFilter === '3months' ? 'active' : ''}" onclick="setKpiFilter('3months')">3 أشهر</button>
       </div>
     </div>
     
@@ -5416,9 +5428,10 @@ async function saveAndLog() {
     const acceptedItems = stats.acceptedItems || 0;
     const reviewItems = stats.reviewItems || 0;
     const docItems = stats.docItems || 0;
+    const rejectedCases = stats.rejectedCases || 0;
     const vitalSignsRate = stats.vitalSignsDocRate || 0;
     
-    // حساب المؤشرات النسبية
+    // حساب المؤشرات النسبية (10 مؤشرات)
     const docQuality = totalServices > 0 
       ? Math.round(((totalServices - docItems) / totalServices) * 100) 
       : 0;
@@ -5426,7 +5439,10 @@ async function saveAndLog() {
       ? Math.round(((totalServices - reviewItems) / totalServices) * 100) 
       : 0;
     const eligibility = totalCases > 0 
-      ? Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100) 
+      ? Math.round(((totalCases - rejectedCases) / totalCases) * 100) 
+      : 0;
+    const insuranceDocQuality = totalServices > 0
+      ? Math.round((acceptedItems / totalServices) * 100)
       : 0;
     
     const saveData = {
@@ -5446,6 +5462,7 @@ async function saveAndLog() {
       docQuality: docQuality,
       medicalQuality: medicalQuality,
       eligibility: eligibility,
+      insuranceDocQuality: insuranceDocQuality,
       notes: '',
       htmlContent: htmlContent,
       fileName: fileName
