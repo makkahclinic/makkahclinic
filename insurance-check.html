@@ -5265,6 +5265,15 @@ async function saveAndLog() {
     
     // Save HTML to Drive
     console.log('📤 Sending save request to Google Apps Script...');
+    
+    // حساب المعايير الثلاثة من إحصائيات التقرير
+    const stats = lastReportStats || {};
+    const totalServices = stats.totalServices || 1;
+    const totalCases = stats.totalCases || 1;
+    const docQuality = Math.round(((totalServices - (stats.docItems || 0)) / totalServices) * 100);
+    const medicalQuality = Math.round(((totalServices - (stats.reviewItems || 0)) / totalServices) * 100);
+    const eligibility = Math.round(((totalCases - (stats.rejectedCases || 0)) / totalCases) * 100);
+    
     const saveData = {
       action: 'logUsageAndSaveHTML',
       userEmail: currentUser.email,
@@ -5272,8 +5281,9 @@ async function saveAndLog() {
       doctorName: doctorName,
       caseType: 'مراجعة تأمين',
       filesCount: filesState.length,
-      insuranceRating: insuranceRatingValue,
-      serviceRating: serviceRatingValue,
+      docQuality: docQuality,
+      medicalQuality: medicalQuality,
+      eligibility: eligibility,
       notes: '',
       htmlContent: htmlContent,
       fileName: fileName
