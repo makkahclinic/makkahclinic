@@ -588,19 +588,37 @@ export function extractStatsFromReport(htmlReport) {
   stats.totalCases = caseMatches ? caseMatches.length : 1;
 
   // ========== استخراج الإحصائيات الفعلية من التقرير ==========
-  // عد البنود المقبولة (✅ مقبول) - تجنب عد العناوين والملخصات
-  const approvedMatches = htmlReport.match(/✅\s*مقبول(?!ة)|<td[^>]*>مقبول<\/td>|class="[^"]*approved[^"]*"/gi);
+  // ✅ نعد فقط خلايا الجدول (td) لتجنب العد المزدوج من صناديق التفاصيل
+  
+  // عد البنود المقبولة - فقط في خلايا الجدول
+  // نبحث عن: ✅ مقبول أو <td>مقبول</td> أو خلية بها class approved
+  const approvedPattern = /<td[^>]*>(?:[^<]*)?✅\s*مقبول|<td[^>]*>\s*مقبول\s*<\/td>/gi;
+  const approvedMatches = htmlReport.match(approvedPattern);
   stats.approvedCount = approvedMatches ? approvedMatches.length : 0;
 
-  // عد البنود المرفوضة والتي تحتاج مراجعة/تصحيح (❌ أو 🚫 أو ⛔)
-  // تشمل: مرفوض، يحتاج مراجعة، يحتاج تصحيح، يحتاج تدقيق، Rejected
-  const rejectedMatches = htmlReport.match(/[❌🚫⛔]\s*(?:مرفوض|يحتاج\s*(?:مراجعة|تصحيح|تدقيق|تعديل))|Rejected|<td[^>]*>مرفوض<\/td>|مرفوض\s*-\s*يحتاج|غير\s*مبرر/gi);
+  // عد البنود المرفوضة - فقط في خلايا الجدول
+  // نبحث عن: 🚫 مرفوض في خلية
+  const rejectedPattern = /<td[^>]*>(?:[^<]*)?(?:🚫|❌|⛔)\s*مرفوض|<td[^>]*>\s*مرفوض\s*<\/td>/gi;
+  const rejectedMatches = htmlReport.match(rejectedPattern);
   stats.rejectedCount = rejectedMatches ? rejectedMatches.length : 0;
 
-  // عد البنود التي تحتاج توثيق (⚠️)
-  // تشمل: يحتاج توثيق، يحتاج توثيق إضافي، يحتاج توثيق تفصيلي، Needs Documentation
-  const needsDocMatches = htmlReport.match(/⚠️\s*يحتاج\s*توثيق|يحتاج\s*توثيق\s*(?:إضافي|تفصيلي)?|<td[^>]*>يحتاج\s*توثيق<\/td>|Needs\s*(?:Documentation|Doc)/gi);
+  // عد البنود التي تحتاج توثيق - فقط في خلايا الجدول
+  // نبحث عن: ⚠️ يحتاج توثيق في خلية
+  const needsDocPattern = /<td[^>]*>(?:[^<]*)?⚠️?\s*يحتاج\s*توثيق|<td[^>]*>\s*يحتاج\s*توثيق\s*<\/td>/gi;
+  const needsDocMatches = htmlReport.match(needsDocPattern);
   stats.needsDocCount = needsDocMatches ? needsDocMatches.length : 0;
+  
+  // Fallback: إذا لم نجد أي شيء بالطريقة الدقيقة، نستخدم الطريقة العامة
+  if (stats.approvedCount === 0 && stats.rejectedCount === 0 && stats.needsDocCount === 0) {
+    // عد عام كـ fallback
+    const generalApproved = htmlReport.match(/✅\s*مقبول/gi);
+    const generalRejected = htmlReport.match(/🚫\s*مرفوض/gi);
+    const generalNeedsDoc = htmlReport.match(/⚠️\s*يحتاج\s*توثيق/gi);
+    
+    stats.approvedCount = generalApproved ? generalApproved.length : 0;
+    stats.rejectedCount = generalRejected ? generalRejected.length : 0;
+    stats.needsDocCount = generalNeedsDoc ? generalNeedsDoc.length : 0;
+  }
 
   // عد حالات التكرار
   const duplicateMatches = htmlReport.match(/تكرار|مكرر|duplicate/gi);
