@@ -594,17 +594,29 @@ function getDoctorStats() {
   const data = statsSheet.getDataRange().getValues();
   const doctors = [];
   
+  // Headers (15 columns):
+  // [0] doctorName, [1] totalCases, [2] totalServices, [3] sumAccepted,
+  // [4] sumReview, [5] sumDoc, [6] avgVitalRate, [7] avgDocQuality,
+  // [8] avgMedicalQuality, [9] avgEligibility, [10] avgInsuranceDocQuality,
+  // [11] lastCaseDate, [12] folderLink, [13] status
+  
   for (let i = 1; i < data.length; i++) {
     if (data[i][0]) {
       doctors.push({
         doctorName: data[i][0],
         totalCases: data[i][1],
-        avgDocQuality: data[i][2],
-        avgMedicalQuality: data[i][3],
-        avgEligibility: data[i][4],
-        lastCaseDate: data[i][5],
-        folderLink: data[i][6],
-        status: data[i][7]
+        totalServices: data[i][2],
+        sumAccepted: data[i][3],
+        sumReview: data[i][4],
+        sumDoc: data[i][5],
+        avgVitalRate: data[i][6],
+        avgDocQuality: data[i][7],          // Column 7 - جودة التوثيق
+        avgMedicalQuality: data[i][8],      // Column 8 - جودة الخدمات
+        avgEligibility: data[i][9],         // Column 9 - أهلية المريض
+        avgInsuranceDocQuality: data[i][10],// Column 10 - جودة توثيق التأمين
+        lastCaseDate: data[i][11],
+        folderLink: data[i][12],
+        status: data[i][13]
       });
     }
   }
