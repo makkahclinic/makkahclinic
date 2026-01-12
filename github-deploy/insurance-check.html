@@ -5503,6 +5503,15 @@ async function markTaskAsPrinted(taskId) {
 
 // Print and track
 function printAndTrack() {
+  // === تحضير RTL للطباعة ===
+  document.documentElement.setAttribute('dir', 'rtl');
+  document.documentElement.setAttribute('lang', 'ar');
+  document.body.style.direction = 'rtl';
+  document.body.style.unicodeBidi = 'embed';
+  
+  // إضافة خط عربي احتياطي
+  document.body.style.fontFamily = "'Tajawal', 'Noto Naskh Arabic', 'Arial Unicode MS', Arial, sans-serif";
+  
   // Update print header date
   const dateEl = document.getElementById('printHeaderDate');
   if (dateEl) {
@@ -5511,6 +5520,20 @@ function printAndTrack() {
     const gregorianFormatter = new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' });
     dateEl.innerHTML = `<div>${hijriFormatter.format(now)}</div><div>${gregorianFormatter.format(now)}</div>`;
   }
+  
+  // === إصلاح RTL للجداول ===
+  document.querySelectorAll('#reportContent table').forEach(table => {
+    table.setAttribute('dir', 'rtl');
+    table.style.direction = 'rtl';
+    table.style.tableLayout = 'auto';
+  });
+  
+  // إصلاح RTL للخلايا
+  document.querySelectorAll('#reportContent th, #reportContent td').forEach(cell => {
+    cell.style.direction = 'rtl';
+    cell.style.textAlign = 'right';
+    cell.style.unicodeBidi = 'embed';
+  });
   
   // Add visual status classes to status cells for printing
   document.querySelectorAll('#reportContent td').forEach(td => {
@@ -5531,8 +5554,11 @@ function printAndTrack() {
   if (currentAnalyzingTaskId) {
     markTaskAsPrinted(currentAnalyzingTaskId);
   }
-  // Trigger print
-  window.print();
+  
+  // تأخير بسيط للسماح للمتصفح بتطبيق الأنماط
+  setTimeout(() => {
+    window.print();
+  }, 100);
 }
 
 // ============================================
