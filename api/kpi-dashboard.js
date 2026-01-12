@@ -1,649 +1,222 @@
 /**
- * لوحة مؤشرات الأداء الشهرية (KPI Dashboard)
- * نظام تقييم ثنائي المسار: عدالة الطبيب + دفاع تأميني
+ * لوحة مؤشرات الأداء المبسطة (KPI Dashboard)
+ * 3 مقاييس معيارية ثابتة وواضحة:
+ * 1. جودة التوثيق التأميني (Documentation Quality)
+ * 2. جودة الخدمات الطبية (Medical Service Quality)
+ * 3. نسبة استحقاق المرضى (Patient Eligibility)
  */
 
 /**
- * تصنيف الأخطاء وأوزانها
- */
-const ERROR_WEIGHTS = {
-  // ❌ أخطاء طبية فعلية (خطورة عالية)
-  medical_error: {
-    label: 'خطأ طبي',
-    weight: -2.0,
-    color: '#dc2626',
-    examples: ['IV بدون مبرر طبي', 'دواء غير مناسب للتشخيص', 'جرعة خاطئة']
-  },
-  // ⚠️ نقص توثيق (قابل للإصلاح)
-  documentation_gap: {
-    label: 'نقص توثيق',
-    weight: -0.5,
-    color: '#f59e0b',
-    examples: ['تشخيص غير محدد', 'علامات حيوية ناقصة', 'ICD ينتهي بـ .9']
-  },
-  // ✅ مقبول
-  compliant: {
-    label: 'مقبول',
-    weight: 0,
-    color: '#22c55e',
-    examples: ['إجراء مبرر', 'توثيق كامل']
-  }
-};
-
-/**
- * حساب مؤشرات الأداء من نتائج التقرير
+ * حساب مؤشرات الأداء المبسطة - 3 مقاييس معيارية فقط
  * @param {Object} reportStats - إحصائيات التقرير
- * @returns {Object} مؤشرات الأداء
+ * @returns {Object} مؤشرات الأداء الثلاثة
  */
 export function calculateKPIs(reportStats) {
-  const kpis = {
-    insuranceCompliance: { score: 0, max: 10, details: [] },
-    medicalQuality: { score: 0, max: 10, details: [] },
-    documentationQuality: { score: 0, max: 10, details: [] },
-    overallScore: { score: 0, max: 10 },
-    // ========== النظام الجديد: ثنائي المسار ==========
-    clinicianFairness: { score: 0, max: 10, details: [] },   // درجة عدالة الطبيب
-    insuranceDefense: { score: 0, max: 10, details: [] },    // درجة الدفاع التأميني
-    deductionLedger: []  // جدول الخصومات الشفاف
-  };
-
   const totalCases = reportStats.totalCases || 1;
+  const totalProcedures = reportStats.totalProcedures || 
+    ((reportStats.approvedCount || 0) + (reportStats.rejectedCount || 0) + (reportStats.needsDocCount || 0)) || 1;
 
-  // حساب نسبة قبول الإجراءات - المقام الموحد: مقبول + مرفوض + يحتاج توثيق
-  const totalProcedures = (reportStats.approvedCount || 0) + (reportStats.rejectedCount || 0) + (reportStats.needsDocCount || 0);
-  const procedureApprovalRate = totalProcedures > 0 
-    ? (reportStats.approvedCount || 0) / totalProcedures 
-    : null; // null يعني "غير متوفر" بدلاً من 0
+  // ========== المقياس 1: جودة التوثيق التأميني ==========
+  // أخطاء التوثيق: IV بدون مبرر، تشخيص غير محدد، نقص تحاليل، ICD ناقص
+  const documentationErrors = reportStats.documentationErrors || 
+    ((reportStats.needsDocCount || 0) + (reportStats.diagnosisNonSpecific || 0));
   
-  // نسبة البنود التي تحتاج توثيق - نفس المقام (totalProcedures) للاتساق
-  // ملاحظة: هذا يجعل approved% + rejected% + needsDoc% = 100%
-  const needsDocRate = totalProcedures > 0 
-    ? (reportStats.needsDocCount || 0) / totalProcedures 
-    : 0;
-  
-  // نسبة الرفض (للعرض الإضافي)
-  const rejectionRate = totalProcedures > 0 
-    ? (reportStats.rejectedCount || 0) / totalProcedures 
-    : 0;
-  // استخدام نسبة التكرار المحسوبة من extractStatsFromCases (عدد الحالات بتكرار ÷ إجمالي الحالات)
-  const duplicateRate = reportStats.duplicateRate || ((reportStats.duplicateCases || 0) / totalCases);
-  const ivWithoutJustificationRate = (reportStats.ivWithoutJustification || 0) / totalCases;
-
-  // استخدام متوسط تقييمات الذكاء الاصطناعي إن وجدت
-  if (reportStats.avgInsuranceScore && reportStats.avgInsuranceScore > 0) {
-    kpis.insuranceCompliance.score = parseFloat(reportStats.avgInsuranceScore.toFixed(1));
-  } else {
-    // حساب بديل إذا لم تتوفر التقييمات
-    let insuranceScore = 10;
-    if (procedureApprovalRate !== null) {
-      insuranceScore -= (1 - procedureApprovalRate) * 4;
-    }
-    insuranceScore -= needsDocRate * 3;
-    insuranceScore -= duplicateRate * 2;
-    insuranceScore -= ivWithoutJustificationRate * 1;
-    kpis.insuranceCompliance.score = Math.max(0, Math.min(10, parseFloat(insuranceScore.toFixed(1))));
-  }
-  
-  // === المؤشرات المتسقة ===
-  // الآن: قبول% + رفض% + يحتاج توثيق% = 100%
-  kpis.insuranceCompliance.details = [
-    { label: 'قبول الإجراءات', value: procedureApprovalRate !== null ? `${(procedureApprovalRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥70%', status: procedureApprovalRate !== null && procedureApprovalRate >= 0.7 ? 'good' : 'na' },
-    { label: 'رفض الإجراءات', value: `${(rejectionRate * 100).toFixed(0)}%`, target: '<10%', status: rejectionRate < 0.1 ? 'good' : 'bad' },
-    { label: 'يحتاج توثيق (بنود)', value: `${(needsDocRate * 100).toFixed(0)}%`, target: '<20%', status: needsDocRate < 0.2 ? 'good' : 'bad' },
-    { label: 'نسبة التكرار', value: `${(duplicateRate * 100).toFixed(0)}%`, target: '<5%', status: duplicateRate < 0.05 ? 'good' : 'bad' },
-    { label: 'IV بدون مبرر', value: `${(ivWithoutJustificationRate * 100).toFixed(0)}%`, target: '<10%', status: ivWithoutJustificationRate < 0.1 ? 'good' : 'bad' }
-  ];
-
-  // 2. Medical Quality Score /10
-  // Based on: antibiotic appropriateness, vital signs documentation, test ordering
-  // إلغاء القيم الافتراضية الوهمية - null يعني "غير متوفر"
-  const antibioticAppropriateRate = (reportStats.antibioticTotal && reportStats.antibioticTotal > 0)
-    ? (reportStats.antibioticAppropriate || 0) / reportStats.antibioticTotal 
-    : null; // لا توجد مضادات = غير قابل للحساب
-  const vitalsDocRate = reportStats.vitalsDocumented !== undefined
-    ? (reportStats.vitalsDocumented / totalCases) 
+  const documentationQualityPct = totalProcedures > 0 
+    ? Math.round(((totalProcedures - documentationErrors) / totalProcedures) * 100)
     : null;
-  const requiredTestsOrderedRate = (reportStats.requiredTestsTotal && reportStats.requiredTestsTotal > 0)
-    ? (reportStats.requiredTestsOrdered || 0) / reportStats.requiredTestsTotal 
-    : null; // لا توجد فحوصات مطلوبة = غير قابل للحساب
 
-  // استخدام متوسط تقييمات الذكاء الاصطناعي إن وجدت
-  if (reportStats.avgMedicalScore && reportStats.avgMedicalScore > 0) {
-    kpis.medicalQuality.score = parseFloat(reportStats.avgMedicalScore.toFixed(1));
-  } else {
-    let medicalScore = 10;
-    let penaltyCount = 0;
-    // خصم فقط للمؤشرات المتوفرة
-    if (antibioticAppropriateRate !== null) {
-      medicalScore -= (1 - antibioticAppropriateRate) * 4;
-      penaltyCount++;
+  // ========== المقياس 2: جودة الخدمات الطبية ==========
+  // أخطاء طبية: أدوية غير مناسبة، جرعات خاطئة، IV غير مبرر طبياً
+  const medicalErrors = reportStats.medicalErrors || 
+    ((reportStats.rejectedCount || 0) + (reportStats.ivWithoutJustification || 0));
+  
+  const medicalServiceQualityPct = totalProcedures > 0 
+    ? Math.round(((totalProcedures - medicalErrors) / totalProcedures) * 100)
+    : null;
+
+  // ========== المقياس 3: نسبة استحقاق المرضى ==========
+  // المرضى الذين لديهم خلل في الاستحقاق (تأمين منتهي، خدمة غير مغطاة)
+  const patientsWithEligibilityGaps = reportStats.patientsWithEligibilityGaps || 0;
+  
+  const patientEligibilityPct = totalCases > 0 
+    ? Math.round(((totalCases - patientsWithEligibilityGaps) / totalCases) * 100)
+    : null;
+
+  // ========== النتيجة الإجمالية (متوسط المقاييس الثلاثة) ==========
+  const validMetrics = [documentationQualityPct, medicalServiceQualityPct, patientEligibilityPct].filter(v => v !== null);
+  const overallPct = validMetrics.length > 0 
+    ? Math.round(validMetrics.reduce((a, b) => a + b, 0) / validMetrics.length)
+    : null;
+
+  return {
+    // المقاييس الثلاثة الرئيسية (نسب مئوية)
+    documentationQuality: {
+      percentage: documentationQualityPct,
+      errors: documentationErrors,
+      total: totalProcedures,
+      label: 'جودة التوثيق التأميني',
+      description: 'نقص تحاليل، IV بدون تشخيص سابق، تشخيص غير محدد'
+    },
+    medicalServiceQuality: {
+      percentage: medicalServiceQualityPct,
+      errors: medicalErrors,
+      total: totalProcedures,
+      label: 'جودة الخدمات الطبية',
+      description: 'أدوية خاطئة، جرعات زائدة، وصفات غير مناسبة'
+    },
+    patientEligibility: {
+      percentage: patientEligibilityPct,
+      gaps: patientsWithEligibilityGaps,
+      total: totalCases,
+      label: 'نسبة استحقاق المرضى',
+      description: 'مرضى بدون تغطية تأمينية أو خدمات غير مشمولة'
+    },
+    // الملخص
+    overall: {
+      percentage: overallPct,
+      label: 'النتيجة الإجمالية'
+    },
+    // بيانات خام للرسوم البيانية
+    rawStats: {
+      totalCases,
+      totalProcedures,
+      documentationErrors,
+      medicalErrors,
+      patientsWithEligibilityGaps,
+      approvedCount: reportStats.approvedCount || 0,
+      rejectedCount: reportStats.rejectedCount || 0,
+      needsDocCount: reportStats.needsDocCount || 0
     }
-    if (vitalsDocRate !== null) {
-      medicalScore -= (1 - vitalsDocRate) * 3;
-      penaltyCount++;
-    }
-    if (requiredTestsOrderedRate !== null) {
-      medicalScore -= (1 - requiredTestsOrderedRate) * 3;
-      penaltyCount++;
-    }
-    // إذا لا توجد بيانات كافية، نُظهر تحذير
-    if (penaltyCount === 0) {
-      kpis.medicalQuality.score = null; // غير قابل للحساب
-    } else {
-      kpis.medicalQuality.score = Math.max(0, Math.min(10, parseFloat(medicalScore.toFixed(1))));
-    }
-  }
-
-  kpis.medicalQuality.details = [
-    { label: 'المضادات المناسبة', value: antibioticAppropriateRate !== null ? `${(antibioticAppropriateRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥90%', status: antibioticAppropriateRate !== null && antibioticAppropriateRate >= 0.9 ? 'good' : 'na' },
-    { label: 'توثيق العلامات الحيوية', value: vitalsDocRate !== null ? `${(vitalsDocRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥95%', status: vitalsDocRate !== null && vitalsDocRate >= 0.95 ? 'good' : 'na' },
-    { label: 'الفحوصات المطلوبة', value: requiredTestsOrderedRate !== null ? `${(requiredTestsOrderedRate * 100).toFixed(0)}%` : 'غير متوفر', target: '≥85%', status: requiredTestsOrderedRate !== null && requiredTestsOrderedRate >= 0.85 ? 'good' : 'na' }
-  ];
-
-  // 3. Documentation Quality Score /10
-  const diagnosisSpecificityRate = reportStats.diagnosisSpecific ?
-    (reportStats.diagnosisSpecific / totalCases) : 0.5;
-  const icdCodeRate = reportStats.icdCodesPresent ?
-    (reportStats.icdCodesPresent / totalCases) : 0.5;
-
-  let docScore = 10;
-  docScore -= (1 - diagnosisSpecificityRate) * 5; // -5 max for vague diagnoses
-  docScore -= (1 - icdCodeRate) * 5; // -5 max for missing ICD codes
-  kpis.documentationQuality.score = Math.max(0, Math.min(10, parseFloat(docScore.toFixed(1))));
-
-  kpis.documentationQuality.details = [
-    { label: 'التشخيص المحدد', value: `${(diagnosisSpecificityRate * 100).toFixed(0)}%`, target: '≥90%', status: diagnosisSpecificityRate >= 0.9 ? 'good' : 'bad' },
-    { label: 'أكواد ICD موجودة', value: `${(icdCodeRate * 100).toFixed(0)}%`, target: '≥95%', status: icdCodeRate >= 0.95 ? 'good' : 'bad' }
-  ];
-
-  // Overall Score (weighted average) - التعامل مع القيم null
-  let totalWeight = 0;
-  let weightedSum = 0;
-  
-  if (kpis.insuranceCompliance.score !== null) {
-    weightedSum += kpis.insuranceCompliance.score * 0.4;
-    totalWeight += 0.4;
-  }
-  if (kpis.medicalQuality.score !== null) {
-    weightedSum += kpis.medicalQuality.score * 0.35;
-    totalWeight += 0.35;
-  }
-  if (kpis.documentationQuality.score !== null) {
-    weightedSum += kpis.documentationQuality.score * 0.25;
-    totalWeight += 0.25;
-  }
-  
-  // إذا كان هناك قسم واحد على الأقل متوفر، نحسب المتوسط المرجح المتناسب
-  if (totalWeight > 0) {
-    // نحسب المتوسط مع إعادة توزيع الأوزان على الأقسام المتوفرة فقط
-    kpis.overallScore.score = parseFloat((weightedSum / totalWeight).toFixed(1));
-  } else {
-    kpis.overallScore.score = null; // جميع الأقسام غير متوفرة
-  }
-  
-  // تتبع الأقسام غير المتوفرة
-  kpis.overallScore.missingPillars = [];
-  if (kpis.insuranceCompliance.score === null) kpis.overallScore.missingPillars.push('الامتثال التأميني');
-  if (kpis.medicalQuality.score === null) kpis.overallScore.missingPillars.push('الجودة الطبية');
-  if (kpis.documentationQuality.score === null) kpis.overallScore.missingPillars.push('جودة التوثيق');
-
-  // ========== النظام الجديد: ثنائي المسار ==========
-  // تصنيف الأخطاء: medical_error (أخطاء طبية) vs documentation_gap (نقص توثيق)
-  
-  const totalProceduresForDual = (reportStats.approvedCount || 0) + (reportStats.rejectedCount || 0) + (reportStats.needsDocCount || 0);
-  
-  // افتراض: البنود المرفوضة = أخطاء طبية، البنود التي تحتاج توثيق = نقص توثيق
-  const medicalErrors = reportStats.rejectedCount || 0;
-  const docGaps = reportStats.needsDocCount || 0;
-  const compliantItems = reportStats.approvedCount || 0;
-  
-  // معدلات الأخطاء
-  const medicalErrorRate = totalProceduresForDual > 0 ? medicalErrors / totalProceduresForDual : 0;
-  const docGapRate = totalProceduresForDual > 0 ? docGaps / totalProceduresForDual : 0;
-  
-  // IV بدون مبرر (خطأ طبي إضافي)
-  const ivWithoutJustCount = reportStats.ivWithoutJustification || 0;
-  const ivRate = totalCases > 0 ? ivWithoutJustCount / totalCases : 0;
-  
-  // تشخيص غير محدد (نقص توثيق)
-  const nonSpecificDiagRate = 1 - diagnosisSpecificityRate;
-  
-  // ========== 1. درجة عدالة الطبيب (Clinician Fairness) ==========
-  // أوزان مُعدّلة: أخطاء طبية تؤثر بشكل كبير
-  let fairnessScore = 10;
-  
-  // خصم الأخطاء الطبية (وزن عالي: حتى -8 للأخطاء الكاملة)
-  const fairnessMedicalDed = medicalErrorRate * 5;
-  const fairnessIvDed = ivRate * 3;
-  fairnessScore -= fairnessMedicalDed;
-  fairnessScore -= fairnessIvDed;
-  
-  // خصم نقص التوثيق بشكل مخفف (وزن منخفض: حتى -2)
-  const fairnessDocDed = docGapRate * 1;
-  const fairnessDiagDed = nonSpecificDiagRate * 1;
-  fairnessScore -= fairnessDocDed;
-  fairnessScore -= fairnessDiagDed;
-  
-  kpis.clinicianFairness.score = Math.max(0, Math.min(10, parseFloat(fairnessScore.toFixed(1))));
-  kpis.clinicianFairness.details = [
-    { label: 'أخطاء طبية', value: `${medicalErrors}`, impact: 'عالي', status: medicalErrors === 0 ? 'good' : 'bad' },
-    { label: 'نقص توثيق', value: `${docGaps}`, impact: 'منخفض', status: docGaps <= 1 ? 'good' : 'warning' },
-    { label: 'IV بدون مبرر', value: `${ivWithoutJustCount}`, impact: 'عالي', status: ivWithoutJustCount === 0 ? 'good' : 'bad' }
-  ];
-  
-  // ========== 2. درجة الدفاع التأميني (Insurance Defense) ==========
-  // صارمة: كل خطأ يُحسب بوزن عالي
-  let defenseScore = 10;
-  
-  // خصم الأخطاء الطبية (وزن عالي جداً)
-  const defenseMedicalDed = medicalErrorRate * 6;
-  const defenseIvDed = ivRate * 4;
-  defenseScore -= defenseMedicalDed;
-  defenseScore -= defenseIvDed;
-  
-  // خصم نقص التوثيق (يؤثر على المطالبات)
-  const defenseDocDed = docGapRate * 2;
-  const defenseDiagDed = nonSpecificDiagRate * 2;
-  defenseScore -= defenseDocDed;
-  defenseScore -= defenseDiagDed;
-  
-  kpis.insuranceDefense.score = Math.max(0, Math.min(10, parseFloat(defenseScore.toFixed(1))));
-  kpis.insuranceDefense.details = [
-    { label: 'قبول الإجراءات', value: `${(procedureApprovalRate !== null ? procedureApprovalRate * 100 : 0).toFixed(0)}%`, target: '≥70%', status: procedureApprovalRate !== null && procedureApprovalRate >= 0.7 ? 'good' : 'bad' },
-    { label: 'توثيق كامل', value: `${((1 - docGapRate) * 100).toFixed(0)}%`, target: '≥90%', status: docGapRate < 0.1 ? 'good' : 'bad' },
-    { label: 'تشخيص محدد', value: `${(diagnosisSpecificityRate * 100).toFixed(0)}%`, target: '≥80%', status: diagnosisSpecificityRate >= 0.8 ? 'good' : 'bad' }
-  ];
-  
-  // ========== الدرجة الرسمية المجمعة ==========
-  // 60% دفاع تأميني + 40% عدالة الطبيب
-  const officialScore = (kpis.insuranceDefense.score * 0.6) + (kpis.clinicianFairness.score * 0.4);
-  kpis.overallScore.score = parseFloat(officialScore.toFixed(1));
-  kpis.overallScore.formula = '60% دفاع تأميني + 40% عدالة الطبيب';
-
-  // ========== جدول الخصومات الشفاف (يعكس المساهمة الفعلية في الدرجة الرسمية) ==========
-  // الخصم الفعلي = (خصم دفاعي × 0.6) + (خصم عدالة × 0.4)
-  const deductions = [];
-  
-  if (medicalErrorRate > 0) {
-    const actualDed = (defenseMedicalDed * 0.6) + (fairnessMedicalDed * 0.4);
-    deductions.push({
-      type: 'medical_error',
-      label: '❌ إجراءات مرفوضة طبياً',
-      rate: `${(medicalErrorRate * 100).toFixed(0)}%`,
-      deduction: parseFloat(actualDed.toFixed(2)),
-      color: '#dc2626'
-    });
-  }
-  
-  if (ivRate > 0) {
-    const actualDed = (defenseIvDed * 0.6) + (fairnessIvDed * 0.4);
-    deductions.push({
-      type: 'medical_error',
-      label: '❌ IV بدون مبرر طبي',
-      rate: `${(ivRate * 100).toFixed(0)}%`,
-      deduction: parseFloat(actualDed.toFixed(2)),
-      color: '#dc2626'
-    });
-  }
-  
-  if (docGapRate > 0) {
-    const actualDed = (defenseDocDed * 0.6) + (fairnessDocDed * 0.4);
-    deductions.push({
-      type: 'documentation_gap',
-      label: '⚠️ بنود تحتاج توثيق',
-      rate: `${(docGapRate * 100).toFixed(0)}%`,
-      deduction: parseFloat(actualDed.toFixed(2)),
-      color: '#f59e0b'
-    });
-  }
-  
-  if (nonSpecificDiagRate > 0.1) {
-    const actualDed = (defenseDiagDed * 0.6) + (fairnessDiagDed * 0.4);
-    deductions.push({
-      type: 'documentation_gap',
-      label: '⚠️ تشخيص غير محدد',
-      rate: `${(nonSpecificDiagRate * 100).toFixed(0)}%`,
-      deduction: parseFloat(actualDed.toFixed(2)),
-      color: '#f59e0b'
-    });
-  }
-  
-  kpis.deductionLedger = deductions;
-
-  return kpis;
+  };
 }
 
 /**
- * توليد قسم التقييم الثنائي
- * @param {Object} kpis - مؤشرات الأداء
- * @param {Function} getScoreColor - دالة لون الدرجة
- * @returns {string} HTML
+ * الحصول على لون النسبة المئوية
  */
-function generateDualScoreSection(kpis, getScoreColor) {
-  const fairnessScore = kpis.clinicianFairness?.score ?? 0;
-  const defenseScore = kpis.insuranceDefense?.score ?? 0;
-  
-  let fairnessDetailsHtml = '';
-  (kpis.clinicianFairness?.details || []).forEach(d => {
-    const statusColor = d.status === 'good' ? '#22c55e' : d.status === 'warning' ? '#f59e0b' : '#ef4444';
-    fairnessDetailsHtml += '<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">' +
-      '<span style="color:#94a3b8;">' + d.label + '</span>' +
-      '<span>' + d.value + ' <span style="color:' + statusColor + '; font-size:10px;">(' + d.impact + ')</span></span>' +
-      '</div>';
-  });
-  
-  let defenseDetailsHtml = '';
-  (kpis.insuranceDefense?.details || []).forEach(d => {
-    const statusMark = d.status === 'good' ? '<span style="color:#22c55e;">✓</span>' : '<span style="color:#ef4444;">✗</span>';
-    defenseDetailsHtml += '<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">' +
-      '<span style="color:#94a3b8;">' + d.label + '</span>' +
-      '<span>' + d.value + ' ' + statusMark + '</span>' +
-      '</div>';
-  });
-  
-  let deductionRowsHtml = '';
-  (kpis.deductionLedger || []).forEach(d => {
-    const typeBg = d.type === 'medical_error' ? '#dc2626' : '#f59e0b';
-    const typeLabel = d.type === 'medical_error' ? 'خطأ طبي' : 'نقص توثيق';
-    deductionRowsHtml += '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
-      '<td style="padding:8px; color:' + d.color + ';">' + d.label + '</td>' +
-      '<td style="text-align:center; padding:8px; color:#e2e8f0;">' + d.rate + '</td>' +
-      '<td style="text-align:center; padding:8px;"><span style="background:' + typeBg + '; color:white; padding:2px 6px; border-radius:4px; font-size:10px;">' + typeLabel + '</span></td>' +
-      '<td style="text-align:left; padding:8px; color:#ef4444; font-weight:bold;">-' + d.deduction + '</td>' +
-      '</tr>';
-  });
-  
-  const deductionTableHtml = (kpis.deductionLedger && kpis.deductionLedger.length > 0) ? 
-    '<div style="background:rgba(0,0,0,0.2); border-radius:8px; padding:12px; margin-top:16px;">' +
-    '<h4 style="color:#f59e0b; margin:0 0 12px 0; font-size:14px;">📋 جدول الخصومات الشفاف</h4>' +
-    '<table style="width:100%; border-collapse:collapse; font-size:12px;">' +
-    '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.2);">' +
-    '<th style="text-align:right; padding:8px; color:#94a3b8;">البند</th>' +
-    '<th style="text-align:center; padding:8px; color:#94a3b8;">النسبة</th>' +
-    '<th style="text-align:center; padding:8px; color:#94a3b8;">النوع</th>' +
-    '<th style="text-align:left; padding:8px; color:#94a3b8;">الخصم</th>' +
-    '</tr></thead><tbody>' +
-    '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
-    '<td style="padding:8px; color:#22c55e;">🏁 البداية</td>' +
-    '<td style="text-align:center; padding:8px; color:#e2e8f0;">—</td>' +
-    '<td style="text-align:center; padding:8px; color:#e2e8f0;">—</td>' +
-    '<td style="text-align:left; padding:8px; color:#22c55e; font-weight:bold;">10.0</td></tr>' +
-    deductionRowsHtml +
-    '<tr style="background:rgba(201,169,98,0.2);">' +
-    '<td style="padding:8px; color:#c9a962; font-weight:bold;">🎯 الدرجة الرسمية</td>' +
-    '<td colspan="2" style="text-align:center; padding:8px; color:#94a3b8; font-size:11px;">60% دفاع + 40% عدالة</td>' +
-    '<td style="text-align:left; padding:8px; color:#c9a962; font-weight:bold; font-size:16px;">' + kpis.overallScore.score + '/10</td>' +
-    '</tr></tbody></table></div>' : '';
-
-  return `
-  <div style="margin-bottom:24px; padding:20px; background:linear-gradient(135deg, rgba(201,169,98,0.15) 0%, rgba(30,58,95,0.3) 100%); border-radius:12px; border:1px solid rgba(201,169,98,0.3);">
-    <h3 style="color:#c9a962; margin:0 0 16px 0; font-size:18px; text-align:center;">
-      ⚖️ نظام التقييم العادل (ثنائي المسار)
-    </h3>
-    <p style="color:#94a3b8; text-align:center; margin:0 0 20px 0; font-size:13px;">
-      ${kpis.overallScore.formula || '60% دفاع تأميني + 40% عدالة الطبيب'}
-    </p>
-    
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:16px; margin-bottom:20px;">
-      
-      <div style="background:rgba(34,197,94,0.1); border-radius:10px; padding:16px; border:2px solid ${getScoreColor(fairnessScore)};">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <div>
-            <h4 style="color:#22c55e; margin:0; font-size:14px;">👨‍⚕️ عدالة الطبيب</h4>
-            <p style="color:#94a3b8; margin:4px 0 0 0; font-size:11px;">تخفيف عقوبات نقص التوثيق</p>
-          </div>
-          <div style="font-size:28px; font-weight:bold; color:${getScoreColor(fairnessScore)};">
-            ${fairnessScore}/10
-          </div>
-        </div>
-        <div style="font-size:12px; color:#e2e8f0;">
-          ${fairnessDetailsHtml}
-        </div>
-      </div>
-      
-      <div style="background:rgba(59,130,246,0.1); border-radius:10px; padding:16px; border:2px solid ${getScoreColor(defenseScore)};">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <div>
-            <h4 style="color:#3b82f6; margin:0; font-size:14px;">🛡️ الدفاع التأميني</h4>
-            <p style="color:#94a3b8; margin:4px 0 0 0; font-size:11px;">قوة الملف أمام شركات التأمين</p>
-          </div>
-          <div style="font-size:28px; font-weight:bold; color:${getScoreColor(defenseScore)};">
-            ${defenseScore}/10
-          </div>
-        </div>
-        <div style="font-size:12px; color:#e2e8f0;">
-          ${defenseDetailsHtml}
-        </div>
-      </div>
-    </div>
-    
-    ${deductionTableHtml}
-  </div>`;
+function getPercentageColor(pct) {
+  if (pct === null || pct === undefined) return '#6b7280';
+  if (pct >= 90) return '#22c55e';
+  if (pct >= 75) return '#eab308';
+  if (pct >= 60) return '#f97316';
+  return '#ef4444';
 }
 
 /**
- * توليد HTML للوحة المؤشرات
+ * توليد شريط تقدم بصري
+ */
+function generateProgressBar(pct, color) {
+  const width = pct !== null ? Math.min(100, Math.max(0, pct)) : 0;
+  return `
+    <div style="background:rgba(255,255,255,0.1); border-radius:8px; height:12px; overflow:hidden; margin-top:8px;">
+      <div style="background:${color}; height:100%; width:${width}%; transition:width 0.3s ease;"></div>
+    </div>`;
+}
+
+/**
+ * توليد HTML للوحة المؤشرات المبسطة - 3 مقاييس فقط
  * @param {Object} kpis - مؤشرات الأداء
  * @param {string} period - الفترة (شهري/أسبوعي)
  * @returns {string} HTML
  */
 export function generateKPIDashboardHTML(kpis, period = 'شهري') {
-  const getScoreColor = (score) => {
-    if (score === null || score === undefined) return '#6b7280'; // gray for N/A
-    if (score >= 8) return '#22c55e'; // green
-    if (score >= 6) return '#eab308'; // yellow
-    if (score >= 4) return '#f97316'; // orange
-    return '#ef4444'; // red
-  };
-
-  const getScoreEmoji = (score) => {
-    if (score === null || score === undefined) return '⚪';
-    if (score >= 8) return '🟢';
-    if (score >= 6) return '🟡';
-    if (score >= 4) return '🟠';
-    return '🔴';
-  };
+  const docQuality = kpis.documentationQuality || {};
+  const medQuality = kpis.medicalServiceQuality || {};
+  const eligibility = kpis.patientEligibility || {};
+  const overall = kpis.overall || {};
   
-  // دالة مساعدة لعرض النتيجة
-  const formatScore = (score, max) => {
-    if (score === null || score === undefined) return 'غير متوفر';
-    return `${score}/${max}`;
-  };
+  const docPct = docQuality.percentage;
+  const medPct = medQuality.percentage;
+  const eligPct = eligibility.percentage;
+  const overallPct = overall.percentage;
 
-  const getStatusBadge = (status) => {
-    if (status === 'good') {
-      return '<span style="background:#22c55e;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">✓ جيد</span>';
-    } else if (status === 'na') {
-      return '<span style="background:#6b7280;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">- غير متوفر</span>';
-    } else {
-      return '<span style="background:#ef4444;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">✗ يحتاج تحسين</span>';
-    }
-  };
-
-  // حساب الهدف الديناميكي - دائماً للأعلى
-  const currentScore = kpis.overallScore.score !== null ? parseFloat(kpis.overallScore.score) : null;
-  const targetScore = currentScore !== null ? (currentScore >= 9 ? 10.0 : currentScore >= 8 ? 9.0 : 8.0) : null;
+  const formatPct = (pct) => pct !== null && pct !== undefined ? `${pct}%` : 'غير متوفر';
   
-  // نص الهدف
-  const targetText = currentScore !== null 
-    ? `التقييم ${period} - يمكن استهداف الرفع من ${currentScore} إلى ${targetScore}+ خلال 3 أشهر`
-    : `التقييم ${period} - البيانات غير كافية لحساب التقييم`;
-  
-  // عرض التقييم الإجمالي
-  const overallScoreDisplay = currentScore !== null ? currentScore : '—';
-  const overallScoreSubtext = currentScore !== null ? '/10' : 'غير متوفر';
-
   return `
-<div class="kpi-dashboard" style="background:linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); border-radius:16px; padding:24px; margin:20px 0; direction:rtl;">
+<div class="kpi-dashboard" style="background:linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%); border-radius:16px; padding:24px; margin:20px 0; direction:rtl; font-family:'Tajawal',sans-serif;">
   
   <div style="text-align:center; margin-bottom:24px;">
     <h2 style="color:#c9a962; margin:0 0 8px 0; font-size:24px;">
-      📊 لوحة مؤشرات الأداء
+      📊 لوحة المؤشرات المعيارية
     </h2>
-    <p style="color:#94a3b8; margin:0; font-size:14px;">${targetText}</p>
+    <p style="color:#94a3b8; margin:0; font-size:14px;">التقييم ${period} - 3 مقاييس ثابتة وواضحة</p>
   </div>
 
-  <!-- Overall Score Circle -->
-  <div style="text-align:center; margin-bottom:24px;">
-    <div style="display:inline-block; width:120px; height:120px; border-radius:50%; background:linear-gradient(135deg, ${getScoreColor(kpis.overallScore.score)}22, ${getScoreColor(kpis.overallScore.score)}44); border:4px solid ${getScoreColor(kpis.overallScore.score)}; position:relative;">
+  <!-- النتيجة الإجمالية -->
+  <div style="text-align:center; margin-bottom:28px;">
+    <div style="display:inline-block; width:140px; height:140px; border-radius:50%; background:linear-gradient(135deg, ${getPercentageColor(overallPct)}22, ${getPercentageColor(overallPct)}44); border:5px solid ${getPercentageColor(overallPct)}; position:relative;">
       <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;">
-        <div style="font-size:32px; font-weight:bold; color:${getScoreColor(kpis.overallScore.score)};">${overallScoreDisplay}</div>
-        <div style="font-size:12px; color:#94a3b8;">${overallScoreSubtext}</div>
+        <div style="font-size:36px; font-weight:bold; color:${getPercentageColor(overallPct)};">${formatPct(overallPct)}</div>
+        <div style="font-size:11px; color:#94a3b8;">النتيجة الإجمالية</div>
       </div>
     </div>
-    <div style="margin-top:8px; color:#e2e8f0; font-size:14px;">التقييم الإجمالي</div>
   </div>
 
-  <!-- Three KPI Cards -->
-  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:24px;">
+  <!-- المقاييس الثلاثة -->
+  <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:24px;">
     
-    <!-- Insurance Compliance -->
-    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:16px; border-right:4px solid ${getScoreColor(kpis.insuranceCompliance.score)};">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="color:#e2e8f0; margin:0; font-size:16px;">🏥 الامتثال التأميني</h3>
-        <div style="font-size:24px; font-weight:bold; color:${getScoreColor(kpis.insuranceCompliance.score)};">
-          ${formatScore(kpis.insuranceCompliance.score, kpis.insuranceCompliance.max)}
-        </div>
+    <!-- 1. جودة التوثيق التأميني -->
+    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; border-top:4px solid ${getPercentageColor(docPct)}; text-align:center;">
+      <div style="font-size:14px; color:#94a3b8; margin-bottom:8px;">📋 جودة التوثيق التأميني</div>
+      <div style="font-size:42px; font-weight:bold; color:${getPercentageColor(docPct)}; margin-bottom:4px;">${formatPct(docPct)}</div>
+      ${generateProgressBar(docPct, getPercentageColor(docPct))}
+      <div style="font-size:11px; color:#64748b; margin-top:12px;">
+        ${docQuality.description || 'نقص تحاليل، IV بدون تشخيص سابق'}
       </div>
-      <div style="font-size:13px;">
-        ${kpis.insuranceCompliance.details.map(d => `
-          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
-            <span style="color:#94a3b8;">${d.label}</span>
-            <span style="color:#e2e8f0;">${d.value} ${getStatusBadge(d.status)}</span>
-          </div>
-        `).join('')}
-      </div>
+      ${docQuality.errors ? `<div style="font-size:10px; color:#f59e0b; margin-top:4px;">⚠️ ${docQuality.errors} خلل من ${docQuality.total}</div>` : ''}
     </div>
 
-    <!-- Medical Quality -->
-    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:16px; border-right:4px solid ${getScoreColor(kpis.medicalQuality.score)};">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="color:#e2e8f0; margin:0; font-size:16px;">⚕️ الجودة الطبية</h3>
-        <div style="font-size:24px; font-weight:bold; color:${getScoreColor(kpis.medicalQuality.score)};">
-          ${formatScore(kpis.medicalQuality.score, kpis.medicalQuality.max)}
-        </div>
+    <!-- 2. جودة الخدمات الطبية -->
+    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; border-top:4px solid ${getPercentageColor(medPct)}; text-align:center;">
+      <div style="font-size:14px; color:#94a3b8; margin-bottom:8px;">⚕️ جودة الخدمات الطبية</div>
+      <div style="font-size:42px; font-weight:bold; color:${getPercentageColor(medPct)}; margin-bottom:4px;">${formatPct(medPct)}</div>
+      ${generateProgressBar(medPct, getPercentageColor(medPct))}
+      <div style="font-size:11px; color:#64748b; margin-top:12px;">
+        ${medQuality.description || 'أدوية خاطئة، جرعات زائدة'}
       </div>
-      <div style="font-size:13px;">
-        ${kpis.medicalQuality.details.map(d => `
-          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
-            <span style="color:#94a3b8;">${d.label}</span>
-            <span style="color:#e2e8f0;">${d.value} ${getStatusBadge(d.status)}</span>
-          </div>
-        `).join('')}
-      </div>
+      ${medQuality.errors ? `<div style="font-size:10px; color:#ef4444; margin-top:4px;">❌ ${medQuality.errors} خطأ من ${medQuality.total}</div>` : ''}
     </div>
 
-    <!-- Documentation Quality -->
-    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:16px; border-right:4px solid ${getScoreColor(kpis.documentationQuality.score)};">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h3 style="color:#e2e8f0; margin:0; font-size:16px;">📝 جودة التوثيق</h3>
-        <div style="font-size:24px; font-weight:bold; color:${getScoreColor(kpis.documentationQuality.score)};">
-          ${formatScore(kpis.documentationQuality.score, kpis.documentationQuality.max)}
-        </div>
+    <!-- 3. نسبة استحقاق المرضى -->
+    <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; border-top:4px solid ${getPercentageColor(eligPct)}; text-align:center;">
+      <div style="font-size:14px; color:#94a3b8; margin-bottom:8px;">👤 استحقاق المرضى</div>
+      <div style="font-size:42px; font-weight:bold; color:${getPercentageColor(eligPct)}; margin-bottom:4px;">${formatPct(eligPct)}</div>
+      ${generateProgressBar(eligPct, getPercentageColor(eligPct))}
+      <div style="font-size:11px; color:#64748b; margin-top:12px;">
+        ${eligibility.description || 'مرضى بتغطية تأمينية صالحة'}
       </div>
-      <div style="font-size:13px;">
-        ${kpis.documentationQuality.details.map(d => `
-          <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
-            <span style="color:#94a3b8;">${d.label}</span>
-            <span style="color:#e2e8f0;">${d.value} ${getStatusBadge(d.status)}</span>
-          </div>
-        `).join('')}
-      </div>
+      ${eligibility.gaps ? `<div style="font-size:10px; color:#f59e0b; margin-top:4px;">⚠️ ${eligibility.gaps} مريض بدون تغطية من ${eligibility.total}</div>` : ''}
     </div>
 
   </div>
 
-  <!-- ========== نظام التقييم الثنائي ========== -->
-  ${generateDualScoreSection(kpis, getScoreColor)}
-
-  <!-- Improvement Recommendations -->
+  <!-- ملخص المعادلات -->
   <div style="background:rgba(201,169,98,0.1); border-radius:12px; padding:16px; border:1px solid rgba(201,169,98,0.3);">
-    <h4 style="color:#c9a962; margin:0 0 12px 0; font-size:15px;">📈 خطة التحسين المقترحة</h4>
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; font-size:13px; color:#e2e8f0;">
-      ${generateImprovementPlan(kpis)}
+    <h4 style="color:#c9a962; margin:0 0 12px 0; font-size:15px;">📐 المعادلات المستخدمة</h4>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; font-size:12px; color:#e2e8f0;">
+      <div style="padding:8px; background:rgba(0,0,0,0.2); border-radius:8px;">
+        <strong style="color:#3b82f6;">جودة التوثيق</strong> = (الإجراءات - أخطاء التوثيق) ÷ الإجراءات × 100
+      </div>
+      <div style="padding:8px; background:rgba(0,0,0,0.2); border-radius:8px;">
+        <strong style="color:#22c55e;">جودة الخدمات</strong> = (الإجراءات - الأخطاء الطبية) ÷ الإجراءات × 100
+      </div>
+      <div style="padding:8px; background:rgba(0,0,0,0.2); border-radius:8px;">
+        <strong style="color:#f59e0b;">الاستحقاق</strong> = (المرضى - ناقصي الاستحقاق) ÷ المرضى × 100
+      </div>
     </div>
   </div>
 
-  <!-- Target Setting -->
-  ${currentScore !== null ? `
-  <div style="margin-top:16px; padding:12px; background:rgba(34,197,94,0.1); border-radius:8px; text-align:center;">
-    <span style="color:#22c55e; font-size:14px;">
-      🎯 الهدف: رفع التقييم الإجمالي من <strong>${currentScore}</strong> إلى <strong>${targetScore}</strong> خلال 3 أشهر
+  <!-- مؤشر الهدف -->
+  ${overallPct !== null ? `
+  <div style="margin-top:16px; padding:12px; background:${overallPct >= 90 ? 'rgba(34,197,94,0.15)' : overallPct >= 75 ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.15)'}; border-radius:8px; text-align:center;">
+    <span style="color:${getPercentageColor(overallPct)}; font-size:14px;">
+      ${overallPct >= 90 ? '🎉 أداء ممتاز! استمر في هذا المستوى' : 
+        overallPct >= 75 ? '📈 أداء جيد - يمكن تحسينه للوصول إلى 90%+' : 
+        '⚠️ يحتاج تحسين عاجل - راجع الأخطاء المذكورة'}
     </span>
   </div>
-  ` : `
-  <div style="margin-top:16px; padding:12px; background:rgba(107,114,128,0.1); border-radius:8px; text-align:center;">
-    <span style="color:#9ca3af; font-size:14px;">
-      ⚠️ البيانات غير كافية لتحديد هدف رقمي - يرجى توفير بيانات كاملة
-    </span>
-  </div>
-  `}
+  ` : ''}
 
 </div>`;
-}
-
-/**
- * توليد خطة التحسين بناءً على أدنى المؤشرات
- */
-function generateImprovementPlan(kpis) {
-  const improvements = [];
-  
-  // Insurance improvements
-  kpis.insuranceCompliance.details.forEach(d => {
-    if (d.status === 'bad') {
-      switch(d.label) {
-        case 'معدل القبول':
-          improvements.push('<div>✓ مراجعة أسباب الرفض وتوثيقها مسبقاً</div>');
-          break;
-        case 'نسبة يحتاج توثيق':
-          improvements.push('<div>✓ إكمال التوثيق قبل الصرف (VAS, علامات حيوية)</div>');
-          break;
-        case 'نسبة التكرار':
-          improvements.push('<div>✓ مراجعة سجل المريض قبل الصرف</div>');
-          break;
-        case 'IV بدون مبرر':
-          improvements.push('<div>✓ توثيق سبب عدم تحمل الفم أو VAS</div>');
-          break;
-      }
-    }
-  });
-
-  // Medical improvements
-  kpis.medicalQuality.details.forEach(d => {
-    if (d.status === 'bad') {
-      switch(d.label) {
-        case 'المضادات المناسبة':
-          improvements.push('<div>✓ طلب RADT/زرع قبل وصف المضاد</div>');
-          break;
-        case 'توثيق العلامات الحيوية':
-          improvements.push('<div>✓ قياس وتسجيل الحرارة والضغط لكل حالة</div>');
-          break;
-        case 'الفحوصات المطلوبة':
-          improvements.push('<div>✓ طلب الفحوصات المطلوبة حسب التشخيص</div>');
-          break;
-      }
-    }
-  });
-
-  // Documentation improvements
-  kpis.documentationQuality.details.forEach(d => {
-    if (d.status === 'bad') {
-      switch(d.label) {
-        case 'التشخيص المحدد':
-          improvements.push('<div>✓ كتابة تشخيص محدد وليس عام (مثال: التهاب لوزتين صديدي)</div>');
-          break;
-        case 'أكواد ICD موجودة':
-          improvements.push('<div>✓ إضافة كود ICD-10 لكل تشخيص</div>');
-          break;
-      }
-    }
-  });
-
-  if (improvements.length === 0) {
-    improvements.push('<div style="color:#22c55e;">🎉 جميع المؤشرات ضمن الهدف - استمر!</div>');
-  }
-
-  return improvements.join('');
 }
 
 /**
@@ -654,12 +227,12 @@ function generateImprovementPlan(kpis) {
 export function extractStatsFromCases(cases) {
   const stats = {
     totalCases: cases.length,
-    totalServiceItems: 0, // إجمالي بنود الخدمة من الإكسل
+    totalServiceItems: 0,
     approvedCount: 0,
     rejectedCount: 0,
     needsDocCount: 0,
     duplicateCount: 0,
-    duplicateCases: 0, // عدد الحالات التي فيها تكرار
+    duplicateCases: 0,
     ivWithoutJustification: 0,
     antibioticTotal: 0,
     antibioticAppropriate: 0,
@@ -667,21 +240,23 @@ export function extractStatsFromCases(cases) {
     requiredTestsTotal: 0,
     requiredTestsOrdered: 0,
     diagnosisSpecific: 0,
-    diagnosisNonSpecific: 0, // للتوضيح
-    icdCodesPresent: 0
+    diagnosisNonSpecific: 0,
+    icdCodesPresent: 0,
+    // للمقاييس الثلاثة المبسطة
+    casesWithDocIssues: 0,    // حالات بها مشاكل توثيق
+    casesWithMedicalErrors: 0  // حالات بها أخطاء طبية
   };
 
-  // تتبع التكرارات على مستوى الخدمة
-  const serviceOccurrences = new Map(); // claimId+serviceCode -> count
-
   for (const c of cases) {
-    // حساب إجمالي بنود الخدمة الفعلية
     const serviceCount = c.services?.length || 0;
     stats.totalServiceItems += serviceCount;
     
-    // تحديد حالة الحالة
     const hasVitals = c.vitals && (c.vitals.temperature || c.vitals.bloodPressure || c.vitals.pulse);
     const hasIcd = c.icdCode && c.icdCode.length > 0;
+    
+    // متغيرات لتتبع حالة هذا المريض
+    let caseHasDocIssue = false;
+    let caseHasMedicalError = false;
     
     // ========== أولاً: تتبع التكرارات داخل نفس المطالبة ==========
     const claimServices = new Map();
@@ -744,9 +319,15 @@ export function extractStatsFromCases(cases) {
       seenServices.set(svcKey, seenCount + 1);
       
       // تحديث العدادات (حالة واحدة فقط لكل خدمة)
-      if (status === 'approved') stats.approvedCount++;
-      else if (status === 'rejected') stats.rejectedCount++;
-      else stats.needsDocCount++;
+      if (status === 'approved') {
+        stats.approvedCount++;
+      } else if (status === 'rejected') {
+        stats.rejectedCount++;
+        caseHasMedicalError = true; // هذه الحالة بها خطأ طبي
+      } else {
+        stats.needsDocCount++;
+        caseHasDocIssue = true; // هذه الحالة بها مشكلة توثيق
+      }
     }
     
     // Vitals documented
@@ -804,7 +385,6 @@ export function extractStatsFromCases(cases) {
     
     if (hasAntibiotic) {
       stats.antibioticTotal++;
-      // Check if has bacterial indication
       const hasBacterialIndication = c.diagnosis?.toLowerCase().includes('bacterial') ||
                                      c.diagnosis?.toLowerCase().includes('بكتيري') ||
                                      c.diagnosis?.toLowerCase().includes('tonsillitis') ||
@@ -814,10 +394,29 @@ export function extractStatsFromCases(cases) {
         stats.antibioticAppropriate++;
       }
     }
+    
+    // تحديث عدادات مستوى الحالة (للمقياس الثالث: استحقاق المرضى)
+    if (caseHasDocIssue) stats.casesWithDocIssues++;
+    if (caseHasMedicalError) stats.casesWithMedicalErrors++;
   }
 
-  // نسبة التكرار: عدد الحالات التي فيها تكرار ÷ إجمالي الحالات
+  // نسبة التكرار
   stats.duplicateRate = stats.totalCases > 0 ? (stats.duplicateCases / stats.totalCases) : 0;
+
+  // ========== المقاييس الثلاثة المبسطة ==========
+  stats.totalProcedures = stats.approvedCount + stats.rejectedCount + stats.needsDocCount;
+  
+  // 1. أخطاء التوثيق (على مستوى الإجراء)
+  stats.documentationErrors = stats.needsDocCount;
+  
+  // 2. الأخطاء الطبية (على مستوى الإجراء)
+  stats.medicalErrors = stats.rejectedCount;
+  
+  // 3. استحقاق المرضى: عدد الحالات التي بها مشاكل (أخطاء طبية أو توثيق)
+  // المريض "غير مستحق" = لديه خدمة مرفوضة أو تحتاج توثيق
+  stats.patientsWithEligibilityGaps = stats.casesWithMedicalErrors + stats.casesWithDocIssues;
+  // نتأكد من عدم تجاوز العدد الكلي (قد يكون مريض واحد لديه مشكلتين)
+  stats.patientsWithEligibilityGaps = Math.min(stats.patientsWithEligibilityGaps, stats.totalCases);
 
   return stats;
 }
