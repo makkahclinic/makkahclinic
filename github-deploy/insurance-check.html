@@ -3988,6 +3988,43 @@ function renderDoctorStats(doctors) {
 let casesChartInstance = null;
 let ratingsChartInstance = null;
 
+// تحديث الشارت مباشرة بعد الحفظ - بدون انتظار Google Sheets
+function updateChartWithNewStats(doctorName, docQuality, medicalQuality, eligibility, totalCases) {
+  if (!ratingsChartInstance) return;
+  
+  const chart = ratingsChartInstance;
+  const doctorIndex = chart.data.labels.indexOf(doctorName);
+  
+  if (doctorIndex >= 0) {
+    // الطبيب موجود - تحديث القيم
+    chart.data.datasets[0].data[doctorIndex] = docQuality;
+    chart.data.datasets[1].data[doctorIndex] = medicalQuality;
+    chart.data.datasets[2].data[doctorIndex] = eligibility;
+    chart.update();
+    console.log('[Chart] Updated existing doctor:', doctorName, { docQuality, medicalQuality, eligibility });
+  } else {
+    // طبيب جديد - إضافته للشارت
+    chart.data.labels.push(doctorName);
+    chart.data.datasets[0].data.push(docQuality);
+    chart.data.datasets[1].data.push(medicalQuality);
+    chart.data.datasets[2].data.push(eligibility);
+    chart.update();
+    console.log('[Chart] Added new doctor:', doctorName, { docQuality, medicalQuality, eligibility });
+  }
+  
+  // تحديث شارت الحالات أيضاً
+  if (casesChartInstance) {
+    const casesDoctorIndex = casesChartInstance.data.labels.indexOf(doctorName);
+    if (casesDoctorIndex >= 0) {
+      casesChartInstance.data.datasets[0].data[casesDoctorIndex] = totalCases;
+    } else {
+      casesChartInstance.data.labels.push(doctorName);
+      casesChartInstance.data.datasets[0].data.push(totalCases);
+    }
+    casesChartInstance.update();
+  }
+}
+
 function renderDoctorsChart(doctors) {
   if (typeof Chart === 'undefined') {
     setTimeout(() => renderDoctorsChart(doctors), 500);
@@ -5563,7 +5600,8 @@ async function saveAndLog() {
       });
     }
     
-    loadDoctorStats();
+    // تحديث الشارت مباشرة بالقيم الجديدة بدون انتظار Google Sheets
+    updateChartWithNewStats(doctorName, docQuality, medicalQuality, eligibility, totalCases);
     
     // حفظ بيانات KPI في Firestore للتتبع التراكمي
     if (lastReportStats) {
