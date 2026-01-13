@@ -5554,11 +5554,21 @@ async function saveAndLog() {
       console.log('[Save] KPI cards not found, using calculateDocQuality');
     }
     
-    // إذا لم نجد الكاردات، نستخدم lastReportStats
+    // ✅ استخدام القيم المحسوبة من الـ API مباشرة (إذا موجودة)
     if (docQuality === 0 && medicalQuality === 0 && lastReportStats) {
-      docQuality = calculateDocQuality(lastReportStats);
-      medicalQuality = calculateMedicalQuality(lastReportStats);
-      eligibility = calculateEligibility(lastReportStats);
+      // أولوية: القيم المحسوبة من API > إعادة الحساب
+      if (lastReportStats.docQuality !== undefined && lastReportStats.medicalQuality !== undefined) {
+        docQuality = lastReportStats.docQuality;
+        medicalQuality = lastReportStats.medicalQuality;
+        eligibility = lastReportStats.eligibility || 0;
+        console.log('[Save] Using API pre-calculated KPIs:', { docQuality, medicalQuality, eligibility });
+      } else {
+        // fallback: إعادة الحساب
+        docQuality = calculateDocQuality(lastReportStats);
+        medicalQuality = calculateMedicalQuality(lastReportStats);
+        eligibility = calculateEligibility(lastReportStats);
+        console.log('[Save] Recalculated KPIs:', { docQuality, medicalQuality, eligibility });
+      }
     }
     
     // باقي البيانات من lastReportStats
