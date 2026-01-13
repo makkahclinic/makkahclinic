@@ -1874,7 +1874,9 @@ Return HTML only, no markdown or code blocks.
     
     const kpis = calculateKPIs(caseStats);
     kpiDashboard = generateKPIDashboardHTML(kpis, 'شهري');
-    console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10, Approved: ${finalApproved}, Rejected: ${finalRejected}, NeedsDoc: ${finalNeedsDoc}`);
+    const insScore = kpis?.insuranceCompliance?.score ?? 'N/A';
+    const medScore = kpis?.medicalQuality?.score ?? 'N/A';
+    console.log(`[KPI] Generated dashboard: Insurance ${insScore}/10, Medical ${medScore}/10, Approved: ${finalApproved}, Rejected: ${finalRejected}, NeedsDoc: ${finalNeedsDoc}`);
   } catch (kpiErr) {
     console.error('[KPI] Error generating dashboard:', kpiErr.message);
   }
@@ -2508,7 +2510,9 @@ Return complete HTML in English.`;
       }
       const kpis = calculateKPIs(reportStats);
       kpiDashboard = generateKPIDashboardHTML(kpis, 'شهري');
-      console.log(`[KPI] Generated dashboard: Insurance ${kpis.insuranceCompliance.score}/10, Medical ${kpis.medicalQuality.score}/10`);
+      const insScore = kpis?.insuranceCompliance?.score ?? 'N/A';
+      const medScore = kpis?.medicalQuality?.score ?? 'N/A';
+      console.log(`[KPI] Generated dashboard: Insurance ${insScore}/10, Medical ${medScore}/10`);
     } catch (kpiErr) {
       console.error('[KPI] Error generating dashboard:', kpiErr.message);
     }
