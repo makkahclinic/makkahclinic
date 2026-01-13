@@ -523,7 +523,8 @@ function updateDoctorStats(doctorName, stats) {
       const newSumDoc = currentSumDoc + (stats.docItems || 0);
       
       // ✅ حساب المتوسطات الموزونة بعدد الخدمات (وليس بعدد التقارير)
-      const newServiceWeight = stats.totalServices || 1;
+      // ⚠️ إذا لم يكن هناك خدمات، نتجاهل هذا التقرير في حساب المتوسطات
+      const newServiceWeight = stats.totalServices || 0;
       const totalWeight = currentSumServices + newServiceWeight;
       
       const newVitalRate = totalWeight > 0 
