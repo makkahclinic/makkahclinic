@@ -3538,40 +3538,31 @@ async function saveKpiSnapshot(stats, doctorName) {
   }
 }
 
-// حساب جودة التوثيق - v2026.01.13.02
+// حساب جودة التوثيق
 function calculateDocQuality(stats) {
-  // ✅ صيغة موحدة: (totalServices - docItems) / totalServices
+  // ✅ نفس صيغة التقرير: (totalServices - docItems) / totalServices
   const totalServices = stats.totalServices || stats.totalServiceItems || 0;
   const docItems = stats.docItems || 0;
-  console.log('[KPI-Calc] DocQuality: services=' + totalServices + ', docItems=' + docItems);
   if (totalServices === 0) return 0;
-  const result = Math.round(((totalServices - docItems) / totalServices) * 100);
-  console.log('[KPI-Calc] DocQuality result=' + result + '%');
-  return result;
+  return Math.round(((totalServices - docItems) / totalServices) * 100);
 }
 
-// حساب جودة الخدمات الطبية - v2026.01.13.02
+// حساب جودة الخدمات الطبية
 function calculateMedicalQuality(stats) {
-  // ✅ صيغة موحدة: (totalServices - reviewItems) / totalServices
+  // ✅ نفس صيغة التقرير: (totalServices - reviewItems) / totalServices
   const totalServices = stats.totalServices || stats.totalServiceItems || 0;
   const reviewItems = stats.reviewItems || 0;
-  console.log('[KPI-Calc] MedicalQuality: services=' + totalServices + ', reviewItems=' + reviewItems);
   if (totalServices === 0) return 0;
-  const result = Math.round(((totalServices - reviewItems) / totalServices) * 100);
-  console.log('[KPI-Calc] MedicalQuality result=' + result + '%');
-  return result;
+  return Math.round(((totalServices - reviewItems) / totalServices) * 100);
 }
 
-// حساب استحقاق المرضى - v2026.01.13.02
+// حساب استحقاق المرضى
 function calculateEligibility(stats) {
-  // ✅ صيغة موحدة: (totalCases - min(reviewItems, totalCases)) / totalCases
+  // ✅ نفس صيغة التقرير: (totalCases - min(reviewItems, totalCases)) / totalCases
   const totalCases = stats.totalCases || 0;
   const reviewItems = stats.reviewItems || 0;
-  console.log('[KPI-Calc] Eligibility: cases=' + totalCases + ', reviewItems=' + reviewItems);
   if (totalCases === 0) return 0;
-  const result = Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100);
-  console.log('[KPI-Calc] Eligibility result=' + result + '%');
-  return result;
+  return Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100);
 }
 
 // استخراج الإحصائيات من HTML التقرير (كحل بديل إذا لم يُرجعها الـ API)
@@ -5554,21 +5545,11 @@ async function saveAndLog() {
       console.log('[Save] KPI cards not found, using calculateDocQuality');
     }
     
-    // ✅ استخدام القيم المحسوبة من الـ API مباشرة (إذا موجودة)
+    // إذا لم نجد الكاردات، نستخدم lastReportStats
     if (docQuality === 0 && medicalQuality === 0 && lastReportStats) {
-      // أولوية: القيم المحسوبة من API > إعادة الحساب
-      if (lastReportStats.docQuality !== undefined && lastReportStats.medicalQuality !== undefined) {
-        docQuality = lastReportStats.docQuality;
-        medicalQuality = lastReportStats.medicalQuality;
-        eligibility = lastReportStats.eligibility || 0;
-        console.log('[Save] Using API pre-calculated KPIs:', { docQuality, medicalQuality, eligibility });
-      } else {
-        // fallback: إعادة الحساب
-        docQuality = calculateDocQuality(lastReportStats);
-        medicalQuality = calculateMedicalQuality(lastReportStats);
-        eligibility = calculateEligibility(lastReportStats);
-        console.log('[Save] Recalculated KPIs:', { docQuality, medicalQuality, eligibility });
-      }
+      docQuality = calculateDocQuality(lastReportStats);
+      medicalQuality = calculateMedicalQuality(lastReportStats);
+      eligibility = calculateEligibility(lastReportStats);
     }
     
     // باقي البيانات من lastReportStats
