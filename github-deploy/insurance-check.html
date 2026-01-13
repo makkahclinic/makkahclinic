@@ -3956,25 +3956,12 @@ function renderDoctorStats(doctors) {
   const tbody = document.getElementById('doctorsTableBody');
   tbody.innerHTML = '';
   
-  // Render table - مع دمج البيانات المحلية
+  // ✅ Render table - مباشرة من API (بدون localStorage)
   doctors.forEach(doc => {
-    // التحقق من وجود بيانات محلية أحدث
-    const localStats = getLocalDoctorStats(doc.doctorName);
-    
-    // استخدام البيانات المحلية إذا كانت موجودة وأحدث (خلال 24 ساعة)
-    let docQ, medQ, eligQ;
-    const isLocalRecent = localStats && (Date.now() - localStats.timestamp < 24 * 60 * 60 * 1000);
-    
-    if (isLocalRecent) {
-      docQ = parseFloat(localStats.docQuality) || 0;
-      medQ = parseFloat(localStats.medicalQuality) || 0;
-      eligQ = parseFloat(localStats.eligibility) || 0;
-      console.log('[LocalStats] Using local data for:', doc.doctorName, { docQ, medQ, eligQ });
-    } else {
-      docQ = parseFloat(doc.avgDocQuality || doc.avgInsuranceRating) || 0;
-      medQ = parseFloat(doc.avgMedicalQuality || doc.avgServiceRating) || 0;
-      eligQ = parseFloat(doc.avgEligibility || doc.avgOverallRating) || 0;
-    }
+    // ✅ القراءة مباشرة من DoctorStats فقط
+    const docQ = parseFloat(doc.avgDocQuality || doc.avgInsuranceRating) || 0;
+    const medQ = parseFloat(doc.avgMedicalQuality || doc.avgServiceRating) || 0;
+    const eligQ = parseFloat(doc.avgEligibility || doc.avgOverallRating) || 0;
     const avgRating = (docQ + medQ + eligQ) / 3;
     
     let badgeClass = 'rating-needs';
@@ -4049,27 +4036,18 @@ function renderDoctorsChart(doctors) {
   // استخدام عدد التقارير (الملفات المفحوصة) بدلاً من عدد المرضى
   const casesData = doctors.map(d => parseInt(d.totalReports) || parseInt(d.totalCases) || 0);
   
-  // استخدام البيانات المحلية إذا وُجدت
-  const docQualityData = doctors.map(d => {
-    const local = getLocalDoctorStats(d.doctorName);
-    const isRecent = local && (Date.now() - local.timestamp < 24 * 60 * 60 * 1000);
-    if (isRecent) return Math.min(Math.max(parseFloat(local.docQuality) || 0, 0), 100);
-    return Math.min(Math.max(parseFloat(d.avgDocQuality || d.avgInsuranceRating) || 0, 0), 100);
-  });
+  // ✅ القراءة مباشرة من DoctorStats (بدون localStorage)
+  const docQualityData = doctors.map(d => 
+    Math.min(Math.max(parseFloat(d.avgDocQuality || d.avgInsuranceRating) || 0, 0), 100)
+  );
   
-  const medicalQualityData = doctors.map(d => {
-    const local = getLocalDoctorStats(d.doctorName);
-    const isRecent = local && (Date.now() - local.timestamp < 24 * 60 * 60 * 1000);
-    if (isRecent) return Math.min(Math.max(parseFloat(local.medicalQuality) || 0, 0), 100);
-    return Math.min(Math.max(parseFloat(d.avgMedicalQuality || d.avgServiceRating) || 0, 0), 100);
-  });
+  const medicalQualityData = doctors.map(d => 
+    Math.min(Math.max(parseFloat(d.avgMedicalQuality || d.avgServiceRating) || 0, 0), 100)
+  );
   
-  const eligibilityData = doctors.map(d => {
-    const local = getLocalDoctorStats(d.doctorName);
-    const isRecent = local && (Date.now() - local.timestamp < 24 * 60 * 60 * 1000);
-    if (isRecent) return Math.min(Math.max(parseFloat(local.eligibility) || 0, 0), 100);
-    return Math.min(Math.max(parseFloat(d.avgEligibility || d.avgOverallRating) || 0, 0), 100);
-  });
+  const eligibilityData = doctors.map(d => 
+    Math.min(Math.max(parseFloat(d.avgEligibility || d.avgOverallRating) || 0, 0), 100)
+  );
   
   const maxCases = Math.max(...casesData, 5);
   

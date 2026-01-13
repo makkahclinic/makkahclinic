@@ -73,6 +73,9 @@ function handleRequest(e) {
       case 'getDoctorStats':
         result = getDoctorStats();
         break;
+      case 'rebuildDoctorStats':
+        result = rebuildDoctorStatsFromLog();
+        break;
       case 'updateDoctorRating':
         result = updateDoctorRating(params.doctorName, params.insuranceRating, params.serviceRating);
         break;
@@ -519,12 +522,26 @@ function updateDoctorStats(doctorName, stats) {
       const newSumReview = currentSumReview + (stats.reviewItems || 0);
       const newSumDoc = currentSumDoc + (stats.docItems || 0);
       
-      // حساب المتوسطات (معدل متحرك)
-      const newVitalRate = ((currentVitalRate * currentReports + (stats.vitalSignsRate || 0)) / newReports).toFixed(1);
-      const newDocQuality = ((currentDocQuality * currentReports + (stats.docQuality || 0)) / newReports).toFixed(1);
-      const newMedicalQuality = ((currentMedicalQuality * currentReports + (stats.medicalQuality || 0)) / newReports).toFixed(1);
-      const newEligibility = ((currentEligibility * currentReports + (stats.eligibility || 0)) / newReports).toFixed(1);
-      const newInsuranceDocQuality = ((currentInsuranceDocQuality * currentReports + (stats.insuranceDocQuality || 0)) / newReports).toFixed(1);
+      // ✅ حساب المتوسطات الموزونة بعدد الخدمات (وليس بعدد التقارير)
+      // ⚠️ إذا لم يكن هناك خدمات، نتجاهل هذا التقرير في حساب المتوسطات
+      const newServiceWeight = stats.totalServices || 0;
+      const totalWeight = currentSumServices + newServiceWeight;
+      
+      const newVitalRate = totalWeight > 0 
+        ? ((currentVitalRate * currentSumServices + (stats.vitalSignsRate || 0) * newServiceWeight) / totalWeight).toFixed(1)
+        : 0;
+      const newDocQuality = totalWeight > 0 
+        ? ((currentDocQuality * currentSumServices + (stats.docQuality || 0) * newServiceWeight) / totalWeight).toFixed(1)
+        : 0;
+      const newMedicalQuality = totalWeight > 0 
+        ? ((currentMedicalQuality * currentSumServices + (stats.medicalQuality || 0) * newServiceWeight) / totalWeight).toFixed(1)
+        : 0;
+      const newEligibility = totalWeight > 0 
+        ? ((currentEligibility * currentSumServices + (stats.eligibility || 0) * newServiceWeight) / totalWeight).toFixed(1)
+        : 0;
+      const newInsuranceDocQuality = totalWeight > 0 
+        ? ((currentInsuranceDocQuality * currentSumServices + (stats.insuranceDocQuality || 0) * newServiceWeight) / totalWeight).toFixed(1)
+        : 0;
       
       const status = getStatus(parseFloat(newDocQuality), parseFloat(newMedicalQuality), parseFloat(newEligibility));
       
@@ -574,6 +591,136 @@ function updateDoctorStats(doctorName, stats) {
   } catch(error) {
     Logger.log('❌ [updateDoctorStats] Error: ' + error.toString());
     throw error;
+  }
+}
+
+/**
+ * ✅ إعادة بناء DoctorStats بالكامل من InsuranceUsageLog
+ * هذه الدالة تضمن تطابق 100% بين السجل والإحصائيات
+ * المتوسطات موزونة بعدد الخدمات (وليس بعدد التقارير)
+ */
+function rebuildDoctorStatsFromLog() {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const logSheet = ss.getSheetByName('InsuranceUsageLog');
+    const statsSheet = ss.getSheetByName('DoctorStats');
+    
+    if (!logSheet || !statsSheet) {
+      return { success: false, error: 'الشيتات غير موجودة' };
+    }
+    
+    const log = logSheet.getDataRange().getValues();
+    
+    // مسح البيانات القديمة (ماعدا الهيدر)
+    if (statsSheet.getLastRow() > 1) {
+      statsSheet.getRange(2, 1, statsSheet.getLastRow() - 1, statsSheet.getLastColumn()).clearContent();
+    }
+    
+    const map = {};
+    
+    // تجميع البيانات من السجل (بدءاً من الصف 2 - بعد الهيدر)
+    for (let i = 1; i < log.length; i++) {
+      const row = log[i];
+      const doctor = row[3]; // doctorName في العمود D (index 3)
+      
+      if (!doctor || doctor === '') continue;
+      
+      if (!map[doctor]) {
+        map[doctor] = {
+          reports: 0,
+          cases: 0,
+          services: 0,
+          accepted: 0,
+          review: 0,
+          doc: 0,
+          vitalSum: 0,
+          docQSum: 0,
+          medQSum: 0,
+          eligSum: 0,
+          insQSum: 0,
+          lastDate: null,
+          folderLink: ''
+        };
+      }
+      
+      const r = map[doctor];
+      const services = Number(row[7]) || 0; // totalServices في العمود H (index 7)
+      
+      r.reports++;
+      r.cases += Number(row[6]) || 0;      // totalCases
+      r.services += services;
+      r.accepted += Number(row[8]) || 0;   // acceptedItems
+      r.review += Number(row[9]) || 0;     // reviewItems
+      r.doc += Number(row[10]) || 0;       // docItems
+      
+      // ⚠️ الوزن بعدد الخدمات وليس التقارير
+      r.vitalSum += (Number(row[11]) || 0) * services;
+      r.docQSum += (Number(row[12]) || 0) * services;
+      r.medQSum += (Number(row[13]) || 0) * services;
+      r.eligSum += (Number(row[14]) || 0) * services;
+      r.insQSum += (Number(row[15]) || 0) * services;
+      
+      // تحديث آخر تاريخ
+      if (row[0]) {
+        const rowDate = new Date(row[0]);
+        if (!r.lastDate || rowDate > r.lastDate) {
+          r.lastDate = rowDate;
+        }
+      }
+    }
+    
+    // حفظ النتائج المحسوبة
+    let doctorsUpdated = 0;
+    Object.entries(map).forEach(([doctor, r]) => {
+      const avgVital = r.services > 0 ? (r.vitalSum / r.services).toFixed(1) : 0;
+      const avgDocQ = r.services > 0 ? (r.docQSum / r.services).toFixed(1) : 0;
+      const avgMedQ = r.services > 0 ? (r.medQSum / r.services).toFixed(1) : 0;
+      const avgElig = r.services > 0 ? (r.eligSum / r.services).toFixed(1) : 0;
+      const avgInsQ = r.services > 0 ? (r.insQSum / r.services).toFixed(1) : 0;
+      
+      // حساب الحالة
+      const avgAll = (parseFloat(avgDocQ) + parseFloat(avgMedQ) + parseFloat(avgElig)) / 3;
+      let status = 'يحتاج تحسين';
+      if (avgAll >= 90) status = 'ممتاز';
+      else if (avgAll >= 70) status = 'جيد جداً';
+      else if (avgAll >= 50) status = 'جيد';
+      
+      const formattedDate = r.lastDate 
+        ? Utilities.formatDate(r.lastDate, 'Asia/Riyadh', 'yyyy-MM-dd HH:mm')
+        : '';
+      
+      statsSheet.appendRow([
+        doctor,      // A: doctorName
+        r.reports,   // B: totalReports
+        r.cases,     // C: sumCases
+        r.services,  // D: sumServices
+        r.accepted,  // E: sumAccepted
+        r.review,    // F: sumReview
+        r.doc,       // G: sumDoc
+        avgVital,    // H: avgVitalRate
+        avgDocQ,     // I: avgDocQuality
+        avgMedQ,     // J: avgMedicalQuality
+        avgElig,     // K: avgEligibility
+        avgInsQ,     // L: avgInsuranceDocQuality
+        formattedDate, // M: lastCaseDate
+        '',          // N: folderLink
+        status       // O: status
+      ]);
+      
+      doctorsUpdated++;
+    });
+    
+    Logger.log('✅ [rebuildDoctorStats] Rebuilt stats for ' + doctorsUpdated + ' doctors');
+    
+    return { 
+      success: true, 
+      message: 'تم إعادة بناء إحصائيات ' + doctorsUpdated + ' طبيب',
+      doctorsUpdated: doctorsUpdated 
+    };
+    
+  } catch(error) {
+    Logger.log('❌ [rebuildDoctorStats] Error: ' + error.toString());
+    return { success: false, error: error.toString() };
   }
 }
 
