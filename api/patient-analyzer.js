@@ -1888,19 +1888,36 @@ Return HTML only, no markdown or code blocks.
   const finalReportWithKPI = kpiDashboard ? fullReport + kpiDashboard : fullReport;
   
   // Return both HTML and structured stats for frontend aggregation
-  // استخدام الإحصائيات المستخرجة من AI
+  // حساب الأخطاء بنفس طريقة KPI Dashboard
+  const documentationErrors = (caseStats.needsDocCount || 0) + (caseStats.diagnosisNonSpecific || 0);
+  const medicalErrors = (caseStats.rejectedCount || 0) + (caseStats.ivWithoutJustification || 0);
+  const totalProcedures = caseStats.totalServiceItems || 0;
+  const totalCasesCount = caseStats.totalCases || caseResults.length;
+  
+  // حساب النسب المئوية بنفس طريقة KPI
+  const docQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - documentationErrors) / totalProcedures) * 100) : 100;
+  const medicalQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - medicalErrors) / totalProcedures) * 100) : 100;
+  const eligibilityPct = totalCasesCount > 0 ? Math.round(((totalCasesCount - (caseStats.casesWithMedicalErrors || 0)) / totalCasesCount) * 100) : 100;
+  
+  console.log(`[Final Stats] DocQ=${docQualityPct}%, MedQ=${medicalQualityPct}%, Elig=${eligibilityPct}% | DocErrors=${documentationErrors}, MedErrors=${medicalErrors}, Total=${totalProcedures}`);
+  
   return res.status(200).json({ 
     htmlReport: finalReportWithKPI,
     stats: {
-      totalCases: caseStats.totalCases || caseResults.length,
-      totalServiceItems: caseStats.totalServiceItems || 0,
+      totalCases: totalCasesCount,
+      totalServiceItems: totalProcedures,
       acceptedItems: finalApproved,
-      reviewItems: finalRejected,
-      docItems: finalNeedsDoc,
+      reviewItems: medicalErrors,  // استخدام medicalErrors بدلاً من rejectedCount
+      docItems: documentationErrors,  // استخدام documentationErrors بدلاً من needsDocCount
       duplicateCases: caseStats.duplicateCases || 0,
       avgInsuranceScore: caseStats.avgInsuranceScore || 0,
       avgMedicalScore: caseStats.avgMedicalScore || 0,
-      vitalSignsDocRate: Math.round((caseStats.vitalsDocumented / Math.max(caseStats.totalCases, 1)) * 100) || 0
+      vitalSignsDocRate: Math.round((caseStats.vitalsDocumented / Math.max(totalCasesCount, 1)) * 100) || 0,
+      // النسب المحسوبة مباشرة (لتجنب إعادة الحساب في Frontend)
+      docQuality: docQualityPct,
+      medicalQuality: medicalQualityPct,
+      eligibility: eligibilityPct,
+      rejectedCases: caseStats.casesWithMedicalErrors || 0
     }
   });
 }
