@@ -599,6 +599,11 @@ function getUsageLog(email) {
 
 /**
  * الحصول على إحصائيات الأطباء
+ * Headers (15 columns - الترتيب الصحيح):
+ * [0] doctorName, [1] totalReports, [2] sumCases, [3] sumServices, [4] sumAccepted,
+ * [5] sumReview, [6] sumDoc, [7] avgVitalRate, [8] avgDocQuality,
+ * [9] avgMedicalQuality, [10] avgEligibility, [11] avgInsuranceDocQuality,
+ * [12] lastCaseDate, [13] folderLink, [14] status
  */
 function getDoctorStats() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -611,29 +616,24 @@ function getDoctorStats() {
   const data = statsSheet.getDataRange().getValues();
   const doctors = [];
   
-  // Headers (15 columns):
-  // [0] doctorName, [1] totalCases, [2] totalServices, [3] sumAccepted,
-  // [4] sumReview, [5] sumDoc, [6] avgVitalRate, [7] avgDocQuality,
-  // [8] avgMedicalQuality, [9] avgEligibility, [10] avgInsuranceDocQuality,
-  // [11] lastCaseDate, [12] folderLink, [13] status
-  
   for (let i = 1; i < data.length; i++) {
     if (data[i][0]) {
       doctors.push({
         doctorName: data[i][0],
-        totalCases: data[i][1],
-        totalServices: data[i][2],
-        sumAccepted: data[i][3],
-        sumReview: data[i][4],
-        sumDoc: data[i][5],
-        avgVitalRate: data[i][6],
-        avgDocQuality: data[i][7],          // Column 7 - جودة التوثيق
-        avgMedicalQuality: data[i][8],      // Column 8 - جودة الخدمات
-        avgEligibility: data[i][9],         // Column 9 - أهلية المريض
-        avgInsuranceDocQuality: data[i][10],// Column 10 - جودة توثيق التأمين
-        lastCaseDate: data[i][11],
-        folderLink: data[i][12],
-        status: data[i][13]
+        totalReports: data[i][1],           // [1] عدد التقارير
+        totalCases: data[i][2],             // [2] مجموع الحالات (sumCases)
+        totalServices: data[i][3],          // [3] مجموع الخدمات (sumServices)
+        sumAccepted: data[i][4],            // [4] المقبولة
+        sumReview: data[i][5],              // [5] تحتاج مراجعة
+        sumDoc: data[i][6],                 // [6] تحتاج توثيق
+        avgVitalRate: data[i][7],           // [7] معدل العلامات الحيوية
+        avgDocQuality: data[i][8],          // [8] جودة التوثيق ✓
+        avgMedicalQuality: data[i][9],      // [9] جودة الخدمات ✓
+        avgEligibility: data[i][10],        // [10] أهلية المريض ✓
+        avgInsuranceDocQuality: data[i][11],// [11] جودة توثيق التأمين
+        lastCaseDate: data[i][12],          // [12] آخر مراجعة
+        folderLink: data[i][13],            // [13] رابط المجلد
+        status: data[i][14]                 // [14] الحالة
       });
     }
   }
