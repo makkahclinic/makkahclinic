@@ -1859,10 +1859,13 @@ Return HTML only, no markdown or code blocks.
     console.error('[AI Stats] Error extracting:', e.message);
   }
   
-  // استخدام إحصائيات AI إذا متوفرة، وإلا استخدام caseStats
-  const finalApproved = aiGeneratedStats.approvedCount > 0 ? aiGeneratedStats.approvedCount : caseStats.approvedCount;
-  const finalRejected = aiGeneratedStats.rejectedCount > 0 ? aiGeneratedStats.rejectedCount : caseStats.rejectedCount;
-  const finalNeedsDoc = aiGeneratedStats.needsDocCount > 0 ? aiGeneratedStats.needsDocCount : caseStats.needsDocCount;
+  // استخدام إحصائيات caseStats مباشرة (مصدر الحقيقة الوحيد)
+  // aiGeneratedStats غير دقيق بسبب regex المعقد
+  const finalApproved = caseStats.approvedCount || 0;
+  const finalRejected = caseStats.rejectedCount || 0;
+  const finalNeedsDoc = caseStats.needsDocCount || 0;
+  
+  console.log(`[Stats] Using caseStats directly: Approved=${finalApproved}, Rejected=${finalRejected}, NeedsDoc=${finalNeedsDoc}, Total=${caseStats.totalServiceItems}`);
   
   try {
     // تحديث caseStats بالقيم من AI
