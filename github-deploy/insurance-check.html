@@ -5036,6 +5036,11 @@ analyzeBtn.addEventListener('click', async () => {
     // حفظ الإحصائيات من التحليل العادي لاستخدامها في KPI
     if (data.stats) {
       lastReportStats = data.stats;
+      // تطبيع اسم الحقل: API يُرجع totalServiceItems لكن الكود يستخدم totalServices
+      if (lastReportStats.totalServiceItems && !lastReportStats.totalServices) {
+        lastReportStats.totalServices = lastReportStats.totalServiceItems;
+      }
+      console.log('[Stats] From API:', lastReportStats);
     } else if (data.html || data.htmlReport) {
       // استخراج الإحصائيات من HTML إذا لم يُرجعها الـ API
       lastReportStats = extractStatsFromHtml(data.html || data.htmlReport);
@@ -5424,7 +5429,9 @@ async function saveAndLog() {
     // استخراج الـ 10 مؤشرات من إحصائيات التقرير
     const stats = lastReportStats || {};
     const totalCases = stats.totalCases || 0;
-    const totalServices = stats.totalServices || 0;
+    // دعم كلا الاسمين: totalServices و totalServiceItems
+    const totalServices = stats.totalServices || stats.totalServiceItems || 0;
+    console.log('[Save] Stats:', { totalCases, totalServices, acceptedItems: stats.acceptedItems, reviewItems: stats.reviewItems, docItems: stats.docItems });
     const acceptedItems = stats.acceptedItems || 0;
     const reviewItems = stats.reviewItems || 0;
     const docItems = stats.docItems || 0;
