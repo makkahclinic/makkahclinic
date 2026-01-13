@@ -2402,7 +2402,7 @@
           <div class="chart-container" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; padding: 25px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
             <h4 style="color: #c9a962; margin: 0 0 20px 0; font-size: 1.2rem; text-align: center;">
               <i class="fas fa-file-medical" style="margin-left: 8px;"></i>
-              عدد الحالات لكل طبيب
+              عدد التقارير لكل طبيب
             </h4>
             <canvas id="casesChart" style="max-height: 280px;"></canvas>
           </div>
@@ -2420,10 +2420,10 @@
             <thead>
               <tr>
                 <th>الطبيب</th>
-                <th>عدد الحالات</th>
+                <th>عدد التقارير</th>
                 <th>جودة التوثيق</th>
                 <th>جودة الخدمات</th>
-                <th>أهلية المريض</th>
+                <th>استحقاق المرضى</th>
                 <th>الحالة</th>
                 <th>آخر مراجعة</th>
               </tr>
@@ -3971,7 +3971,7 @@ function renderDoctorStats(doctors) {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td><strong>${doc.doctorName}</strong></td>
-      <td>${doc.totalCases}</td>
+      <td>${doc.totalReports || doc.totalCases || 0}</td>
       <td>${docQ.toFixed(1)}%</td>
       <td>${medQ.toFixed(1)}%</td>
       <td><strong>${eligQ.toFixed(1)}%</strong></td>
@@ -4032,7 +4032,8 @@ function renderDoctorsChart(doctors) {
   }
   
   const labels = doctors.map(d => d.doctorName);
-  const casesData = doctors.map(d => parseInt(d.totalCases) || 0);
+  // استخدام عدد التقارير (الملفات المفحوصة) بدلاً من عدد المرضى
+  const casesData = doctors.map(d => parseInt(d.totalReports) || parseInt(d.totalCases) || 0);
   
   // استخدام البيانات المحلية إذا وُجدت
   const docQualityData = doctors.map(d => {
@@ -4068,7 +4069,7 @@ function renderDoctorsChart(doctors) {
       data: {
         labels: labels,
         datasets: [{
-          label: 'عدد الحالات',
+          label: 'عدد التقارير',
           data: casesData,
           backgroundColor: 'rgba(201, 169, 98, 0.9)',
           borderColor: '#c9a962',
@@ -4091,7 +4092,7 @@ function renderDoctorsChart(doctors) {
             borderColor: '#c9a962',
             borderWidth: 1,
             callbacks: {
-              label: ctx => `${ctx.raw} حالة`
+              label: ctx => `${ctx.raw} تقرير`
             }
           }
         },
@@ -4138,7 +4139,7 @@ function renderDoctorsChart(doctors) {
             borderRadius: 6
           },
           {
-            label: 'أهلية المريض',
+            label: 'استحقاق المرضى',
             data: eligibilityData,
             backgroundColor: 'rgba(59, 130, 246, 0.9)',
             borderColor: '#3b82f6',
@@ -5521,16 +5522,21 @@ async function saveAndLog() {
     // Save HTML to Drive
     console.log('📤 Sending save request to Google Apps Script...');
     
-    // استخراج الـ 10 مؤشرات من إحصائيات التقرير
-    const stats = lastReportStats || {};
-    const totalCases = stats.totalCases || 0;
-    // دعم كلا الاسمين: totalServices و totalServiceItems
-    const totalServices = stats.totalServices || stats.totalServiceItems || 0;
-    const acceptedItems = stats.acceptedItems || 0;
-    const reviewItems = stats.reviewItems || 0;
-    const docItems = stats.docItems || 0;
-    const rejectedCases = stats.rejectedCases || 0;
-    const vitalSignsRate = stats.vitalSignsDocRate || 0;
+    // استخراج الإحصائيات من HTML المعروض (نفس ما تعرضه KPI Cards)
+    // هذا يضمن تطابق القيم المحفوظة مع القيم المعروضة في التقرير
+    const reportHtml = reportContent.innerHTML || '';
+    const extractedStats = extractStatsFromHtml(reportHtml);
+    
+    // استخدام الإحصائيات المستخرجة من HTML (الأولوية) ثم API stats كـ fallback
+    const totalCases = extractedStats.totalCases || lastReportStats?.totalCases || 0;
+    const totalServices = extractedStats.totalServices || lastReportStats?.totalServices || lastReportStats?.totalServiceItems || 0;
+    const acceptedItems = extractedStats.acceptedItems || lastReportStats?.acceptedItems || 0;
+    const reviewItems = extractedStats.reviewItems || 0; // من HTML فقط - لضمان التطابق مع KPI
+    const docItems = extractedStats.docItems || 0; // من HTML فقط - لضمان التطابق مع KPI  
+    const rejectedCases = extractedStats.rejectedCases || 0;
+    const vitalSignsRate = lastReportStats?.vitalSignsDocRate || 0;
+    
+    console.log('[Save] Extracted from HTML:', { totalCases, totalServices, acceptedItems, reviewItems, docItems });
     
     // استخدام نفس معادلات KPI Cards لضمان تطابق القيم المعروضة والمحفوظة
     // المعادلة: جودة التوثيق = (الإجراءات - أخطاء التوثيق) ÷ الإجراءات × 100
