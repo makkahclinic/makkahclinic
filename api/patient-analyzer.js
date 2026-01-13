@@ -1905,34 +1905,50 @@ Return HTML only, no markdown or code blocks.
   // Append KPI dashboard to report
   const finalReportWithKPI = kpiDashboard ? fullReport + kpiDashboard : fullReport;
   
+  // ========== استخراج أخطاء التوثيق ذكياً من التقرير (Source of Truth) ==========
+  const docIssues = extractDocumentationIssuesFromHtml(fullReport);
+  console.log(`[Smart Extract] partialDoc=${docIssues.partialDocItems}, unspecifiedDiag=${docIssues.unspecifiedDiagnosisCount}, unjustifiedIV=${docIssues.unjustifiedIVCount}, unjustifiedDrug=${docIssues.unjustifiedDrugCount}`);
+  
   // Return both HTML and structured stats for frontend aggregation
-  // حساب الأخطاء بنفس طريقة KPI Dashboard
-  const documentationErrors = (caseStats.needsDocCount || 0) + (caseStats.diagnosisNonSpecific || 0);
-  const medicalErrors = (caseStats.rejectedCount || 0) + (caseStats.ivWithoutJustification || 0);
   const totalProcedures = caseStats.totalServiceItems || 0;
   const totalCasesCount = caseStats.totalCases || caseResults.length;
   
-  // حساب النسب المئوية بنفس طريقة KPI
-  let docQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - documentationErrors) / totalProcedures) * 100) : 100;
-  let medicalQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - medicalErrors) / totalProcedures) * 100) : 100;
+  // ========== حساب أخطاء التوثيق الفعّالة (effectiveDocErrors) ==========
+  const baseDocItems = Math.max(caseStats.needsDocCount || 0, aiGeneratedStats.needsDocCount || 0);
+  const partialDocPenalty = docIssues.partialDocItems * 0.5;
+  const unspecifiedDiagnosisPenalty = docIssues.unspecifiedDiagnosisCount > 0 ? 1 : 0;
+  const unjustifiedIVPenalty = docIssues.unjustifiedIVCount > 0 ? 1 : 0;
+  
+  const effectiveDocErrors = baseDocItems + partialDocPenalty + unspecifiedDiagnosisPenalty + unjustifiedIVPenalty;
+  
+  // ========== حساب أخطاء الجودة الطبية ==========
+  const baseMedicalErrors = Math.max(caseStats.rejectedCount || 0, aiGeneratedStats.rejectedCount || 0);
+  const unjustifiedDrugPenalty = docIssues.unjustifiedDrugCount > 0 ? Math.min(docIssues.unjustifiedDrugCount, 2) : 0;
+  const effectiveMedicalErrors = baseMedicalErrors + unjustifiedDrugPenalty + (caseStats.ivWithoutJustification || 0);
+  
+  console.log(`[Effective Errors] DocErrors=${effectiveDocErrors} (base=${baseDocItems}, partial=${partialDocPenalty}, diag=${unspecifiedDiagnosisPenalty}, iv=${unjustifiedIVPenalty})`);
+  console.log(`[Effective Errors] MedErrors=${effectiveMedicalErrors} (base=${baseMedicalErrors}, drugs=${unjustifiedDrugPenalty})`);
+  
+  // ========== حساب النسب المئوية ==========
+  let docQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - effectiveDocErrors) / totalProcedures) * 100) : 100;
+  let medicalQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - effectiveMedicalErrors) / totalProcedures) * 100) : 100;
   const eligibilityPct = totalCasesCount > 0 ? Math.round(((totalCasesCount - (caseStats.casesWithMedicalErrors || 0)) / totalCasesCount) * 100) : 100;
   
-  // ========== منع 100% إذا وُجدت ملاحظات توثيق في التقرير ==========
-  // إذا كان هناك أي ذكر لـ "يحتاج توثيق" ولكن docQuality = 100، نخفضها لـ 95%
-  const hasDocWarnings = fullReport.includes('يحتاج توثيق') || fullReport.includes('توثيق إضافي') || fullReport.includes('توثيق ناقص');
-  if (hasDocWarnings && docQualityPct === 100 && documentationErrors === 0) {
-    docQualityPct = 95; // سقف للتوثيق الشكلي
-    console.log(`[Doc Cap] Applied 95% cap: Report has documentation warnings but no counted errors`);
+  // ========== منع 100% إذا وُجدت ملاحظات ==========
+  if (effectiveDocErrors > 0 && docQualityPct === 100) {
+    docQualityPct = 95;
+    console.log(`[Doc Cap] Applied 95% cap: effectiveDocErrors > 0 but calculated 100%`);
   }
-  
-  // نفس المنطق للجودة الطبية
-  const hasMedicalWarnings = fullReport.includes('مرفوض') || fullReport.includes('غير مبرر') || fullReport.includes('جرعات زائدة');
-  if (hasMedicalWarnings && medicalQualityPct === 100 && medicalErrors === 0) {
+  if (effectiveMedicalErrors > 0 && medicalQualityPct === 100) {
     medicalQualityPct = 95;
-    console.log(`[Med Cap] Applied 95% cap: Report has medical warnings but no counted errors`);
+    console.log(`[Med Cap] Applied 95% cap: effectiveMedicalErrors > 0 but calculated 100%`);
   }
   
-  console.log(`[Final Stats] DocQ=${docQualityPct}%, MedQ=${medicalQualityPct}%, Elig=${eligibilityPct}% | DocErrors=${documentationErrors}, MedErrors=${medicalErrors}, Total=${totalProcedures}, HasDocWarnings=${hasDocWarnings}`);
+  // تأكد من أن القيم بين 0 و 100
+  docQualityPct = Math.max(0, Math.min(100, docQualityPct));
+  medicalQualityPct = Math.max(0, Math.min(100, medicalQualityPct));
+  
+  console.log(`[Final Stats] DocQ=${docQualityPct}%, MedQ=${medicalQualityPct}%, Elig=${eligibilityPct}% | EffDocErr=${effectiveDocErrors}, EffMedErr=${effectiveMedicalErrors}, Total=${totalProcedures}`);
   
   return res.status(200).json({ 
     htmlReport: finalReportWithKPI,
@@ -1940,8 +1956,8 @@ Return HTML only, no markdown or code blocks.
       totalCases: totalCasesCount,
       totalServiceItems: totalProcedures,
       acceptedItems: finalApproved,
-      reviewItems: medicalErrors,  // استخدام medicalErrors بدلاً من rejectedCount
-      docItems: documentationErrors,  // استخدام documentationErrors بدلاً من needsDocCount
+      reviewItems: Math.round(effectiveMedicalErrors),  // أخطاء طبية فعّالة
+      docItems: Math.round(effectiveDocErrors),  // أخطاء توثيق فعّالة
       duplicateCases: caseStats.duplicateCases || 0,
       avgInsuranceScore: caseStats.avgInsuranceScore || 0,
       avgMedicalScore: caseStats.avgMedicalScore || 0,
@@ -1950,9 +1966,61 @@ Return HTML only, no markdown or code blocks.
       docQuality: docQualityPct,
       medicalQuality: medicalQualityPct,
       eligibility: eligibilityPct,
-      rejectedCases: caseStats.casesWithMedicalErrors || 0
+      rejectedCases: caseStats.casesWithMedicalErrors || 0,
+      // تفاصيل الاستخراج الذكي
+      smartExtract: {
+        partialDocItems: docIssues.partialDocItems,
+        unspecifiedDiagnosisCount: docIssues.unspecifiedDiagnosisCount,
+        unjustifiedIVCount: docIssues.unjustifiedIVCount,
+        unjustifiedDrugCount: docIssues.unjustifiedDrugCount
+      }
     }
   });
+}
+
+/**
+ * استخراج أخطاء التوثيق ذكياً من التقرير HTML (Source of Truth)
+ * @param {string} html - التقرير المولّد من AI
+ * @returns {Object} - عدد كل نوع من أخطاء التوثيق
+ */
+function extractDocumentationIssuesFromHtml(html) {
+  if (!html) {
+    return {
+      partialDocItems: 0,
+      unspecifiedDiagnosisCount: 0,
+      unjustifiedIVCount: 0,
+      unjustifiedDrugCount: 0
+    };
+  }
+
+  // تحويل HTML إلى نص خام للبحث
+  const text = html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+  // ⚠️ يحتاج توثيق
+  const partialDocItems =
+    (text.match(/يحتاج توثيق|needs documentation|partial documentation|توثيق إضافي|توثيق ناقص/gi) || []).length;
+
+  // ❌ تشخيص غير محدد
+  const unspecifiedDiagnosisCount =
+    (text.match(/غير محدد|unspecified|تشخيص غير محدد|diagnosis unspecified/gi) || []).length;
+
+  // ❌ IV بدون مبرر
+  const unjustifiedIVCount =
+    (text.match(/iv.*غير مبرر|normal saline.*غير مبرر|iv without justification|محلول ملحي.*غير مبرر/gi) || []).length;
+
+  // ❌ أدوية غير مبررة
+  const unjustifiedDrugCount =
+    (text.match(/غير مبرر|not justified|unjustified|دواء.*مرفوض|مرفوض.*دواء/gi) || []).length;
+
+  return {
+    partialDocItems,
+    unspecifiedDiagnosisCount,
+    unjustifiedIVCount,
+    unjustifiedDrugCount
+  };
 }
 
 function detectMimeType(base64Data = "") {

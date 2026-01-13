@@ -1,0 +1,169 @@
+ممتاز ✅
+نبدأ بالخيار الأهم فعليًا:
+
+🔧 (1) استخراج أخطاء التوثيق تلقائيًا من التقرير + ربطها بالحساب
+
+هذا هو الجزء الذي يُنهي مشكلة 100% نهائيًا ويجعل النظام ذكيًا بذاته.
+
+الهدف
+
+بدل ما:
+
+تعتمد على قيم تُمرَّر يدويًا
+
+أو أرقام Excel فقط
+
+نخلي النظام يقرأ التقرير نفسه (HTML الناتج من AI) ويستخرج:
+
+⚠️ بنود تحتاج توثيق
+
+❌ تشخيص غير محدد
+
+❌ IV بدون مبرر
+
+❌ أدوية غير مبررة
+
+ثم:
+➡️ يحسب effectiveDocErrors
+➡️ يطلع docQuality واقعي
+
+الجزء 1️⃣: دالة الاستخراج الذكية (انسخها كاملة)
+
+ضع هذه الدالة مرة واحدة في ملف الـ JS (مثلاً تحت extractStatsFromHtml):
+
+function extractDocumentationIssuesFromHtml(html) {
+  if (!html) {
+    return {
+      partialDocItems: 0,
+      unspecifiedDiagnosisCount: 0,
+      unjustifiedIVCount: 0,
+      unjustifiedDrugCount: 0
+    };
+  }
+
+  const text = html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+  // ⚠️ يحتاج توثيق
+  const partialDocItems =
+    (text.match(/يحتاج توثيق|needs documentation|partial documentation/gi) || []).length;
+
+  // ❌ تشخيص غير محدد
+  const unspecifiedDiagnosisCount =
+    (text.match(/غير محدد|unspecified|nos\b/gi) || []).length;
+
+  // ❌ IV بدون مبرر
+  const unjustifiedIVCount =
+    (text.match(/iv infusion.*غير مبرر|normal saline.*غير مبرر|iv without justification/gi) || []).length;
+
+  // ❌ أدوية غير مبررة
+  const unjustifiedDrugCount =
+    (text.match(/غير مبرر|not justified|unjustified drug/gi) || []).length;
+
+  return {
+    partialDocItems,
+    unspecifiedDiagnosisCount,
+    unjustifiedIVCount,
+    unjustifiedDrugCount
+  };
+}
+
+الجزء 2️⃣: اربطها مباشرة بعد التحليل
+
+بعد هذا السطر (عندك موجود):
+
+originalReport = printHeader + sanitizedHtml + printFooter;
+
+
+أضف مباشرة 👇
+
+// --- NEW: استخراج أخطاء التوثيق من التقرير ---
+const docIssues = extractDocumentationIssuesFromHtml(sanitizedHtml);
+
+lastReportStats = lastReportStats || {};
+lastReportStats.partialDocItems = docIssues.partialDocItems;
+lastReportStats.unspecifiedDiagnosisCount = docIssues.unspecifiedDiagnosisCount;
+lastReportStats.unjustifiedIVCount = docIssues.unjustifiedIVCount;
+lastReportStats.unjustifiedDrugCount = docIssues.unjustifiedDrugCount;
+
+الجزء 3️⃣: تعديل حساب جودة التوثيق (الحاسم)
+
+داخل saveAndLog() استبدل الحساب القديم بالكامل 👇
+
+const stats = lastReportStats || {};
+
+const totalServices = stats.totalServices || stats.totalServiceItems || 0;
+const docItems = stats.docItems || 0;
+
+const partialDocItems = stats.partialDocItems || 0;
+const unspecifiedDiagnosisPenalty = stats.unspecifiedDiagnosisCount ? 1 : 0;
+const unjustifiedIVPenalty = stats.unjustifiedIVCount ? 1 : 0;
+
+// 🔑 هذا هو السر
+const effectiveDocErrors =
+  docItems +
+  partialDocItems * 0.5 +
+  unspecifiedDiagnosisPenalty +
+  unjustifiedIVPenalty;
+
+let docQuality =
+  totalServices > 0
+    ? Math.round(((totalServices - effectiveDocErrors) / totalServices) * 100)
+    : 0;
+
+// منع 100% الوهمية
+if (effectiveDocErrors > 0 && docQuality === 100) {
+  docQuality = 95;
+}
+
+docQuality = Math.max(0, Math.min(100, docQuality));
+
+ماذا سيحدث الآن فعليًا؟ (على تقريرك الحالي)
+
+من التقرير المرفق 
+
+١١١١١١
+
+:
+
+⚠ يحتاج توثيق: 1
+
+❌ تشخيص غير محدد: 1
+
+❌ IV غير مبرر: 1
+
+إجمالي البنود: 9
+
+الحساب:
+
+effectiveDocErrors =
+1 (docItems)
++ 0.5 (partial)
++ 1 (IV)
++ 1 (diagnosis)
+= 3.5
+
+docQuality ≈ (9 - 3.5) / 9 × 100 ≈ 61%
+
+
+🎯 النتيجة تتحول من 100% وهمية → 61% حقيقية
+
+لماذا هذا الحل ممتاز؟
+
+✔ يقرأ التقرير نفسه (Source of Truth)
+
+✔ لا يعتمد على إدخال يدوي
+
+✔ لا يحتاج تعديل Excel
+
+✔ متوافق مع:
+
+CBAHI
+
+NPHIES
+
+Clinical Audit Logic
+
+✔ يمنع أي تدقيق خارجي من إسقاط التقرير
