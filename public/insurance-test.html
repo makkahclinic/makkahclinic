@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>بيئة الاختبار - نظام مراجعة جودة الرعاية الطبية</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --gold: #c9a962;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #eab308;
+      --bg: #0f1a2b;
+      --card-bg: #1a2d4a;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --border: rgba(201, 169, 98, 0.3);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Tajawal", sans-serif;
+      background: linear-gradient(135deg, var(--bg) 0%, #152238 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    .test-badge {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-weight: bold;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, #2d4a6f 100%);
+      padding: 20px;
+      border-radius: 16px;
+      border: 2px solid var(--gold);
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .header h1 { color: var(--gold); margin-bottom: 10px; }
+    .header p { color: var(--text-muted); }
+    
+    .card {
+      background: linear-gradient(145deg, var(--card-bg), #152238);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .card h2 { color: var(--gold); margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+    
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; color: var(--gold); margin-bottom: 5px; font-weight: 600; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: rgba(0,0,0,0.2);
+      color: var(--text);
+      font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--gold);
+      outline: none;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border-radius: 10px;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gold), #d4b872);
+      color: var(--primary);
+    }
+    .btn-primary:hover { transform: translateY(-2px); }
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .uploader {
+      border: 2px dashed var(--gold);
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .uploader:hover { background: rgba(201, 169, 98, 0.1); }
+    .uploader input { display: none; }
+    .uploader i { font-size: 3rem; color: var(--gold); }
+    
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .kpi-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      border-top: 4px solid var(--gold);
+    }
+    .kpi-card.doc { border-top-color: #c9a962; }
+    .kpi-card.medical { border-top-color: #f97316; }
+    .kpi-card.eligibility { border-top-color: #ef4444; }
+    .kpi-card .kpi-label { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 8px; }
+    .kpi-card .kpi-value { font-size: 2.5rem; font-weight: bold; }
+    .kpi-card .kpi-bar {
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .kpi-card .kpi-bar-fill { height: 100%; border-radius: 4px; }
+    
+    .log-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    .log-table th, .log-table td {
+      padding: 12px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+    }
+    .log-table th { color: var(--gold); background: rgba(0,0,0,0.2); }
+    
+    .status-msg {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+      display: none;
+    }
+    .status-msg.show { display: block; }
+    .status-msg.success { background: rgba(34, 197, 94, 0.2); border: 1px solid var(--success); }
+    .status-msg.error { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--error); }
+    .status-msg.info { background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; }
+    
+    .chart-container { height: 300px; margin-top: 20px; }
+    
+    #reportContent {
+      background: white;
+      color: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+      display: none;
+    }
+    #reportContent.show { display: block; }
+
+    .comparison-box {
+      background: rgba(201, 169, 98, 0.1);
+      border: 2px solid var(--gold);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 15px;
+    }
+    .comparison-item {
+      text-align: center;
+      padding: 15px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+    }
+    .comparison-item .label { color: var(--text-muted); font-size: 0.85rem; }
+    .comparison-item .value { font-size: 1.5rem; font-weight: bold; color: var(--gold); }
+    .match { color: var(--success) !important; }
+    .mismatch { color: var(--error) !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="test-badge">
+      <i class="fas fa-flask"></i>
+      بيئة الاختبار - معزولة عن الإنتاج
+    </div>
+    
+    <div class="header">
+      <h1><i class="fas fa-stethoscope"></i> نظام مراجعة جودة الرعاية الطبية</h1>
+      <p>اختبر التحليل وتحقق من تطابق KPI قبل النشر للإنتاج</p>
+    </div>
+    
+    <div class="card">
+      <h2><i class="fas fa-user-md"></i> بيانات التحليل</h2>
+      <div class="form-group">
+        <label>اسم الطبيب</label>
+        <input type="text" id="doctorName" placeholder="أدخل اسم الطبيب" value="د. أحمد محمد">
+      </div>
+      
+      <div class="uploader" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFileUpload(event)">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <h3>اسحب الملف هنا أو اضغط للاختيار</h3>
+        <p>Excel, CSV</p>
+      </div>
+      <div id="fileInfo" style="margin-top: 10px; color: var(--success);"></div>
+      
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+        <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeData()" disabled>
+          <i class="fas fa-microscope"></i> تحليل البيانات
+        </button>
+        <button class="btn btn-success" id="saveBtn" onclick="saveToTestLog()" disabled>
+          <i class="fas fa-save"></i> حفظ في سجل الاختبار
+        </button>
+      </div>
+    </div>
+    
+    <div id="statusMsg" class="status-msg"></div>
+    
+    <div class="card" id="kpiSection" style="display: none;">
+      <h2><i class="fas fa-chart-pie"></i> مؤشرات الأداء (KPI)</h2>
+      
+      <div class="kpi-grid">
+        <div class="kpi-card doc">
+          <div class="kpi-label"><i class="fas fa-file-alt"></i> جودة التوثيق التأميني</div>
+          <div class="kpi-value" id="kpiDoc">-</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" id="kpiDocBar" style="width:0%;background:linear-gradient(90deg,#c9a962,#d4b872);"></div></div>
+        </div>
+        <div class="kpi-card medical">
+          <div class="kpi-label"><i class="fas fa-heartbeat"></i> جودة الخدمات الطبية</div>
+          <div class="kpi-value" id="kpiMedical">-</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" id="kpiMedicalBar" style="width:0%;background:linear-gradient(90deg,#f97316,#fb923c);"></div></div>
+        </div>
+        <div class="kpi-card eligibility">
+          <div class="kpi-label"><i class="fas fa-user-check"></i> نسبة استحقاق المرضى</div>
+          <div class="kpi-value" id="kpiEligibility">-</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" id="kpiEligibilityBar" style="width:0%;background:linear-gradient(90deg,#ef4444,#f87171);"></div></div>
+        </div>
+      </div>
+      
+      <div class="comparison-box">
+        <h3 style="color: var(--gold);"><i class="fas fa-balance-scale"></i> مقارنة القيم (API vs Frontend)</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">تأكد من تطابق القيم المحسوبة مع القيم المعروضة</p>
+        <div class="comparison-grid">
+          <div class="comparison-item">
+            <div class="label">جودة التوثيق</div>
+            <div class="value" id="compareDoc">-</div>
+          </div>
+          <div class="comparison-item">
+            <div class="label">جودة الخدمات</div>
+            <div class="value" id="compareMedical">-</div>
+          </div>
+          <div class="comparison-item">
+            <div class="label">الاستحقاق</div>
+            <div class="value" id="compareEligibility">-</div>
+          </div>
+        </div>
+        <div id="matchStatus" style="text-align: center; margin-top: 15px; font-weight: bold;"></div>
+      </div>
+      
+      <div id="statsDetails" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+        <h4 style="color: var(--gold); margin-bottom: 10px;">تفاصيل الإحصائيات</h4>
+        <div id="statsContent"></div>
+      </div>
+    </div>
+    
+    <div id="reportContent"></div>
+    
+    <div class="card">
+      <h2><i class="fas fa-history"></i> سجل الاختبارات</h2>
+      <button class="btn btn-danger" onclick="clearTestLog()" style="margin-bottom: 15px;">
+        <i class="fas fa-trash"></i> مسح السجل
+      </button>
+      <button class="btn btn-primary" onclick="loadTestLog()" style="margin-bottom: 15px;">
+        <i class="fas fa-sync"></i> تحديث
+      </button>
+      
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>الطبيب</th>
+            <th>الحالات</th>
+            <th>الخدمات</th>
+            <th>جودة التوثيق</th>
+            <th>جودة الخدمات</th>
+            <th>الاستحقاق</th>
+          </tr>
+        </thead>
+        <tbody id="logTableBody">
+          <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">لا توجد سجلات</td></tr>
+        </tbody>
+      </table>
+      
+      <div class="chart-container">
+        <canvas id="kpiChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const API_BASE = window.location.origin;
+    const PATIENT_ANALYZER_URL = API_BASE + '/api/patient-analyzer';
+    const TEST_LOG_URL = API_BASE + '/api/test/log-usage';
+    const TEST_HISTORY_URL = API_BASE + '/api/test/usage-log';
+    
+    let uploadedData = null;
+    let lastReportStats = null;
+    let kpiChart = null;
+    
+    // Show status message
+    function showStatus(message, type = 'info') {
+      const el = document.getElementById('statusMsg');
+      el.textContent = message;
+      el.className = 'status-msg show ' + type;
+      setTimeout(() => el.classList.remove('show'), 5000);
+    }
+    
+    // Handle file upload
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      document.getElementById('fileInfo').textContent = 'جاري تحميل: ' + file.name;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          let allText = '';
+          workbook.SheetNames.forEach(sheetName => {
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            
+            if (rows.length > 0) {
+              const headers = rows[0].map(h => String(h || '').toLowerCase());
+              allText += rows.map(row => row.join('|')).join('\n') + '\n';
+            }
+          });
+          
+          uploadedData = allText;
+          document.getElementById('fileInfo').innerHTML = '<i class="fas fa-check-circle"></i> تم تحميل: ' + file.name;
+          document.getElementById('analyzeBtn').disabled = false;
+          showStatus('تم تحميل الملف بنجاح', 'success');
+        } catch (err) {
+          showStatus('خطأ في قراءة الملف: ' + err.message, 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+    
+    // Analyze data using Replit API
+    async function analyzeData() {
+      if (!uploadedData) {
+        showStatus('الرجاء تحميل ملف أولاً', 'error');
+        return;
+      }
+      
+      const doctorName = document.getElementById('doctorName').value.trim();
+      if (!doctorName) {
+        showStatus('الرجاء إدخال اسم الطبيب', 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('analyzeBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحليل...';
+      showStatus('جاري تحليل البيانات بواسطة الذكاء الاصطناعي...', 'info');
+      
+      try {
+        const response = await fetch(PATIENT_ANALYZER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            textContent: uploadedData,
+            doctorName: doctorName,
+            specialty: 'عام'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        // Store stats for saving
+        lastReportStats = result.stats || {};
+        lastReportStats.doctorName = doctorName;
+        
+        // Display KPIs from API response
+        displayKPIs(result.stats);
+        
+        // Show report
+        if (result.html) {
+          const reportEl = document.getElementById('reportContent');
+          reportEl.innerHTML = result.html;
+          reportEl.classList.add('show');
+        }
+        
+        document.getElementById('kpiSection').style.display = 'block';
+        document.getElementById('saveBtn').disabled = false;
+        showStatus('تم التحليل بنجاح!', 'success');
+        
+      } catch (err) {
+        console.error('Analysis error:', err);
+        showStatus('خطأ في التحليل: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-microscope"></i> تحليل البيانات';
+      }
+    }
+    
+    // Display KPIs with comparison
+    function displayKPIs(stats) {
+      console.log('[KPI] Stats received:', stats);
+      
+      // Get pre-calculated KPIs from API (if available)
+      let docQuality = stats.docQuality;
+      let medicalQuality = stats.medicalQuality;
+      let eligibility = stats.eligibility;
+      
+      // If not pre-calculated, calculate locally
+      if (docQuality === undefined) {
+        const totalServices = stats.totalServices || 0;
+        const docErrors = stats.documentationErrors || stats.needsDocCount || 0;
+        docQuality = totalServices > 0 ? Math.round(((totalServices - docErrors) / totalServices) * 100) : 0;
+      }
+      
+      if (medicalQuality === undefined) {
+        const totalServices = stats.totalServices || 0;
+        const medErrors = stats.medicalErrors || stats.rejectedCount || 0;
+        medicalQuality = totalServices > 0 ? Math.round(((totalServices - medErrors) / totalServices) * 100) : 0;
+      }
+      
+      if (eligibility === undefined) {
+        const totalCases = stats.totalCases || 0;
+        const eligGaps = stats.patientsWithEligibilityGaps || 0;
+        eligibility = totalCases > 0 ? Math.round(((totalCases - eligGaps) / totalCases) * 100) : 0;
+      }
+      
+      // Store for saving
+      lastReportStats.docQuality = docQuality;
+      lastReportStats.medicalQuality = medicalQuality;
+      lastReportStats.eligibility = eligibility;
+      
+      // Update KPI cards
+      document.getElementById('kpiDoc').textContent = docQuality + '%';
+      document.getElementById('kpiDocBar').style.width = docQuality + '%';
+      
+      document.getElementById('kpiMedical').textContent = medicalQuality + '%';
+      document.getElementById('kpiMedicalBar').style.width = medicalQuality + '%';
+      
+      document.getElementById('kpiEligibility').textContent = eligibility + '%';
+      document.getElementById('kpiEligibilityBar').style.width = eligibility + '%';
+      
+      // Comparison (API pre-calculated vs displayed)
+      const apiDoc = stats.docQuality !== undefined ? stats.docQuality : 'غير متوفر';
+      const apiMed = stats.medicalQuality !== undefined ? stats.medicalQuality : 'غير متوفر';
+      const apiElig = stats.eligibility !== undefined ? stats.eligibility : 'غير متوفر';
+      
+      document.getElementById('compareDoc').textContent = apiDoc + '% (API) = ' + docQuality + '% (عرض)';
+      document.getElementById('compareMedical').textContent = apiMed + '% (API) = ' + medicalQuality + '% (عرض)';
+      document.getElementById('compareEligibility').textContent = apiElig + '% (API) = ' + eligibility + '% (عرض)';
+      
+      // Check match
+      const isMatch = (apiDoc === docQuality && apiMed === medicalQuality && apiElig === eligibility) ||
+                      (apiDoc === 'غير متوفر' && apiMed === 'غير متوفر');
+      
+      const matchEl = document.getElementById('matchStatus');
+      if (isMatch) {
+        matchEl.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success);"></i> القيم متطابقة - جاهز للحفظ!';
+        matchEl.className = 'match';
+      } else {
+        matchEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: var(--warning);"></i> تحقق من القيم';
+        matchEl.className = 'mismatch';
+      }
+      
+      // Stats details
+      document.getElementById('statsContent').innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+          <div><strong>الحالات:</strong> ${stats.totalCases || 0}</div>
+          <div><strong>الخدمات:</strong> ${stats.totalServices || 0}</div>
+          <div><strong>المقبولة:</strong> ${stats.acceptedCount || 0}</div>
+          <div><strong>تحتاج مراجعة:</strong> ${stats.rejectedCount || 0}</div>
+          <div><strong>تحتاج توثيق:</strong> ${stats.needsDocCount || 0}</div>
+          <div><strong>أخطاء توثيق:</strong> ${stats.documentationErrors || 0}</div>
+          <div><strong>أخطاء طبية:</strong> ${stats.medicalErrors || 0}</div>
+        </div>
+      `;
+    }
+    
+    // Save to test log
+    async function saveToTestLog() {
+      if (!lastReportStats) {
+        showStatus('لا توجد بيانات للحفظ', 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+      
+      try {
+        const payload = {
+          doctorName: lastReportStats.doctorName || document.getElementById('doctorName').value,
+          totalCases: lastReportStats.totalCases || 0,
+          totalServices: lastReportStats.totalServices || 0,
+          acceptedItems: lastReportStats.acceptedCount || 0,
+          reviewItems: lastReportStats.rejectedCount || 0,
+          docItems: lastReportStats.needsDocCount || 0,
+          docQuality: lastReportStats.docQuality || 0,
+          medicalQuality: lastReportStats.medicalQuality || 0,
+          eligibility: lastReportStats.eligibility || 0
+        };
+        
+        console.log('[Save] Payload:', payload);
+        
+        const response = await fetch(TEST_LOG_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showStatus('تم الحفظ بنجاح في سجل الاختبار!', 'success');
+          loadTestLog();
+        } else {
+          throw new Error(result.error || 'فشل الحفظ');
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        showStatus('خطأ في الحفظ: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> حفظ في سجل الاختبار';
+      }
+    }
+    
+    // Load test log
+    async function loadTestLog() {
+      try {
+        const response = await fetch(TEST_HISTORY_URL);
+        const data = await response.json();
+        
+        const tbody = document.getElementById('logTableBody');
+        const history = data.kpiHistory || [];
+        
+        if (history.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">لا توجد سجلات</td></tr>';
+        } else {
+          tbody.innerHTML = history.slice(-10).reverse().map(entry => `
+            <tr>
+              <td>${new Date(entry.timestamp).toLocaleString('ar-SA')}</td>
+              <td>${entry.doctorName}</td>
+              <td>${entry.totalCases}</td>
+              <td>${entry.totalServices}</td>
+              <td style="color: ${entry.docQuality >= 80 ? 'var(--success)' : 'var(--warning)'};">${entry.docQuality}%</td>
+              <td style="color: ${entry.medicalQuality >= 80 ? 'var(--success)' : 'var(--warning)'};">${entry.medicalQuality}%</td>
+              <td style="color: ${entry.eligibility >= 80 ? 'var(--success)' : 'var(--warning)'};">${entry.eligibility}%</td>
+            </tr>
+          `).join('');
+        }
+        
+        // Update chart
+        updateChart(history);
+        
+      } catch (err) {
+        console.error('Load log error:', err);
+      }
+    }
+    
+    // Update chart
+    function updateChart(history) {
+      const ctx = document.getElementById('kpiChart').getContext('2d');
+      
+      if (kpiChart) {
+        kpiChart.destroy();
+      }
+      
+      const labels = history.slice(-10).map(h => new Date(h.timestamp).toLocaleDateString('ar-SA'));
+      const docData = history.slice(-10).map(h => h.docQuality);
+      const medData = history.slice(-10).map(h => h.medicalQuality);
+      const eligData = history.slice(-10).map(h => h.eligibility);
+      
+      kpiChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'جودة التوثيق',
+              data: docData,
+              borderColor: '#c9a962',
+              backgroundColor: 'rgba(201, 169, 98, 0.2)',
+              tension: 0.3
+            },
+            {
+              label: 'جودة الخدمات',
+              data: medData,
+              borderColor: '#f97316',
+              backgroundColor: 'rgba(249, 115, 22, 0.2)',
+              tension: 0.3
+            },
+            {
+              label: 'الاستحقاق',
+              data: eligData,
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.2)',
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#94a3b8' }
+            }
+          },
+          scales: {
+            y: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#94a3b8' },
+              grid: { color: 'rgba(255,255,255,0.1)' }
+            },
+            x: {
+              ticks: { color: '#94a3b8' },
+              grid: { color: 'rgba(255,255,255,0.1)' }
+            }
+          }
+        }
+      });
+    }
+    
+    // Clear test log
+    async function clearTestLog() {
+      if (!confirm('هل أنت متأكد من مسح جميع سجلات الاختبار؟')) return;
+      
+      try {
+        const response = await fetch(API_BASE + '/api/test/clear', { method: 'DELETE' });
+        const result = await response.json();
+        
+        if (result.success) {
+          showStatus('تم مسح السجل', 'success');
+          loadTestLog();
+        }
+      } catch (err) {
+        showStatus('خطأ في المسح: ' + err.message, 'error');
+      }
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTestLog();
+    });
+  </script>
+</body>
+</html>

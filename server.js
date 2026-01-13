@@ -2057,8 +2057,122 @@ app.get('/api/insurance/doctors', async (req, res) => {
   }
 });
 
+// ============================================
+// TEST ENVIRONMENT API - Isolated from production
+// ============================================
+
+const TEST_DATA_FILE = path.join(__dirname, 'data', 'test-usage-log.json');
+
+function readTestData() {
+  try {
+    if (fs.existsSync(TEST_DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(TEST_DATA_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return { entries: [], kpiHistory: [], lastUpdated: null };
+}
+
+function writeTestData(data) {
+  data.lastUpdated = new Date().toISOString();
+  fs.writeFileSync(TEST_DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+// Save KPI entry to test log (mimics Apps Script logUsage)
+app.post('/api/test/log-usage', async (req, res) => {
+  try {
+    const data = readTestData();
+    const entry = {
+      id: `TEST_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      ...req.body
+    };
+    data.entries.push(entry);
+    
+    // Also save to KPI history
+    data.kpiHistory.push({
+      id: entry.id,
+      timestamp: entry.timestamp,
+      doctorName: req.body.doctorName || '',
+      totalCases: req.body.totalCases || 0,
+      totalServices: req.body.totalServices || 0,
+      docQuality: req.body.docQuality || 0,
+      medicalQuality: req.body.medicalQuality || 0,
+      eligibility: req.body.eligibility || 0,
+      acceptedItems: req.body.acceptedItems || 0,
+      reviewItems: req.body.reviewItems || 0,
+      docItems: req.body.docItems || 0
+    });
+    
+    writeTestData(data);
+    
+    console.log('[TEST] Saved usage log:', {
+      doctorName: req.body.doctorName,
+      docQuality: req.body.docQuality,
+      medicalQuality: req.body.medicalQuality,
+      eligibility: req.body.eligibility
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'تم الحفظ في بيئة الاختبار',
+      savedEntry: entry
+    });
+  } catch (err) {
+    console.error('[TEST] Log usage error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get test usage log entries
+app.get('/api/test/usage-log', async (req, res) => {
+  try {
+    const data = readTestData();
+    res.json({ success: true, entries: data.entries, kpiHistory: data.kpiHistory });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get KPI history for charts
+app.get('/api/test/kpi-history', async (req, res) => {
+  try {
+    const data = readTestData();
+    const { days } = req.query;
+    
+    let history = data.kpiHistory || [];
+    
+    if (days) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - parseInt(days));
+      history = history.filter(h => new Date(h.timestamp) >= cutoff);
+    }
+    
+    res.json({ success: true, history });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Clear test data
+app.delete('/api/test/clear', async (req, res) => {
+  try {
+    writeTestData({ entries: [], kpiHistory: [], lastUpdated: null });
+    res.json({ success: true, message: 'تم مسح بيانات الاختبار' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Register Medical Audit API routes
 registerMedicalAuditRoutes(app);
+
+// Serve test environment
+app.use('/test', express.static(path.join(__dirname, 'public')));
+
+// Redirect for test page
+app.get('/insurance-test', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'insurance-test.html'));
+});
 
 // Static file serving - github-deploy folder first
 app.use(express.static(path.join(__dirname, 'github-deploy'), {
