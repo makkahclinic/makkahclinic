@@ -1200,3 +1200,107 @@ function testSetup() {
   addInsurancePermission('owner@m2020m.org', 'المالك', 'الإدارة');
   Logger.log('Setup complete!');
 }
+
+/**
+ * ⚠️ تحديث قسري للهيدرز - يحذف الصف الأول ويعيد كتابته
+ * استخدم هذه الدالة إذا كانت الهيدرز قديمة أو غير متطابقة
+ * 
+ * طريقة الاستخدام:
+ * 1. افتح Apps Script Editor
+ * 2. اختر هذه الدالة من القائمة
+ * 3. اضغط Run
+ * 
+ * ملاحظة: هذا لن يحذف البيانات، فقط الصف الأول (الهيدرز)
+ */
+function forceUpdateAllHeaders() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const results = [];
+  
+  // ========== 1. تحديث InsuranceUsageLog (18 عمود) ==========
+  const logHeaders = [
+    'timestamp', 'userEmail', 'userName', 'doctorName', 'caseType', 'filesCount',
+    'totalCases', 'totalServices', 'acceptedItems', 'reviewItems', 'docItems',
+    'vitalSignsRate', 'docQuality', 'medicalQuality', 'eligibility', 'insuranceDocQuality',
+    'reportLink', 'notes'
+  ];
+  
+  let logSheet = ss.getSheetByName('InsuranceUsageLog');
+  if (logSheet) {
+    // حذف الصف الأول
+    logSheet.deleteRow(1);
+    // إدراج صف جديد في الأعلى
+    logSheet.insertRowBefore(1);
+    // كتابة الهيدرز الجديدة
+    logSheet.getRange(1, 1, 1, logHeaders.length).setValues([logHeaders]);
+    logSheet.getRange(1, 1, 1, logHeaders.length)
+      .setFontWeight('bold')
+      .setBackground('#1e3a5f')
+      .setFontColor('white');
+    results.push('✅ InsuranceUsageLog: تم تحديث 18 عمود');
+  } else {
+    results.push('⚠️ InsuranceUsageLog: الورقة غير موجودة');
+  }
+  
+  // ========== 2. تحديث DoctorStats (15 عمود) ==========
+  const statsHeaders = [
+    'doctorName', 'totalReports', 'sumCases', 'sumServices', 'sumAccepted', 
+    'sumReview', 'sumDoc', 'avgVitalRate', 'avgDocQuality', 'avgMedicalQuality',
+    'avgEligibility', 'avgInsuranceDocQuality', 'lastCaseDate', 'folderLink', 'status'
+  ];
+  
+  let statsSheet = ss.getSheetByName('DoctorStats');
+  if (statsSheet) {
+    statsSheet.deleteRow(1);
+    statsSheet.insertRowBefore(1);
+    statsSheet.getRange(1, 1, 1, statsHeaders.length).setValues([statsHeaders]);
+    statsSheet.getRange(1, 1, 1, statsHeaders.length)
+      .setFontWeight('bold')
+      .setBackground('#1e3a5f')
+      .setFontColor('white');
+    results.push('✅ DoctorStats: تم تحديث 15 عمود');
+  } else {
+    results.push('⚠️ DoctorStats: الورقة غير موجودة');
+  }
+  
+  // ========== 3. تنظيف البيانات القديمة (اختياري) ==========
+  // إذا كانت البيانات القديمة بترتيب خاطئ، احذفها
+  // يمكن تفعيل هذا الجزء إذا أردت البدء من الصفر
+  /*
+  if (statsSheet && statsSheet.getLastRow() > 1) {
+    statsSheet.deleteRows(2, statsSheet.getLastRow() - 1);
+    results.push('🗑️ DoctorStats: تم حذف البيانات القديمة');
+  }
+  */
+  
+  const summary = results.join('\n');
+  Logger.log('========== نتائج التحديث ==========');
+  Logger.log(summary);
+  Logger.log('===================================');
+  
+  return {
+    success: true,
+    message: summary,
+    updatedSheets: results.length
+  };
+}
+
+/**
+ * حذف كل البيانات من DoctorStats والبدء من جديد
+ * ⚠️ تحذير: هذا يحذف كل الإحصائيات المحفوظة!
+ */
+function resetDoctorStats() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const statsSheet = ss.getSheetByName('DoctorStats');
+  
+  if (!statsSheet) {
+    return { success: false, error: 'ورقة DoctorStats غير موجودة' };
+  }
+  
+  const lastRow = statsSheet.getLastRow();
+  if (lastRow > 1) {
+    statsSheet.deleteRows(2, lastRow - 1);
+  }
+  
+  Logger.log('✅ تم حذف كل بيانات DoctorStats');
+  return { success: true, message: 'تم إعادة تعيين إحصائيات الأطباء' };
+}
