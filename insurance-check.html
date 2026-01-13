@@ -5522,32 +5522,42 @@ async function saveAndLog() {
     // Save HTML to Drive
     console.log('📤 Sending save request to Google Apps Script...');
     
-    // استخراج الإحصائيات من HTML المعروض (نفس ما تعرضه KPI Cards)
-    // هذا يضمن تطابق القيم المحفوظة مع القيم المعروضة في التقرير
-    const reportHtml = reportContent.innerHTML || '';
-    const extractedStats = extractStatsFromHtml(reportHtml);
+    // قراءة القيم مباشرة من KPI Cards المعروضة - أبسط وأضمن طريقة
+    const kpiDashboard = document.querySelector('.kpi-dashboard');
+    let docQuality = 0, medicalQuality = 0, eligibility = 0;
     
-    // استخدام الإحصائيات المستخرجة من HTML (الأولوية) ثم API stats كـ fallback
-    const totalCases = extractedStats.totalCases || lastReportStats?.totalCases || 0;
-    const totalServices = extractedStats.totalServices || lastReportStats?.totalServices || lastReportStats?.totalServiceItems || 0;
-    const acceptedItems = extractedStats.acceptedItems || lastReportStats?.acceptedItems || 0;
-    const reviewItems = extractedStats.reviewItems || 0; // من HTML فقط - لضمان التطابق مع KPI
-    const docItems = extractedStats.docItems || 0; // من HTML فقط - لضمان التطابق مع KPI  
-    const rejectedCases = extractedStats.rejectedCases || 0;
+    if (kpiDashboard) {
+      // قراءة النسب المئوية من الكاردات المعروضة
+      const kpiCards = kpiDashboard.querySelectorAll('.kpi-card');
+      kpiCards.forEach(card => {
+        const label = card.querySelector('.kpi-label')?.textContent || '';
+        const valueText = card.querySelector('.kpi-value')?.textContent || '0%';
+        const value = parseInt(valueText.replace('%', '')) || 0;
+        
+        if (label.includes('التوثيق')) docQuality = value;
+        else if (label.includes('الخدمات')) medicalQuality = value;
+        else if (label.includes('استحقاق')) eligibility = value;
+      });
+    }
+    
+    // إذا لم نجد الكاردات، نستخدم lastReportStats
+    if (docQuality === 0 && medicalQuality === 0 && lastReportStats) {
+      const stats = lastReportStats;
+      docQuality = calculateDocQuality(stats);
+      medicalQuality = calculateMedicalQuality(stats);
+      eligibility = calculateEligibility(stats);
+    }
+    
+    // باقي البيانات من lastReportStats
+    const totalCases = lastReportStats?.totalCases || 0;
+    const totalServices = lastReportStats?.totalServices || lastReportStats?.totalServiceItems || 0;
+    const acceptedItems = lastReportStats?.acceptedItems || 0;
+    const reviewItems = lastReportStats?.reviewItems || 0;
+    const docItems = lastReportStats?.docItems || 0;
     const vitalSignsRate = lastReportStats?.vitalSignsDocRate || 0;
-    
-    console.log('[Save] Extracted from HTML:', { totalCases, totalServices, acceptedItems, reviewItems, docItems });
-    
-    // استخدام نفس معادلات KPI Cards لضمان تطابق القيم المعروضة والمحفوظة
-    // المعادلة: جودة التوثيق = (الإجراءات - أخطاء التوثيق) ÷ الإجراءات × 100
-    const docQuality = totalServices > 0 ? Math.round(((totalServices - docItems) / totalServices) * 100) : 0;
-    // المعادلة: جودة الخدمات = (الإجراءات - الأخطاء الطبية) ÷ الإجراءات × 100
-    const medicalQuality = totalServices > 0 ? Math.round(((totalServices - reviewItems) / totalServices) * 100) : 0;
-    // المعادلة: الاستحقاق = (المرضى - ناقصي الاستحقاق) ÷ المرضى × 100
-    const eligibility = totalCases > 0 ? Math.round(((totalCases - rejectedCases) / totalCases) * 100) : 0;
     const insuranceDocQuality = totalServices > 0 ? Math.round((acceptedItems / totalServices) * 100) : 0;
     
-    console.log('[Save] Stats from API:', { docQuality, medicalQuality, eligibility, totalCases, totalServices, docItems, reviewItems });
+    console.log('[Save] KPI from displayed cards:', { docQuality, medicalQuality, eligibility, totalCases, totalServices });
     
     const saveData = {
       action: 'logUsageAndSaveHTML',
