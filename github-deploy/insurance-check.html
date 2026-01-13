@@ -3938,6 +3938,20 @@ function getLocalDoctorStats(doctorName) {
   }
 }
 
+// مسح cache الطبيب لضمان تحميل البيانات الجديدة
+function clearLocalDoctorStats(doctorName) {
+  try {
+    const stored = JSON.parse(localStorage.getItem('localDoctorStats') || '{}');
+    if (stored[doctorName]) {
+      delete stored[doctorName];
+      localStorage.setItem('localDoctorStats', JSON.stringify(stored));
+      console.log('[LocalStats] Cleared cache for:', doctorName);
+    }
+  } catch (e) {
+    console.error('[LocalStats] Clear error:', e);
+  }
+}
+
 function renderDoctorStats(doctors) {
   const tbody = document.getElementById('doctorsTableBody');
   tbody.innerHTML = '';
@@ -5605,21 +5619,24 @@ async function saveAndLog() {
       showCustomAlert('لم يتم الحفظ في Drive: ' + (result.error || 'خطأ غير معروف'), 'warning');
     }
     
-    loadStats();
+    // مسح cache الطبيب القديم ثم حفظ البيانات الجديدة
+    clearLocalDoctorStats(doctorName);
     
-    // حفظ الإحصائيات محلياً لتجاوز بيانات DoctorStats القديمة
-    if (lastReportStats) {
-      saveLocalDoctorStats(doctorName, {
-        docQuality: docQuality,
-        medicalQuality: medicalQuality,
-        eligibility: eligibility,
-        totalCases: totalCases,
-        totalServices: totalServices
-      });
-    }
+    // حفظ الإحصائيات الجديدة محلياً
+    saveLocalDoctorStats(doctorName, {
+      docQuality: docQuality,
+      medicalQuality: medicalQuality,
+      eligibility: eligibility,
+      totalCases: totalCases,
+      totalServices: totalServices
+    });
+    console.log('[Save] Saved to localStorage:', { docQuality, medicalQuality, eligibility });
     
-    // تحديث الشارت مباشرة بالقيم الجديدة بدون انتظار Google Sheets
+    // تحديث الشارت مباشرة بالقيم الجديدة
     updateChartWithNewStats(doctorName, docQuality, medicalQuality, eligibility, totalCases);
+    
+    // إعادة تحميل الإحصائيات من الـ API
+    loadStats();
     
     // حفظ بيانات KPI في Firestore للتتبع التراكمي
     if (lastReportStats) {
@@ -6178,6 +6195,9 @@ function updateTasksBadge() {
 // Start analysis from task
 async function startAnalysis(taskIndex) {
   const task = tasksData[taskIndex];
+  
+  // مسح cache الطبيب لضمان عرض البيانات الجديدة
+  clearLocalDoctorStats(task.doctorName);
   
   // Store task ID for tracking
   currentAnalyzingTaskId = task.id;
