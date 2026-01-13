@@ -1,0 +1,218 @@
+لمطلوب بسيط فعلاً:
+
+أي قياسات/مؤشرات تظهر في التقرير ⟵ تُخزَّن صفّياً في Excel ⟵ التشارت يقرأ منها مباشرة
+بدون Regex، بدون HTML parsing، بدون Firestore، بدون حسابات جانبية.
+
+سأعطيك حل ناجع عملي يعمل مع Replit كما هو عندك الآن، بأقل تعديل ممكن.
+
+🎯 الخلل الحقيقي عندك (باختصار دقيق)
+
+التقرير يولّد القيم (docQuality / medicalQuality / eligibility …)
+
+يتم عرضها في KPI Cards
+
+❌ لكن لا يتم تخزين القيم المرصودة فعليًا كما هي في Excel
+
+❌ التشارت يعتمد على:
+
+DoctorStats (تراكمي)
+
+أو حسابات Firestore
+
+أو extractStatsFromHtml
+
+👉 النتيجة:
+التقرير شيء – التشارت شيء آخر
+
+✅ الحل الصحيح (Excel = سجل القياسات المرصودة)
+القاعدة الذهبية
+
+كل تقرير = صف واحد = Snapshot حقيقي للقياسات
+
+🧱 1️⃣ نثبّت InsuranceUsageLog كسجل القياسات
+الأعمدة المهمة (موجودة عندك – ممتاز)
+timestamp
+doctorName
+totalCases
+totalServices
+acceptedItems
+reviewItems
+docItems
+vitalSignsRate
+docQuality
+medicalQuality
+eligibility
+insuranceDocQuality
+
+
+⚠️ هذه القيم لا تُحسب لاحقًا
+هي القيم المرصودة لحظة التقرير
+
+🧠 2️⃣ التعديل الحاسم (في Frontend – saveAndLog)
+❌ الآن
+
+أنت:
+
+تحسب
+
+تستخرج
+
+تعيد حساب
+
+وتغذي أكثر من مكان
+
+✅ المطلوب (تعديل صغير لكن جوهري)
+
+📌 بعد انتهاء التحليل وقبل الإرسال لـ Apps Script
+خذ القيم كما تظهر في KPI Cards وارسِلها مباشرة.
+
+🔧 أضف هذه الدالة (Frontend)
+function readObservedMetricsFromUI() {
+  const cards = document.querySelectorAll('.kpi-card');
+  const metrics = {
+    docQuality: 0,
+    medicalQuality: 0,
+    eligibility: 0
+  };
+
+  cards.forEach(card => {
+    const label = card.querySelector('.kpi-label')?.textContent || '';
+    const value = parseFloat(
+      (card.querySelector('.kpi-value')?.textContent || '0').replace('%','')
+    ) || 0;
+
+    if (label.includes('التوثيق')) metrics.docQuality = value;
+    if (label.includes('الخدمات')) metrics.medicalQuality = value;
+    if (label.includes('استحقاق')) metrics.eligibility = value;
+  });
+
+  return metrics;
+}
+
+✳️ عدّل saveAndLog() (جزء واحد فقط)
+❌ احذف أي حساب هنا
+✅ استخدم القيم المرصودة
+const observed = readObservedMetricsFromUI();
+
+const saveData = {
+  action: 'logUsage',
+
+  doctorName: doctorName,
+  userEmail: currentUser.email,
+  userName: currentUser.name,
+
+  totalCases: lastReportStats.totalCases || 0,
+  totalServices: lastReportStats.totalServices || 0,
+  acceptedItems: lastReportStats.acceptedItems || 0,
+  reviewItems: lastReportStats.reviewItems || 0,
+  docItems: lastReportStats.docItems || 0,
+
+  vitalSignsRate: lastReportStats.vitalSignsDocRate || 0,
+
+  // ✅ القيم المرصودة فعليًا
+  docQuality: observed.docQuality,
+  medicalQuality: observed.medicalQuality,
+  eligibility: observed.eligibility,
+  insuranceDocQuality:
+    lastReportStats.totalServices > 0
+      ? Math.round((lastReportStats.acceptedItems / lastReportStats.totalServices) * 100)
+      : 0
+};
+
+
+📌 الآن:
+
+ما تراه = ما يُخزَّن
+
+Excel صار سجل قياسات حقيقي
+
+🧱 3️⃣ تعديل بسيط في Apps Script (logInsuranceUsage)
+❌ لا تحسب
+❌ لا تعدل
+✅ فقط خزّن
+function logInsuranceUsage(params) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('InsuranceUsageLog');
+
+  sheet.appendRow([
+    new Date(),
+    params.userEmail || '',
+    params.userName || '',
+    params.doctorName || '',
+    params.caseType || '',
+    params.filesCount || 0,
+
+    Number(params.totalCases),
+    Number(params.totalServices),
+    Number(params.acceptedItems),
+    Number(params.reviewItems),
+    Number(params.docItems),
+
+    Number(params.vitalSignsRate),
+    Number(params.docQuality),
+    Number(params.medicalQuality),
+    Number(params.eligibility),
+    Number(params.insuranceDocQuality),
+
+    params.reportLink || '',
+    params.notes || ''
+  ]);
+
+  return { success: true };
+}
+
+📊 4️⃣ التشارت يقرأ من Excel (InsuranceUsageLog)
+مثال: تشارت جودة التوثيق (آخر 30 تقرير)
+Apps Script
+function getQualityTrend() {
+  const sheet = SpreadsheetApp
+    .openById(SHEET_ID)
+    .getSheetByName('InsuranceUsageLog');
+
+  const data = sheet.getDataRange().getValues().slice(1);
+
+  return {
+    success: true,
+    rows: data.map(r => ({
+      date: r[0],
+      doctor: r[3],
+      docQuality: r[12],
+      medicalQuality: r[13],
+      eligibility: r[14]
+    }))
+  };
+}
+
+Frontend
+const res = await fetch(BACKEND_URL, {
+  method: 'POST',
+  body: JSON.stringify({ action: 'getQualityTrend' })
+});
+const data = await res.json();
+
+// feed Chart.js مباشرة
+
+
+📌 التشارت الآن = انعكاس مباشر لما كُتب في Excel
+
+🧪 اختبار بسيط (سترتاح بعده)
+
+حلّل حالة
+
+انظر KPI Cards (مثلاً: 92% – 85% – 88%)
+
+افتح InsuranceUsageLog
+
+ستجد نفس الأرقام حرفيًا
+
+افتح التشارت ⟵ نفس القيم
+
+🏁 الخلاصة النهائية
+
+✔ القياسات المرصودة تُخزَّن
+✔ Excel هو السجل
+✔ التشارت لا “يخمّن”
+✔ لا Regex
+✔ لا Firestore
+✔ لا تضارب
+✔ تقرير = صف = تشارت
