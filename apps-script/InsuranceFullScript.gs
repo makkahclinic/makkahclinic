@@ -115,6 +115,23 @@ function handleRequest(e) {
       case 'getDeliveryLog':
         result = getDeliveryLog_();
         break;
+      // ============================================
+      // أدوات الصيانة - للمالكين فقط
+      // ============================================
+      case 'forceUpdateHeaders':
+        if (isOwnerEmail(params.email)) {
+          result = forceUpdateAllHeaders();
+        } else {
+          result = { success: false, error: 'غير مصرح لك بتنفيذ هذا الإجراء' };
+        }
+        break;
+      case 'resetDoctorStats':
+        if (isOwnerEmail(params.email)) {
+          result = resetDoctorStats();
+        } else {
+          result = { success: false, error: 'غير مصرح لك بتنفيذ هذا الإجراء' };
+        }
+        break;
       default:
         result = { success: false, error: 'Unknown action: ' + action };
     }
