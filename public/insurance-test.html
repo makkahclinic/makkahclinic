@@ -414,17 +414,21 @@
           throw new Error(result.error);
         }
         
-        // Store stats for saving
+        // Store stats for saving - API returns different field names
         lastReportStats = result.stats || {};
         lastReportStats.doctorName = doctorName;
+        // Map API field names
+        lastReportStats.totalServices = result.stats.totalServiceItems || result.stats.totalServices || 0;
+        
+        console.log('[API Response] Stats:', result.stats);
         
         // Display KPIs from API response
         displayKPIs(result.stats);
         
-        // Show report
-        if (result.html) {
+        // Show report - API returns 'htmlReport' not 'html'
+        if (result.htmlReport || result.html) {
           const reportEl = document.getElementById('reportContent');
-          reportEl.innerHTML = result.html;
+          reportEl.innerHTML = result.htmlReport || result.html;
           reportEl.classList.add('show');
         }
         
@@ -535,10 +539,10 @@
         const payload = {
           doctorName: lastReportStats.doctorName || document.getElementById('doctorName').value,
           totalCases: lastReportStats.totalCases || 0,
-          totalServices: lastReportStats.totalServices || 0,
-          acceptedItems: lastReportStats.acceptedCount || 0,
-          reviewItems: lastReportStats.rejectedCount || 0,
-          docItems: lastReportStats.needsDocCount || 0,
+          totalServices: lastReportStats.totalServiceItems || lastReportStats.totalServices || 0,
+          acceptedItems: lastReportStats.acceptedItems || lastReportStats.acceptedCount || 0,
+          reviewItems: lastReportStats.reviewItems || lastReportStats.rejectedCount || 0,
+          docItems: lastReportStats.docItems || lastReportStats.needsDocCount || 0,
           docQuality: lastReportStats.docQuality || 0,
           medicalQuality: lastReportStats.medicalQuality || 0,
           eligibility: lastReportStats.eligibility || 0
