@@ -1815,8 +1815,7 @@ Return HTML only, no markdown or code blocks.
   };
   
   try {
-    // ========== عد خلايا الجدول فقط (تجنب صناديق الملخص المكررة) ==========
-    // نعد فقط الخلايا <td> التي تحتوي على الحالة
+    // ========== عد شامل لجميع أنماط التوثيق ==========
     
     // Pattern 1: خلايا الجدول بالضبط - <td>...✅ مقبول...</td>
     const approvedInCells = fullReport.match(/<td[^>]*>[^<]*✅[^<]*مقبول[^<]*<\/td>/gi) || [];
@@ -1827,11 +1826,31 @@ Return HTML only, no markdown or code blocks.
     // Pattern 3: خلايا الجدول - <td>...⚠️ يحتاج توثيق...</td>
     const needsDocInCells = fullReport.match(/<td[^>]*>[^<]*⚠️[^<]*يحتاج[^<]*توثيق[^<]*<\/td>/gi) || [];
     
+    // ========== إضافة: عد "يحتاج توثيق إضافي" من الصناديق ==========
+    // Pattern 4: صناديق التحذير مع "يحتاج توثيق إضافي"
+    const needsDocBoxes = fullReport.match(/يحتاج توثيق إضافي/gi) || [];
+    
+    // Pattern 5: أي ذكر لـ "يحتاج توثيق" في الأقسام (ليس في الجداول)
+    const allNeedsDocMentions = fullReport.match(/⚠️\s*يحتاج\s*توثيق/gi) || [];
+    
+    // Pattern 6: عد الأدوية التي تحتاج توثيق من القوائم
+    const docWarningsInLists = fullReport.match(/<li[^>]*>[^<]*يحتاج[^<]*توثيق[^<]*<\/li>/gi) || [];
+    
     aiGeneratedStats.approvedCount = approvedInCells.length;
     aiGeneratedStats.rejectedCount = rejectedInCells.length;
-    aiGeneratedStats.needsDocCount = needsDocInCells.length;
+    // احتساب أكبر قيمة للتأكد من عدم إهمال أي عنصر
+    aiGeneratedStats.needsDocCount = Math.max(
+      needsDocInCells.length,
+      needsDocBoxes.length,
+      docWarningsInLists.length
+    );
     
-    console.log(`[AI Stats] Table cells only: Approved=${aiGeneratedStats.approvedCount}, Rejected=${aiGeneratedStats.rejectedCount}, NeedsDoc=${aiGeneratedStats.needsDocCount}`);
+    // إذا وُجد ذكر لـ "يحتاج توثيق" ولم نعدّ أي شيء، نضع قيمة افتراضية
+    if (aiGeneratedStats.needsDocCount === 0 && allNeedsDocMentions.length > 0) {
+      aiGeneratedStats.needsDocCount = Math.ceil(allNeedsDocMentions.length / 2); // نقسم على 2 لتجنب التكرار
+    }
+    
+    console.log(`[AI Stats] Comprehensive: Approved=${aiGeneratedStats.approvedCount}, Rejected=${aiGeneratedStats.rejectedCount}, NeedsDoc=${aiGeneratedStats.needsDocCount} (cells=${needsDocInCells.length}, boxes=${needsDocBoxes.length}, lists=${docWarningsInLists.length}, total_mentions=${allNeedsDocMentions.length})`);
     
     // إذا لم نجد أي شيء في الجدول، نستخدم fallback أكثر تحديداً
     if (aiGeneratedStats.approvedCount === 0 && aiGeneratedStats.rejectedCount === 0) {
@@ -1859,13 +1878,12 @@ Return HTML only, no markdown or code blocks.
     console.error('[AI Stats] Error extracting:', e.message);
   }
   
-  // استخدام إحصائيات caseStats مباشرة (مصدر الحقيقة الوحيد)
-  // aiGeneratedStats غير دقيق بسبب regex المعقد
-  const finalApproved = caseStats.approvedCount || 0;
-  const finalRejected = caseStats.rejectedCount || 0;
-  const finalNeedsDoc = caseStats.needsDocCount || 0;
+  // استخدام أعلى قيمة بين caseStats و aiGeneratedStats لضمان عدم إهمال أي خطأ
+  const finalApproved = Math.max(caseStats.approvedCount || 0, aiGeneratedStats.approvedCount || 0);
+  const finalRejected = Math.max(caseStats.rejectedCount || 0, aiGeneratedStats.rejectedCount || 0);
+  const finalNeedsDoc = Math.max(caseStats.needsDocCount || 0, aiGeneratedStats.needsDocCount || 0);
   
-  console.log(`[Stats] Using caseStats directly: Approved=${finalApproved}, Rejected=${finalRejected}, NeedsDoc=${finalNeedsDoc}, Total=${caseStats.totalServiceItems}`);
+  console.log(`[Stats] Using MAX values: Approved=${finalApproved} (case=${caseStats.approvedCount}, ai=${aiGeneratedStats.approvedCount}), Rejected=${finalRejected}, NeedsDoc=${finalNeedsDoc}, Total=${caseStats.totalServiceItems}`);
   
   try {
     // تحديث caseStats بالقيم من AI
@@ -1895,11 +1913,26 @@ Return HTML only, no markdown or code blocks.
   const totalCasesCount = caseStats.totalCases || caseResults.length;
   
   // حساب النسب المئوية بنفس طريقة KPI
-  const docQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - documentationErrors) / totalProcedures) * 100) : 100;
-  const medicalQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - medicalErrors) / totalProcedures) * 100) : 100;
+  let docQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - documentationErrors) / totalProcedures) * 100) : 100;
+  let medicalQualityPct = totalProcedures > 0 ? Math.round(((totalProcedures - medicalErrors) / totalProcedures) * 100) : 100;
   const eligibilityPct = totalCasesCount > 0 ? Math.round(((totalCasesCount - (caseStats.casesWithMedicalErrors || 0)) / totalCasesCount) * 100) : 100;
   
-  console.log(`[Final Stats] DocQ=${docQualityPct}%, MedQ=${medicalQualityPct}%, Elig=${eligibilityPct}% | DocErrors=${documentationErrors}, MedErrors=${medicalErrors}, Total=${totalProcedures}`);
+  // ========== منع 100% إذا وُجدت ملاحظات توثيق في التقرير ==========
+  // إذا كان هناك أي ذكر لـ "يحتاج توثيق" ولكن docQuality = 100، نخفضها لـ 95%
+  const hasDocWarnings = fullReport.includes('يحتاج توثيق') || fullReport.includes('توثيق إضافي') || fullReport.includes('توثيق ناقص');
+  if (hasDocWarnings && docQualityPct === 100 && documentationErrors === 0) {
+    docQualityPct = 95; // سقف للتوثيق الشكلي
+    console.log(`[Doc Cap] Applied 95% cap: Report has documentation warnings but no counted errors`);
+  }
+  
+  // نفس المنطق للجودة الطبية
+  const hasMedicalWarnings = fullReport.includes('مرفوض') || fullReport.includes('غير مبرر') || fullReport.includes('جرعات زائدة');
+  if (hasMedicalWarnings && medicalQualityPct === 100 && medicalErrors === 0) {
+    medicalQualityPct = 95;
+    console.log(`[Med Cap] Applied 95% cap: Report has medical warnings but no counted errors`);
+  }
+  
+  console.log(`[Final Stats] DocQ=${docQualityPct}%, MedQ=${medicalQualityPct}%, Elig=${eligibilityPct}% | DocErrors=${documentationErrors}, MedErrors=${medicalErrors}, Total=${totalProcedures}, HasDocWarnings=${hasDocWarnings}`);
   
   return res.status(200).json({ 
     htmlReport: finalReportWithKPI,
