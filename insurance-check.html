@@ -5290,141 +5290,36 @@ analyzeBtn.addEventListener('click', async () => {
 
 async function saveAndLog() {
   const doctorName = doctorNameInput.value.trim();
+  // XSS protection: sanitize user-controlled values
   const safeDoctorName = sanitizeText(doctorName);
   const safeReviewerName = sanitizeText(currentUser.name);
-
+  
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
   saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-
+  
   try {
-    // ================================
-    // 1️⃣ تجهيز اسم الملف
-    // ================================
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const timeStr = today.toTimeString().split(' ')[0].replace(/:/g, '');
     const fileName = `تقرير_${safeDoctorName}_${dateStr}_${timeStr}.html`;
-
-    // ================================
-    // 2️⃣ تنظيف HTML التقرير
-    // ================================
+    
+    // Get clean content using DOMParser (safe HTML manipulation)
     const parser = new DOMParser();
-    const doc = parser.parseFromString(
-      `<div id="save-wrapper">${reportContent.innerHTML}</div>`,
-      'text/html'
-    );
+    const doc = parser.parseFromString(`<div id="save-wrapper">${reportContent.innerHTML}</div>`, 'text/html');
     const wrapper = doc.getElementById('save-wrapper');
-
-    // إزالة أي سكربت أو عناصر غير مطلوبة
-    wrapper.querySelectorAll('script, [id="ai-ratings"]').forEach(el => el.remove());
-
+    
+    // إزالة العناصر غير المرغوبة
+    wrapper.querySelectorAll('[id="ai-ratings"], script').forEach(el => el.remove());
+    
     // إصلاح الخلايا الفارغة
     wrapper.querySelectorAll('td').forEach(td => {
       const text = td.textContent.trim();
-      if (!text) {
-        td.textContent = '⚠️ غير متوفر';
+      if (!text || text.match(/^\[.*\]$/)) {
+        td.innerHTML = '⚠️ غير متوفر';
         td.style.color = '#856404';
       }
     });
-
-    const htmlContent = wrapper.innerHTML;
-
-    // ================================
-    // 3️⃣ قراءة الأرقام من مصدر واحد فقط (lastReportStats)
-    // ================================
-    const totalCases = Number(lastReportStats?.totalCases) || 0;
-    const totalServices = Number(
-      lastReportStats?.totalServices ??
-      lastReportStats?.totalServiceItems ??
-      0
-    );
-
-    const acceptedItems = Number(lastReportStats?.acceptedItems) || 0;
-    const reviewItems   = Number(lastReportStats?.reviewItems) || 0;
-    const docItems      = Number(lastReportStats?.docItems) || 0;
-    const vitalSignsRate = Number(lastReportStats?.vitalSignsDocRate) || 0;
-
-    // ================================
-    // 4️⃣ حساب المؤشرات (مرة واحدة فقط)
-    // ================================
-    const medicalQuality = totalServices > 0
-      ? Math.round(((totalServices - reviewItems) / totalServices) * 100)
-      : 0;
-
-    const docQuality = totalServices > 0
-      ? Math.round(((totalServices - docItems) / totalServices) * 100)
-      : 0;
-
-    const eligibility = totalCases > 0
-      ? Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100)
-      : 0;
-
-    // ================================
-    // 5️⃣ تجهيز بيانات الإرسال للسيرفر
-    // ================================
-    const saveData = {
-      action: 'logUsageAndSaveHTML',
-      userEmail: currentUser.email,
-      userName: currentUser.name,
-      doctorName: doctorName,
-      caseType: 'مراجعة تأمين',
-      filesCount: filesState.length,
-
-      totalCases,
-      totalServices,
-      acceptedItems,
-      reviewItems,
-      docItems,
-      vitalSignsRate,
-
-      docQuality,
-      medicalQuality,
-      eligibility,
-
-      notes: '',
-      htmlContent,
-      fileName
-    };
-
-    // ================================
-    // 6️⃣ الإرسال إلى Google Apps Script
-    // ================================
-    const response = await fetch(BACKEND_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(saveData)
-    });
-
-    const text = await response.text();
-    const result = JSON.parse(text);
-
-    if (result.success) {
-      showCustomAlert('تم حفظ التقرير وتسجيل الإحصائيات بنجاح ✅', 'success');
-    } else {
-      throw new Error(result.error || 'فشل الحفظ');
-    }
-
-    // ================================
-    // 7️⃣ تحديث الإحصائيات بعد الحفظ
-    // ================================
-    setTimeout(() => {
-      loadStats();
-      loadDoctorStats();
-    }, 1500);
-
-    if (lastReportStats) {
-       saveKpiSnapshot(lastReportStats, doctorName);
-    }
-
-  } catch (err) {
-    console.error('Save error:', err);
-    showCustomAlert('حدث خطأ أثناء الحفظ: ' + err.message, 'error');
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ وتسجيل';
-  }
-}
     
     // إصلاح أنماط الجداول للـ PDF - حدود سوداء واضحة
     wrapper.querySelectorAll('table').forEach(t => {
@@ -5647,18 +5542,6 @@ async function saveAndLog() {
     const reviewItems = lastReportStats?.reviewItems || 0;
     const docItems = lastReportStats?.docItems || 0;
     const vitalSignsRate = lastReportStats?.vitalSignsDocRate || 0;
-// === حساب المؤشرات مرة واحدة فقط (مصدر واحد) ===
-const medicalQuality = totalServices > 0
-  ? Math.round(((totalServices - reviewItems) / totalServices) * 100)
-  : 0;
-
-const docQuality = totalServices > 0
-  ? Math.round(((totalServices - docItems) / totalServices) * 100)
-  : 0;
-
-const eligibility = totalCases > 0
-  ? Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100)
-  : 0;
     const saveData = {
       action: 'logUsageAndSaveHTML',
       userEmail: currentUser.email,
@@ -5711,7 +5594,7 @@ const eligibility = totalCases > 0
     
     // حفظ بيانات KPI في Firestore للتتبع التراكمي
     if (lastReportStats) {
-saveKpiSnapshot(lastReportStats, doctorName);
+      await saveKpiSnapshot(lastReportStats, doctorName);
     }
     
   } catch(err) {
