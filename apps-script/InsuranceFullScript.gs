@@ -481,6 +481,8 @@ return {
 }
 /**
  * تحديث إحصائيات الطبيب - مع الـ 10 مؤشرات الكاملة
+ */
+function updateDoctorStats(doctorName, stats) {
  * الهيدرز (15 عمود): doctorName, totalReports, sumCases, sumServices, sumAccepted, 
  *          sumReview, sumDoc, avgVitalRate, avgDocQuality, avgMedicalQuality,
  *          avgEligibility, avgInsuranceDocQuality, lastCaseDate, folderLink, status
