@@ -5535,11 +5535,43 @@ async function saveAndLog() {
     console.log('📤 Sending save request to Google Apps Script...');
     
     // قراءة القيم مباشرة من KPI Cards المعروضة
+    const kpiCardsRow = document.querySelector('.kpi-cards-row');
+    let docQuality = 0, medicalQuality = 0, eligibility = 0;
+    
+    if (kpiCardsRow) {
+      const kpiCards = kpiCardsRow.querySelectorAll('.kpi-card');
+      console.log('[Save] Found', kpiCards.length, 'KPI cards');
+      kpiCards.forEach(card => {
+        const label = card.querySelector('.kpi-label')?.textContent || '';
+        const valueText = card.querySelector('.kpi-value')?.textContent || '0%';
+        const value = parseInt(valueText.replace('%', '')) || 0;
+        console.log('[Save] Card:', label, '=', value);
+        
+        if (label.includes('التوثيق')) docQuality = value;
+        else if (label.includes('الخدمات')) medicalQuality = value;
+        else if (label.includes('استحقاق')) eligibility = value;
+      });
     } else {
       console.log('[Save] KPI cards not found, using calculateDocQuality');
     }
     
     // ✅ استخدام القيم المحسوبة من الـ API مباشرة (إذا موجودة)
+    if (docQuality === 0 && medicalQuality === 0 && lastReportStats) {
+      // أولوية: القيم المحسوبة من API > إعادة الحساب
+      if (lastReportStats.docQuality !== undefined && lastReportStats.medicalQuality !== undefined) {
+        docQuality = lastReportStats.docQuality;
+        medicalQuality = lastReportStats.medicalQuality;
+        eligibility = lastReportStats.eligibility || 0;
+        console.log('[Save] Using API pre-calculated KPIs:', { docQuality, medicalQuality, eligibility });
+      } else {
+        // fallback: إعادة الحساب
+        docQuality = calculateDocQuality(lastReportStats);
+        medicalQuality = calculateMedicalQuality(lastReportStats);
+        eligibility = calculateEligibility(lastReportStats);
+        console.log('[Save] Recalculated KPIs:', { docQuality, medicalQuality, eligibility });
+      }
+    }
+    
     // باقي البيانات من lastReportStats
     const totalCases = lastReportStats?.totalCases || 0;
     const totalServices = lastReportStats?.totalServices || lastReportStats?.totalServiceItems || 0;
@@ -5547,6 +5579,10 @@ async function saveAndLog() {
     const reviewItems = lastReportStats?.reviewItems || 0;
     const docItems = lastReportStats?.docItems || 0;
     const vitalSignsRate = lastReportStats?.vitalSignsDocRate || 0;
+    const insuranceDocQuality = totalServices > 0 ? Math.round((acceptedItems / totalServices) * 100) : 0;
+    
+    console.log('[Save] KPI from displayed cards:', { docQuality, medicalQuality, eligibility, totalCases, totalServices });
+    
     const saveData = {
       action: 'logUsageAndSaveHTML',
       userEmail: currentUser.email,
