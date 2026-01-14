@@ -437,22 +437,41 @@ function logInsuranceUsage(params) {
     ]);
     
     Logger.log('✅ InsuranceUsageLog: Row added successfully');
-    
-    // تحديث إحصائيات الطبيب مع كل المؤشرات
-    updateDoctorStats(params.doctorName, {
-      totalCases, totalServices, acceptedItems, reviewItems, docItems,
-      vitalSignsRate, docQuality, medicalQuality, eligibility, insuranceDocQuality
-    });
-    
-    Logger.log('✅ DoctorStats: Updated successfully');
-    
-    return { success: true, message: 'تم تسجيل الاستخدام بنجاح' };
-  } catch(error) {
-    Logger.log('❌ [logInsuranceUsage] Error: ' + error.toString());
-    return { success: false, error: error.toString() };
-  }
-}
+    // ================================
+// تسجيل الاستخدام وتحديث إحصائيات الطبيب (النسخة الصحيحة)
+// ================================
+updateDoctorStats(params.doctorName, {
+  // 🔹 أرقام أساسية
+  totalCases: totalCases,                 // عدد المرضى (يُستخدم فقط للاستحقاق)
+  totalServices: totalServices,            // عدد بنود الخدمة (أساس الجودة)
+  acceptedItems: acceptedItems,
+  reviewItems: reviewItems,                // أخطاء طبية
+  docItems: docItems,                      // أخطاء توثيق
 
+  // 🔹 نسب جاهزة محسوبة على المقام الصحيح
+  medicalQuality: totalServices > 0
+    ? Math.round(((totalServices - reviewItems) / totalServices) * 100)
+    : 0,
+
+  docQuality: totalServices > 0
+    ? Math.round(((totalServices - docItems) / totalServices) * 100)
+    : 0,
+
+  eligibility: totalCases > 0
+    ? Math.round(((totalCases - Math.min(reviewItems, totalCases)) / totalCases) * 100)
+    : 0,
+
+  // 🔹 مؤشرات إضافية
+  vitalSignsRate: vitalSignsRate,
+  insuranceDocQuality: insuranceDocQuality
+});
+
+Logger.log('✅ DoctorStats: Updated successfully');
+
+return {
+  success: true,
+  message: 'تم تسجيل الاستخدام وتحديث إحصائيات الطبيب بنجاح'
+};
 /**
  * تحديث إحصائيات الطبيب - مع الـ 10 مؤشرات الكاملة
  * الهيدرز (15 عمود): doctorName, totalReports, sumCases, sumServices, sumAccepted, 
