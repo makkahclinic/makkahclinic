@@ -471,7 +471,7 @@ Logger.log('✅ DoctorStats: Updated successfully');
 return {
   success: true,
   message: 'تم تسجيل الاستخدام وتحديث إحصائيات الطبيب بنجاح'
-};
+};}
 /**
  * تحديث إحصائيات الطبيب - مع الـ 10 مؤشرات الكاملة
  * الهيدرز (15 عمود): doctorName, totalReports, sumCases, sumServices, sumAccepted, 
