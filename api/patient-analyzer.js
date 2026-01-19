@@ -682,6 +682,101 @@ function injectCaseDataIntoHTML(aiHtml, caseData) {
   return html;
 }
 
+// ========== ENFORCE RULES ENGINE DECISIONS IN HTML OUTPUT ==========
+// Post-processing to ensure AI output matches rule-based decisions
+function enforceRulesDecisionsInHTML(html, rulesResult, language) {
+  if (!html || !rulesResult || !rulesResult.medicationResults) return html;
+  
+  let modifiedHtml = html;
+  const L = language === 'en' ? 'en' : 'ar';
+  
+  for (const medResult of rulesResult.medicationResults) {
+    if (medResult.decisionSource !== 'RULE') continue;
+    
+    const drugName = medResult.drugName;
+    const drugNameUpper = drugName.toUpperCase();
+    const decision = medResult.decision;
+    const reason = L === 'ar' ? medResult.reason : (medResult.reasonEn || medResult.reason);
+    
+    // Build regex to find medication row in tables
+    const drugPattern = new RegExp(
+      `(<tr[^>]*>\\s*<td[^>]*>[^<]*${escapeRegex(drugName)}[^<]*</td>)([\\s\\S]*?)(</tr>)`,
+      'gi'
+    );
+    
+    // Status badge HTML based on decision
+    let statusBadge = '';
+    let bgColor = '';
+    if (decision === 'APPROVED') {
+      statusBadge = L === 'ar' 
+        ? '<span style="color:#16a34a;font-weight:bold">✅ مقبول [RULE]</span>'
+        : '<span style="color:#16a34a;font-weight:bold">✅ Approved [RULE]</span>';
+      bgColor = '#d1fae5';
+    } else if (decision === 'REJECTED') {
+      statusBadge = L === 'ar'
+        ? '<span style="color:#dc2626;font-weight:bold">🚫 مرفوض [RULE]</span>'
+        : '<span style="color:#dc2626;font-weight:bold">🚫 Rejected [RULE]</span>';
+      bgColor = '#fee2e2';
+    } else {
+      statusBadge = L === 'ar'
+        ? '<span style="color:#d97706;font-weight:bold">⚠️ يحتاج توثيق [RULE]</span>'
+        : '<span style="color:#d97706;font-weight:bold">⚠️ Needs Docs [RULE]</span>';
+      bgColor = '#fef3c7';
+    }
+    
+    // Try to update medication row with rule-based decision
+    modifiedHtml = modifiedHtml.replace(drugPattern, (match, start, middle, end) => {
+      // Replace the status cell with rule-based status
+      let newMiddle = middle.replace(
+        /<td[^>]*>[\s\S]*?(✅|🚫|⚠️|مقبول|مرفوض|Approved|Rejected)[\s\S]*?<\/td>/i,
+        `<td style="border:1px solid #ccc;padding:6px;background:${bgColor}">${statusBadge}</td>`
+      );
+      
+      // Ensure reason is also updated
+      if (newMiddle === middle) {
+        // Status cell not found, append the badge
+        newMiddle = middle + `<td style="border:1px solid #ccc;padding:6px;background:${bgColor}">${statusBadge}</td>`;
+      }
+      
+      return start + newMiddle + end;
+    });
+    
+    // Also add decision source marker as data attribute
+    modifiedHtml = modifiedHtml.replace(
+      new RegExp(`(${escapeRegex(drugName)})`, 'gi'),
+      (match) => `${match}<sup style="font-size:9px;color:#6366f1">[R]</sup>`
+    );
+  }
+  
+  // Add Rules Engine summary section if not already present
+  if (rulesResult.hasRuleBasedDecisions && !modifiedHtml.includes('rules-engine-summary')) {
+    const summary = rulesResult.summary;
+    const summaryHtml = L === 'ar' 
+      ? `<div class="rules-engine-summary" style="margin:10px 0;padding:10px;background:#e0e7ff;border-radius:8px;border-left:4px solid #4f46e5">
+          <strong>⚙️ محرك القواعد:</strong> ${summary.approved} مقبول، ${summary.rejected} مرفوض، ${summary.needsDocs} يحتاج توثيق
+          <span style="font-size:11px;color:#6366f1"> | مصدر القرار: RULE</span>
+         </div>`
+      : `<div class="rules-engine-summary" style="margin:10px 0;padding:10px;background:#e0e7ff;border-radius:8px;border-left:4px solid #4f46e5">
+          <strong>⚙️ Rules Engine:</strong> ${summary.approved} approved, ${summary.rejected} rejected, ${summary.needsDocs} needs docs
+          <span style="font-size:11px;color:#6366f1"> | Decision Source: RULE</span>
+         </div>`;
+    
+    // Insert after case header
+    const headerEndMatch = modifiedHtml.match(/<\/h[1-4]>/i);
+    if (headerEndMatch) {
+      const insertPos = modifiedHtml.indexOf(headerEndMatch[0]) + headerEndMatch[0].length;
+      modifiedHtml = modifiedHtml.substring(0, insertPos) + summaryHtml + modifiedHtml.substring(insertPos);
+    }
+  }
+  
+  return modifiedHtml;
+}
+
+// Helper to escape regex special characters
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ========== REPETITION DETECTION & PATTERN ANALYSIS ==========
 function detectRepetitionsAndPatterns(cases) {
   const repetitions = [];
@@ -1420,11 +1515,19 @@ Return HTML only, no markdown or code blocks.
     // ========== Rules Engine Evaluation (BEFORE Gemini) ==========
     let rulesResult = null;
     try {
-      // Normalize case data for rules engine
+      // Normalize case data for rules engine - merge all diagnosis sources
+      const allDiagnosisText = [
+        caseData.diagnosis,
+        caseData.icdCode,
+        caseData.icd10,
+        caseData.primaryDiagnosis,
+        caseData.secondaryDiagnosis
+      ].filter(Boolean).join(' | ');
+      
       const normalizedCase = {
         claimNo: caseData.claimId,
         patientId: caseData.patientId,
-        diagnoses: parseDiagnosesToArray(caseData.diagnosis || caseData.icdCode),
+        diagnoses: parseDiagnosesToArray(allDiagnosisText),
         medications: (caseData.medications || []).map(m => ({ name: m.name || m, dose: m.dose })),
         services: caseData.procedures || [],
         procedures: caseData.procedures || [],
@@ -1471,6 +1574,12 @@ Return HTML only, no markdown or code blocks.
       
       // إصلاح: حقن البيانات الفعلية إذا كانت فارغة في استجابة الذكاء الاصطناعي
       text = injectCaseDataIntoHTML(text, caseData);
+      
+      // ========== POST-PROCESSING: إنفاذ قرارات Rules Engine في HTML ==========
+      if (rulesResult && rulesResult.hasRuleBasedDecisions) {
+        text = enforceRulesDecisionsInHTML(text, rulesResult, language);
+        console.log(`[Rules Engine] Enforced ${rulesResult.summary.total} rule-based decisions in case ${caseNumber}`);
+      }
       
       if (text) {
         // كشف الفحوصات الناقصة من حق المريض
