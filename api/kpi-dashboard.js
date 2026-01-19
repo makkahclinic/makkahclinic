@@ -280,43 +280,65 @@ export function extractStatsFromCases(cases) {
     }
     
     // ========== ثانياً: تقييم كل خدمة (حالة واحدة فقط: مقبول/مرفوض/تحتاج توثيق) ==========
+    // ========== USE RULES ENGINE DECISIONS AS SINGLE SOURCE OF TRUTH ==========
+    const medicationDecisions = c._medicationDecisions || [];
+    const medicationDecisionMap = new Map();
+    for (const md of medicationDecisions) {
+      medicationDecisionMap.set((md.name || '').toUpperCase(), md);
+    }
+    
     const seenServices = new Map(); // لتتبع أي خدمة تم عدها
     
     for (const svc of (c.services || [])) {
       const svcKey = svc.code || svc.name;
       const svcName = (svc.name || svc.code || '').toUpperCase();
       
-      // تحديد حالة الخدمة
+      // تحديد حالة الخدمة - أولاً: ابحث في قرارات محرك القواعد
       let status = 'approved'; // افتراضي: مقبول
+      let decisionFromRules = false;
       
-      // التكرار: الخدمة الأولى من نوعها = تقييم عادي، المكررة = needsDoc
-      const seenCount = seenServices.get(svcKey) || 0;
-      if (seenCount > 0 && duplicatedKeys.has(svcKey)) {
-        status = 'needsDoc'; // مكررة
-      } else {
-        // معايير الرفض:
-        const isIV = svcName.includes('IV') || svcName.includes('INFUSION') || svcName.includes('SALINE');
-        if (isIV) {
-          const hasJustification = c.diagnosis?.toLowerCase().includes('vomit') ||
-                                   c.diagnosis?.toLowerCase().includes('dehydrat') ||
-                                   c.diagnosis?.toLowerCase().includes('قيء') ||
-                                   (c.vitals?.temperature && parseFloat(c.vitals.temperature) >= 39);
-          if (!hasJustification) {
-            status = 'rejected';
-          }
+      // Check Rules Engine decision first (Single Source of Truth)
+      const ruleDecision = medicationDecisionMap.get(svcName);
+      if (ruleDecision && ruleDecision.decisionSource === 'RULE') {
+        decisionFromRules = true;
+        if (ruleDecision.decision === 'APPROVED') {
+          status = 'approved';
+        } else if (ruleDecision.decision === 'REJECTED') {
+          status = 'rejected';
+        } else {
+          status = 'needsDoc';
         }
-        
-        // معايير "تحتاج توثيق":
-        if (status === 'approved') {
-          if (!hasVitals && (svcName.includes('CONSULTATION') || svcName.includes('INJECTION'))) {
-            status = 'needsDoc';
-          } else if (!hasIcd) {
-            status = 'needsDoc';
+      } else {
+        // Fallback: التكرار: الخدمة الأولى من نوعها = تقييم عادي، المكررة = needsDoc
+        const seenCountFallback = seenServices.get(svcKey) || 0;
+        if (seenCountFallback > 0 && duplicatedKeys.has(svcKey)) {
+          status = 'needsDoc'; // مكررة
+        } else {
+          // معايير الرفض:
+          const isIV = svcName.includes('IV') || svcName.includes('INFUSION') || svcName.includes('SALINE');
+          if (isIV) {
+            const hasJustification = c.diagnosis?.toLowerCase().includes('vomit') ||
+                                     c.diagnosis?.toLowerCase().includes('dehydrat') ||
+                                     c.diagnosis?.toLowerCase().includes('قيء') ||
+                                     (c.vitals?.temperature && parseFloat(c.vitals.temperature) >= 39);
+            if (!hasJustification) {
+              status = 'rejected';
+            }
+          }
+          
+          // معايير "تحتاج توثيق":
+          if (status === 'approved') {
+            if (!hasVitals && (svcName.includes('CONSULTATION') || svcName.includes('INJECTION'))) {
+              status = 'needsDoc';
+            } else if (!hasIcd) {
+              status = 'needsDoc';
+            }
           }
         }
       }
       
-      seenServices.set(svcKey, seenCount + 1);
+      const currentCount = seenServices.get(svcKey) || 0;
+      seenServices.set(svcKey, currentCount + 1);
       
       // تحديث العدادات (حالة واحدة فقط لكل خدمة)
       if (status === 'approved') {

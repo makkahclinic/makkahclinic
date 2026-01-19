@@ -1537,11 +1537,22 @@ Return HTML only, no markdown or code blocks.
       
       rulesResult = evaluateCase(normalizedCase);
       
+      // ========== ATTACH RULES RESULT TO CASE DATA (Single Source of Truth) ==========
+      caseData._rulesResult = rulesResult;
+      caseData._medicationDecisions = rulesResult.medicationResults.map(mr => ({
+        name: mr.drugName,
+        decision: mr.decision,
+        reason: mr.reason,
+        decisionSource: mr.decisionSource // 'RULE' or 'AI'
+      }));
+      
       if (rulesResult.hasRuleBasedDecisions) {
         console.log(`[Rules Engine] Case ${caseNumber}: ${rulesResult.summary.approved} approved, ${rulesResult.summary.rejected} rejected by rules`);
       }
     } catch (rulesError) {
       console.error(`[Rules Engine] Error for case ${caseNumber}:`, rulesError.message);
+      caseData._rulesResult = null;
+      caseData._medicationDecisions = [];
     }
     
     const casePrompt = buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseDuplicates, rulesResult);
