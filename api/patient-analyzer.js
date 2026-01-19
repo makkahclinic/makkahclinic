@@ -3,6 +3,7 @@ import XLSX from 'xlsx';
 import { detectDuplicates, formatDuplicatesForPrompt, formatDuplicatesForReport } from './claim-history.js';
 import { detectMissingRequiredTests, generateMissingTestsSection, generateMissingTestsHTML, getDemographicRecommendations, generateDemographicRecommendationsHTML, calculateBMI, getBMICategory } from './required-tests.js';
 import { calculateKPIs, generateKPIDashboardHTML, extractStatsFromReport, extractStatsFromCases } from './kpi-dashboard.js';
+import { evaluateCase, evaluateDrug, getRulesVersion } from './rules-engine.js';
 
 // Robust date parser - handles Excel serials, dd/MM/yyyy, yyyy-MM-dd, and other formats
 // Returns ISO date string (YYYY-MM-DD) or null if unparseable
@@ -475,8 +476,37 @@ function parseExcelCases(base64Data) {
   }
 }
 
+// Helper function to parse diagnosis string into array of {code, description}
+function parseDiagnosesToArray(diagnosisString) {
+  if (!diagnosisString) return [];
+  
+  const diagnoses = [];
+  // Split by common separators: |, ;, or newline
+  const parts = String(diagnosisString).split(/[|;,\n]+/).filter(p => p.trim());
+  
+  for (const part of parts) {
+    const trimmed = part.trim();
+    // Try to extract ICD code (starts with letter + numbers like E11, J20, M79.0)
+    const codeMatch = trimmed.match(/^([A-Z]\d{2}(?:\.\d{1,2})?)\s*[-–:.]?\s*(.*)/i);
+    if (codeMatch) {
+      diagnoses.push({
+        code: codeMatch[1].toUpperCase(),
+        description: codeMatch[2].trim() || trimmed
+      });
+    } else {
+      // No code found, treat entire string as description
+      diagnoses.push({
+        code: '',
+        description: trimmed
+      });
+    }
+  }
+  
+  return diagnoses;
+}
+
 // Build prompt for a single case - COMPACT format like Report #20
-function buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseDuplicates = null) {
+function buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseDuplicates = null, rulesResult = null) {
   const L = language === 'en' ? 'en' : 'ar';
   
   // Only include vitals that are actually available
@@ -518,6 +548,32 @@ function buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseD
     }
   }
   
+  // Build Rules Engine section if available
+  let rulesSection = '';
+  if (rulesResult && rulesResult.hasRuleBasedDecisions) {
+    if (L === 'ar') {
+      rulesSection = '\n\n⚙️ **قرارات محرك القواعد (إلزامية - لا تغيرها):**\n';
+      for (const medResult of rulesResult.medicationResults) {
+        if (medResult.decisionSource === 'RULE') {
+          const icon = medResult.decision === 'APPROVED' ? '✅' : medResult.decision === 'REJECTED' ? '🚫' : '⚠️';
+          rulesSection += `${icon} ${medResult.drugName}: ${medResult.decision === 'APPROVED' ? 'مقبول' : medResult.decision === 'REJECTED' ? 'مرفوض' : 'يحتاج مراجعة'} - ${medResult.reason}\n`;
+          rulesSection += `   📌 مصدر القرار: RULE (قاعدة حتمية)\n`;
+        }
+      }
+      rulesSection += '\n⚠️ **ملاحظة:** القرارات أعلاه نهائية من محرك القواعد. يجب تضمينها كما هي في التقرير.';
+    } else {
+      rulesSection = '\n\n⚙️ **Rules Engine Decisions (MANDATORY - DO NOT OVERRIDE):**\n';
+      for (const medResult of rulesResult.medicationResults) {
+        if (medResult.decisionSource === 'RULE') {
+          const icon = medResult.decision === 'APPROVED' ? '✅' : medResult.decision === 'REJECTED' ? '🚫' : '⚠️';
+          rulesSection += `${icon} ${medResult.drugName}: ${medResult.decision} - ${medResult.reasonEn || medResult.reason}\n`;
+          rulesSection += `   📌 Decision Source: RULE (deterministic)\n`;
+        }
+      }
+      rulesSection += '\n⚠️ **Note:** Above decisions are final from Rules Engine. Include them as-is in the report.';
+    }
+  }
+  
   if (L === 'ar') {
     let vitalsLine = '';
     if (temp) vitalsLine += `الحرارة: ${temp}`;
@@ -526,7 +582,7 @@ function buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseD
     return `🔍 الحالة ${caseNumber} | Claim: ${caseData.claimId} | المريض: ${caseData.patientId || '-'}
 التشخيص: ${caseData.diagnosis || '-'}${vitalsLine ? '\n' + vitalsLine : ''}
 الأدوية: ${caseData.medications.length > 0 ? caseData.medications.map(m => `${m.name} (${m.dose || '-'})`).join(' | ') : 'لا يوجد'}
-الإجراءات: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'لا يوجد'}${duplicateSection}
+الإجراءات: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'لا يوجد'}${duplicateSection}${rulesSection}
 ---`;
   } else {
     let vitalsLine = '';
@@ -536,7 +592,7 @@ function buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseD
     return `🔍 Case ${caseNumber} | Claim: ${caseData.claimId} | Patient: ${caseData.patientId || '-'}
 Diagnosis: ${caseData.diagnosis || '-'}${vitalsLine ? '\n' + vitalsLine : ''}
 Medications: ${caseData.medications.length > 0 ? caseData.medications.map(m => `${m.name} (${m.dose || '-'})`).join(' | ') : 'None'}
-Procedures: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'None'}${duplicateSection}
+Procedures: ${caseData.procedures.length > 0 ? caseData.procedures.join(' | ') : 'None'}${duplicateSection}${rulesSection}
 ---`;
   }
 }
@@ -1343,6 +1399,14 @@ Return HTML only, no markdown or code blocks.
 
   console.log(`Processing ${totalCases} cases individually...`);
   
+  // Log Rules Engine version
+  try {
+    const rulesVersion = getRulesVersion();
+    console.log(`[Rules Engine] Active: v${rulesVersion.version}, ${rulesVersion.totalRules} rules loaded`);
+  } catch (e) {
+    console.log('[Rules Engine] Not loaded, using AI-only mode');
+  }
+  
   for (let i = 0; i < totalCases; i++) {
     const caseData = cases[i];
     const caseNumber = i + 1;
@@ -1353,7 +1417,31 @@ Return HTML only, no markdown or code blocks.
     const caseDuplicates = duplicatesMap.get(`${caseData.patientId}_${caseData.claimId}`) || 
                            duplicatesMap.get(caseData.claimId) || null;
     
-    const casePrompt = buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseDuplicates);
+    // ========== Rules Engine Evaluation (BEFORE Gemini) ==========
+    let rulesResult = null;
+    try {
+      // Normalize case data for rules engine
+      const normalizedCase = {
+        claimNo: caseData.claimId,
+        patientId: caseData.patientId,
+        diagnoses: parseDiagnosesToArray(caseData.diagnosis || caseData.icdCode),
+        medications: (caseData.medications || []).map(m => ({ name: m.name || m, dose: m.dose })),
+        services: caseData.procedures || [],
+        procedures: caseData.procedures || [],
+        temperature: parseFloat(caseData.vitals?.temperature || caseData.temperature) || null,
+        bloodPressure: caseData.vitals?.bloodPressure || caseData.bloodPressure
+      };
+      
+      rulesResult = evaluateCase(normalizedCase);
+      
+      if (rulesResult.hasRuleBasedDecisions) {
+        console.log(`[Rules Engine] Case ${caseNumber}: ${rulesResult.summary.approved} approved, ${rulesResult.summary.rejected} rejected by rules`);
+      }
+    } catch (rulesError) {
+      console.error(`[Rules Engine] Error for case ${caseNumber}:`, rulesError.message);
+    }
+    
+    const casePrompt = buildSingleCasePrompt(caseData, caseNumber, totalCases, language, caseDuplicates, rulesResult);
     
     const payload = {
       system_instruction: { role: "system", parts: [{ text: caseTemplate }] },
