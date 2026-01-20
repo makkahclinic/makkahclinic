@@ -33,6 +33,11 @@
       --ipc:#e91e63;
       --qi:#2ecc71;
       --eoc:#f39c12;
+      
+      --theme-primary: #d4af37;
+      --theme-primary-rgb: 212, 175, 55;
+      --theme-secondary: #f5d86c;
+      --theme-ink: #1a0b10;
     }
 
     * { box-sizing:border-box; }
@@ -69,6 +74,50 @@
       font-weight: 700;
       font-size: 0.9rem;
     }
+    
+    .committee-ribbon {
+      background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.15), rgba(var(--theme-primary-rgb), 0.05));
+      border-bottom: 3px solid var(--theme-primary);
+      padding: 12px 0;
+      display: none;
+      transition: all 0.4s ease;
+    }
+    .committee-ribbon.active {
+      display: block;
+      animation: ribbonSlide 0.4s ease;
+    }
+    @keyframes ribbonSlide {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .committee-ribbon .ribbon-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    .committee-ribbon .ribbon-icon {
+      width: 45px;
+      height: 45px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--theme-primary), var(--theme-secondary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      color: var(--theme-ink);
+      box-shadow: 0 4px 15px rgba(var(--theme-primary-rgb), 0.4);
+    }
+    .committee-ribbon .ribbon-text {
+      font-family: 'Cairo';
+      font-weight: 800;
+      font-size: 1.2rem;
+      color: var(--theme-primary);
+    }
+    .committee-ribbon .ribbon-subtitle {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
 
     .tabbar{
       background: rgba(255,255,255,.08);
@@ -90,8 +139,8 @@
       color:#fff;
     }
     .tabbar .nav-link.active{
-      border-color:var(--gold);
-      background:rgba(212,175,55,0.18);
+      border-color: var(--theme-primary);
+      background: rgba(var(--theme-primary-rgb), 0.18);
       color:#fff;
     }
 
@@ -418,8 +467,8 @@
     }
     .committee-btn.active {
       transform: scale(1.05);
-      box-shadow: 0 0 25px rgba(212,175,55,0.6), 0 8px 25px rgba(0,0,0,0.3);
-      outline: 3px solid var(--gold);
+      box-shadow: 0 0 25px rgba(var(--theme-primary-rgb), 0.6), 0 8px 25px rgba(0,0,0,0.3);
+      outline: 3px solid var(--theme-primary);
     }
     
     .committee-btn.btn-exec { background: linear-gradient(135deg, #d4af37, #f5d86c); color: #1a0b10; }
@@ -467,6 +516,20 @@
     </div>
   </div>
 </nav>
+
+<div id="committeeRibbon" class="committee-ribbon">
+  <div class="container">
+    <div class="ribbon-content">
+      <div class="ribbon-icon">
+        <i id="ribbonIcon" class="fa-solid fa-crown"></i>
+      </div>
+      <div>
+        <div class="ribbon-text" id="ribbonText">اللجنة الحالية</div>
+        <div class="ribbon-subtitle">جميع البيانات والتوصيات خاصة بهذه اللجنة</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <section class="tabbar">
   <div class="container">
@@ -1049,6 +1112,35 @@ const COMMITTEES = {
   }
 };
 
+const THEME_COLORS = {
+  EXEC: { primary: '#d4af37', secondary: '#f5d86c', rgb: '212, 175, 55', ink: '#1a0b10' },
+  MIC: { primary: '#17a2b8', secondary: '#4dd4e8', rgb: '23, 162, 184', ink: '#fff' },
+  RM: { primary: '#e74c3c', secondary: '#ff7675', rgb: '231, 76, 60', ink: '#fff' },
+  FMS: { primary: '#3498db', secondary: '#74b9ff', rgb: '52, 152, 219', ink: '#fff' },
+  PSC: { primary: '#9b59b6', secondary: '#d6a4e8', rgb: '155, 89, 182', ink: '#fff' },
+  IPC: { primary: '#e91e63', secondary: '#ff6b9d', rgb: '233, 30, 99', ink: '#fff' },
+  QI: { primary: '#2ecc71', secondary: '#7bed9f', rgb: '46, 204, 113', ink: '#fff' },
+  EOC: { primary: '#f39c12', secondary: '#fdcb6e', rgb: '243, 156, 18', ink: '#1a0b10' }
+};
+
+function setCommitteeTheme(code) {
+  const theme = THEME_COLORS[code] || THEME_COLORS.EXEC;
+  const comm = COMMITTEES[code];
+  
+  document.documentElement.style.setProperty('--theme-primary', theme.primary);
+  document.documentElement.style.setProperty('--theme-secondary', theme.secondary);
+  document.documentElement.style.setProperty('--theme-primary-rgb', theme.rgb);
+  document.documentElement.style.setProperty('--theme-ink', theme.ink);
+  
+  const ribbon = document.getElementById('committeeRibbon');
+  const ribbonIcon = document.getElementById('ribbonIcon');
+  const ribbonText = document.getElementById('ribbonText');
+  
+  ribbon.classList.add('active');
+  ribbonIcon.className = 'fa-solid ' + comm.icon;
+  ribbonText.textContent = comm.name + ' (' + code + ')';
+}
+
 const API_URL = 'https://script.google.com/macros/s/AKfycbz-vImcmRIh0M86i44V5Rm1C0m23lrN4q1aql9R7HNfQZUgShVyg7JlYlD5xLK2H9Gurg/exec';
 
 let currentCommittee = null;
@@ -1101,12 +1193,14 @@ function selectCommittee(code) {
   currentCommittee = code;
   const comm = COMMITTEES[code];
   
+  setCommitteeTheme(code);
+  
   document.querySelectorAll('.committee-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.meeting-comm-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll(`[data-committee="${code}"]`).forEach(b => b.classList.add('active'));
   
   document.getElementById('committeeBadge').innerHTML = `
-    <span style="background: ${comm.color}; padding: 8px 16px; border-radius: 20px;">
+    <span style="background: linear-gradient(135deg, var(--theme-primary), var(--theme-secondary)); color: var(--theme-ink); padding: 8px 16px; border-radius: 20px;">
       <i class="fa-solid ${comm.icon} me-2"></i> ${comm.name} (${code})
     </span>
   `;
