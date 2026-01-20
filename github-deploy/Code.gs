@@ -55,6 +55,8 @@
     'addTrainee',
     'updateTrainee',
     'deleteTrainee',
+    'logTrainingSession',
+    'saveTrainingSession',
     // ✅ دوال تحديث حالة الطوارئ
     'updateEmergencyStatus',
     'updateEmergencyReportStatus'
