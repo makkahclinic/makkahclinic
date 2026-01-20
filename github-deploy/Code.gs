@@ -764,6 +764,12 @@ function doPost(e) {
         case 'deleteTrainee':
           result = deleteTrainee(payload);
           break;
+        case 'logTrainingSession':
+          result = logTrainingSession(payload);
+          break;
+        case 'saveTrainingSession':
+          result = logTrainingSession(payload);
+          break;
         default:
           throw new Error('Unknown action: ' + action);
       }
